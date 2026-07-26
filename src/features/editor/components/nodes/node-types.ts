@@ -1,10 +1,11 @@
 /**
- * STUB — ownership transfers to T2-A in Batch 2.
+ * React Flow node registry (T2-A). The exported name and type
+ * (`nodeTypes: NodeTypes`, keys = every `C4NodeType`) are the frozen contract
+ * from dev-handoff §4.4; `canvas.tsx` (final) consumes it.
  *
- * The exported name and type (`nodeTypes: NodeTypes`, keys = every
- * `C4NodeType`) are the frozen contract from dev-handoff §4.4; `canvas.tsx`
- * (final) consumes it. T2-A swaps the values for per-type components without
- * touching the canvas.
+ * All 8 keys map to the one `C4NodeComponent`, which branches on
+ * `data.node.type` only (AF-E3-S1) — one component, one prop contract, eight
+ * visual treatments.
  */
 
 import type { NodeTypes } from "@xyflow/react";

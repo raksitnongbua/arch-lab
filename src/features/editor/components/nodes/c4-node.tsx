@@ -1,20 +1,32 @@
 "use client";
 
 /**
- * STUB — ownership transfers to T2-A in Batch 2.
+ * The C4 node component (T2-A — AF-E3-S1, AF-E4-S1, AF-E1-S6).
  *
  * The exported TYPE surface (`C4NodeData`, `C4FlowNode`,
  * `C4NodeComponentProps`) is the frozen contract from dev-handoff §4.2 —
  * `use-canvas-nodes.ts` and `canvas.tsx` (both final) build against it, so it
- * must not change. The COMPONENT body is deliberately minimal: T2-A replaces
- * it with per-type visual treatments, icons, badges and inline label editing
- * without touching any other file.
+ * must not change.
+ *
+ * The component branches on `data.node.type` only — never on appearance.
+ * Layout lives in `node-chrome.tsx`; per-type silhouettes in
+ * `node-shapes.tsx`. This file additionally registers the `F2`/`Enter`
+ * rename shortcuts (§4.5 claims them for T2-A): each node registers only
+ * while selected, with a per-node-unique id, guarded to the single-selection
+ * case, so the registry never sees a duplicate id.
  */
 
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { useMemo } from "react";
+import type { Node, NodeProps } from "@xyflow/react";
 
-import { cn } from "@/lib/utils";
 import type { C4Level, C4Node, C4NodeType } from "@/types";
+
+import {
+  useShortcuts,
+  type ShortcutBinding,
+  type ShortcutContext,
+} from "../../hooks/use-keyboard-shortcuts";
+import { NodeChrome } from "./node-chrome";
 
 /* ---- Contract (dev-handoff §4.2, frozen) --------------------------------- */
 
@@ -38,64 +50,34 @@ export type C4NodeComponentProps = NodeProps<C4FlowNode>;
 // `selected`, `dragging`, `id`, `width`, `height` come from React Flow — do
 // not duplicate them in data.
 
-/* ---- Stub rendering (replaced wholesale by T2-A) ------------------------- */
+/* ---- Component ------------------------------------------------------------ */
 
-const TYPE_LABEL: Record<C4NodeType, string> = {
-  person: "Person",
-  softwareSystem: "Software System",
-  externalSystem: "External System",
-  container: "Container",
-  database: "Database",
-  queue: "Queue",
-  component: "Component",
-  codeElement: "Code Element",
-};
-
-const HANDLES = [
-  { id: "top", position: Position.Top },
-  { id: "right", position: Position.Right },
-  { id: "bottom", position: Position.Bottom },
-  { id: "left", position: Position.Left },
-] as const;
+const NO_BINDINGS: ShortcutBinding[] = [];
 
 export function C4NodeComponent({
+  id,
   data,
   selected,
   dragging,
-}: C4NodeComponentProps) {
-  const { node } = data;
-  return (
-    <div
-      className={cn(
-        "group relative flex size-full flex-col items-center justify-center gap-0.5 rounded-lg border border-node-border bg-node px-3 py-2 text-center text-node-foreground shadow-sm transition-shadow",
-        selected && "ring-2 ring-ring ring-offset-2 ring-offset-canvas",
-        dragging && "shadow-lg",
-        data.isPlaceholder && "border-dashed opacity-60",
-      )}
-    >
-      <span className="line-clamp-2 w-full text-sm leading-tight font-medium break-words">
-        {node.name}
-      </span>
-      <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
-        {TYPE_LABEL[node.type]}
-      </span>
-      {data.hasChildren ? (
-        <span
-          aria-label={`Contains ${data.childCount} elements`}
-          className="absolute top-1 right-1 rounded-sm bg-secondary px-1 text-[10px] leading-4 text-secondary-foreground"
-        >
-          {data.childCount}
-        </span>
-      ) : null}
-      {HANDLES.map((handle) => (
-        <Handle
-          key={handle.id}
-          id={handle.id}
-          type="source"
-          position={handle.position}
-          className="!size-2 !border-node-border !bg-node-foreground/60 opacity-0 transition-opacity group-hover:opacity-100"
-        />
-      ))}
-    </div>
-  );
+}: C4NodeComponentProps): React.JSX.Element {
+  const isPlaceholder = data.isPlaceholder;
+
+  const bindings = useMemo<ShortcutBinding[]>(() => {
+    if (!selected || isPlaceholder) return NO_BINDINGS;
+    const when = ({ store }: ShortcutContext) =>
+      store.labelEdit === null &&
+      store.selection.nodeIds.length === 1 &&
+      store.selection.nodeIds[0] === id &&
+      store.selection.edgeIds.length === 0;
+    const run = ({ store }: ShortcutContext) =>
+      store.beginLabelEdit({ kind: "node", id });
+    return [
+      { id: `node.rename.f2:${id}`, combo: "F2", when, run },
+      { id: `node.rename.enter:${id}`, combo: "Enter", when, run },
+    ];
+  }, [id, selected, isPlaceholder]);
+
+  useShortcuts(bindings);
+
+  return <NodeChrome data={data} selected={selected} dragging={dragging} />;
 }

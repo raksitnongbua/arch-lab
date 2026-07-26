@@ -1,0 +1,218 @@
+"use client";
+
+/**
+ * Single-node inspector (AF-E3-S2): `name`, `description` (≤500 chars with a
+ * counter), `technology` (autocomplete from the icon registry), `type`
+ * (constrained to the level's legality matrix), `icon` (swatch opening
+ * T2-A's IconPicker) and `tags`.
+ *
+ * Text fields commit through `useInspectorField` — one undo entry per
+ * editing session via the store's `coalesceKey`. Discrete controls (type,
+ * icon, tags) commit immediately, one undo entry each.
+ */
+
+import { useState } from "react";
+
+import { toast } from "@/components/ui/toast";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  isNodeTypeValidAtLevel,
+  VALID_NODE_TYPES_BY_LEVEL,
+  type C4Level,
+  type C4Node,
+  type C4NodeType,
+} from "@/types";
+
+import { InvalidNodeTypeError, useEditorStore } from "../../state";
+import { resolveIcon } from "../../lib/icons/registry";
+import { IconPicker } from "../icon-picker";
+import { Field, InspectorSection } from "./field";
+import { TagInput } from "./tag-input";
+import { TechnologyInput } from "./technology-input";
+import { useInspectorField } from "./use-inspector-field";
+
+export const NODE_TYPE_LABELS: Record<C4NodeType, string> = {
+  person: "Person",
+  softwareSystem: "Software System",
+  externalSystem: "External System",
+  container: "Container",
+  database: "Database",
+  queue: "Queue",
+  component: "Component",
+  codeElement: "Code Element",
+};
+
+const DESCRIPTION_MAX = 500;
+
+export function NodeInspector({
+  diagramId,
+  node,
+  level,
+}: {
+  diagramId: string;
+  node: C4Node;
+  level: C4Level;
+}): React.JSX.Element {
+  const updateNode = useEditorStore((s) => s.updateNode);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const keyBase = `inspector:node:${diagramId}:${node.id}`;
+  const validTypes = VALID_NODE_TYPES_BY_LEVEL[level];
+
+  const nameField = useInspectorField({
+    value: node.name,
+    fieldKey: `${keyBase}:name`,
+    commit: (next, coalesceKey) => {
+      const trimmed = next.trim();
+      if (trimmed === "") return; // a name is required — keep the previous one
+      updateNode(diagramId, node.id, { name: trimmed }, { coalesceKey });
+    },
+  });
+
+  const descriptionField = useInspectorField({
+    value: node.description ?? "",
+    fieldKey: `${keyBase}:description`,
+    commit: (next, coalesceKey) => {
+      const trimmed = next.trim();
+      updateNode(
+        diagramId,
+        node.id,
+        { description: trimmed === "" ? undefined : trimmed },
+        { coalesceKey },
+      );
+    },
+  });
+
+  const changeType = (next: C4NodeType) => {
+    if (next === node.type) return;
+    try {
+      if (!isNodeTypeValidAtLevel(next, level)) {
+        throw new InvalidNodeTypeError(level, next, validTypes);
+      }
+      updateNode(diagramId, node.id, { type: next });
+    } catch (error) {
+      if (error instanceof InvalidNodeTypeError) {
+        toast({ message: error.message, tone: "error" });
+        return;
+      }
+      throw error;
+    }
+  };
+
+  const resolved = resolveIcon(node);
+  const IconSvg = resolved.def.Svg;
+
+  return (
+    <InspectorSection title={NODE_TYPE_LABELS[node.type]}>
+      <Field id="inspector-node-name" label="Name">
+        <Input
+          id="inspector-node-name"
+          value={nameField.value}
+          onFocus={nameField.onFocus}
+          onChange={(event) => nameField.onChange(event.currentTarget.value)}
+          onBlur={nameField.onBlur}
+          onKeyDown={nameField.onKeyDown}
+        />
+      </Field>
+
+      <Field
+        id="inspector-node-description"
+        label="Description"
+        hint={`${descriptionField.value.length}/${DESCRIPTION_MAX}`}
+      >
+        <Textarea
+          id="inspector-node-description"
+          rows={4}
+          maxLength={DESCRIPTION_MAX}
+          placeholder="What is it, and why does it exist?"
+          value={descriptionField.value}
+          onFocus={descriptionField.onFocus}
+          onChange={(event) =>
+            descriptionField.onChange(
+              event.currentTarget.value.slice(0, DESCRIPTION_MAX),
+            )
+          }
+          onBlur={descriptionField.onBlur}
+          onKeyDown={(event) => {
+            // Enter inserts a newline in a textarea; only Escape reverts.
+            if (event.key === "Escape") descriptionField.onKeyDown(event);
+          }}
+        />
+      </Field>
+
+      <TechnologyInput
+        id="inspector-node-technology"
+        fieldKey={`${keyBase}:technology`}
+        value={node.technology ?? ""}
+        placeholder='e.g. "Go 1.22 / chi"'
+        commit={(next, coalesceKey) => {
+          const trimmed = next.trim();
+          updateNode(
+            diagramId,
+            node.id,
+            { technology: trimmed === "" ? undefined : trimmed },
+            { coalesceKey },
+          );
+        }}
+      />
+
+      <Field id="inspector-node-type" label="Type">
+        <Select
+          id="inspector-node-type"
+          value={node.type}
+          disabled={validTypes.length <= 1}
+          onChange={(event) =>
+            changeType(event.currentTarget.value as C4NodeType)
+          }
+        >
+          {validTypes.map((type) => (
+            <option key={type} value={type}>
+              {NODE_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <Field id="inspector-node-icon" label="Icon">
+        <button
+          id="inspector-node-icon"
+          type="button"
+          aria-haspopup="dialog"
+          aria-label={`Change icon (current: ${resolved.def.name})`}
+          className="flex h-9 w-full items-center gap-2.5 rounded-md border border-input bg-transparent px-3 text-sm text-foreground shadow-sm transition-colors hover:border-foreground/25 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:outline-none"
+          onClick={() => setPickerOpen(true)}
+        >
+          <IconSvg aria-hidden="true" className="size-5 shrink-0" />
+          <span className="truncate">{resolved.def.name}</span>
+          {resolved.isFallback ? (
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+              default
+            </span>
+          ) : null}
+        </button>
+        {pickerOpen ? (
+          <IconPicker
+            {...(node.icon !== undefined ? { value: node.icon } : {})}
+            nodeType={node.type}
+            onChange={(slug) => {
+              updateNode(diagramId, node.id, {
+                icon: slug,
+                iconSource: "explicit",
+              });
+              setPickerOpen(false);
+            }}
+            onClose={() => setPickerOpen(false)}
+          />
+        ) : null}
+      </Field>
+
+      <TagInput
+        id="inspector-node-tags"
+        tags={node.tags ?? []}
+        commit={(next) => updateNode(diagramId, node.id, { tags: next })}
+      />
+    </InspectorSection>
+  );
+}
