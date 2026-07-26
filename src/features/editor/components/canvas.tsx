@@ -1,0 +1,829 @@
+"use client";
+
+/**
+ * The canvas (AF-E1-S1/S3/S4). FINAL THIS SPRINT (dev-handoff D9) — every
+ * React Flow event handler any later ticket needs is already wired here,
+ * delegating to store actions or to the interaction store below. Later
+ * tickets fill their overlay/node/edge stubs; nobody reopens this file.
+ *
+ * Position ownership (integration risk R1): nodes and edges are DERIVED from
+ * the editor store by `use-canvas-nodes`. During a drag, positions live only
+ * in this component's local React Flow state; on drag stop exactly one
+ * `moveNodes` call commits the absolute final positions — one undo entry per
+ * press-to-release drag. Selection, hover and dimension changes never reach
+ * the model (risk R2).
+ */
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+} from "react";
+import {
+  Background,
+  BackgroundVariant,
+  ConnectionMode,
+  Panel,
+  ReactFlow,
+  ReactFlowProvider,
+  SelectionMode,
+  applyEdgeChanges,
+  applyNodeChanges,
+  getNodesBounds,
+  useReactFlow,
+  type Connection,
+  type EdgeChange,
+  type FinalConnectionState,
+  type NodeChange,
+  type NodePositionChange,
+  type OnMoveEnd,
+  type OnSelectionChangeParams,
+  type Viewport,
+} from "@xyflow/react";
+import { create } from "zustand";
+
+import "@xyflow/react/dist/style.css";
+
+import { toast } from "@/components/ui/toast";
+import {
+  C4_LEVELS,
+  hasChildDiagram,
+  isBoundaryPlaceholder,
+  isNodeTypeValidAtLevel,
+  type C4Level,
+  type C4NodeType,
+  type Point,
+} from "@/types";
+
+import { useCanvasNodes } from "../hooks/use-canvas-nodes";
+import {
+  useShortcuts,
+  type ShortcutBinding,
+} from "../hooks/use-keyboard-shortcuts";
+import {
+  ALIGNMENT_THRESHOLD,
+  DEFAULT_NODE_SIZE,
+  FIT_VIEW_PADDING_PX,
+  GRID_SIZE,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  NUDGE_STEP,
+  NUDGE_STEP_FINE,
+} from "../lib/canvas-constants";
+import { duration } from "../lib/motion";
+import { useEditorStore } from "../state";
+import type { C4FlowEdge } from "./edges/c4-edge";
+import { edgeTypes } from "./edges/edge-types";
+import type { C4FlowNode } from "./nodes/c4-node";
+import { nodeTypes } from "./nodes/node-types";
+import {
+  AlignmentGuides,
+  clearAlignmentGuides,
+  setAlignmentGuides,
+  type AlignmentGuide,
+} from "./overlays/alignment-guides";
+import { DeleteConfirmDialog } from "./overlays/delete-confirm-dialog";
+import { LevelTransition } from "./overlays/level-transition";
+import { NodeContextMenu } from "./overlays/node-context-menu";
+import { QuickAddMenu } from "./overlays/quick-add-menu";
+import { ZoomIndicator } from "./zoom-indicator";
+
+/* -------------------------------------------------------------------------- */
+/* Canvas interaction store — the seam later tickets consume                   */
+/*                                                                             */
+/* canvas.tsx is final, so transient canvas gestures that later tickets react  */
+/* to are published here instead of via props. QuickAddMenu (T2-B) reads       */
+/* `pendingConnect`; NodeContextMenu (T2-C) reads `contextMenu`. Consumers     */
+/* clear their slice when they close.                                          */
+/* -------------------------------------------------------------------------- */
+
+export interface PendingConnect {
+  /** The node the aborted connection drag started from. */
+  sourceNodeId: string;
+  /** Release point in flow coordinates (where the new node should go). */
+  flowPosition: Point;
+  /** Release point in screen coordinates (where the menu should open). */
+  screenPosition: Point;
+}
+
+export interface ContextMenuTarget {
+  nodeId: string;
+  screenPosition: Point;
+}
+
+interface CanvasInteractionState {
+  pendingConnect: PendingConnect | null;
+  contextMenu: ContextMenuTarget | null;
+}
+
+export const useCanvasInteraction = create<CanvasInteractionState>(() => ({
+  pendingConnect: null,
+  contextMenu: null,
+}));
+
+export function setPendingConnect(value: PendingConnect | null): void {
+  useCanvasInteraction.setState({ pendingConnect: value });
+}
+
+export function setContextMenu(value: ContextMenuTarget | null): void {
+  useCanvasInteraction.setState({ contextMenu: value });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Palette drag payload (dev-handoff §4.7)                                     */
+/*                                                                             */
+/* The codec lives in T2-B's `lib/drag-payload.ts` (Batch 2). This file is     */
+/* final in Batch 1 and must build before that file exists, so it consumes     */
+/* the FROZEN wire format directly: MIME type + JSON `{ nodeType, level }`.    */
+/* -------------------------------------------------------------------------- */
+
+const PALETTE_DRAG_MIME = "application/x-arch-flow-node-type";
+
+interface PaletteDragPayload {
+  nodeType: C4NodeType;
+  level: C4Level;
+}
+
+function readPaletteDrag(dt: DataTransfer): PaletteDragPayload | null {
+  const raw = dt.getData(PALETTE_DRAG_MIME);
+  if (!raw) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const candidate = parsed as Record<string, unknown>;
+  const level = candidate.level;
+  const nodeType = candidate.nodeType;
+  if (typeof level !== "string" || typeof nodeType !== "string") return null;
+  if (!(C4_LEVELS as readonly string[]).includes(level)) return null;
+  const typedLevel = level as C4Level;
+  if (!isNodeTypeValidAtLevel(nodeType as C4NodeType, typedLevel)) return null;
+  return { nodeType: nodeType as C4NodeType, level: typedLevel };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Geometry helpers                                                            */
+/* -------------------------------------------------------------------------- */
+
+const snap = (value: number): number =>
+  Math.round(value / GRID_SIZE) * GRID_SIZE;
+
+interface AxisSnap {
+  delta: number;
+  guide: AlignmentGuide;
+}
+
+function bestAxisSnap(
+  ownStops: readonly number[],
+  otherStops: readonly number[],
+  buildGuide: (alignedAt: number) => AlignmentGuide,
+): AxisSnap | null {
+  let best: AxisSnap | null = null;
+  for (const own of ownStops) {
+    for (const other of otherStops) {
+      const delta = other - own;
+      if (Math.abs(delta) > ALIGNMENT_THRESHOLD) continue;
+      if (best !== null && Math.abs(delta) >= Math.abs(best.delta)) continue;
+      best = { delta, guide: buildGuide(other) };
+    }
+  }
+  return best;
+}
+
+/**
+ * Snap `proposed` to sibling edges/centres within ALIGNMENT_THRESHOLD.
+ * Returns the adjusted position and the guides to show — guides exist only
+ * when an axis genuinely snapped (AF-E1-S3).
+ */
+function alignToSiblings(
+  nodeId: string,
+  proposed: Point,
+  allNodes: readonly C4FlowNode[],
+  excludeIds: ReadonlySet<string>,
+): { position: Point; guides: AlignmentGuide[] } {
+  const moving = allNodes.find((node) => node.id === nodeId);
+  const width = moving?.width ?? DEFAULT_NODE_SIZE.width;
+  const height = moving?.height ?? DEFAULT_NODE_SIZE.height;
+
+  let bestX: AxisSnap | null = null;
+  let bestY: AxisSnap | null = null;
+
+  for (const other of allNodes) {
+    if (other.id === nodeId || excludeIds.has(other.id)) continue;
+    const ow = other.width ?? DEFAULT_NODE_SIZE.width;
+    const oh = other.height ?? DEFAULT_NODE_SIZE.height;
+    const ox = other.position.x;
+    const oy = other.position.y;
+
+    const verticalSpanFrom = Math.min(proposed.y, oy) - 24;
+    const verticalSpanTo = Math.max(proposed.y + height, oy + oh) + 24;
+    const candidateX = bestAxisSnap(
+      [proposed.x, proposed.x + width / 2, proposed.x + width],
+      [ox, ox + ow / 2, ox + ow],
+      (alignedAt) => ({
+        id: `v-${alignedAt}`,
+        orientation: "vertical",
+        position: alignedAt,
+        from: verticalSpanFrom,
+        to: verticalSpanTo,
+      }),
+    );
+    if (
+      candidateX !== null &&
+      (bestX === null || Math.abs(candidateX.delta) < Math.abs(bestX.delta))
+    ) {
+      bestX = candidateX;
+    }
+
+    const horizontalSpanFrom = Math.min(proposed.x, ox) - 24;
+    const horizontalSpanTo = Math.max(proposed.x + width, ox + ow) + 24;
+    const candidateY = bestAxisSnap(
+      [proposed.y, proposed.y + height / 2, proposed.y + height],
+      [oy, oy + oh / 2, oy + oh],
+      (alignedAt) => ({
+        id: `h-${alignedAt}`,
+        orientation: "horizontal",
+        position: alignedAt,
+        from: horizontalSpanFrom,
+        to: horizontalSpanTo,
+      }),
+    );
+    if (
+      candidateY !== null &&
+      (bestY === null || Math.abs(candidateY.delta) < Math.abs(bestY.delta))
+    ) {
+      bestY = candidateY;
+    }
+  }
+
+  const guides: AlignmentGuide[] = [];
+  const position = { ...proposed };
+  if (bestX !== null) {
+    position.x += bestX.delta;
+    guides.push(bestX.guide);
+  }
+  if (bestY !== null) {
+    position.y += bestY.delta;
+    guides.push(bestY.guide);
+  }
+  return { position, guides };
+}
+
+function sameIdSets(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((id) => set.has(id));
+}
+
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /mac|iphone|ipad|ipod/i.test(navigator.platform);
+
+/* -------------------------------------------------------------------------- */
+/* The canvas                                                                  */
+/* -------------------------------------------------------------------------- */
+
+function CanvasInner(): React.JSX.Element {
+  const activeDiagramId = useEditorStore((s) => s.activeDiagramId);
+  const { nodes: storeNodes, edges: storeEdges } = useCanvasNodes();
+  const { fitView, screenToFlowPosition, setCenter, setViewport } =
+    useReactFlow<C4FlowNode, C4FlowEdge>();
+
+  // Local React Flow state: the store projection plus in-flight drag
+  // positions. Never a source of truth for the model.
+  const [nodes, setNodes] = useState<C4FlowNode[]>(storeNodes);
+  const [edges, setEdges] = useState<C4FlowEdge[]>(storeEdges);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const nodesRef = useRef<C4FlowNode[]>(nodes);
+  const altKeyRef = useRef(false);
+  // Dragged node ids: the ref feeds event handlers, the state twin feeds the
+  // render-time store resync below (refs must not be read during render).
+  const draggingIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const [draggingIds, setDraggingIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
+  // Resync from the store using the render-time derived-state pattern,
+  // preserving in-flight drag positions (rare — a store update landing
+  // mid-drag, e.g. the drag-start selection mirror).
+  const [prevStoreNodes, setPrevStoreNodes] = useState(storeNodes);
+  if (storeNodes !== prevStoreNodes) {
+    setPrevStoreNodes(storeNodes);
+    if (draggingIds.size === 0) {
+      setNodes(storeNodes);
+    } else {
+      const previousById = new Map(nodes.map((node) => [node.id, node]));
+      setNodes(
+        storeNodes.map((node) => {
+          if (!draggingIds.has(node.id)) return node;
+          const local = previousById.get(node.id);
+          return local
+            ? { ...node, position: local.position, dragging: true }
+            : node;
+        }),
+      );
+    }
+  }
+
+  const [prevStoreEdges, setPrevStoreEdges] = useState(storeEdges);
+  if (storeEdges !== prevStoreEdges) {
+    setPrevStoreEdges(storeEdges);
+    setEdges(storeEdges);
+  }
+
+  // Restore the per-diagram camera when navigating levels (AF-E2-S3 seam).
+  useEffect(() => {
+    const saved =
+      useEditorStore.getState().viewportByDiagramId[activeDiagramId];
+    if (saved) void setViewport(saved);
+  }, [activeDiagramId, setViewport]);
+
+  // `Alt` suspends grid snapping and alignment guides (AF-E1-S3).
+  useEffect(() => {
+    const update = (event: KeyboardEvent) => {
+      altKeyRef.current = event.altKey;
+    };
+    const reset = () => {
+      altKeyRef.current = false;
+    };
+    window.addEventListener("keydown", update);
+    window.addEventListener("keyup", update);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("keydown", update);
+      window.removeEventListener("keyup", update);
+      window.removeEventListener("blur", reset);
+    };
+  }, []);
+
+  /* ---- node changes: drags stay local, selection mirrors, nothing else ---- */
+
+  const processPositionChange = useCallback(
+    (change: NodePositionChange): NodePositionChange => {
+      if (!change.position || !change.dragging) return change;
+      if (altKeyRef.current) {
+        clearAlignmentGuides();
+        return change;
+      }
+      const quantised: Point = {
+        x: snap(change.position.x),
+        y: snap(change.position.y),
+      };
+      // Alignment guides only for single-node drags; multi-drags keep their
+      // relative layout via per-node grid quantisation.
+      if (draggingIdsRef.current.size > 1) {
+        clearAlignmentGuides();
+        return { ...change, position: quantised };
+      }
+      const { position, guides } = alignToSiblings(
+        change.id,
+        quantised,
+        nodesRef.current,
+        draggingIdsRef.current,
+      );
+      setAlignmentGuides(guides);
+      return { ...change, position };
+    },
+    [],
+  );
+
+  const handleNodesChange = useCallback(
+    (changes: NodeChange<C4FlowNode>[]) => {
+      const processed = changes.map((change) =>
+        change.type === "position" ? processPositionChange(change) : change,
+      );
+      setNodes((previous) => applyNodeChanges(processed, previous));
+    },
+    [processPositionChange],
+  );
+
+  const handleEdgesChange = useCallback((changes: EdgeChange<C4FlowEdge>[]) => {
+    setEdges((previous) => applyEdgeChanges(changes, previous));
+  }, []);
+
+  /* ---- selection: view state, never history (risk R2) --------------------- */
+
+  const handleSelectionChange = useCallback(
+    ({
+      nodes: selectedNodes,
+      edges: selectedEdges,
+    }: OnSelectionChangeParams) => {
+      const store = useEditorStore.getState();
+      const nodeIds = selectedNodes.map((node) => node.id);
+      const edgeIds = selectedEdges.map((edge) => edge.id);
+      if (
+        sameIdSets(store.selection.nodeIds, nodeIds) &&
+        sameIdSets(store.selection.edgeIds, edgeIds)
+      ) {
+        return;
+      }
+      store.setSelection({ nodeIds, edgeIds });
+    },
+    [],
+  );
+
+  /* ---- drag lifecycle: exactly one moveNodes per press-to-release --------- */
+
+  const handleNodeDragStart = useCallback(
+    (_event: unknown, _node: C4FlowNode, draggedNodes: C4FlowNode[]) => {
+      const ids: ReadonlySet<string> = new Set(
+        draggedNodes.map((node) => node.id),
+      );
+      draggingIdsRef.current = ids;
+      setDraggingIds(ids);
+    },
+    [],
+  );
+
+  const handleNodeDrag = useCallback(
+    (event: React.MouseEvent | MouseEvent | TouchEvent) => {
+      if ("altKey" in event) altKeyRef.current = event.altKey;
+    },
+    [],
+  );
+
+  const handleNodeDragStop = useCallback(
+    (_event: unknown, _node: C4FlowNode, draggedNodes: C4FlowNode[]) => {
+      const empty: ReadonlySet<string> = new Set();
+      draggingIdsRef.current = empty;
+      setDraggingIds(empty);
+      clearAlignmentGuides();
+      const store = useEditorStore.getState();
+      const diagram = store.model.diagrams[store.activeDiagramId];
+      if (!diagram) return;
+      const localById = new Map(
+        nodesRef.current.map((node) => [node.id, node]),
+      );
+      const positions: Record<string, Point> = {};
+      for (const dragged of draggedNodes) {
+        const final = localById.get(dragged.id)?.position ?? dragged.position;
+        const rounded: Point = {
+          x: Math.round(final.x),
+          y: Math.round(final.y),
+        };
+        const before = diagram.nodes.find((node) => node.id === dragged.id);
+        if (
+          before &&
+          (before.position.x !== rounded.x || before.position.y !== rounded.y)
+        ) {
+          positions[dragged.id] = rounded;
+        }
+      }
+      if (Object.keys(positions).length > 0) {
+        store.moveNodes(store.activeDiagramId, positions);
+      }
+    },
+    [],
+  );
+
+  /* ---- edge creation (T2-B builds on these) -------------------------------- */
+
+  const handleConnect = useCallback((connection: Connection) => {
+    const store = useEditorStore.getState();
+    try {
+      const edgeId = store.createEdge({
+        diagramId: store.activeDiagramId,
+        source: connection.source,
+        target: connection.target,
+      });
+      store.setSelection({ nodeIds: [], edgeIds: [edgeId] });
+      store.beginLabelEdit({ kind: "edge", id: edgeId });
+    } catch (error) {
+      toast({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not create the relationship.",
+        tone: "warning",
+      });
+    }
+  }, []);
+
+  const handleConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      if (connectionState.isValid) return;
+      const sourceNodeId = connectionState.fromNode?.id;
+      if (!sourceNodeId) return;
+      if (connectionState.toNode) {
+        if (connectionState.toNode.id === sourceNodeId) {
+          toast({
+            message:
+              "Self-relationships are not supported yet — release over a different element.",
+            tone: "info",
+          });
+        }
+        return;
+      }
+      // Released over empty canvas → the quick-add menu (T2-B) takes over.
+      const point =
+        "changedTouches" in event
+          ? event.changedTouches[0]
+          : (event as MouseEvent);
+      setPendingConnect({
+        sourceNodeId,
+        flowPosition: screenToFlowPosition({
+          x: point.clientX,
+          y: point.clientY,
+        }),
+        screenPosition: { x: point.clientX, y: point.clientY },
+      });
+    },
+    [screenToFlowPosition],
+  );
+
+  /* ---- palette drop (T2-B encodes, this file consumes §4.7) ---------------- */
+
+  const handleDragOver = useCallback((event: ReactDragEvent) => {
+    if (!event.dataTransfer.types.includes(PALETTE_DRAG_MIME)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: ReactDragEvent) => {
+      const payload = readPaletteDrag(event.dataTransfer);
+      if (!payload) return;
+      event.preventDefault();
+      const store = useEditorStore.getState();
+      const diagram = store.model.diagrams[store.activeDiagramId];
+      // Reject a stale drag started while another level was active (§4.7).
+      if (!diagram || diagram.level !== payload.level) return;
+      const raw = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      try {
+        const nodeId = store.createNode({
+          diagramId: store.activeDiagramId,
+          type: payload.nodeType,
+          position: { x: snap(raw.x), y: snap(raw.y) },
+        });
+        store.setSelection({ nodeIds: [nodeId], edgeIds: [] });
+        store.beginLabelEdit({ kind: "node", id: nodeId });
+      } catch (error) {
+        toast({
+          message:
+            error instanceof Error
+              ? error.message
+              : "That element type is not valid at this level.",
+          tone: "warning",
+        });
+      }
+    },
+    [screenToFlowPosition],
+  );
+
+  /* ---- drill / rename / context menu (T2-A and T2-C build on these) -------- */
+
+  const handleNodeDoubleClick = useCallback(
+    (_event: unknown, flowNode: C4FlowNode) => {
+      const store = useEditorStore.getState();
+      const diagram = store.model.diagrams[store.activeDiagramId];
+      const node = diagram?.nodes.find((n) => n.id === flowNode.id);
+      if (!node || isBoundaryPlaceholder(node)) return;
+      // D5: double-click drills when a child diagram exists, renames when not.
+      if (hasChildDiagram(node) && node.childDiagramId) {
+        store.setActiveDiagram(node.childDiagramId);
+      } else {
+        store.beginLabelEdit({ kind: "node", id: node.id });
+      }
+    },
+    [],
+  );
+
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, flowNode: C4FlowNode) => {
+      event.preventDefault();
+      const store = useEditorStore.getState();
+      if (!store.selection.nodeIds.includes(flowNode.id)) {
+        store.setSelection({ nodeIds: [flowNode.id], edgeIds: [] });
+      }
+      setContextMenu({
+        nodeId: flowNode.id,
+        screenPosition: { x: event.clientX, y: event.clientY },
+      });
+    },
+    [],
+  );
+
+  const handlePaneClick = useCallback(() => {
+    setContextMenu(null);
+    setPendingConnect(null);
+  }, []);
+
+  /* ---- camera persistence --------------------------------------------------- */
+
+  const handleMoveEnd = useCallback<OnMoveEnd>((_event, viewport: Viewport) => {
+    const store = useEditorStore.getState();
+    store.setViewport(store.activeDiagramId, {
+      x: viewport.x,
+      y: viewport.y,
+      zoom: viewport.zoom,
+    });
+  }, []);
+
+  /* ---- keyboard (registry §4.5; Batch-1 combos only) ------------------------ */
+
+  const bindings = useMemo<ShortcutBinding[]>(() => {
+    const nudge = (dx: number, dy: number) => {
+      const store = useEditorStore.getState();
+      const diagram = store.model.diagrams[store.activeDiagramId];
+      if (!diagram) return;
+      const selected = new Set(store.selection.nodeIds);
+      if (selected.size === 0) return;
+      const positions: Record<string, Point> = {};
+      for (const node of diagram.nodes) {
+        if (!selected.has(node.id) || isBoundaryPlaceholder(node)) continue;
+        positions[node.id] = {
+          x: node.position.x + dx,
+          y: node.position.y + dy,
+        };
+      }
+      if (Object.keys(positions).length > 0) {
+        store.moveNodes(store.activeDiagramId, positions);
+      }
+    };
+    const hasNodeSelection = () =>
+      useEditorStore.getState().selection.nodeIds.length > 0;
+
+    const nudgeBindings: ShortcutBinding[] = (
+      [
+        ["left", "ArrowLeft", -1, 0],
+        ["right", "ArrowRight", 1, 0],
+        ["up", "ArrowUp", 0, -1],
+        ["down", "ArrowDown", 0, 1],
+      ] as const
+    ).flatMap(([name, key, dx, dy]) => [
+      {
+        id: `canvas.nudge-${name}`,
+        combo: key,
+        when: hasNodeSelection,
+        run: () => nudge(dx * NUDGE_STEP, dy * NUDGE_STEP),
+      },
+      {
+        id: `canvas.nudge-${name}-fine`,
+        combo: `shift+${key}`,
+        when: hasNodeSelection,
+        run: () => nudge(dx * NUDGE_STEP_FINE, dy * NUDGE_STEP_FINE),
+      },
+    ]);
+
+    return [
+      {
+        id: "editor.undo",
+        combo: "mod+z",
+        run: ({ store }) => store.undo(),
+      },
+      {
+        id: "editor.redo",
+        combo: "mod+shift+z",
+        run: ({ store }) => store.redo(),
+      },
+      {
+        id: "canvas.select-all",
+        combo: "mod+a",
+        run: ({ store }) => {
+          const diagram = store.model.diagrams[store.activeDiagramId];
+          if (!diagram) return;
+          store.setSelection({
+            nodeIds: diagram.nodes.map((node) => node.id),
+            edgeIds: diagram.edges.map((edge) => edge.id),
+          });
+        },
+      },
+      {
+        id: "canvas.escape",
+        combo: "Escape",
+        run: ({ store }) => {
+          const interaction = useCanvasInteraction.getState();
+          if (interaction.pendingConnect || interaction.contextMenu) {
+            setPendingConnect(null);
+            setContextMenu(null);
+            return;
+          }
+          store.clearSelection();
+        },
+      },
+      {
+        id: "canvas.fit-view",
+        combo: "shift+1",
+        run: () => {
+          void fitView({
+            padding: `${FIT_VIEW_PADDING_PX}px`,
+            duration: duration("fitView"),
+            minZoom: MIN_ZOOM,
+            maxZoom: MAX_ZOOM,
+          });
+        },
+      },
+      {
+        id: "canvas.reset-zoom",
+        combo: "shift+0",
+        run: ({ store }) => {
+          const selectedIds = new Set(store.selection.nodeIds);
+          const selectedNodes = nodesRef.current.filter((node) =>
+            selectedIds.has(node.id),
+          );
+          const animation = { zoom: 1, duration: duration("fitView") };
+          if (selectedNodes.length > 0) {
+            const bounds = getNodesBounds(selectedNodes);
+            void setCenter(
+              bounds.x + bounds.width / 2,
+              bounds.y + bounds.height / 2,
+              animation,
+            );
+            return;
+          }
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          const centre = screenToFlowPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          });
+          void setCenter(centre.x, centre.y, animation);
+        },
+      },
+      ...nudgeBindings,
+    ];
+  }, [fitView, screenToFlowPosition, setCenter]);
+
+  useShortcuts(bindings);
+
+  /* ---- render ---------------------------------------------------------------- */
+
+  return (
+    <div ref={containerRef} className="size-full">
+      <ReactFlow<C4FlowNode, C4FlowEdge>
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
+        onSelectionChange={handleSelectionChange}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDrag={handleNodeDrag}
+        onNodeDragStop={handleNodeDragStop}
+        onConnect={handleConnect}
+        onConnectEnd={handleConnectEnd}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeContextMenu={handleNodeContextMenu}
+        onPaneClick={handlePaneClick}
+        onMoveEnd={handleMoveEnd}
+        connectionMode={ConnectionMode.Loose}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        panOnScroll
+        zoomOnScroll={false}
+        zoomOnPinch
+        zoomOnDoubleClick={false}
+        zoomActivationKeyCode={IS_MAC ? "Meta" : "Control"}
+        panOnDrag={[1, 2]}
+        panActivationKeyCode="Space"
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode="Shift"
+        deleteKeyCode={null}
+        nodeDragThreshold={1}
+        className="bg-canvas [&_.react-flow__pane]:cursor-default [&_.react-flow__selection]:rounded-sm [&_.react-flow__selection]:border [&_.react-flow__selection]:border-ring/60 [&_.react-flow__selection]:bg-selection"
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={GRID_SIZE * 2}
+          size={1.5}
+          color="var(--canvas-grid)"
+        />
+        <AlignmentGuides />
+        <QuickAddMenu />
+        <LevelTransition />
+        <DeleteConfirmDialog />
+        <NodeContextMenu />
+        <Panel position="bottom-left">
+          <ZoomIndicator />
+        </Panel>
+      </ReactFlow>
+    </div>
+  );
+}
+
+/** The canvas mount. FINAL THIS SPRINT — see the header comment. */
+export function Canvas(): React.JSX.Element {
+  return (
+    <ReactFlowProvider>
+      <CanvasInner />
+    </ReactFlowProvider>
+  );
+}
