@@ -98,25 +98,14 @@ const edgeTypes: EdgeTypes = { c4: ViewerEdge };
 const DIM_NODE_OPACITY = 0.3;
 
 /**
- * Stagger between neighbouring comets when a selected ELEMENT lights up all
- * of its touching edges at once. Applied as a NEGATIVE animation-delay
- * (start mid-cycle, no startup stall), stepped by each edge's 0-based
- * position within the touching set — which follows the frozen model's edge
- * order, so the offsets are fully deterministic across renders and reloads.
- * 260ms ≢ any divisor of the 1600ms cycle, so even many edges never re-sync
- * into visual lockstep.
- */
-const FLOW_STAGGER_MS = 260;
-
-/**
  * Connector interaction styling, in one scoped stylesheet: hover affordance,
  * selection emphasis, the flowing-gradient current along the selected path,
  * and the dim cross-fade behind it. `stroke`/`opacity` only — nothing
  * layout-bound. Continuously animated: the selected edge's overlay, or — when
- * an ELEMENT is selected — the overlays of the edges touching it (each a
- * stroke-dashoffset dash march, no JS per frame; measured at the display's
- * full 120fps with the highest-degree ShopFlow node selected, so no cap on
- * the number of simultaneously flowing edges is needed).
+ * an ELEMENT is selected — that node's own outline overlay (both a
+ * stroke-dashoffset dash march, no JS per frame). Edges touching a selected
+ * element hold perfectly still: they keep full strength while the rest of
+ * the diagram dims, so the only moving light is the selection itself.
  *
  * The flow itself: viewer-edge.tsx paints three overlay copies of the
  * selected bezier with a per-edge gradient and normalises them to
@@ -182,6 +171,47 @@ const EDGE_INTERACTION_CSS = `
 }
 .viewer-canvas .react-flow__node {
   transition: opacity ${DURATIONS.nodeIn}ms ease;
+}
+/*
+ * Selected-NODE outline comet (viewer-node.tsx renders the geometry: the
+ * node's real perimeter — cylinder, pipe, rounded shoulders — normalised to
+ * pathLength=100). Same bands, dash maths, keyframes and 1600ms clock as the
+ * edge comets, so element selection reads as ONE effect: light circling the
+ * node and streaming out along its connectors. Everything below is inert
+ * until the selection stylesheet lights ONE node's overlay and attaches the
+ * animations — unselected nodes carry zero running animations.
+ */
+.viewer-canvas .viewer-node-outline {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity ${VIEWER_DURATIONS.edgeFocus}ms ease,
+    visibility 0s linear ${VIEWER_DURATIONS.edgeFocus}ms;
+}
+.viewer-canvas .viewer-node-outline path {
+  fill: none;
+  stroke-linecap: round;
+}
+/* The constant affordance under the comet — never dips with the animation. */
+.viewer-canvas .viewer-node-outline-base {
+  stroke: var(--primary);
+  stroke-width: 2;
+  opacity: 0.5;
+}
+.viewer-canvas .viewer-node-flow-glow {
+  stroke-width: 7;
+  opacity: 0.35;
+  filter: blur(2.5px);
+  stroke-dasharray: 30 70;
+}
+.viewer-canvas .viewer-node-flow-tail {
+  stroke-width: 2.5;
+  opacity: 0.5;
+  stroke-dasharray: 22 78;
+}
+.viewer-canvas .viewer-node-flow-head {
+  stroke-width: 3;
+  stroke-dasharray: 9 91;
 }
 @keyframes viewer-edge-flow-glow {
   from { stroke-dashoffset: 30; }
@@ -843,46 +873,27 @@ function ViewerCanvasInner({
       selectedEdgeId !== null ? findEdge(diagram, selectedEdgeId) : null;
     const nameById = new Map(diagram.nodes.map((n) => [n.id, n.name]));
 
-    // Node selected: every touching edge runs the same source → target comet
-    // as an edge selection would — because the flow direction is real, the
-    // selected element's outgoing edges visibly stream away from it and its
-    // incoming ones toward it. Each gets a deterministic stagger offset from
-    // its 0-based position in the (frozen, ordered) touching set.
-    const flowDelayByEdge = new Map<string, number>();
-    if (selectedEdge === null && selectedNodeId !== null) {
-      let position = 0;
-      for (const edge of diagram.edges) {
-        if (edge.source === selectedNodeId || edge.target === selectedNodeId) {
-          flowDelayByEdge.set(
-            edge.id,
-            -((position * FLOW_STAGGER_MS) % VIEWER_DURATIONS.edgeFlow),
-          );
-          position += 1;
-        }
-      }
-    }
-
     const flowEdges: ViewerFlowEdge[] = diagram.edges.map((edge) => {
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
       const isSelected = selectedEdge !== null && edge.id === selectedEdge.id;
       // Edge selected: it alone is emphasised (and animated), all else dims.
-      // Node selected: the edges TOUCHING it flow — they are the payload
-      // (what this element talks to, and in which direction) — the rest dim.
+      // Node selected: the edges TOUCHING it keep full strength — they are
+      // the payload (what this element talks to) — and the rest dim. The
+      // animation stays on the node's own outline; the connectors hold still.
       const emphasis: EdgeEmphasis = isSelected
         ? "selected"
         : selectedEdge !== null
           ? "dimmed"
           : selectedNodeId !== null
-            ? flowDelayByEdge.has(edge.id)
-              ? "flowing"
+            ? edge.source === selectedNodeId || edge.target === selectedNodeId
+              ? "idle"
               : "dimmed"
             : "idle";
       const marker: EdgeMarker = {
         type: MarkerType.ArrowClosed,
-        // Idle/dimmed arrowheads only — while its flow overlay shows
-        // (selected edge, or edge touching the selected element), the edge
-        // component swaps in its own pulsing marker that answers the gradient
-        // band (see viewer-edge.tsx). Dimming reaches this one for free —
+        // Idle/dimmed arrowheads only — while selected, the edge component
+        // swaps in its own pulsing marker that answers the gradient band
+        // (see viewer-edge.tsx). Dimming reaches this one for free —
         // element opacity on the path applies to its markers too.
         color: "var(--edge)",
         width: 18,
@@ -908,7 +919,6 @@ function ViewerCanvasInner({
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,
-          flowDelayMs: flowDelayByEdge.get(edge.id) ?? 0,
           onSelect: toggleEdgeSelection,
         },
       };
@@ -978,8 +988,8 @@ function ViewerCanvasInner({
   }, [drillInto]);
 
   // Focus effect while an element is selected: the element and its direct
-  // neighbours stay at full strength (the touching edges get the animated
-  // flow via the "flowing" emphasis in the edges memo); everything else
+  // neighbours stay at full strength (the touching edges stay "idle" in the
+  // edges memo — emphasised by contrast, never animated); everything else
   // recedes. Same stylesheet-driven approach as the relationship focus
   // (node ids are model slugs) so node objects never change with selection —
   // see the remount note above the `nodes` memo.
@@ -991,9 +1001,30 @@ function ViewerCanvasInner({
       if (edge.target === selectedNodeId) keep.add(edge.source);
     }
     const notChain = [...keep].map((id) => `:not([data-id="${id}"])`).join("");
+    const selected = `.viewer-canvas .react-flow__node[data-id="${selectedNodeId}"]`;
+    // Selection affordance splits on motion preference. Motion: the node's
+    // outline overlay lights up AND starts marching — the animation property
+    // lives HERE, on the selected node only, so the other nodes' (invisible,
+    // always-mounted) overlays never tick. The three bands reuse the edge
+    // comets' keyframes and 1600ms clock verbatim, so element and
+    // relationship selection read as one system — but while an element is
+    // selected the ONLY moving light is this outline; its connectors hold
+    // still at full strength. Reduced motion: nothing marches anywhere — the
+    // classic static ring lights instead, exactly as before this animation
+    // existed.
+    const flowAnimation = (name: string): string =>
+      `animation: ${name} ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;`;
     return (
       `.viewer-canvas .react-flow__node${notChain} { opacity: ${DIM_NODE_OPACITY}; }\n` +
-      `.viewer-canvas .react-flow__node[data-id="${selectedNodeId}"] .viewer-node-selected-ring { opacity: 1; }`
+      `@media (prefers-reduced-motion: no-preference) {\n` +
+      `  ${selected} .viewer-node-outline { opacity: 1; visibility: visible; transition-delay: 0s; }\n` +
+      `  ${selected} .viewer-node-flow-glow { ${flowAnimation("viewer-edge-flow-glow")} }\n` +
+      `  ${selected} .viewer-node-flow-tail { ${flowAnimation("viewer-edge-flow-tail")} }\n` +
+      `  ${selected} .viewer-node-flow-head { ${flowAnimation("viewer-edge-flow-head")} }\n` +
+      `}\n` +
+      `@media (prefers-reduced-motion: reduce) {\n` +
+      `  ${selected} .viewer-node-selected-ring { opacity: 1; }\n` +
+      `}`
     );
   }, [diagram, selectedNodeId]);
 

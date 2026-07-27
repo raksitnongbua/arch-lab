@@ -11,8 +11,9 @@
  * `prefers-reduced-motion` fallback — defined once in viewer-canvas.tsx, so
  * no component ever re-checks the media query.
  *
- * The flow treatment (shared by "selected" and "flowing" emphasis): a
- * `userSpaceOnUse` linear gradient oriented along this edge's own anchors
+ * The flow treatment (selected edge only — a selected NODE animates its own
+ * outline instead, see viewer-node.tsx, and its touching edges stay static):
+ * a `userSpaceOnUse` linear gradient oriented along this edge's own anchors
  * paints THREE overlay paths that reuse the exact bezier `d`.
  * `pathLength={100}` normalises dash arithmetic, so each overlay is a dash
  * "band" whose leading edge travels source → target along the true curve
@@ -20,12 +21,7 @@
  * in flight. Stacked bands of decreasing length build the comet falloff; a
  * wide blurred one underneath is the glow. The arrowhead joins in via a
  * private pulsing <marker> swapped in only while the flow is showing.
- * All ids come from useId, so several live instances can never collide —
- * which matters now that a selected NODE lights up every touching edge at
- * once ("flowing"), each riding this same mechanism with a deterministic
- * negative `animation-delay` (data.flowDelayMs) so neighbours don't pulse in
- * lockstep. The delay is applied inline to all four animated pieces of one
- * edge (glow, tail, head, arrowhead) so they stay one comet.
+ * All ids come from useId, so several live instances can never collide.
  *
  * The label chip is a real <button>: it is the keyboard path into edge
  * selection (edges' SVG paths are not tabbable in a view-only flow) and a
@@ -55,12 +51,11 @@ import {
 } from "@/features/editor/lib/edge-geometry";
 
 /**
- * How a connector renders relative to the current selection.
- * "flowing" = not itself selected, but touching the selected ELEMENT: it gets
- * the same emphasised base + animated comet as "selected" (the chip and
- * accessible name stay idle — the edge is evidence, not the selection).
+ * How a connector renders relative to the current selection. Edges touching
+ * a selected NODE stay "idle" (full strength — the dimming of everything else
+ * is what emphasises them); only a selected EDGE animates.
  */
-export type EdgeEmphasis = "idle" | "selected" | "dimmed" | "flowing";
+export type EdgeEmphasis = "idle" | "selected" | "dimmed";
 
 export interface ViewerEdgeData extends Record<string, unknown> {
   edge: C4Edge;
@@ -72,13 +67,6 @@ export interface ViewerEdgeData extends Record<string, unknown> {
   sourceName: string;
   targetName: string;
   emphasis: EdgeEmphasis;
-  /**
-   * Stagger for the "flowing" comet, in milliseconds — a deterministic,
-   * NEGATIVE animation-delay (start mid-cycle, never stall) computed by the
-   * canvas from the edge's stable position in the diagram's edge order.
-   * Ignored unless the flow overlay is showing.
-   */
-  flowDelayMs?: number;
   /** Toggle this edge's selection — the canvas owns the state. */
   onSelect: (edgeId: string) => void;
 }
@@ -142,18 +130,9 @@ function ViewerEdgeInner({
   const emphasis = data?.emphasis ?? "idle";
   const isSelected = emphasis === "selected";
   const isDimmed = emphasis === "dimmed";
-  // Selected edge OR edge touching the selected element: same comet. The two
-  // states are mutually exclusive upstream (element/relationship selection
-  // displace each other), but if both ever applied, "selected" simply wins
-  // the tie-breaks below (chip emphasis, accessible name) and the overlay is
-  // rendered once either way.
-  const isFlowing = emphasis === "flowing";
-  const showFlow = isSelected || isFlowing;
-  // One shared delay keeps glow/tail/head/arrowhead phase-locked per edge.
-  // Inline style beats the stylesheet's `animation` shorthand (which resets
-  // delay to 0), and under prefers-reduced-motion the CSS sets
-  // `animation: none`, making the delay moot — exactly right.
-  const flowDelay = `${data?.flowDelayMs ?? 0}ms`;
+  // The comet flows on the selected edge alone — a selected NODE runs its
+  // own outline comet (viewer-node.tsx) while its touching edges hold still.
+  const showFlow = isSelected;
 
   const joiner = data?.edge.direction === "bidirectional" ? "and" : "to";
   const chipText = label || technology || "Unlabelled relationship";
@@ -167,8 +146,7 @@ function ViewerEdgeInner({
       <BaseEdge
         id={id}
         path={path}
-        // While the flow shows (selected edge, or edge touching the selected
-        // element), the stock arrowheads hand over to this edge's own
+        // While selected, the stock arrowheads hand over to this edge's own
         // pulsing marker so the tip brightens in sympathy with the band
         // arriving — a live gradient line ending in a dull static arrow is
         // exactly the unfinished look this avoids. Geometry (viewBox, ref
@@ -226,7 +204,6 @@ function ViewerEdgeInner({
             >
               <polyline
                 className="viewer-edge-flow-arrow"
-                style={{ animationDelay: flowDelay }}
                 points="-5,-4 0,0 -5,4 -5,-4"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -237,21 +214,18 @@ function ViewerEdgeInner({
             d={path}
             pathLength={100}
             stroke={`url(#${gradientId})`}
-            style={{ animationDelay: flowDelay }}
             className="viewer-edge-flow viewer-edge-flow-glow"
           />
           <path
             d={path}
             pathLength={100}
             stroke={`url(#${gradientId})`}
-            style={{ animationDelay: flowDelay }}
             className="viewer-edge-flow viewer-edge-flow-tail"
           />
           <path
             d={path}
             pathLength={100}
             stroke={`url(#${gradientId})`}
-            style={{ animationDelay: flowDelay }}
             className="viewer-edge-flow viewer-edge-flow-head"
           />
         </g>

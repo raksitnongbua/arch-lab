@@ -22,12 +22,12 @@
  *     with selection and edges never remount mid-interaction.
  */
 
-import { memo } from "react";
+import { memo, useId } from "react";
 import { ZoomIn } from "lucide-react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
-import type { C4Level, C4Node } from "@/types";
+import type { C4Level, C4Node, C4NodeType } from "@/types";
 
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 import {
@@ -60,12 +60,101 @@ export interface ViewerNodeData extends Record<string, unknown> {
 
 export type ViewerFlowNode = Node<ViewerNodeData, "c4">;
 
+/* -------------------------------------------------------------------------- */
+/* Selection-outline geometry                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Corner radii (px) of the CSS-box silhouettes, top/bottom — kept in lockstep
+ * with `SHAPE_WRAPPER_CLASSES` and the theme's `--radius: 0.625rem` (10px):
+ * rounded-t-[28px]/rounded-b-xl (person), rounded-lg (systems/containers),
+ * rounded-md (component), rounded-sm (code element). `database` and `queue`
+ * are SVG silhouettes and never consult this table.
+ */
+const BOX_CORNER_RADII: Record<C4NodeType, { top: number; bottom: number }> = {
+  person: { top: 28, bottom: 14 },
+  softwareSystem: { top: 10, bottom: 10 },
+  externalSystem: { top: 10, bottom: 10 },
+  container: { top: 10, bottom: 10 },
+  component: { top: 8, bottom: 8 },
+  codeElement: { top: 6, bottom: 6 },
+  database: { top: 0, bottom: 0 },
+  queue: { top: 0, bottom: 0 },
+};
+
+/** Native design-space of the editor's SVG silhouettes (node-shapes.tsx). */
+const SILHOUETTE_VIEWBOX = { width: 176, height: 88 };
+
+function roundedRectPath(
+  width: number,
+  height: number,
+  topRadius: number,
+  bottomRadius: number,
+): string {
+  const cap = Math.min(width, height) / 2;
+  const rt = Math.min(topRadius, cap);
+  const rb = Math.min(bottomRadius, cap);
+  return (
+    `M ${rt} 0 H ${width - rt} A ${rt} ${rt} 0 0 1 ${width} ${rt} ` +
+    `V ${height - rb} A ${rb} ${rb} 0 0 1 ${width - rb} ${height} ` +
+    `H ${rb} A ${rb} ${rb} 0 0 1 0 ${height - rb} ` +
+    `V ${rt} A ${rt} ${rt} 0 0 1 ${rt} 0 Z`
+  );
+}
+
+/**
+ * The node's outer perimeter as a single closed path in its own pixel space,
+ * traced clockwise from the top — the track the selection comet runs on.
+ *
+ * Box types reproduce the CSS border-radius geometry exactly (radii above).
+ * `database`/`queue` re-trace the editor silhouette's outer edge: the same
+ * curve coordinates as node-shapes.tsx, scaled from its 176×88 design space
+ * to the node's real size (interior lines — the cylinder rim's lower arc,
+ * the pipe's inner rim — are not part of the perimeter and are skipped).
+ */
+function outlinePath(type: C4NodeType, width: number, height: number): string {
+  const sx = width / SILHOUETTE_VIEWBOX.width;
+  const sy = height / SILHOUETTE_VIEWBOX.height;
+  if (type === "database") {
+    // Cylinder: over the top rim, down the right wall, under the bottom
+    // bulge, up the left wall. Rim ellipse: centre y=12, rx=84, ry=10.
+    const rx = 84 * sx;
+    const ry = 10 * sy;
+    return (
+      `M ${4 * sx} ${12 * sy} A ${rx} ${ry} 0 0 1 ${172 * sx} ${12 * sy} ` +
+      `L ${172 * sx} ${76 * sy} A ${rx} ${ry} 0 0 1 ${4 * sx} ${76 * sy} Z`
+    );
+  }
+  if (type === "queue") {
+    // Pipe: along the top, around the right end cap, back along the bottom,
+    // around the open left rim (through its leftmost bulge at x=2).
+    return (
+      `M ${14 * sx} ${4 * sy} L ${160 * sx} ${4 * sy} ` +
+      `A ${13 * sx} ${40 * sy} 0 0 1 ${160 * sx} ${84 * sy} ` +
+      `L ${14 * sx} ${84 * sy} ` +
+      `A ${12 * sx} ${40 * sy} 0 0 1 ${14 * sx} ${4 * sy} Z`
+    );
+  }
+  const radii = BOX_CORNER_RADII[type];
+  return roundedRectPath(width, height, radii.top, radii.bottom);
+}
+
 function ViewerNodeInner({
   data,
 }: NodeProps<ViewerFlowNode>): React.JSX.Element {
   const { node, drill, onDrill, isPlaceholder } = data;
   const { def } = resolveIcon(node);
   const Icon = def.Svg;
+
+  // Per-instance gradient id (sanitised — useId's delimiters are not valid
+  // inside url(#…)). Never shared: a duplicate id would silently recolour the
+  // wrong node's outline.
+  const outlineKey = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const outlineGradientId = `viewer-node-outline-grad-${outlineKey}`;
+  // The comet's track: this node's outer perimeter, in its own pixel space.
+  // Sizes are frozen in the model (the viewer never resizes), so the flow
+  // node's width/height — and therefore this rendered box — equal node.size.
+  const outline = outlinePath(node.type, node.size.width, node.size.height);
 
   const meta =
     node.technology !== undefined && node.technology !== ""
@@ -134,11 +223,58 @@ function ViewerNodeInner({
         aria-hidden="true"
         className="pointer-events-none absolute -inset-1 z-[2] rounded-[inherit] opacity-0 ring-2 ring-primary/50 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
       />
-      {/* Selection ring — lit by the canvas's selection stylesheet. */}
+      {/* Selection ring — lit by the canvas's selection stylesheet (under
+          prefers-reduced-motion only; motion users get the outline below). */}
       <span
         aria-hidden="true"
         className="viewer-node-selected-ring pointer-events-none absolute -inset-1 z-[2] rounded-[inherit] opacity-0 ring-2 ring-primary transition-opacity duration-150"
       />
+      {/*
+       * Selection outline — the ONE moving light while an element is
+       * selected (its connectors stay emphasised but static).
+       * Always mounted (selection must never remount nodes — see the canvas's
+       * projection notes) and invisible until the canvas's selection
+       * stylesheet lights it AND starts its animation; nothing here animates
+       * for the other nodes. Same recipe as viewer-edge.tsx: the perimeter
+       * normalised to pathLength=100, a static base stroke as the constant
+       * "selected" affordance, then glow → tail → head dash bands riding the
+       * SAME keyframes and 1600ms clock as the edge-selection comet,
+       * recoloured primary → accent by one per-node gradient. The stroke
+       * rides the border line itself, well clear of the padded label.
+       */}
+      <svg
+        aria-hidden="true"
+        viewBox={`0 0 ${node.size.width} ${node.size.height}`}
+        preserveAspectRatio="none"
+        className="viewer-node-outline pointer-events-none absolute inset-0 z-[2] size-full overflow-visible"
+      >
+        <defs>
+          <linearGradient id={outlineGradientId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="var(--primary)" />
+            <stop offset="55%" stopColor="var(--primary)" />
+            <stop offset="100%" stopColor="var(--accent)" />
+          </linearGradient>
+        </defs>
+        <path d={outline} className="viewer-node-outline-base" />
+        <path
+          d={outline}
+          pathLength={100}
+          stroke={`url(#${outlineGradientId})`}
+          className="viewer-node-flow-glow"
+        />
+        <path
+          d={outline}
+          pathLength={100}
+          stroke={`url(#${outlineGradientId})`}
+          className="viewer-node-flow-tail"
+        />
+        <path
+          d={outline}
+          pathLength={100}
+          stroke={`url(#${outlineGradientId})`}
+          className="viewer-node-flow-head"
+        />
+      </svg>
     </>
   );
 
