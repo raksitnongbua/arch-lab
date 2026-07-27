@@ -385,9 +385,11 @@ function cancelTransition(active: ActiveTransition | null): void {
 
 function ViewerCanvasInner({
   model,
+  initialDiagramId,
   onDiagramChange,
 }: {
   model: ViewerModel;
+  initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
 }): React.JSX.Element {
   const { getViewport, setViewport } = useReactFlow<
@@ -395,7 +397,14 @@ function ViewerCanvasInner({
     ViewerFlowEdge
   >();
 
-  const [diagramId, setDiagramId] = useState(model.rootDiagramId);
+  // Deep links (share) may name a starting diagram; unknown ids fall back to
+  // the root so a stale or hand-edited link still renders something honest.
+  const [diagramId, setDiagramId] = useState(() =>
+    initialDiagramId !== undefined &&
+    model.diagrams[initialDiagramId] !== undefined
+      ? initialDiagramId
+      : model.rootDiagramId,
+  );
 
   // Tell interested parents (export control, code panel) which diagram is on
   // screen. Fires for the initial diagram too, so consumers never start stale.
@@ -1131,15 +1140,22 @@ function ViewerCanvasInner({
 /** The mount: provider + inner canvas over a (deep-frozen) viewer model. */
 export function ViewerCanvas({
   model,
+  initialDiagramId,
   onDiagramChange,
 }: {
   model: ViewerModel;
+  /** Open on this diagram (share deep links); unknown ids fall back to root. */
+  initialDiagramId?: string;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
-      <ViewerCanvasInner model={model} onDiagramChange={onDiagramChange} />
+      <ViewerCanvasInner
+        model={model}
+        initialDiagramId={initialDiagramId}
+        onDiagramChange={onDiagramChange}
+      />
     </ReactFlowProvider>
   );
 }

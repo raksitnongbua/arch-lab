@@ -45,6 +45,7 @@ import { EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import { ViewerExportButton } from "../export/export-button";
+import { ViewerShareButton, type ShareSource } from "../share/share-button";
 import { deepFreeze, getDiagram, type ViewerModel } from "../lib/model";
 import { ViewerCanvas } from "./viewer-canvas";
 
@@ -76,9 +77,15 @@ const readFalse = (): boolean => false;
 
 export function ViewerShell({
   model,
+  initialDiagramId,
+  share,
   onDiagramChange,
 }: {
   model: ViewerModel;
+  /** Open on this diagram (share deep links); unknown ids fall back to root. */
+  initialDiagramId?: string;
+  /** Where the model came from — enables the Share control when provided. */
+  share?: ShareSource;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
 }): React.JSX.Element {
@@ -91,10 +98,15 @@ export function ViewerShell({
   const immersiveRef = useRef(false);
   const [announcement, setAnnouncement] = useState("");
 
-  // The diagram on screen — drives the export control (and is forwarded to
-  // any interested parent, e.g. the paste page's Mermaid conversion panel).
-  const [currentDiagramId, setCurrentDiagramId] = useState(
-    frozenModel.rootDiagramId,
+  // The diagram on screen — drives the export and share controls (and is
+  // forwarded to any interested parent, e.g. the paste page). Starts at the
+  // deep-linked diagram when one is named and exists, else at the root —
+  // the same resolution the canvas applies.
+  const [currentDiagramId, setCurrentDiagramId] = useState(() =>
+    initialDiagramId !== undefined &&
+    frozenModel.diagrams[initialDiagramId] !== undefined
+      ? initialDiagramId
+      : frozenModel.rootDiagramId,
   );
   const handleDiagramChange = useCallback(
     (diagramId: string) => {
@@ -215,6 +227,15 @@ export function ViewerShell({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {share !== undefined ? (
+              <ViewerShareButton
+                share={share}
+                modelTitle={frozenModel.title}
+                diagram={currentDiagram}
+                rootDiagramId={frozenModel.rootDiagramId}
+                onAnnounce={setAnnouncement}
+              />
+            ) : null}
             <ViewerExportButton
               modelTitle={frozenModel.title}
               diagram={currentDiagram}
@@ -281,6 +302,7 @@ export function ViewerShell({
       <div className="relative min-h-96 flex-1">
         <ViewerCanvas
           model={frozenModel}
+          initialDiagramId={initialDiagramId}
           onDiagramChange={handleDiagramChange}
         />
       </div>

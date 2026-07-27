@@ -58,6 +58,7 @@ import {
   type PaneId,
   type SyncedModel,
 } from "../input/sync";
+import { decodeShareFragment } from "../share/codec";
 import { ViewerShell } from "./viewer-shell";
 
 /**
@@ -79,6 +80,9 @@ interface PaneErrorState {
   error: PaneErrorDetail;
 }
 
+/** Outcome of trying to open a `#m=…` share link on this page. */
+type SharedLinkNotice = { kind: "opened" } | { kind: "error"; message: string };
+
 export function ViewerPlayground(): React.JSX.Element {
   /* ---- state ---------------------------------------------------------- */
 
@@ -94,6 +98,14 @@ export function ViewerPlayground(): React.JSX.Element {
   // in the new model — otherwise drill-down position survives every edit.
   const [shellEpoch, setShellEpoch] = useState(0);
   const currentDiagramRef = useRef(SEED_MODEL.model.rootDiagramId);
+
+  // Share links (`/view/new#m=…`): the model arrives inside the fragment.
+  const [sharedNotice, setSharedNotice] = useState<SharedLinkNotice | null>(
+    null,
+  );
+  const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
+    string | null
+  >(null);
 
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
@@ -157,6 +169,64 @@ export function ViewerPlayground(): React.JSX.Element {
     return () => window.clearTimeout(timer);
   }, [pending, applySync]);
 
+  /* ---- opening a share link (`#m=…`) ------------------------------------ */
+  // The fragment never reaches the server, so only the client can read it.
+  // Read on mount (and again on hashchange, for a second link clicked in the
+  // same tab); a decoded model replaces both panes exactly as an import
+  // does, and a corrupt or truncated payload becomes a visible error — the
+  // seed model keeps rendering underneath.
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const openFromHash = async () => {
+      const decoded = await decodeShareFragment(window.location.hash);
+      if (cancelled || decoded.status === "none") return;
+
+      if (decoded.status === "error") {
+        setSharedNotice({ kind: "error", message: decoded.message });
+        setAnnouncement(
+          `This share link could not be opened — ${decoded.message}.`,
+        );
+        return;
+      }
+
+      const result = parsePane("aft", decoded.aftText);
+      if (result.status !== "ok") {
+        const message =
+          "the model inside it does not parse — the link was probably truncated or altered by the app that carried it";
+        setSharedNotice({ kind: "error", message });
+        setAnnouncement(`This share link could not be opened — ${message}.`);
+        return;
+      }
+
+      setPending(null);
+      adoptSynced(result.value, null);
+      const target =
+        decoded.diagramId !== null &&
+        result.value.model.diagrams[decoded.diagramId] !== undefined
+          ? decoded.diagramId
+          : result.value.model.rootDiagramId;
+      currentDiagramRef.current = target;
+      setSharedInitialDiagram(target);
+      setShellEpoch((epoch) => epoch + 1);
+      setSharedNotice({ kind: "opened" });
+      setAnnouncement(
+        "Opened a model from a share link — nothing was uploaded; both panes hold its source.",
+      );
+    };
+
+    void openFromHash();
+    const onHashChange = () => {
+      void openFromHash();
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("hashchange", onHashChange);
+    };
+  }, [adoptSynced]);
+
   /* ---- pane interactions ----------------------------------------------- */
 
   const handlePaneChange = useCallback((pane: PaneId, value: string) => {
@@ -210,8 +280,12 @@ export function ViewerPlayground(): React.JSX.Element {
   );
 
   // Reports which diagram is on screen so edits keep the drill-down place.
+  // Also retires the share link's one-shot starting diagram: once the shell
+  // is up, later remounts (edits that delete the current diagram) go back to
+  // the model root, not to a stale deep link.
   const handleDiagramChange = useCallback((diagramId: string) => {
     currentDiagramRef.current = diagramId;
+    setSharedInitialDiagram((current) => (current === null ? current : null));
   }, []);
 
   /* ---- Tab handling — indent, with a documented escape ------------------ */
@@ -268,6 +342,50 @@ export function ViewerPlayground(): React.JSX.Element {
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
+
+      {/* ---- share-link outcome --------------------------------------------- */}
+      {sharedNotice !== null ? (
+        <div
+          className={cn(
+            "flex items-start justify-between gap-3 rounded-lg border px-4 py-3",
+            sharedNotice.kind === "opened"
+              ? "border-accent/40 bg-accent/10"
+              : "border-destructive/40 bg-destructive/5",
+          )}
+        >
+          <p className="text-sm leading-relaxed text-foreground">
+            {sharedNotice.kind === "opened" ? (
+              <>
+                <span className="font-semibold">Opened from a share link.</span>{" "}
+                The model below travelled inside the link itself — nothing was
+                uploaded, and nothing is stored. Both panes hold its source; any
+                edits stay in your browser.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold">
+                  This share link could not be opened
+                </span>{" "}
+                — {sharedNotice.message}. Ask the sender to re-copy the link, or
+                to send the <span className="font-mono text-xs">.aft</span> file
+                instead. The example model is shown below.
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={() => setSharedNotice(null)}
+            aria-label="Dismiss the share link notice"
+            className={buttonClasses({
+              variant: "ghost",
+              size: "sm",
+              className: "shrink-0",
+            })}
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
 
       {/* ---- Mermaid import ------------------------------------------------ */}
       <div className="flex flex-wrap items-center gap-2">
@@ -363,6 +481,8 @@ export function ViewerPlayground(): React.JSX.Element {
         <ViewerShell
           key={shellEpoch}
           model={synced.model}
+          initialDiagramId={sharedInitialDiagram ?? undefined}
+          share={{ kind: "payload", file: synced.file }}
           onDiagramChange={handleDiagramChange}
         />
       </section>

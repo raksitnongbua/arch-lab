@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import {
   listViewerModelIds,
   loadViewerModel,
-  ViewerShell,
+  ViewerBundledView,
 } from "@/features/viewer";
 
 interface ViewPageProps {
@@ -62,5 +62,5 @@ export default async function ViewPage({
     );
   }
 
-  return <ViewerShell model={result.model} />;
+  return <ViewerBundledView model={result.model} />;
 }
