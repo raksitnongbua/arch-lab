@@ -23,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { HeroDiagram } from "@/features/marketing/hero-diagram";
 import { APP_NAME, C4_LEVEL_META } from "@/lib/constants";
 import type { C4Level } from "@/types";
 
@@ -69,50 +70,57 @@ export default function Home() {
 
       {/* ---------------------------------------------------------------- hero */}
       <section className="mx-auto w-full max-w-6xl px-5 pt-16 pb-14 sm:px-8 sm:pt-24 sm:pb-20">
-        <Badge variant="accent" className="mb-6">
-          <span className="size-1.5 rounded-full bg-accent" />
-          Early preview · C4 editor and live demo working today
-        </Badge>
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-16">
+          <div>
+            <Badge variant="accent" className="mb-6">
+              <span className="size-1.5 rounded-full bg-accent" />
+              Early preview · C4 editor and live demo working today
+            </Badge>
 
-        <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
-          Architecture diagrams that{" "}
-          <span className="af-running-gradient bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
-            survive code review
-          </span>
-          .
-        </h1>
+            <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
+              Architecture diagrams that{" "}
+              <span className="af-running-gradient bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+                survive code review
+              </span>
+              .
+            </h1>
 
-        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
-          <span className="font-mono text-base text-foreground sm:text-lg">
-            {APP_NAME}
-          </span>{" "}
-          is a local-first workspace for architecture documentation. It opens
-          with a full C4-model editor — with sequence diagrams, a data
-          dictionary, and network diagrams planned next — and saves everything
-          as diff-readable JSON you own.
-        </p>
+            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
+              <span className="font-mono text-base text-foreground sm:text-lg">
+                {APP_NAME}
+              </span>{" "}
+              is a local-first workspace for architecture documentation. It
+              opens with a full C4-model editor — with sequence diagrams, a data
+              dictionary, and network diagrams planned next — and saves
+              everything as diff-readable JSON you own.
+            </p>
 
-        <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-          <Link
-            href="/editor"
-            aria-describedby="cta-note"
-            className={buttonClasses({ size: "lg" })}
-          >
-            Open Editor
-            <ArrowRight aria-hidden="true" />
-          </Link>
-          <Link
-            href="/demo"
-            className={buttonClasses({ variant: "outline", size: "lg" })}
-          >
-            Explore the live demo
-          </Link>
-          <p id="cta-note" className="text-sm text-muted-foreground">
-            No account, no cloud — the model saves to a JSON file you own.
-          </p>
+            <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <Link
+                href="/editor"
+                aria-describedby="cta-note"
+                className={buttonClasses({ size: "lg" })}
+              >
+                Open Editor
+                <ArrowRight aria-hidden="true" />
+              </Link>
+              <Link
+                href="/demo"
+                className={buttonClasses({ variant: "outline", size: "lg" })}
+              >
+                Explore the live demo
+              </Link>
+              <p id="cta-note" className="text-sm text-muted-foreground">
+                No account, no cloud — the model saves to a JSON file you own.
+              </p>
+            </div>
+          </div>
+
+          {/* Decorative mini C4 diagram — desktop only, hidden from AT. */}
+          <HeroDiagram className="hidden lg:block" />
         </div>
 
-        <ul className="mt-14 grid max-w-3xl grid-cols-2 gap-x-8 gap-y-6 border-t border-border/60 pt-8 sm:grid-cols-4">
+        <ul className="mt-14 grid grid-cols-2 gap-x-8 gap-y-6 border-t border-border/60 pt-8 sm:grid-cols-4">
           <Stat value="4" label="C4 levels, editable today" />
           <Stat value="1" label="JSON file per model" />
           <Stat value="0" label="Accounts or servers" />
@@ -205,7 +213,7 @@ export default function Home() {
                       <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-muted-foreground">
                         <Icon aria-hidden="true" className="size-5" />
                       </span>
-                      <Badge variant="outline">Planned</Badge>
+                      <Badge variant="outline">Coming soon</Badge>
                     </div>
                     <CardTitle className="text-lg text-muted-foreground">
                       {diagramType.title}
