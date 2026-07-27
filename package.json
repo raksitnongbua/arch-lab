@@ -12,7 +12,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "check:roundtrip": "node scripts/roundtrip-check.mjs",
-    "check:mermaid": "node scripts/mermaid-check.mjs"
+    "check:mermaid": "node scripts/mermaid-check.mjs",
+    "check:archtext": "node scripts/archtext-check.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.2",
