@@ -1,0 +1,1118 @@
+{
+  "$schema": "https://arch-flow.dev/schema/v1/diagram.schema.json",
+  "version": "1.0",
+  "metadata": {
+    "title": "Atlas Shop",
+    "description": "Global event-sourced order shop. Commands append immutable events to a regional event store, Kafka carries the stream, projections build eventually-consistent read models, and MirrorMaker 2 mirrors events between regions. The diagrams show one regional stamp (EU); the US region runs the identical topology.",
+    "owner": "orders-platform",
+    "tags": ["commerce", "event-sourcing", "kafka", "multi-region"],
+    "createdAt": "2026-07-28T00:00:00Z",
+    "updatedAt": "2026-07-28T00:00:00Z",
+    "tagColors": {
+      "global": "#0ea5e9",
+      "regional": "#8b5cf6",
+      "region-us": "#f59e0b",
+      "write-side": "#e0524d",
+      "read-side": "#10b981",
+      "async": "#eab308"
+    },
+    "generator": {
+      "name": "arch-flow",
+      "version": "0.1.0"
+    }
+  },
+  "rootDiagramId": "d-ctx-root",
+  "diagrams": [
+    {
+      "id": "d-cmp-order-command",
+      "level": "component",
+      "title": "Order Command Service — Components",
+      "description": "The write side: commands in, events out. No component updates state in place — the aggregate decides, the repository appends, the relay publishes. Boundary nodes come from the container view.",
+      "ownerNodeId": "order-command-service",
+      "parentDiagramId": "d-cnt-atlas",
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "command-handler",
+          "type": "component",
+          "name": "Command Handler",
+          "description": "Decodes and authenticates commands, loads the order's event history, invokes the aggregate, appends the new events, and returns the outcome synchronously.",
+          "technology": "Go",
+          "position": {
+            "x": 560,
+            "y": 176
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "event-store-repository",
+          "type": "component",
+          "name": "Event Store Repository",
+          "description": "Appends with optimistic concurrency: the INSERT fails if another writer advanced the stream (unique stream_id + version), and the caller retries against fresh history.",
+          "technology": "Go / pgx",
+          "position": {
+            "x": 312,
+            "y": 528
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "ext-eventstore-cmp",
+          "type": "database",
+          "name": "Event Store",
+          "position": {
+            "x": 320,
+            "y": 704
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-atlas",
+            "nodeId": "event-store"
+          }
+        },
+        {
+          "id": "ext-gateway-cmd",
+          "type": "externalSystem",
+          "name": "API Gateway",
+          "position": {
+            "x": 568,
+            "y": 24
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-atlas",
+            "nodeId": "api-gateway"
+          }
+        },
+        {
+          "id": "ext-kafka-cmd",
+          "type": "queue",
+          "name": "Event Backbone",
+          "position": {
+            "x": 1352,
+            "y": 528
+          },
+          "size": {
+            "width": 192,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-atlas",
+            "nodeId": "kafka"
+          }
+        },
+        {
+          "id": "ext-psp-cmp",
+          "type": "externalSystem",
+          "name": "Payment Gateway",
+          "position": {
+            "x": 1352,
+            "y": 176
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-atlas",
+            "nodeId": "ext-payment"
+          }
+        },
+        {
+          "id": "order-aggregate",
+          "type": "component",
+          "name": "Order Aggregate",
+          "description": "Pure decision logic, rehydrated by folding the event stream. decide() enforces invariants — no paying a cancelled order — and emits new events. No I/O.",
+          "technology": "Go",
+          "position": {
+            "x": 560,
+            "y": 352
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          },
+          "childDiagramId": "d-code-order-aggregate"
+        },
+        {
+          "id": "outbox-relay",
+          "type": "component",
+          "name": "Outbox Relay",
+          "description": "Tails the committed journal and publishes each event to Kafka at-least-once, in stream order, key = order id. The journal is its own outbox: appending the event and queueing it are one transaction.",
+          "technology": "Go",
+          "position": {
+            "x": 856,
+            "y": 528
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "payment-process-manager",
+          "type": "component",
+          "name": "Payment Process Manager",
+          "description": "Saga: reacts to OrderPlaced by authorising payment with the gateway, then submits RecordPaymentResult as a new command. Retries carry idempotency keys; a slow gateway never blocks order acceptance.",
+          "technology": "Go",
+          "position": {
+            "x": 952,
+            "y": 176
+          },
+          "size": {
+            "width": 192,
+            "height": 96
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-gwc-handler",
+          "source": "ext-gateway-cmd",
+          "target": "command-handler",
+          "label": "PlaceOrder, CancelOrder, RecordPaymentResult, RecordShipment",
+          "technology": "HTTP/JSON",
+          "direction": "forward",
+          "realizes": "e-gateway-commands"
+        },
+        {
+          "id": "e-handler-aggregate",
+          "source": "command-handler",
+          "target": "order-aggregate",
+          "label": "Rehydrates state, calls decide(state, command)",
+          "direction": "forward"
+        },
+        {
+          "id": "e-handler-repo",
+          "source": "command-handler",
+          "target": "event-store-repository",
+          "label": "Appends new events at the expected version",
+          "direction": "forward"
+        },
+        {
+          "id": "e-outbox-eventstore",
+          "source": "outbox-relay",
+          "target": "ext-eventstore-cmp",
+          "label": "Tails the journal (poll + LISTEN/NOTIFY)",
+          "technology": "SQL/TCP",
+          "direction": "forward",
+          "style": "dashed",
+          "realizes": "e-commands-eventstore"
+        },
+        {
+          "id": "e-outbox-kafka",
+          "source": "outbox-relay",
+          "target": "ext-kafka-cmd",
+          "label": "Publishes to orders.events.v1, key = order id, at-least-once",
+          "technology": "Kafka protocol",
+          "direction": "forward",
+          "realizes": "e-commands-kafka"
+        },
+        {
+          "id": "e-pm-handler",
+          "source": "payment-process-manager",
+          "target": "command-handler",
+          "label": "Submits RecordPaymentResult",
+          "direction": "forward"
+        },
+        {
+          "id": "e-pm-kafka",
+          "source": "payment-process-manager",
+          "target": "ext-kafka-cmd",
+          "label": "Consumes OrderPlaced (group payment-pm-eu)",
+          "technology": "Kafka protocol",
+          "direction": "forward",
+          "style": "dashed",
+          "tags": ["async"],
+          "realizes": "e-commands-kafka"
+        },
+        {
+          "id": "e-pm-psp",
+          "source": "payment-process-manager",
+          "target": "ext-psp-cmp",
+          "label": "Authorise / capture with idempotency key",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-commands-payment"
+        },
+        {
+          "id": "e-repo-eventstore",
+          "source": "event-store-repository",
+          "target": "ext-eventstore-cmp",
+          "label": "INSERT events; unique (stream_id, version) rejects concurrent writers",
+          "technology": "SQL/TCP",
+          "direction": "bidirectional",
+          "realizes": "e-commands-eventstore"
+        }
+      ]
+    },
+    {
+      "id": "d-cmp-projections",
+      "level": "component",
+      "title": "Order Projection Service — Components",
+      "description": "The read side: a consumer pulls events (local and mirrored), a projector folds them into views, the query API serves them. Everything here is disposable and rebuildable from the topic.",
+      "ownerNodeId": "order-projection-service",
+      "parentDiagramId": "d-cnt-atlas",
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "event-consumer",
+          "type": "component",
+          "name": "Event Consumer",
+          "description": "Subscribes to orders.events.v1 and us.orders.events.v1 in group orders-projector-eu. Commits offsets only after a batch is durably projected — redelivery is expected and safe.",
+          "technology": "Go / franz-go",
+          "position": {
+            "x": 456,
+            "y": 288
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "ext-gateway-proj",
+          "type": "externalSystem",
+          "name": "API Gateway",
+          "position": {
+            "x": 344,
+            "y": 32
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-atlas",
+            "nodeId": "api-gateway"
+          }
+        },
+        {
+          "id": "ext-kafka-proj",
+          "type": "queue",
+          "name": "Event Backbone",
+          "position": {
+            "x": 24,
+            "y": 288
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-atlas",
+            "nodeId": "kafka"
+          }
+        },
+        {
+          "id": "ext-readstore-proj",
+          "type": "database",
+          "name": "Order Read Store",
+          "position": {
+            "x": 1192,
+            "y": 288
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-atlas",
+            "nodeId": "read-store"
+          }
+        },
+        {
+          "id": "order-query-api",
+          "type": "component",
+          "name": "Order Query API",
+          "description": "Serves order summary, history and tracking from the read store. Responses carry the view's last applied (order id, version) so clients can detect staleness against a command response.",
+          "technology": "Go / chi",
+          "position": {
+            "x": 744,
+            "y": 32
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-view-projector",
+          "type": "component",
+          "name": "Order View Projector",
+          "description": "Folds events into denormalised documents. Idempotent: an upsert at-or-below the view's stored version is a no-op, so at-least-once delivery never double-applies.",
+          "technology": "Go",
+          "position": {
+            "x": 824,
+            "y": 288
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "replay-coordinator",
+          "type": "component",
+          "name": "Replay Coordinator",
+          "description": "Rebuilds a view after a schema change: provisions a fresh collection, rewinds the consumer group to the topic start, replays, then atomically swaps the live view.",
+          "technology": "Go",
+          "position": {
+            "x": 456,
+            "y": 512
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-consumer-kafka",
+          "source": "event-consumer",
+          "target": "ext-kafka-proj",
+          "label": "Fetches event batches; commits offsets after apply",
+          "technology": "Kafka protocol",
+          "direction": "forward",
+          "style": "dashed",
+          "tags": ["async"],
+          "realizes": "e-projections-kafka"
+        },
+        {
+          "id": "e-consumer-projector",
+          "source": "event-consumer",
+          "target": "order-view-projector",
+          "label": "Dispatches events in partition order",
+          "direction": "forward"
+        },
+        {
+          "id": "e-gwp-query",
+          "source": "ext-gateway-proj",
+          "target": "order-query-api",
+          "label": "GET /orders/{id}, /orders?customer=…",
+          "technology": "HTTP/JSON",
+          "direction": "forward",
+          "realizes": "e-gateway-queries"
+        },
+        {
+          "id": "e-projector-readstore",
+          "source": "order-view-projector",
+          "target": "ext-readstore-proj",
+          "label": "Versioned upserts, keyed by order id",
+          "technology": "MongoDB wire protocol",
+          "direction": "forward",
+          "realizes": "e-projections-readstore"
+        },
+        {
+          "id": "e-query-readstore",
+          "source": "order-query-api",
+          "target": "ext-readstore-proj",
+          "label": "Reads denormalised views",
+          "technology": "MongoDB wire protocol",
+          "direction": "forward",
+          "realizes": "e-projections-readstore"
+        },
+        {
+          "id": "e-replay-consumer",
+          "source": "replay-coordinator",
+          "target": "event-consumer",
+          "label": "Rewinds group offsets to rebuild",
+          "direction": "forward",
+          "style": "dashed"
+        },
+        {
+          "id": "e-replay-readstore",
+          "source": "replay-coordinator",
+          "target": "ext-readstore-proj",
+          "label": "Provisions and swaps rebuilt views",
+          "technology": "MongoDB wire protocol",
+          "direction": "forward",
+          "style": "dashed",
+          "realizes": "e-projections-readstore"
+        }
+      ]
+    },
+    {
+      "id": "d-cnt-atlas",
+      "level": "container",
+      "title": "Atlas Shop — Containers (one regional stamp)",
+      "description": "The EU region of the active-active deployment; the US stamp is identical. An order is written only in the region that accepted it (its home region); every region serves reads for all orders via mirrored events.",
+      "ownerNodeId": "atlas-shop",
+      "parentDiagramId": "d-ctx-root",
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "api-gateway",
+          "type": "container",
+          "name": "API Gateway",
+          "description": "Authentication and rate limiting; routes commands to the write side and queries to the read side.",
+          "technology": "Kong Gateway 3.7",
+          "icon": "kong",
+          "iconSource": "inferred",
+          "position": {
+            "x": 904,
+            "y": 320
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "tags": ["regional"]
+        },
+        {
+          "id": "event-store",
+          "type": "database",
+          "name": "Event Store",
+          "description": "Append-only order_events journal, one stream per order, unique (stream_id, version). An order's stream lives only in its home region, so there are no cross-region write conflicts by construction.",
+          "technology": "PostgreSQL 16",
+          "icon": "postgresql",
+          "iconSource": "inferred",
+          "position": {
+            "x": 64,
+            "y": 720
+          },
+          "size": {
+            "width": 192,
+            "height": 96
+          },
+          "tags": ["regional", "write-side"]
+        },
+        {
+          "id": "ext-carrier",
+          "type": "externalSystem",
+          "name": "Shipping Carrier",
+          "position": {
+            "x": 248,
+            "y": 1096
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "shipping-carrier"
+          }
+        },
+        {
+          "id": "ext-email",
+          "type": "externalSystem",
+          "name": "Email Provider",
+          "position": {
+            "x": 584,
+            "y": 1096
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "email-provider"
+          }
+        },
+        {
+          "id": "ext-payment",
+          "type": "externalSystem",
+          "name": "Payment Gateway",
+          "position": {
+            "x": 32,
+            "y": 320
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "payment-gateway"
+          }
+        },
+        {
+          "id": "ext-shopper",
+          "type": "person",
+          "name": "Shopper",
+          "position": {
+            "x": 624,
+            "y": 24
+          },
+          "size": {
+            "width": 160,
+            "height": 88
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "shopper"
+          }
+        },
+        {
+          "id": "fulfilment-worker",
+          "type": "container",
+          "name": "Fulfilment Worker",
+          "description": "Consumes OrderPaid, books the shipment with the carrier, then submits a RecordShipment command back to the write side — carrier facts become events like everything else.",
+          "technology": "Go 1.23",
+          "icon": "golang",
+          "iconSource": "inferred",
+          "position": {
+            "x": 232,
+            "y": 928
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          },
+          "tags": ["regional"]
+        },
+        {
+          "id": "global-edge",
+          "type": "container",
+          "name": "Global Edge",
+          "description": "The only truly global tier: GeoDNS steers each shopper to the nearest healthy region and fails traffic over when a region degrades. Static assets cached at the edge.",
+          "technology": "Cloudflare (GeoDNS, CDN, WAF)",
+          "icon": "cloudflare",
+          "iconSource": "inferred",
+          "position": {
+            "x": 616,
+            "y": 160
+          },
+          "size": {
+            "width": 176,
+            "height": 96
+          },
+          "tags": ["global"]
+        },
+        {
+          "id": "kafka",
+          "type": "queue",
+          "name": "Event Backbone",
+          "description": "Regional Kafka cluster carrying orders.events.v1 (key = order id, so each order's events stay ordered) plus the mirrored us.orders.events.v1. Retention is long enough to rebuild any projection from scratch.",
+          "technology": "Apache Kafka 3.7",
+          "icon": "queue",
+          "iconSource": "explicit",
+          "position": {
+            "x": 568,
+            "y": 720
+          },
+          "size": {
+            "width": 224,
+            "height": 96
+          },
+          "tags": ["regional"]
+        },
+        {
+          "id": "notification-worker",
+          "type": "container",
+          "name": "Notification Worker",
+          "description": "Consumes order events and sends lifecycle emails. Idempotent per (order id, version); poison messages go to a dead-letter topic.",
+          "technology": "Go 1.23",
+          "icon": "golang",
+          "iconSource": "inferred",
+          "position": {
+            "x": 568,
+            "y": 928
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          },
+          "tags": ["regional"]
+        },
+        {
+          "id": "order-command-service",
+          "type": "container",
+          "name": "Order Command Service",
+          "description": "The write side. Validates each command against the order's event history and appends new events. Never updates state in place — the event stream is the system of record.",
+          "technology": "Go 1.23",
+          "icon": "golang",
+          "iconSource": "inferred",
+          "position": {
+            "x": 336,
+            "y": 488
+          },
+          "size": {
+            "width": 192,
+            "height": 96
+          },
+          "tags": ["regional", "write-side"],
+          "childDiagramId": "d-cmp-order-command"
+        },
+        {
+          "id": "order-projection-service",
+          "type": "container",
+          "name": "Order Projection Service",
+          "description": "The read side. Consumes the local and mirrored event topics into denormalised views and serves order queries. Eventually consistent: typically milliseconds behind the write side, seconds for cross-region orders.",
+          "technology": "Go 1.23",
+          "icon": "golang",
+          "iconSource": "inferred",
+          "position": {
+            "x": 904,
+            "y": 488
+          },
+          "size": {
+            "width": 192,
+            "height": 96
+          },
+          "tags": ["read-side", "regional"],
+          "childDiagramId": "d-cmp-projections"
+        },
+        {
+          "id": "read-store",
+          "type": "database",
+          "name": "Order Read Store",
+          "description": "Denormalised order views: summary, history, tracking. Disposable — any view can be dropped and rebuilt by replaying the event topics.",
+          "technology": "MongoDB 7",
+          "icon": "mongodb",
+          "iconSource": "inferred",
+          "position": {
+            "x": 1344,
+            "y": 744
+          },
+          "size": {
+            "width": 192,
+            "height": 96
+          },
+          "tags": ["read-side", "regional"]
+        },
+        {
+          "id": "storefront",
+          "type": "container",
+          "name": "Storefront",
+          "description": "Server-rendered shop UI. After checkout it renders the command response, not the projection — the shopper never observes read-model lag on their own order.",
+          "technology": "Next.js 15",
+          "icon": "nextjs",
+          "iconSource": "inferred",
+          "position": {
+            "x": 344,
+            "y": 320
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "tags": ["regional"]
+        },
+        {
+          "id": "us-region",
+          "type": "externalSystem",
+          "name": "US Region (peer stamp)",
+          "description": "The identical topology in us-east-1. Each region owns writes for orders placed there and mirrors its events to the other. Mirroring is async: a region loss can lose the last seconds of unreplicated events (RPO > 0).",
+          "technology": "Identical deployment, us-east-1",
+          "position": {
+            "x": 1064,
+            "y": 720
+          },
+          "size": {
+            "width": 192,
+            "height": 96
+          },
+          "tags": ["region-us"]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-commands-eventstore",
+          "source": "order-command-service",
+          "target": "event-store",
+          "label": "Appends events; reads streams to rehydrate",
+          "technology": "SQL/TCP",
+          "direction": "bidirectional"
+        },
+        {
+          "id": "e-commands-kafka",
+          "source": "order-command-service",
+          "target": "kafka",
+          "label": "Publishes committed events (outbox, key = order id); payment saga consumes OrderPlaced",
+          "technology": "Kafka protocol",
+          "direction": "bidirectional",
+          "tags": ["async"]
+        },
+        {
+          "id": "e-commands-payment",
+          "source": "order-command-service",
+          "target": "ext-payment",
+          "label": "Authorises and captures payments",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-atlas-payment"
+        },
+        {
+          "id": "e-edge-gateway",
+          "source": "global-edge",
+          "target": "api-gateway",
+          "label": "Routes /api to the nearest region",
+          "technology": "HTTPS",
+          "direction": "forward"
+        },
+        {
+          "id": "e-edge-storefront",
+          "source": "global-edge",
+          "target": "storefront",
+          "label": "Serves pages from the nearest region",
+          "technology": "HTTPS",
+          "direction": "forward"
+        },
+        {
+          "id": "e-fulfil-carrier",
+          "source": "fulfilment-worker",
+          "target": "ext-carrier",
+          "label": "Books shipments, polls tracking",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-atlas-carrier"
+        },
+        {
+          "id": "e-fulfil-commands",
+          "source": "fulfilment-worker",
+          "target": "order-command-service",
+          "label": "Submits RecordShipment commands",
+          "technology": "HTTP/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-fulfil-kafka",
+          "source": "fulfilment-worker",
+          "target": "kafka",
+          "label": "Consumes OrderPaid (group fulfilment-eu)",
+          "technology": "Kafka protocol",
+          "direction": "forward",
+          "style": "dashed",
+          "tags": ["async"]
+        },
+        {
+          "id": "e-gateway-commands",
+          "source": "api-gateway",
+          "target": "order-command-service",
+          "label": "Order commands: PlaceOrder, CancelOrder",
+          "technology": "HTTP/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-gateway-queries",
+          "source": "api-gateway",
+          "target": "order-projection-service",
+          "label": "Order queries: summary, history, tracking",
+          "technology": "HTTP/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-kafka-us",
+          "source": "kafka",
+          "target": "us-region",
+          "label": "Mirrors event topics both ways — async, per-partition order preserved",
+          "technology": "MirrorMaker 2",
+          "direction": "bidirectional",
+          "style": "dashed",
+          "tags": ["async"]
+        },
+        {
+          "id": "e-notify-email",
+          "source": "notification-worker",
+          "target": "ext-email",
+          "label": "Sends lifecycle emails",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-atlas-email"
+        },
+        {
+          "id": "e-notify-kafka",
+          "source": "notification-worker",
+          "target": "kafka",
+          "label": "Consumes order events (group notifications-eu)",
+          "technology": "Kafka protocol",
+          "direction": "forward",
+          "style": "dashed",
+          "tags": ["async"]
+        },
+        {
+          "id": "e-projections-kafka",
+          "source": "order-projection-service",
+          "target": "kafka",
+          "label": "Consumes orders.events.v1 + us.orders.events.v1 (group orders-projector-eu)",
+          "technology": "Kafka protocol",
+          "direction": "forward",
+          "style": "dashed",
+          "tags": ["async"]
+        },
+        {
+          "id": "e-projections-readstore",
+          "source": "order-projection-service",
+          "target": "read-store",
+          "label": "Projects events into views; serves queries",
+          "technology": "MongoDB wire protocol",
+          "direction": "bidirectional"
+        },
+        {
+          "id": "e-shopper-edge",
+          "source": "ext-shopper",
+          "target": "global-edge",
+          "label": "Uses the shop",
+          "technology": "HTTPS",
+          "direction": "forward",
+          "realizes": "e-shopper-atlas"
+        },
+        {
+          "id": "e-storefront-gateway",
+          "source": "storefront",
+          "target": "api-gateway",
+          "label": "Server-side data fetching",
+          "technology": "HTTP/JSON",
+          "direction": "forward"
+        }
+      ]
+    },
+    {
+      "id": "d-code-order-aggregate",
+      "level": "code",
+      "title": "Order Aggregate — Code",
+      "description": "Event sourcing in one loop: state is a left fold of events, decide() proposes new events from the current state, and nothing mutates in place.",
+      "ownerNodeId": "order-aggregate",
+      "parentDiagramId": "d-cmp-order-command",
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "apply-fn",
+          "type": "codeElement",
+          "name": "apply()",
+          "description": "(OrderState, OrderEvent) → OrderState. The fold step: replaying history is events.reduce(apply, empty).",
+          "technology": "Go func",
+          "position": {
+            "x": 856,
+            "y": 288
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "decide-fn",
+          "type": "codeElement",
+          "name": "decide()",
+          "description": "(OrderState, Command) → []OrderEvent. Pure: enforces invariants and either emits events or rejects the command. No clock, no I/O.",
+          "technology": "Go func",
+          "position": {
+            "x": 280,
+            "y": 288
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-event",
+          "type": "codeElement",
+          "name": "OrderEvent",
+          "description": "OrderPlaced, PaymentCaptured, PaymentFailed, OrderShipped, OrderCancelled — immutable facts named in the past tense, versioned for schema evolution.",
+          "technology": "Go sum type",
+          "position": {
+            "x": 568,
+            "y": 512
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-state",
+          "type": "codeElement",
+          "name": "OrderState",
+          "description": "In-memory snapshot of one order, produced only by apply(). Never persisted — rebuilt from the stream on every command.",
+          "technology": "Go struct",
+          "position": {
+            "x": 568,
+            "y": 64
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-apply-state",
+          "source": "apply-fn",
+          "target": "order-state",
+          "label": "Returns the next state",
+          "direction": "forward"
+        },
+        {
+          "id": "e-decide-event",
+          "source": "decide-fn",
+          "target": "order-event",
+          "label": "Emits new events",
+          "direction": "forward"
+        },
+        {
+          "id": "e-event-apply",
+          "source": "order-event",
+          "target": "apply-fn",
+          "label": "Folded one at a time",
+          "direction": "forward"
+        },
+        {
+          "id": "e-state-decide",
+          "source": "order-state",
+          "target": "decide-fn",
+          "label": "Current state in",
+          "direction": "forward"
+        }
+      ]
+    },
+    {
+      "id": "d-ctx-root",
+      "level": "context",
+      "title": "Atlas Shop — System Context",
+      "description": "Who shops here and which third parties the platform depends on. Shoppers everywhere use one shop; geography appears one level down.",
+      "ownerNodeId": null,
+      "parentDiagramId": null,
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "atlas-shop",
+          "type": "softwareSystem",
+          "name": "Atlas Shop",
+          "description": "Online order shop deployed as identical stamps in eu-central-1 and us-east-1. Orders are event-sourced: every state change is an immutable event, and all read views derive from the event stream.",
+          "technology": "Go / Next.js / Kafka",
+          "position": {
+            "x": 400,
+            "y": 320
+          },
+          "size": {
+            "width": 320,
+            "height": 128
+          },
+          "childDiagramId": "d-cnt-atlas"
+        },
+        {
+          "id": "email-provider",
+          "type": "externalSystem",
+          "name": "Email Provider",
+          "description": "Third party that delivers order confirmation and shipping emails.",
+          "technology": "REST API",
+          "position": {
+            "x": 464,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        },
+        {
+          "id": "payment-gateway",
+          "type": "externalSystem",
+          "name": "Payment Gateway",
+          "description": "Third party that authorises and captures card payments.",
+          "technology": "REST API",
+          "position": {
+            "x": 144,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        },
+        {
+          "id": "shipping-carrier",
+          "type": "externalSystem",
+          "name": "Shipping Carrier",
+          "description": "Carrier that picks up parcels and reports tracking events.",
+          "technology": "REST API",
+          "position": {
+            "x": 784,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        },
+        {
+          "id": "shopper",
+          "type": "person",
+          "name": "Shopper",
+          "description": "Customer browsing, ordering, and tracking deliveries — served by whichever region is closest.",
+          "position": {
+            "x": 480,
+            "y": 80
+          },
+          "size": {
+            "width": 160,
+            "height": 96
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-atlas-carrier",
+          "source": "atlas-shop",
+          "target": "shipping-carrier",
+          "label": "Books shipments, receives tracking",
+          "technology": "HTTPS/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-atlas-email",
+          "source": "atlas-shop",
+          "target": "email-provider",
+          "label": "Sends order lifecycle emails",
+          "technology": "HTTPS/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-atlas-payment",
+          "source": "atlas-shop",
+          "target": "payment-gateway",
+          "label": "Authorises and captures payments",
+          "technology": "HTTPS/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-shopper-atlas",
+          "source": "shopper",
+          "target": "atlas-shop",
+          "label": "Browses, orders and tracks deliveries",
+          "technology": "HTTPS",
+          "direction": "forward"
+        }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,7 @@ import {
 
 import type { ViewerModel } from "../lib/model";
 
+import atlasShopFile from "./data/atlas-shop.archflow.json";
 import orderShopFile from "./data/order-shop.archflow.json";
 import shopflowFile from "./data/shopflow.archflow.json";
 
@@ -44,6 +45,7 @@ interface ModelSource {
 }
 
 const SOURCES: readonly ModelSource[] = [
+  { id: "atlas-shop", document: atlasShopFile },
   { id: "order-shop", document: orderShopFile },
   { id: "shopflow", document: shopflowFile },
 ];
