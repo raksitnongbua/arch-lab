@@ -1,5 +1,5 @@
 /**
- * A single-line token cursor for the `.aft` parser. The format is
+ * A single-line token cursor for the `.alab` parser. The format is
  * line-structured (significant indentation, one statement per line), so the
  * tokenizer works one line at a time and every token knows its 1-based
  * line and column for error reporting.

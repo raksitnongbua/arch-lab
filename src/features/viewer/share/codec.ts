@@ -5,12 +5,12 @@
  *
  * Payload shape (the part after `#`), URLSearchParams-style:
  *
- *   m=AF1.<base64url(deflate-raw(utf8(.aft text)))>   — the model
+ *   m=AF1.<base64url(deflate-raw(utf8(.alab text)))>   — the model
  *   d=<diagram id>                                    — optional: the diagram
  *                                                       the sharer was viewing
  *
  * Design decisions, and why:
- *   - The model is carried as its `.aft` TEXT form, not JSON — the archtext
+ *   - The model is carried as its `.alab` TEXT form, not JSON — the archtext
  *     serializer is deterministic and lossless (proven round trip) and the
  *     text is materially smaller than the JSON, which matters when the whole
  *     model must fit in a URL.
@@ -42,7 +42,7 @@ export const SHARE_PARAM_DIAGRAM = "d";
  * clients, spreadsheet cells) truncate or refuse URLs beyond ~2000
  * characters, and a truncated link fails for the RECIPIENT — silently
  * producing one would make the feature untrustworthy. Past this, the UI
- * offers the `.aft` file download instead.
+ * offers the `.alab` file download instead.
  */
 export const MAX_SHARE_URL_LENGTH = 2000;
 
@@ -122,7 +122,7 @@ async function decompress(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Builds the fragment body (`m=AF1.…[&d=…]`) for a model's canonical `.aft`
+ * Builds the fragment body (`m=AF1.…[&d=…]`) for a model's canonical `.alab`
  * text. The caller prepends `#` and the page URL. Requires `canEncodeShare()`.
  */
 export async function encodeShareFragment(
@@ -142,7 +142,7 @@ export async function encodeShareFragment(
 /* -------------------------------------------------------------------------- */
 
 export type DecodedShare =
-  /** A model payload was present and decoded; `.aft` parsing is the caller's. */
+  /** A model payload was present and decoded; `.alab` parsing is the caller's. */
   | { status: "ok"; aftText: string; diagramId: string | null }
   /** No model payload in this fragment — not a shared-model link. */
   | { status: "none" }

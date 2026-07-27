@@ -1,5 +1,5 @@
 /**
- * The two-pane sync engine for `/view/new`: arch-lab text (`.aft`) on one
+ * The two-pane sync engine for `/view/new`: arch-lab text (`.alab`) on one
  * side, arch-lab JSON on the other, one model behind both. Everything here
  * is a pure function over the REAL readers and writers — `parseArchText` /
  * `serializeArchText` from the archtext feature, `deserializeModel` /
@@ -11,7 +11,7 @@
  *     pane that was parsed is never reformatted here; canonicalising the
  *     user's own pane is an explicit action (`canonicalizePane`).
  *   - Errors keep their native precision and share one presentation shape:
- *     `.aft` failures carry line/column (plus the quoted offending line),
+ *     `.alab` failures carry line/column (plus the quoted offending line),
  *     JSON failures carry the validator's JSON-path issues, and content
  *     that is recognisably Mermaid C4 is routed to the import flow instead
  *     of a misleading parse error.
@@ -61,13 +61,13 @@ export const PANE_LABEL: Record<PaneId, string> = {
 export interface SyncedModel {
   file: ArchLabFile;
   model: ViewerModel;
-  /** Canonical `.aft` text (deterministic archtext serializer). */
+  /** Canonical `.alab` text (deterministic archtext serializer). */
   aftText: string;
   /** Canonical `.archlab.json` text (editor's deterministic serializer). */
   jsonText: string;
 }
 
-/** An `.aft` failure — located to a line and column. */
+/** An `.alab` failure — located to a line and column. */
 export interface AftErrorDetail {
   kind: "aft";
   message: string;

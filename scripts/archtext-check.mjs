@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * arch-lab text format (`.aft`) ⇄ JSON check. Follows the pattern of
+ * arch-lab text format (`.alab`) ⇄ JSON check. Follows the pattern of
  * `scripts/roundtrip-check.mjs` and `scripts/mermaid-check.mjs`: loads the
  * REAL library from `src/features/archtext/**` (and the editor's real
  * deserializer/serializer/validator) via Node's built-in TypeScript type

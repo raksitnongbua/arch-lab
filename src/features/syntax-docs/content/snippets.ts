@@ -1,5 +1,5 @@
 /**
- * Every piece of `.aft` source shown on the syntax reference page lives HERE,
+ * Every piece of `.alab` source shown on the syntax reference page lives HERE,
  * not inline in JSX — so `scripts/syntax-docs-check.mjs` can import this one
  * module and push every snippet through the real `parseArchText`:
  *
@@ -22,7 +22,7 @@
 export interface DocSnippet {
   /** Stable id, used by the check script's output. */
   id: string;
-  /** The exact `.aft` source displayed on the page. */
+  /** The exact `.alab` source displayed on the page. */
   code: string;
 }
 
@@ -371,7 +371,7 @@ export const HEADER_ROWS: readonly HeaderRow[] = [
 /* -------------------------------------------------------------------------- */
 
 export interface NodeTypeRow {
-  /** The `.aft` keyword written after `id:`. */
+  /** The `.alab` keyword written after `id:`. */
   keyword: string;
   /** The node `type` value in the JSON model. */
   modelType: string;
@@ -642,7 +642,7 @@ export interface InvalidSnippet {
   id: string;
   /** What the mistake is, in the page's words. */
   title: string;
-  /** The exact broken `.aft` source displayed on the page. */
+  /** The exact broken `.alab` source displayed on the page. */
   code: string;
   /** The full parser message the page displays — asserted verbatim. */
   expected: { line: number; column: number; message: string };

@@ -1,4 +1,4 @@
-# arch-lab text format (`.aft`)
+# arch-lab text format (`.alab`)
 
 A Mermaid-like, human-editable text format that is a **lossless,
 bidirectional** representation of the arch-lab JSON model. Text and JSON are
@@ -9,7 +9,7 @@ dropped.
   (`line <n>, column <n>: …`) on malformed input; all-or-nothing.
 - `serializeArchText(file): string` — deterministic and canonical; the same
   model always yields byte-identical text.
-- File extension: **`.aft`**.
+- File extension: **`.alab`**.
 
 Round-trip guarantees (proved by `scripts/archtext-check.mjs`):
 

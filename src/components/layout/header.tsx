@@ -10,17 +10,19 @@ import { cn } from "@/lib/utils";
 /**
  * Primary navigation.
  *
- * Deliberately empty for this release. The Demo entry was removed on request,
- * and the Editor entry is gated behind EDITOR_ENABLED, so the header currently
- * carries only the wordmark, the C4 reference link and the theme toggle.
+ * Carries a single permanent entry — Syntax, the `.alab` text-format
+ * reference — so the reference page is reachable from every route, not only
+ * from the footer and the playground. The Demo entry was removed on request
+ * (do not re-add it), and the Editor entry is gated behind EDITOR_ENABLED;
+ * flipping that flag restores it alongside Syntax with no other change.
  *
- * Consequence worth knowing: /demo is now reachable only from the landing
- * page's hero call to action and its C4 card, and /view/new only from the demo
- * index. Restoring EDITOR_ENABLED brings the Editor entry back and the nav
- * renders again with no other change.
+ * The empty-array guard on the <nav> below still matters if every entry is
+ * ever removed again: an empty <nav> would expose a navigation landmark with
+ * nothing in it, which is worse for a screen reader than no landmark at all.
  */
 const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
   ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
+  { href: "/syntax", label: "Syntax" },
 ];
 
 export function Header() {

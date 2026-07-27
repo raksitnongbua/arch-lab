@@ -1,5 +1,5 @@
 /**
- * Shared token classes for the `.aft` grammar. Both the parser and the
+ * Shared token classes for the `.alab` grammar. Both the parser and the
  * serializer read these, so what one side emits bare the other side is
  * guaranteed to accept bare — the single-source-of-truth that keeps the
  * round trip byte-identical.

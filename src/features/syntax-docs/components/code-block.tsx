@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * A `.aft` code block for the syntax reference: `<pre><code>` semantics, a
+ * A `.alab` code block for the syntax reference: `<pre><code>` semantics, a
  * copy button with announced feedback, and (optionally) an "Open in view
  * mode" link that carries the snippet to `/view/new` inside a share-link
  * fragment — the same codec the viewer's Share button uses, so the reference
@@ -26,7 +26,7 @@ export function CodeBlock({
   label,
   tryIt = false,
 }: {
-  /** The exact `.aft` source to display (and copy). */
+  /** The exact `.alab` source to display (and copy). */
   code: string;
   /** Names the snippet in the copy button's accessible name. */
   label: string;
@@ -38,7 +38,7 @@ export function CodeBlock({
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-1.5">
           <figcaption className="font-mono text-xs text-muted-foreground">
-            .aft
+            .alab
           </figcaption>
           <div className="flex flex-wrap items-center gap-1.5">
             {tryIt ? <TryItLink code={code} label={label} /> : null}

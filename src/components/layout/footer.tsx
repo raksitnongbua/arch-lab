@@ -17,7 +17,7 @@ export function Footer() {
             href="/syntax"
             className="font-medium text-foreground hover:underline"
           >
-            <span className="font-mono">.aft</span> syntax reference
+            <span className="font-mono">.alab</span> syntax reference
           </Link>
         </p>
       </div>

@@ -1,5 +1,5 @@
 /**
- * The canonical defaults of the `.aft` format. Every rule here is applied
+ * The canonical defaults of the `.alab` format. Every rule here is applied
  * identically by the parser (fill in what the text omitted) and by the
  * serializer (omit what matches the rule), which is what makes terse,
  * Mermaid-like text and full geometry-carrying text two faces of the same

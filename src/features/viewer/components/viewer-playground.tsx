@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * `/view/new` — the live two-pane editor: arch-lab text (`.aft`) and
+ * `/view/new` — the live two-pane editor: arch-lab text (`.alab`) and
  * arch-lab JSON side by side over the rendered diagram. Two views, one
  * model — edit either pane and the other follows.
  *
@@ -17,7 +17,7 @@
  *     Nothing reformats under the caret.
  *   - While a pane fails to parse, the last good model keeps rendering and
  *     the other pane keeps its content; the error shows inline under the
- *     offending pane. `.aft` errors quote the line with a caret at the
+ *     offending pane. `.alab` errors quote the line with a caret at the
  *     column; JSON errors list the validator's JSON-path issues. One shared
  *     polite live region announces sync state and errors.
  *   - Mermaid C4 is an explicit, one-way, LOSSY import — never a third
@@ -327,7 +327,7 @@ export function ViewerPlayground(): React.JSX.Element {
         </h1>
         <p className="mt-3 leading-relaxed text-muted-foreground">
           The same model in two languages:{" "}
-          <span className="font-mono text-sm text-foreground">.aft</span>{" "}
+          <span className="font-mono text-sm text-foreground">.alab</span>{" "}
           arch-lab text and{" "}
           <span className="font-mono text-sm text-foreground">
             .archlab.json
@@ -340,7 +340,7 @@ export function ViewerPlayground(): React.JSX.Element {
             href="/syntax"
             className="font-medium text-primary hover:underline"
           >
-            .aft syntax reference
+            .alab syntax reference
           </Link>
           .
         </p>
@@ -375,8 +375,8 @@ export function ViewerPlayground(): React.JSX.Element {
                   This share link could not be opened
                 </span>{" "}
                 — {sharedNotice.message}. Ask the sender to re-copy the link, or
-                to send the <span className="font-mono text-xs">.aft</span> file
-                instead. The example model is shown below.
+                to send the <span className="font-mono text-xs">.alab</span>{" "}
+                file instead. The example model is shown below.
               </>
             )}
           </p>

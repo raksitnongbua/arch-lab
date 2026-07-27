@@ -1,5 +1,5 @@
 /**
- * `.aft` text → `ArchLabFile`. A line-structured recursive-descent parser:
+ * `.alab` text → `ArchLabFile`. A line-structured recursive-descent parser:
  * the source is split into lines, each line is tokenized by a `LineCursor`,
  * significant indentation (0 = header/diagram, 2 = diagram body, 4 = node/
  * edge continuation, always spaces) selects the grammar production, and a
@@ -285,7 +285,7 @@ function segString(segment: PathSegment, what: string): string {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Parses `.aft` source into an `ArchLabFile`. Pure and deterministic; the
+ * Parses `.alab` source into an `ArchLabFile`. Pure and deterministic; the
  * result passes the editor's `validateArchLabFile` unchanged. Throws
  * `ArchTextParseError` (line + column) on any problem — all-or-nothing.
  */

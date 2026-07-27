@@ -1,5 +1,5 @@
 /**
- * Keyword tables of the `.aft` grammar — node-type keywords, arrow forms,
+ * Keyword tables of the `.alab` grammar — node-type keywords, arrow forms,
  * and the file extension. One table per mapping, used by both directions,
  * so parser and serializer can never disagree.
  *
@@ -10,9 +10,9 @@
 import type { C4NodeType, EdgeDirection, EdgeStyle } from "@/types";
 
 /** The file extension of the arch-lab text format. */
-export const ARCHTEXT_EXTENSION = ".aft";
+export const ARCHTEXT_EXTENSION = ".alab";
 
-/** `.aft` node-type keyword → model node type (bijective). */
+/** `.alab` node-type keyword → model node type (bijective). */
 export const NODE_TYPE_BY_KEYWORD: Readonly<Record<string, C4NodeType>> = {
   person: "person",
   system: "softwareSystem",
@@ -24,7 +24,7 @@ export const NODE_TYPE_BY_KEYWORD: Readonly<Record<string, C4NodeType>> = {
   code: "codeElement",
 };
 
-/** Model node type → `.aft` keyword (inverse of `NODE_TYPE_BY_KEYWORD`). */
+/** Model node type → `.alab` keyword (inverse of `NODE_TYPE_BY_KEYWORD`). */
 export const KEYWORD_BY_NODE_TYPE: Readonly<Record<C4NodeType, string>> = {
   person: "person",
   softwareSystem: "system",

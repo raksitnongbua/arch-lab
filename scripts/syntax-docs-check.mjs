@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Syntax reference page check: every `.aft` snippet displayed on `/syntax`
+ * Syntax reference page check: every `.alab` snippet displayed on `/syntax`
  * must actually work. The page renders its snippets from ONE data module
  * (`src/features/syntax-docs/content/snippets.ts`); this script imports that
  * same module — through the same `registerHooks` resolver pattern as

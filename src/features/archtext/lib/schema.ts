@@ -1,5 +1,5 @@
 /**
- * Schema-declared key knowledge shared by the `.aft` parser and serializer.
+ * Schema-declared key knowledge shared by the `.alab` parser and serializer.
  *
  * `*_KEYS` mirror the key orders of `src/features/editor/io/serialize.ts`
  * (data-model.md field tables) — the serializer walks objects with these to

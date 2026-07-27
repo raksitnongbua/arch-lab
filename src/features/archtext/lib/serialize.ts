@@ -1,5 +1,5 @@
 /**
- * `ArchLabFile` → `.aft` text. Deterministic: fixed line order, fixed
+ * `ArchLabFile` → `.alab` text. Deterministic: fixed line order, fixed
  * attribute order, canonical omission rules (mirrored exactly by the
  * parser's defaults), so the same model always yields byte-identical text
  * and `parse(serialize(file))` reproduces `file` losslessly.
@@ -146,7 +146,7 @@ function tagsLine(value: unknown): string | undefined {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Serializes an `ArchLabFile` to canonical `.aft` text. Pure and
+ * Serializes an `ArchLabFile` to canonical `.alab` text. Pure and
  * deterministic: identical models always produce identical bytes, and
  * `parseArchText(serializeArchText(file))` round-trips every field.
  */

@@ -1,10 +1,10 @@
 /**
- * `/syntax` — the `.aft` text-format reference. Server-rendered: every
+ * `/syntax` — the `.alab` text-format reference. Server-rendered: every
  * snippet and table row comes from `../content/snippets.ts`, the SAME module
  * `scripts/syntax-docs-check.mjs` pushes through the real parser — so
  * nothing on this page can drift from what `parseArchText` actually accepts.
  *
- * Structured for someone who has just seen `.aft` in the two-pane editor:
+ * Structured for someone who has just seen `.alab` in the two-pane editor:
  * what it is → one complete example → reference tables per construct →
  * layout rules → what errors look like → where to try it.
  */
@@ -52,10 +52,10 @@ export function SyntaxReference(): React.JSX.Element {
       </Badge>
 
       <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
-        The <span className="font-mono">.aft</span> syntax
+        The <span className="font-mono">.alab</span> syntax
       </h1>
       <p className="mt-4 max-w-3xl text-lg leading-relaxed text-pretty text-muted-foreground">
-        <span className="font-mono text-base text-foreground">.aft</span> is a
+        <span className="font-mono text-base text-foreground">.alab</span> is a
         readable, Mermaid-like text form of the same model{" "}
         <span className="font-mono text-base text-foreground">
           .archlab.json
@@ -371,7 +371,7 @@ export function SyntaxReference(): React.JSX.Element {
           >
             view mode
           </Link>{" "}
-          is a two-pane editor with <Code>.aft</Code> on one side and{" "}
+          is a two-pane editor with <Code>.alab</Code> on one side and{" "}
           <Code>.archlab.json</Code> on the other — each pane regenerates the
           other as you type, and parse errors appear inline with the caret
           format above. The &quot;Open in view mode&quot; buttons on this

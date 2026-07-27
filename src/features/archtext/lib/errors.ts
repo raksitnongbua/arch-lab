@@ -1,5 +1,5 @@
 /**
- * Error type for the arch-lab text (`.aft`) parser. Mirrors the shape and
+ * Error type for the arch-lab text (`.alab`) parser. Mirrors the shape and
  * tone of the editor's `FileValidationError` (src/features/editor/io/
  * validate.ts) and the Mermaid feature's `MermaidParseError`
  * (src/features/mermaid/lib/errors.ts) so the UI can treat all three
@@ -13,9 +13,9 @@
  */
 
 export interface ArchTextIssue {
-  /** 1-based line in the `.aft` source. */
+  /** 1-based line in the `.alab` source. */
   line: number;
-  /** 1-based column in the `.aft` source. */
+  /** 1-based column in the `.alab` source. */
   column: number;
   message: string;
   /** The offending text, when there is a concrete lexeme to point at. */

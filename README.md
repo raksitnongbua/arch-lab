@@ -16,8 +16,8 @@ Be precise about what this repo is right now:
 | Area                                                     | State                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Read-only C4 viewer**                                  | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Diagrams export as SVG or PNG (rasterised at 2×).                                                                              |
-| **View-mode playground** (`/view/new`)                   | Works today. A two-pane live editor for the two text formats — `.aft` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                 |
-| **`.aft` ⇄ JSON conversion**                             | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                        |
+| **View-mode playground** (`/view/new`)                   | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                |
+| **`.alab` ⇄ JSON conversion**                            | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                        |
 | **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                  |
 | **C4 editor**                                            | Feature-complete in the codebase but **gated off for this release** behind `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts). `/editor` renders a coming-soon page and the editor code is excluded from the deployed bundle. See [Enabling the editor](#enabling-the-editor). |
 | **Sequence diagrams, data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                            |
@@ -29,21 +29,21 @@ Be precise about what this repo is right now:
 | `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                       |
 | `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                             |
 | `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas. |
-| `/view/new`       | The paste-your-own playground: `.aft` and JSON side by side, live sync, Mermaid import, image export.                                                                       |
-| `/syntax`         | The `.aft` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.              |
+| `/view/new`       | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                      |
+| `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.             |
 | `/editor`         | Coming-soon page while the editor is gated.                                                                                                                                 |
 
 ## The two model formats
 
 One model, two views. A model is stored as **`.archlab.json`** (the schema is
 specified in [`docs/product/data-model.md`](docs/product/data-model.md)) or
-authored as **`.aft`** — a Mermaid-like, human-editable text format. Conversion
+authored as **`.alab`** — a Mermaid-like, human-editable text format. Conversion
 between them is **lossless in both directions**: `pnpm check:archtext` proves
 byte-identical round trips (text → model → text, and JSON → text → JSON
 including unknown forward-compatible fields in their original key positions)
 for both bundled example models.
 
-A valid `.aft` file:
+A valid `.alab` file:
 
 ```
 archlab 1.0
@@ -118,8 +118,8 @@ Then open <http://localhost:3000>.
 | `pnpm format:check`      | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                             |
 | `pnpm check:roundtrip`   | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named. |
 | `pnpm check:mermaid`     | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                     |
-| `pnpm check:archtext`    | Proves `.aft` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                   |
-| `pnpm check:syntax-docs` | Proves the `/syntax` reference page: every `.aft` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                  |
+| `pnpm check:archtext`    | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                  |
+| `pnpm check:syntax-docs` | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                 |
 
 The `check:*` scripts load the **real** library code from `src/` (via
 Node's TypeScript type stripping and a resolve hook for the `@/*` alias), so
@@ -139,7 +139,7 @@ arch-lab/
     │   ├── ui/                Generic primitives (button, card, badge, dialog, tooltip, toast, …)
     │   └── layout/            App chrome (header, footer, theme-toggle)
     ├── features/
-    │   ├── archtext/          The .aft text format: parser + canonical serializer (see its README)
+    │   ├── archtext/          The .alab text format: parser + canonical serializer (see its README)
     │   ├── editor/            The full C4 canvas — built, currently gated (see its README)
     │   ├── marketing/         Landing-page hero diagram
     │   ├── mermaid/           Mermaid C4 ⇄ arch-lab converter (pure, dependency-free)
@@ -200,7 +200,7 @@ switches back on its own.
   styling (details above).
 - **Default layout is basic.** Text-authored models without explicit
   coordinates get a deterministic grid layout; on dense diagrams it can crowd
-  edge labels. Add `(x,y w×h)` geometry in `.aft` when it matters.
+  edge labels. Add `(x,y w×h)` geometry in `.alab` when it matters.
 - **Sequence diagrams, the data dictionary, and network diagrams are planned,
   not built.** Only C4 exists today.
 - **The editor is not in this release** — see above.

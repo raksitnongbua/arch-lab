@@ -8,7 +8,7 @@
  *     plain page address is the share link — short and clean, no payload —
  *     and the panel says so instead of needlessly embedding one.
  *   - PASTED / edited models are encoded into the link itself: canonical
- *     `.aft` text, deflate-raw-compressed, base64url, in the `#` fragment
+ *     `.alab` text, deflate-raw-compressed, base64url, in the `#` fragment
  *     (see `codec.ts`). Nothing is uploaded; fragments never reach servers.
  *
  * Either way, the link carries the diagram being viewed (`d=…`) when it is
@@ -16,7 +16,7 @@
  *
  * Honesty about limits: past `MAX_SHARE_URL_LENGTH` the panel refuses to
  * mint a link that chat apps and email clients would truncate, says exactly
- * why, and offers the `.aft` file download instead. Browsers without
+ * why, and offers the `.alab` file download instead. Browsers without
  * `CompressionStream` get the same honest fallback.
  *
  * Keyboard/a11y: normal trigger button (`aria-expanded`/`aria-haspopup`),
