@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { ViewerPlayground } from "@/features/viewer";
 
 export const metadata: Metadata = {
-  title: "Render your own model — view mode",
+  title: "Write your own model — live two-pane editor",
   description:
-    "Paste an arch-flow JSON document or Mermaid C4 code and render it read-only, convert between the two formats, and export the diagram as an image. Everything stays in your browser.",
+    "Edit arch-flow text (.aft) and arch-flow JSON side by side — each pane regenerates the other as you type and the diagram re-renders live. Import Mermaid C4 one-way, copy or download either format, and export the diagram as an image. Everything stays in your browser.",
 };
 
 /**

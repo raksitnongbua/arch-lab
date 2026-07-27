@@ -1,352 +1,684 @@
 "use client";
 
 /**
- * The paste-your-own view mode (`/view/new`): one text area, two input
- * languages, one viewer.
+ * `/view/new` — the live two-pane editor: arch-flow text (`.aft`) and
+ * arch-flow JSON side by side over the rendered diagram. Two views, one
+ * model — edit either pane and the other follows.
  *
- *   - Paste arch-flow JSON or Mermaid C4 code. The format is auto-detected
- *     from the first meaningful line and ALWAYS shown; a radio group
- *     overrides detection when the user knows better.
- *   - Render on submit: the parsed model mounts the exact same read-only
- *     `ViewerShell` the registry models use — drill-down, connector details,
- *     export button, everything.
- *   - Errors keep their native precision. JSON failures list the validator's
- *     JSON-path issues; Mermaid failures quote the offending line and point
- *     a caret at the exact column. Never a bare "invalid input".
- *   - The converted-code panel shows the OTHER representation of whatever is
- *     loaded (Mermaid in → canonical JSON out; JSON in → Mermaid out). A
- *     Mermaid document describes ONE diagram, so that direction follows the
- *     level being viewed and says so.
+ * Sync mechanics (the correctness story):
+ *   - There is ONE pending edit slot `{pane, value}`. Typing in a pane
+ *     stores the edit there; a 300 ms debounce then parses it and, on
+ *     success, rewrites ONLY the opposite pane and re-renders the diagram.
+ *     The pane being typed in is never rewritten by the sync — that is what
+ *     structurally rules out echo loops and mid-edit reformatting. A new
+ *     keystroke in either pane replaces the slot and cancels the timer, so
+ *     a stale parse can never land after the user has moved on.
+ *   - Canonicalising your OWN pane is explicit: the per-pane Format button.
+ *     Nothing reformats under the caret.
+ *   - While a pane fails to parse, the last good model keeps rendering and
+ *     the other pane keeps its content; the error shows inline under the
+ *     offending pane. `.aft` errors quote the line with a caret at the
+ *     column; JSON errors list the validator's JSON-path issues. One shared
+ *     polite live region announces sync state and errors.
+ *   - Mermaid C4 is an explicit, one-way, LOSSY import — never a third
+ *     pane. Pasting Mermaid into either pane is auto-detected and offered
+ *     as an import (with the lossy notice) instead of a misleading parse
+ *     error.
  *
- * Everything runs in the browser: pasted content is parsed in memory and is
- * never uploaded or persisted anywhere.
+ * Everything runs in the browser: nothing typed here is uploaded or stored.
  */
 
-import { useCallback, useId, useMemo, useState } from "react";
-import { ArrowDownToLine, Check, Copy, Play } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  AlignLeft,
+  ArrowDownToLine,
+  Check,
+  Copy,
+  Download,
+  Import,
+  X,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
-import { EDITOR_ENABLED } from "@/lib/constants";
+import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { cn } from "@/lib/utils";
 
-import { getDiagram } from "../lib/model";
+import { MERMAID_EXAMPLE } from "../input/examples";
 import {
-  detectFormat,
-  FORMAT_LABEL,
-  type FormatChoice,
-  type PastedFormat,
-} from "../input/detect";
-import { JSON_EXAMPLE, MERMAID_EXAMPLE } from "../input/examples";
-import {
-  mermaidTextForDiagram,
-  parsePastedText,
-  type PastedErrorDetail,
-  type PastedModel,
-} from "../input/parse-input";
+  canonicalizePane,
+  downloadStem,
+  importMermaid,
+  MERMAID_LOSSY_NOTICE,
+  PANE_LABEL,
+  parsePane,
+  SEED_MODEL,
+  type MermaidImportError,
+  type PaneErrorDetail,
+  type PaneId,
+  type SyncedModel,
+} from "../input/sync";
 import { ViewerShell } from "./viewer-shell";
 
-const LEVEL_LABEL = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-} as const;
+/**
+ * How long a pane rests before its content is parsed and the other pane is
+ * regenerated. 300 ms keeps typing smooth (no parse per keystroke) while
+ * the mirror still feels live.
+ */
+const SYNC_DEBOUNCE_MS = 300;
 
-interface RenderedState {
-  pasted: PastedModel;
-  /** Monotonic — keys the shell so a new paste never inherits old state. */
-  submission: number;
+const JSON_EXTENSION = ".archflow.json";
+
+interface PendingEdit {
+  pane: PaneId;
+  value: string;
+}
+
+interface PaneErrorState {
+  pane: PaneId;
+  error: PaneErrorDetail;
 }
 
 export function ViewerPlayground(): React.JSX.Element {
-  const [text, setText] = useState(MERMAID_EXAMPLE);
-  const [choice, setChoice] = useState<FormatChoice>("auto");
-  const [rendered, setRendered] = useState<RenderedState | null>(null);
-  const [error, setError] = useState<PastedErrorDetail | null>(null);
-  const [currentDiagramId, setCurrentDiagramId] = useState<string | null>(null);
+  /* ---- state ---------------------------------------------------------- */
 
-  const textareaId = useId();
-  const detected = useMemo(() => detectFormat(text), [text]);
+  const [aftText, setAftText] = useState(SEED_MODEL.aftText);
+  const [jsonText, setJsonText] = useState(SEED_MODEL.jsonText);
+  /** The last GOOD model — what the diagram renders, error or not. */
+  const [synced, setSynced] = useState<SyncedModel>(SEED_MODEL);
+  const [pending, setPending] = useState<PendingEdit | null>(null);
+  const [paneError, setPaneError] = useState<PaneErrorState | null>(null);
+  const [announcement, setAnnouncement] = useState("");
 
-  const handleSubmit = useCallback(
-    (event: React.FormEvent) => {
-      event.preventDefault();
-      const result = parsePastedText(text, choice);
-      if (result.status === "ok") {
-        setError(null);
-        setCurrentDiagramId(result.value.model.rootDiagramId);
-        setRendered((previous) => ({
-          pasted: result.value,
-          submission: (previous?.submission ?? 0) + 1,
-        }));
-      } else {
-        setError(result.error);
-        setRendered(null);
-        setCurrentDiagramId(null);
+  // Remount the shell only when the diagram being viewed no longer exists
+  // in the new model — otherwise drill-down position survives every edit.
+  const [shellEpoch, setShellEpoch] = useState(0);
+  const currentDiagramRef = useRef(SEED_MODEL.model.rootDiagramId);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState<MermaidImportError | null>(
+    null,
+  );
+  const [lossyNoticeVisible, setLossyNoticeVisible] = useState(false);
+
+  const aftPaneId = useId();
+  const jsonPaneId = useId();
+  const importTextareaId = useId();
+  const editingHintId = useId();
+
+  /* ---- adopting a successfully parsed model --------------------------- */
+
+  const adoptSynced = useCallback(
+    (next: SyncedModel, sourcePane: PaneId | null) => {
+      setSynced(next);
+      // Only ever rewrite the OTHER pane(s) — never the one being edited.
+      if (sourcePane !== "aft") setAftText(next.aftText);
+      if (sourcePane !== "json") setJsonText(next.jsonText);
+      setPaneError(null);
+      if (next.model.diagrams[currentDiagramRef.current] === undefined) {
+        currentDiagramRef.current = next.model.rootDiagramId;
+        setShellEpoch((epoch) => epoch + 1);
       }
     },
-    [text, choice],
+    [],
   );
 
-  const detectionSentence =
-    choice !== "auto"
-      ? `Format forced to ${FORMAT_LABEL[choice]} — auto-detection is off.`
-      : detected !== null
-        ? `Auto-detected format: ${FORMAT_LABEL[detected]}.`
-        : text.trim() === ""
-          ? "Paste a document to auto-detect its format."
-          : "Format not recognised — pick JSON or Mermaid explicitly.";
+  const applySync = useCallback(
+    (pane: PaneId, value: string) => {
+      const result = parsePane(pane, value);
+      if (result.status === "ok") {
+        adoptSynced(result.value, pane);
+        setAnnouncement(
+          pane === "aft"
+            ? "Panes in sync — JSON regenerated and diagram updated."
+            : "Panes in sync — text regenerated and diagram updated.",
+        );
+        return;
+      }
+      setPaneError({ pane, error: result.error });
+      setAnnouncement(
+        result.error.kind === "mermaid-detected"
+          ? `The ${PANE_LABEL[pane]} pane looks like Mermaid C4 — use the import action to convert it.`
+          : `${PANE_LABEL[pane]} has a problem — ${result.error.message}. The other pane and the diagram show the last good version.`,
+      );
+    },
+    [adoptSynced],
+  );
+
+  // The debounce: one timer for the single pending edit; replaced (and the
+  // old timer cancelled) on every keystroke in either pane.
+  useEffect(() => {
+    if (pending === null) return;
+    const timer = window.setTimeout(() => {
+      setPending(null);
+      applySync(pending.pane, pending.value);
+    }, SYNC_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [pending, applySync]);
+
+  /* ---- pane interactions ----------------------------------------------- */
+
+  const handlePaneChange = useCallback((pane: PaneId, value: string) => {
+    if (pane === "aft") setAftText(value);
+    else setJsonText(value);
+    setPending({ pane, value });
+  }, []);
+
+  const handleFormat = useCallback(
+    (pane: PaneId) => {
+      const value = pane === "aft" ? aftText : jsonText;
+      setPending(null);
+      const canonical = canonicalizePane(pane, value);
+      if (canonical === null) {
+        // Doesn't parse — surface the error now instead of formatting.
+        applySync(pane, value);
+        return;
+      }
+      if (pane === "aft") setAftText(canonical);
+      else setJsonText(canonical);
+      applySync(pane, canonical);
+      setAnnouncement(`${PANE_LABEL[pane]} formatted to its canonical form.`);
+    },
+    [aftText, jsonText, applySync],
+  );
+
+  const handleImport = useCallback(
+    (source: string) => {
+      const result = importMermaid(source);
+      if (result.status === "error") {
+        setImportError(result.error);
+        setImportOpen(true);
+        setAnnouncement(
+          `The Mermaid code has a problem — ${result.error.message}.`,
+        );
+        return;
+      }
+      setPending(null);
+      adoptSynced(result.value, null);
+      currentDiagramRef.current = result.value.model.rootDiagramId;
+      setShellEpoch((epoch) => epoch + 1);
+      setImportError(null);
+      setImportOpen(false);
+      setImportText("");
+      setLossyNoticeVisible(true);
+      setAnnouncement(
+        "Imported from Mermaid — both panes replaced. Note: the conversion is lossy; details above the panes.",
+      );
+    },
+    [adoptSynced],
+  );
+
+  // Reports which diagram is on screen so edits keep the drill-down place.
+  const handleDiagramChange = useCallback((diagramId: string) => {
+    currentDiagramRef.current = diagramId;
+  }, []);
+
+  /* ---- Tab handling — indent, with a documented escape ------------------ */
+
+  // After Escape, the next Tab moves focus instead of indenting.
+  const tabEscapeRef = useRef(false);
+
+  const handleEditorKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>, pane: PaneId) => {
+      if (event.key === "Escape") {
+        tabEscapeRef.current = true;
+        return;
+      }
+      if (event.key === "Tab" && !event.shiftKey && !tabEscapeRef.current) {
+        event.preventDefault();
+        const el = event.currentTarget;
+        el.setRangeText("  ", el.selectionStart, el.selectionEnd, "end");
+        handlePaneChange(pane, el.value);
+      }
+      tabEscapeRef.current = false;
+    },
+    [handlePaneChange],
+  );
+
+  /* ---- render ------------------------------------------------------------ */
+
+  const stem = downloadStem(synced.model.title);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-5 py-10 sm:px-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-10 sm:px-8">
       <header className="max-w-3xl">
         <Badge variant="accent" className="mb-4">
           <span className="size-1.5 rounded-full bg-accent" />
-          View mode · paste your own
+          View mode · live two-pane editor
         </Badge>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Render your own model
+          Write your own model — text and JSON, in sync
         </h1>
         <p className="mt-3 leading-relaxed text-muted-foreground">
-          Paste an{" "}
+          The same model in two languages:{" "}
+          <span className="font-mono text-sm text-foreground">.aft</span>{" "}
+          arch-flow text and{" "}
           <span className="font-mono text-sm text-foreground">
             .archflow.json
-          </span>{" "}
-          document or Mermaid C4 code (
-          <span className="font-mono text-sm text-foreground">C4Context</span>,{" "}
-          <span className="font-mono text-sm text-foreground">C4Container</span>
-          , …) and render it in the same read-only viewer the demos use — then
-          copy it back out in the other format, or export the diagram as an
-          image. Everything stays in your browser: nothing you paste is uploaded
-          or stored.
+          </span>
+          . Edit either pane and the other regenerates as you type — both are
+          lossless, so nothing is dropped in either direction. Mermaid C4 can be
+          imported (one-way). Everything stays in your browser: nothing you type
+          is uploaded or stored.
         </p>
       </header>
 
-      {/* ---- input form ---------------------------------------------------- */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <label
-            htmlFor={textareaId}
-            className="text-sm font-medium text-foreground"
-          >
-            Model source — arch-flow JSON or Mermaid C4
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setText(MERMAID_EXAMPLE)}
-              className={buttonClasses({ variant: "ghost", size: "sm" })}
-            >
-              <ArrowDownToLine aria-hidden="true" />
-              Mermaid example
-            </button>
-            <button
-              type="button"
-              onClick={() => setText(JSON_EXAMPLE)}
-              className={buttonClasses({ variant: "ghost", size: "sm" })}
-            >
-              <ArrowDownToLine aria-hidden="true" />
-              JSON example
-            </button>
-          </div>
-        </div>
+      {/* One shared live region for sync state and errors. */}
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
-        <textarea
-          id={textareaId}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          spellCheck={false}
-          rows={14}
-          className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      {/* ---- Mermaid import ------------------------------------------------ */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setImportOpen((open) => !open)}
+          aria-expanded={importOpen}
+          className={buttonClasses({ variant: "outline", size: "sm" })}
+        >
+          <Import aria-hidden="true" />
+          Import from Mermaid
+        </button>
+        <p className="text-xs text-muted-foreground">
+          One-way and lossy — converts Mermaid C4 into both panes.
+        </p>
+      </div>
+
+      {importOpen ? (
+        <MermaidImportPanel
+          textareaId={importTextareaId}
+          value={importText}
+          onChange={setImportText}
+          onImport={() => handleImport(importText)}
+          error={importError}
         />
+      ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <fieldset className="flex flex-wrap items-center gap-1.5">
-            <legend className="sr-only">Input format</legend>
-            {(["auto", "json", "mermaid"] as const).map((option) => (
-              <label
-                key={option}
-                className={cn(
-                  "flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring",
-                  choice === option
-                    ? "border-primary/50 bg-primary/10 font-medium text-foreground"
-                    : "border-border text-muted-foreground hover:border-foreground/25 hover:text-foreground",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="format"
-                  value={option}
-                  checked={choice === option}
-                  onChange={() => setChoice(option)}
-                  className="sr-only"
-                />
-                {option === "auto" ? "Auto-detect" : FORMAT_LABEL[option]}
-              </label>
-            ))}
-          </fieldset>
-          <button type="submit" className={buttonClasses({ size: "md" })}>
-            <Play aria-hidden="true" />
-            Render diagram
+      {lossyNoticeVisible ? (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
+          <p className="text-sm leading-relaxed text-foreground">
+            <span className="font-semibold">Imported from Mermaid.</span>{" "}
+            {MERMAID_LOSSY_NOTICE}
+          </p>
+          <button
+            type="button"
+            onClick={() => setLossyNoticeVisible(false)}
+            aria-label="Dismiss the Mermaid import notice"
+            className={buttonClasses({
+              variant: "ghost",
+              size: "sm",
+              className: "shrink-0",
+            })}
+          >
+            <X aria-hidden="true" />
           </button>
         </div>
-
-        {/* Detection is a convenience, never a trap: always say what it saw. */}
-        <p aria-live="polite" className="text-sm text-muted-foreground">
-          {detectionSentence}
-        </p>
-      </form>
-
-      {/* ---- errors --------------------------------------------------------- */}
-      {error !== null ? <PasteError error={error} /> : null}
-
-      {/* ---- the rendered model --------------------------------------------- */}
-      {rendered !== null ? (
-        <>
-          <section
-            aria-label="Rendered diagram"
-            className="flex h-[75vh] min-h-96 flex-col overflow-hidden rounded-xl border border-border shadow-sm"
-          >
-            <ViewerShell
-              key={rendered.submission}
-              model={rendered.pasted.model}
-              onDiagramChange={setCurrentDiagramId}
-            />
-          </section>
-          <ConvertedCode
-            pasted={rendered.pasted}
-            currentDiagramId={
-              currentDiagramId ?? rendered.pasted.model.rootDiagramId
-            }
-          />
-        </>
       ) : null}
+
+      {/* ---- the two panes -------------------------------------------------- */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+        <EditorPane
+          pane="aft"
+          textareaId={aftPaneId}
+          hintId={editingHintId}
+          heading="arch-flow text"
+          extension={ARCHTEXT_EXTENSION}
+          filename={`${stem}${ARCHTEXT_EXTENSION}`}
+          mime="text/plain"
+          value={aftText}
+          error={paneError?.pane === "aft" ? paneError.error : null}
+          onChange={handlePaneChange}
+          onKeyDown={handleEditorKeyDown}
+          onFormat={handleFormat}
+          onImportMermaid={handleImport}
+        />
+        <EditorPane
+          pane="json"
+          textareaId={jsonPaneId}
+          hintId={editingHintId}
+          heading="arch-flow JSON"
+          extension={JSON_EXTENSION}
+          filename={`${stem}${JSON_EXTENSION}`}
+          mime="application/json"
+          value={jsonText}
+          error={paneError?.pane === "json" ? paneError.error : null}
+          onChange={handlePaneChange}
+          onKeyDown={handleEditorKeyDown}
+          onFormat={handleFormat}
+          onImportMermaid={handleImport}
+        />
+      </div>
+      <p id={editingHintId} className="text-xs text-muted-foreground">
+        Tab inserts two spaces inside the editors — press Escape, then Tab, to
+        move focus out. Format rewrites a pane to its canonical form; nothing is
+        reformatted while you type.
+      </p>
+
+      {/* ---- the rendered model ---------------------------------------------- */}
+      <section
+        aria-label="Rendered diagram"
+        className="flex h-[75vh] min-h-96 flex-col overflow-hidden rounded-xl border border-border shadow-sm"
+      >
+        <ViewerShell
+          key={shellEpoch}
+          model={synced.model}
+          onDiagramChange={handleDiagramChange}
+        />
+      </section>
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* Error presentation — precise, located, never a bare "invalid input"        */
+/* One editor pane: label, actions, textarea, inline error                     */
 /* -------------------------------------------------------------------------- */
 
-function PasteError({
+function EditorPane({
+  pane,
+  textareaId,
+  hintId,
+  heading,
+  extension,
+  filename,
+  mime,
+  value,
   error,
+  onChange,
+  onKeyDown,
+  onFormat,
+  onImportMermaid,
 }: {
-  error: PastedErrorDetail;
+  pane: PaneId;
+  textareaId: string;
+  hintId: string;
+  heading: string;
+  extension: string;
+  filename: string;
+  mime: string;
+  value: string;
+  error: PaneErrorDetail | null;
+  onChange: (pane: PaneId, value: string) => void;
+  onKeyDown: (
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+    pane: PaneId,
+  ) => void;
+  onFormat: (pane: PaneId) => void;
+  onImportMermaid: (source: string) => void;
 }): React.JSX.Element {
   return (
-    <div
-      role="alert"
-      className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3.5"
+    <section
+      aria-label={`${heading} editor`}
+      className="flex min-w-0 flex-col gap-2"
     >
-      {error.kind === "unknown-format" ? (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label
+          htmlFor={textareaId}
+          className="text-sm font-medium text-foreground"
+        >
+          {heading}{" "}
+          <span className="font-mono text-xs text-muted-foreground">
+            ({extension})
+          </span>
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => onFormat(pane)}
+            aria-label={`Format the ${heading} pane to its canonical form`}
+            className={buttonClasses({ variant: "ghost", size: "sm" })}
+          >
+            <AlignLeft aria-hidden="true" />
+            Format
+          </button>
+          <CopyButton text={value} label={`Copy the ${heading}`} />
+          <button
+            type="button"
+            onClick={() => downloadTextFile(filename, value, mime)}
+            aria-label={`Download the ${heading} as ${filename}`}
+            className={buttonClasses({ variant: "outline", size: "sm" })}
+          >
+            <Download aria-hidden="true" />
+            Download
+          </button>
+        </div>
+      </div>
+
+      <textarea
+        id={textareaId}
+        value={value}
+        onChange={(event) => onChange(pane, event.target.value)}
+        onKeyDown={(event) => onKeyDown(event, pane)}
+        aria-describedby={hintId}
+        aria-invalid={error !== null && error.kind !== "mermaid-detected"}
+        spellCheck={false}
+        rows={18}
+        className={cn(
+          "w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          error !== null && error.kind !== "mermaid-detected"
+            ? "border-destructive/60"
+            : "border-border",
+        )}
+      />
+
+      {error !== null ? (
+        <PaneErrorBox
+          heading={heading}
+          error={error}
+          onImportMermaid={onImportMermaid}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Errors — one shape, native precision, work always preserved                 */
+/* -------------------------------------------------------------------------- */
+
+function PaneErrorBox({
+  heading,
+  error,
+  onImportMermaid,
+}: {
+  heading: string;
+  error: PaneErrorDetail;
+  onImportMermaid: (source: string) => void;
+}): React.JSX.Element {
+  if (error.kind === "mermaid-detected") {
+    return (
+      <div className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3.5">
         <p className="text-sm leading-relaxed text-foreground">
-          {error.message}
+          This looks like <span className="font-mono">Mermaid C4</span> code.
+          Mermaid is a one-way import here, not a sync format — convert it into
+          both panes instead. {MERMAID_LOSSY_NOTICE}
         </p>
-      ) : null}
+        <button
+          type="button"
+          onClick={() => onImportMermaid(error.source)}
+          className={buttonClasses({
+            variant: "outline",
+            size: "sm",
+            className: "mt-2.5",
+          })}
+        >
+          <Import aria-hidden="true" />
+          Import this Mermaid code
+        </button>
+      </div>
+    );
+  }
 
-      {error.kind === "json" ? (
-        <>
-          <p className="text-sm font-medium text-foreground">
-            This is not a valid{" "}
-            <span className="font-mono">.archflow.json</span> document:
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {error.issues.map((issue) => (
-              <li
-                key={`${issue.path}:${issue.message}`}
-                className="font-mono text-xs leading-relaxed break-words text-foreground"
-              >
-                <span className="font-semibold">{issue.path}</span>:{" "}
-                {issue.message}
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
+  return (
+    <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3.5">
+      <p className="text-sm font-medium text-foreground">
+        The {heading} doesn&apos;t parse —{" "}
+        <span className="font-mono">{error.message}</span>
+      </p>
 
-      {error.kind === "mermaid" ? (
-        <>
+      {error.kind === "aft" ? (
+        <CaretQuote
+          line={error.line}
+          column={error.column}
+          lineText={error.lineText}
+          extraIssues={error.issues.slice(1).map((issue) => ({
+            key: `${issue.line}:${issue.column}:${issue.message}`,
+            text: `line ${issue.line}, column ${issue.column}: ${issue.message}`,
+          }))}
+        />
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {error.issues.map((issue) => (
+            <li
+              key={`${issue.path}:${issue.message}`}
+              className="font-mono text-xs leading-relaxed break-words text-foreground"
+            >
+              <span className="font-semibold">{issue.path}</span>:{" "}
+              {issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-2.5 text-xs text-muted-foreground">
+        Your work is safe — the other pane and the rendered diagram still show
+        the last good version and will catch up once this parses.
+      </p>
+    </div>
+  );
+}
+
+/** The offending line, quoted verbatim, caret at the column. */
+function CaretQuote({
+  line,
+  column,
+  lineText,
+  extraIssues,
+}: {
+  line: number;
+  column: number;
+  lineText: string | null;
+  extraIssues: readonly { key: string; text: string }[];
+}): React.JSX.Element {
+  return (
+    <>
+      {lineText !== null ? (
+        <pre className="mt-2 overflow-x-auto rounded-md bg-card px-3 py-2 font-mono text-xs leading-relaxed text-foreground">
+          {`${String(line).padStart(4)} | ${lineText}\n`}
+          <span aria-hidden="true">
+            {`${" ".repeat(4)} | ${" ".repeat(Math.max(0, column - 1))}`}
+            <span className="font-bold text-destructive">^</span>
+          </span>
+        </pre>
+      ) : null}
+      {extraIssues.length > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {extraIssues.map((issue) => (
+            <li
+              key={issue.key}
+              className="font-mono text-xs text-muted-foreground"
+            >
+              {issue.text}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mermaid import panel                                                        */
+/* -------------------------------------------------------------------------- */
+
+function MermaidImportPanel({
+  textareaId,
+  value,
+  onChange,
+  onImport,
+  error,
+}: {
+  textareaId: string;
+  value: string;
+  onChange: (value: string) => void;
+  onImport: () => void;
+  error: MermaidImportError | null;
+}): React.JSX.Element {
+  return (
+    <section
+      aria-label="Import from Mermaid"
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label
+          htmlFor={textareaId}
+          className="text-sm font-medium text-foreground"
+        >
+          Mermaid C4 code
+        </label>
+        <button
+          type="button"
+          onClick={() => onChange(MERMAID_EXAMPLE)}
+          className={buttonClasses({ variant: "ghost", size: "sm" })}
+        >
+          <ArrowDownToLine aria-hidden="true" />
+          Insert example
+        </button>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {MERMAID_LOSSY_NOTICE} The converted model replaces both panes.
+      </p>
+      <textarea
+        id={textareaId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        spellCheck={false}
+        rows={8}
+        className="w-full min-w-0 resize-y rounded-lg border border-border bg-background px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      />
+      {error !== null ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3.5">
           <p className="text-sm font-medium text-foreground">
             This is not valid Mermaid C4 code —{" "}
             <span className="font-mono">{error.message}</span>
           </p>
-          {error.lineText !== null ? (
-            // The offending line, quoted verbatim, caret at the column.
-            <pre className="mt-2 overflow-x-auto rounded-md bg-card px-3 py-2 font-mono text-xs leading-relaxed text-foreground">
-              {`${String(error.line).padStart(4)} | ${error.lineText}\n`}
-              <span aria-hidden="true">
-                {`${" ".repeat(4)} | ${" ".repeat(Math.max(0, error.column - 1))}`}
-                <span className="font-bold text-destructive">^</span>
-              </span>
-            </pre>
-          ) : null}
-          {error.issues.length > 1 ? (
-            <ul className="mt-2 space-y-1">
-              {error.issues.slice(1).map((issue) => (
-                <li
-                  key={`${issue.line}:${issue.column}:${issue.message}`}
-                  className="font-mono text-xs text-muted-foreground"
-                >
-                  line {issue.line}, column {issue.column}: {issue.message}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </>
+          <CaretQuote
+            line={error.line}
+            column={error.column}
+            lineText={error.lineText}
+            extraIssues={error.issues.slice(1).map((issue) => ({
+              key: `${issue.line}:${issue.column}:${issue.message}`,
+              text: `line ${issue.line}, column ${issue.column}: ${issue.message}`,
+            }))}
+          />
+        </div>
       ) : null}
-    </div>
+      <div>
+        <button
+          type="button"
+          onClick={onImport}
+          className={buttonClasses({ size: "md" })}
+        >
+          <Import aria-hidden="true" />
+          Import — replaces both panes
+        </button>
+      </div>
+    </section>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* The converted-code panel: the OTHER representation of what is loaded       */
+/* Copy & download                                                             */
 /* -------------------------------------------------------------------------- */
 
-function ConvertedCode({
-  pasted,
-  currentDiagramId,
-}: {
-  pasted: PastedModel;
-  currentDiagramId: string;
-}): React.JSX.Element {
-  const target: PastedFormat = pasted.format === "mermaid" ? "json" : "mermaid";
-  const diagram = getDiagram(pasted.model, currentDiagramId);
-
-  const code =
-    target === "json"
-      ? pasted.jsonText
-      : mermaidTextForDiagram(pasted.file, currentDiagramId);
-
-  const scopeSentence =
-    target === "json"
-      ? EDITOR_ENABLED
-        ? "The complete model — every level — as the same canonical JSON the editor saves."
-        : "The complete model — every level — as canonical arch-flow JSON."
-      : `A Mermaid document describes one diagram at a time. This is the diagram you are viewing — ${diagram.title} (${LEVEL_LABEL[diagram.level]} view) — and it follows along as you drill up and down.`;
-
-  return (
-    <section
-      aria-label={`Converted code — ${FORMAT_LABEL[target]}`}
-      className="rounded-xl border border-border bg-card shadow-sm"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-foreground">
-            Converted to {FORMAT_LABEL[target]}
-          </h2>
-          <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-            {scopeSentence}
-          </p>
-        </div>
-        <CopyButton text={code} label={`Copy the ${FORMAT_LABEL[target]}`} />
-      </div>
-      <pre className="max-h-96 overflow-auto px-4 py-3 font-mono text-xs leading-relaxed text-foreground">
-        {code}
-      </pre>
-    </section>
-  );
+function downloadTextFile(filename: string, text: string, mime: string): void {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function CopyButton({
@@ -366,7 +698,7 @@ function CopyButton({
         window.setTimeout(() => setCopied(false), 2_000);
       })
       .catch(() => {
-        /* Clipboard blocked — the code stays selectable below. */
+        /* Clipboard blocked — the text stays selectable in the pane. */
       });
   }, [text]);
 

@@ -114,7 +114,7 @@ function editorModelFromFile(file: ArchFlowFile): EditorModel {
 }
 
 /** `EditorModel` → `ArchFlowFile`, unknown fields re-attached verbatim. */
-function fileFromEditorModel(editorModel: EditorModel): ArchFlowFile {
+export function fileFromEditorModel(editorModel: EditorModel): ArchFlowFile {
   const file: ArchFlowFile = {
     version: editorModel.version,
     metadata: editorModel.metadata,
@@ -233,6 +233,11 @@ export function parsePastedText(
 /** Canonical `.archflow.json` text for a validated file. */
 export function canonicalJsonText(file: ArchFlowFile): string {
   return serializeModel(editorModelFromFile(file));
+}
+
+/** The `ViewerModel` the canvas renders, straight from a validated file. */
+export function viewerModelFromFile(file: ArchFlowFile): ViewerModel {
+  return viewerModelFromEditorModel(editorModelFromFile(file));
 }
 
 /**
