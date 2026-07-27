@@ -14,7 +14,7 @@
 
 import { memo } from "react";
 import { ZoomIn } from "lucide-react";
-import type { Node, NodeProps } from "@xyflow/react";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
 import type { C4Level, C4Node } from "@/types";
@@ -33,12 +33,16 @@ export interface ShowcaseNodeData extends Record<string, unknown> {
   node: C4Node;
   /** The containing diagram's level — a node's level is never stored on it. */
   level: C4Level;
-  /** Present ⇔ the node has a child diagram to zoom into. */
+  /**
+   * Present ⇔ the node has a child diagram to zoom into. Navigation itself
+   * happens in the canvas's onNodeClick (see showcase-canvas.tsx — the node
+   * wrapper only receives pointer events because the flow declares that
+   * handler); this object only shapes the affordance.
+   */
   drill: {
     childDiagramId: string;
     childLevelLabel: string;
     childCount: number;
-    onDrill: (nodeId: string) => void;
   } | null;
   isPlaceholder: boolean;
 }
@@ -72,6 +76,26 @@ function ShowcaseNodeInner({
 
   const content = (
     <>
+      {/*
+       * Invisible anchor handles. React Flow will not CREATE an edge unless
+       * both endpoint nodes expose a handle (error 008), even though our
+       * ShowcaseEdge recomputes floating anchors itself and never draws from
+       * these points. `visibility: hidden` keeps them measurable for React
+       * Flow's internals while removing them from painting, hit-testing, and
+       * the accessibility tree — the demo stays strictly view-only.
+       */}
+      <Handle
+        type="source"
+        position={Position.Top}
+        isConnectable={false}
+        className="!invisible"
+      />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        isConnectable={false}
+        className="!invisible"
+      />
       <NodeShapeLayer type={node.type} />
       <div className="relative z-[1] flex w-full min-w-0 flex-col items-center gap-px overflow-hidden">
         <div className="flex w-full min-w-0 items-center justify-center gap-1.5">
@@ -108,10 +132,12 @@ function ShowcaseNodeInner({
 
   // Drillable: a genuine button so click, Enter, Space, and Tab all work for
   // free, with an unmistakable persistent chip naming what a click does.
+  // No onClick of its own — the click (mouse, or synthesized by Enter/Space)
+  // bubbles to the node wrapper and the canvas's onNodeClick performs the
+  // drill, so navigation has exactly one code path.
   return (
     <button
       type="button"
-      onClick={() => drill.onDrill(node.id)}
       aria-label={`Zoom into ${node.name} — ${drill.childLevelLabel} view, ${drill.childCount} elements`}
       title={`Zoom into ${node.name}`}
       className={cn(

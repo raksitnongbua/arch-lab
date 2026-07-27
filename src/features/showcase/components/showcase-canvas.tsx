@@ -44,6 +44,7 @@ import {
   useReactFlow,
   type EdgeMarker,
   type EdgeTypes,
+  type NodeMouseHandler,
   type NodeTypes,
   type OnMoveEnd,
   type Viewport,
@@ -335,6 +336,19 @@ function ShowcaseCanvasInner({
     [model, navigateTo],
   );
 
+  // Drilling routes through React Flow's onNodeClick, not a handler inside
+  // the node component: with every interactive flag off (draggable /
+  // selectable / connectable all false), React Flow sets `pointer-events:
+  // none` on the node wrapper unless the flow itself declares a node click
+  // handler — an onClick inside the node would never receive the mouse.
+  // Keyboard still works through the same path: Enter/Space on the node's
+  // <button> dispatches a click that bubbles to the wrapper. drillInto()
+  // no-ops for leaf nodes, so the demo stays view-only.
+  const handleNodeClick = useCallback<NodeMouseHandler<ShowcaseFlowNode>>(
+    (_event, node) => drillInto(node.id),
+    [drillInto],
+  );
+
   const climbTo = useCallback(
     (targetId: string) => {
       const anchorNodeId = climbAnchorNodeId(
@@ -532,7 +546,6 @@ function ShowcaseCanvasInner({
                   childLevelLabel: childLevel,
                   childCount: getDiagram(model, node.childDiagramId).nodes
                     .length,
-                  onDrill: drillInto,
                 }
               : null,
         },
@@ -561,7 +574,7 @@ function ShowcaseCanvasInner({
     });
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [model, diagram, drillInto]);
+  }, [model, diagram]);
 
   /* ---- camera persistence --------------------------------------------------- */
 
@@ -577,7 +590,12 @@ function ShowcaseCanvasInner({
       tabIndex={-1}
       role="region"
       aria-label={`${diagram.title} — read-only diagram`}
-      className="relative size-full outline-none"
+      // absolute inset-0, not size-full: the shell's wrapper sizes itself with
+      // min-h-96 + flex-1 (no definite `height`), so a percentage height here
+      // would resolve to auto and collapse the canvas to zero (React Flow
+      // error 004). Absolute positioning tracks the wrapper's USED box —
+      // min-height clamp included — so the graph always has real dimensions.
+      className="absolute inset-0 outline-none"
     >
       <p aria-live="polite" className="sr-only">
         {announcement}
@@ -589,6 +607,7 @@ function ShowcaseCanvasInner({
         edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: FIT_PADDING }}
+        onNodeClick={handleNodeClick}
         onMoveEnd={handleMoveEnd}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
