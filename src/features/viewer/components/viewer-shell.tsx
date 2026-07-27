@@ -17,7 +17,8 @@
  *   1. native fullscreen active → the BROWSER exits fullscreen; the viewer
  *      deliberately ignores the key (see viewer-canvas.tsx) so one press
  *      never does two things;
- *   2. a relationship is selected → deselect it (canvas);
+ *   2. an element or relationship is selected (never both — they are
+ *      mutually exclusive) → deselect it (canvas);
  *   3. below Context → climb one C4 level (canvas);
  *   4. at the root with nothing selected and immersive mode on → leave
  *      immersive mode (here — the canvas leaves the event unconsumed, and

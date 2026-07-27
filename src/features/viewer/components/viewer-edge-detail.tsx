@@ -102,11 +102,11 @@ export function ViewerEdgeDetail({
     return (
       <div className="hidden w-56 rounded-lg border border-border/60 bg-card/80 p-3 backdrop-blur sm:block">
         <p className="text-xs font-medium text-foreground">
-          Inspect a relationship
+          Inspect the diagram
         </p>
         <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          Click any connector — the line or its label — to trace the flow and
-          see how the two elements talk.
+          Click any element to see what it is and what it talks to, or any
+          connector — the line or its label — to trace that relationship.
         </p>
       </div>
     );
@@ -126,7 +126,9 @@ export function ViewerEdgeDetail({
     <aside
       aria-label="Relationship details"
       className={cn(
-        "flex max-h-[min(70vh,32rem)] w-72 max-w-full flex-col overflow-y-auto",
+        // Same narrow-screen height cap as the element card: at most 40vh
+        // below `sm` so the canvas stays usable beneath the overlay.
+        "flex max-h-[min(40vh,32rem)] w-72 max-w-full flex-col overflow-y-auto sm:max-h-[min(70vh,32rem)]",
         "rounded-lg border border-primary/40 bg-card/95 p-3 shadow-lg backdrop-blur",
       )}
     >

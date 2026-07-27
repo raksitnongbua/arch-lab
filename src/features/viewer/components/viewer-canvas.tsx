@@ -2,9 +2,15 @@
 
 /**
  * The viewer canvas: a view-only React Flow surface over the frozen demo
- * model, plus the interaction that is the whole point of the page — clicking
- * a node with a child layer zooms INTO it, and climbing back out reverses
- * the move (IcePanel-style continuous descent, not a screen swap).
+ * model, plus the two interactions that are the whole point of the page:
+ *
+ *   - SELECT — single click (or Enter/Space) on any element or connector
+ *     opens its detail panel and focuses the diagram on it. Element and
+ *     relationship selection are mutually exclusive; the pane click or
+ *     Escape clears whichever is active.
+ *   - DRILL — the zoom chip on a node with a child layer, or double-click
+ *     on the node body, zooms INTO it; climbing back out reverses the move
+ *     (IcePanel-style continuous descent, not a screen swap).
  *
  * How a transition plays (mirrors the editor's proven LevelTransition
  * approach — snapshot + Web Animations API, `transform`/`opacity` only):
@@ -67,8 +73,10 @@ import {
   type ViewerModel,
 } from "../lib/model";
 import { FIT_PADDING, MAX_ZOOM, MIN_ZOOM } from "../lib/canvas-constants";
+import { TYPE_LABEL } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
+import { ViewerNodeDetail, type NodeDetail } from "./viewer-node-detail";
 import {
   ViewerEdge,
   type EdgeEmphasis,
@@ -353,14 +361,17 @@ function ViewerCanvasInner({
   const [announcement, setAnnouncement] = useState("");
   /** At most one relationship selected at a time; null ⇒ nothing selected. */
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  /** At most one element selected — mutually exclusive with the edge. */
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramIdRef = useRef(diagramId);
   useEffect(() => {
     diagramIdRef.current = diagramId;
   }, [diagramId]);
-  /** Mirror for handlers that must read the selection synchronously. */
+  /** Mirrors for handlers that must read the selection synchronously. */
   const selectedEdgeIdRef = useRef<string | null>(null);
+  const selectedNodeIdRef = useRef<string | null>(null);
   /** Last camera per diagram — climbing back returns to where you were. */
   const viewportsRef = useRef<Record<string, Viewport>>({});
   const pendingRef = useRef<PendingNav | null>(null);
@@ -372,7 +383,7 @@ function ViewerCanvasInner({
     [model, diagramId],
   );
 
-  /* ---- edge selection ------------------------------------------------------- */
+  /* ---- selection (one element OR one relationship, never both) -------------- */
 
   const clearEdgeSelection = useCallback((announce = true) => {
     if (selectedEdgeIdRef.current === null) return;
@@ -380,6 +391,22 @@ function ViewerCanvasInner({
     setSelectedEdgeId(null);
     if (announce) setAnnouncement("Relationship deselected.");
   }, []);
+
+  const clearNodeSelection = useCallback((announce = true) => {
+    if (selectedNodeIdRef.current === null) return;
+    selectedNodeIdRef.current = null;
+    setSelectedNodeId(null);
+    if (announce) setAnnouncement("Element deselected.");
+  }, []);
+
+  /** Clear whichever selection is active (they are mutually exclusive). */
+  const clearSelection = useCallback(
+    (announce = true) => {
+      clearEdgeSelection(announce);
+      clearNodeSelection(announce);
+    },
+    [clearEdgeSelection, clearNodeSelection],
+  );
 
   const toggleEdgeSelection = useCallback(
     (edgeId: string) => {
@@ -390,6 +417,8 @@ function ViewerCanvasInner({
       const current = getDiagram(model, diagramIdRef.current);
       const edge = findEdge(current, edgeId);
       if (edge === null) return;
+      // Mutually exclusive: an incoming edge selection displaces the node's.
+      clearNodeSelection(false);
       const sourceName = findNode(current, edge.source)?.name ?? edge.source;
       const targetName = findNode(current, edge.target)?.name ?? edge.target;
       selectedEdgeIdRef.current = edgeId;
@@ -399,6 +428,30 @@ function ViewerCanvasInner({
         `Relationship selected: ${sourceName} ${joiner} ${targetName}` +
           (edge.label ? ` — ${edge.label}.` : ".") +
           " Details panel updated. Press Escape to deselect.",
+      );
+    },
+    [model, clearEdgeSelection, clearNodeSelection],
+  );
+
+  // Selecting an already-selected node keeps it selected (idempotent, NOT a
+  // toggle): a double-click's first two clicks land here, and a toggle would
+  // flash the panel closed on the way into the drill.
+  const selectNode = useCallback(
+    (nodeId: string) => {
+      if (selectedNodeIdRef.current === nodeId) return;
+      const current = getDiagram(model, diagramIdRef.current);
+      const node = findNode(current, nodeId);
+      if (node === null) return;
+      // Mutually exclusive: an incoming node selection displaces the edge's.
+      clearEdgeSelection(false);
+      selectedNodeIdRef.current = nodeId;
+      setSelectedNodeId(nodeId);
+      const drillHint = hasChildDiagram(node)
+        ? " Use the zoom button to open its child view."
+        : "";
+      setAnnouncement(
+        `Element selected: ${node.name} — ${TYPE_LABEL[node.type]}. ` +
+          `Details panel updated.${drillHint} Press Escape to deselect.`,
       );
     },
     [model, clearEdgeSelection],
@@ -413,17 +466,14 @@ function ViewerCanvasInner({
     [toggleEdgeSelection],
   );
 
-  const handlePaneClick = useCallback(
-    () => clearEdgeSelection(),
-    [clearEdgeSelection],
-  );
+  const handlePaneClick = useCallback(() => clearSelection(), [clearSelection]);
 
   const handleDetailDismiss = useCallback(() => {
-    clearEdgeSelection();
+    clearSelection();
     // The close button unmounts with the panel — hand focus back to the
     // canvas region so keyboard users are not dropped at <body>.
     containerRef.current?.focus({ preventScroll: true });
-  }, [clearEdgeSelection]);
+  }, [clearSelection]);
 
   /* ---- navigation ---------------------------------------------------------- */
 
@@ -436,8 +486,10 @@ function ViewerCanvasInner({
       const fromId = diagramIdRef.current;
       if (targetId === fromId) return;
       // A selection belongs to one diagram; drop it before the level swaps.
-      // Silent: the navigation announcement below supersedes it.
-      clearEdgeSelection(false);
+      // Silent: the navigation announcement below supersedes it. This is also
+      // what guarantees a drilling double-click leaves no stray selection
+      // from its first click.
+      clearSelection(false);
       const container = containerRef.current;
       const target = getDiagram(model, targetId);
 
@@ -509,7 +561,7 @@ function ViewerCanvasInner({
           (target.parentDiagramId !== null ? " Press Escape to zoom out." : ""),
       );
     },
-    [model, getViewport, clearEdgeSelection],
+    [model, getViewport, clearSelection],
   );
 
   const drillInto = useCallback(
@@ -523,26 +575,26 @@ function ViewerCanvasInner({
     [model, navigateTo],
   );
 
-  // Drilling routes through React Flow's onNodeClick, not a handler inside
-  // the node component: with every interactive flag off (draggable /
+  // Element selection routes through React Flow's onNodeClick, not a handler
+  // inside the node component: with every interactive flag off (draggable /
   // selectable / connectable all false), React Flow sets `pointer-events:
   // none` on the node wrapper unless the flow itself declares a node click
   // handler — an onClick inside the node would never receive the mouse.
-  // Keyboard still works through the same path: Enter/Space on the node's
-  // <button> dispatches a click that bubbles to the wrapper. drillInto()
-  // no-ops for leaf nodes, so the demo stays view-only.
+  // Keyboard works through the same path: Enter/Space on the node's body
+  // <button> dispatches a click that bubbles to the wrapper. The zoom chip
+  // never lands here — it stops propagation and calls drillInto directly.
   const handleNodeClick = useCallback<NodeMouseHandler<ViewerFlowNode>>(
-    (_event, node) => {
-      const current = getDiagram(model, diagramIdRef.current);
-      const modelNode = findNode(current, node.id);
-      if (modelNode !== null && hasChildDiagram(modelNode)) {
-        drillInto(node.id);
-      } else {
-        // Clicking a leaf acts like clicking empty canvas for selection.
-        clearEdgeSelection();
-      }
-    },
-    [model, drillInto, clearEdgeSelection],
+    (_event, node) => selectNode(node.id),
+    [selectNode],
+  );
+
+  // Double-click on the node body drills (the chip is the other drill path).
+  // The first click's selectNode is idempotent and navigateTo clears every
+  // selection, so a completed double-click never strands a selection; on a
+  // leaf, drillInto no-ops and the detail panel simply stays open.
+  const handleNodeDoubleClick = useCallback<NodeMouseHandler<ViewerFlowNode>>(
+    (_event, node) => drillInto(node.id),
+    [drillInto],
   );
 
   const climbTo = useCallback(
@@ -708,10 +760,14 @@ function ViewerCanvasInner({
       // make one press do two things. The viewer's own Escape ladder
       // (deselect → climb → leave immersive mode) resumes afterwards.
       if (document.fullscreenElement !== null) return;
-      // Selection takes priority; level-climb is the fallback.
-      if (selectedEdgeIdRef.current !== null) {
+      // Selection (element or relationship — never both) takes priority;
+      // level-climb is the fallback.
+      if (
+        selectedEdgeIdRef.current !== null ||
+        selectedNodeIdRef.current !== null
+      ) {
         event.preventDefault();
-        clearEdgeSelection();
+        clearSelection();
         return;
       }
       const current = getDiagram(model, diagramIdRef.current);
@@ -721,7 +777,7 @@ function ViewerCanvasInner({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model, climbTo, clearEdgeSelection]);
+  }, [model, climbTo, clearSelection]);
 
   /* ---- projection: frozen model diagram → fresh React Flow objects --------- */
 
@@ -750,6 +806,7 @@ function ViewerCanvasInner({
           node,
           level: diagram.level,
           isPlaceholder: isBoundaryPlaceholder(node),
+          onDrill: drillInto,
           drill:
             drillable && node.childDiagramId && childLevel !== null
               ? {
@@ -764,7 +821,7 @@ function ViewerCanvasInner({
     });
 
     return flowNodes;
-  }, [model, diagram]);
+  }, [model, diagram, drillInto]);
 
   const edges = useMemo(() => {
     const groups = parallelGroups(diagram.edges);
@@ -775,11 +832,18 @@ function ViewerCanvasInner({
     const flowEdges: ViewerFlowEdge[] = diagram.edges.map((edge) => {
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
       const isSelected = selectedEdge !== null && edge.id === selectedEdge.id;
+      // Edge selected: it alone is emphasised, everything else dims.
+      // Node selected: the edges TOUCHING it keep full strength — they are
+      // the payload (what this element talks to) — and the rest dim.
       const emphasis: EdgeEmphasis = isSelected
         ? "selected"
         : selectedEdge !== null
           ? "dimmed"
-          : "idle";
+          : selectedNodeId !== null
+            ? edge.source === selectedNodeId || edge.target === selectedNodeId
+              ? "idle"
+              : "dimmed"
+            : "idle";
       const marker: EdgeMarker = {
         type: MarkerType.ArrowClosed,
         // Idle/dimmed arrowheads only — while selected, the edge component
@@ -816,7 +880,7 @@ function ViewerCanvasInner({
     });
 
     return flowEdges;
-  }, [diagram, selectedEdgeId, toggleEdgeSelection]);
+  }, [diagram, selectedEdgeId, selectedNodeId, toggleEdgeSelection]);
 
   /* ---- selected-relationship detail ----------------------------------------- */
 
@@ -841,6 +905,61 @@ function ViewerCanvasInner({
     }
     return { edge, source, target, realizes };
   }, [model, diagram, selectedEdgeId]);
+
+  /* ---- selected-element detail ------------------------------------------------ */
+
+  const nodeDetail = useMemo<NodeDetail | null>(() => {
+    if (selectedNodeId === null) return null;
+    const node = findNode(diagram, selectedNodeId);
+    if (node === null) return null;
+    const nameById = new Map(diagram.nodes.map((n) => [n.id, n.name]));
+    const outgoing = diagram.edges
+      .filter((edge) => edge.source === selectedNodeId)
+      .map((edge) => ({
+        edge,
+        otherName: nameById.get(edge.target) ?? edge.target,
+      }));
+    const incoming = diagram.edges
+      .filter((edge) => edge.target === selectedNodeId)
+      .map((edge) => ({
+        edge,
+        otherName: nameById.get(edge.source) ?? edge.source,
+      }));
+    const childLevel = childLevelOf(diagram.level);
+    const drill =
+      hasChildDiagram(node) && node.childDiagramId && childLevel !== null
+        ? {
+            childCount: getDiagram(model, node.childDiagramId).nodes.length,
+            childLevel,
+          }
+        : null;
+    return { node, level: diagram.level, outgoing, incoming, drill };
+  }, [model, diagram, selectedNodeId]);
+
+  const handleDetailZoomIn = useCallback(() => {
+    if (selectedNodeIdRef.current !== null) {
+      drillInto(selectedNodeIdRef.current);
+    }
+  }, [drillInto]);
+
+  // Focus effect while an element is selected: the element, its direct
+  // neighbours, and the edges touching it stay at full strength; everything
+  // else recedes. Same stylesheet-driven approach as the relationship focus
+  // (node ids are model slugs) so node objects never change with selection —
+  // see the remount note above the `nodes` memo.
+  const nodeFocusCss = useMemo<string | null>(() => {
+    if (selectedNodeId === null) return null;
+    const keep = new Set<string>([selectedNodeId]);
+    for (const edge of diagram.edges) {
+      if (edge.source === selectedNodeId) keep.add(edge.target);
+      if (edge.target === selectedNodeId) keep.add(edge.source);
+    }
+    const notChain = [...keep].map((id) => `:not([data-id="${id}"])`).join("");
+    return (
+      `.viewer-canvas .react-flow__node${notChain} { opacity: ${DIM_NODE_OPACITY}; }\n` +
+      `.viewer-canvas .react-flow__node[data-id="${selectedNodeId}"] .viewer-node-selected-ring { opacity: 1; }`
+    );
+  }, [diagram, selectedNodeId]);
 
   /* ---- camera persistence --------------------------------------------------- */
 
@@ -871,6 +990,7 @@ function ViewerCanvasInner({
         // remount note above the `nodes` memo.
         <style>{`.viewer-canvas .react-flow__node:not([data-id="${detail.edge.source}"]):not([data-id="${detail.edge.target}"]) { opacity: ${DIM_NODE_OPACITY}; }`}</style>
       ) : null}
+      {nodeFocusCss !== null ? <style>{nodeFocusCss}</style> : null}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -882,6 +1002,7 @@ function ViewerCanvasInner({
         fitView
         fitViewOptions={{ padding: FIT_PADDING }}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
         onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}
         onMoveEnd={handleMoveEnd}
@@ -911,18 +1032,27 @@ function ViewerCanvasInner({
           position="top-right"
           className="max-w-[min(19rem,calc(100%-1rem))]"
         >
-          <ViewerEdgeDetail detail={detail} onDismiss={handleDetailDismiss} />
+          {nodeDetail !== null ? (
+            <ViewerNodeDetail
+              detail={nodeDetail}
+              onDismiss={handleDetailDismiss}
+              onZoomIn={handleDetailZoomIn}
+            />
+          ) : (
+            <ViewerEdgeDetail detail={detail} onDismiss={handleDetailDismiss} />
+          )}
         </Panel>
         <Panel position="bottom-left">
           <ViewerZoomControls />
         </Panel>
         <Panel position="bottom-center" className="hidden sm:block">
           <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
-            Click a{" "}
-            <span className="font-medium text-primary">numbered node</span> to
-            zoom in · click a{" "}
-            <span className="font-medium text-primary">connector</span> for
-            details · <kbd className="font-mono text-[10px]">Esc</kbd> steps
+            Click an <span className="font-medium text-primary">element</span>{" "}
+            or <span className="font-medium text-primary">connector</span> for
+            details ·{" "}
+            <span className="font-medium text-primary">double-click</span> or
+            the <span className="font-medium text-primary">zoom chip</span> to
+            zoom in · <kbd className="font-mono text-[10px]">Esc</kbd> steps
             back · drag to pan
           </p>
         </Panel>

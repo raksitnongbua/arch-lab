@@ -6,10 +6,20 @@
  * but carries none of its machinery: no handles, no selection, no rename, no
  * store.
  *
- * The drill affordance is the point of this file. A node with a child layer
- * renders as a real <button> (keyboard-reachable, honest semantics) with a
- * persistent "N ▸ zoom" chip; a leaf renders as a plain figure and never
- * pretends to be clickable.
+ * Interaction model (mirrors connectors):
+ *
+ *   - The node BODY is a real <button> on every node — leaf, drillable, or
+ *     placeholder alike. Click / Enter / Space selects the element and opens
+ *     the detail panel; the click bubbles to the flow wrapper and the
+ *     canvas's onNodeClick owns the state (viewer-canvas.tsx — the wrapper
+ *     only receives pointer events because the flow declares that handler).
+ *   - Drilling moved OFF the single click: the zoom CHIP (its own focusable
+ *     <button>, sibling of the body so buttons never nest) and DOUBLE-CLICK
+ *     on the body both zoom into the child diagram. The chip stops
+ *     propagation so it never also opens the detail panel.
+ *   - Selection emphasis is stylesheet-driven from the canvas (the
+ *     `viewer-node-selected-ring` span below), so node data never changes
+ *     with selection and edges never remount mid-interaction.
  */
 
 import { memo } from "react";
@@ -34,16 +44,17 @@ export interface ViewerNodeData extends Record<string, unknown> {
   /** The containing diagram's level — a node's level is never stored on it. */
   level: C4Level;
   /**
-   * Present ⇔ the node has a child diagram to zoom into. Navigation itself
-   * happens in the canvas's onNodeClick (see viewer-canvas.tsx — the node
-   * wrapper only receives pointer events because the flow declares that
-   * handler); this object only shapes the affordance.
+   * Present ⇔ the node has a child diagram to zoom into. Shapes the chip;
+   * the chip's own click handler calls `onDrill` directly (with propagation
+   * stopped, so the body's selection path never fires alongside it).
    */
   drill: {
     childDiagramId: string;
     childLevelLabel: string;
     childCount: number;
   } | null;
+  /** Drill into this node's child diagram — the canvas owns navigation. */
+  onDrill: (nodeId: string) => void;
   isPlaceholder: boolean;
 }
 
@@ -52,7 +63,7 @@ export type ViewerFlowNode = Node<ViewerNodeData, "c4">;
 function ViewerNodeInner({
   data,
 }: NodeProps<ViewerFlowNode>): React.JSX.Element {
-  const { node, drill, isPlaceholder } = data;
+  const { node, drill, onDrill, isPlaceholder } = data;
   const { def } = resolveIcon(node);
   const Icon = def.Svg;
 
@@ -118,51 +129,65 @@ function ViewerNodeInner({
           </span>
         ) : null}
       </div>
+      {/* Hover outline — always mounted, opacity-only transition. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-1 z-[2] rounded-[inherit] opacity-0 ring-2 ring-primary/50 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
+      />
+      {/* Selection ring — lit by the canvas's selection stylesheet. */}
+      <span
+        aria-hidden="true"
+        className="viewer-node-selected-ring pointer-events-none absolute -inset-1 z-[2] rounded-[inherit] opacity-0 ring-2 ring-primary transition-opacity duration-150"
+      />
     </>
   );
 
-  if (drill === null) {
-    // Leaf: a plain figure. No cursor change, no hover lift, not focusable.
-    return (
-      <div title={node.description} className={frameClasses}>
-        {content}
-      </div>
-    );
-  }
+  const detailLabel =
+    `${node.name} — ${meta}. Show details` +
+    (drill !== null ? ". Double-click to zoom in" : "");
 
-  // Drillable: a genuine button so click, Enter, Space, and Tab all work for
-  // free, with an unmistakable persistent chip naming what a click does.
-  // No onClick of its own — the click (mouse, or synthesized by Enter/Space)
-  // bubbles to the node wrapper and the canvas's onNodeClick performs the
-  // drill, so navigation has exactly one code path.
   return (
-    <button
-      type="button"
-      aria-label={`Zoom into ${node.name} — ${drill.childLevelLabel} view, ${drill.childCount} elements`}
-      title={`Zoom into ${node.name}`}
-      className={cn(
-        frameClasses,
-        "group cursor-zoom-in transition-[transform,box-shadow] duration-150 will-change-transform",
-        "hover:-translate-y-0.5 focus-visible:-translate-y-0.5",
-        !svgSilhouette && "hover:shadow-lg hover:shadow-primary/10",
-        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas focus-visible:outline-none",
-      )}
-    >
-      {content}
-      {/* Hover/focus outline — always mounted, opacity-only transition. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -inset-1 z-[2] rounded-[inherit] opacity-0 ring-2 ring-primary/50 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
-      />
-      {/* The affordance chip: only drillable nodes carry one. */}
-      <span
-        aria-hidden="true"
-        className="absolute -right-2 -bottom-2 z-[3] flex items-center gap-1 rounded-full border border-primary/40 bg-node px-1.5 py-0.5 text-[10px] leading-none font-medium text-primary shadow-sm transition-colors duration-150 group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground"
+    // The lift lives on this wrapper so body and chip travel together.
+    <div className="group relative size-full transition-transform duration-150 will-change-transform focus-within:-translate-y-0.5 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:focus-within:translate-y-0 motion-reduce:hover:translate-y-0">
+      <button
+        type="button"
+        aria-label={detailLabel}
+        title={node.description ?? `Show details for ${node.name}`}
+        className={cn(
+          frameClasses,
+          "cursor-pointer",
+          !svgSilhouette &&
+            "group-hover:shadow-lg group-hover:shadow-primary/10",
+          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas focus-visible:outline-none",
+        )}
       >
-        <ZoomIn className="size-3" />
-        {drill.childCount}
-      </span>
-    </button>
+        {content}
+      </button>
+      {drill !== null ? (
+        // The drill affordance: an independently focusable control, sibling
+        // (never child) of the body button. Click and double-click both stop
+        // here so drilling never doubles as selection.
+        <button
+          type="button"
+          data-child-badge
+          aria-label={`Zoom into ${node.name} — ${drill.childLevelLabel} view, ${drill.childCount} elements`}
+          title={`Zoom into ${node.name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDrill(node.id);
+          }}
+          onDoubleClick={(event) => event.stopPropagation()}
+          className={cn(
+            "absolute -right-2 -bottom-2 z-[3] flex cursor-zoom-in items-center gap-1 rounded-full border border-primary/40 bg-node px-1.5 py-0.5 text-[10px] leading-none font-medium text-primary shadow-sm",
+            "transition-colors duration-150 hover:border-primary hover:bg-primary hover:text-primary-foreground",
+            "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas focus-visible:outline-none",
+          )}
+        >
+          <ZoomIn aria-hidden="true" className="size-3" />
+          {drill.childCount}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
