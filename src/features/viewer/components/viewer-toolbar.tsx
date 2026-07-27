@@ -13,7 +13,7 @@ import type { C4Level } from "@/types";
 
 import type { Crumb } from "../lib/model";
 
-export interface ShowcaseToolbarProps {
+export interface ViewerToolbarProps {
   /** Root-first trail; the last entry is the current diagram. */
   crumbs: Crumb[];
   currentLevel: C4Level;
@@ -21,11 +21,11 @@ export interface ShowcaseToolbarProps {
   onNavigate: (diagramId: string) => void;
 }
 
-export function ShowcaseToolbar({
+export function ViewerToolbar({
   crumbs,
   currentLevel,
   onNavigate,
-}: ShowcaseToolbarProps): React.JSX.Element {
+}: ViewerToolbarProps): React.JSX.Element {
   const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2] : null;
   const currentMeta = C4_LEVEL_META.find((meta) => meta.level === currentLevel);
 

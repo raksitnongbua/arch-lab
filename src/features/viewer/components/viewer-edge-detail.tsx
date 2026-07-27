@@ -90,7 +90,7 @@ function EndpointCard({
   );
 }
 
-export function ShowcaseEdgeDetail({
+export function ViewerEdgeDetail({
   detail,
   onDismiss,
 }: {

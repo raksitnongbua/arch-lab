@@ -1,22 +1,20 @@
 /**
- * Showcase model helpers. The demo is a plain, deep-frozen, in-memory C4
+ * Viewer model helpers. A viewer model is a plain, deep-frozen, in-memory C4
  * model — no store, no persistence, no mutation path. Everything here is a
- * pure read over that structure.
+ * pure read over that structure. Instances come from the viewer's model
+ * service, which parses hard-coded `.archflow.json` text through the
+ * editor's real reader (`@/features/editor/io/deserialize`).
  */
 
-import type {
-  C4Diagram,
-  C4Edge,
-  C4Level,
-  C4Node,
-  C4NodeTypeForLevel,
-} from "@/types";
+import type { C4Diagram, C4Edge, C4Level, C4Node } from "@/types";
 
 /* -------------------------------------------------------------------------- */
 /* Shape                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export interface ShowcaseModel {
+export interface ViewerModel {
+  /** Service-registry id — also the `/view/[modelId]` route segment. */
+  id: string;
   title: string;
   description: string;
   rootDiagramId: string;
@@ -25,21 +23,7 @@ export interface ShowcaseModel {
 }
 
 /**
- * Level-checked diagram literal: `nodes[].type` is narrowed to the types the
- * data model allows at `level` (AF-E3-S1), so an illegal demo node is a
- * compile error, not a runtime surprise.
- */
-export function diagram<L extends C4Level>(
-  input: Omit<C4Diagram, "level" | "nodes"> & {
-    level: L;
-    nodes: Array<Omit<C4Node, "type"> & { type: C4NodeTypeForLevel<L> }>;
-  },
-): C4Diagram {
-  return input;
-}
-
-/**
- * Recursively freeze the demo model. This is what makes "view-only"
+ * Recursively freeze the viewer model. This is what makes "view-only"
  * structurally true: any accidental write anywhere throws in dev (strict
  * mode) and no-ops in prod — the model cannot drift while browsing.
  */
@@ -57,10 +41,10 @@ export function deepFreeze<T>(value: T): T {
 /* Reads                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export function getDiagram(model: ShowcaseModel, id: string): C4Diagram {
+export function getDiagram(model: ViewerModel, id: string): C4Diagram {
   const found = model.diagrams[id];
   if (found === undefined) {
-    throw new Error(`showcase: unknown diagram "${id}"`);
+    throw new Error(`viewer: unknown diagram "${id}"`);
   }
   return found;
 }
@@ -75,7 +59,7 @@ export function findEdge(diagram: C4Diagram, edgeId: string): C4Edge | null {
 
 /** The node (in the parent diagram) whose internals `diagram` shows. */
 export function ownerNodeOf(
-  model: ShowcaseModel,
+  model: ViewerModel,
   diagram: C4Diagram,
 ): C4Node | null {
   if (diagram.parentDiagramId === null || diagram.ownerNodeId === null) {
@@ -97,10 +81,7 @@ export interface Crumb {
  * Breadcrumb from the root down to `diagramId`, built from the upward
  * pointers — O(depth), depth bounded at 4 by the level enum.
  */
-export function breadcrumbFor(
-  model: ShowcaseModel,
-  diagramId: string,
-): Crumb[] {
+export function breadcrumbFor(model: ViewerModel, diagramId: string): Crumb[] {
   const trail: Crumb[] = [];
   let cursor: C4Diagram | null = getDiagram(model, diagramId);
   let guard = 0;
@@ -126,7 +107,7 @@ export function breadcrumbFor(
  * animation should land on. Null when `toId` is not an ancestor.
  */
 export function climbAnchorNodeId(
-  model: ShowcaseModel,
+  model: ViewerModel,
   fromId: string,
   toId: string,
 ): string | null {

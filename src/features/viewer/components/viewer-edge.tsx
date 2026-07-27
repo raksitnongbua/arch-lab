@@ -3,12 +3,12 @@
 /**
  * Read-only edge: the editor's floating-anchor geometry (edges re-anchor to
  * whichever sides face each other) and parallel-offset curves, minus label
- * editing and shortcuts — plus the ONE interaction the showcase adds on top:
+ * editing and shortcuts — plus the ONE interaction the viewer adds on top:
  * click a connector to select it and inspect the relationship.
  *
- * Selection visuals are class-driven (`showcase-edge-*`), with the actual CSS
+ * Selection visuals are class-driven (`viewer-edge-*`), with the actual CSS
  * — hover emphasis, dim cross-fade, the flowing-gradient animation and its
- * `prefers-reduced-motion` fallback — defined once in showcase-canvas.tsx, so
+ * `prefers-reduced-motion` fallback — defined once in viewer-canvas.tsx, so
  * no component ever re-checks the media query.
  *
  * The selected-edge flow treatment: a `userSpaceOnUse` linear gradient
@@ -51,7 +51,7 @@ import {
 /** How a connector renders relative to the current selection. */
 export type EdgeEmphasis = "idle" | "selected" | "dimmed";
 
-export interface ShowcaseEdgeData extends Record<string, unknown> {
+export interface ViewerEdgeData extends Record<string, unknown> {
   edge: C4Edge;
   /** 0-based position within the set of edges sharing this endpoint pair. */
   parallelIndex: number;
@@ -65,7 +65,7 @@ export interface ShowcaseEdgeData extends Record<string, unknown> {
   onSelect: (edgeId: string) => void;
 }
 
-export type ShowcaseFlowEdge = Edge<ShowcaseEdgeData, "c4">;
+export type ViewerFlowEdge = Edge<ViewerEdgeData, "c4">;
 
 /** Generous invisible hit stroke — a 1.5px line is not a click target. */
 const EDGE_INTERACTION_WIDTH = 24;
@@ -83,7 +83,7 @@ function internalNodeRect(node: InternalNode | undefined): NodeRect | null {
   };
 }
 
-function ShowcaseEdgeInner({
+function ViewerEdgeInner({
   id,
   source,
   target,
@@ -96,7 +96,7 @@ function ShowcaseEdgeInner({
   markerEnd,
   markerStart,
   data,
-}: EdgeProps<ShowcaseFlowEdge>): React.JSX.Element {
+}: EdgeProps<ViewerFlowEdge>): React.JSX.Element {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   const sourceRect = internalNodeRect(sourceNode);
@@ -116,8 +116,8 @@ function ShowcaseEdgeInner({
   // inside url(#…) references). Duplicate gradient/marker ids across edges
   // would silently repaint the wrong instance, so these are never shared.
   const flowKey = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const gradientId = `showcase-flow-grad-${flowKey}`;
-  const arrowId = `showcase-flow-arrow-${flowKey}`;
+  const gradientId = `viewer-flow-grad-${flowKey}`;
+  const arrowId = `viewer-flow-arrow-${flowKey}`;
 
   const label = data?.edge.label;
   const technology = data?.edge.technology;
@@ -153,9 +153,9 @@ function ShowcaseEdgeInner({
         }
         interactionWidth={EDGE_INTERACTION_WIDTH}
         className={cn(
-          "showcase-edge-base",
-          isSelected && "showcase-edge-base-selected",
-          isDimmed && "showcase-edge-base-dimmed",
+          "viewer-edge-base",
+          isSelected && "viewer-edge-base-selected",
+          isDimmed && "viewer-edge-base-dimmed",
         )}
         style={{
           strokeDasharray: data?.edge.style === "dashed" ? "6 4" : undefined,
@@ -194,7 +194,7 @@ function ShowcaseEdgeInner({
               refY="0"
             >
               <polyline
-                className="showcase-edge-flow-arrow"
+                className="viewer-edge-flow-arrow"
                 points="-5,-4 0,0 -5,4 -5,-4"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -205,19 +205,19 @@ function ShowcaseEdgeInner({
             d={path}
             pathLength={100}
             stroke={`url(#${gradientId})`}
-            className="showcase-edge-flow showcase-edge-flow-glow"
+            className="viewer-edge-flow viewer-edge-flow-glow"
           />
           <path
             d={path}
             pathLength={100}
             stroke={`url(#${gradientId})`}
-            className="showcase-edge-flow showcase-edge-flow-tail"
+            className="viewer-edge-flow viewer-edge-flow-tail"
           />
           <path
             d={path}
             pathLength={100}
             stroke={`url(#${gradientId})`}
-            className="showcase-edge-flow showcase-edge-flow-head"
+            className="viewer-edge-flow viewer-edge-flow-head"
           />
         </g>
       ) : null}
@@ -271,4 +271,4 @@ function ShowcaseEdgeInner({
   );
 }
 
-export const ShowcaseEdge = memo(ShowcaseEdgeInner);
+export const ViewerEdge = memo(ViewerEdgeInner);

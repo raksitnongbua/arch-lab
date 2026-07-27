@@ -1,0 +1,1222 @@
+{
+  "$schema": "https://arch-flow.dev/schema/v1/diagram.schema.json",
+  "version": "1.0",
+  "metadata": {
+    "title": "ShopFlow Platform",
+    "description": "Customer-facing commerce platform: catalogue, cart, checkout, and order fulfilment.",
+    "createdAt": "2026-07-01T00:00:00Z",
+    "updatedAt": "2026-07-27T00:00:00Z",
+    "generator": {
+      "name": "arch-flow",
+      "version": "0.1.0"
+    }
+  },
+  "rootDiagramId": "d-ctx-root",
+  "diagrams": [
+    {
+      "id": "d-cmp-catalog",
+      "level": "component",
+      "title": "Catalog Service — Components",
+      "description": "Internal structure of the Catalog Service. Boundary nodes are inherited from the container view.",
+      "ownerNodeId": "catalog-service",
+      "parentDiagramId": "d-cnt-shopflow",
+      "nodes": [
+        {
+          "id": "cache-adapter",
+          "type": "component",
+          "name": "Cache Adapter",
+          "description": "Read-through product cache with jittered TTLs.",
+          "technology": "Go / go-redis",
+          "icon": "redis",
+          "position": {
+            "x": 168,
+            "y": 528
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "catalog-grpc-handler",
+          "type": "component",
+          "name": "Catalog gRPC Handler",
+          "description": "ListProducts, GetProduct, SearchFacets, ReserveStock. Thin decode/validate layer.",
+          "technology": "Go / grpc-go",
+          "icon": "golang",
+          "position": {
+            "x": 488,
+            "y": 200
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "catalog-repository",
+          "type": "component",
+          "name": "Catalog Repository",
+          "description": "Product documents, facet aggregation pipelines, and inventory counters.",
+          "technology": "Go / mongo-driver",
+          "icon": "service",
+          "position": {
+            "x": 528,
+            "y": 528
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "ext-cache-cat",
+          "type": "database",
+          "name": "Session & Rate-limit Cache",
+          "icon": "redis",
+          "position": {
+            "x": 168,
+            "y": 704
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "session-cache"
+          }
+        },
+        {
+          "id": "ext-catalog-db",
+          "type": "database",
+          "name": "Catalog Store",
+          "icon": "mongodb",
+          "position": {
+            "x": 528,
+            "y": 704
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "catalog-db"
+          }
+        },
+        {
+          "id": "ext-kong-cat",
+          "type": "externalSystem",
+          "name": "API Gateway",
+          "icon": "kong",
+          "position": {
+            "x": 344,
+            "y": 40
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "kong-gateway"
+          }
+        },
+        {
+          "id": "ext-orders-svc",
+          "type": "externalSystem",
+          "name": "Orders Service",
+          "icon": "golang",
+          "position": {
+            "x": 640,
+            "y": 40
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "orders-service"
+          }
+        },
+        {
+          "id": "facet-search",
+          "type": "component",
+          "name": "Facet Search",
+          "description": "Builds search facets and runs filtered listings over denormalised documents.",
+          "technology": "Go",
+          "icon": "service",
+          "position": {
+            "x": 664,
+            "y": 360
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "product-query",
+          "type": "component",
+          "name": "Product Query",
+          "description": "Serves product detail and listing reads through a read-through cache.",
+          "technology": "Go",
+          "icon": "service",
+          "position": {
+            "x": 312,
+            "y": 360
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "stock-reservation",
+          "type": "component",
+          "name": "Stock Reservation",
+          "description": "Holds inventory for in-flight checkouts with a TTL; releases on cancel.",
+          "technology": "Go",
+          "icon": "service",
+          "position": {
+            "x": 880,
+            "y": 200
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-cacheadapter-redis",
+          "source": "cache-adapter",
+          "target": "ext-cache-cat",
+          "label": "GET / SETEX product documents",
+          "technology": "RESP/TCP",
+          "direction": "bidirectional",
+          "style": "dashed",
+          "realizes": "e-catalog-cache"
+        },
+        {
+          "id": "e-cathandler-facets",
+          "source": "catalog-grpc-handler",
+          "target": "facet-search",
+          "label": "Invokes",
+          "direction": "forward"
+        },
+        {
+          "id": "e-cathandler-query",
+          "source": "catalog-grpc-handler",
+          "target": "product-query",
+          "label": "Invokes",
+          "direction": "forward"
+        },
+        {
+          "id": "e-catrepo-db",
+          "source": "catalog-repository",
+          "target": "ext-catalog-db",
+          "label": "find / aggregate / updateOne",
+          "technology": "MongoDB wire protocol",
+          "direction": "bidirectional",
+          "realizes": "e-catalog-db"
+        },
+        {
+          "id": "e-facets-repo",
+          "source": "facet-search",
+          "target": "catalog-repository",
+          "label": "Runs aggregation pipelines",
+          "direction": "forward"
+        },
+        {
+          "id": "e-kongcat-handler",
+          "source": "ext-kong-cat",
+          "target": "catalog-grpc-handler",
+          "label": "ListProducts, GetProduct, SearchFacets",
+          "technology": "gRPC",
+          "direction": "forward",
+          "realizes": "e-kong-catalog"
+        },
+        {
+          "id": "e-orderssvc-reservation",
+          "source": "ext-orders-svc",
+          "target": "stock-reservation",
+          "label": "Reserves stock at checkout",
+          "technology": "gRPC",
+          "direction": "forward",
+          "realizes": "e-orders-catalog"
+        },
+        {
+          "id": "e-query-cache",
+          "source": "product-query",
+          "target": "cache-adapter",
+          "label": "Read-through product cache",
+          "direction": "forward"
+        },
+        {
+          "id": "e-query-repo",
+          "source": "product-query",
+          "target": "catalog-repository",
+          "label": "Loads product documents",
+          "direction": "forward"
+        },
+        {
+          "id": "e-reservation-repo",
+          "source": "stock-reservation",
+          "target": "catalog-repository",
+          "label": "Decrements inventory counters",
+          "direction": "forward"
+        }
+      ]
+    },
+    {
+      "id": "d-cmp-orders",
+      "level": "component",
+      "title": "Orders Service — Components",
+      "description": "Internal structure of the Orders Service. Boundary nodes are inherited from the container view.",
+      "ownerNodeId": "orders-service",
+      "parentDiagramId": "d-cnt-shopflow",
+      "nodes": [
+        {
+          "id": "checkout-usecase",
+          "type": "component",
+          "name": "Checkout Use Case",
+          "description": "Orchestrates stock reservation, payment authorisation, and order persistence in one transactional boundary.",
+          "technology": "Go",
+          "icon": "golang",
+          "position": {
+            "x": 480,
+            "y": 360
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "childDiagramId": "d-code-checkout"
+        },
+        {
+          "id": "ext-cache",
+          "type": "database",
+          "name": "Session & Rate-limit Cache",
+          "icon": "redis",
+          "position": {
+            "x": 232,
+            "y": 704
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "session-cache"
+          }
+        },
+        {
+          "id": "ext-catalog-svc",
+          "type": "externalSystem",
+          "name": "Catalog Service",
+          "icon": "golang",
+          "position": {
+            "x": 736,
+            "y": 360
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "catalog-service"
+          }
+        },
+        {
+          "id": "ext-kong",
+          "type": "externalSystem",
+          "name": "API Gateway",
+          "icon": "kong",
+          "position": {
+            "x": 480,
+            "y": 40
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "kong-gateway"
+          }
+        },
+        {
+          "id": "ext-orders-db",
+          "type": "database",
+          "name": "Orders Database",
+          "icon": "postgresql",
+          "position": {
+            "x": 480,
+            "y": 704
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "orders-db"
+          }
+        },
+        {
+          "id": "ext-sendgrid-cmp",
+          "type": "externalSystem",
+          "name": "SendGrid",
+          "icon": "external",
+          "position": {
+            "x": 760,
+            "y": 704
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "ext-sendgrid"
+          }
+        },
+        {
+          "id": "ext-stripe-cmp",
+          "type": "externalSystem",
+          "name": "Stripe",
+          "icon": "external",
+          "position": {
+            "x": 24,
+            "y": 528
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "ext-stripe"
+          }
+        },
+        {
+          "id": "idempotency-guard",
+          "type": "component",
+          "name": "Idempotency Guard",
+          "description": "Rejects duplicate checkout attempts by key before any side effect occurs.",
+          "technology": "Go",
+          "icon": "service",
+          "position": {
+            "x": 232,
+            "y": 360
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-grpc-handler",
+          "type": "component",
+          "name": "Order gRPC Handler",
+          "description": "Decodes requests, validates payloads, maps domain errors to status codes.",
+          "technology": "Go / grpc-go",
+          "icon": "golang",
+          "position": {
+            "x": 480,
+            "y": 200
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-repository",
+          "type": "component",
+          "name": "Order Repository",
+          "description": "Persistence for the order aggregate plus the transactional outbox write.",
+          "technology": "Go / pgx",
+          "icon": "service",
+          "position": {
+            "x": 480,
+            "y": 528
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "outbox-worker",
+          "type": "component",
+          "name": "Outbox Worker",
+          "description": "Polls the outbox table and dispatches receipt emails and fulfilment events at-least-once.",
+          "technology": "Go",
+          "icon": "queue",
+          "position": {
+            "x": 736,
+            "y": 528
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "payment-client",
+          "type": "component",
+          "name": "Payment Client",
+          "description": "Stripe adapter: retries, webhook signature verification, card data never logged.",
+          "technology": "Go / stripe-go",
+          "icon": "service",
+          "position": {
+            "x": 232,
+            "y": 528
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-checkout-catalog",
+          "source": "checkout-usecase",
+          "target": "ext-catalog-svc",
+          "label": "Reserves stock",
+          "technology": "gRPC",
+          "direction": "forward",
+          "realizes": "e-orders-catalog"
+        },
+        {
+          "id": "e-checkout-payment",
+          "source": "checkout-usecase",
+          "target": "payment-client",
+          "label": "Authorises payment",
+          "direction": "forward"
+        },
+        {
+          "id": "e-checkout-repo",
+          "source": "checkout-usecase",
+          "target": "order-repository",
+          "label": "Persists order and outbox record",
+          "direction": "forward"
+        },
+        {
+          "id": "e-guard-cache",
+          "source": "idempotency-guard",
+          "target": "ext-cache",
+          "label": "SETNX on idempotency key, 24h TTL",
+          "technology": "RESP/TCP",
+          "direction": "bidirectional",
+          "tags": ["idempotency"],
+          "realizes": "e-orders-cache"
+        },
+        {
+          "id": "e-handler-checkout",
+          "source": "order-grpc-handler",
+          "target": "checkout-usecase",
+          "label": "Invokes",
+          "direction": "forward"
+        },
+        {
+          "id": "e-handler-guard",
+          "source": "order-grpc-handler",
+          "target": "idempotency-guard",
+          "label": "Checks request key before dispatch",
+          "direction": "forward"
+        },
+        {
+          "id": "e-kong-handler",
+          "source": "ext-kong",
+          "target": "order-grpc-handler",
+          "label": "CreateOrder, CancelOrder, GetOrder",
+          "technology": "gRPC",
+          "direction": "forward",
+          "realizes": "e-kong-orders"
+        },
+        {
+          "id": "e-outbox-db",
+          "source": "outbox-worker",
+          "target": "ext-orders-db",
+          "label": "Polls outbox, marks dispatched",
+          "technology": "SQL/TCP",
+          "direction": "bidirectional",
+          "style": "dashed",
+          "realizes": "e-orders-db"
+        },
+        {
+          "id": "e-outbox-sendgrid",
+          "source": "outbox-worker",
+          "target": "ext-sendgrid-cmp",
+          "label": "Sends receipt email",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-orders-sendgrid"
+        },
+        {
+          "id": "e-payment-stripe",
+          "source": "payment-client",
+          "target": "ext-stripe-cmp",
+          "label": "PaymentIntents create/capture",
+          "technology": "HTTPS/JSON",
+          "direction": "bidirectional",
+          "tags": ["payments", "pci-scope"],
+          "realizes": "e-orders-stripe"
+        },
+        {
+          "id": "e-repo-db",
+          "source": "order-repository",
+          "target": "ext-orders-db",
+          "label": "SELECT / INSERT / UPDATE",
+          "technology": "SQL/TCP",
+          "direction": "bidirectional",
+          "realizes": "e-orders-db"
+        }
+      ]
+    },
+    {
+      "id": "d-cnt-shopflow",
+      "level": "container",
+      "title": "ShopFlow Platform — Containers",
+      "description": "Deployable units inside the platform boundary.",
+      "ownerNodeId": "shopflow-platform",
+      "parentDiagramId": "d-ctx-root",
+      "nodes": [
+        {
+          "id": "catalog-db",
+          "type": "database",
+          "name": "Catalog Store",
+          "description": "Denormalised product documents and search facets.",
+          "technology": "MongoDB 7",
+          "icon": "mongodb",
+          "position": {
+            "x": 992,
+            "y": 800
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "catalog-service",
+          "type": "container",
+          "name": "Catalog Service",
+          "description": "Product, pricing, and inventory read models.",
+          "technology": "Go 1.22",
+          "icon": "golang",
+          "position": {
+            "x": 936,
+            "y": 616
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "childDiagramId": "d-cmp-catalog"
+        },
+        {
+          "id": "cloudflare-edge",
+          "type": "container",
+          "name": "Edge / CDN",
+          "description": "TLS termination, WAF, bot mitigation, static asset caching.",
+          "technology": "Cloudflare",
+          "icon": "cloudflare",
+          "position": {
+            "x": 560,
+            "y": 176
+          },
+          "size": {
+            "width": 160,
+            "height": 88
+          }
+        },
+        {
+          "id": "ext-customer",
+          "type": "person",
+          "name": "Customer",
+          "icon": "person",
+          "position": {
+            "x": 560,
+            "y": 40
+          },
+          "size": {
+            "width": 160,
+            "height": 88
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "customer"
+          }
+        },
+        {
+          "id": "ext-sendgrid",
+          "type": "externalSystem",
+          "name": "SendGrid",
+          "icon": "external",
+          "position": {
+            "x": 560,
+            "y": 960
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "sendgrid"
+          }
+        },
+        {
+          "id": "ext-stripe",
+          "type": "externalSystem",
+          "name": "Stripe",
+          "icon": "external",
+          "position": {
+            "x": 344,
+            "y": 960
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "stripe"
+          }
+        },
+        {
+          "id": "kong-gateway",
+          "type": "container",
+          "name": "API Gateway",
+          "description": "Authn/authz enforcement, rate limiting, request routing to internal services.",
+          "technology": "Kong Gateway 3.7",
+          "icon": "kong",
+          "position": {
+            "x": 760,
+            "y": 456
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "nginx-ingress",
+          "type": "container",
+          "name": "Ingress",
+          "description": "Reverse proxy inside the cluster; routes /api to the gateway and everything else to the web app.",
+          "technology": "nginx 1.27",
+          "icon": "nginx",
+          "position": {
+            "x": 560,
+            "y": 312
+          },
+          "size": {
+            "width": 160,
+            "height": 88
+          }
+        },
+        {
+          "id": "orders-db",
+          "type": "database",
+          "name": "Orders Database",
+          "description": "Orders, payments, and the outbox table. System of record.",
+          "technology": "PostgreSQL 16",
+          "icon": "postgresql",
+          "position": {
+            "x": 560,
+            "y": 800
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "orders-service",
+          "type": "container",
+          "name": "Orders Service",
+          "description": "Order lifecycle: create, pay, cancel, fulfil. Owns the order aggregate.",
+          "technology": "Go 1.22",
+          "icon": "golang",
+          "position": {
+            "x": 656,
+            "y": 616
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "childDiagramId": "d-cmp-orders"
+        },
+        {
+          "id": "session-cache",
+          "type": "database",
+          "name": "Session & Rate-limit Cache",
+          "description": "Sessions, idempotency keys, gateway rate-limit counters.",
+          "technology": "Redis 7",
+          "icon": "redis",
+          "position": {
+            "x": 776,
+            "y": 800
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "web-app",
+          "type": "container",
+          "name": "Web Application",
+          "description": "Server-rendered storefront: catalogue, cart, checkout flow.",
+          "technology": "Next.js 15 (App Router)",
+          "icon": "nextjs",
+          "position": {
+            "x": 344,
+            "y": 456
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-catalog-cache",
+          "source": "catalog-service",
+          "target": "session-cache",
+          "label": "Caches hot product reads",
+          "technology": "RESP/TCP",
+          "direction": "bidirectional",
+          "style": "dashed"
+        },
+        {
+          "id": "e-catalog-db",
+          "source": "catalog-service",
+          "target": "catalog-db",
+          "label": "Reads and writes product documents",
+          "technology": "MongoDB wire protocol",
+          "direction": "bidirectional"
+        },
+        {
+          "id": "e-cf-nginx",
+          "source": "cloudflare-edge",
+          "target": "nginx-ingress",
+          "label": "Forwards uncached requests",
+          "technology": "HTTPS (origin pull)",
+          "direction": "forward"
+        },
+        {
+          "id": "e-cust-cf",
+          "source": "ext-customer",
+          "target": "cloudflare-edge",
+          "label": "Visits shopflow.example",
+          "technology": "HTTPS",
+          "direction": "forward",
+          "tags": ["critical-path"],
+          "realizes": "e-customer-shopflow"
+        },
+        {
+          "id": "e-kong-cache",
+          "source": "kong-gateway",
+          "target": "session-cache",
+          "label": "Reads sessions, increments rate-limit counters",
+          "technology": "RESP/TCP",
+          "direction": "bidirectional"
+        },
+        {
+          "id": "e-kong-catalog",
+          "source": "kong-gateway",
+          "target": "catalog-service",
+          "label": "Routes catalogue queries",
+          "technology": "gRPC",
+          "direction": "forward"
+        },
+        {
+          "id": "e-kong-orders",
+          "source": "kong-gateway",
+          "target": "orders-service",
+          "label": "Routes order operations",
+          "technology": "gRPC",
+          "direction": "forward"
+        },
+        {
+          "id": "e-nginx-kong",
+          "source": "nginx-ingress",
+          "target": "kong-gateway",
+          "label": "Routes /api/*",
+          "technology": "HTTP/1.1",
+          "direction": "forward"
+        },
+        {
+          "id": "e-nginx-web",
+          "source": "nginx-ingress",
+          "target": "web-app",
+          "label": "Routes page requests",
+          "technology": "HTTP/1.1",
+          "direction": "forward"
+        },
+        {
+          "id": "e-orders-cache",
+          "source": "orders-service",
+          "target": "session-cache",
+          "label": "Stores idempotency keys",
+          "technology": "RESP/TCP",
+          "direction": "bidirectional"
+        },
+        {
+          "id": "e-orders-catalog",
+          "source": "orders-service",
+          "target": "catalog-service",
+          "label": "Reserves stock at checkout",
+          "technology": "gRPC",
+          "direction": "forward",
+          "tags": ["checkout", "critical-path"]
+        },
+        {
+          "id": "e-orders-db",
+          "source": "orders-service",
+          "target": "orders-db",
+          "label": "Reads and writes orders",
+          "technology": "SQL/TCP (pgx)",
+          "direction": "bidirectional",
+          "tags": ["system-of-record"]
+        },
+        {
+          "id": "e-orders-sendgrid",
+          "source": "orders-service",
+          "target": "ext-sendgrid",
+          "label": "Sends receipts via outbox worker",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-shopflow-sendgrid"
+        },
+        {
+          "id": "e-orders-stripe",
+          "source": "orders-service",
+          "target": "ext-stripe",
+          "label": "Authorises and captures payments",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "tags": ["payments", "pci-scope"],
+          "realizes": "e-shopflow-stripe"
+        },
+        {
+          "id": "e-web-kong",
+          "source": "web-app",
+          "target": "kong-gateway",
+          "label": "Server-side data fetching",
+          "technology": "HTTP/JSON",
+          "direction": "forward"
+        }
+      ]
+    },
+    {
+      "id": "d-code-checkout",
+      "level": "code",
+      "title": "Checkout Use Case — Code",
+      "description": "The structs and interfaces that make the checkout transaction real. Level 4 is plain boxes on purpose.",
+      "ownerNodeId": "checkout-usecase",
+      "parentDiagramId": "d-cmp-orders",
+      "nodes": [
+        {
+          "id": "checkout-input",
+          "type": "codeElement",
+          "name": "CheckoutInput",
+          "description": "Validated request: cart lines, payment method, idempotency key.",
+          "technology": "Go struct",
+          "icon": "golang",
+          "position": {
+            "x": 176,
+            "y": 96
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "checkout-result",
+          "type": "codeElement",
+          "name": "CheckoutResult",
+          "description": "Order id, payment status, and reservation expiry returned to the handler.",
+          "technology": "Go struct",
+          "icon": "golang",
+          "position": {
+            "x": 760,
+            "y": 96
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "checkout-service",
+          "type": "codeElement",
+          "name": "CheckoutService",
+          "description": "Orchestrates the checkout transaction; the only exported entry point.",
+          "technology": "Go struct",
+          "icon": "golang",
+          "position": {
+            "x": 464,
+            "y": 96
+          },
+          "size": {
+            "width": 208,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-writer",
+          "type": "codeElement",
+          "name": "OrderWriter",
+          "description": "Port implemented by the Order Repository: order plus outbox record in one transaction.",
+          "technology": "Go interface",
+          "icon": "service",
+          "position": {
+            "x": 704,
+            "y": 320
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "payment-authorizer",
+          "type": "codeElement",
+          "name": "PaymentAuthorizer",
+          "description": "Port implemented by the Payment Client adapter.",
+          "technology": "Go interface",
+          "icon": "service",
+          "position": {
+            "x": 240,
+            "y": 320
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        },
+        {
+          "id": "stock-reserver",
+          "type": "codeElement",
+          "name": "StockReserver",
+          "description": "Port implemented by the Catalog Service gRPC client.",
+          "technology": "Go interface",
+          "icon": "service",
+          "position": {
+            "x": 472,
+            "y": 320
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-input-service",
+          "source": "checkout-input",
+          "target": "checkout-service",
+          "label": "Consumed by",
+          "direction": "forward"
+        },
+        {
+          "id": "e-service-payment",
+          "source": "checkout-service",
+          "target": "payment-authorizer",
+          "label": "Authorises via",
+          "direction": "forward",
+          "style": "dashed"
+        },
+        {
+          "id": "e-service-result",
+          "source": "checkout-service",
+          "target": "checkout-result",
+          "label": "Returns",
+          "direction": "forward"
+        },
+        {
+          "id": "e-service-stock",
+          "source": "checkout-service",
+          "target": "stock-reserver",
+          "label": "Reserves via",
+          "direction": "forward",
+          "style": "dashed"
+        },
+        {
+          "id": "e-service-writer",
+          "source": "checkout-service",
+          "target": "order-writer",
+          "label": "Persists via",
+          "direction": "forward",
+          "style": "dashed"
+        }
+      ]
+    },
+    {
+      "id": "d-ctx-root",
+      "level": "context",
+      "title": "ShopFlow Platform — System Context",
+      "description": "Who uses ShopFlow and which third parties it depends on.",
+      "ownerNodeId": null,
+      "parentDiagramId": null,
+      "nodes": [
+        {
+          "id": "customer",
+          "type": "person",
+          "name": "Customer",
+          "description": "Shopper browsing the catalogue and placing orders.",
+          "icon": "person",
+          "position": {
+            "x": 480,
+            "y": 80
+          },
+          "size": {
+            "width": 160,
+            "height": 96
+          }
+        },
+        {
+          "id": "ops-engineer",
+          "type": "person",
+          "name": "Ops Engineer",
+          "description": "On-call engineer inspecting order state and replaying failed payments.",
+          "icon": "person",
+          "position": {
+            "x": 800,
+            "y": 80
+          },
+          "size": {
+            "width": 160,
+            "height": 96
+          }
+        },
+        {
+          "id": "sendgrid",
+          "type": "externalSystem",
+          "name": "SendGrid",
+          "description": "Transactional email delivery for order receipts.",
+          "technology": "REST API",
+          "icon": "external",
+          "position": {
+            "x": 600,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        },
+        {
+          "id": "shopflow-platform",
+          "type": "softwareSystem",
+          "name": "ShopFlow Platform",
+          "description": "Catalogue browsing, cart, checkout, and order fulfilment.",
+          "technology": "Go / Next.js",
+          "icon": "service",
+          "position": {
+            "x": 480,
+            "y": 320
+          },
+          "size": {
+            "width": 480,
+            "height": 128
+          },
+          "childDiagramId": "d-cnt-shopflow"
+        },
+        {
+          "id": "stripe",
+          "type": "externalSystem",
+          "name": "Stripe",
+          "description": "Card authorisation and capture.",
+          "technology": "REST API",
+          "icon": "external",
+          "position": {
+            "x": 320,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        },
+        {
+          "id": "warehouse-wms",
+          "type": "externalSystem",
+          "name": "Warehouse WMS",
+          "description": "Third-party warehouse management system that fulfils shipments.",
+          "technology": "SFTP / CSV",
+          "icon": "external",
+          "position": {
+            "x": 880,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-customer-shopflow",
+          "source": "customer",
+          "target": "shopflow-platform",
+          "label": "Browses catalogue and places orders",
+          "technology": "HTTPS",
+          "direction": "forward"
+        },
+        {
+          "id": "e-ops-shopflow",
+          "source": "ops-engineer",
+          "target": "shopflow-platform",
+          "label": "Inspects orders, replays payments",
+          "technology": "HTTPS / internal admin",
+          "direction": "forward"
+        },
+        {
+          "id": "e-shopflow-sendgrid",
+          "source": "shopflow-platform",
+          "target": "sendgrid",
+          "label": "Sends order confirmation emails",
+          "technology": "HTTPS/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-shopflow-stripe",
+          "source": "shopflow-platform",
+          "target": "stripe",
+          "label": "Authorises and captures payments",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "tags": ["payments", "pci-scope"]
+        },
+        {
+          "id": "e-shopflow-wms",
+          "source": "shopflow-platform",
+          "target": "warehouse-wms",
+          "label": "Exports fulfilment batches, imports shipment status",
+          "technology": "SFTP",
+          "direction": "bidirectional",
+          "tags": ["batch", "daily"]
+        }
+      ]
+    }
+  ]
+}

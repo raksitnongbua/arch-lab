@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The showcase canvas: a view-only React Flow surface over the frozen demo
+ * The viewer canvas: a view-only React Flow surface over the frozen demo
  * model, plus the interaction that is the whole point of the page — clicking
  * a node with a child layer zooms INTO it, and climbing back out reverses
  * the move (IcePanel-style continuous descent, not a screen swap).
@@ -58,24 +58,23 @@ import { childLevelOf, hasChildDiagram, isBoundaryPlaceholder } from "@/types";
 
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
 
-import { DEMO_MODEL } from "../data/demo-model";
 import {
   breadcrumbFor,
   climbAnchorNodeId,
   findEdge,
   findNode,
   getDiagram,
-  type ShowcaseModel,
+  type ViewerModel,
 } from "../lib/model";
-import { SHOWCASE_DURATIONS } from "../lib/motion";
-import { ShowcaseEdgeDetail, type EdgeDetail } from "./showcase-edge-detail";
+import { VIEWER_DURATIONS } from "../lib/motion";
+import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
 import {
-  ShowcaseEdge,
+  ViewerEdge,
   type EdgeEmphasis,
-  type ShowcaseFlowEdge,
-} from "./showcase-edge";
-import { ShowcaseNode, type ShowcaseFlowNode } from "./showcase-node";
-import { ShowcaseToolbar } from "./showcase-toolbar";
+  type ViewerFlowEdge,
+} from "./viewer-edge";
+import { ViewerNode, type ViewerFlowNode } from "./viewer-node";
+import { ViewerToolbar } from "./viewer-toolbar";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 2.5;
@@ -86,8 +85,8 @@ const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
 const SCALE_NEAR = 1.42;
 const SCALE_FAR = 0.7;
 
-const nodeTypes: NodeTypes = { c4: ShowcaseNode };
-const edgeTypes: EdgeTypes = { c4: ShowcaseEdge };
+const nodeTypes: NodeTypes = { c4: ViewerNode };
+const edgeTypes: EdgeTypes = { c4: ViewerEdge };
 
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
@@ -99,7 +98,7 @@ const DIM_NODE_OPACITY = 0.3;
  * layout-bound, and the only continuously-animated element is the single
  * selected edge's overlay.
  *
- * The flow itself: showcase-edge.tsx paints three overlay copies of the
+ * The flow itself: viewer-edge.tsx paints three overlay copies of the
  * selected bezier with a per-edge gradient and normalises them to
  * `pathLength=100`, so the dash bands here are percentages of the true curve.
  * Every band's keyframes run `dashoffset: L → L − 100`, which puts each
@@ -114,89 +113,89 @@ const DIM_NODE_OPACITY = 0.3;
  * gradient's arrival colour.
  */
 const EDGE_INTERACTION_CSS = `
-.showcase-canvas .react-flow__edge { cursor: pointer; }
-.showcase-canvas .showcase-edge-base {
+.viewer-canvas .react-flow__edge { cursor: pointer; }
+.viewer-canvas .viewer-edge-base {
   stroke: var(--edge);
   stroke-width: 1.5;
   transition:
-    stroke ${SHOWCASE_DURATIONS.edgeHover}ms ease,
-    stroke-width ${SHOWCASE_DURATIONS.edgeHover}ms ease,
-    opacity ${SHOWCASE_DURATIONS.edgeFocus}ms ease;
+    stroke ${VIEWER_DURATIONS.edgeHover}ms ease,
+    stroke-width ${VIEWER_DURATIONS.edgeHover}ms ease,
+    opacity ${VIEWER_DURATIONS.edgeFocus}ms ease;
 }
-.showcase-canvas .react-flow__edge:hover .showcase-edge-base {
+.viewer-canvas .react-flow__edge:hover .viewer-edge-base {
   stroke: var(--primary);
   stroke-width: 2;
   opacity: 1;
 }
-.showcase-canvas .showcase-edge-base-dimmed { opacity: 0.2; }
-.showcase-canvas .showcase-edge-base-selected,
-.showcase-canvas .react-flow__edge:hover .showcase-edge-base-selected {
+.viewer-canvas .viewer-edge-base-dimmed { opacity: 0.2; }
+.viewer-canvas .viewer-edge-base-selected,
+.viewer-canvas .react-flow__edge:hover .viewer-edge-base-selected {
   stroke: var(--primary);
   stroke-width: 2.5;
   opacity: 0.35;
 }
-.showcase-canvas .showcase-edge-flow {
+.viewer-canvas .viewer-edge-flow {
   fill: none;
   stroke-linecap: round;
 }
-.showcase-canvas .showcase-edge-flow-glow {
+.viewer-canvas .viewer-edge-flow-glow {
   stroke-width: 7;
   opacity: 0.35;
   filter: blur(2.5px);
   stroke-dasharray: 30 70;
-  animation: showcase-edge-flow-glow ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+  animation: viewer-edge-flow-glow ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;
 }
-.showcase-canvas .showcase-edge-flow-tail {
+.viewer-canvas .viewer-edge-flow-tail {
   stroke-width: 2.5;
   opacity: 0.5;
   stroke-dasharray: 22 78;
-  animation: showcase-edge-flow-tail ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+  animation: viewer-edge-flow-tail ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;
 }
-.showcase-canvas .showcase-edge-flow-head {
+.viewer-canvas .viewer-edge-flow-head {
   stroke-width: 3;
   stroke-dasharray: 9 91;
-  animation: showcase-edge-flow-head ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+  animation: viewer-edge-flow-head ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;
 }
-.showcase-canvas .showcase-edge-flow-arrow {
+.viewer-canvas .viewer-edge-flow-arrow {
   stroke-width: 1;
-  animation: showcase-edge-flow-arrive ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+  animation: viewer-edge-flow-arrive ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;
 }
-.showcase-canvas .react-flow__node {
+.viewer-canvas .react-flow__node {
   transition: opacity ${DURATIONS.nodeIn}ms ease;
 }
-@keyframes showcase-edge-flow-glow {
+@keyframes viewer-edge-flow-glow {
   from { stroke-dashoffset: 30; }
   to { stroke-dashoffset: -70; }
 }
-@keyframes showcase-edge-flow-tail {
+@keyframes viewer-edge-flow-tail {
   from { stroke-dashoffset: 22; }
   to { stroke-dashoffset: -78; }
 }
-@keyframes showcase-edge-flow-head {
+@keyframes viewer-edge-flow-head {
   from { stroke-dashoffset: 9; }
   to { stroke-dashoffset: -91; }
 }
-@keyframes showcase-edge-flow-arrive {
+@keyframes viewer-edge-flow-arrive {
   0% { fill: var(--accent); stroke: var(--accent); }
   30%, 78% { fill: var(--primary); stroke: var(--primary); }
   100% { fill: var(--accent); stroke: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .showcase-canvas .showcase-edge-flow,
-  .showcase-canvas .showcase-edge-flow-arrow {
+  .viewer-canvas .viewer-edge-flow,
+  .viewer-canvas .viewer-edge-flow-arrow {
     animation: none;
   }
-  .showcase-canvas .showcase-edge-flow-tail { visibility: hidden; }
-  .showcase-canvas .showcase-edge-flow-head {
+  .viewer-canvas .viewer-edge-flow-tail { visibility: hidden; }
+  .viewer-canvas .viewer-edge-flow-head {
     stroke-dasharray: none;
     stroke-dashoffset: 0;
   }
-  .showcase-canvas .showcase-edge-flow-glow {
+  .viewer-canvas .viewer-edge-flow-glow {
     stroke-dasharray: none;
     stroke-dashoffset: 0;
     opacity: 0.2;
   }
-  .showcase-canvas .showcase-edge-flow-arrow {
+  .viewer-canvas .viewer-edge-flow-arrow {
     fill: var(--accent);
     stroke: var(--accent);
   }
@@ -334,14 +333,14 @@ function cancelTransition(active: ActiveTransition | null): void {
 /* The canvas                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function ShowcaseCanvasInner({
+function ViewerCanvasInner({
   model,
 }: {
-  model: ShowcaseModel;
+  model: ViewerModel;
 }): React.JSX.Element {
   const { getViewport, setViewport } = useReactFlow<
-    ShowcaseFlowNode,
-    ShowcaseFlowEdge
+    ViewerFlowNode,
+    ViewerFlowEdge
   >();
 
   const [diagramId, setDiagramId] = useState(model.rootDiagramId);
@@ -403,7 +402,7 @@ function ShowcaseCanvasInner({
   // flags off, React Flow marks edges `inactive` (pointer-events: none)
   // UNLESS the flow declares an edge click handler — so the click must be
   // caught here at canvas level, never inside the edge component's SVG.
-  const handleEdgeClick = useCallback<EdgeMouseHandler<ShowcaseFlowEdge>>(
+  const handleEdgeClick = useCallback<EdgeMouseHandler<ViewerFlowEdge>>(
     (_event, edge) => toggleEdgeSelection(edge.id),
     [toggleEdgeSelection],
   );
@@ -526,7 +525,7 @@ function ShowcaseCanvasInner({
   // Keyboard still works through the same path: Enter/Space on the node's
   // <button> dispatches a click that bubbles to the wrapper. drillInto()
   // no-ops for leaf nodes, so the demo stays view-only.
-  const handleNodeClick = useCallback<NodeMouseHandler<ShowcaseFlowNode>>(
+  const handleNodeClick = useCallback<NodeMouseHandler<ViewerFlowNode>>(
     (_event, node) => {
       const current = getDiagram(model, diagramIdRef.current);
       const modelNode = findNode(current, node.id);
@@ -698,6 +697,11 @@ function ShowcaseCanvasInner({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      // Native fullscreen owns Escape outright: the browser is about to exit
+      // fullscreen on this very keypress, and consuming it here too would
+      // make one press do two things. The viewer's own Escape ladder
+      // (deselect → climb → leave immersive mode) resumes afterwards.
+      if (document.fullscreenElement !== null) return;
       // Selection takes priority; level-climb is the fallback.
       if (selectedEdgeIdRef.current !== null) {
         event.preventDefault();
@@ -723,7 +727,7 @@ function ShowcaseCanvasInner({
   const nodes = useMemo(() => {
     const childLevel = childLevelOf(diagram.level);
 
-    const flowNodes: ShowcaseFlowNode[] = diagram.nodes.map((node) => {
+    const flowNodes: ViewerFlowNode[] = diagram.nodes.map((node) => {
       const drillable =
         hasChildDiagram(node) && typeof node.childDiagramId === "string";
       return {
@@ -762,7 +766,7 @@ function ShowcaseCanvasInner({
       selectedEdgeId !== null ? findEdge(diagram, selectedEdgeId) : null;
     const nameById = new Map(diagram.nodes.map((n) => [n.id, n.name]));
 
-    const flowEdges: ShowcaseFlowEdge[] = diagram.edges.map((edge) => {
+    const flowEdges: ViewerFlowEdge[] = diagram.edges.map((edge) => {
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
       const isSelected = selectedEdge !== null && edge.id === selectedEdge.id;
       const emphasis: EdgeEmphasis = isSelected
@@ -774,7 +778,7 @@ function ShowcaseCanvasInner({
         type: MarkerType.ArrowClosed,
         // Idle/dimmed arrowheads only — while selected, the edge component
         // swaps in its own pulsing marker that answers the gradient band
-        // (see showcase-edge.tsx). Dimming reaches this one for free —
+        // (see viewer-edge.tsx). Dimming reaches this one for free —
         // element opacity on the path applies to its markers too.
         color: "var(--edge)",
         width: 18,
@@ -851,7 +855,7 @@ function ShowcaseCanvasInner({
       // would resolve to auto and collapse the canvas to zero (React Flow
       // error 004). Absolute positioning tracks the wrapper's USED box —
       // min-height clamp included — so the graph always has real dimensions.
-      className="showcase-canvas absolute inset-0 outline-none"
+      className="viewer-canvas absolute inset-0 outline-none"
     >
       <style>{EDGE_INTERACTION_CSS}</style>
       {detail !== null ? (
@@ -859,12 +863,12 @@ function ShowcaseCanvasInner({
         // the two endpoints recedes. Stylesheet-driven (node ids are model
         // slugs) so the node objects themselves stay untouched — see the
         // remount note above the `nodes` memo.
-        <style>{`.showcase-canvas .react-flow__node:not([data-id="${detail.edge.source}"]):not([data-id="${detail.edge.target}"]) { opacity: ${DIM_NODE_OPACITY}; }`}</style>
+        <style>{`.viewer-canvas .react-flow__node:not([data-id="${detail.edge.source}"]):not([data-id="${detail.edge.target}"]) { opacity: ${DIM_NODE_OPACITY}; }`}</style>
       ) : null}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <ReactFlow<ShowcaseFlowNode, ShowcaseFlowEdge>
+      <ReactFlow<ViewerFlowNode, ViewerFlowEdge>
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -891,7 +895,7 @@ function ShowcaseCanvasInner({
         className="bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing"
       >
         <Panel position="top-left" className="max-w-full">
-          <ShowcaseToolbar
+          <ViewerToolbar
             crumbs={crumbs}
             currentLevel={diagram.level}
             onNavigate={climbTo}
@@ -901,7 +905,7 @@ function ShowcaseCanvasInner({
           position="top-right"
           className="max-w-[min(19rem,calc(100%-1rem))]"
         >
-          <ShowcaseEdgeDetail detail={detail} onDismiss={handleDetailDismiss} />
+          <ViewerEdgeDetail detail={detail} onDismiss={handleDetailDismiss} />
         </Panel>
         <Panel position="bottom-center" className="hidden sm:block">
           <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
@@ -918,11 +922,15 @@ function ShowcaseCanvasInner({
   );
 }
 
-/** The mount: provider + inner canvas, keyed to the frozen demo model. */
-export function ShowcaseCanvas(): React.JSX.Element {
+/** The mount: provider + inner canvas over a (deep-frozen) viewer model. */
+export function ViewerCanvas({
+  model,
+}: {
+  model: ViewerModel;
+}): React.JSX.Element {
   return (
     <ReactFlowProvider>
-      <ShowcaseCanvasInner model={DEMO_MODEL} />
+      <ViewerCanvasInner model={model} />
     </ReactFlowProvider>
   );
 }

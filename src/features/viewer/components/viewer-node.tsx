@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The showcase's read-only node. Shares the editor's visual language — the
+ * The viewer's read-only node. Shares the editor's visual language — the
  * same per-type silhouettes (`node-shapes`) and the same 16-icon registry —
  * but carries none of its machinery: no handles, no selection, no rename, no
  * store.
@@ -28,14 +28,14 @@ import {
 
 import { TYPE_LABEL } from "../lib/labels";
 
-export interface ShowcaseNodeData extends Record<string, unknown> {
+export interface ViewerNodeData extends Record<string, unknown> {
   /** The (frozen) model node. */
   node: C4Node;
   /** The containing diagram's level — a node's level is never stored on it. */
   level: C4Level;
   /**
    * Present ⇔ the node has a child diagram to zoom into. Navigation itself
-   * happens in the canvas's onNodeClick (see showcase-canvas.tsx — the node
+   * happens in the canvas's onNodeClick (see viewer-canvas.tsx — the node
    * wrapper only receives pointer events because the flow declares that
    * handler); this object only shapes the affordance.
    */
@@ -47,11 +47,11 @@ export interface ShowcaseNodeData extends Record<string, unknown> {
   isPlaceholder: boolean;
 }
 
-export type ShowcaseFlowNode = Node<ShowcaseNodeData, "c4">;
+export type ViewerFlowNode = Node<ViewerNodeData, "c4">;
 
-function ShowcaseNodeInner({
+function ViewerNodeInner({
   data,
-}: NodeProps<ShowcaseFlowNode>): React.JSX.Element {
+}: NodeProps<ViewerFlowNode>): React.JSX.Element {
   const { node, drill, isPlaceholder } = data;
   const { def } = resolveIcon(node);
   const Icon = def.Svg;
@@ -79,7 +79,7 @@ function ShowcaseNodeInner({
       {/*
        * Invisible anchor handles. React Flow will not CREATE an edge unless
        * both endpoint nodes expose a handle (error 008), even though our
-       * ShowcaseEdge recomputes floating anchors itself and never draws from
+       * ViewerEdge recomputes floating anchors itself and never draws from
        * these points. `visibility: hidden` keeps them measurable for React
        * Flow's internals while removing them from painting, hit-testing, and
        * the accessibility tree — the demo stays strictly view-only.
@@ -166,4 +166,4 @@ function ShowcaseNodeInner({
   );
 }
 
-export const ShowcaseNode = memo(ShowcaseNodeInner);
+export const ViewerNode = memo(ViewerNodeInner);
