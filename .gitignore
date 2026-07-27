@@ -56,3 +56,8 @@ yarn-error.log*
 # misc
 *.pem
 .vercel
+
+# agent tooling and git worktrees. .claude/worktrees holds nested checkouts of
+# this same repository, so leaving it untracked but unignored lets `git add -A`
+# stage a worktree as an embedded gitlink.
+.claude/
