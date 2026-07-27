@@ -335,8 +335,10 @@ function cancelTransition(active: ActiveTransition | null): void {
 
 function ViewerCanvasInner({
   model,
+  onDiagramChange,
 }: {
   model: ViewerModel;
+  onDiagramChange?: (diagramId: string) => void;
 }): React.JSX.Element {
   const { getViewport, setViewport } = useReactFlow<
     ViewerFlowNode,
@@ -344,6 +346,12 @@ function ViewerCanvasInner({
   >();
 
   const [diagramId, setDiagramId] = useState(model.rootDiagramId);
+
+  // Tell interested parents (export control, code panel) which diagram is on
+  // screen. Fires for the initial diagram too, so consumers never start stale.
+  useEffect(() => {
+    onDiagramChange?.(diagramId);
+  }, [diagramId, onDiagramChange]);
   const [announcement, setAnnouncement] = useState("");
   /** At most one relationship selected at a time; null ⇒ nothing selected. */
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -925,12 +933,15 @@ function ViewerCanvasInner({
 /** The mount: provider + inner canvas over a (deep-frozen) viewer model. */
 export function ViewerCanvas({
   model,
+  onDiagramChange,
 }: {
   model: ViewerModel;
+  /** Reports which diagram is on screen (initial diagram included). */
+  onDiagramChange?: (diagramId: string) => void;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
-      <ViewerCanvasInner model={model} />
+      <ViewerCanvasInner model={model} onDiagramChange={onDiagramChange} />
     </ReactFlowProvider>
   );
 }

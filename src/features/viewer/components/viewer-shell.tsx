@@ -42,7 +42,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { deepFreeze, type ViewerModel } from "../lib/model";
+import { ViewerExportButton } from "../export/export-button";
+import { deepFreeze, getDiagram, type ViewerModel } from "../lib/model";
 import { ViewerCanvas } from "./viewer-canvas";
 
 /* ---- fullscreen state, as an external store ------------------------------- */
@@ -73,8 +74,11 @@ const readFalse = (): boolean => false;
 
 export function ViewerShell({
   model,
+  onDiagramChange,
 }: {
   model: ViewerModel;
+  /** Reports which diagram is on screen (initial diagram included). */
+  onDiagramChange?: (diagramId: string) => void;
 }): React.JSX.Element {
   // Structural read-only-ness: freeze once, before the canvas ever sees it.
   const frozenModel = useMemo(() => deepFreeze(model), [model]);
@@ -84,6 +88,20 @@ export function ViewerShell({
   const [isImmersive, setIsImmersive] = useState(false);
   const immersiveRef = useRef(false);
   const [announcement, setAnnouncement] = useState("");
+
+  // The diagram on screen — drives the export control (and is forwarded to
+  // any interested parent, e.g. the paste page's Mermaid conversion panel).
+  const [currentDiagramId, setCurrentDiagramId] = useState(
+    frozenModel.rootDiagramId,
+  );
+  const handleDiagramChange = useCallback(
+    (diagramId: string) => {
+      setCurrentDiagramId(diagramId);
+      onDiagramChange?.(diagramId);
+    },
+    [onDiagramChange],
+  );
+  const currentDiagram = getDiagram(frozenModel, currentDiagramId);
 
   /* ---- native fullscreen ---------------------------------------------------- */
 
@@ -195,6 +213,10 @@ export function ViewerShell({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <ViewerExportButton
+              modelTitle={frozenModel.title}
+              diagram={currentDiagram}
+            />
             <button
               type="button"
               onClick={() => setImmersive(!isImmersive)}
@@ -249,7 +271,10 @@ export function ViewerShell({
       </header>
 
       <div className="relative min-h-96 flex-1">
-        <ViewerCanvas model={frozenModel} />
+        <ViewerCanvas
+          model={frozenModel}
+          onDiagramChange={handleDiagramChange}
+        />
       </div>
     </div>
   );

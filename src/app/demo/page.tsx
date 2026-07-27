@@ -141,7 +141,17 @@ export default function DemoPage(): React.JSX.Element {
       </ul>
 
       <p className="mt-8 text-sm leading-relaxed text-muted-foreground">
-        Want to change something? These examples are read-only — head to the{" "}
+        Have a model of your own? Paste it —{" "}
+        <span className="font-mono text-foreground">.archflow.json</span> or
+        Mermaid C4 code — into{" "}
+        <Link
+          href="/view/new"
+          className="font-medium text-primary hover:underline"
+        >
+          view mode
+        </Link>{" "}
+        to render it right here in the browser. Want to change something? These
+        examples are read-only — head to the{" "}
         <Link
           href="/editor"
           className="font-medium text-primary hover:underline"
