@@ -75,8 +75,7 @@ export default function Home() {
             Explore the live demo
           </Link>
           <p id="cta-note" className="text-sm text-muted-foreground">
-            The canvas lands in the next milestone — the route is a placeholder
-            for now.
+            No account, no cloud — the model saves to a JSON file you own.
           </p>
         </div>
 

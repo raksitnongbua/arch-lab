@@ -1,9 +1,26 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+
+/**
+ * Primary navigation. The header renders in the root layout, so these are the
+ * only links that reach /demo and /editor from every page — without them the
+ * demo is only discoverable from the landing-page hero, which strands anyone
+ * who is already inside the editor.
+ */
+const NAV_LINKS = [
+  { href: "/demo", label: "Demo" },
+  { href: "/editor", label: "Editor" },
+] as const;
 
 export function Header() {
+  const pathname = usePathname();
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
@@ -16,6 +33,27 @@ export function Header() {
             {APP_NAME}
           </span>
         </Link>
+
+        <nav aria-label="Primary" className="flex items-center gap-1">
+          {NAV_LINKS.map((link) => {
+            const isCurrent = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={isCurrent ? "page" : undefined}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+                  isCurrent
+                    ? "bg-secondary/70 font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
 
         <div className="flex items-center gap-2">
           <a
