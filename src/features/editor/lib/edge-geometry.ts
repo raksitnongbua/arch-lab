@@ -9,10 +9,98 @@
  * never collapse onto the same curve.
  */
 
-import { getBezierPath, type Position } from "@xyflow/react";
+import { getBezierPath, Position } from "@xyflow/react";
 
 /** Control-point spacing between adjacent parallel edges, in flow units. */
 export const PARALLEL_EDGE_SPACING = 48;
+
+/* ---- Floating anchors ------------------------------------------------------ */
+
+/** Axis-aligned node bounds in flow coordinates. */
+export interface NodeRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface FloatingAnchors {
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  sourcePosition: Position;
+  targetPosition: Position;
+}
+
+/**
+ * The side of `rect` facing the direction (dx, dy), where (dx, dy) points
+ * from this rect's centre toward the other node's centre. The horizontal /
+ * vertical decision normalises by the node's own half-extents, so a wide
+ * node connecting to a neighbour slightly above it exits through its (long)
+ * top side rather than snapping to a narrow left/right side.
+ */
+function facingSide(rect: NodeRect, dx: number, dy: number): Position {
+  const horizontalness = Math.abs(dx) / Math.max(rect.width / 2, 1);
+  const verticalness = Math.abs(dy) / Math.max(rect.height / 2, 1);
+  if (horizontalness >= verticalness) {
+    return dx >= 0 ? Position.Right : Position.Left;
+  }
+  return dy >= 0 ? Position.Bottom : Position.Top;
+}
+
+/** Midpoint of the given side of `rect`. */
+function sideMidpoint(
+  rect: NodeRect,
+  side: Position,
+): { x: number; y: number } {
+  switch (side) {
+    case Position.Left:
+      return { x: rect.x, y: rect.y + rect.height / 2 };
+    case Position.Right:
+      return { x: rect.x + rect.width, y: rect.y + rect.height / 2 };
+    case Position.Top:
+      return { x: rect.x + rect.width / 2, y: rect.y };
+    case Position.Bottom:
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height };
+  }
+}
+
+/**
+ * Floating (dynamic) edge anchors: the edge leaves the side of the source
+ * facing the target and enters the side of the target facing the source,
+ * recomputed from current node geometry on every render — so edges follow
+ * nodes live during drags.
+ *
+ * Deliberately NOT persisted per-edge: this is a C4 editor whose nodes are
+ * dragged constantly, and a handle pinned at save time goes stale the moment
+ * a node moves (an edge frozen to "top" while its target sits below looks
+ * broken). draw.io — the product's explicit reference — re-routes edges to
+ * the facing side automatically, and computing sides at render time keeps
+ * the persisted schema, serializer key order, and round-trip fixtures
+ * untouched.
+ */
+export function getFloatingAnchors(
+  source: NodeRect,
+  target: NodeRect,
+): FloatingAnchors {
+  const dx = target.x + target.width / 2 - (source.x + source.width / 2);
+  const dy = target.y + target.height / 2 - (source.y + source.height / 2);
+
+  const sourcePosition = facingSide(source, dx, dy);
+  const targetPosition = facingSide(target, -dx, -dy);
+  const sourcePoint = sideMidpoint(source, sourcePosition);
+  const targetPoint = sideMidpoint(target, targetPosition);
+
+  return {
+    sourceX: sourcePoint.x,
+    sourceY: sourcePoint.y,
+    targetX: targetPoint.x,
+    targetY: targetPoint.y,
+    sourcePosition,
+    targetPosition,
+  };
+}
 
 export interface ParallelEdgePathInput {
   sourceX: number;

@@ -14,7 +14,13 @@
  */
 
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
-import { BaseEdge, type Edge, type EdgeProps } from "@xyflow/react";
+import {
+  BaseEdge,
+  useInternalNode,
+  type Edge,
+  type EdgeProps,
+  type InternalNode,
+} from "@xyflow/react";
 
 import type { C4Edge } from "@/types";
 
@@ -23,7 +29,11 @@ import {
   type ShortcutBinding,
   type ShortcutContext,
 } from "../../hooks/use-keyboard-shortcuts";
-import { getParallelEdgePath } from "../../lib/edge-geometry";
+import {
+  getFloatingAnchors,
+  getParallelEdgePath,
+  type NodeRect,
+} from "../../lib/edge-geometry";
 import { duration } from "../../lib/motion";
 import { useEditorStore } from "../../state";
 import {
@@ -50,8 +60,28 @@ export type C4EdgeComponentProps = EdgeProps<C4FlowEdge>;
 
 const NO_BINDINGS: ShortcutBinding[] = [];
 
+/**
+ * Bounds of an internal node in flow coordinates, or null before React Flow
+ * has measured it. `positionAbsolute` tracks in-flight drags, so anchors
+ * computed from this follow the node live, frame by frame — no DOM reads.
+ */
+function internalNodeRect(node: InternalNode | undefined): NodeRect | null {
+  if (!node) return null;
+  const width = node.measured.width ?? node.width;
+  const height = node.measured.height ?? node.height;
+  if (width === undefined || height === undefined) return null;
+  return {
+    x: node.internals.positionAbsolute.x,
+    y: node.internals.positionAbsolute.y,
+    width,
+    height,
+  };
+}
+
 export function C4EdgeComponent({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -85,13 +115,24 @@ export function C4EdgeComponent({
     [],
   );
 
+  // Floating anchoring (see getFloatingAnchors): the four handles are drag
+  // affordances only — the rendered edge re-anchors to whichever sides of the
+  // two nodes face each other, from geometry React Flow already tracks in its
+  // store (a few arithmetic ops per render — no DOM measurement, no memo
+  // bookkeeping needed). The prop-based coordinates, which React Flow pins to
+  // the first declared handle when the edge carries no handle id, are only a
+  // fallback for the frame before a node is measured.
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+  const sourceRect = internalNodeRect(sourceNode);
+  const targetRect = internalNodeRect(targetNode);
+  const anchors =
+    sourceRect !== null && targetRect !== null
+      ? getFloatingAnchors(sourceRect, targetRect)
+      : { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
+
   const { path, labelX, labelY } = getParallelEdgePath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
+    ...anchors,
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
   });

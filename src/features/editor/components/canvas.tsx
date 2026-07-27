@@ -492,6 +492,13 @@ function CanvasInner(): React.JSX.Element {
   const handleConnect = useCallback((connection: Connection) => {
     const store = useEditorStore.getState();
     try {
+      // `connection.sourceHandle` / `targetHandle` are dropped ON PURPOSE.
+      // Edges use floating anchoring (edges/c4-edge.tsx + lib/edge-geometry
+      // `getFloatingAnchors`): the rendered edge always leaves the side of
+      // the source facing the target, recomputed live as nodes move. A handle
+      // pinned at connect time would go stale on the first node drag, and
+      // persisting it would change the JSON schema for no benefit — the
+      // handles are drag affordances, not routing decisions.
       const edgeId = store.createEdge({
         diagramId: store.activeDiagramId,
         source: connection.source,
