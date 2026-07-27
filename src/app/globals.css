@@ -250,6 +250,16 @@
 }
 
 .af-running-gradient {
+  /* `background-clip: text` paints glyphs only where the background paints, and
+     the background box is the inline box's *advance* width. Geist's `w` (and
+     italics, and any glyph with a negative right side bearing) has ink that
+     overhangs that edge, so the last letter gets sliced by a hard vertical cut.
+     Widen the paint box and pull the same amount back off the margin, so the
+     glyph is fully painted and surrounding layout is untouched. Sized in `em`
+     so it tracks the font size across breakpoints. */
+  padding-right: 0.08em;
+  margin-right: -0.08em;
+
   /* `repeat` (the default) matters: the 200%-wide gradient tiles, so the text is
      fully covered at every animation phase and no glyph can be left unpainted
      as the background scrolls. */
