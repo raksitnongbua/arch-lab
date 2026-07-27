@@ -68,6 +68,12 @@ export default function Home() {
             Open Editor
             <ArrowRight aria-hidden="true" />
           </Link>
+          <Link
+            href="/demo"
+            className={buttonClasses({ variant: "outline", size: "lg" })}
+          >
+            Explore the live demo
+          </Link>
           <p id="cta-note" className="text-sm text-muted-foreground">
             The canvas lands in the next milestone — the route is a placeholder
             for now.
