@@ -227,3 +227,38 @@
     }
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Running text gradient.
+
+   Pairs with `bg-clip-text text-transparent` and a `to-r` gradient whose first
+   and last stops are the same token, so the 200%-wide background tiles
+   seamlessly and a 200% shift lands exactly back where it started — no visible
+   jump at the loop boundary.
+
+   Only background-position animates. It is paint-only rather than composited,
+   which is acceptable on a single short heading; do not reach for this on
+   anything large or repeated.
+   --------------------------------------------------------------------------- */
+@keyframes af-text-gradient {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
+}
+
+.af-running-gradient {
+  background-size: 200% 100%;
+  animation: af-text-gradient 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Park it on a deliberate frame rather than wherever the global backstop
+     happens to freeze the first 0.01ms. */
+  .af-running-gradient {
+    animation: none;
+    background-position: 25% 50%;
+  }
+}
