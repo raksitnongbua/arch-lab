@@ -250,8 +250,19 @@
 }
 
 .af-running-gradient {
+  /* `repeat` (the default) matters: the 200%-wide gradient tiles, so the text is
+     fully covered at every animation phase and no glyph can be left unpainted
+     as the background scrolls. */
+  background-repeat: repeat;
   background-size: 200% 100%;
-  animation: af-text-gradient 6s linear infinite;
+  animation: af-text-gradient 3s linear infinite;
+
+  /* Left at the initial `slice` deliberately. When the phrase wraps, `slice`
+     lays the gradient out as if the inline box were unbroken and then divides
+     it across the line fragments, giving one continuous sweep; `clone` would
+     restart the whole gradient on every line. */
+  box-decoration-break: slice;
+  -webkit-box-decoration-break: slice;
 }
 
 @media (prefers-reduced-motion: reduce) {
