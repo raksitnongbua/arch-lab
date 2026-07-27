@@ -3,7 +3,7 @@ import type { C4Level } from "@/types";
 export const APP_NAME = "arch-flow";
 
 export const APP_DESCRIPTION =
-  "An interactive C4-model architecture editor — draw your system, drill from Context to Code, and save it as reviewable JSON.";
+  "A local-first workspace for architecture documentation — C4 model diagrams today, with sequence diagrams, a data dictionary, and network diagrams planned. Everything saves as reviewable JSON.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

@@ -5,8 +5,8 @@ export function Footer() {
     <footer className="mt-auto border-t border-border/60">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <p>
-          <span className="font-mono">{APP_NAME}</span> — local-first C4
-          architecture diagrams.
+          <span className="font-mono">{APP_NAME}</span> — local-first
+          architecture documentation. C4 today; more diagram types planned.
         </p>
         <p>Saves to plain JSON. Diff it, review it, commit it.</p>
       </div>

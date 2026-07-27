@@ -3,11 +3,14 @@ import {
   Boxes,
   FileJson,
   Layers,
+  Network,
   Puzzle,
   Code2,
   Globe2,
   Keyboard,
   MousePointer2,
+  Table2,
+  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -30,6 +33,35 @@ const LEVEL_ICONS: Record<C4Level, LucideIcon> = {
   code: Code2,
 };
 
+interface PlannedDiagramType {
+  id: string;
+  icon: LucideIcon;
+  title: string;
+  body: string;
+}
+
+/** The three documentation surfaces that come after C4. Planned — no dates. */
+const PLANNED_DIAGRAM_TYPES: readonly PlannedDiagramType[] = [
+  {
+    id: "sequence",
+    icon: Workflow,
+    title: "Sequence diagrams",
+    body: "Trace a request across the systems you have modelled — participants, messages, and lifelines alongside the structural view.",
+  },
+  {
+    id: "data-dictionary",
+    icon: Table2,
+    title: "Data dictionary",
+    body: "A structured catalogue of the data your containers own — entities, fields, and types, named once and referenced everywhere.",
+  },
+  {
+    id: "network",
+    icon: Network,
+    title: "Network diagrams",
+    body: "The physical layer under the logical one — zones, subnets, gateways, and the paths between them, kept in the same repository.",
+  },
+];
+
 export default function Home() {
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -39,7 +71,7 @@ export default function Home() {
       <section className="mx-auto w-full max-w-6xl px-5 pt-16 pb-14 sm:px-8 sm:pt-24 sm:pb-20">
         <Badge variant="accent" className="mb-6">
           <span className="size-1.5 rounded-full bg-accent" />
-          Pre-alpha · foundation only
+          Early preview · C4 editor and live demo working today
         </Badge>
 
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
@@ -54,9 +86,10 @@ export default function Home() {
           <span className="font-mono text-base text-foreground sm:text-lg">
             {APP_NAME}
           </span>{" "}
-          is an interactive C4-model editor — drag out your system on a canvas,
-          drill from Context down to Code, and save the whole model as one
-          diff-readable JSON file.
+          is a local-first workspace for architecture documentation. It opens
+          with a full C4-model editor — with sequence diagrams, a data
+          dictionary, and network diagrams planned next — and saves everything
+          as diff-readable JSON you own.
         </p>
 
         <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -80,10 +113,112 @@ export default function Home() {
         </div>
 
         <ul className="mt-14 grid max-w-3xl grid-cols-2 gap-x-8 gap-y-6 border-t border-border/60 pt-8 sm:grid-cols-4">
-          <Stat value="4" label="C4 levels" />
+          <Stat value="4" label="C4 levels, editable today" />
           <Stat value="1" label="JSON file per model" />
           <Stat value="0" label="Accounts or servers" />
           <Stat value="Git" label="Is the collaboration layer" />
+        </ul>
+      </section>
+
+      {/* ------------------------------------------------------- diagram types */}
+      <section
+        aria-labelledby="diagram-types-heading"
+        className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-24"
+      >
+        <div className="mb-8 flex flex-col gap-2">
+          <h2
+            id="diagram-types-heading"
+            className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+          >
+            One workspace, four kinds of documentation
+          </h2>
+          <p className="max-w-2xl leading-relaxed text-muted-foreground">
+            The first phase ships C4 model diagrams. The other three surfaces
+            are planned and will share the same local-first, JSON-on-disk
+            foundation — they are listed here as direction, not as promises with
+            dates.
+          </p>
+        </div>
+
+        <ul className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {/* Shipping now: C4 — the featured card with real destinations. */}
+          <li className="flex lg:col-span-3">
+            <Card className="group relative flex w-full flex-col overflow-hidden border-primary/25 transition-all duration-300 hover:border-primary/45 hover:shadow-lg hover:shadow-primary/5">
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/8 via-transparent to-accent/6"
+              />
+              <CardHeader className="relative gap-4 sm:p-8">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+                    <Layers aria-hidden="true" className="size-5" />
+                  </span>
+                  <Badge variant="accent">
+                    <span
+                      aria-hidden="true"
+                      className="size-1.5 rounded-full bg-accent"
+                    />
+                    Available now
+                  </Badge>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <CardTitle className="text-xl leading-tight sm:text-2xl">
+                    C4 model diagrams
+                  </CardTitle>
+                </div>
+                <CardDescription className="max-w-2xl text-base">
+                  Model your system from Context down to Code on an interactive
+                  canvas. Double-click any node to open the level beneath it,
+                  breadcrumb back out, and save the whole model as one
+                  diff-reviewable JSON file.
+                </CardDescription>
+                <div className="mt-2 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                  <Link
+                    href="/editor"
+                    className={buttonClasses({ size: "md" })}
+                  >
+                    Open the C4 editor
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                  <Link
+                    href="/demo"
+                    className={buttonClasses({
+                      variant: "outline",
+                      size: "md",
+                    })}
+                  >
+                    Explore the live demo
+                  </Link>
+                </div>
+              </CardHeader>
+            </Card>
+          </li>
+
+          {/* Planned: honestly labelled, deliberately non-interactive. */}
+          {PLANNED_DIAGRAM_TYPES.map((diagramType) => {
+            const Icon = diagramType.icon;
+            return (
+              <li key={diagramType.id} className="flex">
+                <Card className="flex w-full flex-col border-dashed bg-card/50">
+                  <CardHeader className="gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-muted-foreground">
+                        <Icon aria-hidden="true" className="size-5" />
+                      </span>
+                      <Badge variant="outline">Planned</Badge>
+                    </div>
+                    <CardTitle className="text-lg text-muted-foreground">
+                      {diagramType.title}
+                    </CardTitle>
+                    <CardDescription>{diagramType.body}</CardDescription>
+                    <p className="mt-1 text-xs text-muted-foreground/70">
+                      Not part of the first release — no date yet.
+                    </p>
+                  </CardHeader>
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
@@ -97,7 +232,7 @@ export default function Home() {
             id="levels-heading"
             className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
           >
-            One model, four altitudes
+            Inside C4: one model, four altitudes
           </h2>
           <p className="max-w-2xl leading-relaxed text-muted-foreground">
             Every node can open into the level beneath it. Double-click to
