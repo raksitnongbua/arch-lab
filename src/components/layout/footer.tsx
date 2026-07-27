@@ -3,7 +3,8 @@ import { APP_NAME } from "@/lib/constants";
 export function Footer() {
   return (
     <footer className="mt-auto border-t border-border/60">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
+      {/* Full-bleed to match the header — see the note there. */}
+      <div className="flex w-full flex-col gap-2 px-4 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p>
           <span className="font-mono">{APP_NAME}</span> — local-first
           architecture documentation. C4 today; more diagram types planned.

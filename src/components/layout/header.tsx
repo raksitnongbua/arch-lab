@@ -23,7 +23,11 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+      {/* Full-bleed rather than centred in a max-width container: the editor is
+          edge-to-edge (rails flush to both sides), so a contained header left the
+          chrome visibly inset from the app below it. Padding is kept close to the
+          editor header's own so the two read as one continuous surface. */}
+      <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6">
         <Link
           href="/"
           className="group flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
