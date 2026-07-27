@@ -39,7 +39,7 @@ export default function DemoPage(): React.JSX.Element {
       <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground">
         Each example below is a complete C4 model stored as a plain{" "}
         <span className="font-mono text-base text-foreground">
-          .archflow.json
+          .archlab.json
         </span>{" "}
         file. Open one to explore it read-only — click any numbered node to zoom
         from Context down to Code, click a connector to inspect the
@@ -142,7 +142,7 @@ export default function DemoPage(): React.JSX.Element {
 
       <p className="mt-8 text-sm leading-relaxed text-muted-foreground">
         Have a model of your own? Paste it —{" "}
-        <span className="font-mono text-foreground">.archflow.json</span> or
+        <span className="font-mono text-foreground">.archlab.json</span> or
         Mermaid C4 code — into{" "}
         <Link
           href="/view/new"

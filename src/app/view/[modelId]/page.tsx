@@ -46,7 +46,7 @@ export default async function ViewPage({
         <p className="mt-2 leading-relaxed text-muted-foreground">
           The model <span className="font-mono">{result.id}</span> is
           registered, but its JSON does not conform to the{" "}
-          <span className="font-mono">.archflow.json</span> schema:
+          <span className="font-mono">.archlab.json</span> schema:
         </p>
         <ul className="mt-4 space-y-2">
           {result.issues.map((issue) => (

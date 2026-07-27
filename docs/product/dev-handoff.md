@@ -1,4 +1,4 @@
-# arch-flow — Sprint Handoff (MVP walking skeleton)
+# arch-lab — Sprint Handoff (MVP walking skeleton)
 
 **Audience:** the developers building this round. This is the document you work from.
 **Scope:** the 23 **Must** stories in `docs/product/user-stories.md`. Nothing else.
@@ -297,14 +297,14 @@ Follows Batch 2 because byte-identical round-trip can only be proven once the mo
 
 **Stories:** AF-E5-S1, AF-E5-S2
 
-**Scope.** The file format made real, in both directions, and the File System Access API layer with its fallback (D2). Writing: the determinism rules from `data-model.md` §"Determinism rules" — schema-declared key order, `diagrams`/`nodes`/`edges` sorted by id, `tags` sorted lexically, 2-space indent, LF, trailing newline, optional fields omitted rather than `null`, integral numbers, `updatedAt` written only when the model actually changed, unknown fields from newer minor versions preserved verbatim. Reading: the load-time hard errors, refusing the file with the offending JSON path named. Plus save/open UI in the shell's file-actions slot, drag-and-drop of a `.archflow.json` onto the window, and the unsaved-changes prompt when opening over dirty state.
+**Scope.** The file format made real, in both directions, and the File System Access API layer with its fallback (D2). Writing: the determinism rules from `data-model.md` §"Determinism rules" — schema-declared key order, `diagrams`/`nodes`/`edges` sorted by id, `tags` sorted lexically, 2-space indent, LF, trailing newline, optional fields omitted rather than `null`, integral numbers, `updatedAt` written only when the model actually changed, unknown fields from newer minor versions preserved verbatim. Reading: the load-time hard errors, refusing the file with the offending JSON path named. Plus save/open UI in the shell's file-actions slot, drag-and-drop of a `.archlab.json` onto the window, and the unsaved-changes prompt when opening over dirty state.
 
 **Files it OWNS**
 - `src/features/editor/io/serialize.ts`, `io/deserialize.ts`, `io/validate.ts`, `io/file-access.ts`, `io/index.ts`
 - `src/features/editor/components/file-actions.tsx` (taken over from T1-B)
 - `src/features/editor/hooks/use-file-shortcuts.ts` — `Cmd+S`, `Cmd+O` via the registry.
 - `src/features/editor/hooks/use-file-drop.ts`
-- `scripts/roundtrip-check.mjs`, `src/features/editor/io/__fixtures__/shopflow.archflow.json`
+- `scripts/roundtrip-check.mjs`, `src/features/editor/io/__fixtures__/shopflow.archlab.json`
 - `package.json` — **only** to add `"check:roundtrip"` to `scripts`. No dependency changes.
 
 **May READ, must NOT modify:** `state/**` (`replaceModel`, `markSaved`, `isDirty`), `docs/product/data-model.md`, `src/types/c4.ts`.
@@ -317,7 +317,7 @@ Follows Batch 2 because byte-identical round-trip can only be proven once the mo
 - Output is pretty-printed at 2 spaces with the exact key order of `data-model.md`; `diagrams`, `nodes`, `edges` sorted by `id`; `tags` sorted; unset optional fields absent (no `null`, no `""`); LF endings; single trailing newline; `"zoom": 1` not `1.0`; positions integral.
 - `pnpm check:roundtrip` reads the committed fixture, deserializes, re-serializes, and asserts **byte equality**. It exits non-zero on any difference and is green on `main`.
 - A no-op save (open, change nothing, save) leaves the file byte-identical, including an untouched `updatedAt`.
-- `Cmd/Ctrl+O` and drag-drop of a `.archflow.json` both load all levels, render the Context level fit-to-view, and show the root breadcrumb.
+- `Cmd/Ctrl+O` and drag-drop of a `.archlab.json` both load all levels, render the Context level fit-to-view, and show the root breadcrumb.
 - Opening with unsaved changes prompts save / discard / cancel, and cancel truly cancels.
 - Each of the 8 hard errors in `data-model.md` is detected on a deliberately broken fixture and reported with the JSON path, e.g. `diagrams[1].nodes[3].type: "servcie" is not valid at level "container"`. The app does not crash and does not half-load — the previous model stays intact.
 - A file whose `version` major exceeds ours is refused read-write with an explanation naming the needed upgrade; it is not silently downgraded and unknown fields are not dropped.
@@ -398,14 +398,14 @@ Frozen. Code against these, not against another ticket's implementation. Changin
 
 ```ts
 import type {
-  ArchFlowMetadata, C4Diagram, C4Edge, C4Level, C4Node, C4NodeType,
+  ArchLabMetadata, C4Diagram, C4Edge, C4Level, C4Node, C4NodeType,
   EdgeDirection, EdgeStyle, Point, Viewport,
 } from "@/types";
 
 /** The model in memory. Diagrams keyed by id; serialized back to a sorted array. */
 export interface EditorModel {
   version: string;
-  metadata: ArchFlowMetadata;
+  metadata: ArchLabMetadata;
   rootDiagramId: string;
   diagrams: Record<string, C4Diagram>;
   /** Unknown top-level fields from a newer minor version, preserved verbatim. */
@@ -492,7 +492,7 @@ export interface EditorActions {
 
   updateDiagram(diagramId: string, patch: Partial<Pick<C4Diagram, "title" | "description">>,
     opts?: { coalesceKey?: string }): void;
-  updateMetadata(patch: Partial<ArchFlowMetadata>): void;
+  updateMetadata(patch: Partial<ArchLabMetadata>): void;
 
   /** Creates the child diagram one level deeper and sets BOTH pointers. Throws MaxDepthError at `code`. */
   createChildDiagram(diagramId: string, nodeId: string): string; // child diagram id
@@ -679,7 +679,7 @@ export declare function IconPicker(props: {
 ### 4.7 Palette drag payload — `lib/drag-payload.ts` (T2-B), consumed by `canvas.tsx` (T1-B)
 
 ```ts
-export const PALETTE_DRAG_MIME = "application/x-arch-flow-node-type";
+export const PALETTE_DRAG_MIME = "application/x-arch-lab-node-type";
 
 export interface PaletteDragPayload {
   nodeType: C4NodeType;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Mermaid C4 ⇄ arch-flow converter check. Follows the pattern of
+ * Mermaid C4 ⇄ arch-lab converter check. Follows the pattern of
  * `scripts/roundtrip-check.mjs`: loads the REAL library from
  * `src/features/mermaid/**` (and the editor's real validator) via Node's
  * built-in TypeScript type stripping plus a resolve hook for the `@/*`
@@ -66,7 +66,7 @@ registerHooks({
 const { parseMermaidC4, serializeMermaidC4, MermaidParseError } = await import(
   pathToFileURL(path.join(ROOT, "src/features/mermaid/index.ts")).href
 );
-const { validateArchFlowFile } = await import(
+const { validateArchLabFile } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/validate.ts")).href
 );
 const { isNodeTypeValidAtLevel } = await import(
@@ -306,7 +306,7 @@ check(
 console.log("model validity");
 
 try {
-  validateArchFlowFile(JSON.parse(JSON.stringify(file)));
+  validateArchLabFile(JSON.parse(JSON.stringify(file)));
   ok("the parsed model passes the editor's validate.ts unchanged");
 } catch (error) {
   fail(
@@ -466,7 +466,7 @@ check(
   ),
 );
 try {
-  validateArchFlowFile(JSON.parse(JSON.stringify(containerFile)));
+  validateArchLabFile(JSON.parse(JSON.stringify(containerFile)));
   ok("the container-source model (with synthetic root) passes validate.ts");
 } catch (error) {
   fail(
@@ -503,7 +503,7 @@ check(
       ?.level === "context",
 );
 try {
-  validateArchFlowFile(JSON.parse(JSON.stringify(componentFile)));
+  validateArchLabFile(JSON.parse(JSON.stringify(componentFile)));
   ok("the component-source model passes validate.ts");
 } catch (error) {
   fail("the component-source model passes validate.ts", String(error));
@@ -518,7 +518,7 @@ const dynamicFile = parseMermaidC4(
   'C4Dynamic\n    Container(c1, "One")\n    Container(c2, "Two")\n    Rel(c1, c2, "Calls")\n',
 );
 check(
-  "C4Dynamic maps to level container (no dynamic level in arch-flow)",
+  "C4Dynamic maps to level container (no dynamic level in arch-lab)",
   dynamicFile.diagrams.find(
     (d) => d.id === dynamicFile["x-mermaid"].sourceDiagramId,
   )?.level === "container",

@@ -48,7 +48,7 @@ export function SyntaxReference(): React.JSX.Element {
       {/* ---- intro ---------------------------------------------------------- */}
       <Badge variant="accent" className="mb-6">
         <span className="size-1.5 rounded-full bg-accent" />
-        Reference · the arch-flow text format
+        Reference · the arch-lab text format
       </Badge>
 
       <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
@@ -58,7 +58,7 @@ export function SyntaxReference(): React.JSX.Element {
         <span className="font-mono text-base text-foreground">.aft</span> is a
         readable, Mermaid-like text form of the same model{" "}
         <span className="font-mono text-base text-foreground">
-          .archflow.json
+          .archlab.json
         </span>{" "}
         stores — <strong className="text-foreground">lossless</strong> in both
         directions, so you can edit whichever you prefer and nothing is dropped.
@@ -147,7 +147,7 @@ export function SyntaxReference(): React.JSX.Element {
           <li>Blank lines are ignored.</li>
           <li>
             <Code>{"//"}</Code> starts a <em>full-line</em> comment — at any
-            indentation, even above the <Code>archflow</Code> line. Trailing
+            indentation, even above the <Code>archlab</Code> line. Trailing
             comments after content are a parse error (see{" "}
             <a
               href="#errors"
@@ -174,7 +174,7 @@ export function SyntaxReference(): React.JSX.Element {
         <P>
           Header lines sit at indent 0, before the first <Code>@</Code> diagram
           (a header line after a diagram is a parse error). Only{" "}
-          <Code>archflow</Code> and <Code>title</Code> are required. Each line
+          <Code>archlab</Code> and <Code>title</Code> are required. Each line
           maps to one field of the JSON model:
         </P>
         <Table
@@ -372,7 +372,7 @@ export function SyntaxReference(): React.JSX.Element {
             view mode
           </Link>{" "}
           is a two-pane editor with <Code>.aft</Code> on one side and{" "}
-          <Code>.archflow.json</Code> on the other — each pane regenerates the
+          <Code>.archlab.json</Code> on the other — each pane regenerates the
           other as you type, and parse errors appear inline with the caret
           format above. The &quot;Open in view mode&quot; buttons on this
           page&apos;s complete examples carry the snippet there inside the link

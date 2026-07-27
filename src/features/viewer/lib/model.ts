@@ -2,7 +2,7 @@
  * Viewer model helpers. A viewer model is a plain, deep-frozen, in-memory C4
  * model — no store, no persistence, no mutation path. Everything here is a
  * pure read over that structure. Instances come from the viewer's model
- * service, which parses hard-coded `.archflow.json` text through the
+ * service, which parses hard-coded `.archlab.json` text through the
  * editor's real reader (`@/features/editor/io/deserialize`).
  */
 

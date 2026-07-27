@@ -106,7 +106,7 @@ Bindings are suppressed centrally while focus is in `input`, `textarea`,
 
 T2-B's `lib/drag-payload.ts` owns the codec. `canvas.tsx` is Batch-1-final
 and must build before that file exists, so it consumes the frozen **wire
-format** directly: MIME `application/x-arch-flow-node-type`, JSON
+format** directly: MIME `application/x-arch-lab-node-type`, JSON
 `{ nodeType, level }`, level-mismatch drops rejected. Keep the codec
 byte-compatible with that.
 

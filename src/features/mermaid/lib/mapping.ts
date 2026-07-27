@@ -7,7 +7,7 @@
  *     level per `VALID_NODE_TYPES_BY_LEVEL`.
  *   - The exact inverse for the serializer.
  *
- * Where arch-flow's type system is narrower than Mermaid's form set (e.g.
+ * Where arch-lab's type system is narrower than Mermaid's form set (e.g.
  * there is no "external person" type, and no `database` type at `context`
  * level), the residue is carried in node tags:
  *
@@ -49,7 +49,7 @@ export type MermaidDiagramType = (typeof MERMAID_DIAGRAM_TYPES)[number];
  * Level for each Mermaid diagram type. `C4Dynamic` and `C4Deployment` have no
  * exact C4 level: both draw containers/nodes, so they map to `container`
  * (documented lossy choice — dynamic call ordering and deployment topology
- * are not part of arch-flow's model).
+ * are not part of arch-lab's model).
  */
 export const LEVEL_BY_DIAGRAM_TYPE: Readonly<
   Record<MermaidDiagramType, C4Level>
@@ -181,7 +181,7 @@ export const REL_FORMS: Readonly<Record<string, RelFormSpec>> = {
 
 /**
  * Styling/layout directives that are parsed (so a file containing them is
- * not rejected) and then deliberately dropped — arch-flow has its own
+ * not rejected) and then deliberately dropped — arch-lab has its own
  * presentation model.
  */
 export const IGNORED_CALLS: ReadonlySet<string> = new Set([
@@ -281,7 +281,7 @@ function kindMatchesLevel(kind: ElementKind, level: C4Level): boolean {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The inverse of `toNodeType`. Also total over hand-authored arch-flow
+ * The inverse of `toNodeType`. Also total over hand-authored arch-lab
  * models whose tags were never produced by the parser: every (type, level)
  * has a canonical form. `codeElement` (no Mermaid equivalent) emits as
  * `Component`.

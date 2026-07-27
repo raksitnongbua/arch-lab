@@ -1,5 +1,5 @@
 /**
- * `ArchFlowFile` → `.aft` text. Deterministic: fixed line order, fixed
+ * `ArchLabFile` → `.aft` text. Deterministic: fixed line order, fixed
  * attribute order, canonical omission rules (mirrored exactly by the
  * parser's defaults), so the same model always yields byte-identical text
  * and `parse(serialize(file))` reproduces `file` losslessly.
@@ -28,7 +28,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { ArchFlowFile, C4NodeType, EdgeDirection } from "@/types";
+import type { ArchLabFile, C4NodeType, EdgeDirection } from "@/types";
 
 import {
   compareStrings,
@@ -81,7 +81,7 @@ function isStringArray(value: unknown): value is string[] {
 
 function invalid(what: string, value: unknown): never {
   throw new Error(
-    `serializeArchText: ${what} is not serializable (${JSON.stringify(value) ?? typeof value}) — this model would not pass validateArchFlowFile`,
+    `serializeArchText: ${what} is not serializable (${JSON.stringify(value) ?? typeof value}) — this model would not pass validateArchLabFile`,
   );
 }
 
@@ -146,11 +146,11 @@ function tagsLine(value: unknown): string | undefined {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Serializes an `ArchFlowFile` to canonical `.aft` text. Pure and
+ * Serializes an `ArchLabFile` to canonical `.aft` text. Pure and
  * deterministic: identical models always produce identical bytes, and
  * `parseArchText(serializeArchText(file))` round-trips every field.
  */
-export function serializeArchText(file: ArchFlowFile): string {
+export function serializeArchText(file: ArchLabFile): string {
   if (!isRecord(file)) invalid("the file", file);
   const lines: string[] = [];
 
@@ -160,7 +160,7 @@ export function serializeArchText(file: ArchFlowFile): string {
   if (typeof version !== "string" || !/^\d+\.\d+$/.test(version)) {
     invalid("version", version);
   }
-  lines.push(`archflow ${version}`);
+  lines.push(`archlab ${version}`);
 
   const schemaValue = file.$schema;
   if (typeof schemaValue === "string") {

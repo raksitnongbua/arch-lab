@@ -9,7 +9,7 @@
 
 import type { C4NodeType, EdgeDirection, EdgeStyle } from "@/types";
 
-/** The file extension of the arch-flow text format. */
+/** The file extension of the arch-lab text format. */
 export const ARCHTEXT_EXTENSION = ".aft";
 
 /** `.aft` node-type keyword → model node type (bijective). */

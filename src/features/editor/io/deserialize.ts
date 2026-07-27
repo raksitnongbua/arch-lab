@@ -1,5 +1,5 @@
 /**
- * Reader for `.archflow.json` text (T3-A, AF-E5-S2). Parses, validates the
+ * Reader for `.archlab.json` text (T3-A, AF-E5-S2). Parses, validates the
  * eight load-time hard errors (see `./validate.ts`), and reshapes the file
  * into the store's `EditorModel` — diagrams keyed by id, unknown top-level
  * fields hoisted verbatim into `unknownFields`.
@@ -20,7 +20,7 @@
 import type { C4Diagram } from "@/types";
 import type { EditorModel } from "../state";
 
-import { FileValidationError, validateArchFlowFile } from "./validate";
+import { FileValidationError, validateArchLabFile } from "./validate";
 
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   "version",
@@ -30,7 +30,7 @@ const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Parses and validates `.archflow.json` text into an `EditorModel`, ready
+ * Parses and validates `.archlab.json` text into an `EditorModel`, ready
  * for `replaceModel`. Throws `FileValidationError` on malformed JSON, a
  * newer major `version`, or any of the schema's load-time hard errors.
  */
@@ -45,7 +45,7 @@ export function deserializeModel(text: string): EditorModel {
     ]);
   }
 
-  const file = validateArchFlowFile(parsed);
+  const file = validateArchLabFile(parsed);
 
   const diagrams: Record<string, C4Diagram> = {};
   for (const diagram of file.diagrams) {

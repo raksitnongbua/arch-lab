@@ -1,5 +1,5 @@
 /**
- * The share-link codec: an arch-flow model encoded INTO a URL fragment, so a
+ * The share-link codec: an arch-lab model encoded INTO a URL fragment, so a
  * link can carry a whole diagram with no account, no upload and no server —
  * the browser never sends the `#…` fragment anywhere.
  *
@@ -166,7 +166,7 @@ export async function decodeShareFragment(hash: string): Promise<DecodedShare> {
     return {
       status: "error",
       message:
-        "its payload does not start with the expected version marker — the link may come from a newer arch-flow, or it was damaged in transit",
+        "its payload does not start with the expected version marker — the link may come from a newer arch-lab, or it was damaged in transit",
     };
   }
   if (!canDecodeShare()) {

@@ -29,7 +29,7 @@ export interface DocSnippet {
 /** The whole-file example shown first — a complete two-level model. */
 export const MINIMAL_EXAMPLE: DocSnippet = {
   id: "minimal-complete-model",
-  code: `archflow 1.0
+  code: `archlab 1.0
 title "ShopFlow Platform"
 
 @context ctx-root "ShopFlow Platform"
@@ -51,8 +51,8 @@ title "ShopFlow Platform"
 /** Every header line the format knows, in canonical order. */
 export const HEADER_EXAMPLE: DocSnippet = {
   id: "full-header",
-  code: `archflow 1.0
-schema "https://arch-flow.dev/schema/v1/diagram.schema.json"
+  code: `archlab 1.0
+schema "https://arch-lab.dev/schema/v1/diagram.schema.json"
 title "ShopFlow Platform"
 description "Customer-facing commerce platform."
 owner "Platform Team"
@@ -62,7 +62,7 @@ updated 2026-07-27T00:00:00Z
 reviewed 2026-07-20T00:00:00Z
 tagcolor payments "#e11d48"
 customicon warehouse "Warehouse" "<svg viewBox=\\"0 0 24 24\\"/>"
-generator "arch-flow" "0.1.0"
+generator "arch-lab" "0.1.0"
 root ctx-root
 
 @context ctx-root "ShopFlow Platform"
@@ -73,7 +73,7 @@ root ctx-root
 /** A diagram header with every attribute, plus the desc/view body lines. */
 export const DIAGRAM_EXAMPLE: DocSnippet = {
   id: "diagram-header",
-  code: `archflow 1.0
+  code: `archlab 1.0
 title "ShopFlow Platform"
 
 @context ctx-root "ShopFlow Platform"
@@ -89,7 +89,7 @@ title "ShopFlow Platform"
 /** A node line carrying every attribute, with a desc continuation. */
 export const NODE_EXAMPLE: DocSnippet = {
   id: "node-anatomy",
-  code: `archflow 1.0
+  code: `archlab 1.0
 title "Orders"
 
 @context ctx-root "Orders"
@@ -107,7 +107,7 @@ title "Orders"
 /** An edge line carrying every attribute, realizing a parent-level edge. */
 export const EDGE_EXAMPLE: DocSnippet = {
   id: "edge-anatomy",
-  code: `archflow 1.0
+  code: `archlab 1.0
 title "Orders"
 
 @context ctx-root "Orders"
@@ -127,7 +127,7 @@ title "Orders"
 /** `!` escape lines at file, metadata, diagram and node scope. */
 export const UNKNOWN_FIELDS_EXAMPLE: DocSnippet = {
   id: "unknown-fields",
-  code: `archflow 1.0
+  code: `archlab 1.0
 title "Forward compatible"
 ! meta.x-review after updatedAt : {"cycle":30}
 ! x-pipeline : {"stage":"prod"}
@@ -143,7 +143,7 @@ title "Forward compatible"
 export const LAYOUT_EXAMPLE: DocSnippet = {
   id: "indentation-and-comments",
   code: `// Full-line comments start with // — at any indentation, even line 1.
-archflow 1.0
+archlab 1.0
 title "Layout rules"
 
 // Blank lines are ignored. Comments are text-only sugar: they are the one
@@ -180,10 +180,10 @@ function indentBody(block: string): string {
 export function wrapHeaderExample(example: string): string {
   const keyword = example.split(" ")[0] ?? "";
   const lines: string[] = [];
-  if (keyword === "archflow") {
+  if (keyword === "archlab") {
     lines.push(example, 'title "Header demo"');
   } else {
-    lines.push("archflow 1.0");
+    lines.push("archlab 1.0");
     if (keyword !== "title") lines.push('title "Header demo"');
     lines.push(example);
   }
@@ -198,7 +198,7 @@ export function wrapHeaderExample(example: string): string {
  */
 export function wrapNodeExample(example: string, suffix?: string): string {
   const lines = [
-    "archflow 1.0",
+    "archlab 1.0",
     'title "Node demo"',
     "",
     '@context ctx-root "Node demo"',
@@ -219,7 +219,7 @@ export function wrapNodeExample(example: string, suffix?: string): string {
  */
 export function wrapEdgeExample(example: string): string {
   return [
-    "archflow 1.0",
+    "archlab 1.0",
     'title "Edge demo"',
     "",
     '@context ctx-root "Edge demo"',
@@ -242,7 +242,7 @@ export function wrapNodeTypeExample(
   level: "context" | "container" | "component" | "code",
   keyword: string,
 ): string {
-  const lines = ["archflow 1.0", 'title "Type demo"', ""];
+  const lines = ["archlab 1.0", 'title "Type demo"', ""];
   const node = `  n:${keyword} "Example"`;
   if (level === "context") {
     lines.push('@context ctx-root "Type demo"', node, "");
@@ -285,14 +285,14 @@ export interface HeaderRow {
 
 export const HEADER_ROWS: readonly HeaderRow[] = [
   {
-    syntax: "archflow <version>",
-    example: "archflow 1.0",
+    syntax: "archlab <version>",
+    example: "archlab 1.0",
     mapsTo: "version",
     notes: "Required; must be the first content line of the file.",
   },
   {
     syntax: 'schema "<url>"',
-    example: 'schema "https://arch-flow.dev/schema/v1/diagram.schema.json"',
+    example: 'schema "https://arch-lab.dev/schema/v1/diagram.schema.json"',
     mapsTo: "$schema",
     notes: "Optional JSON-schema URL.",
   },
@@ -353,7 +353,7 @@ export const HEADER_ROWS: readonly HeaderRow[] = [
   },
   {
     syntax: 'generator "<name>" "<version>"',
-    example: 'generator "arch-flow" "0.1.0"',
+    example: 'generator "arch-lab" "0.1.0"',
     mapsTo: "metadata.generator",
     notes: "Optional tool fingerprint.",
   },
@@ -493,7 +493,7 @@ export const NODE_ATTR_ROWS: readonly NodeAttrRow[] = [
   {
     attr: '>>"file"',
     mapsTo: "childRef",
-    example: 'billing:container "Billing" >>"./billing.archflow.json"',
+    example: 'billing:container "Billing" >>"./billing.archlab.json"',
     notes: "Reference to another model file; mutually exclusive with >child.",
   },
   {
@@ -652,7 +652,7 @@ export const INVALID_SNIPPETS: readonly InvalidSnippet[] = [
   {
     id: "error-unknown-node-type",
     title: "A node type the format does not know",
-    code: `archflow 1.0
+    code: `archlab 1.0
 title "Broken"
 
 @context ctx-root "Broken"
@@ -668,7 +668,7 @@ title "Broken"
   {
     id: "error-type-illegal-at-level",
     title: "A node type that is real, but illegal at this level",
-    code: `archflow 1.0
+    code: `archlab 1.0
 title "Broken"
 
 @context ctx-root "Broken"
@@ -684,7 +684,7 @@ title "Broken"
   {
     id: "error-bad-indentation",
     title: "Indentation that is not 0, 2 or 4 spaces",
-    code: `archflow 1.0
+    code: `archlab 1.0
 title "Broken"
 
 @context ctx-root "Broken"
@@ -700,7 +700,7 @@ title "Broken"
   {
     id: "error-missing-node",
     title: "An edge whose endpoint is not a node in this diagram",
-    code: `archflow 1.0
+    code: `archlab 1.0
 title "Broken"
 
 @context ctx-root "Broken"
@@ -718,7 +718,7 @@ title "Broken"
   {
     id: "error-trailing-comment",
     title: "A trailing comment — comments must be full lines",
-    code: `archflow 1.0
+    code: `archlab 1.0
 title "Broken" // not allowed here
 `,
     expected: {
@@ -730,7 +730,7 @@ title "Broken" // not allowed here
   {
     id: "error-unterminated-string",
     title: "A string that is never closed",
-    code: `archflow 1.0
+    code: `archlab 1.0
 title "Broken"
 
 @context ctx-root "Broken
@@ -745,7 +745,7 @@ title "Broken"
   {
     id: "error-missing-title",
     title: "A file without a title",
-    code: `archflow 1.0
+    code: `archlab 1.0
 
 @context ctx-root "Untitled"
 `,

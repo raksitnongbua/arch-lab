@@ -1,6 +1,6 @@
 import type { C4Level } from "@/types";
 
-export const APP_NAME = "arch-flow";
+export const APP_NAME = "arch-lab";
 
 /* -------------------------------------------------------------------------- */
 /* Feature flags                                                               */
@@ -43,7 +43,7 @@ export type Theme = (typeof THEMES)[number];
 export const DEFAULT_THEME: Theme = "dark";
 
 /** localStorage key next-themes persists the choice under. */
-export const THEME_STORAGE_KEY = "arch-flow-theme";
+export const THEME_STORAGE_KEY = "arch-lab-theme";
 
 /* -------------------------------------------------------------------------- */
 /* C4 level presentation                                                       */

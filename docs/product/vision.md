@@ -1,4 +1,4 @@
-# arch-flow — Product Vision
+# arch-lab — Product Vision
 
 > One page. If a decision elsewhere in `docs/product/` contradicts this page, this page wins.
 
@@ -13,7 +13,7 @@ Architecture diagrams rot. Teams draw them once in draw.io, Miro, or Lucidchart,
 
 ## The product
 
-**arch-flow is a browser-based C4 model editor: draw.io's directness with Structurizr's model discipline, saving to a plain JSON file in your repo.**
+**arch-lab is a browser-based C4 model editor: draw.io's directness with Structurizr's model discipline, saving to a plain JSON file in your repo.**
 
 You place nodes on a real canvas — drag, drop, snap, connect, rename inline. But you are editing a *model*, not shapes: every node knows which C4 level it belongs to, and clicking a node **drills into that node's own child diagram** — Context → Container → Component → Code — with a breadcrumb to climb back out. The whole model saves to one human-readable JSON file on local disk that you commit next to your code.
 

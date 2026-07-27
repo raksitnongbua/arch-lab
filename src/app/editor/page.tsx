@@ -17,14 +17,14 @@ import { buttonClasses } from "@/components/ui/button";
  *   import { EditorShell } from "@/features/editor";
  *   export default function EditorPage() { return <EditorShell />; }
  *
- * (metadata below reverts to: title "Editor", description "The arch-flow C4
+ * (metadata below reverts to: title "Editor", description "The arch-lab C4
  * canvas — draw your system, drill from Context to Code.")
  */
 
 export const metadata: Metadata = {
   title: "Editor — coming soon",
   description:
-    "The arch-flow C4 editor is coming soon. Explore the read-only demo models, or paste your own model into view mode today.",
+    "The arch-lab C4 editor is coming soon. Explore the read-only demo models, or paste your own model into view mode today.",
 };
 
 export default function EditorPage(): React.JSX.Element {
@@ -64,7 +64,7 @@ export default function EditorPage(): React.JSX.Element {
 
         <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
           Have an{" "}
-          <span className="font-mono text-foreground">.archflow.json</span> file
+          <span className="font-mono text-foreground">.archlab.json</span> file
           or Mermaid C4 code already? View mode renders it read-only, right in
           your browser — nothing is uploaded.
         </p>

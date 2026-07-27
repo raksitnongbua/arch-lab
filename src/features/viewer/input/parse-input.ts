@@ -1,14 +1,14 @@
 /**
  * Parsing pasted model text — either format — into the one viewer model,
- * through the REAL readers only: arch-flow JSON goes through the editor's
+ * through the REAL readers only: arch-lab JSON goes through the editor's
  * `deserializeModel` (full schema validation, JSON-path errors) and Mermaid
  * C4 goes through `parseMermaidC4` (line/column errors). Nothing is parsed
  * with a bespoke parser, and nothing leaves the browser.
  *
  * A successful parse carries every representation the UI needs:
  *   - `model`     — the `ViewerModel` the canvas renders;
- *   - `file`      — the `ArchFlowFile`, for Mermaid emission per diagram;
- *   - `jsonText`  — canonical `.archflow.json` text via the editor's real
+ *   - `file`      — the `ArchLabFile`, for Mermaid emission per diagram;
+ *   - `jsonText`  — canonical `.archlab.json` text via the editor's real
  *                   deterministic serializer (the "convert to code" output
  *                   when the input was Mermaid).
  *
@@ -17,7 +17,7 @@
  * offending line so the UI can point at the exact character.
  */
 
-import type { ArchFlowFile } from "@/types";
+import type { ArchLabFile } from "@/types";
 
 import { deserializeModel } from "@/features/editor/io/deserialize";
 import { serializeModel } from "@/features/editor/io/serialize";
@@ -48,8 +48,8 @@ export interface PastedModel {
   /** What the canvas renders. */
   model: ViewerModel;
   /** The validated file — the source for per-diagram Mermaid emission. */
-  file: ArchFlowFile;
-  /** Canonical `.archflow.json` text (editor's deterministic serializer). */
+  file: ArchLabFile;
+  /** Canonical `.archlab.json` text (editor's deterministic serializer). */
   jsonText: string;
 }
 
@@ -96,8 +96,8 @@ const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   "diagrams",
 ]);
 
-/** `ArchFlowFile` (diagrams as array) → `EditorModel` (diagrams keyed). */
-function editorModelFromFile(file: ArchFlowFile): EditorModel {
+/** `ArchLabFile` (diagrams as array) → `EditorModel` (diagrams keyed). */
+function editorModelFromFile(file: ArchLabFile): EditorModel {
   const diagrams: EditorModel["diagrams"] = {};
   for (const diagram of file.diagrams) diagrams[diagram.id] = diagram;
   const unknownFields: Record<string, unknown> = {};
@@ -113,9 +113,9 @@ function editorModelFromFile(file: ArchFlowFile): EditorModel {
   };
 }
 
-/** `EditorModel` → `ArchFlowFile`, unknown fields re-attached verbatim. */
-export function fileFromEditorModel(editorModel: EditorModel): ArchFlowFile {
-  const file: ArchFlowFile = {
+/** `EditorModel` → `ArchLabFile`, unknown fields re-attached verbatim. */
+export function fileFromEditorModel(editorModel: EditorModel): ArchLabFile {
+  const file: ArchLabFile = {
     version: editorModel.version,
     metadata: editorModel.metadata,
     rootDiagramId: editorModel.rootDiagramId,
@@ -167,7 +167,7 @@ export function parsePastedText(
         kind: "unknown-format",
         message:
           text.trim() === ""
-            ? "Nothing to render yet — paste an arch-flow JSON document or Mermaid C4 code first."
+            ? "Nothing to render yet — paste an arch-lab JSON document or Mermaid C4 code first."
             : "Could not detect the format: the first line neither opens a JSON object ({…}) nor starts with a Mermaid C4 header (C4Context, C4Container, C4Component, C4Dynamic, C4Deployment). Pick the format explicitly if this is intentional.",
       },
     };
@@ -230,13 +230,13 @@ export function parsePastedText(
   }
 }
 
-/** Canonical `.archflow.json` text for a validated file. */
-export function canonicalJsonText(file: ArchFlowFile): string {
+/** Canonical `.archlab.json` text for a validated file. */
+export function canonicalJsonText(file: ArchLabFile): string {
   return serializeModel(editorModelFromFile(file));
 }
 
 /** The `ViewerModel` the canvas renders, straight from a validated file. */
-export function viewerModelFromFile(file: ArchFlowFile): ViewerModel {
+export function viewerModelFromFile(file: ArchLabFile): ViewerModel {
   return viewerModelFromEditorModel(editorModelFromFile(file));
 }
 
@@ -246,7 +246,7 @@ export function viewerModelFromFile(file: ArchFlowFile): ViewerModel {
  * the UI names which diagram this text describes.
  */
 export function mermaidTextForDiagram(
-  file: ArchFlowFile,
+  file: ArchLabFile,
   diagramId: string,
 ): string {
   return serializeMermaidC4(file, { diagramId });

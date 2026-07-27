@@ -1,6 +1,6 @@
 /**
  * Text codecs shared by the parser and the emitter. Mermaid C4 labels carry
- * line breaks as `<br/>` (or `<br>` / `<br />`); the arch-flow model stores
+ * line breaks as `<br/>` (or `<br>` / `<br />`); the arch-lab model stores
  * real newlines. Quotes travel as `\"` inside Mermaid strings.
  *
  * Imported by `scripts/mermaid-check.mjs` through Node's type stripping:

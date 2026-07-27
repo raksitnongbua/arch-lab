@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * arch-flow text format (`.aft`) ⇄ JSON check. Follows the pattern of
+ * arch-lab text format (`.aft`) ⇄ JSON check. Follows the pattern of
  * `scripts/roundtrip-check.mjs` and `scripts/mermaid-check.mjs`: loads the
  * REAL library from `src/features/archtext/**` (and the editor's real
  * deserializer/serializer/validator) via Node's built-in TypeScript type
@@ -18,7 +18,7 @@
  *      `deserialize.ts` and `serialize.ts`.
  *   3. Unknown forward-compatible fields survive a full JSON → text → JSON
  *      round trip verbatim and in position.
- *   4. Every emitted model passes the editor's `validateArchFlowFile`
+ *   4. Every emitted model passes the editor's `validateArchLabFile`
  *      unchanged, and every node type is legal at its diagram's level.
  *   5. A set of malformed inputs each fail with an ArchTextParseError
  *      naming a line and column (and the parse is all-or-nothing).
@@ -73,7 +73,7 @@ const { deserializeModel } = await import(
 const { serializeModel } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/serialize.ts")).href
 );
-const { validateArchFlowFile } = await import(
+const { validateArchLabFile } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/validate.ts")).href
 );
 const { isNodeTypeValidAtLevel } = await import(
@@ -117,7 +117,7 @@ function firstDiff(a, b) {
 
 function checkValid(label, file) {
   try {
-    validateArchFlowFile(JSON.parse(JSON.stringify(file)));
+    validateArchLabFile(JSON.parse(JSON.stringify(file)));
     const legal = file.diagrams.every((d) =>
       d.nodes.every((n) => isNodeTypeValidAtLevel(n.type, d.level)),
     );
@@ -127,7 +127,7 @@ function checkValid(label, file) {
   }
 }
 
-/** Rebuilds an ArchFlowFile from the editor's EditorModel, key order intact. */
+/** Rebuilds an ArchLabFile from the editor's EditorModel, key order intact. */
 function fileFromModel(model) {
   const file = {};
   if (typeof model.unknownFields.$schema === "string") {
@@ -149,7 +149,7 @@ function fileFromModel(model) {
 
 console.log("the user's reference sample");
 
-const USER_SAMPLE = `archflow 1.0
+const USER_SAMPLE = `archlab 1.0
 title "ShopFlow Platform"
 
 @context ctx-root "ShopFlow Platform"
@@ -257,8 +257,8 @@ check(
 
 console.log("kitchen sink (every model field)");
 
-const KITCHEN_SINK = `archflow 1.0
-schema "https://arch-flow.dev/schema/v1/diagram.schema.json"
+const KITCHEN_SINK = `archlab 1.0
+schema "https://arch-lab.dev/schema/v1/diagram.schema.json"
 title "Kitchen Sink"
 description "Exercises every field of the model."
 owner "Platform Team"
@@ -270,7 +270,7 @@ tagcolor payments "#e11d48"
 tagcolor "weird tag" "#0ea5e9"
 customicon warehouse "Warehouse" "<svg viewBox=\\"0 0 24 24\\"/>"
 ! meta.customIcons.warehouse.x-license after svg : "MIT"
-generator "arch-flow" "0.1.0"
+generator "arch-lab" "0.1.0"
 ! meta.generator.x-build after version : 42
 ! meta.x-review after updatedAt : {"cycle":30}
 root d-ctx-a
@@ -285,7 +285,7 @@ root d-ctx-a
     desc "Says \\"hello\\" on line one.\\nLine two."
     ! x-node-meta after name : [1,2]
     ! position.x-anchor after y : "se"
-  ext-b:external "Billing SaaS" >>"./billing.archflow.json"
+  ext-b:external "Billing SaaS" >>"./billing.archlab.json"
   sys-a:system "Kitchen System" @service~ [Go 1.22 / chi] #core #vip >d-cnt-a pin (320,48 480x128)
 
   alice -> sys-a : "Uses" [HTTPS]
@@ -353,11 +353,11 @@ check(
 check(
   "generator + its unknown field survive",
   JSON.stringify(sink.metadata.generator) ===
-    '{"name":"arch-flow","version":"0.1.0","x-build":42}',
+    '{"name":"arch-lab","version":"0.1.0","x-build":42}',
 );
 check(
   "$schema, explicit root and top-level unknown field survive",
-  sink.$schema === "https://arch-flow.dev/schema/v1/diagram.schema.json" &&
+  sink.$schema === "https://arch-lab.dev/schema/v1/diagram.schema.json" &&
     sink.rootDiagramId === "d-ctx-a" &&
     JSON.stringify(sink["x-pipeline"]) === '{"stage":"prod"}',
 );
@@ -399,7 +399,7 @@ check(
   "childDiagramId, explicit >null and childRef all survive",
   sysA?.childDiagramId === "d-cnt-a" &&
     dbA?.childDiagramId === null &&
-    extB?.childRef === "./billing.archflow.json",
+    extB?.childRef === "./billing.archlab.json",
 );
 check(
   "externalRef placeholder survives",
@@ -462,7 +462,7 @@ console.log("JSON → text → JSON (both committed example models)");
 
 for (const name of ["shopflow", "order-shop"]) {
   const raw = readFileSync(
-    path.join(ROOT, `src/features/viewer/service/data/${name}.archflow.json`),
+    path.join(ROOT, `src/features/viewer/service/data/${name}.archlab.json`),
     "utf8",
   );
   const model = deserializeModel(raw);
@@ -508,7 +508,7 @@ function insertAfter(obj, anchor, key, value) {
 
 {
   const raw = readFileSync(
-    path.join(ROOT, "src/features/viewer/service/data/shopflow.archflow.json"),
+    path.join(ROOT, "src/features/viewer/service/data/shopflow.archlab.json"),
     "utf8",
   );
   let mutated = JSON.parse(raw);
@@ -619,18 +619,18 @@ function expectParseError(label, source, expectFragment) {
   );
 }
 
-const OK_HEAD = 'archflow 1.0\ntitle "T"\n';
+const OK_HEAD = 'archlab 1.0\ntitle "T"\n';
 
-expectParseError("empty source is refused", "", "archflow");
+expectParseError("empty source is refused", "", "archlab");
 expectParseError(
-  "a file not starting with archflow is refused",
+  "a file not starting with archlab is refused",
   'title "T"\n',
-  'must start with an "archflow',
+  'must start with an "archlab',
 );
 expectParseError(
   "a newer major version is refused",
-  'archflow 2.0\ntitle "T"\n@context d "C"\n',
-  "newer arch-flow",
+  'archlab 2.0\ntitle "T"\n@context d "C"\n',
+  "newer arch-lab",
 );
 expectParseError(
   "bad indentation (3 spaces) is refused",
@@ -689,7 +689,7 @@ expectParseError(
 );
 expectParseError(
   "a missing file title is refused",
-  'archflow 1.0\n@context d "C"\n',
+  'archlab 1.0\n@context d "C"\n',
   "no title",
 );
 expectParseError(
@@ -719,12 +719,12 @@ expectParseError(
 );
 expectParseError(
   "a ! line for a field with dedicated syntax is refused",
-  `archflow 1.0\ntitle "T"\n! version : "9.9"\n@context d "C"\n`,
+  `archlab 1.0\ntitle "T"\n! version : "9.9"\n@context d "C"\n`,
   '"version" has dedicated syntax',
 );
 expectParseError(
   "a duplicate ! line for the same unknown key is refused",
-  `archflow 1.0\ntitle "T"\n! x-a : 1\n! x-a : 2\n@context d "C"\n`,
+  `archlab 1.0\ntitle "T"\n! x-a : 1\n! x-a : 2\n@context d "C"\n`,
   'duplicate "!" line',
 );
 expectParseError(

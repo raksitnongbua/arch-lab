@@ -46,7 +46,7 @@ let store: UseStore | null = null;
 
 function getStore(): UseStore | null {
   if (typeof indexedDB === "undefined") return null;
-  store ??= createStore("arch-flow", "drafts");
+  store ??= createStore("arch-lab", "drafts");
   return store;
 }
 
@@ -67,7 +67,7 @@ function isDraftRecord(value: unknown): value is DraftRecord {
 }
 
 function warn(operation: string, error: unknown): void {
-  console.warn(`arch-flow draft ${operation} failed`, error);
+  console.warn(`arch-lab draft ${operation} failed`, error);
 }
 
 /* -------------------------------------------------------------------------- */

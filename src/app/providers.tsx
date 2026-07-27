@@ -7,7 +7,7 @@ import { DEFAULT_THEME, THEMES, THEME_STORAGE_KEY } from "@/lib/constants";
 /**
  * Client-side providers, mounted once in the root layout.
  *
- * `enableSystem={false}` is deliberate: arch-flow is dark by default because
+ * `enableSystem={false}` is deliberate: arch-lab is dark by default because
  * that is the right canvas for diagram work (AF-E6-S1), not because the OS
  * happens to be dark. Light stays one click away.
  *

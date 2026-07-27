@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * `/view/new` — the live two-pane editor: arch-flow text (`.aft`) and
- * arch-flow JSON side by side over the rendered diagram. Two views, one
+ * `/view/new` — the live two-pane editor: arch-lab text (`.aft`) and
+ * arch-lab JSON side by side over the rendered diagram. Two views, one
  * model — edit either pane and the other follows.
  *
  * Sync mechanics (the correctness story):
@@ -69,7 +69,7 @@ import { ViewerShell } from "./viewer-shell";
  */
 const SYNC_DEBOUNCE_MS = 300;
 
-const JSON_EXTENSION = ".archflow.json";
+const JSON_EXTENSION = ".archlab.json";
 
 interface PendingEdit {
   pane: PaneId;
@@ -328,9 +328,9 @@ export function ViewerPlayground(): React.JSX.Element {
         <p className="mt-3 leading-relaxed text-muted-foreground">
           The same model in two languages:{" "}
           <span className="font-mono text-sm text-foreground">.aft</span>{" "}
-          arch-flow text and{" "}
+          arch-lab text and{" "}
           <span className="font-mono text-sm text-foreground">
-            .archflow.json
+            .archlab.json
           </span>
           . Edit either pane and the other regenerates as you type — both are
           lossless, so nothing is dropped in either direction. Mermaid C4 can be
@@ -448,7 +448,7 @@ export function ViewerPlayground(): React.JSX.Element {
           pane="aft"
           textareaId={aftPaneId}
           hintId={editingHintId}
-          heading="arch-flow text"
+          heading="arch-lab text"
           extension={ARCHTEXT_EXTENSION}
           filename={`${stem}${ARCHTEXT_EXTENSION}`}
           mime="text/plain"
@@ -463,7 +463,7 @@ export function ViewerPlayground(): React.JSX.Element {
           pane="json"
           textareaId={jsonPaneId}
           hintId={editingHintId}
-          heading="arch-flow JSON"
+          heading="arch-lab JSON"
           extension={JSON_EXTENSION}
           filename={`${stem}${JSON_EXTENSION}`}
           mime="application/json"

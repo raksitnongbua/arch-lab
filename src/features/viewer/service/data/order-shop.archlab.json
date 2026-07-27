@@ -1,5 +1,5 @@
 {
-  "$schema": "https://arch-flow.dev/schema/v1/diagram.schema.json",
+  "$schema": "https://arch-lab.dev/schema/v1/diagram.schema.json",
   "version": "1.0",
   "metadata": {
     "title": "Order Shop",
@@ -7,7 +7,7 @@
     "createdAt": "2026-07-27T00:00:00Z",
     "updatedAt": "2026-07-27T00:00:00Z",
     "generator": {
-      "name": "arch-flow",
+      "name": "arch-lab",
       "version": "0.1.0"
     }
   },

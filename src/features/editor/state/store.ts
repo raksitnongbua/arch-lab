@@ -21,7 +21,7 @@ import {
   childLevelOf,
   isNodeTypeValidAtLevel,
   VALID_NODE_TYPES_BY_LEVEL,
-  type ArchFlowMetadata,
+  type ArchLabMetadata,
   type C4Diagram,
   type C4Edge,
   type C4Level,
@@ -66,7 +66,7 @@ import {
 /** The model in memory. Diagrams keyed by id; serialized back to a sorted array. */
 export interface EditorModel {
   version: string;
-  metadata: ArchFlowMetadata;
+  metadata: ArchLabMetadata;
   rootDiagramId: string;
   diagrams: Record<string, C4Diagram>;
   /** Unknown top-level fields from a newer minor version, preserved verbatim. */
@@ -160,7 +160,7 @@ export interface EditorActions {
     patch: Partial<Pick<C4Diagram, "title" | "description">>,
     opts?: { coalesceKey?: string },
   ): void;
-  updateMetadata(patch: Partial<ArchFlowMetadata>): void;
+  updateMetadata(patch: Partial<ArchLabMetadata>): void;
 
   /** Creates the child diagram one level deeper and sets BOTH pointers. Throws MaxDepthError at `code`. */
   createChildDiagram(diagramId: string, nodeId: string): string; // child diagram id

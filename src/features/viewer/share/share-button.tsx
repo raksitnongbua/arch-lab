@@ -31,7 +31,7 @@ import { Check, Copy, Download, Share2 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import { ARCHTEXT_EXTENSION, serializeArchText } from "@/features/archtext";
-import type { ArchFlowFile, C4Diagram } from "@/types";
+import type { ArchLabFile, C4Diagram } from "@/types";
 
 import { fileStem } from "../export/download";
 import {
@@ -43,8 +43,7 @@ import {
 
 /** Where the model being viewed came from — decides what a share link is. */
 export type ShareSource =
-  | { kind: "bundled"; modelId: string }
-  | { kind: "payload"; file: ArchFlowFile };
+  { kind: "bundled"; modelId: string } | { kind: "payload"; file: ArchLabFile };
 
 type LinkState =
   | { status: "building" }
@@ -248,7 +247,7 @@ export function ViewerShareButton({
 
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
             {share.kind === "bundled"
-              ? "This model ships with arch-flow, so the plain page address is the whole link — short and clean, with nothing to embed and nothing about you in it."
+              ? "This model ships with arch-lab, so the plain page address is the whole link — short and clean, with nothing to embed and nothing about you in it."
               : "Nothing is uploaded: the model travels inside the link itself, compressed into the part after # — which browsers never send to any server."}
           </p>
 

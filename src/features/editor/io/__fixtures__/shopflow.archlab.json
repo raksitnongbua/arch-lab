@@ -1,5 +1,5 @@
 {
-  "$schema": "https://arch-flow.dev/schema/v1/diagram.schema.json",
+  "$schema": "https://arch-lab.dev/schema/v1/diagram.schema.json",
   "version": "1.0",
   "metadata": {
     "title": "ShopFlow Platform",
@@ -14,7 +14,7 @@
       "pci": "#f5a524"
     },
     "generator": {
-      "name": "arch-flow",
+      "name": "arch-lab",
       "version": "0.1.0"
     }
   },

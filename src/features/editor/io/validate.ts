@@ -1,5 +1,5 @@
 /**
- * Load-time validation of a parsed `.archflow.json` document (T3-A,
+ * Load-time validation of a parsed `.archlab.json` document (T3-A,
  * AF-E5-S2). Implements the eight HARD errors of
  * `docs/product/data-model.md` §"Validation rules (load-time)" — a file that
  * trips any of them is refused with the offending JSON path named. The
@@ -12,7 +12,7 @@
  */
 
 import { C4_LEVELS, childLevelOf, VALID_NODE_TYPES_BY_LEVEL } from "@/types";
-import type { ArchFlowFile, C4Level, C4NodeType } from "@/types";
+import type { ArchLabFile, C4Level, C4NodeType } from "@/types";
 
 /** The newest schema MAJOR this build can read and write ("1.x"). */
 export const SUPPORTED_MAJOR_VERSION = 1;
@@ -24,7 +24,7 @@ export interface ValidationIssue {
 }
 
 /**
- * Thrown by `validateArchFlowFile` / `deserializeModel`. The message is
+ * Thrown by `validateArchLabFile` / `deserializeModel`. The message is
  * user-presentable and always names the first offending JSON path; the full
  * list is on `issues`.
  */
@@ -91,13 +91,12 @@ const EDGE_STYLES: readonly string[] = ["solid", "dashed"];
  * hard errors. Returns the same object, typed, on success; throws
  * `FileValidationError` (never mutating the input) on any failure.
  */
-export function validateArchFlowFile(input: unknown): ArchFlowFile {
+export function validateArchLabFile(input: unknown): ArchLabFile {
   if (!isRecord(input)) {
     throw new FileValidationError([
       {
         path: "(file)",
-        message:
-          "the file is not a JSON object — is this an arch-flow diagram?",
+        message: "the file is not a JSON object — is this an arch-lab diagram?",
       },
     ]);
   }
@@ -119,8 +118,8 @@ export function validateArchFlowFile(input: unknown): ArchFlowFile {
       {
         path: "version",
         message:
-          `"${version}" was written by a newer arch-flow than this one, which supports up to ` +
-          `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-flow to open this file — opening it here ` +
+          `"${version}" was written by a newer arch-lab than this one, which supports up to ` +
+          `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-lab to open this file — opening it here ` +
           "would silently drop data it cannot understand.",
       },
     ]);
@@ -549,5 +548,5 @@ export function validateArchFlowFile(input: unknown): ArchFlowFile {
   if (issues.length > 0) {
     throw new FileValidationError(issues);
   }
-  return input as ArchFlowFile;
+  return input as ArchLabFile;
 }

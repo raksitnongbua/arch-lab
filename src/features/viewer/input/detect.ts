@@ -4,7 +4,7 @@
  *
  * The heuristic reads the first meaningful line only:
  *   - a document whose first non-blank, non-comment character is `{` is
- *     arch-flow JSON;
+ *     arch-lab JSON;
  *   - a document whose first word is one of Mermaid's C4 diagram headers
  *     (`C4Context`, `C4Container`, …) is Mermaid C4 code;
  *   - anything else is unrecognised — the caller asks the user to choose.
@@ -19,7 +19,7 @@ export type PastedFormat = "json" | "mermaid";
 export type FormatChoice = "auto" | PastedFormat;
 
 export const FORMAT_LABEL: Record<PastedFormat, string> = {
-  json: "arch-flow JSON",
+  json: "arch-lab JSON",
   mermaid: "Mermaid C4",
 };
 

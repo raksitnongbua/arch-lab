@@ -27,7 +27,7 @@ export function useDocumentTitle(): void {
   }, []);
 
   useEffect(() => {
-    const base = `${title} — arch-flow`;
+    const base = `${title} — arch-lab`;
     document.title = isDirty ? `• ${base}` : base;
   }, [isDirty, title]);
 }

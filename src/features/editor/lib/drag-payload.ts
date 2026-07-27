@@ -3,7 +3,7 @@
  *
  * WIRE FORMAT — FROZEN. `canvas.tsx` (Batch-1 final) could not import this
  * file and still build in Batch 1, so its `onDrop` inlines the exact same
- * format: MIME `application/x-arch-flow-node-type` carrying JSON
+ * format: MIME `application/x-arch-lab-node-type` carrying JSON
  * `{ "nodeType": C4NodeType, "level": C4Level }`. Any change here silently
  * breaks palette drops — keep the encoder byte-compatible with
  * `readPaletteDrag` in `components/canvas.tsx`.
@@ -16,7 +16,7 @@ import {
   type C4NodeType,
 } from "@/types";
 
-export const PALETTE_DRAG_MIME = "application/x-arch-flow-node-type";
+export const PALETTE_DRAG_MIME = "application/x-arch-lab-node-type";
 
 export interface PaletteDragPayload {
   nodeType: C4NodeType;

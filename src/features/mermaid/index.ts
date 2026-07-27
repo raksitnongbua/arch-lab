@@ -1,12 +1,12 @@
 /**
- * Mermaid C4 ⇄ arch-flow converter — public API.
+ * Mermaid C4 ⇄ arch-lab converter — public API.
  *
  * A pure, dependency-free, framework-agnostic library:
  *
- *   - `parseMermaidC4(source, options?)` — Mermaid C4 code → `ArchFlowFile`
+ *   - `parseMermaidC4(source, options?)` — Mermaid C4 code → `ArchLabFile`
  *     (validator-clean, deterministic layout). Throws `MermaidParseError`
  *     with line/column on malformed input.
- *   - `serializeMermaidC4(file, options?)` — `ArchFlowFile` → Mermaid C4
+ *   - `serializeMermaidC4(file, options?)` — `ArchLabFile` → Mermaid C4
  *     code for one diagram (default: the diagram the source described).
  *
  * Both the viewer and the editor consume this feature only through this

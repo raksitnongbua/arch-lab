@@ -1,4 +1,4 @@
-# arch-flow — Epics & User Stories
+# arch-lab — Epics & User Stories
 
 **Story ID format:** `AF-E<epic>-S<story>`
 **Priority:** MoSCoW — Must (MVP-blocking), Should (important, ship soon after), Could (nice, unscheduled), Won't (explicitly out for now)
@@ -149,7 +149,7 @@ The draw.io-grade table stakes. If this epic is mediocre, nothing else matters �
 
 ## E2 · C4 Hierarchy & Drill-down Navigation
 
-The differentiator. This is why arch-flow is not draw.io.
+The differentiator. This is why arch-lab is not draw.io.
 
 ### AF-E2-S1 · Four-level model with a level-aware canvas
 **As an** Architect, **I want** the editor to know which C4 level I'm on, **so that** each view stays at a consistent altitude and I can't accidentally mix a database table into a Context diagram.
@@ -352,7 +352,7 @@ Because we're editing a model, not shapes.
 **As an** Author, **I want** to save to a real file on disk, **so that** I can commit the diagram next to the code it describes.
 
 **Acceptance criteria**
-- **Given** unsaved changes, **when** I press `Cmd/Ctrl+S`, **then** the whole multi-level model writes to a single `.archflow.json` file; the unsaved indicator clears and the timestamp updates.
+- **Given** unsaved changes, **when** I press `Cmd/Ctrl+S`, **then** the whole multi-level model writes to a single `.archlab.json` file; the unsaved indicator clears and the timestamp updates.
 - **Given** the first save of a new diagram, **then** the OS file-save dialog appears with a name derived from the diagram title.
 - **Given** a subsequent save, **then** it writes to the same handle with **no dialog**.
 - **Given** the file is written, **then** JSON is pretty-printed at 2-space indent with **deterministic key order** and **sorted collections**, so identical models always produce identical bytes.
@@ -366,7 +366,7 @@ Because we're editing a model, not shapes.
 
 **Acceptance criteria**
 - **Given** the app, **when** I choose Open (or `Cmd/Ctrl+O`) and pick a valid file, **then** all levels load, the Context level renders fit-to-view, and the breadcrumb shows the root.
-- **Given** I drag a `.archflow.json` file onto the app window, **then** it opens the same way.
+- **Given** I drag a `.archlab.json` file onto the app window, **then** it opens the same way.
 - **Given** unsaved changes when opening another file, **then** I am prompted to save, discard, or cancel.
 - **Given** an invalid or corrupt file, **then** a readable error names the problem and, where possible, the JSON path (e.g. `nodes[3].type: "servcie" is not a valid node type`) — the app does not crash or half-load.
 - **Given** a file whose `version` is newer than this app supports, **then** the app refuses to open it read-write and explains that an upgrade is needed, rather than silently dropping unknown fields.
@@ -556,10 +556,10 @@ Because we're editing a model, not shapes.
 **Priority:** Could · **Size:** M
 
 ### AF-E8-S3 · Import from Structurizr JSON
-**As an** Architect **with an existing Structurizr workspace, I want** to import it, **so that** adopting arch-flow isn't a re-draw from scratch.
+**As an** Architect **with an existing Structurizr workspace, I want** to import it, **so that** adopting arch-lab isn't a re-draw from scratch.
 
 **Acceptance criteria**
-- **Given** a Structurizr workspace JSON, **when** I import it, **then** software systems, containers, components, people, and relationships map to arch-flow nodes/edges across the corresponding levels with parent/child links intact.
+- **Given** a Structurizr workspace JSON, **when** I import it, **then** software systems, containers, components, people, and relationships map to arch-lab nodes/edges across the corresponding levels with parent/child links intact.
 - **Given** the import completes, **then** a report lists what was mapped, what was approximated, and what was dropped.
 - **Given** no layout information in the source, **then** Tidy layout (AF-E1-S10) is applied so the result is immediately readable.
 
@@ -601,7 +601,7 @@ Ranked by how much they block work. Each names who should answer it.
 The File System Access API gives us true "save to a folder" but is Chromium-only. Options: (a) Chromium-only web app, document the limitation; (b) web app with graceful download/upload fallback elsewhere; (c) Tauri/Electron desktop app for universal real file access. This changes the MVP's technical foundation, not just a feature. **Recommendation: (b)** — Chromium-first with fallback, revisit (c) if design partners are on Safari/Firefox. *Owner: requester + tech lead.*
 
 **OQ-2 · Is git integration in the product, or purely external?** *(blocks E5/E8 scope)*
-"Diffable and git-friendly" is a schema property we deliver either way. But should arch-flow itself show diffs, blame, or branch state? A visual "what changed between these two versions" view is arguably the killer feature for maintainability — and is easily a whole epic. **Recommendation: out of MVP, prototype for v0.3.** *Owner: requester.*
+"Diffable and git-friendly" is a schema property we deliver either way. But should arch-lab itself show diffs, blame, or branch state? A visual "what changed between these two versions" view is arguably the killer feature for maintainability — and is easily a whole epic. **Recommendation: out of MVP, prototype for v0.3.** *Owner: requester.*
 
 **OQ-3 · Double-click: drill down or rename?** *(blocks AF-E1-S6 and AF-E2-S2 — small but user-visible)*
 draw.io users expect double-click to edit the label. C4 tool users expect it to drill in. AF-E2-S2 proposes conditional behaviour (drill if children exist, else rename), which is clever but potentially surprising. Alternative: double-click **always** renames; drilling is a dedicated affordance (badge click or `Cmd+↓`). **Recommendation: test both with 3 engineers before locking.** *Owner: design + requester.*

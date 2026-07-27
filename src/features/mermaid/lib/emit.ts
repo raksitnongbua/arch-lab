@@ -1,5 +1,5 @@
 /**
- * arch-flow model → Mermaid C4 code: the reverse of `toModel.ts`.
+ * arch-lab model → Mermaid C4 code: the reverse of `toModel.ts`.
  *
  * Emits one diagram of the file as a valid Mermaid C4 document — by default
  * the diagram the file's `x-mermaid.sourceDiagramId` points at (falling back
@@ -20,7 +20,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { ArchFlowFile, C4Diagram, C4Node } from "@/types";
+import type { ArchLabFile, C4Diagram, C4Node } from "@/types";
 
 import {
   BOUNDARY_FORM_BY_KIND,
@@ -42,11 +42,11 @@ export interface SerializeMermaidOptions {
 const INDENT = "    ";
 
 /**
- * Serializes one diagram of an arch-flow file to Mermaid C4 code.
+ * Serializes one diagram of an arch-lab file to Mermaid C4 code.
  * Pure: identical models always produce identical text.
  */
 export function serializeMermaidC4(
-  file: ArchFlowFile,
+  file: ArchLabFile,
   options?: SerializeMermaidOptions,
 ): string {
   const extension = readMermaidExtension(file);
@@ -154,7 +154,7 @@ export function serializeMermaidC4(
 
 /** Convenience overload target: emit a specific diagram object directly. */
 export function serializeDiagramToMermaid(
-  file: ArchFlowFile,
+  file: ArchLabFile,
   diagram: C4Diagram,
 ): string {
   return serializeMermaidC4(file, { diagramId: diagram.id });

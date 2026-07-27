@@ -51,7 +51,7 @@ const JSON_EXAMPLE_SOURCE = `C4Container
 `;
 
 /**
- * Canonical `.archflow.json` example text. Fixed timestamp (the converter's
+ * Canonical `.archlab.json` example text. Fixed timestamp (the converter's
  * deterministic default) so the seed is byte-stable across reloads.
  */
 export const JSON_EXAMPLE: string = canonicalJsonText(

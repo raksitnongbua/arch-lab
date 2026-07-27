@@ -1,6 +1,6 @@
 /**
  * Recursive-descent parser for Mermaid C4 source, producing a small AST
- * (`MermaidDocument`) that `toModel.ts` then converts into the arch-flow
+ * (`MermaidDocument`) that `toModel.ts` then converts into the arch-lab
  * model. Grammar (statements are newline-terminated):
  *
  *   document  := newline* diagramType statement*

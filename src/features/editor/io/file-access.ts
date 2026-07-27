@@ -61,13 +61,13 @@ function fsaWindow(): FileSystemAccessWindow {
 }
 
 /**
- * Compound extensions (".archflow.json") are rejected by the picker spec, so
- * the filter is plain ".json"; the ".archflow.json" convention lives in the
+ * Compound extensions (".archlab.json") are rejected by the picker spec, so
+ * the filter is plain ".json"; the ".archlab.json" convention lives in the
  * suggested/derived file name instead.
  */
 const PICKER_TYPES: FilePickerAcceptType[] = [
   {
-    description: "arch-flow diagram",
+    description: "arch-lab diagram",
     accept: { "application/json": [".json"] },
   },
 ];
@@ -134,7 +134,7 @@ export async function pickSaveHandle(
     return await picker({
       suggestedName,
       types: PICKER_TYPES,
-      id: "arch-flow",
+      id: "arch-lab",
     });
   } catch (error) {
     if (isPickerCancellation(error)) return null;
@@ -155,7 +155,7 @@ export async function pickOpenHandle(): Promise<FileSystemFileHandle | null> {
     const [handle] = await picker({
       types: PICKER_TYPES,
       multiple: false,
-      id: "arch-flow",
+      id: "arch-lab",
     });
     return handle ?? null;
   } catch (error) {
@@ -243,11 +243,11 @@ export function downloadTextFile(fileName: string, text: string): void {
 /* Naming                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/** `"ShopFlow Platform"` → `"shopflow-platform.archflow.json"` (AF-E5-S1). */
+/** `"ShopFlow Platform"` → `"shopflow-platform.archlab.json"` (AF-E5-S1). */
 export function deriveFileName(title: string): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `${slug === "" ? "untitled-model" : slug}.archflow.json`;
+  return `${slug === "" ? "untitled-model" : slug}.archlab.json`;
 }

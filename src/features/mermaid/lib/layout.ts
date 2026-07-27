@@ -1,6 +1,6 @@
 /**
  * Deterministic layered layout for parsed Mermaid diagrams. Mermaid code
- * carries no coordinates, but arch-flow nodes require `position`/`size`, so
+ * carries no coordinates, but arch-lab nodes require `position`/`size`, so
  * the parser lays nodes out here.
  *
  * Algorithm — longest-path layering by relationship direction:

@@ -1,5 +1,5 @@
 /**
- * `.aft` text → `ArchFlowFile`. A line-structured recursive-descent parser:
+ * `.aft` text → `ArchLabFile`. A line-structured recursive-descent parser:
  * the source is split into lines, each line is tokenized by a `LineCursor`,
  * significant indentation (0 = header/diagram, 2 = diagram body, 4 = node/
  * edge continuation, always spaces) selects the grammar production, and a
@@ -9,7 +9,7 @@
  *
  * Every failure throws `ArchTextParseError` naming a 1-based line and
  * column; a parse is all-or-nothing. Successful parses produce models that
- * pass the editor's `validateArchFlowFile` unchanged.
+ * pass the editor's `validateArchLabFile` unchanged.
  *
  * Imported by `scripts/archtext-check.mjs` through Node's type stripping:
  * keep the syntax erasable and type-only imports as `import type`.
@@ -17,7 +17,7 @@
 
 import { C4_LEVELS, VALID_NODE_TYPES_BY_LEVEL } from "@/types";
 import type {
-  ArchFlowFile,
+  ArchLabFile,
   C4Level,
   C4NodeType,
   EdgeDirection,
@@ -285,11 +285,11 @@ function segString(segment: PathSegment, what: string): string {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Parses `.aft` source into an `ArchFlowFile`. Pure and deterministic; the
- * result passes the editor's `validateArchFlowFile` unchanged. Throws
+ * Parses `.aft` source into an `ArchLabFile`. Pure and deterministic; the
+ * result passes the editor's `validateArchLabFile` unchanged. Throws
  * `ArchTextParseError` (line + column) on any problem — all-or-nothing.
  */
-export function parseArchText(source: string): ArchFlowFile {
+export function parseArchText(source: string): ArchLabFile {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -343,15 +343,15 @@ export function parseArchText(source: string): ArchFlowFile {
     /* --------------------------- first content line ---------------------- */
     if (!seenContent) {
       seenContent = true;
-      if (indent !== 0 || !text.startsWith("archflow ")) {
+      if (indent !== 0 || !text.startsWith("archlab ")) {
         failAt(
           lineNo,
           indent + 1,
-          'the file must start with an "archflow <version>" line, e.g. archflow 1.0',
+          'the file must start with an "archlab <version>" line, e.g. archlab 1.0',
           text.trim().slice(0, 40),
         );
       }
-      cursor.pos += "archflow".length;
+      cursor.pos += "archlab".length;
       cursor.skipSpaces();
       const versionLoc = { line: lineNo, column: cursor.column };
       const version = cursor.readBare(
@@ -364,8 +364,8 @@ export function parseArchText(source: string): ArchFlowFile {
         failAt(
           versionLoc.line,
           versionLoc.column,
-          `"${version}" was written by a newer arch-flow than this one, which supports up to ` +
-            `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-flow to open this file — opening it here ` +
+          `"${version}" was written by a newer arch-lab than this one, which supports up to ` +
+            `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-lab to open this file — opening it here ` +
             "would silently drop data it cannot understand.",
           version,
         );
@@ -428,7 +428,7 @@ export function parseArchText(source: string): ArchFlowFile {
   }
 
   if (!seenContent || header.version === undefined) {
-    failAt(1, 1, 'the file is empty — expected an "archflow <version>" line');
+    failAt(1, 1, 'the file is empty — expected an "archlab <version>" line');
   }
 
   return resolve(header, diagrams, diagramById, nodeHome);
@@ -453,9 +453,9 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
   const keyword = cursor.readBare(/^[a-z]+/, "a header keyword");
   cursor.skipSpaces();
   switch (keyword) {
-    case "archflow":
+    case "archlab":
       cursor.fail(
-        'duplicate "archflow" line — the version may only appear on line 1',
+        'duplicate "archlab" line — the version may only appear on line 1',
       );
       break;
     case "schema":
@@ -552,7 +552,7 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       failAt(
         loc.line,
         loc.column,
-        `"${keyword}" is not a recognised header keyword — expected archflow, schema, title, ` +
+        `"${keyword}" is not a recognised header keyword — expected archlab, schema, title, ` +
           "description, owner, tags, created, updated, reviewed, tagcolor, customicon, generator or root",
         keyword,
       );
@@ -1448,7 +1448,7 @@ function resolve(
   diagrams: PendingDiagram[],
   diagramById: Map<string, PendingDiagram>,
   nodeHome: Map<string, { diagram: PendingDiagram; node: PendingNode }>,
-): ArchFlowFile {
+): ArchLabFile {
   if (header.title === undefined && !header.metaRaw.has("title")) {
     failAt(1, 1, 'the file has no title — add a line like: title "My System"');
   }
@@ -1887,7 +1887,7 @@ function resolve(
   for (const pend of header.fileUnknowns) {
     file[pend.key] = pend.value;
   }
-  return file as ArchFlowFile;
+  return file as ArchLabFile;
 }
 
 function resolveParent(

@@ -1,6 +1,6 @@
 /**
- * AST → arch-flow model. Turns a parsed `MermaidDocument` into a complete
- * `ArchFlowFile` that satisfies the editor's load-time validator
+ * AST → arch-lab model. Turns a parsed `MermaidDocument` into a complete
+ * `ArchLabFile` that satisfies the editor's load-time validator
  * (`src/features/editor/io/validate.ts`) unchanged.
  *
  * Structural decisions (see the feature README for the full rationale):
@@ -13,12 +13,12 @@
  *     intermediate container diagram). `x-mermaid.sourceDiagramId` records
  *     which diagram the Mermaid code actually described.
  *
- *   - **Boundaries.** arch-flow has no first-class boundary container, so a
+ *   - **Boundaries.** arch-lab has no first-class boundary container, so a
  *     boundary becomes (a) a `boundary:<id>` tag on each member node naming
  *     its innermost boundary, and (b) an entry in the file-level
  *     `x-mermaid.boundaries[<diagramId>]` list carrying the boundary's id,
  *     label, kind and parent — the nesting tree. The `x-…` field rides on
- *     `ArchFlowFile`'s documented forward-tolerance index signature, so the
+ *     `ArchLabFile`'s documented forward-tolerance index signature, so the
  *     editor's serializer preserves it verbatim.
  *
  *   - **Determinism.** Everything (ids, layout, tag order) derives only from
@@ -29,7 +29,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { ArchFlowFile, C4Diagram, C4Edge, C4Node } from "@/types";
+import type { ArchLabFile, C4Diagram, C4Edge, C4Node } from "@/types";
 
 import { failAt } from "./errors";
 import { layoutNodes, NODE_SIZE } from "./layout";
@@ -48,7 +48,7 @@ import type {
 /* The x-mermaid extension field                                               */
 /* -------------------------------------------------------------------------- */
 
-/** Key of the converter's extension field on `ArchFlowFile`. */
+/** Key of the converter's extension field on `ArchLabFile`. */
 export const MERMAID_EXTENSION_KEY = "x-mermaid";
 
 export interface MermaidBoundary {
@@ -70,7 +70,7 @@ export interface MermaidExtension {
 
 /** Reads the extension field back off a file, tolerating its absence. */
 export function readMermaidExtension(
-  file: ArchFlowFile,
+  file: ArchLabFile,
 ): MermaidExtension | null {
   const raw: unknown = file[MERMAID_EXTENSION_KEY];
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
@@ -117,10 +117,10 @@ function compareById(a: { id: string }, b: { id: string }): number {
   return compareIds(a.id, b.id);
 }
 
-export function mermaidDocumentToArchFlow(
+export function mermaidDocumentToArchLab(
   doc: MermaidDocument,
   options?: ParseMermaidOptions,
-): ArchFlowFile {
+): ArchLabFile {
   const level = LEVEL_BY_DIAGRAM_TYPE[doc.diagramType];
   const timestamp = options?.timestamp ?? DEFAULT_TIMESTAMP;
 
@@ -190,7 +190,7 @@ export function mermaidDocumentToArchFlow(
       failAt(
         rel.line,
         rel.column,
-        `"${alias}" is a boundary, not an element — arch-flow relationships must connect two elements (Person, System, Container, …)`,
+        `"${alias}" is a boundary, not an element — arch-lab relationships must connect two elements (Person, System, Container, …)`,
         alias,
       );
     }
@@ -344,7 +344,7 @@ export function mermaidDocumentToArchFlow(
 
   /* -------------------------------- file --------------------------------- */
 
-  const file: ArchFlowFile = {
+  const file: ArchLabFile = {
     version: "1.0",
     metadata: {
       title: fileTitle,

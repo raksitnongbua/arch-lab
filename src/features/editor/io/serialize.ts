@@ -1,5 +1,5 @@
 /**
- * Deterministic serializer for `.archflow.json` (T3-A, AF-E5-S1).
+ * Deterministic serializer for `.archlab.json` (T3-A, AF-E5-S1).
  *
  * Implements the write-time determinism rules of `docs/product/data-model.md`
  * §"Determinism rules" exactly:
@@ -26,7 +26,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { ArchFlowMetadata } from "@/types";
+import type { ArchLabMetadata } from "@/types";
 import type { EditorModel } from "../state";
 
 /* -------------------------------------------------------------------------- */
@@ -313,15 +313,15 @@ const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
 
 /** Shallow copy preserving key insertion order, with `updatedAt` replaced. */
 function withUpdatedAt(
-  metadata: ArchFlowMetadata,
+  metadata: ArchLabMetadata,
   updatedAt: string,
-): ArchFlowMetadata {
+): ArchLabMetadata {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
     out[key] = key === "updatedAt" ? updatedAt : value;
   }
   if (!("updatedAt" in out)) out.updatedAt = updatedAt;
-  return out as unknown as ArchFlowMetadata;
+  return out as unknown as ArchLabMetadata;
 }
 
 export interface SerializeOptions {
@@ -334,7 +334,7 @@ export interface SerializeOptions {
 }
 
 /**
- * Serializes the in-memory model to canonical `.archflow.json` text.
+ * Serializes the in-memory model to canonical `.archlab.json` text.
  * Pure: identical models always produce identical bytes.
  */
 export function serializeModel(

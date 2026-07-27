@@ -1,13 +1,13 @@
 /**
- * arch-flow text format (`.aft`) — public API.
+ * arch-lab text format (`.aft`) — public API.
  *
  * A pure, dependency-free, framework-agnostic library (no DOM, no I/O):
  *
- *   - `parseArchText(source)` — `.aft` text → `ArchFlowFile`. The result
- *     passes the editor's `validateArchFlowFile` unchanged. Throws
+ *   - `parseArchText(source)` — `.aft` text → `ArchLabFile`. The result
+ *     passes the editor's `validateArchLabFile` unchanged. Throws
  *     `ArchTextParseError` with a 1-based line and column on malformed
  *     input; a parse is all-or-nothing.
- *   - `serializeArchText(file)` — `ArchFlowFile` → canonical `.aft` text.
+ *   - `serializeArchText(file)` — `ArchLabFile` → canonical `.aft` text.
  *     Deterministic (same model ⇒ byte-identical text) and lossless:
  *     `parseArchText(serializeArchText(file))` reproduces every field,
  *     including geometry, viewports, `realizes`, `externalRef`, `childRef`,

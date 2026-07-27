@@ -2,7 +2,7 @@
  * The viewer's model service — the single place view-mode gets models from.
  *
  * Every model lives here as hard-coded JSON in the persisted
- * `.archflow.json` format (see `docs/product/data-model.md`) and is parsed
+ * `.archlab.json` format (see `docs/product/data-model.md`) and is parsed
  * through the editor's REAL reader (`io/deserialize.ts`), never a bespoke
  * parser: the viewer renders anything that conforms to the file format, and
  * the ShopFlow demo is merely the first registered instance.
@@ -26,9 +26,9 @@ import {
 
 import type { ViewerModel } from "../lib/model";
 
-import atlasShopFile from "./data/atlas-shop.archflow.json";
-import orderShopFile from "./data/order-shop.archflow.json";
-import shopflowFile from "./data/shopflow.archflow.json";
+import atlasShopFile from "./data/atlas-shop.archlab.json";
+import orderShopFile from "./data/order-shop.archlab.json";
+import shopflowFile from "./data/shopflow.archlab.json";
 
 /* -------------------------------------------------------------------------- */
 /* Registry                                                                    */
@@ -38,7 +38,7 @@ interface ModelSource {
   /** Stable id — doubles as the `/view/[modelId]` route segment. */
   id: string;
   /**
-   * The raw `.archflow.json` document. Typed `unknown` on purpose: nothing
+   * The raw `.archlab.json` document. Typed `unknown` on purpose: nothing
    * downstream trusts its shape until `deserializeModel` has validated it.
    */
   document: unknown;

@@ -1,5 +1,5 @@
 /**
- * First-pass TypeScript sketch of the arch-flow saved-file format.
+ * First-pass TypeScript sketch of the arch-lab saved-file format.
  *
  * Source of truth: `docs/product/data-model.md` (schema v1, status: proposed).
  * These types intentionally mirror that document field-for-field, including its
@@ -188,7 +188,7 @@ export interface CustomIcon {
   svg: string;
 }
 
-export interface ArchFlowMetadata {
+export interface ArchLabMetadata {
   title: string;
   description?: string;
   /** Team or person accountable for accuracy. */
@@ -214,12 +214,12 @@ export interface ArchFlowMetadata {
  * round-trip; an unknown MAJOR version is refused read-write. That is why the
  * type carries an index signature escape hatch rather than being sealed.
  */
-export interface ArchFlowFile {
+export interface ArchLabFile {
   /** URL of the JSON Schema, for editor autocomplete. */
   $schema?: string;
   /** "MAJOR.MINOR". */
   version: string;
-  metadata: ArchFlowMetadata;
+  metadata: ArchLabMetadata;
   /** The Context-level diagram; the entry point. */
   rootDiagramId: string;
   /** Every diagram at every level, flat, sorted by `id`. */

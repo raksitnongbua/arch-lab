@@ -1,11 +1,11 @@
-# arch-flow text format (`.aft`)
+# arch-lab text format (`.aft`)
 
 A Mermaid-like, human-editable text format that is a **lossless,
-bidirectional** representation of the arch-flow JSON model. Text and JSON are
+bidirectional** representation of the arch-lab JSON model. Text and JSON are
 two views of one model: edit either, get the identical diagram, nothing
 dropped.
 
-- `parseArchText(source): ArchFlowFile` — throws `ArchTextParseError`
+- `parseArchText(source): ArchLabFile` — throws `ArchTextParseError`
   (`line <n>, column <n>: …`) on malformed input; all-or-nothing.
 - `serializeArchText(file): string` — deterministic and canonical; the same
   model always yields byte-identical text.
@@ -35,8 +35,8 @@ model data).
 ## Header
 
 ```
-archflow 1.0                                   // file version, must be line 1
-schema "https://arch-flow.dev/schema/v1/diagram.schema.json"
+archlab 1.0                                   // file version, must be line 1
+schema "https://arch-lab.dev/schema/v1/diagram.schema.json"
 title "ShopFlow Platform"                      // metadata.title (required)
 description "Customer-facing commerce platform."
 owner "Platform Team"
@@ -46,7 +46,7 @@ updated 2026-07-27T00:00:00Z                   // metadata.updatedAt
 reviewed 2026-07-20T00:00:00Z                  // metadata.lastReviewedAt
 tagcolor payments "#e11d48"                    // metadata.tagColors, one per line
 customicon warehouse "Warehouse" "<svg viewBox=\"0 0 24 24\"/>"
-generator "arch-flow" "0.1.0"
+generator "arch-lab" "0.1.0"
 root d-ctx-root                                // rootDiagramId (see defaults)
 ```
 
@@ -84,7 +84,7 @@ One line per node: `<id>:<type> "Name"` then attributes in any order
 | `[Go 1.22]` or `["weird ] tech"]`   | `technology`                              |
 | `#tag` or `#"weird tag"`            | `tags`                                    |
 | `>d-cmp-orders` / `>null`           | `childDiagramId` (drill-down)             |
-| `>>"./billing.archflow.json"`       | `childRef`                                |
+| `>>"./billing.archlab.json"`        | `childRef`                                |
 | `^d-cnt-shopflow/session-cache`     | `externalRef` (boundary placeholder)      |
 | `pin` / `pin=false`                 | `pinned`                                  |
 | `(x,y w×h)` e.g. `(656,616 176x88)` | `position` + `size`                       |

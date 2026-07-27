@@ -111,7 +111,7 @@ function firstDifference(a, b) {
 
 const FIXTURE_PATH = path.join(
   ROOT,
-  "src/features/editor/io/__fixtures__/shopflow.archflow.json",
+  "src/features/editor/io/__fixtures__/shopflow.archlab.json",
 );
 
 console.log("round-trip fidelity");
@@ -293,7 +293,7 @@ expectRefusal(
     for (const diagram of doc.diagrams) {
       for (const node of diagram.nodes) {
         if (typeof node.childDiagramId === "string") {
-          node.childRef = "./elsewhere.archflow.json";
+          node.childRef = "./elsewhere.archlab.json";
           return;
         }
       }

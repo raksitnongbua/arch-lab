@@ -1,4 +1,4 @@
-# arch-flow — Saved Diagram Data Model
+# arch-lab — Saved Diagram Data Model
 
 Status: **proposed**, v1 schema. Decisions marked ⚠️ depend on Open Questions in `user-stories.md`.
 
@@ -16,7 +16,7 @@ The file format is a product feature, not an implementation detail. It is optimi
 ## Top-level structure
 
 ```
-ArchFlowFile
+ArchLabFile
 ├── $schema        string   — URL of the JSON Schema, for editor autocomplete
 ├── version        string   — schema version, "MAJOR.MINOR"
 ├── metadata       object   — title, ownership, timestamps, custom icons, theme hint
@@ -39,7 +39,7 @@ The critical shape decision: **diagrams are stored flat, not nested.** A nested 
 | `lastReviewedAt` | string | | Set manually; drives the "review overdue" chip (AF-E5-S6) |
 | `tagColors` | object | | `{ "<tag>": "<hex>" }`, for AF-E3-S6 |
 | `customIcons` | object | | `{ "<slug>": { "name": string, "svg": string } }`, sanitised inline SVG (AF-E4-S4) |
-| `generator` | object | | `{ "name": "arch-flow", "version": "0.4.1" }`. Diagnostic only; never read for behaviour |
+| `generator` | object | | `{ "name": "arch-lab", "version": "0.4.1" }`. Diagnostic only; never read for behaviour |
 
 > `updatedAt` is the only field that changes on a no-op save, so it is the one field that breaks strict byte-identical round-trip. Resolution: **`updatedAt` is written only when the model actually changed.** A save with no edits is a no-op and touches nothing. This is what makes the 100% round-trip metric in the vision achievable.
 
@@ -148,7 +148,7 @@ A small e-commerce platform: Next.js web app behind Cloudflare and nginx → Kon
 
 ```json
 {
-  "$schema": "https://arch-flow.dev/schema/v1/diagram.schema.json",
+  "$schema": "https://arch-lab.dev/schema/v1/diagram.schema.json",
   "version": "1.0",
   "metadata": {
     "title": "ShopFlow Platform",
@@ -162,7 +162,7 @@ A small e-commerce platform: Next.js web app behind Cloudflare and nginx → Kon
       "pci": "#f5a524",
       "team-orders": "#7c5cff"
     },
-    "generator": { "name": "arch-flow", "version": "0.4.1" }
+    "generator": { "name": "arch-lab", "version": "0.4.1" }
   },
   "rootDiagramId": "d-ctx-root",
   "diagrams": [

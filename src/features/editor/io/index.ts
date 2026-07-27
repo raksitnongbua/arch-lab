@@ -12,7 +12,7 @@ export { deserializeModel } from "./deserialize";
 export {
   FileValidationError,
   SUPPORTED_MAJOR_VERSION,
-  validateArchFlowFile,
+  validateArchLabFile,
   type ValidationIssue,
 } from "./validate";
 export {

@@ -140,7 +140,7 @@ export function setContextMenu(value: ContextMenuTarget | null): void {
 /* the FROZEN wire format directly: MIME type + JSON `{ nodeType, level }`.    */
 /* -------------------------------------------------------------------------- */
 
-const PALETTE_DRAG_MIME = "application/x-arch-flow-node-type";
+const PALETTE_DRAG_MIME = "application/x-arch-lab-node-type";
 
 interface PaletteDragPayload {
   nodeType: C4NodeType;

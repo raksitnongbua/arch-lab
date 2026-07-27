@@ -1,4 +1,4 @@
-# arch-flow
+# arch-lab
 
 A **local-first workspace for architecture documentation**. C4 model diagrams
 today, with sequence diagrams, a data dictionary, and network diagrams planned.
@@ -16,7 +16,7 @@ Be precise about what this repo is right now:
 | Area                                                     | State                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Read-only C4 viewer**                                  | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Diagrams export as SVG or PNG (rasterised at 2×).                                                                              |
-| **View-mode playground** (`/view/new`)                   | Works today. A two-pane live editor for the two text formats — `.aft` on one side, `.archflow.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                |
+| **View-mode playground** (`/view/new`)                   | Works today. A two-pane live editor for the two text formats — `.aft` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                 |
 | **`.aft` ⇄ JSON conversion**                             | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                        |
 | **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                  |
 | **C4 editor**                                            | Feature-complete in the codebase but **gated off for this release** behind `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts). `/editor` renders a coming-soon page and the editor code is excluded from the deployed bundle. See [Enabling the editor](#enabling-the-editor). |
@@ -35,7 +35,7 @@ Be precise about what this repo is right now:
 
 ## The two model formats
 
-One model, two views. A model is stored as **`.archflow.json`** (the schema is
+One model, two views. A model is stored as **`.archlab.json`** (the schema is
 specified in [`docs/product/data-model.md`](docs/product/data-model.md)) or
 authored as **`.aft`** — a Mermaid-like, human-editable text format. Conversion
 between them is **lossless in both directions**: `pnpm check:archtext` proves
@@ -46,7 +46,7 @@ for both bundled example models.
 A valid `.aft` file:
 
 ```
-archflow 1.0
+archlab 1.0
 title "ShopFlow Platform"
 
 @context ctx-root "ShopFlow Platform"
@@ -81,7 +81,7 @@ import:
 - `SystemDb` / `SystemQueue` at Context level lose their database and queue
   styling.
 - `C4Dynamic` and `C4Deployment` map to the container level; call ordering and
-  deployment topology are not part of arch-flow's model.
+  deployment topology are not part of arch-lab's model.
 
 Everything else — names, descriptions, technologies, relationships, `<br/>`
 decoding, `_Ext` externality, `BiRel` bidirectionality — carries over.
@@ -129,7 +129,7 @@ run them before touching the formats or converters.
 ## Project structure
 
 ```
-arch-flow/
+arch-lab/
 ├── docs/product/              Product specs (vision, user stories, data model, roadmap, dev handoff)
 ├── public/                    Static assets
 ├── scripts/                   The check:* verification scripts
@@ -142,7 +142,7 @@ arch-flow/
     │   ├── archtext/          The .aft text format: parser + canonical serializer (see its README)
     │   ├── editor/            The full C4 canvas — built, currently gated (see its README)
     │   ├── marketing/         Landing-page hero diagram
-    │   ├── mermaid/           Mermaid C4 ⇄ arch-flow converter (pure, dependency-free)
+    │   ├── mermaid/           Mermaid C4 ⇄ arch-lab converter (pure, dependency-free)
     │   └── viewer/            Read-only viewer, /view/new playground, SVG/PNG export, model service
     ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy)
     └── types/                 C4 model types — mirrors docs/product/data-model.md

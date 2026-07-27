@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { SyntaxReference } from "@/features/syntax-docs";
 
 export const metadata: Metadata = {
-  title: "The .aft syntax — arch-flow text format reference",
+  title: "The .aft syntax — arch-lab text format reference",
   description:
-    "Reference for the .aft text format: a readable, Mermaid-like, lossless twin of .archflow.json. Header lines, diagrams, nodes, edges, unknown-field escapes, indentation rules and error format — every example verified against the real parser.",
+    "Reference for the .aft text format: a readable, Mermaid-like, lossless twin of .archlab.json. Header lines, diagrams, nodes, edges, unknown-field escapes, indentation rules and error format — every example verified against the real parser.",
 };
 
 /**

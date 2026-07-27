@@ -1,5 +1,5 @@
 /**
- * Error type for the arch-flow text (`.aft`) parser. Mirrors the shape and
+ * Error type for the arch-lab text (`.aft`) parser. Mirrors the shape and
  * tone of the editor's `FileValidationError` (src/features/editor/io/
  * validate.ts) and the Mermaid feature's `MermaidParseError`
  * (src/features/mermaid/lib/errors.ts) so the UI can treat all three

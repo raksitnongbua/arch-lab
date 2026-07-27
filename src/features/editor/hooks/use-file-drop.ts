@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Window-level drag-and-drop of a `.archflow.json` file (T3-A, AF-E5-S2).
+ * Window-level drag-and-drop of a `.archlab.json` file (T3-A, AF-E5-S2).
  *
  * Reads the dropped file's text and — where the browser supports
  * `DataTransferItem.getAsFileSystemHandle` (feature-detected, D2/R3) — also
@@ -62,7 +62,7 @@ export function useFileDrop(onFile: (file: DroppedFile) => void): void {
       if (file === null) {
         if (sawAnyFile) {
           toast({
-            message: "Drop a .archflow.json file to open it here.",
+            message: "Drop a .archlab.json file to open it here.",
             tone: "warning",
           });
         }

@@ -1,6 +1,6 @@
 /**
- * The two-pane sync engine for `/view/new`: arch-flow text (`.aft`) on one
- * side, arch-flow JSON on the other, one model behind both. Everything here
+ * The two-pane sync engine for `/view/new`: arch-lab text (`.aft`) on one
+ * side, arch-lab JSON on the other, one model behind both. Everything here
  * is a pure function over the REAL readers and writers — `parseArchText` /
  * `serializeArchText` from the archtext feature, `deserializeModel` /
  * `serializeModel` from the editor's io layer — so the panes can never
@@ -21,7 +21,7 @@
  * Nothing leaves the browser; both directions run entirely in memory.
  */
 
-import type { ArchFlowFile } from "@/types";
+import type { ArchLabFile } from "@/types";
 
 import {
   ArchTextParseError,
@@ -49,21 +49,21 @@ import {
 /* Shapes                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** The two live panes. `aft` is the arch-flow text; `json` the JSON. */
+/** The two live panes. `aft` is the arch-lab text; `json` the JSON. */
 export type PaneId = "aft" | "json";
 
 export const PANE_LABEL: Record<PaneId, string> = {
-  aft: "arch-flow text",
-  json: "arch-flow JSON",
+  aft: "arch-lab text",
+  json: "arch-lab JSON",
 };
 
 /** One successfully parsed model, in every representation the UI needs. */
 export interface SyncedModel {
-  file: ArchFlowFile;
+  file: ArchLabFile;
   model: ViewerModel;
   /** Canonical `.aft` text (deterministic archtext serializer). */
   aftText: string;
-  /** Canonical `.archflow.json` text (editor's deterministic serializer). */
+  /** Canonical `.archlab.json` text (editor's deterministic serializer). */
   jsonText: string;
 }
 
@@ -88,7 +88,7 @@ export interface JsonPaneErrorDetail {
 /**
  * The pane's content is recognisably Mermaid C4, which is an import — not a
  * sync format. The UI offers the one-way conversion instead of a parse
- * error that would mislead ("line 1: expected `archflow`").
+ * error that would mislead ("line 1: expected `archlab`").
  */
 export interface MermaidDetectedDetail {
   kind: "mermaid-detected";
@@ -124,7 +124,7 @@ function sourceLineAt(text: string, line: number): string | null {
   return text.split(/\r?\n/)[line - 1] ?? null;
 }
 
-function syncedFromFile(file: ArchFlowFile): SyncedModel {
+function syncedFromFile(file: ArchLabFile): SyncedModel {
   return {
     file,
     model: viewerModelFromFile(file),
@@ -241,7 +241,7 @@ export function importMermaid(source: string): MermaidImportResult {
  * dashed edges. Hand-written, then canonicalised through the real parser
  * and serializer at module load so it can never drift from the grammar.
  */
-const SEED_SOURCE = `archflow 1.0
+const SEED_SOURCE = `archlab 1.0
 title "Coffee Shop"
 description "A tiny two-level example — edit either pane and the other follows."
 tags #demo

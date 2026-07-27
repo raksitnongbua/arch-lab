@@ -1,4 +1,4 @@
-# arch-flow — Release Roadmap
+# arch-lab — Release Roadmap
 
 Slices are ordered by **risk retired per week**, not by feature count. Each release states plainly what is in, what is out, and what would make us stop and rethink.
 
@@ -49,7 +49,7 @@ OQ-3 (double-click semantics) and OQ-4 (what Level 4 is) should be answered in w
 - Sustained **≥55fps** pan/drag on a 150-node fixture.
 - Level transition completes in **≤400ms**; `prefers-reduced-motion` honoured.
 - Undo reverses 100% of model-changing actions in a scripted 40-action sequence.
-- The MVP's own architecture is documented *in arch-flow*, committed to this repo. If we won't dogfood it, it isn't ready.
+- The MVP's own architecture is documented *in arch-lab*, committed to this repo. If we won't dogfood it, it isn't ready.
 
 ### Stop-and-rethink signals
 
@@ -151,4 +151,4 @@ Three ordering choices worth defending:
 
 **Export is v0.2, not MVP.** Export feels essential but is genuinely replaceable by a screenshot for a few weeks. It also gets meaningfully cheaper once the renderer has settled, so building it early means building it twice.
 
-**Accessibility is v0.3, and named as debt.** Honest position: it isn't in MVP, and MVP is a validation artefact, not a public release. It is scheduled with exit criteria rather than left as a vague "later", because "later" is how accessibility becomes never. If arch-flow ships publicly before v0.3, this ordering must change.
+**Accessibility is v0.3, and named as debt.** Honest position: it isn't in MVP, and MVP is a validation artefact, not a public release. It is scheduled with exit criteria rather than left as a vague "later", because "later" is how accessibility becomes never. If arch-lab ships publicly before v0.3, this ordering must change.
