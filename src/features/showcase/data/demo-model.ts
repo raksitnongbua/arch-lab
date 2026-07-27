@@ -117,6 +117,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           label: "Authorises and captures payments",
           technology: "HTTPS/JSON",
           direction: "forward",
+          tags: ["payments", "pci-scope"],
         },
         {
           id: "e-shopflow-sendgrid",
@@ -133,6 +134,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           label: "Exports fulfilment batches, imports shipment status",
           technology: "SFTP",
           direction: "bidirectional",
+          tags: ["batch", "daily"],
         },
       ],
     }),
@@ -282,6 +284,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           technology: "HTTPS",
           direction: "forward",
           realizes: "e-customer-shopflow",
+          tags: ["critical-path"],
         },
         {
           id: "e-cf-nginx",
@@ -346,6 +349,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           label: "Reads and writes orders",
           technology: "SQL/TCP (pgx)",
           direction: "bidirectional",
+          tags: ["system-of-record"],
         },
         {
           id: "e-orders-cache",
@@ -363,6 +367,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           technology: "HTTPS/JSON",
           direction: "forward",
           realizes: "e-shopflow-stripe",
+          tags: ["payments", "pci-scope"],
         },
         {
           id: "e-orders-sendgrid",
@@ -380,6 +385,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           label: "Reserves stock at checkout",
           technology: "gRPC",
           direction: "forward",
+          tags: ["checkout", "critical-path"],
         },
         {
           id: "e-catalog-db",
@@ -568,6 +574,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           technology: "RESP/TCP",
           direction: "bidirectional",
           realizes: "e-orders-cache",
+          tags: ["idempotency"],
         },
         {
           id: "e-checkout-payment",
@@ -600,6 +607,7 @@ export const DEMO_MODEL: ShowcaseModel = deepFreeze<ShowcaseModel>({
           technology: "HTTPS/JSON",
           direction: "bidirectional",
           realizes: "e-orders-stripe",
+          tags: ["payments", "pci-scope"],
         },
         {
           id: "e-repo-db",

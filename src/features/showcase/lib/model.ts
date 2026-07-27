@@ -4,7 +4,13 @@
  * pure read over that structure.
  */
 
-import type { C4Diagram, C4Level, C4Node, C4NodeTypeForLevel } from "@/types";
+import type {
+  C4Diagram,
+  C4Edge,
+  C4Level,
+  C4Node,
+  C4NodeTypeForLevel,
+} from "@/types";
 
 /* -------------------------------------------------------------------------- */
 /* Shape                                                                       */
@@ -61,6 +67,10 @@ export function getDiagram(model: ShowcaseModel, id: string): C4Diagram {
 
 export function findNode(diagram: C4Diagram, nodeId: string): C4Node | null {
   return diagram.nodes.find((node) => node.id === nodeId) ?? null;
+}
+
+export function findEdge(diagram: C4Diagram, edgeId: string): C4Edge | null {
+  return diagram.edges.find((edge) => edge.id === edgeId) ?? null;
 }
 
 /** The node (in the parent diagram) whose internals `diagram` shows. */

@@ -43,6 +43,7 @@ import {
   getViewportForBounds,
   useReactFlow,
   type EdgeMarker,
+  type EdgeMouseHandler,
   type EdgeTypes,
   type NodeMouseHandler,
   type NodeTypes,
@@ -55,17 +56,24 @@ import "@xyflow/react/dist/style.css";
 import type { C4Diagram, C4Edge } from "@/types";
 import { childLevelOf, hasChildDiagram, isBoundaryPlaceholder } from "@/types";
 
-import { duration } from "@/features/editor/lib/motion";
+import { DURATIONS, duration } from "@/features/editor/lib/motion";
 
 import { DEMO_MODEL } from "../data/demo-model";
 import {
   breadcrumbFor,
   climbAnchorNodeId,
+  findEdge,
   findNode,
   getDiagram,
   type ShowcaseModel,
 } from "../lib/model";
-import { ShowcaseEdge, type ShowcaseFlowEdge } from "./showcase-edge";
+import { SHOWCASE_DURATIONS } from "../lib/motion";
+import { ShowcaseEdgeDetail, type EdgeDetail } from "./showcase-edge-detail";
+import {
+  ShowcaseEdge,
+  type EdgeEmphasis,
+  type ShowcaseFlowEdge,
+} from "./showcase-edge";
 import { ShowcaseNode, type ShowcaseFlowNode } from "./showcase-node";
 import { ShowcaseToolbar } from "./showcase-toolbar";
 
@@ -80,6 +88,65 @@ const SCALE_FAR = 0.7;
 
 const nodeTypes: NodeTypes = { c4: ShowcaseNode };
 const edgeTypes: EdgeTypes = { c4: ShowcaseEdge };
+
+/** How far non-participants recede while a relationship is selected. */
+const DIM_NODE_OPACITY = 0.3;
+
+/**
+ * Connector interaction styling, in one scoped stylesheet: hover affordance,
+ * selection emphasis, the marching-dash flow along the selected path, and the
+ * dim cross-fade behind it. `stroke`/`opacity` only — nothing layout-bound.
+ * Durations interpolate from the frozen editor motion table plus the
+ * showcase-local additions; `prefers-reduced-motion` degrades the flow to a
+ * static full-strength highlight (the marching overlay disappears entirely —
+ * a continuous animation is exactly what that preference suppresses).
+ */
+const EDGE_INTERACTION_CSS = `
+.showcase-canvas .react-flow__edge { cursor: pointer; }
+.showcase-canvas .showcase-edge-base {
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  transition:
+    stroke ${SHOWCASE_DURATIONS.edgeHover}ms ease,
+    stroke-width ${SHOWCASE_DURATIONS.edgeHover}ms ease,
+    opacity ${SHOWCASE_DURATIONS.edgeFocus}ms ease;
+}
+.showcase-canvas .react-flow__edge:hover .showcase-edge-base {
+  stroke: var(--primary);
+  stroke-width: 2;
+  opacity: 1;
+}
+.showcase-canvas .showcase-edge-base-dimmed { opacity: 0.2; }
+.showcase-canvas .showcase-edge-base-selected,
+.showcase-canvas .react-flow__edge:hover .showcase-edge-base-selected {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  opacity: 0.35;
+}
+.showcase-canvas .showcase-edge-march {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 8 12;
+  animation: showcase-edge-march ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+}
+.showcase-canvas .react-flow__node {
+  transition: opacity ${DURATIONS.nodeIn}ms ease;
+}
+@keyframes showcase-edge-march {
+  to { stroke-dashoffset: -20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .showcase-canvas .showcase-edge-march {
+    animation: none;
+    visibility: hidden;
+  }
+  .showcase-canvas .showcase-edge-base-selected,
+  .showcase-canvas .react-flow__edge:hover .showcase-edge-base-selected {
+    opacity: 1;
+  }
+}
+`;
 
 /* -------------------------------------------------------------------------- */
 /* Pure helpers                                                                */
@@ -224,12 +291,16 @@ function ShowcaseCanvasInner({
 
   const [diagramId, setDiagramId] = useState(model.rootDiagramId);
   const [announcement, setAnnouncement] = useState("");
+  /** At most one relationship selected at a time; null ⇒ nothing selected. */
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramIdRef = useRef(diagramId);
   useEffect(() => {
     diagramIdRef.current = diagramId;
   }, [diagramId]);
+  /** Mirror for handlers that must read the selection synchronously. */
+  const selectedEdgeIdRef = useRef<string | null>(null);
   /** Last camera per diagram — climbing back returns to where you were. */
   const viewportsRef = useRef<Record<string, Viewport>>({});
   const pendingRef = useRef<PendingNav | null>(null);
@@ -241,6 +312,59 @@ function ShowcaseCanvasInner({
     [model, diagramId],
   );
 
+  /* ---- edge selection ------------------------------------------------------- */
+
+  const clearEdgeSelection = useCallback((announce = true) => {
+    if (selectedEdgeIdRef.current === null) return;
+    selectedEdgeIdRef.current = null;
+    setSelectedEdgeId(null);
+    if (announce) setAnnouncement("Relationship deselected.");
+  }, []);
+
+  const toggleEdgeSelection = useCallback(
+    (edgeId: string) => {
+      if (selectedEdgeIdRef.current === edgeId) {
+        clearEdgeSelection();
+        return;
+      }
+      const current = getDiagram(model, diagramIdRef.current);
+      const edge = findEdge(current, edgeId);
+      if (edge === null) return;
+      const sourceName = findNode(current, edge.source)?.name ?? edge.source;
+      const targetName = findNode(current, edge.target)?.name ?? edge.target;
+      selectedEdgeIdRef.current = edgeId;
+      setSelectedEdgeId(edgeId);
+      const joiner = edge.direction === "bidirectional" ? "and" : "to";
+      setAnnouncement(
+        `Relationship selected: ${sourceName} ${joiner} ${targetName}` +
+          (edge.label ? ` — ${edge.label}.` : ".") +
+          " Details panel updated. Press Escape to deselect.",
+      );
+    },
+    [model, clearEdgeSelection],
+  );
+
+  // Same pointer-events constraint as node drilling: with selection and focus
+  // flags off, React Flow marks edges `inactive` (pointer-events: none)
+  // UNLESS the flow declares an edge click handler — so the click must be
+  // caught here at canvas level, never inside the edge component's SVG.
+  const handleEdgeClick = useCallback<EdgeMouseHandler<ShowcaseFlowEdge>>(
+    (_event, edge) => toggleEdgeSelection(edge.id),
+    [toggleEdgeSelection],
+  );
+
+  const handlePaneClick = useCallback(
+    () => clearEdgeSelection(),
+    [clearEdgeSelection],
+  );
+
+  const handleDetailDismiss = useCallback(() => {
+    clearEdgeSelection();
+    // The close button unmounts with the panel — hand focus back to the
+    // canvas region so keyboard users are not dropped at <body>.
+    containerRef.current?.focus({ preventScroll: true });
+  }, [clearEdgeSelection]);
+
   /* ---- navigation ---------------------------------------------------------- */
 
   const navigateTo = useCallback(
@@ -251,6 +375,9 @@ function ShowcaseCanvasInner({
     ) => {
       const fromId = diagramIdRef.current;
       if (targetId === fromId) return;
+      // A selection belongs to one diagram; drop it before the level swaps.
+      // Silent: the navigation announcement below supersedes it.
+      clearEdgeSelection(false);
       const container = containerRef.current;
       const target = getDiagram(model, targetId);
 
@@ -322,7 +449,7 @@ function ShowcaseCanvasInner({
           (target.parentDiagramId !== null ? " Press Escape to zoom out." : ""),
       );
     },
-    [model, getViewport],
+    [model, getViewport, clearEdgeSelection],
   );
 
   const drillInto = useCallback(
@@ -345,8 +472,17 @@ function ShowcaseCanvasInner({
   // <button> dispatches a click that bubbles to the wrapper. drillInto()
   // no-ops for leaf nodes, so the demo stays view-only.
   const handleNodeClick = useCallback<NodeMouseHandler<ShowcaseFlowNode>>(
-    (_event, node) => drillInto(node.id),
-    [drillInto],
+    (_event, node) => {
+      const current = getDiagram(model, diagramIdRef.current);
+      const modelNode = findNode(current, node.id);
+      if (modelNode !== null && hasChildDiagram(modelNode)) {
+        drillInto(node.id);
+      } else {
+        // Clicking a leaf acts like clicking empty canvas for selection.
+        clearEdgeSelection();
+      }
+    },
+    [model, drillInto, clearEdgeSelection],
   );
 
   const climbTo = useCallback(
@@ -502,11 +638,17 @@ function ShowcaseCanvasInner({
     [],
   );
 
-  /* ---- Escape climbs one level --------------------------------------------- */
+  /* ---- Escape: deselect first, then climb one level ------------------------- */
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
+      // Selection takes priority; level-climb is the fallback.
+      if (selectedEdgeIdRef.current !== null) {
+        event.preventDefault();
+        clearEdgeSelection();
+        return;
+      }
       const current = getDiagram(model, diagramIdRef.current);
       if (current.parentDiagramId === null) return;
       event.preventDefault();
@@ -514,12 +656,16 @@ function ShowcaseCanvasInner({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model, climbTo]);
+  }, [model, climbTo, clearEdgeSelection]);
 
   /* ---- projection: frozen model diagram → fresh React Flow objects --------- */
 
-  const { nodes, edges } = useMemo(() => {
-    const groups = parallelGroups(diagram.edges);
+  // Nodes deliberately do NOT depend on the edge selection: replacing the
+  // node objects makes React Flow re-adopt them, and for one frame the edge
+  // position lookup comes back null — every EdgeWrapper unmounts and
+  // remounts, stealing focus from the edge's label button mid-selection.
+  // Node dimming is done with a small dynamic stylesheet instead (below).
+  const nodes = useMemo(() => {
     const childLevel = childLevelOf(diagram.level);
 
     const flowNodes: ShowcaseFlowNode[] = diagram.nodes.map((node) => {
@@ -552,11 +698,29 @@ function ShowcaseCanvasInner({
       };
     });
 
+    return flowNodes;
+  }, [model, diagram]);
+
+  const edges = useMemo(() => {
+    const groups = parallelGroups(diagram.edges);
+    const selectedEdge =
+      selectedEdgeId !== null ? findEdge(diagram, selectedEdgeId) : null;
+    const nameById = new Map(diagram.nodes.map((n) => [n.id, n.name]));
+
     const flowEdges: ShowcaseFlowEdge[] = diagram.edges.map((edge) => {
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
+      const isSelected = selectedEdge !== null && edge.id === selectedEdge.id;
+      const emphasis: EdgeEmphasis = isSelected
+        ? "selected"
+        : selectedEdge !== null
+          ? "dimmed"
+          : "idle";
       const marker: EdgeMarker = {
         type: MarkerType.ArrowClosed,
-        color: "var(--edge)",
+        // The arrowhead is part of the highlight: it flips to the emphasis
+        // colour with the stroke. Dimming reaches it for free — element
+        // opacity on the path applies to its markers too.
+        color: isSelected ? "var(--primary)" : "var(--edge)",
         width: 18,
         height: 18,
       };
@@ -567,14 +731,50 @@ function ShowcaseCanvasInner({
         type: "c4" as const,
         selectable: false,
         focusable: false,
+        // No zIndex elevation on select: a zIndex change moves the edge into
+        // another SVG layer group, remounting it — which would steal focus
+        // from the label button mid-keyboard-selection. Dimming the other
+        // edges to 0.2 isolates the selection well enough without it.
         markerEnd: edge.direction === "none" ? undefined : marker,
         markerStart: edge.direction === "bidirectional" ? marker : undefined,
-        data: { edge, parallelIndex: group.index, parallelCount: group.count },
+        data: {
+          edge,
+          parallelIndex: group.index,
+          parallelCount: group.count,
+          sourceName: nameById.get(edge.source) ?? edge.source,
+          targetName: nameById.get(edge.target) ?? edge.target,
+          emphasis,
+          onSelect: toggleEdgeSelection,
+        },
       };
     });
 
-    return { nodes: flowNodes, edges: flowEdges };
-  }, [model, diagram]);
+    return flowEdges;
+  }, [diagram, selectedEdgeId, toggleEdgeSelection]);
+
+  /* ---- selected-relationship detail ----------------------------------------- */
+
+  const detail = useMemo<EdgeDetail | null>(() => {
+    if (selectedEdgeId === null) return null;
+    const edge = findEdge(diagram, selectedEdgeId);
+    if (edge === null) return null;
+    const source = findNode(diagram, edge.source);
+    const target = findNode(diagram, edge.target);
+    if (source === null || target === null) return null;
+    // Traceability: the parent-level relationship this one implements.
+    let realizes: EdgeDetail["realizes"] = null;
+    if (edge.realizes !== undefined && diagram.parentDiagramId !== null) {
+      const parent = getDiagram(model, diagram.parentDiagramId);
+      const parentEdge = findEdge(parent, edge.realizes);
+      if (parentEdge !== null) {
+        realizes = {
+          label: parentEdge.label ?? parentEdge.id,
+          level: parent.level,
+        };
+      }
+    }
+    return { edge, source, target, realizes };
+  }, [model, diagram, selectedEdgeId]);
 
   /* ---- camera persistence --------------------------------------------------- */
 
@@ -595,8 +795,16 @@ function ShowcaseCanvasInner({
       // would resolve to auto and collapse the canvas to zero (React Flow
       // error 004). Absolute positioning tracks the wrapper's USED box —
       // min-height clamp included — so the graph always has real dimensions.
-      className="absolute inset-0 outline-none"
+      className="showcase-canvas absolute inset-0 outline-none"
     >
+      <style>{EDGE_INTERACTION_CSS}</style>
+      {detail !== null ? (
+        // Focus effect while a relationship is selected: every node except
+        // the two endpoints recedes. Stylesheet-driven (node ids are model
+        // slugs) so the node objects themselves stay untouched — see the
+        // remount note above the `nodes` memo.
+        <style>{`.showcase-canvas .react-flow__node:not([data-id="${detail.edge.source}"]):not([data-id="${detail.edge.target}"]) { opacity: ${DIM_NODE_OPACITY}; }`}</style>
+      ) : null}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -608,6 +816,8 @@ function ShowcaseCanvasInner({
         fitView
         fitViewOptions={{ padding: FIT_PADDING }}
         onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
+        onPaneClick={handlePaneClick}
         onMoveEnd={handleMoveEnd}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
@@ -631,12 +841,20 @@ function ShowcaseCanvasInner({
             onNavigate={climbTo}
           />
         </Panel>
+        <Panel
+          position="top-right"
+          className="max-w-[min(19rem,calc(100%-1rem))]"
+        >
+          <ShowcaseEdgeDetail detail={detail} onDismiss={handleDetailDismiss} />
+        </Panel>
         <Panel position="bottom-center" className="hidden sm:block">
           <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
             Click a{" "}
             <span className="font-medium text-primary">numbered node</span> to
-            zoom in · <kbd className="font-mono text-[10px]">Esc</kbd> zooms out
-            · drag to pan
+            zoom in · click a{" "}
+            <span className="font-medium text-primary">connector</span> for
+            details · <kbd className="font-mono text-[10px]">Esc</kbd> steps
+            back · drag to pan
           </p>
         </Panel>
       </ReactFlow>
