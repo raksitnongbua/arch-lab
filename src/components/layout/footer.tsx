@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { APP_NAME } from "@/lib/constants";
 
 export function Footer() {
@@ -9,7 +11,15 @@ export function Footer() {
           <span className="font-mono">{APP_NAME}</span> — local-first
           architecture documentation. C4 today; more diagram types planned.
         </p>
-        <p>Saves to plain JSON. Diff it, review it, commit it.</p>
+        <p>
+          Saves to plain JSON. Diff it, review it, commit it.{" "}
+          <Link
+            href="/syntax"
+            className="font-medium text-foreground hover:underline"
+          >
+            <span className="font-mono">.aft</span> syntax reference
+          </Link>
+        </p>
       </div>
     </footer>
   );

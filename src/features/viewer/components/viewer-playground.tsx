@@ -38,6 +38,7 @@ import {
   Import,
   X,
 } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -334,7 +335,14 @@ export function ViewerPlayground(): React.JSX.Element {
           . Edit either pane and the other regenerates as you type — both are
           lossless, so nothing is dropped in either direction. Mermaid C4 can be
           imported (one-way). Everything stays in your browser: nothing you type
-          is uploaded or stored.
+          is uploaded or stored. New to the text format? Read the{" "}
+          <Link
+            href="/syntax"
+            className="font-medium text-primary hover:underline"
+          >
+            .aft syntax reference
+          </Link>
+          .
         </p>
       </header>
 
