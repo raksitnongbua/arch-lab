@@ -1,0 +1,483 @@
+{
+  "$schema": "https://arch-flow.dev/schema/v1/diagram.schema.json",
+  "version": "1.0",
+  "metadata": {
+    "title": "Order Shop",
+    "description": "A deliberately small model of one flow: a customer places an order in an online shop.",
+    "createdAt": "2026-07-27T00:00:00Z",
+    "updatedAt": "2026-07-27T00:00:00Z",
+    "generator": {
+      "name": "arch-flow",
+      "version": "0.1.0"
+    }
+  },
+  "rootDiagramId": "d-ctx-root",
+  "diagrams": [
+    {
+      "id": "d-cmp-order-service",
+      "level": "component",
+      "title": "Order Service — Components",
+      "description": "The parts that place one order. Boundary nodes come from the container view.",
+      "ownerNodeId": "order-service",
+      "parentDiagramId": "d-cnt-order-shop",
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "ext-email-cmp",
+          "type": "externalSystem",
+          "name": "Email Provider",
+          "position": {
+            "x": 752,
+            "y": 520
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-order-shop",
+            "nodeId": "ext-email"
+          }
+        },
+        {
+          "id": "ext-order-db",
+          "type": "database",
+          "name": "Order Database",
+          "position": {
+            "x": 496,
+            "y": 688
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-order-shop",
+            "nodeId": "order-db"
+          }
+        },
+        {
+          "id": "ext-payment-cmp",
+          "type": "externalSystem",
+          "name": "Payment Provider",
+          "position": {
+            "x": 240,
+            "y": 688
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-order-shop",
+            "nodeId": "ext-payment"
+          }
+        },
+        {
+          "id": "ext-storefront",
+          "type": "externalSystem",
+          "name": "Storefront Web App",
+          "position": {
+            "x": 480,
+            "y": 40
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-order-shop",
+            "nodeId": "storefront"
+          }
+        },
+        {
+          "id": "order-api",
+          "type": "component",
+          "name": "Order API Handler",
+          "description": "Validates the request and maps errors to HTTP responses.",
+          "technology": "Go / chi",
+          "position": {
+            "x": 480,
+            "y": 192
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-repository",
+          "type": "component",
+          "name": "Order Repository",
+          "description": "Persistence for the order record.",
+          "technology": "Go / pgx",
+          "position": {
+            "x": 496,
+            "y": 520
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "payment-client",
+          "type": "component",
+          "name": "Payment Client",
+          "description": "Adapter for the payment provider's REST API.",
+          "technology": "Go",
+          "position": {
+            "x": 240,
+            "y": 520
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "place-order-usecase",
+          "type": "component",
+          "name": "Place Order Use Case",
+          "description": "Takes payment, saves the order, then sends the confirmation.",
+          "technology": "Go",
+          "position": {
+            "x": 472,
+            "y": 352
+          },
+          "size": {
+            "width": 192,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-api-usecase",
+          "source": "order-api",
+          "target": "place-order-usecase",
+          "label": "Invokes with a validated order",
+          "direction": "forward"
+        },
+        {
+          "id": "e-payment-provider",
+          "source": "payment-client",
+          "target": "ext-payment-cmp",
+          "label": "Authorises and captures the card",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-orders-payment"
+        },
+        {
+          "id": "e-repo-db",
+          "source": "order-repository",
+          "target": "ext-order-db",
+          "label": "Inserts and reads orders",
+          "technology": "SQL/TCP",
+          "direction": "bidirectional",
+          "realizes": "e-orders-db"
+        },
+        {
+          "id": "e-storefront-api",
+          "source": "ext-storefront",
+          "target": "order-api",
+          "label": "POST /orders",
+          "technology": "HTTP/JSON",
+          "direction": "forward",
+          "realizes": "e-storefront-orders"
+        },
+        {
+          "id": "e-usecase-email",
+          "source": "place-order-usecase",
+          "target": "ext-email-cmp",
+          "label": "Sends the order confirmation",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-orders-email"
+        },
+        {
+          "id": "e-usecase-payment",
+          "source": "place-order-usecase",
+          "target": "payment-client",
+          "label": "Requests payment authorisation",
+          "direction": "forward"
+        },
+        {
+          "id": "e-usecase-repo",
+          "source": "place-order-usecase",
+          "target": "order-repository",
+          "label": "Saves the accepted order",
+          "direction": "forward"
+        }
+      ]
+    },
+    {
+      "id": "d-cnt-order-shop",
+      "level": "container",
+      "title": "Order Shop — Containers",
+      "description": "The deployable pieces that place one order.",
+      "ownerNodeId": "order-shop",
+      "parentDiagramId": "d-ctx-root",
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "ext-customer",
+          "type": "person",
+          "name": "Customer",
+          "position": {
+            "x": 480,
+            "y": 40
+          },
+          "size": {
+            "width": 160,
+            "height": 88
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "customer"
+          }
+        },
+        {
+          "id": "ext-email",
+          "type": "externalSystem",
+          "name": "Email Provider",
+          "position": {
+            "x": 688,
+            "y": 560
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "email-provider"
+          }
+        },
+        {
+          "id": "ext-payment",
+          "type": "externalSystem",
+          "name": "Payment Provider",
+          "position": {
+            "x": 480,
+            "y": 560
+          },
+          "size": {
+            "width": 160,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "payment-provider"
+          }
+        },
+        {
+          "id": "order-db",
+          "type": "database",
+          "name": "Order Database",
+          "description": "Orders and their payment status. System of record.",
+          "technology": "PostgreSQL 16",
+          "icon": "postgresql",
+          "iconSource": "inferred",
+          "position": {
+            "x": 264,
+            "y": 560
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-service",
+          "type": "container",
+          "name": "Order Service",
+          "description": "Accepts an order, takes payment, and records it.",
+          "technology": "Go 1.22",
+          "icon": "golang",
+          "iconSource": "inferred",
+          "position": {
+            "x": 472,
+            "y": 376
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "childDiagramId": "d-cmp-order-service"
+        },
+        {
+          "id": "storefront",
+          "type": "container",
+          "name": "Storefront Web App",
+          "description": "Product pages, the cart, and the checkout form.",
+          "technology": "Next.js 15",
+          "icon": "nextjs",
+          "iconSource": "inferred",
+          "position": {
+            "x": 472,
+            "y": 208
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-customer-storefront",
+          "source": "ext-customer",
+          "target": "storefront",
+          "label": "Browses products and checks out",
+          "technology": "HTTPS",
+          "direction": "forward",
+          "realizes": "e-customer-shop"
+        },
+        {
+          "id": "e-orders-db",
+          "source": "order-service",
+          "target": "order-db",
+          "label": "Reads and writes orders",
+          "technology": "SQL/TCP",
+          "direction": "bidirectional"
+        },
+        {
+          "id": "e-orders-email",
+          "source": "order-service",
+          "target": "ext-email",
+          "label": "Sends order confirmation",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-shop-email"
+        },
+        {
+          "id": "e-orders-payment",
+          "source": "order-service",
+          "target": "ext-payment",
+          "label": "Authorises payment",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "realizes": "e-shop-payment"
+        },
+        {
+          "id": "e-storefront-orders",
+          "source": "storefront",
+          "target": "order-service",
+          "label": "Submits the order",
+          "technology": "HTTP/JSON",
+          "direction": "forward"
+        }
+      ]
+    },
+    {
+      "id": "d-ctx-root",
+      "level": "context",
+      "title": "Order Shop — System Context",
+      "description": "Who places orders and which third parties fulfil them.",
+      "ownerNodeId": null,
+      "parentDiagramId": null,
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "customer",
+          "type": "person",
+          "name": "Customer",
+          "description": "Shopper picking products and placing an order.",
+          "position": {
+            "x": 480,
+            "y": 80
+          },
+          "size": {
+            "width": 160,
+            "height": 96
+          }
+        },
+        {
+          "id": "email-provider",
+          "type": "externalSystem",
+          "name": "Email Provider",
+          "description": "Third party that delivers order confirmation emails.",
+          "technology": "REST API",
+          "position": {
+            "x": 640,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        },
+        {
+          "id": "order-shop",
+          "type": "softwareSystem",
+          "name": "Order Shop",
+          "description": "Small online shop: browse products, place an order, pay.",
+          "technology": "Next.js / Go",
+          "position": {
+            "x": 400,
+            "y": 320
+          },
+          "size": {
+            "width": 320,
+            "height": 120
+          },
+          "childDiagramId": "d-cnt-order-shop"
+        },
+        {
+          "id": "payment-provider",
+          "type": "externalSystem",
+          "name": "Payment Provider",
+          "description": "Third party that authorises and captures card payments.",
+          "technology": "REST API",
+          "position": {
+            "x": 280,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-customer-shop",
+          "source": "customer",
+          "target": "order-shop",
+          "label": "Places an order",
+          "technology": "HTTPS",
+          "direction": "forward"
+        },
+        {
+          "id": "e-shop-email",
+          "source": "order-shop",
+          "target": "email-provider",
+          "label": "Sends order confirmation",
+          "technology": "HTTPS/JSON",
+          "direction": "forward"
+        },
+        {
+          "id": "e-shop-payment",
+          "source": "order-shop",
+          "target": "payment-provider",
+          "label": "Authorises payment",
+          "technology": "HTTPS/JSON",
+          "direction": "forward"
+        }
+      ]
+    }
+  ]
+}
