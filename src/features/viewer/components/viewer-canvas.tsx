@@ -98,11 +98,25 @@ const edgeTypes: EdgeTypes = { c4: ViewerEdge };
 const DIM_NODE_OPACITY = 0.3;
 
 /**
+ * Stagger between neighbouring comets when a selected ELEMENT lights up all
+ * of its touching edges at once. Applied as a NEGATIVE animation-delay
+ * (start mid-cycle, no startup stall), stepped by each edge's 0-based
+ * position within the touching set — which follows the frozen model's edge
+ * order, so the offsets are fully deterministic across renders and reloads.
+ * 260ms ≢ any divisor of the 1600ms cycle, so even many edges never re-sync
+ * into visual lockstep.
+ */
+const FLOW_STAGGER_MS = 260;
+
+/**
  * Connector interaction styling, in one scoped stylesheet: hover affordance,
  * selection emphasis, the flowing-gradient current along the selected path,
  * and the dim cross-fade behind it. `stroke`/`opacity` only — nothing
- * layout-bound, and the only continuously-animated element is the single
- * selected edge's overlay.
+ * layout-bound. Continuously animated: the selected edge's overlay, or — when
+ * an ELEMENT is selected — the overlays of the edges touching it (each a
+ * stroke-dashoffset dash march, no JS per frame; measured at the display's
+ * full 120fps with the highest-degree ShopFlow node selected, so no cap on
+ * the number of simultaneously flowing edges is needed).
  *
  * The flow itself: viewer-edge.tsx paints three overlay copies of the
  * selected bezier with a per-edge gradient and normalises them to
@@ -829,26 +843,46 @@ function ViewerCanvasInner({
       selectedEdgeId !== null ? findEdge(diagram, selectedEdgeId) : null;
     const nameById = new Map(diagram.nodes.map((n) => [n.id, n.name]));
 
+    // Node selected: every touching edge runs the same source → target comet
+    // as an edge selection would — because the flow direction is real, the
+    // selected element's outgoing edges visibly stream away from it and its
+    // incoming ones toward it. Each gets a deterministic stagger offset from
+    // its 0-based position in the (frozen, ordered) touching set.
+    const flowDelayByEdge = new Map<string, number>();
+    if (selectedEdge === null && selectedNodeId !== null) {
+      let position = 0;
+      for (const edge of diagram.edges) {
+        if (edge.source === selectedNodeId || edge.target === selectedNodeId) {
+          flowDelayByEdge.set(
+            edge.id,
+            -((position * FLOW_STAGGER_MS) % VIEWER_DURATIONS.edgeFlow),
+          );
+          position += 1;
+        }
+      }
+    }
+
     const flowEdges: ViewerFlowEdge[] = diagram.edges.map((edge) => {
       const group = groups.get(edge.id) ?? { index: 0, count: 1 };
       const isSelected = selectedEdge !== null && edge.id === selectedEdge.id;
-      // Edge selected: it alone is emphasised, everything else dims.
-      // Node selected: the edges TOUCHING it keep full strength — they are
-      // the payload (what this element talks to) — and the rest dim.
+      // Edge selected: it alone is emphasised (and animated), all else dims.
+      // Node selected: the edges TOUCHING it flow — they are the payload
+      // (what this element talks to, and in which direction) — the rest dim.
       const emphasis: EdgeEmphasis = isSelected
         ? "selected"
         : selectedEdge !== null
           ? "dimmed"
           : selectedNodeId !== null
-            ? edge.source === selectedNodeId || edge.target === selectedNodeId
-              ? "idle"
+            ? flowDelayByEdge.has(edge.id)
+              ? "flowing"
               : "dimmed"
             : "idle";
       const marker: EdgeMarker = {
         type: MarkerType.ArrowClosed,
-        // Idle/dimmed arrowheads only — while selected, the edge component
-        // swaps in its own pulsing marker that answers the gradient band
-        // (see viewer-edge.tsx). Dimming reaches this one for free —
+        // Idle/dimmed arrowheads only — while its flow overlay shows
+        // (selected edge, or edge touching the selected element), the edge
+        // component swaps in its own pulsing marker that answers the gradient
+        // band (see viewer-edge.tsx). Dimming reaches this one for free —
         // element opacity on the path applies to its markers too.
         color: "var(--edge)",
         width: 18,
@@ -874,6 +908,7 @@ function ViewerCanvasInner({
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,
+          flowDelayMs: flowDelayByEdge.get(edge.id) ?? 0,
           onSelect: toggleEdgeSelection,
         },
       };
@@ -942,9 +977,10 @@ function ViewerCanvasInner({
     }
   }, [drillInto]);
 
-  // Focus effect while an element is selected: the element, its direct
-  // neighbours, and the edges touching it stay at full strength; everything
-  // else recedes. Same stylesheet-driven approach as the relationship focus
+  // Focus effect while an element is selected: the element and its direct
+  // neighbours stay at full strength (the touching edges get the animated
+  // flow via the "flowing" emphasis in the edges memo); everything else
+  // recedes. Same stylesheet-driven approach as the relationship focus
   // (node ids are model slugs) so node objects never change with selection —
   // see the remount note above the `nodes` memo.
   const nodeFocusCss = useMemo<string | null>(() => {
