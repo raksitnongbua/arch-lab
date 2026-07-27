@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/app/providers";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
-import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
+import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 
 import "./globals.css";
 
@@ -22,7 +22,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: `${APP_NAME} — C4 architecture editor`,
+    default: EDITOR_ENABLED
+      ? `${APP_NAME} — C4 architecture editor`
+      : `${APP_NAME} — C4 architecture diagrams`,
     template: `%s · ${APP_NAME}`,
   },
   description: APP_DESCRIPTION,

@@ -66,6 +66,7 @@ import {
   getDiagram,
   type ViewerModel,
 } from "../lib/model";
+import { FIT_PADDING, MAX_ZOOM, MIN_ZOOM } from "../lib/canvas-constants";
 import { VIEWER_DURATIONS } from "../lib/motion";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
 import {
@@ -75,10 +76,7 @@ import {
 } from "./viewer-edge";
 import { ViewerNode, type ViewerFlowNode } from "./viewer-node";
 import { ViewerToolbar } from "./viewer-toolbar";
-
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 2.5;
-const FIT_PADDING = 0.14;
+import { ViewerZoomControls } from "./viewer-zoom-controls";
 
 const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
 /** How far the level "behind" the camera is scaled. Inverse pair. */
@@ -914,6 +912,9 @@ function ViewerCanvasInner({
           className="max-w-[min(19rem,calc(100%-1rem))]"
         >
           <ViewerEdgeDetail detail={detail} onDismiss={handleDetailDismiss} />
+        </Panel>
+        <Panel position="bottom-left">
+          <ViewerZoomControls />
         </Panel>
         <Panel position="bottom-center" className="hidden sm:block">
           <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">

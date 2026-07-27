@@ -2,7 +2,7 @@
 
 /**
  * The view-mode page body: a slim header naming the model (title, read-only
- * badge, the way back to the demo index and into the editor) over the
+ * badge, and — while EDITOR_ENABLED — the way into the editor) over the
  * view-only canvas — plus the two ways the canvas can take the whole screen:
  *
  *  1. Native fullscreen — the Fullscreen API on this shell's root element,
@@ -40,6 +40,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import { ViewerExportButton } from "../export/export-button";
@@ -259,13 +260,19 @@ export function ViewerShell({
                 </span>
               </button>
             ) : null}
-            <Link
-              href="/editor"
-              className={buttonClasses({ size: "sm", className: "shrink-0" })}
-            >
-              Build yours in the editor
-              <ArrowRight aria-hidden="true" />
-            </Link>
+            {EDITOR_ENABLED ? (
+              <Link
+                href="/editor"
+                className={buttonClasses({ size: "sm", className: "shrink-0" })}
+              >
+                Build yours in the editor
+                <ArrowRight aria-hidden="true" />
+              </Link>
+            ) : (
+              <Badge variant="outline" className="shrink-0">
+                Editor — coming soon
+              </Badge>
+            )}
           </div>
         </div>
       </header>

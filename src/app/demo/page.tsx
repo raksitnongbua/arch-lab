@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { listViewerModels } from "@/features/viewer";
-import { C4_LEVEL_META } from "@/lib/constants";
+import { C4_LEVEL_META, EDITOR_ENABLED } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Live demo",
@@ -37,13 +37,13 @@ export default function DemoPage(): React.JSX.Element {
         Real models, in view mode
       </h1>
       <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground">
-        Each example below is a complete C4 model stored as the same{" "}
+        Each example below is a complete C4 model stored as a plain{" "}
         <span className="font-mono text-base text-foreground">
           .archflow.json
         </span>{" "}
-        file the editor saves. Open one to explore it read-only — click any
-        numbered node to zoom from Context down to Code, click a connector to
-        inspect the relationship, and press Escape to step back out.
+        file. Open one to explore it read-only — click any numbered node to zoom
+        from Context down to Code, click a connector to inspect the
+        relationship, and press Escape to step back out.
       </p>
 
       <ul className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -150,15 +150,24 @@ export default function DemoPage(): React.JSX.Element {
         >
           view mode
         </Link>{" "}
-        to render it right here in the browser. Want to change something? These
-        examples are read-only — head to the{" "}
-        <Link
-          href="/editor"
-          className="font-medium text-primary hover:underline"
-        >
-          editor
-        </Link>{" "}
-        to build a model of your own.
+        to render it right here in the browser.{" "}
+        {EDITOR_ENABLED ? (
+          <>
+            Want to change something? These examples are read-only — head to the{" "}
+            <Link
+              href="/editor"
+              className="font-medium text-primary hover:underline"
+            >
+              editor
+            </Link>{" "}
+            to build a model of your own.
+          </>
+        ) : (
+          <>
+            Want to change something? These examples are read-only, and the
+            editor that builds models like these is coming soon.
+          </>
+        )}
       </p>
     </div>
   );

@@ -4,19 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 /**
  * Primary navigation. The header renders in the root layout, so these are the
- * only links that reach /demo and /editor from every page — without them the
- * demo is only discoverable from the landing-page hero, which strands anyone
- * who is already inside the editor.
+ * only links that reach /demo (and, when the editor ships, /editor) from
+ * every page — without them the demo is only discoverable from the
+ * landing-page hero. The Editor entry follows EDITOR_ENABLED: while the
+ * editor is gated off for this release, the navbar simply does not offer it.
  */
-const NAV_LINKS = [
+const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/demo", label: "Demo" },
-  { href: "/editor", label: "Editor" },
-] as const;
+  ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
+];
 
 export function Header() {
   const pathname = usePathname();

@@ -27,6 +27,7 @@ import { ArrowDownToLine, Check, Copy, Play } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import { getDiagram } from "../lib/model";
@@ -320,7 +321,9 @@ function ConvertedCode({
 
   const scopeSentence =
     target === "json"
-      ? "The complete model — every level — as the same canonical JSON the editor saves."
+      ? EDITOR_ENABLED
+        ? "The complete model — every level — as the same canonical JSON the editor saves."
+        : "The complete model — every level — as canonical arch-flow JSON."
       : `A Mermaid document describes one diagram at a time. This is the diagram you are viewing — ${diagram.title} (${LEVEL_LABEL[diagram.level]} view) — and it follows along as you drill up and down.`;
 
   return (

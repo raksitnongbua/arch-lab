@@ -24,7 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
-import { APP_NAME, C4_LEVEL_META } from "@/lib/constants";
+import { APP_NAME, C4_LEVEL_META, EDITOR_ENABLED } from "@/lib/constants";
 import type { C4Level } from "@/types";
 
 const LEVEL_ICONS: Record<C4Level, LucideIcon> = {
@@ -74,7 +74,9 @@ export default function Home() {
           <div>
             <Badge variant="accent" className="mb-6">
               <span className="size-1.5 rounded-full bg-accent" />
-              Early preview · C4 editor and live demo working today
+              {EDITOR_ENABLED
+                ? "Early preview · C4 editor and live demo working today"
+                : "Early preview · live C4 demo working today · editor coming soon"}
             </Badge>
 
             <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
@@ -89,29 +91,58 @@ export default function Home() {
               <span className="font-mono text-base text-foreground sm:text-lg">
                 {APP_NAME}
               </span>{" "}
-              is a local-first workspace for architecture documentation. It
-              opens with a full C4-model editor — with sequence diagrams, a data
-              dictionary, and network diagrams planned next — and saves
-              everything as diff-readable JSON you own.
+              {EDITOR_ENABLED
+                ? "is a local-first workspace for architecture documentation. It opens with a full C4-model editor — with sequence diagrams, a data dictionary, and network diagrams planned next — and saves everything as diff-readable JSON you own."
+                : "is a local-first workspace for architecture documentation. Today it opens with an interactive, read-only C4 viewer — the editor that builds these models is coming soon, with sequence diagrams, a data dictionary, and network diagrams planned after it. Every model lives as diff-readable JSON you own."}
             </p>
 
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <Link
-                href="/editor"
-                aria-describedby="cta-note"
-                className={buttonClasses({ size: "lg" })}
-              >
-                Open Editor
-                <ArrowRight aria-hidden="true" />
-              </Link>
-              <Link
-                href="/demo"
-                className={buttonClasses({ variant: "outline", size: "lg" })}
-              >
-                Explore the live demo
-              </Link>
+              {EDITOR_ENABLED ? (
+                <>
+                  <Link
+                    href="/editor"
+                    aria-describedby="cta-note"
+                    className={buttonClasses({ size: "lg" })}
+                  >
+                    Open Editor
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                  <Link
+                    href="/demo"
+                    className={buttonClasses({
+                      variant: "outline",
+                      size: "lg",
+                    })}
+                  >
+                    Explore the live demo
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/demo"
+                    aria-describedby="cta-note"
+                    className={buttonClasses({ size: "lg" })}
+                  >
+                    Explore the live demo
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                  <Link
+                    href="/view/new"
+                    className={buttonClasses({
+                      variant: "outline",
+                      size: "lg",
+                    })}
+                  >
+                    Paste your own model
+                  </Link>
+                  <Badge variant="outline">Editor — coming soon</Badge>
+                </>
+              )}
               <p id="cta-note" className="text-sm text-muted-foreground">
-                No account, no cloud — the model saves to a JSON file you own.
+                {EDITOR_ENABLED
+                  ? "No account, no cloud — the model saves to a JSON file you own."
+                  : "No account, no cloud — models are plain JSON files, and nothing you paste leaves your browser."}
               </p>
             </div>
           </div>
@@ -121,7 +152,14 @@ export default function Home() {
         </div>
 
         <ul className="mt-14 grid grid-cols-2 gap-x-8 gap-y-6 border-t border-border/60 pt-8 sm:grid-cols-4">
-          <Stat value="4" label="C4 levels, editable today" />
+          <Stat
+            value="4"
+            label={
+              EDITOR_ENABLED
+                ? "C4 levels, editable today"
+                : "C4 levels, explorable today"
+            }
+          />
           <Stat value="1" label="JSON file per model" />
           <Stat value="0" label="Accounts or servers" />
           <Stat value="Git" label="Is the collaboration layer" />
@@ -175,28 +213,51 @@ export default function Home() {
                   </CardTitle>
                 </div>
                 <CardDescription className="max-w-2xl text-base">
-                  Model your system from Context down to Code on an interactive
-                  canvas. Double-click any node to open the level beneath it,
-                  breadcrumb back out, and save the whole model as one
-                  diff-reviewable JSON file.
+                  {EDITOR_ENABLED
+                    ? "Model your system from Context down to Code on an interactive canvas. Double-click any node to open the level beneath it, breadcrumb back out, and save the whole model as one diff-reviewable JSON file."
+                    : "Explore complete systems from Context down to Code on an interactive canvas. Click any numbered node to open the level beneath it, breadcrumb back out, and inspect every relationship — each model is one diff-reviewable JSON file. The editor that builds them is coming soon."}
                 </CardDescription>
-                <div className="mt-2 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                  <Link
-                    href="/editor"
-                    className={buttonClasses({ size: "md" })}
-                  >
-                    Open the C4 editor
-                    <ArrowRight aria-hidden="true" />
-                  </Link>
-                  <Link
-                    href="/demo"
-                    className={buttonClasses({
-                      variant: "outline",
-                      size: "md",
-                    })}
-                  >
-                    Explore the live demo
-                  </Link>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  {EDITOR_ENABLED ? (
+                    <>
+                      <Link
+                        href="/editor"
+                        className={buttonClasses({ size: "md" })}
+                      >
+                        Open the C4 editor
+                        <ArrowRight aria-hidden="true" />
+                      </Link>
+                      <Link
+                        href="/demo"
+                        className={buttonClasses({
+                          variant: "outline",
+                          size: "md",
+                        })}
+                      >
+                        Explore the live demo
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="/demo"
+                        className={buttonClasses({ size: "md" })}
+                      >
+                        Explore the live demo
+                        <ArrowRight aria-hidden="true" />
+                      </Link>
+                      <Link
+                        href="/view/new"
+                        className={buttonClasses({
+                          variant: "outline",
+                          size: "md",
+                        })}
+                      >
+                        Paste your own model
+                      </Link>
+                      <Badge variant="outline">Editor — coming soon</Badge>
+                    </>
+                  )}
                 </div>
               </CardHeader>
             </Card>
@@ -307,7 +368,11 @@ export default function Home() {
             <Principle
               icon={MousePointer2}
               title="A canvas, not a syntax"
-              body="Drag, snap, connect. Direct manipulation with alignment guides and undo on every edit — closer to draw.io than to a text DSL."
+              body={
+                EDITOR_ENABLED
+                  ? "Drag, snap, connect. Direct manipulation with alignment guides and undo on every edit — closer to draw.io than to a text DSL."
+                  : "Direct manipulation over a text DSL — closer to draw.io than to code. Pan, zoom, and drill the canvas today; drag-snap-connect editing arrives with the editor."
+              }
             />
             <Principle
               icon={FileJson}
