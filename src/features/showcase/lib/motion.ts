@@ -10,10 +10,11 @@ import { DURATIONS } from "@/features/editor/lib/motion";
 
 export const SHOWCASE_DURATIONS = {
   /**
-   * One full cycle of the selected connector's marching-dash flow. Slow on
+   * One full source → target traversal of the selected connector's luminous
+   * gradient band (and one pulse of the arrowhead it arrives at). Slow on
    * purpose: it must read as steady directional current, not a blink.
    */
-  edgeFlow: 1100,
+  edgeFlow: 1600,
   /** Cross-fade when the rest of the diagram dims behind a selection. */
   edgeFocus: DURATIONS.nodeIn,
   /** Hover emphasis on a connector — mirrors the editor's hover band. */

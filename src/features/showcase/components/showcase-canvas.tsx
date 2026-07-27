@@ -94,12 +94,24 @@ const DIM_NODE_OPACITY = 0.3;
 
 /**
  * Connector interaction styling, in one scoped stylesheet: hover affordance,
- * selection emphasis, the marching-dash flow along the selected path, and the
- * dim cross-fade behind it. `stroke`/`opacity` only — nothing layout-bound.
- * Durations interpolate from the frozen editor motion table plus the
- * showcase-local additions; `prefers-reduced-motion` degrades the flow to a
- * static full-strength highlight (the marching overlay disappears entirely —
- * a continuous animation is exactly what that preference suppresses).
+ * selection emphasis, the flowing-gradient current along the selected path,
+ * and the dim cross-fade behind it. `stroke`/`opacity` only — nothing
+ * layout-bound, and the only continuously-animated element is the single
+ * selected edge's overlay.
+ *
+ * The flow itself: showcase-edge.tsx paints three overlay copies of the
+ * selected bezier with a per-edge gradient and normalises them to
+ * `pathLength=100`, so the dash bands here are percentages of the true curve.
+ * Every band's keyframes run `dashoffset: L → L − 100`, which puts each
+ * leading edge at exactly `100t` — glow, tail and head stay in lockstep as
+ * one comet however long the path is. The arrowhead keyframes are phased to
+ * the same clock: warm accent exactly when the head lands on it (t = 1 ≡ 0),
+ * relaxing back to primary while the next band sets off.
+ *
+ * `prefers-reduced-motion` stops the travel entirely (no slowed-down
+ * variant): the head band un-dashes into a full-length static gradient
+ * stroke over a faint full-length glow, and the arrowhead holds the
+ * gradient's arrival colour.
  */
 const EDGE_INTERACTION_CSS = `
 .showcase-canvas .react-flow__edge { cursor: pointer; }
@@ -123,27 +135,70 @@ const EDGE_INTERACTION_CSS = `
   stroke-width: 2.5;
   opacity: 0.35;
 }
-.showcase-canvas .showcase-edge-march {
-  stroke: var(--primary);
-  stroke-width: 2.5;
+.showcase-canvas .showcase-edge-flow {
+  fill: none;
   stroke-linecap: round;
-  stroke-dasharray: 8 12;
-  animation: showcase-edge-march ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+}
+.showcase-canvas .showcase-edge-flow-glow {
+  stroke-width: 7;
+  opacity: 0.35;
+  filter: blur(2.5px);
+  stroke-dasharray: 30 70;
+  animation: showcase-edge-flow-glow ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+}
+.showcase-canvas .showcase-edge-flow-tail {
+  stroke-width: 2.5;
+  opacity: 0.5;
+  stroke-dasharray: 22 78;
+  animation: showcase-edge-flow-tail ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+}
+.showcase-canvas .showcase-edge-flow-head {
+  stroke-width: 3;
+  stroke-dasharray: 9 91;
+  animation: showcase-edge-flow-head ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
+}
+.showcase-canvas .showcase-edge-flow-arrow {
+  stroke-width: 1;
+  animation: showcase-edge-flow-arrive ${SHOWCASE_DURATIONS.edgeFlow}ms linear infinite;
 }
 .showcase-canvas .react-flow__node {
   transition: opacity ${DURATIONS.nodeIn}ms ease;
 }
-@keyframes showcase-edge-march {
-  to { stroke-dashoffset: -20px; }
+@keyframes showcase-edge-flow-glow {
+  from { stroke-dashoffset: 30; }
+  to { stroke-dashoffset: -70; }
+}
+@keyframes showcase-edge-flow-tail {
+  from { stroke-dashoffset: 22; }
+  to { stroke-dashoffset: -78; }
+}
+@keyframes showcase-edge-flow-head {
+  from { stroke-dashoffset: 9; }
+  to { stroke-dashoffset: -91; }
+}
+@keyframes showcase-edge-flow-arrive {
+  0% { fill: var(--accent); stroke: var(--accent); }
+  30%, 78% { fill: var(--primary); stroke: var(--primary); }
+  100% { fill: var(--accent); stroke: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .showcase-canvas .showcase-edge-march {
+  .showcase-canvas .showcase-edge-flow,
+  .showcase-canvas .showcase-edge-flow-arrow {
     animation: none;
-    visibility: hidden;
   }
-  .showcase-canvas .showcase-edge-base-selected,
-  .showcase-canvas .react-flow__edge:hover .showcase-edge-base-selected {
-    opacity: 1;
+  .showcase-canvas .showcase-edge-flow-tail { visibility: hidden; }
+  .showcase-canvas .showcase-edge-flow-head {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .showcase-canvas .showcase-edge-flow-glow {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    opacity: 0.2;
+  }
+  .showcase-canvas .showcase-edge-flow-arrow {
+    fill: var(--accent);
+    stroke: var(--accent);
   }
 }
 `;
@@ -717,10 +772,11 @@ function ShowcaseCanvasInner({
           : "idle";
       const marker: EdgeMarker = {
         type: MarkerType.ArrowClosed,
-        // The arrowhead is part of the highlight: it flips to the emphasis
-        // colour with the stroke. Dimming reaches it for free — element
-        // opacity on the path applies to its markers too.
-        color: isSelected ? "var(--primary)" : "var(--edge)",
+        // Idle/dimmed arrowheads only — while selected, the edge component
+        // swaps in its own pulsing marker that answers the gradient band
+        // (see showcase-edge.tsx). Dimming reaches this one for free —
+        // element opacity on the path applies to its markers too.
+        color: "var(--edge)",
         width: 18,
         height: 18,
       };

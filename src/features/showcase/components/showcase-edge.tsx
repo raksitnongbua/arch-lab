@@ -7,9 +7,19 @@
  * click a connector to select it and inspect the relationship.
  *
  * Selection visuals are class-driven (`showcase-edge-*`), with the actual CSS
- * — hover emphasis, dim cross-fade, the marching-dash flow animation and its
+ * — hover emphasis, dim cross-fade, the flowing-gradient animation and its
  * `prefers-reduced-motion` fallback — defined once in showcase-canvas.tsx, so
  * no component ever re-checks the media query.
+ *
+ * The selected-edge flow treatment: a `userSpaceOnUse` linear gradient
+ * oriented along this edge's own anchors paints THREE overlay paths that
+ * reuse the exact bezier `d`. `pathLength={100}` normalises dash arithmetic,
+ * so each overlay is a dash "band" whose leading edge travels source → target
+ * along the true curve (never a straight-line approximation) while the fixed
+ * gradient recolours it in flight. Stacked bands of decreasing length build
+ * the comet falloff; a wide blurred one underneath is the glow. The arrowhead
+ * joins in via a private pulsing <marker> swapped in only while selected.
+ * All ids come from useId, so several selected instances could never collide.
  *
  * The label chip is a real <button>: it is the keyboard path into edge
  * selection (edges' SVG paths are not tabbable in a view-only flow) and a
@@ -19,7 +29,7 @@
  * flag is off (same wall, and same fix, as node drilling).
  */
 
-import { memo } from "react";
+import { memo, useId } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -102,6 +112,13 @@ function ShowcaseEdgeInner({
     parallelCount: data?.parallelCount ?? 1,
   });
 
+  // Stable per-instance SVG ids (sanitised: useId's delimiters are not safe
+  // inside url(#…) references). Duplicate gradient/marker ids across edges
+  // would silently repaint the wrong instance, so these are never shared.
+  const flowKey = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const gradientId = `showcase-flow-grad-${flowKey}`;
+  const arrowId = `showcase-flow-arrow-${flowKey}`;
+
   const label = data?.edge.label;
   const technology = data?.edge.technology;
   const emphasis = data?.emphasis ?? "idle";
@@ -120,8 +137,20 @@ function ShowcaseEdgeInner({
       <BaseEdge
         id={id}
         path={path}
-        markerEnd={markerEnd}
-        markerStart={markerStart}
+        // While selected, the stock arrowheads hand over to this edge's own
+        // pulsing marker so the tip brightens in sympathy with the band
+        // arriving — a live gradient line ending in a dull static arrow is
+        // exactly the unfinished look this avoids. Geometry (viewBox, ref
+        // point, strokeWidth units) mirrors React Flow's ArrowClosed marker
+        // one-to-one, so the swap never moves the tip by a pixel.
+        markerEnd={
+          isSelected && markerEnd !== undefined ? `url(#${arrowId})` : markerEnd
+        }
+        markerStart={
+          isSelected && markerStart !== undefined
+            ? `url(#${arrowId})`
+            : markerStart
+        }
         interactionWidth={EDGE_INTERACTION_WIDTH}
         className={cn(
           "showcase-edge-base",
@@ -133,15 +162,64 @@ function ShowcaseEdgeInner({
         }}
       />
       {isSelected ? (
-        // The flow overlay: dashes marching source → target along the exact
-        // same path. Pure stroke animation — the CSS hides it entirely and
-        // keeps only the static emphasis under prefers-reduced-motion.
-        <path
-          d={path}
-          fill="none"
-          aria-hidden="true"
-          className="showcase-edge-march pointer-events-none"
-        />
+        // The flow overlay: one fixed gradient along this edge's anchors,
+        // painted onto three dash bands that ride the exact same bezier
+        // (pathLength normalises all dash maths to 0–100). Glow → tail →
+        // head share one leading edge, so they read as a single comet whose
+        // colour shifts primary → accent as it approaches the arrowhead.
+        // Pure stroke animation — under prefers-reduced-motion the CSS stops
+        // the travel and leaves the full-length gradient as static emphasis.
+        <g aria-hidden="true" className="pointer-events-none">
+          <defs>
+            <linearGradient
+              id={gradientId}
+              gradientUnits="userSpaceOnUse"
+              x1={anchors.sourceX}
+              y1={anchors.sourceY}
+              x2={anchors.targetX}
+              y2={anchors.targetY}
+            >
+              <stop offset="0%" stopColor="var(--primary)" />
+              <stop offset="55%" stopColor="var(--primary)" />
+              <stop offset="100%" stopColor="var(--accent)" />
+            </linearGradient>
+            <marker
+              id={arrowId}
+              markerWidth="18"
+              markerHeight="18"
+              viewBox="-10 -10 20 20"
+              markerUnits="strokeWidth"
+              orient="auto-start-reverse"
+              refX="0"
+              refY="0"
+            >
+              <polyline
+                className="showcase-edge-flow-arrow"
+                points="-5,-4 0,0 -5,4 -5,-4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </marker>
+          </defs>
+          <path
+            d={path}
+            pathLength={100}
+            stroke={`url(#${gradientId})`}
+            className="showcase-edge-flow showcase-edge-flow-glow"
+          />
+          <path
+            d={path}
+            pathLength={100}
+            stroke={`url(#${gradientId})`}
+            className="showcase-edge-flow showcase-edge-flow-tail"
+          />
+          <path
+            d={path}
+            pathLength={100}
+            stroke={`url(#${gradientId})`}
+            className="showcase-edge-flow showcase-edge-flow-head"
+          />
+        </g>
       ) : null}
       <EdgeLabelRenderer>
         <div
