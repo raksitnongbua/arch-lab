@@ -1,0 +1,139 @@
+/* ---------------------------------------------------------------------------
+ * Canvas micro-interaction motion (T3-C — AF-E6-S2).
+ *
+ * Every duration below reads a `--motion-*` custom property that
+ * `components/nodes/canvas-motion-runtime.ts` writes onto <html> from the
+ * frozen `lib/motion.ts` `duration()` helper — so reduced-motion collapses
+ * everything to 0ms in exactly one place. The `0ms` fallbacks mean nothing
+ * animates before the runtime installs. Zero colour literals: every colour
+ * is a semantic token via var().
+ *
+ * Only `transform` and `opacity` are animated, plus stroke recolouring on
+ * the single hovered/selected edge path — no layout-triggering property is
+ * ever transitioned, so 150-node diagrams stay compositor-bound.
+ * ------------------------------------------------------------------------- */
+
+/* ---- node chrome: hover elevation, drag ghost (AF-E6-S2) ----------------- */
+
+.af-node-chrome {
+  transition:
+    box-shadow var(--motion-hover, 0ms) ease-out,
+    opacity var(--motion-hover, 0ms) ease-out;
+}
+
+/* ---- selection outline: fades in/out over --motion-selection ------------- */
+
+.af-selection-ring {
+  transition: opacity var(--motion-selection, 0ms) ease-out;
+}
+
+/* ---- create: fade + scale 0.96 -> 1.0 (nodes) ----------------------------- */
+
+.af-node-enter {
+  animation: af-node-in var(--motion-node-in, 0ms) ease-out backwards;
+}
+
+@keyframes af-node-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---- delete ghosts: fade + scale out before removal ----------------------
+ * The runtime clones the outgoing `.react-flow__node` / `.react-flow__edge`
+ * DOM element and stamps these classes on the clone. The React Flow node
+ * wrapper positions itself with an inline `translate(...)` transform, so the
+ * wrapper only fades — the scale runs on its child (the node chrome), whose
+ * transform is free. */
+
+.af-node-ghost,
+.af-edge-ghost {
+  pointer-events: none;
+  animation: af-fade-out var(--motion-node-out, 0ms) ease-in forwards;
+}
+
+.af-node-ghost > div {
+  animation: af-scale-out var(--motion-node-out, 0ms) ease-in forwards;
+}
+
+@keyframes af-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes af-scale-out {
+  to {
+    transform: scale(0.96);
+  }
+}
+
+/* ---- new edge: path draw from source to target over --motion-edge-draw ---
+ * `pathLength={1}` is set on the path while drawing, so dasharray/dashoffset
+ * are resolution-independent. The class is removed on animationend so a
+ * dashed edge's own dasharray takes back over. */
+
+.react-flow__edge-path.af-edge-draw {
+  stroke-dasharray: 1;
+  animation: af-edge-draw var(--motion-edge-draw, 0ms) ease-out;
+}
+
+@keyframes af-edge-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---- edges: hover + selection feedback (AF-E6-S2) -------------------------
+ * Stroke colour/width are set inline by the component (selected state), so
+ * the hover preview needs !important. This unlayered rule also outranks
+ * Tailwind's layered utilities by cascade-layer order. */
+
+.react-flow__edge .react-flow__edge-path {
+  transition:
+    stroke var(--motion-selection, 0ms) ease-out,
+    stroke-width var(--motion-selection, 0ms) ease-out;
+}
+
+.react-flow__edge.selectable:hover .react-flow__edge-path {
+  stroke: var(--ring) !important;
+  stroke-width: 2 !important;
+}
+
+/* ---- connection handles: reveal + connect feedback ------------------------
+ * Handles are opacity-0 until node hover (Tailwind classes in node-chrome);
+ * this gives the reveal its 120ms timing and keeps them visible while a
+ * connection drags from them. A valid drop target's handle highlights with
+ * the ring token. */
+
+.react-flow__node .react-flow__handle {
+  transition:
+    opacity var(--motion-hover, 0ms) ease-out,
+    background-color var(--motion-hover, 0ms) ease-out,
+    border-color var(--motion-hover, 0ms) ease-out;
+}
+
+.react-flow__handle.connectingfrom {
+  opacity: 1 !important;
+}
+
+.react-flow__handle.valid {
+  opacity: 1 !important;
+  background-color: var(--ring) !important;
+  border-color: var(--ring) !important;
+}
+
+/* The live connection preview line follows the selection accent instead of
+ * React Flow's default grey, in both themes (AF-E6-S1 parity). */
+.react-flow__connection-path {
+  stroke: var(--ring);
+  stroke-width: 1.5;
+}

@@ -1,0 +1,369 @@
+{
+  "$schema": "https://arch-flow.dev/schema/v1/diagram.schema.json",
+  "version": "1.0",
+  "metadata": {
+    "title": "ShopFlow Platform",
+    "description": "Customer-facing commerce platform. Fixture for the byte-identical round-trip check.",
+    "owner": "platform-team",
+    "tags": ["commerce", "tier-1"],
+    "createdAt": "2026-05-14T09:12:00Z",
+    "updatedAt": "2026-07-20T11:48:33Z",
+    "x-checksum": "5f2c19aa",
+    "lastReviewedAt": "2026-07-01T00:00:00Z",
+    "tagColors": {
+      "pci": "#f5a524"
+    },
+    "generator": {
+      "name": "arch-flow",
+      "version": "0.1.0"
+    }
+  },
+  "rootDiagramId": "d-ctx-root",
+  "diagrams": [
+    {
+      "id": "d-cmp-orders",
+      "level": "component",
+      "title": "Orders Service — Components",
+      "description": "Internal structure of the Orders Service.",
+      "ownerNodeId": "orders-service",
+      "parentDiagramId": "d-cnt-shopflow",
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "checkout-usecase",
+          "type": "component",
+          "name": "Checkout Use Case",
+          "description": "Orchestrates stock reservation, payment, and persistence.",
+          "technology": "Go",
+          "position": {
+            "x": 480,
+            "y": 200
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "tags": ["pci"]
+        },
+        {
+          "id": "ext-orders-db",
+          "type": "database",
+          "name": "Orders Database",
+          "position": {
+            "x": 480,
+            "y": 560
+          },
+          "size": {
+            "width": 176,
+            "height": 80
+          },
+          "externalRef": {
+            "diagramId": "d-cnt-shopflow",
+            "nodeId": "orders-db"
+          }
+        },
+        {
+          "id": "order-repository",
+          "type": "component",
+          "name": "Order Repository",
+          "description": "Persistence for the order aggregate plus the outbox write.",
+          "technology": "Go / pgx",
+          "position": {
+            "x": 480,
+            "y": 384
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-checkout-repo",
+          "source": "checkout-usecase",
+          "target": "order-repository",
+          "label": "Persists order and outbox record",
+          "direction": "forward"
+        },
+        {
+          "id": "e-repo-db",
+          "source": "order-repository",
+          "target": "ext-orders-db",
+          "label": "SELECT / INSERT / UPDATE",
+          "technology": "SQL/TCP",
+          "direction": "bidirectional",
+          "realizes": "e-orders-db"
+        }
+      ]
+    },
+    {
+      "id": "d-cnt-shopflow",
+      "level": "container",
+      "title": "ShopFlow Platform — Containers",
+      "description": "Deployable units inside the platform boundary.",
+      "x-layout-hint": {
+        "algorithm": "layered",
+        "direction": "down"
+      },
+      "ownerNodeId": "shopflow-platform",
+      "parentDiagramId": "d-ctx-root",
+      "viewport": {
+        "zoom": 0.85,
+        "x": -40,
+        "y": -20
+      },
+      "nodes": [
+        {
+          "id": "ext-customer",
+          "type": "person",
+          "name": "Customer",
+          "position": {
+            "x": 560,
+            "y": 40
+          },
+          "size": {
+            "width": 160,
+            "height": 88
+          },
+          "externalRef": {
+            "diagramId": "d-ctx-root",
+            "nodeId": "customer"
+          }
+        },
+        {
+          "id": "kong-gateway",
+          "type": "container",
+          "name": "API Gateway",
+          "description": "Authn/authz enforcement, rate limiting, request routing.",
+          "technology": "Kong Gateway 3.7",
+          "icon": "kong",
+          "iconSource": "inferred",
+          "position": {
+            "x": 560,
+            "y": 200
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "order-events",
+          "type": "queue",
+          "name": "Order Events",
+          "description": "At-least-once order lifecycle events for downstream consumers.",
+          "technology": "Redis Streams",
+          "icon": "redis",
+          "iconSource": "inferred",
+          "position": {
+            "x": 856,
+            "y": 512
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          }
+        },
+        {
+          "id": "orders-db",
+          "type": "database",
+          "name": "Orders Database",
+          "description": "Orders, payments, and the outbox table. System of record.",
+          "technology": "PostgreSQL 16",
+          "icon": "postgresql",
+          "iconSource": "inferred",
+          "position": {
+            "x": 560,
+            "y": 512
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "tags": ["pci", "team-orders"]
+        },
+        {
+          "id": "orders-service",
+          "type": "container",
+          "name": "Orders Service",
+          "description": "Order lifecycle: create, pay, cancel, fulfil. Owns the order aggregate.",
+          "technology": "Go 1.22",
+          "x-badge": "beta",
+          "icon": "golang",
+          "iconSource": "inferred",
+          "position": {
+            "x": 560,
+            "y": 352
+          },
+          "size": {
+            "width": 176,
+            "height": 88
+          },
+          "tags": ["pci", "team-orders"],
+          "childDiagramId": "d-cmp-orders",
+          "pinned": true
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-cust-kong",
+          "source": "ext-customer",
+          "target": "kong-gateway",
+          "label": "Places orders via the storefront",
+          "technology": "HTTPS",
+          "direction": "forward",
+          "realizes": "e-customer-shopflow"
+        },
+        {
+          "id": "e-kong-orders",
+          "source": "kong-gateway",
+          "target": "orders-service",
+          "label": "Routes order operations",
+          "x-confidence": 0.75,
+          "technology": "gRPC",
+          "direction": "forward"
+        },
+        {
+          "id": "e-orders-db",
+          "source": "orders-service",
+          "target": "orders-db",
+          "label": "Reads and writes orders",
+          "technology": "SQL/TCP (pgx)",
+          "direction": "bidirectional"
+        },
+        {
+          "id": "e-orders-events",
+          "source": "orders-service",
+          "target": "order-events",
+          "label": "Publishes lifecycle events via outbox",
+          "technology": "RESP/TCP",
+          "direction": "forward",
+          "style": "dashed"
+        }
+      ]
+    },
+    {
+      "id": "d-ctx-root",
+      "level": "context",
+      "title": "ShopFlow Platform — System Context",
+      "description": "Who uses ShopFlow and which third parties it depends on.",
+      "ownerNodeId": null,
+      "parentDiagramId": null,
+      "viewport": {
+        "zoom": 1,
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "id": "customer",
+          "type": "person",
+          "name": "Customer",
+          "description": "Shopper browsing the catalogue and placing orders.",
+          "position": {
+            "x": 480,
+            "y": 80
+          },
+          "size": {
+            "width": 160,
+            "height": 96
+          }
+        },
+        {
+          "id": "legacy-erp",
+          "type": "externalSystem",
+          "name": "Legacy ERP",
+          "position": {
+            "x": 880,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          }
+        },
+        {
+          "id": "shopflow-platform",
+          "type": "softwareSystem",
+          "name": "ShopFlow Platform",
+          "description": "Catalogue browsing, cart, checkout, and order fulfilment.",
+          "technology": "Go / Next.js",
+          "position": {
+            "x": 480,
+            "y": 320
+          },
+          "size": {
+            "width": 480,
+            "height": 128
+          },
+          "childDiagramId": "d-cnt-shopflow"
+        },
+        {
+          "id": "stripe",
+          "type": "externalSystem",
+          "name": "Stripe",
+          "description": "Card authorisation and capture.",
+          "technology": "REST API",
+          "icon": "stripe",
+          "iconSource": "explicit",
+          "position": {
+            "x": 320,
+            "y": 600
+          },
+          "size": {
+            "width": 200,
+            "height": 96
+          },
+          "tags": ["pci"]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-customer-shopflow",
+          "source": "customer",
+          "target": "shopflow-platform",
+          "label": "Browses catalogue and places orders",
+          "technology": "HTTPS",
+          "direction": "forward"
+        },
+        {
+          "id": "e-shopflow-erp",
+          "source": "shopflow-platform",
+          "target": "legacy-erp",
+          "label": "Nightly stock reconciliation",
+          "technology": "SFTP",
+          "direction": "bidirectional",
+          "style": "dashed"
+        },
+        {
+          "id": "e-shopflow-stripe",
+          "source": "shopflow-platform",
+          "target": "stripe",
+          "label": "Authorises and captures payments",
+          "technology": "HTTPS/JSON",
+          "direction": "forward",
+          "tags": ["pci"],
+          "waypoints": [
+            {
+              "x": 408,
+              "y": 480
+            },
+            {
+              "x": 384,
+              "y": 552
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "x-workspace": {
+    "layoutEngine": "elk",
+    "gridSize": 8
+  }
+}

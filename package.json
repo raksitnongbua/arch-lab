@@ -10,7 +10,8 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:roundtrip": "node scripts/roundtrip-check.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.2",

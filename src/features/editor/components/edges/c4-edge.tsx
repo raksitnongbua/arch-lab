@@ -13,7 +13,7 @@
  * solely-selected edge begin label editing, mirroring nodes.
  */
 
-import { useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { BaseEdge, type Edge, type EdgeProps } from "@xyflow/react";
 
 import type { C4Edge } from "@/types";
@@ -24,7 +24,12 @@ import {
   type ShortcutContext,
 } from "../../hooks/use-keyboard-shortcuts";
 import { getParallelEdgePath } from "../../lib/edge-geometry";
+import { duration } from "../../lib/motion";
 import { useEditorStore } from "../../state";
+import {
+  ensureCanvasMotionRuntime,
+  isFirstPresentation,
+} from "../nodes/canvas-motion-runtime";
 import { EdgeLabelChip } from "./edge-label";
 
 /* ---- Contract (dev-handoff §4.3, frozen) --------------------------------- */
@@ -58,6 +63,28 @@ export function C4EdgeComponent({
   selected,
   data,
 }: C4EdgeComponentProps): React.JSX.Element {
+  // Path-draw animation (AF-E6-S2): once, on the edge's first-ever
+  // presentation, over `--motion-edge-draw` (200ms; 0 under reduced motion
+  // via the frozen lib/motion.ts). While drawing, `pathLength={1}` +
+  // `.af-edge-draw` (styles/canvas-motion.css) run the dashoffset sweep; on
+  // animationend both are dropped so a dashed edge's own dasharray applies.
+  const [drawing, setDrawing] = useState(
+    () => isFirstPresentation("edge", id) && duration("edgeDraw") > 0,
+  );
+
+  // Installs the shared motion runtime (idempotent; nodes install it too,
+  // but an edge render must not depend on a node having rendered first).
+  useLayoutEffect(() => {
+    ensureCanvasMotionRuntime();
+  }, []);
+
+  const handleAnimationEnd = useCallback(
+    (event: React.AnimationEvent<SVGGElement>) => {
+      if (event.animationName === "af-edge-draw") setDrawing(false);
+    },
+    [],
+  );
+
   const { path, labelX, labelY } = getParallelEdgePath({
     sourceX,
     sourceY,
@@ -95,6 +122,7 @@ export function C4EdgeComponent({
           event.stopPropagation();
           useEditorStore.getState().beginLabelEdit({ kind: "edge", id });
         }}
+        onAnimationEnd={handleAnimationEnd}
       >
         <BaseEdge
           id={id}
@@ -102,10 +130,14 @@ export function C4EdgeComponent({
           markerEnd={markerEnd}
           markerStart={markerStart}
           interactionWidth={16}
+          className={drawing ? "af-edge-draw" : undefined}
+          pathLength={drawing ? 1 : undefined}
           style={{
             stroke: selected ? "var(--ring)" : "var(--edge)",
             strokeWidth: selected ? 2 : 1.5,
-            strokeDasharray: data?.edge.style === "dashed" ? "6 4" : undefined,
+            // Suspended while drawing — the draw animation owns the dasharray.
+            strokeDasharray:
+              !drawing && data?.edge.style === "dashed" ? "6 4" : undefined,
           }}
         />
       </g>

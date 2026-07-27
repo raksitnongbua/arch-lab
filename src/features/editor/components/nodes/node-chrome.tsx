@@ -46,12 +46,15 @@ export interface NodeChromeProps {
   data: C4NodeData;
   selected?: boolean;
   dragging?: boolean;
+  /** True on a node's first-ever presentation: plays the create animation. */
+  entering?: boolean;
 }
 
 export function NodeChrome({
   data,
   selected,
   dragging,
+  entering,
 }: NodeChromeProps): React.JSX.Element {
   const { node } = data;
   // The component resolves through the registry itself; `data.resolvedIcon`
@@ -77,20 +80,39 @@ export function NodeChrome({
     <div
       title={data.isEditingLabel ? undefined : hoverText}
       className={cn(
-        "group relative flex size-full flex-col items-center justify-center overflow-visible px-3 py-1.5 text-center text-node-foreground transition-shadow",
+        // `af-node-chrome` (styles/canvas-motion.css) gives box-shadow and
+        // opacity their `--motion-hover` transition, driven by lib/motion.ts.
+        "af-node-chrome group relative flex size-full flex-col items-center justify-center overflow-visible px-3 py-1.5 text-center text-node-foreground",
         SHAPE_WRAPPER_CLASSES[node.type],
-        !svgSilhouette && "shadow-sm",
+        // Hover raises elevation (AF-E6-S2); SVG-silhouette types (cylinder,
+        // pipe) skip the box shadow — it would draw a rectangle around them.
+        !svgSilhouette && "shadow-sm hover:shadow-md",
         // Content clears the cylinder rim / pipe rims.
         node.type === "database" && "pt-4",
         node.type === "queue" && "px-8",
         svgSilhouette && "rounded-lg",
-        selected && "ring-2 ring-ring ring-offset-2 ring-offset-canvas",
-        dragging && "shadow-lg",
-        data.isPlaceholder && "opacity-60",
-        node.type === "externalSystem" && !data.isPlaceholder && "opacity-90",
+        // Drag ghost at 60% opacity (AF-E6-S2); otherwise the static
+        // placeholder / external-system treatments.
+        dragging
+          ? "opacity-60 shadow-lg"
+          : data.isPlaceholder
+            ? "opacity-60"
+            : node.type === "externalSystem" && "opacity-90",
+        entering && "af-node-enter",
       )}
     >
       <NodeShapeLayer type={node.type} />
+
+      {/* Selection outline: always mounted so it can fade in AND out over
+          `--motion-selection` (AF-E6-S2). Sits 4px outside the node bounds,
+          replacing the previous instant ring+offset. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "af-selection-ring pointer-events-none absolute -inset-1 z-[2] rounded-[inherit] ring-2 ring-ring",
+          selected ? "opacity-100" : "opacity-0",
+        )}
+      />
 
       <div className="relative z-[1] flex w-full min-w-0 flex-col items-center gap-px overflow-hidden">
         <div className="flex w-full min-w-0 items-center justify-center gap-1.5">
@@ -138,7 +160,9 @@ export function NodeChrome({
           id={handle.id}
           type="source"
           position={handle.position}
-          className="!size-2 !border-node-border !bg-node-foreground/60 opacity-0 transition-opacity group-hover:opacity-100"
+          // Reveal timing (and connect-state feedback) lives in
+          // styles/canvas-motion.css on `--motion-hover`.
+          className="!size-2 !border-node-border !bg-node-foreground/60 opacity-0 group-hover:opacity-100"
         />
       ))}
     </div>
