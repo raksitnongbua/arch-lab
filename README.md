@@ -1,160 +1,204 @@
 # arch-flow
 
-An interactive **C4-model architecture editor**. Draw your system on a canvas
-(draw.io-style direct manipulation), drill from **Context → Container →
-Component → Code**, and save the whole model as one plain JSON file you can diff,
-review, and commit.
+A **local-first workspace for architecture documentation**. C4 model diagrams
+today, with sequence diagrams, a data dictionary, and network diagrams planned.
+Everything saves as plain, diff-reviewable JSON you own — no account, no
+server, nothing leaves the machine. Git is the collaboration layer.
 
-Local-first: no account, no server, nothing leaves the machine. Git is the
-collaboration layer.
+Product specs live in [`docs/product/`](docs/product/) — `vision.md`,
+`user-stories.md`, `data-model.md`, `roadmap.md`, and `dev-handoff.md`. Read
+them before making product decisions.
 
-> **Status: foundation only.** This repository currently contains the app shell —
-> scaffold, theming system, landing page, and the folder structure the editor
-> will slot into. The canvas itself is not implemented. See
-> [`src/features/editor/README.md`](src/features/editor/README.md).
+## Status
 
-Product specs live in [`docs/product/`](docs/product/) — read
-`vision.md`, `user-stories.md`, and `data-model.md` before making product
-decisions.
+Be precise about what this repo is right now:
 
----
+| Area                                                     | State                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Read-only C4 viewer**                                  | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Diagrams export as SVG or PNG (rasterised at 2×).                                                                              |
+| **View-mode playground** (`/view/new`)                   | Works today. A two-pane live editor for the two text formats — `.aft` on one side, `.archflow.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                |
+| **`.aft` ⇄ JSON conversion**                             | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                        |
+| **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                  |
+| **C4 editor**                                            | Feature-complete in the codebase but **gated off for this release** behind `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts). `/editor` renders a coming-soon page and the editor code is excluded from the deployed bundle. See [Enabling the editor](#enabling-the-editor). |
+| **Sequence diagrams, data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                            |
 
-## Prerequisites
+## Routes
 
-| Tool    | Version                                               |
-| ------- | ----------------------------------------------------- |
-| Node.js | **≥ 20** (developed on 24.13.0)                       |
-| pnpm    | **10.27.0** — this project uses pnpm, not npm or yarn |
+| Route             | What it is                                                                                                                                                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                       |
+| `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                             |
+| `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas. |
+| `/view/new`       | The paste-your-own playground: `.aft` and JSON side by side, live sync, Mermaid import, image export.                                                                       |
+| `/editor`         | Coming-soon page while the editor is gated.                                                                                                                                 |
 
-pnpm is pinned via the `packageManager` field in `package.json`. If you have
-Corepack enabled, the right version is used automatically:
+## The two model formats
 
-```bash
-corepack enable
+One model, two views. A model is stored as **`.archflow.json`** (the schema is
+specified in [`docs/product/data-model.md`](docs/product/data-model.md)) or
+authored as **`.aft`** — a Mermaid-like, human-editable text format. Conversion
+between them is **lossless in both directions**: `pnpm check:archtext` proves
+byte-identical round trips (text → model → text, and JSON → text → JSON
+including unknown forward-compatible fields in their original key positions)
+for both bundled example models.
+
+A valid `.aft` file:
+
+```
+archflow 1.0
+title "ShopFlow Platform"
+
+@context ctx-root "ShopFlow Platform"
+  customer:person "Customer" #shopper
+  shop:system "ShopFlow Platform" @nextjs >cnt-shop
+  stripe:external "Stripe"
+
+  customer -> shop : "Places an order" [HTTPS]
+  shop <-> stripe : "Authorises payment" [HTTPS/JSON]
+
+@container cnt-shop owner=shop
+  web:container "Web App" @nextjs
+  db:database "Orders DB" @postgresql
+  web -> db : "Reads and writes" [SQL/TCP]
 ```
 
-Otherwise: `npm i -g pnpm@10.27.0`.
+`>cnt-shop` is a drill-down link, `@nextjs` an icon, `#shopper` a tag,
+`[HTTPS]` a technology. Geometry may be omitted — parser and serializer apply
+the same deterministic default layout, so terse files stay lossless. Full
+syntax: [`src/features/archtext/README.md`](src/features/archtext/README.md).
+
+## Mermaid C4 import
+
+`/view/new` imports Mermaid C4 source (`C4Context`, `C4Container`,
+`C4Component`, `C4Dynamic`, `C4Deployment`) and converts it into both panes.
+The conversion is **one-way and lossy**, and the UI says so at the point of
+import:
+
+- Enterprise/System boundaries become tags on their members and are **not
+  drawn as frames** (the boundary tree is preserved in an `x-mermaid`
+  extension field).
+- `SystemDb` / `SystemQueue` at Context level lose their database and queue
+  styling.
+- `C4Dynamic` and `C4Deployment` map to the container level; call ordering and
+  deployment topology are not part of arch-flow's model.
+
+Everything else — names, descriptions, technologies, relationships, `<br/>`
+decoding, `_Ext` externality, `BiRel` bidirectionality — carries over.
+`pnpm check:mermaid` proves the mapping.
 
 ## Getting started
 
+| Tool    | Version                                                                                                                                                          |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js | ≥ 20 to run the app; **≥ 23.6** to run the `check:*` scripts (they load the app's TypeScript directly via Node's built-in type stripping). Developed on 24.13.0. |
+| pnpm    | **10.27.0** — this project uses pnpm, not npm or yarn.                                                                                                           |
+
+pnpm is pinned via the `packageManager` field in `package.json`, so with
+Corepack enabled (`corepack enable`) the right version is used automatically.
+Otherwise: `npm i -g pnpm@10.27.0`.
+
 ```bash
 pnpm install
-pnpm run dev
+pnpm dev
 ```
 
 Then open <http://localhost:3000>.
 
 ## Scripts
 
-| Script                  | What it does                                     |
-| ----------------------- | ------------------------------------------------ |
-| `pnpm run dev`          | Start the dev server on :3000                    |
-| `pnpm run build`        | Production build                                 |
-| `pnpm run start`        | Serve the production build (run `build` first)   |
-| `pnpm run lint`         | ESLint (Next core-web-vitals + TypeScript rules) |
-| `pnpm run typecheck`    | `tsc --noEmit` against the strict config         |
-| `pnpm run format`       | Prettier, writing changes in place               |
-| `pnpm run format:check` | Prettier in check-only mode, for CI              |
+| Script                 | What it does                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`             | Start the dev server on :3000                                                                                                                                                                                                                                                                   |
+| `pnpm build`           | Production build                                                                                                                                                                                                                                                                                |
+| `pnpm start`           | Serve the production build (run `build` first)                                                                                                                                                                                                                                                  |
+| `pnpm lint`            | ESLint (Next core-web-vitals + TypeScript rules)                                                                                                                                                                                                                                                |
+| `pnpm typecheck`       | `tsc --noEmit` against the strict config                                                                                                                                                                                                                                                        |
+| `pnpm format`          | Prettier, writing changes in place                                                                                                                                                                                                                                                              |
+| `pnpm format:check`    | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                             |
+| `pnpm check:roundtrip` | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named. |
+| `pnpm check:mermaid`   | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                     |
+| `pnpm check:archtext`  | Proves `.aft` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                   |
 
-Before pushing: `pnpm run lint && pnpm run typecheck && pnpm run build`.
+The three `check:*` scripts load the **real** library code from `src/` (via
+Node's TypeScript type stripping and a resolve hook for the `@/*` alias), so
+they exercise exactly what the app ships. They are the project's safety net —
+run them before touching the formats or converters.
 
-## Stack
-
-- **Next.js 16** (App Router) with React 19
-- **TypeScript** in strict mode, path alias `@/*` → `src/*`
-- **Tailwind CSS v4** — CSS-first config, no `tailwind.config.js`
-- **next-themes** for theme switching
-- **lucide-react** icons, `clsx` + `tailwind-merge` for the `cn` helper
-- **ESLint** (flat config) + **Prettier** with `prettier-plugin-tailwindcss`
-
-No diagram/canvas library is installed yet — that choice is deliberately
-deferred until edge-routing and export requirements are on the table.
-
----
-
-## Theming
-
-Dark is the **default and the intent**, not a reflection of the OS. Light is one
-click away in the header.
-
-### How it works
-
-1. **Tokens live in CSS.** [`src/app/globals.css`](src/app/globals.css) defines
-   semantic custom properties — `--background`, `--foreground`, `--card`,
-   `--muted`, `--border`, `--primary`, `--accent`, `--destructive`, `--ring`, and
-   friends — once per theme: `:root` holds light, `.dark` holds dark. Names
-   follow the **shadcn/ui convention**, so `pnpm dlx shadcn@latest add button`
-   drops components in with no restyling.
-2. **Tailwind reads those tokens.** An `@theme inline` block maps each property
-   into a Tailwind namespace, which is what makes `bg-background`,
-   `text-muted-foreground`, `border-border`, `ring-ring` and `rounded-lg` work.
-3. **`dark:` follows a class, not the media query.** `@custom-variant dark
-(&:is(.dark *))` points the variant at a `.dark` class on `<html>`.
-4. **next-themes owns that class.**
-   [`src/app/providers.tsx`](src/app/providers.tsx) configures
-   `attribute="class"`, `defaultTheme="dark"`, `enableSystem={false}`,
-   `disableTransitionOnChange`.
-5. **No flash, no hydration warning.** next-themes injects a small blocking
-   script that stamps the class before first paint, `globals.css` paints
-   `<html>` with `--background` immediately, and `<html>` carries
-   `suppressHydrationWarning` because that one element legitimately differs
-   between server and client.
-6. **The toggle is accessible.**
-   [`src/components/layout/theme-toggle.tsx`](src/components/layout/theme-toggle.tsx)
-   keeps both sun and moon in the DOM and cross-fades them, so the button box
-   never changes size (no layout shift). Before mount it renders inert with a
-   neutral `aria-label`, since the resolved theme is not knowable server-side.
-
-Canvas-specific tokens (`--canvas`, `--canvas-grid`, `--node`,
-`--node-foreground`, `--node-border`, `--edge`, `--selection`) already exist so
-the future editor never hardcodes a colour, and a user-defined palette
-(AF-E6-S3) can retint it.
-
-### Adding a theme
-
-Adding a third theme is one CSS block plus one array entry:
-
-1. In `globals.css`, copy the `.dark` block, rename the selector (e.g.
-   `.midnight`), and change the values. Redefine the **full** token set for a
-   dark-family theme — anything omitted falls back to the light `:root` value.
-   The file marks this spot with an `EXTENSION POINT` comment.
-2. Add the name to `THEMES` in [`src/lib/constants.ts`](src/lib/constants.ts).
-   The provider and the toggle both read that list.
-
-No Tailwind change, no component change.
-
----
-
-## Folder map
+## Project structure
 
 ```
 arch-flow/
-├── docs/product/              Product specs (vision, user stories, data model, roadmap)
+├── docs/product/              Product specs (vision, user stories, data model, roadmap, dev handoff)
 ├── public/                    Static assets
+├── scripts/                   The check:* verification scripts
 └── src/
-    ├── app/                   App Router: routes, root layout, global CSS
-    │   ├── layout.tsx         <html>, fonts, providers, header/footer, skip link
-    │   ├── providers.tsx      next-themes ThemeProvider (client)
-    │   ├── globals.css        Theme tokens + Tailwind mapping — the whole theme system
-    │   ├── page.tsx           Landing page
-    │   └── editor/page.tsx    Placeholder editor route
+    ├── app/                   App Router: /, /demo, /view/[modelId], /view/new, /editor
     ├── components/
-    │   ├── ui/                Generic primitives (button, card, badge)
+    │   ├── ui/                Generic primitives (button, card, badge, dialog, tooltip, toast, …)
     │   └── layout/            App chrome (header, footer, theme-toggle)
     ├── features/
-    │   └── editor/            Reserved home for the C4 canvas — read its README
-    ├── lib/
-    │   ├── utils.ts           cn() class merger
-    │   └── constants.ts       App name/description, THEMES, C4 level copy
-    └── types/
-        └── c4.ts              C4Level, C4Node, C4Edge, C4Diagram, ArchFlowFile
+    │   ├── archtext/          The .aft text format: parser + canonical serializer (see its README)
+    │   ├── editor/            The full C4 canvas — built, currently gated (see its README)
+    │   ├── marketing/         Landing-page hero diagram
+    │   ├── mermaid/           Mermaid C4 ⇄ arch-flow converter (pure, dependency-free)
+    │   └── viewer/            Read-only viewer, /view/new playground, SVG/PNG export, model service
+    ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy)
+    └── types/                 C4 model types — mirrors docs/product/data-model.md
 ```
 
-### Where things belong
+Each feature is consumed only through its `index.ts` barrel; nothing outside a
+feature imports its internals. The saved-file shape has exactly one definition
+(`src/types/`); extend it rather than declaring a parallel one.
 
-- `components/ui` — feature-agnostic primitives. No editor knowledge.
-- `components/layout` — app chrome shared across routes.
-- `features/editor` — everything canvas-specific, exported through its
-  `index.ts`. Nothing outside imports its internals.
-- `types/c4.ts` — mirrors `docs/product/data-model.md`. The saved-file shape has
-  exactly one definition; extend it rather than declaring a parallel one.
+## Theming
+
+Dark is the default and the intent, not a reflection of the OS. Light is one
+click away in the header.
+
+- Semantic tokens (`--background`, `--card`, `--primary`, plus canvas tokens
+  like `--canvas`, `--node`, `--edge`, `--selection`) are defined once per
+  theme in [`src/app/globals.css`](src/app/globals.css) — `:root` holds light,
+  `.dark` holds dark. An `@theme inline` block maps them into Tailwind
+  utilities; `@custom-variant dark` points `dark:` at a `.dark` class that
+  next-themes stamps on `<html>` before first paint.
+- **Adding a theme is one CSS block plus one array entry**: copy the `.dark`
+  block in `globals.css` (the file marks the spot with an `EXTENSION POINT`
+  comment), rename the selector, change the values, and add the name to
+  `THEMES` in [`src/lib/constants.ts`](src/lib/constants.ts). No Tailwind
+  change, no component change.
+
+## Enabling the editor
+
+The editor is built and gated, not vaporware. Two steps bring it back:
+
+1. Flip the flag in [`src/lib/constants.ts`](src/lib/constants.ts):
+
+   ```ts
+   export const EDITOR_ENABLED: boolean = true;
+   ```
+
+2. Restore the two commented lines at the top of `src/app/editor/page.tsx`
+   (while gated, that file deliberately imports nothing from
+   `@/features/editor`, which is what keeps the editor UI out of the deployed
+   bundle):
+
+   ```ts
+   import { EditorShell } from "@/features/editor";
+   export default function EditorPage() { return <EditorShell />; }
+   ```
+
+Everything else — the header's Editor nav entry, the landing-page CTAs, the
+capability copy on the demo index and in view mode — reads the flag and
+switches back on its own.
+
+## Known limitations
+
+- **Mermaid import is one-way and lossy.** Boundaries become tags and are not
+  drawn as frames; `SystemDb`/`SystemQueue` at Context level lose their
+  styling (details above).
+- **Default layout is basic.** Text-authored models without explicit
+  coordinates get a deterministic grid layout; on dense diagrams it can crowd
+  edge labels. Add `(x,y w×h)` geometry in `.aft` when it matters.
+- **Sequence diagrams, the data dictionary, and network diagrams are planned,
+  not built.** Only C4 exists today.
+- **The editor is not in this release** — see above.

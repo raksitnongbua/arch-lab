@@ -8,14 +8,18 @@ import { APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 /**
- * Primary navigation. The header renders in the root layout, so these are the
- * only links that reach /demo (and, when the editor ships, /editor) from
- * every page — without them the demo is only discoverable from the
- * landing-page hero. The Editor entry follows EDITOR_ENABLED: while the
- * editor is gated off for this release, the navbar simply does not offer it.
+ * Primary navigation.
+ *
+ * Deliberately empty for this release. The Demo entry was removed on request,
+ * and the Editor entry is gated behind EDITOR_ENABLED, so the header currently
+ * carries only the wordmark, the C4 reference link and the theme toggle.
+ *
+ * Consequence worth knowing: /demo is now reachable only from the landing
+ * page's hero call to action and its C4 card, and /view/new only from the demo
+ * index. Restoring EDITOR_ENABLED brings the Editor entry back and the nav
+ * renders again with no other change.
  */
 const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: "/demo", label: "Demo" },
   ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
 ];
 
@@ -39,26 +43,31 @@ export function Header() {
           </span>
         </Link>
 
-        <nav aria-label="Primary" className="flex items-center gap-1">
-          {NAV_LINKS.map((link) => {
-            const isCurrent = pathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={isCurrent ? "page" : undefined}
-                className={cn(
-                  "rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
-                  isCurrent
-                    ? "bg-secondary/70 font-medium text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* Suppressed entirely when there are no links: an empty <nav> would
+            expose a navigation landmark with nothing in it, which is worse for
+            a screen reader than having no landmark at all. */}
+        {NAV_LINKS.length > 0 ? (
+          <nav aria-label="Primary" className="flex items-center gap-1">
+            {NAV_LINKS.map((link) => {
+              const isCurrent = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={isCurrent ? "page" : undefined}
+                  className={cn(
+                    "rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+                    isCurrent
+                      ? "bg-secondary/70 font-medium text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
 
         <div className="flex items-center gap-2">
           <a
