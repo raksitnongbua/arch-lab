@@ -380,8 +380,8 @@ check(
   JSON.stringify({ alice: alice?.position, sysA: sysA?.size }),
 );
 check(
-  "omitted geometry gets the ordinal default (ext-b is #1 of alice,ext-b,sys-a)",
-  JSON.stringify(extB?.position) === '{"x":280,"y":40}' &&
+  "omitted geometry gets the layered default (alice → sys-a → ext-b puts ext-b on row 2)",
+  JSON.stringify(extB?.position) === '{"x":40,"y":472}' &&
     JSON.stringify(extB?.size) === '{"width":176,"height":88}',
 );
 check(

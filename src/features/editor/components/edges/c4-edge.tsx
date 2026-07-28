@@ -32,6 +32,7 @@ import {
 import {
   getFloatingAnchors,
   getParallelEdgePath,
+  type LabelBias,
   type NodeRect,
 } from "../../lib/edge-geometry";
 import { duration } from "../../lib/motion";
@@ -51,6 +52,8 @@ export interface C4EdgeData extends Record<string, unknown> {
   parallelIndex: number;
   /** Size of that set. 1 ⇒ draw straight; >1 ⇒ offset the curve. */
   parallelCount: number;
+  /** Slides the label off a shared endpoint (`labelBiasByEdgeId`). */
+  labelBias: LabelBias;
 }
 
 export type C4FlowEdge = Edge<C4EdgeData, "c4">;
@@ -135,6 +138,7 @@ export function C4EdgeComponent({
     ...anchors,
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
+    labelBias: data?.labelBias ?? 0,
   });
 
   const bindings = useMemo<ShortcutBinding[]>(() => {

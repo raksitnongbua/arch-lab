@@ -102,6 +102,57 @@ export function getFloatingAnchors(
   };
 }
 
+/* ---- Label fan bias -------------------------------------------------------- */
+
+/**
+ * How far along the line a label slides away from a shared endpoint, in flow
+ * units — and never more than `LABEL_FAN_FRACTION` of the line, so a short edge
+ * keeps its label on the line rather than pushing it past a node.
+ */
+const LABEL_FAN_SHIFT = 56;
+const LABEL_FAN_FRACTION = 0.22;
+
+/** Which way an edge's label slides: −1 toward the source, +1 toward the target. */
+export type LabelBias = -1 | 0 | 1;
+
+export interface EdgeEndpoints {
+  id: string;
+  source: string;
+  target: string;
+}
+
+/**
+ * A bias per edge id that keeps the labels of a *fan* — several edges meeting
+ * at one node — from landing on top of each other. Near the shared node the
+ * curves are bunched together, so every midpoint label collides there; away
+ * from it they have already spread out. So a label slides toward whichever end
+ * of its edge is NOT shared:
+ *
+ *   - one source, many targets  → slide toward the target (+1)
+ *   - many sources, one target  → slide toward the source (−1)
+ *   - shared at both ends, or neither → stay at the midpoint (0)
+ *
+ * Bias 0 for every edge in a diagram with no fans, so simple diagrams render
+ * exactly as before.
+ */
+export function labelBiasByEdgeId(
+  edges: readonly EdgeEndpoints[],
+): Map<string, LabelBias> {
+  const outDegree = new Map<string, number>();
+  const inDegree = new Map<string, number>();
+  for (const edge of edges) {
+    outDegree.set(edge.source, (outDegree.get(edge.source) ?? 0) + 1);
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+  }
+  const bias = new Map<string, LabelBias>();
+  for (const edge of edges) {
+    const fansOut = (outDegree.get(edge.source) ?? 0) > 1;
+    const fansIn = (inDegree.get(edge.target) ?? 0) > 1;
+    bias.set(edge.id, fansOut === fansIn ? 0 : fansOut ? 1 : -1);
+  }
+  return bias;
+}
+
 export interface ParallelEdgePathInput {
   sourceX: number;
   sourceY: number;
@@ -113,12 +164,14 @@ export interface ParallelEdgePathInput {
   parallelIndex: number;
   /** Size of that group. 1 ⇒ default bezier; >1 ⇒ symmetric offsets. */
   parallelCount: number;
+  /** From `labelBiasByEdgeId`. Omitted ⇒ 0 ⇒ label at the midpoint. */
+  labelBias?: LabelBias;
 }
 
 export interface EdgePathGeometry {
   /** SVG path `d` for the edge line. */
   path: string;
-  /** Label anchor — the curve's midpoint. */
+  /** Label anchor — the curve's midpoint, slid along the line by `labelBias`. */
   labelX: number;
   labelY: number;
 }
@@ -132,6 +185,31 @@ export function parallelOffset(index: number, count: number): number {
 }
 
 /**
+ * Slides a midpoint label along the source→target direction by the edge's fan
+ * bias (see `labelBiasByEdgeId`). Deliberately along the straight line, not
+ * along the curve: at these curvatures the two are within a couple of pixels
+ * of each other, and this needs no assumption about how React Flow places the
+ * control points of its bezier.
+ */
+function slideAlongLine(
+  input: ParallelEdgePathInput,
+  x: number,
+  y: number,
+): { labelX: number; labelY: number } {
+  const bias = input.labelBias ?? 0;
+  if (bias === 0) return { labelX: x, labelY: y };
+  const dx = input.targetX - input.sourceX;
+  const dy = input.targetY - input.sourceY;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return { labelX: x, labelY: y };
+  const shift = Math.min(LABEL_FAN_SHIFT, length * LABEL_FAN_FRACTION) * bias;
+  return {
+    labelX: x + (dx / length) * shift,
+    labelY: y + (dy / length) * shift,
+  };
+}
+
+/**
  * The edge path plus its label anchor. A lone edge uses React Flow's default
  * bezier; parallels become quadratic curves whose control point is pushed
  * along the canonical perpendicular of the source→target line.
@@ -142,7 +220,7 @@ export function getParallelEdgePath(
   const offset = parallelOffset(input.parallelIndex, input.parallelCount);
 
   if (offset === 0) {
-    const [path, labelX, labelY] = getBezierPath({
+    const [path, midX, midY] = getBezierPath({
       sourceX: input.sourceX,
       sourceY: input.sourceY,
       sourcePosition: input.sourcePosition,
@@ -150,7 +228,7 @@ export function getParallelEdgePath(
       targetY: input.targetY,
       targetPosition: input.targetPosition,
     });
-    return { path, labelX, labelY };
+    return { path, ...slideAlongLine(input, midX, midY) };
   }
 
   const dx = input.targetX - input.sourceX;
@@ -172,8 +250,8 @@ export function getParallelEdgePath(
   const path = `M ${input.sourceX},${input.sourceY} Q ${controlX},${controlY} ${input.targetX},${input.targetY}`;
 
   // Quadratic bezier at t = 0.5: B(0.5) = 0.25·P0 + 0.5·C + 0.25·P1.
-  const labelX = 0.25 * input.sourceX + 0.5 * controlX + 0.25 * input.targetX;
-  const labelY = 0.25 * input.sourceY + 0.5 * controlY + 0.25 * input.targetY;
+  const midX = 0.25 * input.sourceX + 0.5 * controlX + 0.25 * input.targetX;
+  const midY = 0.25 * input.sourceY + 0.5 * controlY + 0.25 * input.targetY;
 
-  return { path, labelX, labelY };
+  return { path, ...slideAlongLine(input, midX, midY) };
 }

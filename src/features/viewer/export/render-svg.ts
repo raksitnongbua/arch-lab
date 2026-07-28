@@ -27,6 +27,7 @@ import { isBoundaryPlaceholder } from "@/types";
 import {
   getFloatingAnchors,
   getParallelEdgePath,
+  labelBiasByEdgeId,
   type NodeRect,
 } from "@/features/editor/lib/edge-geometry";
 
@@ -387,6 +388,7 @@ function edgeMarkup(
   markerId: string,
 ): string {
   const groups = parallelGroups(diagram.edges);
+  const labelBias = labelBiasByEdgeId(diagram.edges);
   const rectById = new Map(
     diagram.nodes.map((node) => [node.id, nodeRectOf(node)]),
   );
@@ -403,6 +405,7 @@ function edgeMarkup(
       ...anchors,
       parallelIndex: group.index,
       parallelCount: group.count,
+      labelBias: labelBias.get(edge.id) ?? 0,
     });
 
     const dash = edge.style === "dashed" ? ' stroke-dasharray="6 4"' : "";

@@ -18,6 +18,7 @@ import {
 
 import type { C4EdgeData, C4FlowEdge } from "../components/edges/c4-edge";
 import type { C4FlowNode, C4NodeData } from "../components/nodes/c4-node";
+import { labelBiasByEdgeId } from "../lib/edge-geometry";
 import {
   selectChildCount,
   selectParallelEdgeGroups,
@@ -59,6 +60,7 @@ export function useCanvasNodes(): CanvasProjection {
     // Consistent snapshot for the contract selectors that need full state.
     const state = useEditorStore.getState();
     const parallelGroups = selectParallelEdgeGroups(state);
+    const labelBias = labelBiasByEdgeId(diagram.edges);
     const selectedNodeIds = new Set(selection.nodeIds);
     const selectedEdgeIds = new Set(selection.edgeIds);
 
@@ -100,6 +102,7 @@ export function useCanvasNodes(): CanvasProjection {
         isEditingLabel: labelEdit?.kind === "edge" && labelEdit.id === edge.id,
         parallelIndex: group.index,
         parallelCount: group.count,
+        labelBias: labelBias.get(edge.id) ?? 0,
       };
       return {
         id: edge.id,

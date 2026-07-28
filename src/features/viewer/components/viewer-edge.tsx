@@ -47,6 +47,7 @@ import type { C4Edge } from "@/types";
 import {
   getFloatingAnchors,
   getParallelEdgePath,
+  type LabelBias,
   type NodeRect,
 } from "@/features/editor/lib/edge-geometry";
 
@@ -63,6 +64,8 @@ export interface ViewerEdgeData extends Record<string, unknown> {
   parallelIndex: number;
   /** Size of that set. 1 ⇒ straight bezier; >1 ⇒ offset curves. */
   parallelCount: number;
+  /** Slides the label off a shared endpoint (`labelBiasByEdgeId`). */
+  labelBias: LabelBias;
   /** Endpoint node names, for honest accessible labelling. */
   sourceName: string;
   targetName: string;
@@ -116,6 +119,7 @@ function ViewerEdgeInner({
     ...anchors,
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
+    labelBias: data?.labelBias ?? 0,
   });
 
   // Stable per-instance SVG ids (sanitised: useId's delimiters are not safe

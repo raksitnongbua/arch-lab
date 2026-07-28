@@ -27,7 +27,7 @@ import type {
 
 import { LineCursor } from "./cursor";
 import { compareStrings, defaultEdgeId, DEFAULT_TIMESTAMP } from "./defaults";
-import { defaultPositionAt, defaultSizeFor } from "./defaults";
+import { defaultPositions, defaultSizeFor } from "./defaults";
 import { failAt } from "./errors";
 import { ARROWS, NODE_TYPE_BY_KEYWORD } from "./keywords";
 import {
@@ -1601,11 +1601,11 @@ function resolve(
     /* nodes */
     const sortedIds = diagram.nodes.map((n) => n.id).sort(compareStrings);
     const nodeIdSet = new Set(sortedIds);
+    const layout = defaultPositions(sortedIds, diagram.edges);
     const finalNodes: Record<string, unknown>[] = [];
     for (const node of diagram.nodes) {
-      const ordinal = sortedIds.indexOf(node.id);
       const geometry = node.geometry ?? {
-        ...defaultPositionAt(ordinal),
+        ...(layout.get(node.id) ?? { x: 40, y: 40 }),
         ...defaultSizeFor(node.type),
       };
       const position = assemble(

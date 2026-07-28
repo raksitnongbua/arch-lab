@@ -443,3 +443,19 @@
     opacity: 0;
   }
 }
+
+/* ---- canvas stacking order (editor + viewer) ------------------------------
+ * React Flow renders the edge-label portal after the node layer and gives
+ * neither an explicit z-index, so an edge label chip painted over a node card
+ * wins — which is how a busy diagram ends up with a relationship label sitting
+ * on top of a node's name. Pinning both layers fixes the order in one place:
+ * labels stay above the lines they annotate (the edge <svg> is earlier still)
+ * and below every node card. */
+
+.react-flow__edgelabel-renderer {
+  z-index: 1;
+}
+
+.react-flow__nodes {
+  z-index: 2;
+}

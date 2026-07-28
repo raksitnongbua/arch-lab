@@ -62,6 +62,7 @@ import "@xyflow/react/dist/style.css";
 import type { C4Diagram, C4Edge } from "@/types";
 import { childLevelOf, hasChildDiagram, isBoundaryPlaceholder } from "@/types";
 
+import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
 
 import {
@@ -878,6 +879,7 @@ function ViewerCanvasInner({
 
   const edges = useMemo(() => {
     const groups = parallelGroups(diagram.edges);
+    const labelBias = labelBiasByEdgeId(diagram.edges);
     const selectedEdge =
       selectedEdgeId !== null ? findEdge(diagram, selectedEdgeId) : null;
     const nameById = new Map(diagram.nodes.map((n) => [n.id, n.name]));
@@ -925,6 +927,7 @@ function ViewerCanvasInner({
           edge,
           parallelIndex: group.index,
           parallelCount: group.count,
+          labelBias: labelBias.get(edge.id) ?? 0,
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,

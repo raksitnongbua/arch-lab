@@ -94,9 +94,12 @@ Node types: `person`, `system` (softwareSystem), `external`
 (externalSystem), `container`, `database`, `queue`, `component`, `code`
 (codeElement) — checked against `VALID_NODE_TYPES_BY_LEVEL` at parse time.
 
-Geometry may be omitted; the default is a deterministic grid position by the
-node's ordinal in the diagram's sorted id list plus a per-type default size,
-applied identically by parser and serializer, so terse files stay lossless.
+Geometry may be omitted. The default position comes from a deterministic
+layered auto-layout over the diagram's own relationships — sources on top,
+each target at least one row below, rows centred under their parents — plus a
+per-type default size. Parser and serializer compute it from the same inputs
+(sorted node ids + the canonical edge set), so terse files stay lossless and
+an agent can write pure structure and still get a readable diagram.
 
 ## Edges
 
