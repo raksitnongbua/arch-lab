@@ -50,13 +50,20 @@ export function Header() {
           edge-to-edge (rails flush to both sides), so a contained header left the
           chrome visibly inset from the app below it. Padding is kept close to the
           editor header's own so the two read as one continuous surface. */}
-      <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6">
+      {/* This row has to fit a phone. Four nav entries plus the wordmark and
+          the theme toggle came to ~404px, so at 393px (iPhone 15) — let alone
+          375px — it overflowed, and a header wider than the viewport widens
+          the whole document: every page below it then scrolls sideways. Gaps
+          and padding step down here, and below `sm` the wordmark gives up its
+          width to the nav (`max-sm:sr-only` — no pixels, still the link's
+          accessible name) leaving the mark to carry the brand. */}
+      <div className="flex h-16 w-full items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6">
         <Link
           href="/"
-          className="group flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+          className="group flex shrink-0 items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
         >
           <Mark />
-          <span className="font-mono text-[15px] font-semibold tracking-tight text-foreground">
+          <span className="font-mono text-[15px] font-semibold tracking-tight whitespace-nowrap text-foreground max-sm:sr-only">
             {APP_NAME}
           </span>
         </Link>
@@ -66,12 +73,15 @@ export function Header() {
             the middle of a full-bleed header, far from both edges and from
             everything else that is clickable. Grouped here it reads as one
             cluster of controls, and it stays put as entries are added. */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex min-w-0 items-center gap-0.5 sm:gap-2">
           {/* Suppressed entirely when there are no links: an empty <nav> would
               expose a navigation landmark with nothing in it, which is worse
               for a screen reader than having no landmark at all. */}
           {NAV_LINKS.length > 0 ? (
-            <nav aria-label="Primary" className="flex items-center gap-1">
+            <nav
+              aria-label="Primary"
+              className="flex items-center gap-0.5 sm:gap-1"
+            >
               {NAV_LINKS.map((link) => {
                 const isCurrent = pathname === link.href;
                 return (
@@ -80,7 +90,7 @@ export function Header() {
                     href={link.href}
                     aria-current={isCurrent ? "page" : undefined}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none sm:px-2.5 sm:text-sm",
                       isCurrent
                         ? "bg-secondary/70 font-medium text-foreground"
                         : "text-muted-foreground hover:text-foreground",
@@ -89,9 +99,11 @@ export function Header() {
                     {link.label}
                     {/* Part of the link's accessible name, not aria-hidden:
                         "MCP Beta" is what the entry actually offers, and a
-                        screen-reader user needs the caveat as much as anyone. */}
+                        screen-reader user needs the caveat as much as anyone.
+                        `max-sm:sr-only` reclaims its width on a phone without
+                        dropping it from that name. */}
                     {link.status !== undefined ? (
-                      <span className="rounded-full border border-accent/25 bg-accent/12 px-1.5 py-px text-[10px] leading-none font-medium tracking-wide text-accent uppercase">
+                      <span className="rounded-full border border-accent/25 bg-accent/12 px-1.5 py-px text-[10px] leading-none font-medium tracking-wide text-accent uppercase max-sm:sr-only">
                         {link.status}
                       </span>
                     ) : null}

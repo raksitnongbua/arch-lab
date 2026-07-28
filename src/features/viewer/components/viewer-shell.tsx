@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * The view-mode page body: a slim header naming the model (title, read-only
- * badge, and — while EDITOR_ENABLED — the way into the editor) over the
- * view-only canvas — plus the two ways the canvas can take the whole screen:
+ * The view-mode page body: the view-only canvas, with a slim strip under it
+ * naming the model (title, read-only badge, and — while EDITOR_ENABLED — the
+ * way into the editor) — plus the two ways the canvas can take the whole
+ * screen:
  *
  *  1. Native fullscreen — the Fullscreen API on this shell's root element,
  *     feature-detected, state tracked through `fullscreenchange` so the
@@ -11,7 +12,7 @@
  *  2. Immersive mode — an in-page fallback that fixes the shell over the
  *     viewport (the site header/footer are simply covered, never edited),
  *     for embedding contexts where the Fullscreen API is blocked. The shell
- *     header stays visible in both, so the exit is always one click away.
+ *     strip stays visible in both, so the exit is always one click away.
  *
  * Escape precedence, one ladder, one step per press:
  *   1. native fullscreen active → the BROWSER exits fullscreen; the viewer
@@ -209,7 +210,26 @@ export function ViewerShell({
         {announcement}
       </p>
 
-      <header className="border-b border-border/60 bg-background">
+      {/* The diagram comes FIRST, above the strip that names it. This is a
+          diagram viewer: the diagram is what you came for, so it gets the top
+          of the viewport and the identifying detail reads as its caption. It
+          matters most on a phone, where the title, description and five
+          controls used to wrap into ~370px of chrome and push the canvas
+          below the fold — you arrived at a diagram tool and saw no diagram. */}
+      {/* `flex-1` does the real work — on a standalone view page this takes
+          every pixel the site chrome leaves. The floor is only a guard against
+          a collapsed canvas, and is deliberately modest: the shell is also
+          embedded in the playground inside a clamped-height section, where a
+          tall floor would push itself past the bottom of its own frame. */}
+      <div className="relative min-h-56 flex-1 sm:min-h-80">
+        <ViewerCanvas
+          model={frozenModel}
+          initialDiagramId={initialDiagramId}
+          onDiagramChange={handleDiagramChange}
+        />
+      </div>
+
+      <header className="border-t border-border/60 bg-background">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -283,11 +303,19 @@ export function ViewerShell({
               </button>
             ) : null}
             {EDITOR_ENABLED ? (
+              // The label shortens on a phone so this sits on the same row as
+              // the four icon controls instead of wrapping below them — a
+              // whole extra row of chrome for one link. `aria-label` keeps the
+              // full phrase, which is the one that says where it goes.
               <Link
                 href="/editor"
+                aria-label="Build yours in the editor"
                 className={buttonClasses({ size: "sm", className: "shrink-0" })}
               >
-                Build yours in the editor
+                <span className="sm:hidden">Editor</span>
+                <span className="hidden sm:inline">
+                  Build yours in the editor
+                </span>
                 <ArrowRight aria-hidden="true" />
               </Link>
             ) : (
@@ -298,14 +326,6 @@ export function ViewerShell({
           </div>
         </div>
       </header>
-
-      <div className="relative min-h-96 flex-1">
-        <ViewerCanvas
-          model={frozenModel}
-          initialDiagramId={initialDiagramId}
-          onDiagramChange={handleDiagramChange}
-        />
-      </div>
     </div>
   );
 }
