@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { MCP_STATUS_LABEL } from "@/features/mcp/catalog";
 import { APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -20,15 +21,24 @@ import { cn } from "@/lib/utils";
  * entry is gated behind EDITOR_ENABLED; flipping that flag restores it
  * alongside the others with no other change.
  *
+ * MCP carries a `status` pill read from the mcp feature's catalogue, so the
+ * beta marker here can never disagree with the one on `/mcp` or the one the
+ * server sends on `initialize` — there is one constant behind all three.
+ *
  * The empty-array guard on the <nav> below still matters if every entry is
  * ever removed again: an empty <nav> would expose a navigation landmark with
  * nothing in it, which is worse for a screen reader than no landmark at all.
  */
-const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
+const NAV_LINKS: ReadonlyArray<{
+  href: string;
+  label: string;
+  /** Release status, shown as a small pill after the label. */
+  status?: string;
+}> = [
   ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
   { href: "/syntax", label: "Syntax" },
   { href: "/validate", label: "Validate" },
-  { href: "/mcp", label: "MCP" },
+  { href: "/mcp", label: "MCP", status: MCP_STATUS_LABEL },
 ];
 
 export function Header() {
@@ -70,13 +80,21 @@ export function Header() {
                     href={link.href}
                     aria-current={isCurrent ? "page" : undefined}
                     className={cn(
-                      "rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+                      "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
                       isCurrent
                         ? "bg-secondary/70 font-medium text-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {link.label}
+                    {/* Part of the link's accessible name, not aria-hidden:
+                        "MCP Beta" is what the entry actually offers, and a
+                        screen-reader user needs the caveat as much as anyone. */}
+                    {link.status !== undefined ? (
+                      <span className="rounded-full border border-accent/25 bg-accent/12 px-1.5 py-px text-[10px] leading-none font-medium tracking-wide text-accent uppercase">
+                        {link.status}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}

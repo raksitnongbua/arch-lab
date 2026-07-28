@@ -14,14 +14,17 @@
  * confused until told otherwise.
  */
 
+import { FlaskConical } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 
 import {
   CONNECT_RECIPES,
+  MCP_BETA_NOTICE,
   MCP_PROMPTS,
   MCP_RESOURCES,
+  MCP_STATUS_LABEL,
   MCP_TOOLS,
   mcpEndpointUrl,
 } from "../catalog";
@@ -43,10 +46,15 @@ export function McpGuide(): React.JSX.Element {
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-14 sm:px-8 sm:py-20">
       {/* ---- intro ---------------------------------------------------------- */}
-      <Badge variant="accent" className="mb-6">
-        <span className="size-1.5 rounded-full bg-accent" />
-        Integration · Model Context Protocol
-      </Badge>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <Badge variant="accent">
+          <span className="size-1.5 rounded-full bg-accent" />
+          Integration · Model Context Protocol
+        </Badge>
+        {/* Outline rather than accent: the status qualifies the badge next to
+            it, so it should not compete with it for attention. */}
+        <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
+      </div>
 
       <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
         Use arch-lab from your AI agent
@@ -66,6 +74,19 @@ export function McpGuide(): React.JSX.Element {
         models. It is hosted — there is nothing to install and no key to
         configure.
       </p>
+
+      {/* Above the endpoint, not buried at the bottom: someone about to paste
+          a URL into their client deserves to know what it does not promise
+          before they depend on it. */}
+      <div className="mt-6 max-w-3xl rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+          <FlaskConical aria-hidden="true" className="size-4 text-accent" />
+          {MCP_STATUS_LABEL}
+        </h2>
+        <p className="mt-2 leading-relaxed text-muted-foreground">
+          {MCP_BETA_NOTICE}
+        </p>
+      </div>
 
       <div className="mt-6 max-w-3xl">
         <CopySnippet

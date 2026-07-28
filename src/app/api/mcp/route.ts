@@ -22,7 +22,11 @@
 import { createMcpHandler } from "mcp-handler";
 
 import { registerArchLabMcp } from "@/features/mcp";
-import { MCP_SERVER_NAME, MCP_SERVER_VERSION } from "@/features/mcp/catalog";
+import {
+  MCP_BETA_NOTICE_SHORT,
+  MCP_SERVER_NAME,
+  MCP_SERVER_VERSION,
+} from "@/features/mcp/catalog";
 
 export const runtime = "nodejs";
 
@@ -43,7 +47,11 @@ const handler = createMcpHandler(
       "that you cannot: the exact grammar (get_syntax_reference) and the " +
       "real parser's verdict (validate_model). Validate before presenting " +
       "any model you authored, and use create_share_link when a human needs " +
-      "to actually see the diagram.",
+      "to actually see the diagram. " +
+      // A client may connect without any human ever opening `/mcp`, so the
+      // beta caveat travels with the handshake rather than living only on a
+      // page nobody in the loop has read.
+      MCP_BETA_NOTICE_SHORT,
   },
   {
     // `/api` + the file's own segment resolves to `/api/mcp`.

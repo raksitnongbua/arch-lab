@@ -4,6 +4,14 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server at
 `/api/mcp`, so an AI agent can read, check and convert `.alab` models. Also
 documents itself at `/mcp`.
 
+**Status: beta.** `MCP_STATUS_LABEL` and `MCP_BETA_NOTICE` in `catalog.ts` are
+the single source of that claim — the navbar pill, the `/mcp` page callout and
+the server's `initialize` instructions all read them, so the marker cannot be
+true in one place and stale in another. The endpoint URL and the `.alab` format
+are stable; tool names, arguments and response wording are not yet. Promoting
+out of beta is an edit to those two constants (and deleting the check that
+asserts the label).
+
 ## What it is for — and what it is not
 
 An agent already has file tools, and `.alab` is a text format precisely so it
