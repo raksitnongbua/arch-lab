@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { McpGuide } from "@/features/mcp/components/mcp-guide";
 
 export const metadata: Metadata = {
-  title: "MCP server — use arch-lab from your AI agent",
+  title: "MCP server (beta) — use arch-lab from your AI agent",
   description:
-    "Connect Claude Code, Claude Desktop, Cursor or any MCP client to arch-lab: validate .alab models against the real parser, convert between .alab, arch-lab JSON and Mermaid C4, read the verified syntax reference, and turn a model into a share link. Hosted, read-only, nothing stored.",
+    "Connect Claude Code, Claude Desktop, Cursor or any MCP client to arch-lab: validate .alab models against the real parser, convert between .alab, arch-lab JSON and Mermaid C4, read the verified syntax reference, and turn a model into a share link. Hosted, read-only, nothing stored. In beta — tool names and response wording may still change.",
 };
 
 /**

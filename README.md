@@ -20,21 +20,22 @@ Be precise about what this repo is right now:
 | **`.alab` ⇄ JSON conversion**                            | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                        |
 | **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                  |
 | **C4 editor**                                            | Feature-complete in the codebase but **gated off for this release** behind `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts). `/editor` renders a coming-soon page and the editor code is excluded from the deployed bundle. See [Enabling the editor](#enabling-the-editor). |
+| **MCP server** (`/api/mcp`)                              | **Beta.** Eight read-only tools, a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                     |
 | **Sequence diagrams, data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                            |
 
 ## Routes
 
-| Route             | What it is                                                                                                                                                                  |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                       |
-| `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                             |
-| `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas. |
-| `/view/new`       | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                      |
-| `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.             |
-| `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers.                                                              |
-| `/mcp`            | How to connect an AI agent. Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.    |
-| `/api/mcp`        | The MCP server itself (Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                           |
-| `/editor`         | Coming-soon page while the editor is gated.                                                                                                                                 |
+| Route             | What it is                                                                                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
+| `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                                     |
+| `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
+| `/view/new`       | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                              |
+| `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
+| `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers.                                                                      |
+| `/mcp`            | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
+| `/api/mcp`        | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
+| `/editor`         | Coming-soon page while the editor is gated.                                                                                                                                         |
 
 ## The two model formats
 
@@ -90,7 +91,7 @@ Everything else — names, descriptions, technologies, relationships, `<br/>`
 decoding, `_Ext` externality, `BiRel` bidirectionality — carries over.
 `pnpm check:mermaid` proves the mapping.
 
-## Use it from an AI agent (MCP)
+## Use it from an AI agent (MCP) — beta
 
 arch-lab hosts a [Model Context Protocol](https://modelcontextprotocol.io)
 server, so Claude Code, Claude Desktop, Cursor and anything else speaking the
@@ -114,6 +115,12 @@ the grammar in a second place and drift from it.
 Nothing is stored. Every tool is a pure function of the text it is sent, and
 `create_share_link` encodes the model into a URL _fragment_, which browsers
 never transmit — so even a shared link uploads nothing.
+
+**This integration is in beta.** The endpoint URL and the `.alab` format are
+stable, but tool names, arguments and response wording may still change, and
+there is no protocol-level versioning yet — so pin nothing to the exact text of
+a response. The caveat also travels in the server's `initialize` instructions,
+for agents that connect without a human reading this.
 
 Details, per-client setup and the honest limits are on
 [`/mcp`](https://arch-lab-virid.vercel.app/mcp); the implementation is

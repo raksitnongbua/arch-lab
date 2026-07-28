@@ -24,6 +24,7 @@
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -82,9 +83,15 @@ registerHooks({
 const load = (relative) =>
   import(pathToFileURL(path.join(ROOT, relative)).href);
 
-const { MCP_TOOLS, MCP_RESOURCES, MCP_PROMPTS, mcpEndpointUrl } = await load(
-  "src/features/mcp/catalog.ts",
-);
+const {
+  MCP_TOOLS,
+  MCP_RESOURCES,
+  MCP_PROMPTS,
+  MCP_STATUS_LABEL,
+  MCP_BETA_NOTICE,
+  MCP_BETA_NOTICE_SHORT,
+  mcpEndpointUrl,
+} = await load("src/features/mcp/catalog.ts");
 const { registerArchLabMcp } = await load("src/features/mcp/server.ts");
 const { validateModel } = await load("src/features/mcp/tools/validate.ts");
 const { convertModel, formatModel } = await load(
@@ -259,6 +266,33 @@ check("the authoring prompt tells the agent to validate", () => {
   assert.match(text, /a coffee shop/);
   assert.match(text, /validate_model/);
   assert.match(text, /get_syntax_reference/);
+});
+
+check("the beta status is one constant, stated in commitments", () => {
+  assert.equal(MCP_STATUS_LABEL, "Beta");
+  // Not adjectives: a reader needs to know what is safe to depend on. Both
+  // notices must name the stable part AND the unstable part.
+  for (const [name, notice] of [
+    ["MCP_BETA_NOTICE", MCP_BETA_NOTICE],
+    ["MCP_BETA_NOTICE_SHORT", MCP_BETA_NOTICE_SHORT],
+  ]) {
+    assert.match(notice, /beta/i, `${name} must say it is beta`);
+    assert.match(notice, /endpoint URL/i, `${name} must name what is stable`);
+    assert.match(notice, /tool names/i, `${name} must name what may change`);
+  }
+});
+
+check("the server tells a connecting client it is beta", async () => {
+  // The handshake is where an agent learns this — a human may never open /mcp.
+  const route = await readFile(
+    path.join(ROOT, "src/app/api/mcp/route.ts"),
+    "utf8",
+  );
+  assert.match(
+    route,
+    /MCP_BETA_NOTICE_SHORT/,
+    "the initialize instructions must carry the beta notice",
+  );
 });
 
 check("the endpoint url is built from the site origin", () => {

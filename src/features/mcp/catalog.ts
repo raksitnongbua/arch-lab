@@ -28,6 +28,39 @@ export function mcpEndpointUrl(origin: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Release status                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The integration is in **beta**, and says so everywhere it is offered: the
+ * navbar entry, the `/mcp` page, and the server's own `initialize`
+ * instructions — so an agent that connects without a human ever visiting the
+ * page still learns that tool names and response shapes may move under it.
+ *
+ * One constant, read by all three, because a status that is true in one place
+ * and stale in another is worse than no status at all.
+ */
+export const MCP_STATUS_LABEL = "Beta";
+
+/**
+ * What beta actually means here, in commitments rather than adjectives. Vague
+ * "this may change" wording tells a reader nothing they can plan around; this
+ * separates what is safe to depend on from what is not.
+ */
+export const MCP_BETA_NOTICE =
+  "This integration is in beta. The endpoint URL and the .alab format itself " +
+  "are stable — the format's round-trip guarantees are proven on every build " +
+  "— but tool names, arguments and the wording of responses may still change, " +
+  "and there is no protocol-level versioning to smooth that over yet. Pin " +
+  "nothing to the exact text of a response, and expect to re-read this page " +
+  "after an upgrade.";
+
+/** The same commitment, compressed for the server's `initialize` payload. */
+export const MCP_BETA_NOTICE_SHORT =
+  "This server is in beta: the endpoint URL is stable, but tool names, " +
+  "arguments and response wording may change without a version bump.";
+
+/* -------------------------------------------------------------------------- */
 /* Tools                                                                       */
 /* -------------------------------------------------------------------------- */
 
