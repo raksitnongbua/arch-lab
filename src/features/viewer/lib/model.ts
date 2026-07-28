@@ -6,7 +6,14 @@
  * editor's real reader (`@/features/editor/io/deserialize`).
  */
 
-import type { C4Diagram, C4Edge, C4Level, C4Node } from "@/types";
+import type {
+  ArchLabFile,
+  ArchLabMetadata,
+  C4Diagram,
+  C4Edge,
+  C4Level,
+  C4Node,
+} from "@/types";
 
 /* -------------------------------------------------------------------------- */
 /* Shape                                                                       */
@@ -20,6 +27,38 @@ export interface ViewerModel {
   rootDiagramId: string;
   /** Flat, id-keyed — same shape decision as the saved-file format. */
   diagrams: Readonly<Record<string, C4Diagram>>;
+  /**
+   * The file-level fields that are not diagrams. `title` and `description`
+   * above are conveniences read off `metadata`; this is what makes the model
+   * whole, so `archLabFileFrom` can hand the EXACT document to something that
+   * needs a file (the "Edit this diagram" handoff) instead of a reconstruction
+   * that quietly drops `tagColors`, `customIcons` or a newer version's
+   * unknown fields. Deliberately not the diagrams over again: those are right
+   * here, and duplicating them would double the page payload.
+   */
+  file: Readonly<{
+    version: string;
+    metadata: ArchLabMetadata;
+    /** Unknown top-level fields from a newer minor version, verbatim. */
+    unknownFields: Readonly<Record<string, unknown>>;
+  }>;
+}
+
+/**
+ * The viewer model as the `ArchLabFile` it was parsed from — byte-for-byte the
+ * same document, so serializing this is the same as serializing the original.
+ */
+export function archLabFileFrom(model: ViewerModel): ArchLabFile {
+  const file: ArchLabFile = {
+    version: model.file.version,
+    metadata: model.file.metadata,
+    rootDiagramId: model.rootDiagramId,
+    diagrams: Object.values(model.diagrams),
+  };
+  for (const [key, value] of Object.entries(model.file.unknownFields)) {
+    file[key] = value;
+  }
+  return file;
 }
 
 /**

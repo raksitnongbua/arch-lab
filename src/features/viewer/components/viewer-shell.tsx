@@ -37,8 +37,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ArrowRight, Expand, Maximize2, Minimize2, Shrink } from "lucide-react";
-import Link from "next/link";
+import { Expand, Maximize2, Minimize2, Shrink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -46,6 +45,7 @@ import { EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import { ViewerExportButton } from "../export/export-button";
+import { EditModeLink } from "./edit-mode-link";
 import { ViewerShareButton, type ShareSource } from "../share/share-button";
 import { deepFreeze, getDiagram, type ViewerModel } from "../lib/model";
 import { ViewerCanvas } from "./viewer-canvas";
@@ -314,21 +314,7 @@ export function ViewerShell({
               </button>
             ) : null}
             {EDITOR_ENABLED ? (
-              // The label shortens on a phone so this sits on the same row as
-              // the four icon controls instead of wrapping below them — a
-              // whole extra row of chrome for one link. `aria-label` keeps the
-              // full phrase, which is the one that says where it goes.
-              <Link
-                href="/editor"
-                aria-label="Build yours in the editor"
-                className={buttonClasses({ size: "sm", className: "shrink-0" })}
-              >
-                <span className="sm:hidden">Editor</span>
-                <span className="hidden sm:inline">
-                  Build yours in the editor
-                </span>
-                <ArrowRight aria-hidden="true" />
-              </Link>
+              <EditModeLink model={frozenModel} diagramId={currentDiagramId} />
             ) : (
               <Badge variant="outline" className="shrink-0">
                 Editor — coming soon

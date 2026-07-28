@@ -239,7 +239,10 @@ export function ViewerShareButton({
           role="dialog"
           aria-labelledby={headingId}
           tabIndex={-1}
-          className="absolute left-0 z-50 mt-1.5 w-[min(22rem,calc(100vw-4rem))] rounded-lg border border-border bg-card p-4 shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:right-0 sm:left-auto"
+          /* Opens UPWARD — see the note on the Export menu: this strip is at
+             the bottom of the shell, and in immersive mode there is nothing
+             below the fold to scroll to. */
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-[min(22rem,calc(100vw-4rem))] rounded-lg border border-border bg-card p-4 shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:right-0 sm:left-auto"
         >
           <h2 id={headingId} className="text-sm font-semibold text-foreground">
             Share this model

@@ -137,6 +137,11 @@ function viewerModelFromEditorModel(editorModel: EditorModel): ViewerModel {
     description: editorModel.metadata.description ?? "",
     rootDiagramId: editorModel.rootDiagramId,
     diagrams: editorModel.diagrams,
+    file: {
+      version: editorModel.version,
+      metadata: editorModel.metadata,
+      unknownFields: editorModel.unknownFields,
+    },
   };
 }
 
