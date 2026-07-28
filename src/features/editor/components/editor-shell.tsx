@@ -26,6 +26,7 @@ import { FileActions } from "./file-actions";
 import { InspectorPanel } from "./inspector/inspector-panel";
 import { Palette } from "./palette";
 import { RecoveryPrompt } from "./recovery-prompt";
+import { ViewModeLink } from "./view-mode-link";
 
 const emptySubscribe = () => () => {};
 
@@ -74,6 +75,7 @@ export function EditorShell(): React.JSX.Element {
             <Code2 aria-hidden="true" />
             <span className="hidden lg:inline">Model text</span>
           </Button>
+          <ViewModeLink />
           <FileActions />
         </header>
         <div className="relative min-h-96 flex-1 bg-canvas">

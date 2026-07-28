@@ -1,7 +1,7 @@
 /**
  * The icon registry (dev-handoff §4.6, D15, AF-E4-S1/S2). Owned by T2-A.
  *
- * Exactly 16 hand-authored inline-SVG icons: the 9 named marks plus 7
+ * 38 hand-authored inline-SVG icons: 31 named marks plus 7
  * generics. Icons are referenced by slug; no SVG data or URL is ever written
  * into the model. All 16 are monochrome and follow `currentColor`, so they
  * stay legible in both themes with zero colour literals.
@@ -10,22 +10,44 @@
 import type { C4Node, C4NodeType } from "@/types";
 
 import { type IconCategory } from "./categories";
+import { AwsIcon } from "./svg/aws";
+import { AzureIcon } from "./svg/azure";
 import { BrowserIcon } from "./svg/browser";
 import { CloudflareIcon } from "./svg/cloudflare";
 import { DatabaseIcon } from "./svg/database";
+import { DockerIcon } from "./svg/docker";
+import { DotnetIcon } from "./svg/dotnet";
+import { ElasticsearchIcon } from "./svg/elasticsearch";
 import { ExternalIcon } from "./svg/external";
+import { FirebaseIcon } from "./svg/firebase";
+import { GcpIcon } from "./svg/gcp";
 import { GolangIcon } from "./svg/golang";
+import { GraphqlIcon } from "./svg/graphql";
+import { GrpcIcon } from "./svg/grpc";
+import { JavaIcon } from "./svg/java";
+import { KafkaIcon } from "./svg/kafka";
 import { KongIcon } from "./svg/kong";
+import { KubernetesIcon } from "./svg/kubernetes";
+import { LambdaIcon } from "./svg/lambda";
 import { MobileIcon } from "./svg/mobile";
 import { MongodbIcon } from "./svg/mongodb";
 import { MysqlIcon } from "./svg/mysql";
 import { NextjsIcon } from "./svg/nextjs";
 import { NginxIcon } from "./svg/nginx";
+import { NodejsIcon } from "./svg/nodejs";
 import { PersonIcon } from "./svg/person";
+import { PhpIcon } from "./svg/php";
 import { PostgresqlIcon } from "./svg/postgresql";
+import { PythonIcon } from "./svg/python";
 import { QueueIcon } from "./svg/queue";
+import { RabbitmqIcon } from "./svg/rabbitmq";
+import { ReactIcon } from "./svg/react";
 import { RedisIcon } from "./svg/redis";
+import { RustIcon } from "./svg/rust";
+import { S3Icon } from "./svg/s3";
 import { ServiceIcon } from "./svg/service";
+import { TerraformIcon } from "./svg/terraform";
+import { TypescriptIcon } from "./svg/typescript";
 
 export type { IconCategory } from "./categories";
 
@@ -64,6 +86,70 @@ const ICON_DEFS: readonly IconDef[] = [
     Svg: NextjsIcon,
     monochrome: true,
   },
+  {
+    slug: "dotnet",
+    name: ".NET",
+    aliases: ["c#", "csharp", "asp.net", "clr"],
+    category: "languages",
+    Svg: DotnetIcon,
+    monochrome: true,
+  },
+  {
+    slug: "java",
+    name: "Java",
+    aliases: ["jvm", "kotlin", "spring", "spring boot"],
+    category: "languages",
+    Svg: JavaIcon,
+    monochrome: true,
+  },
+  {
+    slug: "nodejs",
+    name: "Node.js",
+    aliases: ["node", "express", "nest", "nestjs"],
+    category: "languages",
+    Svg: NodejsIcon,
+    monochrome: true,
+  },
+  {
+    slug: "php",
+    name: "PHP",
+    aliases: ["laravel", "symfony"],
+    category: "languages",
+    Svg: PhpIcon,
+    monochrome: true,
+  },
+  {
+    slug: "python",
+    name: "Python",
+    aliases: ["py", "django", "fastapi", "flask"],
+    category: "languages",
+    Svg: PythonIcon,
+    monochrome: true,
+  },
+  {
+    slug: "react",
+    name: "React",
+    aliases: ["reactjs", "jsx", "vite", "remix"],
+    category: "languages",
+    Svg: ReactIcon,
+    monochrome: true,
+  },
+  {
+    slug: "rust",
+    name: "Rust",
+    aliases: ["rs", "cargo", "axum", "tokio"],
+    category: "languages",
+    Svg: RustIcon,
+    monochrome: true,
+  },
+  {
+    slug: "typescript",
+    name: "TypeScript",
+    aliases: ["ts", "javascript", "js"],
+    category: "languages",
+    Svg: TypescriptIcon,
+    monochrome: true,
+  },
   /* -- Databases ----------------------------------------------------------- */
   {
     slug: "mongodb",
@@ -89,6 +175,14 @@ const ICON_DEFS: readonly IconDef[] = [
     Svg: PostgresqlIcon,
     monochrome: true,
   },
+  {
+    slug: "elasticsearch",
+    name: "Elasticsearch",
+    aliases: ["elastic", "opensearch", "search", "lucene"],
+    category: "databases",
+    Svg: ElasticsearchIcon,
+    monochrome: true,
+  },
   /* -- Caching & Messaging -------------------------------------------------- */
   {
     slug: "redis",
@@ -96,6 +190,22 @@ const ICON_DEFS: readonly IconDef[] = [
     aliases: ["cache", "valkey"],
     category: "messaging",
     Svg: RedisIcon,
+    monochrome: true,
+  },
+  {
+    slug: "kafka",
+    name: "Kafka",
+    aliases: ["event stream", "streaming", "msk", "pubsub"],
+    category: "messaging",
+    Svg: KafkaIcon,
+    monochrome: true,
+  },
+  {
+    slug: "rabbitmq",
+    name: "RabbitMQ",
+    aliases: ["amqp", "rabbit"],
+    category: "messaging",
+    Svg: RabbitmqIcon,
     monochrome: true,
   },
   /* -- Networking & Edge ---------------------------------------------------- */
@@ -115,6 +225,22 @@ const ICON_DEFS: readonly IconDef[] = [
     Svg: NginxIcon,
     monochrome: true,
   },
+  {
+    slug: "graphql",
+    name: "GraphQL",
+    aliases: ["gql", "apollo", "federation"],
+    category: "networking",
+    Svg: GraphqlIcon,
+    monochrome: true,
+  },
+  {
+    slug: "grpc",
+    name: "gRPC",
+    aliases: ["rpc", "protobuf", "proto"],
+    category: "networking",
+    Svg: GrpcIcon,
+    monochrome: true,
+  },
   /* -- Cloud ----------------------------------------------------------------- */
   {
     slug: "cloudflare",
@@ -122,6 +248,78 @@ const ICON_DEFS: readonly IconDef[] = [
     aliases: ["cf", "cdn", "edge"],
     category: "cloud",
     Svg: CloudflareIcon,
+    monochrome: true,
+  },
+  {
+    slug: "aws",
+    name: "AWS",
+    aliases: ["amazon", "amazon web services", "ec2"],
+    category: "cloud",
+    Svg: AwsIcon,
+    monochrome: true,
+  },
+  {
+    slug: "azure",
+    name: "Azure",
+    aliases: ["microsoft azure", "msft"],
+    category: "cloud",
+    Svg: AzureIcon,
+    monochrome: true,
+  },
+  {
+    slug: "docker",
+    name: "Docker",
+    aliases: ["container", "oci", "compose"],
+    category: "cloud",
+    Svg: DockerIcon,
+    monochrome: true,
+  },
+  {
+    slug: "firebase",
+    name: "Firebase",
+    aliases: ["gcp firebase", "firestore"],
+    category: "cloud",
+    Svg: FirebaseIcon,
+    monochrome: true,
+  },
+  {
+    slug: "gcp",
+    name: "Google Cloud",
+    aliases: ["google", "google cloud platform", "big query"],
+    category: "cloud",
+    Svg: GcpIcon,
+    monochrome: true,
+  },
+  {
+    slug: "kubernetes",
+    name: "Kubernetes",
+    aliases: ["k8s", "eks", "gke", "aks"],
+    category: "cloud",
+    Svg: KubernetesIcon,
+    monochrome: true,
+  },
+  {
+    slug: "lambda",
+    name: "Serverless",
+    aliases: ["function", "faas", "cloud function"],
+    category: "cloud",
+    Svg: LambdaIcon,
+    monochrome: true,
+  },
+  {
+    slug: "s3",
+    name: "Object storage",
+    aliases: ["bucket", "blob", "gcs"],
+    category: "cloud",
+    Svg: S3Icon,
+    monochrome: true,
+  },
+  {
+    slug: "terraform",
+    name: "Terraform",
+    aliases: ["iac", "opentofu", "hcl"],
+    category: "cloud",
+    Svg: TerraformIcon,
     monochrome: true,
   },
   /* -- Generic ---------------------------------------------------------------- */

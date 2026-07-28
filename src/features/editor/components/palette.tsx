@@ -15,7 +15,12 @@
 import { useCallback } from "react";
 
 import { toast } from "@/components/ui/toast";
-import type { C4Level, C4NodeType, Point } from "@/types";
+import {
+  childLevelOf,
+  type C4Level,
+  type C4NodeType,
+  type Point,
+} from "@/types";
 
 import {
   DEFAULT_NODE_SIZE,
@@ -27,6 +32,7 @@ import {
   selectValidNodeTypes,
   useEditorStore,
 } from "../state";
+import { C4_LEVEL_META } from "@/lib/constants";
 import { PaletteItem } from "./palette-item";
 
 /** Display order and grouping of the palette; filtered per level at render. */
@@ -112,6 +118,14 @@ function createAtViewportCentre(type: C4NodeType): void {
 
 export function Palette(): React.JSX.Element {
   const activeLevel = useEditorStore(selectActiveLevel);
+
+  // `null` at code level, where there is nothing below to point at.
+  const childLevel = childLevelOf(activeLevel);
+  const nextLevelLabel =
+    childLevel === null
+      ? null
+      : (C4_LEVEL_META.find((meta) => meta.level === childLevel)?.label ??
+        null);
   const validTypes = useEditorStore(selectValidNodeTypes);
 
   const handleCreate = useCallback((type: C4NodeType) => {
@@ -156,9 +170,28 @@ export function Palette(): React.JSX.Element {
         </section>
       ))}
 
-      <p className="mt-auto text-[10px] leading-relaxed text-muted-foreground/80">
-        Drag onto the canvas, or double-click to add at the centre.
-      </p>
+      <div className="mt-auto flex flex-col gap-2">
+        {/* The palette can only ever offer types legal at THIS level, so the
+            level below is unreachable from here by construction. Users read
+            that absence as "arch-lab cannot make containers" — say where they
+            actually live, in the panel where they went looking for them. */}
+        {nextLevelLabel === null ? null : (
+          <p className="rounded-md border border-border/60 bg-secondary/40 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
+            Looking for{" "}
+            <span className="font-medium text-foreground">
+              {nextLevelLabel.toLowerCase()}s
+            </span>
+            ? They live inside an element. Select one on the canvas and use{" "}
+            <span className="font-medium text-foreground">
+              Add {nextLevelLabel.toLowerCase()}s inside
+            </span>{" "}
+            in the inspector.
+          </p>
+        )}
+        <p className="text-[10px] leading-relaxed text-muted-foreground/80">
+          Drag onto the canvas, or double-click to add at the centre.
+        </p>
+      </div>
     </nav>
   );
 }
