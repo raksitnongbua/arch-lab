@@ -1,7 +1,7 @@
 import {
   ArrowRight,
   Boxes,
-  FileJson,
+  FileText,
   Layers,
   Network,
   Puzzle,
@@ -141,7 +141,7 @@ export default function Home() {
               )}
               <p id="cta-note" className="text-sm text-muted-foreground">
                 {EDITOR_ENABLED
-                  ? "No account, no cloud — the model saves to a JSON file you own."
+                  ? "No account, no cloud — the model saves to one .alab text file you own."
                   : "No account, no cloud — models are plain text files, and nothing you paste leaves your browser."}
               </p>
             </div>
@@ -160,7 +160,7 @@ export default function Home() {
                 : "C4 levels, explorable today"
             }
           />
-          <Stat value="1" label="JSON file per model" />
+          <Stat value="1" label="Text file per model" />
           <Stat value="0" label="Accounts or servers" />
           <Stat value="Git" label="Is the collaboration layer" />
         </ul>
@@ -180,7 +180,7 @@ export default function Home() {
           </h2>
           <p className="max-w-2xl leading-relaxed text-muted-foreground">
             The first phase ships C4 model diagrams. The other three surfaces
-            are planned and will share the same local-first, JSON-on-disk
+            are planned and will share the same local-first, text-on-disk
             foundation — they are listed here as direction, not as promises with
             dates.
           </p>
@@ -375,9 +375,9 @@ export default function Home() {
               }
             />
             <Principle
-              icon={FileJson}
-              title="Plain JSON on disk"
-              body="Stable ids, deterministic key order, sorted arrays. A reviewer sees what changed in the architecture, not a reshuffled blob."
+              icon={FileText}
+              title="Plain text on disk"
+              body="One .alab file per model — stable ids, deterministic line order, sorted tags. A reviewer sees what changed in the architecture, not a reshuffled blob. JSON stays available for tools that want it."
             />
             <Principle
               icon={Layers}
