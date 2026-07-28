@@ -342,13 +342,19 @@
   }
 }
 
-/* The travelling band: a short dash chasing the curve, source → target. */
+/* The travelling comet, source → target.
+
+   The offset spans exactly 1 — one whole `pathLength`, which is also exactly
+   one period of the dash pattern below. That equality is what makes the loop
+   seamless: the pattern at offset 0 is pixel-identical to the pattern at
+   offset 1, so the restart has nothing to see. (The previous version ran
+   1 → -0.12, a fraction of a period, and visibly snapped every cycle.) */
 @keyframes af-hero-flow {
   from {
     stroke-dashoffset: 1;
   }
   to {
-    stroke-dashoffset: -0.12;
+    stroke-dashoffset: 0;
   }
 }
 
@@ -393,16 +399,30 @@
 }
 
 .af-hero-flow {
-  /* 12% of the curve lit, the rest dark — long enough to read as a packet in
-     motion, short enough that two of them never overlap on one edge. */
-  stroke-dasharray: 0.12 0.88;
+  /* The dash pattern is NOT set here — each trail layer carries its own
+     `stroke-dasharray` inline, because the taper is built from several copies
+     of the curve at different lengths and opacities rather than from one
+     multi-dash array. (That was the first attempt: at this size the little
+     fragments collapsed into the head and the taper never read.) Every layer
+     still uses a two-value `len (1 - len)` array, so the period stays exactly
+     1 and the loop stays seamless — see the keyframe above.
+
+     What lives here is everything the layers share. */
+
+  /* Round caps soften both ends of every fragment. Without them each dash is
+     a hard-edged rectangle, which is most of why the old band read as a
+     sliding block rather than as something moving through a wire. */
+  stroke-linecap: round;
   /* The fade shares the element's `animation-delay`, so its backwards fill
-     holds the band at opacity 0 for exactly as long as the current is waiting
+     holds the comet at opacity 0 for exactly as long as the current is waiting
      to start. Without it a stationary dash would sit at the head of every
      connector all through the drawing sequence. */
   animation:
     af-hero-fade 400ms ease-out both,
-    af-hero-flow 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite both;
+    /* Linear, deliberately. An eased timing function on a loop that never
+       stops means the comet decelerates into the wrap and lurches out of it;
+       constant speed is what makes it read as current. */
+    af-hero-flow 3.2s linear infinite both;
 }
 
 .af-hero-head {
