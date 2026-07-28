@@ -7,8 +7,8 @@
  * reject), no duplicated icon paths, and byte-for-byte the same artwork the
  * viewer shows.
  *
- * Results are memoised per icon slug: the registry is a fixed set of 16
- * static components, so one render each per session is all it ever costs.
+ * Results are memoised per icon slug: the registry is a fixed set of static
+ * components, so one render each per session is all it ever costs.
  */
 
 import { createElement } from "react";
