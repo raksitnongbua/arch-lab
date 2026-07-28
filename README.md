@@ -31,6 +31,9 @@ Be precise about what this repo is right now:
 | `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas. |
 | `/view/new`       | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                      |
 | `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.             |
+| `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers.                                                              |
+| `/mcp`            | How to connect an AI agent. Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.    |
+| `/api/mcp`        | The MCP server itself (Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                           |
 | `/editor`         | Coming-soon page while the editor is gated.                                                                                                                                 |
 
 ## The two model formats
@@ -87,6 +90,35 @@ Everything else — names, descriptions, technologies, relationships, `<br/>`
 decoding, `_Ext` externality, `BiRel` bidirectionality — carries over.
 `pnpm check:mermaid` proves the mapping.
 
+## Use it from an AI agent (MCP)
+
+arch-lab hosts a [Model Context Protocol](https://modelcontextprotocol.io)
+server, so Claude Code, Claude Desktop, Cursor and anything else speaking the
+protocol can work with `.alab` models:
+
+```bash
+claude mcp add --transport http arch-lab https://arch-lab-virid.vercel.app/api/mcp
+```
+
+Eight read-only tools: `validate_model`, `format_model`, `convert_model`,
+`describe_model`, `get_syntax_reference`, `list_example_models`,
+`get_example_model`, `create_share_link` — plus the grammar as the resource
+`archlab://syntax` and an `author_c4_model` prompt.
+
+The framing matters: an agent already has file tools, and `.alab` is a text
+format precisely so it can edit one directly. The server is there for the two
+things it cannot do alone — **know the grammar exactly** and **get the real
+parser's verdict**. There is deliberately no mutation API; that would duplicate
+the grammar in a second place and drift from it.
+
+Nothing is stored. Every tool is a pure function of the text it is sent, and
+`create_share_link` encodes the model into a URL _fragment_, which browsers
+never transmit — so even a shared link uploads nothing.
+
+Details, per-client setup and the honest limits are on
+[`/mcp`](https://arch-lab-virid.vercel.app/mcp); the implementation is
+documented in `src/features/mcp/README.md`.
+
 ## Getting started
 
 | Tool    | Version                                                                                                                                                          |
@@ -107,19 +139,21 @@ Then open <http://localhost:3000>.
 
 ## Scripts
 
-| Script                   | What it does                                                                                                                                                                                                                                                                                    |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`               | Start the dev server on :3000                                                                                                                                                                                                                                                                   |
-| `pnpm build`             | Production build                                                                                                                                                                                                                                                                                |
-| `pnpm start`             | Serve the production build (run `build` first)                                                                                                                                                                                                                                                  |
-| `pnpm lint`              | ESLint (Next core-web-vitals + TypeScript rules)                                                                                                                                                                                                                                                |
-| `pnpm typecheck`         | `tsc --noEmit` against the strict config                                                                                                                                                                                                                                                        |
-| `pnpm format`            | Prettier, writing changes in place                                                                                                                                                                                                                                                              |
-| `pnpm format:check`      | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                             |
-| `pnpm check:roundtrip`   | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named. |
-| `pnpm check:mermaid`     | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                     |
-| `pnpm check:archtext`    | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                  |
-| `pnpm check:syntax-docs` | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                 |
+| Script                        | What it does                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                    | Start the dev server on :3000                                                                                                                                                                                                                                                                   |
+| `pnpm build`                  | Production build                                                                                                                                                                                                                                                                                |
+| `pnpm start`                  | Serve the production build (run `build` first)                                                                                                                                                                                                                                                  |
+| `pnpm lint`                   | ESLint (Next core-web-vitals + TypeScript rules)                                                                                                                                                                                                                                                |
+| `pnpm typecheck`              | `tsc --noEmit` against the strict config                                                                                                                                                                                                                                                        |
+| `pnpm format`                 | Prettier, writing changes in place                                                                                                                                                                                                                                                              |
+| `pnpm format:check`           | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                             |
+| `pnpm check:roundtrip`        | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named. |
+| `pnpm check:mermaid`          | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                     |
+| `pnpm check:archtext`         | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                  |
+| `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                 |
+| `pnpm check:validate-samples` | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                         |
+| `pnpm check:mcp`              | Proves the MCP server without booting a protocol: the tools it registers and the tools `/mcp` documents match exactly both ways, every tool works over real input, failures carry the parser's line and column, and a generated share link decodes back to the model that went into it.         |
 
 The `check:*` scripts load the **real** library code from `src/` (via
 Node's TypeScript type stripping and a resolve hook for the `@/*` alias), so
@@ -134,7 +168,7 @@ arch-lab/
 ├── public/                    Static assets
 ├── scripts/                   The check:* verification scripts
 └── src/
-    ├── app/                   App Router: /, /demo, /view/[modelId], /view/new, /editor
+    ├── app/                   App Router: /, /demo, /view/[modelId], /view/new, /syntax, /validate, /mcp, /api/mcp, /editor
     ├── components/
     │   ├── ui/                Generic primitives (button, card, badge, dialog, tooltip, toast, …)
     │   └── layout/            App chrome (header, footer, theme-toggle)
@@ -142,6 +176,7 @@ arch-lab/
     │   ├── archtext/          The .alab text format: parser + canonical serializer (see its README)
     │   ├── editor/            The full C4 canvas — built, currently gated (see its README)
     │   ├── marketing/         Landing-page hero diagram
+    │   ├── mcp/               The MCP server behind /api/mcp, plus the /mcp page (see its README)
     │   ├── mermaid/           Mermaid C4 ⇄ arch-lab converter (pure, dependency-free)
     │   └── viewer/            Read-only viewer, /view/new playground, SVG/PNG export, model service
     ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy)

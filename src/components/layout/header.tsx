@@ -10,13 +10,15 @@ import { cn } from "@/lib/utils";
 /**
  * Primary navigation.
  *
- * Two permanent entries — Syntax (the `.alab` text-format reference) and
- * Validate (the model checker) — so both are reachable from every route, not
- * only from the footer and the playground. They are adjacent on purpose:
- * reading the grammar and testing something against it are the same errand.
+ * Three permanent entries — Syntax (the `.alab` text-format reference),
+ * Validate (the model checker) and MCP (connecting an AI agent) — so all are
+ * reachable from every route, not only from the footer and the playground.
+ * They are adjacent on purpose: reading the grammar, testing something
+ * against it, and pointing an agent at both are the same errand. MCP goes
+ * last because it is the one you reach for after the format makes sense.
  * The Demo entry was removed on request (do not re-add it), and the Editor
  * entry is gated behind EDITOR_ENABLED; flipping that flag restores it
- * alongside the other two with no other change.
+ * alongside the others with no other change.
  *
  * The empty-array guard on the <nav> below still matters if every entry is
  * ever removed again: an empty <nav> would expose a navigation landmark with
@@ -26,6 +28,7 @@ const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
   ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
   { href: "/syntax", label: "Syntax" },
   { href: "/validate", label: "Validate" },
+  { href: "/mcp", label: "MCP" },
 ];
 
 export function Header() {

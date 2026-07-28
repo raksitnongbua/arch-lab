@@ -34,7 +34,7 @@ import shopflowFile from "./data/shopflow.archlab.json";
 /* Registry                                                                    */
 /* -------------------------------------------------------------------------- */
 
-interface ModelSource {
+export interface ModelSource {
   /** Stable id — doubles as the `/view/[modelId]` route segment. */
   id: string;
   /**
@@ -150,6 +150,20 @@ function summarize(model: ViewerModel): ViewerModelSummary {
 /** Every registered model id — used by the route's static params. */
 export function listViewerModelIds(): string[] {
   return SOURCES.map((source) => source.id);
+}
+
+/**
+ * The registry's RAW documents, before validation.
+ *
+ * Exposed for consumers that need the model in a different representation
+ * than `ViewerModel` — the MCP server's `get_example_model` hands these to
+ * the same reader every other input goes through, so the examples it serves
+ * are the identical bytes this page renders. Kept as `unknown` for the same
+ * reason `ModelSource.document` is: nothing trusts the shape until a reader
+ * has validated it.
+ */
+export function listViewerModelSources(): readonly ModelSource[] {
+  return SOURCES;
 }
 
 /**
