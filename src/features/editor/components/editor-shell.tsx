@@ -64,12 +64,14 @@ export function EditorShell(): React.JSX.Element {
             the column is cramped, which is exactly how Save ended up
             underneath the panel. */}
         <header className="@container flex h-12 min-w-0 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
-          {/* FIRST in the row, before the breadcrumb. Opening the pane takes
-              width off this column, and flexbox settles that against whatever
-              can shrink — so anything after a flexible sibling moves, and the
-              button you just pressed slid out from under the cursor. Pinned
-              to the header's leading edge it has nothing to its left that can
-              resize, so its position is fixed whatever the panel does. */}
+          <Breadcrumb />
+          {/* Sits after the title, by request. The breadcrumb before it is
+              the row's one shrinkable item, so this button's position is only
+              as stable as that element's width — see the note on the nav's
+              min-width floor in breadcrumb.tsx. Measured at 1280/1440/1680
+              with the panel opening: the title holds its width at all three,
+              so the button does not move under the cursor. It would begin to
+              again if the title grew long enough to be squeezed. */}
           <Button
             variant={textPaneOpen ? "secondary" : "ghost"}
             size="sm"
@@ -84,7 +86,6 @@ export function EditorShell(): React.JSX.Element {
             <Code2 aria-hidden="true" />
             <span className="hidden @[46rem]:inline">Model text</span>
           </Button>
-          <Breadcrumb />
           <DirtyIndicator />
           <div className="min-w-0 flex-1" />
           {/* One shrink-0 group: the row gives up space at the breadcrumb
