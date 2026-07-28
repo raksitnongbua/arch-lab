@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Window-level drag-and-drop of a `.archlab.json` file (T3-A, AF-E5-S2).
+ * Window-level drag-and-drop of a `.alab` or `.archlab.json` file
+ * (T3-A, AF-E5-S2).
  *
  * Reads the dropped file's text and — where the browser supports
  * `DataTransferItem.getAsFileSystemHandle` (feature-detected, D2/R3) — also
@@ -13,6 +14,7 @@
 import { useEffect } from "react";
 
 import { toast } from "@/components/ui/toast";
+import { isOpenableFileName } from "../io/format";
 
 export interface DroppedFile {
   text: string;
@@ -28,6 +30,13 @@ interface DataTransferItemWithHandle extends DataTransferItem {
 function dragHasFiles(event: DragEvent): boolean {
   return event.dataTransfer?.types.includes("Files") ?? false;
 }
+
+/**
+ * How long to wait for the dropped item's file handle before opening without
+ * it. Generous — a real OS drag resolves this in microseconds, so anything
+ * approaching this bound means it is never going to settle.
+ */
+const HANDLE_TIMEOUT_MS = 1_000;
 
 export function useFileDrop(onFile: (file: DroppedFile) => void): void {
   useEffect(() => {
@@ -50,7 +59,9 @@ export function useFileDrop(onFile: (file: DroppedFile) => void): void {
         sawAnyFile = true;
         const candidate = item.getAsFile();
         if (candidate === null) continue;
-        if (!candidate.name.toLowerCase().endsWith(".json")) continue;
+        // Both readable formats, not just JSON — dropping the `.alab` the
+        // app now writes by default has to work.
+        if (!isOpenableFileName(candidate.name)) continue;
         file = candidate;
         const withHandle = item as DataTransferItemWithHandle;
         if (typeof withHandle.getAsFileSystemHandle === "function") {
@@ -62,7 +73,7 @@ export function useFileDrop(onFile: (file: DroppedFile) => void): void {
       if (file === null) {
         if (sawAnyFile) {
           toast({
-            message: "Drop a .archlab.json file to open it here.",
+            message: "Drop a .alab or .archlab.json file to open it here.",
             tone: "warning",
           });
         }
@@ -81,9 +92,22 @@ export function useFileDrop(onFile: (file: DroppedFile) => void): void {
           });
           return;
         }
+        // The handle is an upgrade, never a requirement: with it, Save can
+        // write back to the dropped file; without it, the open still works
+        // and Save falls back to a download. So the wait for it is bounded.
+        // `getAsFileSystemHandle()` is not guaranteed to settle — a
+        // synthetic DataTransfer leaves it pending forever, and an
+        // unsettled promise here used to mean the file silently never
+        // opened at all. Losing write-back is a far smaller failure than
+        // losing the open.
         let handle: FileSystemFileHandle | null = null;
         if (handlePromise !== null) {
-          const resolved = await handlePromise.catch(() => null);
+          const resolved = await Promise.race([
+            handlePromise.catch(() => null),
+            new Promise<null>((resolve) => {
+              window.setTimeout(() => resolve(null), HANDLE_TIMEOUT_MS);
+            }),
+          ]);
           if (resolved !== null && resolved.kind === "file") {
             handle = resolved as FileSystemFileHandle;
           }

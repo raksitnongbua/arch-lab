@@ -12,12 +12,17 @@
  */
 
 import { useState } from "react";
+import { Layers } from "lucide-react";
 
 import { toast } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { C4_LEVEL_META } from "@/lib/constants";
 import {
+  childLevelOf,
+  hasChildDiagram,
   isNodeTypeValidAtLevel,
   VALID_NODE_TYPES_BY_LEVEL,
   type C4Level,
@@ -26,6 +31,7 @@ import {
 } from "@/types";
 
 import { InvalidNodeTypeError, useEditorStore } from "../../state";
+import { canDrillInto, drillIntoNode } from "../../hooks/use-level-navigation";
 import { resolveIcon } from "../../lib/icons/registry";
 import { IconPicker } from "../icon-picker";
 import { Field, InspectorSection } from "./field";
@@ -213,6 +219,57 @@ export function NodeInspector({
         tags={node.tags ?? []}
         commit={(next) => updateNode(diagramId, node.id, { tags: next })}
       />
+
+      <DrillAction node={node} diagramLevel={level} />
     </InspectorSection>
+  );
+}
+
+/**
+ * The way down a level, in the panel people actually look at.
+ *
+ * C4 has no "container" you can drop at Context level — containers only exist
+ * INSIDE a system, so the palette (which shows exactly the types valid here)
+ * can never offer one. Until now the only route was right-click → Drill into,
+ * which is invisible: users reported not being able to create a container at
+ * all. This states the rule and performs it in one control.
+ *
+ * Renders nothing at `code` level or on a boundary placeholder, matching
+ * `canDrillInto` exactly rather than re-deriving the rule.
+ */
+function DrillAction({
+  node,
+  diagramLevel,
+}: {
+  node: C4Node;
+  diagramLevel: C4Level;
+}): React.JSX.Element | null {
+  const childLevel = childLevelOf(diagramLevel);
+  if (childLevel === null || !canDrillInto(node, true)) return null;
+
+  const existing = hasChildDiagram(node);
+  const childLabel = C4_LEVEL_META.find(
+    (meta) => meta.level === childLevel,
+  )?.label.toLowerCase();
+
+  return (
+    <div className="mt-1 border-t border-border/60 pt-3">
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full"
+        onClick={() => drillIntoNode(node.id)}
+      >
+        <Layers aria-hidden="true" />
+        {existing ? `Open ${childLabel}s` : `Add ${childLabel}s inside`}
+      </Button>
+      {/* Said once, here, because it is the thing nobody guesses: the level
+          below is reached THROUGH a node, never from the palette. */}
+      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        {existing
+          ? `“${node.name}” already has a ${childLabel} diagram.`
+          : `${childLabel === undefined ? "The next level" : `A ${childLabel}`} lives inside this ${diagramLevel === "context" ? "system" : "element"} — opening it creates the diagram one level down.`}
+      </p>
+    </div>
   );
 }

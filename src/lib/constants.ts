@@ -7,23 +7,23 @@ export const APP_NAME = "arch-lab";
 /* -------------------------------------------------------------------------- */
 
 /**
- * Ships the C4 editor. `false` for the current deploy: the navbar drops its
- * Editor entry, `/editor` renders a coming-soon page, and every editor CTA
- * and capability claim on the landing page, the demo index, and view mode
- * downgrades to an honest "coming soon" treatment.
+ * Ships the C4 editor. `true` for the current deploy: the navbar carries its
+ * Editor entry, `/editor` renders the real canvas, and every editor CTA and
+ * capability claim on the landing page, the demo index, and view mode speaks
+ * in the present tense.
  *
- * Flip to `true` and all of those come back on their own. The one extra step
- * is `src/app/editor/page.tsx`, which deliberately does NOT import the editor
- * while disabled (so the deployed bundle cannot contain the editor UI) — the
- * two lines to restore are commented at the top of that file.
+ * Flip to `false` and all of those downgrade to an honest "coming soon" on
+ * their own. The one extra step is `src/app/editor/page.tsx`, which must stop
+ * importing the editor while disabled — otherwise the deployed bundle still
+ * carries the editor UI that the flag claims is not shipped.
  *
  * Typed `boolean`, not the literal, so both branches of every consumer stay
  * type-checked whichever way the flag points.
  */
-export const EDITOR_ENABLED: boolean = false;
+export const EDITOR_ENABLED: boolean = true;
 
 export const APP_DESCRIPTION =
-  "A local-first workspace for architecture documentation — C4 model diagrams today, with sequence diagrams, a data dictionary, and network diagrams planned. Everything saves as reviewable JSON.";
+  "A local-first workspace for architecture documentation — C4 model diagrams today, with sequence diagrams, a data dictionary, and network diagrams planned. Everything saves as plain, reviewable text you own.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

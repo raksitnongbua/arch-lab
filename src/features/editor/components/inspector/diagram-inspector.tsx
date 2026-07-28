@@ -7,6 +7,8 @@
  * `updateDiagram`'s `coalesceKey`.
  */
 
+import { useSyncExternalStore } from "react";
+
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { C4Diagram } from "@/types";
@@ -21,6 +23,8 @@ const LEVEL_LABELS: Record<C4Diagram["level"], string> = {
   component: "Component",
   code: "Code",
 };
+
+const emptySubscribe = () => () => {};
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -38,6 +42,18 @@ export function DiagramInspector({
 }): React.JSX.Element {
   const updateDiagram = useEditorStore((s) => s.updateDiagram);
   const updatedAt = useEditorStore((s) => s.model.metadata.updatedAt);
+
+  // An empty model stamps `updatedAt` when the store module first evaluates,
+  // so the server and the client never produce the same instant — and
+  // `toLocaleString` then formats it in two different locales and zones on top
+  // of that. Both mismatches abort hydration for the WHOLE editor tree, which
+  // React then re-renders from scratch. Same hydration-safe guard the shell
+  // uses (D17): nothing on the server, the real timestamp once mounted.
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
 
   const keyBase = `inspector:diagram:${diagram.id}`;
 
@@ -99,7 +115,7 @@ export function DiagramInspector({
           Last updated
         </dt>
         <dd className="text-xs text-foreground">
-          {formatTimestamp(updatedAt)}
+          {mounted ? formatTimestamp(updatedAt) : null}
         </dd>
       </dl>
 

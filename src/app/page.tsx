@@ -92,8 +92,8 @@ export default function Home() {
                 {APP_NAME}
               </span>{" "}
               {EDITOR_ENABLED
-                ? "is a local-first workspace for architecture documentation. It opens with a full C4-model editor — with sequence diagrams, a data dictionary, and network diagrams planned next — and saves everything as diff-readable JSON you own."
-                : "is a local-first workspace for architecture documentation. Today it opens with an interactive, read-only C4 viewer — the editor that builds these models is coming soon, with sequence diagrams, a data dictionary, and network diagrams planned after it. Every model lives as diff-readable JSON you own."}
+                ? "is a local-first workspace for architecture documentation. It opens with a full C4-model editor — with sequence diagrams, a data dictionary, and network diagrams planned next — and saves everything as diff-readable .alab text you own — or JSON, if a tool downstream wants it."
+                : "is a local-first workspace for architecture documentation. Today it opens with an interactive, read-only C4 viewer — the editor that builds these models is coming soon, with sequence diagrams, a data dictionary, and network diagrams planned after it. Every model lives as diff-readable .alab text you own — or JSON, if a tool downstream wants it."}
             </p>
 
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -142,7 +142,7 @@ export default function Home() {
               <p id="cta-note" className="text-sm text-muted-foreground">
                 {EDITOR_ENABLED
                   ? "No account, no cloud — the model saves to a JSON file you own."
-                  : "No account, no cloud — models are plain JSON files, and nothing you paste leaves your browser."}
+                  : "No account, no cloud — models are plain text files, and nothing you paste leaves your browser."}
               </p>
             </div>
           </div>
@@ -214,8 +214,8 @@ export default function Home() {
                 </div>
                 <CardDescription className="max-w-2xl text-base">
                   {EDITOR_ENABLED
-                    ? "Model your system from Context down to Code on an interactive canvas. Double-click any node to open the level beneath it, breadcrumb back out, and save the whole model as one diff-reviewable JSON file."
-                    : "Explore complete systems from Context down to Code on an interactive canvas. Click any numbered node to open the level beneath it, breadcrumb back out, and inspect every relationship — each model is one diff-reviewable JSON file. The editor that builds them is coming soon."}
+                    ? "Model your system from Context down to Code on an interactive canvas. Double-click any node to open the level beneath it, breadcrumb back out, and save the whole model as one diff-reviewable .alab file."
+                    : "Explore complete systems from Context down to Code on an interactive canvas. Click any numbered node to open the level beneath it, breadcrumb back out, and inspect every relationship — each model is one diff-reviewable .alab file. The editor that builds them is coming soon."}
                 </CardDescription>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   {EDITOR_ENABLED ? (

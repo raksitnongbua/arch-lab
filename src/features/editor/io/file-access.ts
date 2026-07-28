@@ -62,15 +62,25 @@ function fsaWindow(): FileSystemAccessWindow {
 
 /**
  * Compound extensions (".archlab.json") are rejected by the picker spec, so
- * the filter is plain ".json"; the ".archlab.json" convention lives in the
- * suggested/derived file name instead.
+ * the JSON filter is plain ".json"; the ".archlab.json" convention lives in
+ * the suggested/derived file name instead.
+ *
+ * Both readable formats are offered, `.alab` first — it is what the app now
+ * writes by default, and the first entry is what the picker preselects. The
+ * open dialog uses the same list, so a `.alab` file is selectable there too;
+ * before this it was not, which made a text model impossible to open at all.
  */
 const PICKER_TYPES: FilePickerAcceptType[] = [
   {
-    description: "arch-lab diagram",
+    description: "arch-lab model (text)",
+    accept: { "text/plain": [ARCHTEXT_EXTENSION] },
+  },
+  {
+    description: "arch-lab model (JSON)",
     accept: { "application/json": [".json"] },
   },
 ];
+import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 
 /* -------------------------------------------------------------------------- */
 /* Feature detection — at call time, never by user-agent (R3)                 */
@@ -243,7 +253,13 @@ export function downloadTextFile(fileName: string, text: string): void {
 /* Naming                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/** `"ShopFlow Platform"` → `"shopflow-platform.archlab.json"` (AF-E5-S1). */
+/**
+ * `"ShopFlow Platform"` → `"shopflow-platform.archlab.json"`.
+ *
+ * Kept for callers that specifically want the JSON name (the export action).
+ * Anything choosing a name for a SAVE should use `deriveFileNameFor` in
+ * `./format`, which honours the model's own format.
+ */
 export function deriveFileName(title: string): string {
   const slug = title
     .toLowerCase()

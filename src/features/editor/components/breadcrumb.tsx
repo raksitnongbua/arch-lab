@@ -101,11 +101,104 @@ function Separator(): React.JSX.Element {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Renaming the model                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The model's name, edited where it is displayed.
+ *
+ * The root segment's label IS `metadata.title` (see `selectBreadcrumb`), so
+ * this is the one place in the editor where the model's own name is on
+ * screen. Before this it could only be changed by saving under a different
+ * filename — the inspector's Title field edits the root DIAGRAM's title,
+ * which is a different field.
+ *
+ * The gesture has to share the segment with navigation, which already owns
+ * single click when you are deeper than the root. So:
+ *
+ *   - at the root, where there is nothing to navigate to, a single click
+ *     starts editing;
+ *   - anywhere deeper, single click still navigates and double click starts
+ *     editing — the same split the canvas already uses for drill-vs-rename
+ *     (D5), so it is a convention here rather than a new rule.
+ *
+ * Committed on Enter and on blur, abandoned on Escape. An empty or
+ * whitespace-only name is refused rather than written: `metadata.title` is
+ * required by the file validator, so an empty one would produce a document
+ * that will not reopen.
+ */
+function ModelNameInput({
+  value,
+  onCommit,
+  onCancel,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <input
+      ref={(node) => {
+        // Select on mount so typing replaces the old name, which is what
+        // renaming almost always means.
+        if (node !== null && inputRef.current === null) {
+          inputRef.current = node;
+          node.focus();
+          node.select();
+        }
+      }}
+      value={draft}
+      aria-label="Model name"
+      className={cn(
+        "min-w-0 rounded-md border border-input bg-background px-1.5 py-0.5 text-sm font-medium text-foreground",
+        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+      )}
+      size={Math.max(8, Math.min(draft.length + 1, 32))}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onBlur={() => onCommit(draft)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          onCommit(draft);
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onCancel();
+          return;
+        }
+        // The editor binds single-key shortcuts (delete, level nav) at the
+        // document. While a name is being typed they must not fire.
+        event.stopPropagation();
+      }}
+    />
+  );
+}
+
 export function Breadcrumb(): React.JSX.Element {
   useLevelNavigation();
 
   const segments = useEditorStore(selectBreadcrumb);
   const model = useEditorStore((s) => s.model);
+  const updateMetadata = useEditorStore((s) => s.updateMetadata);
+  const [renaming, setRenaming] = useState(false);
+
+  const commitName = useCallback(
+    (next: string) => {
+      const trimmed = next.trim();
+      // Refused, not written: `metadata.title` is required by the file
+      // validator, so an empty one produces a document that will not reopen.
+      if (trimmed !== "" && trimmed !== model.metadata.title) {
+        updateMetadata({ title: trimmed });
+      }
+      setRenaming(false);
+    },
+    [model.metadata.title, updateMetadata],
+  );
   const shakeToken = useNavigationFeedback((s) => s.shakeToken);
 
   const navRef = useRef<HTMLElement>(null);
@@ -205,27 +298,55 @@ export function Breadcrumb(): React.JSX.Element {
 
   const renderSegment = (segment: BreadcrumbSegment, isCurrent: boolean) => {
     const siblings = siblingsOf(model, segment);
+    const isRoot = segment.diagramId === model.rootDiagramId;
     return (
       <li
         key={segment.diagramId}
         className="flex min-w-0 shrink-0 items-center gap-0.5"
       >
-        {isCurrent ? (
-          <span
-            aria-current="page"
-            className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-sm font-medium text-foreground"
-          >
-            <SegmentContent segment={segment} />
-          </span>
+        {isRoot && renaming ? (
+          <ModelNameInput
+            value={model.metadata.title}
+            onCommit={commitName}
+            onCancel={() => setRenaming(false)}
+          />
+        ) : isCurrent ? (
+          isRoot ? (
+            /* At the root there is nowhere to navigate, so the click is free
+               to mean rename. Deeper down it still means "go up". */
+            <button
+              type="button"
+              aria-current="page"
+              title="Rename the model"
+              className={cn(
+                "flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-sm font-medium text-foreground transition-colors",
+                "hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              )}
+              onClick={() => setRenaming(true)}
+            >
+              <SegmentContent segment={segment} />
+            </button>
+          ) : (
+            <span
+              aria-current="page"
+              className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-sm font-medium text-foreground"
+            >
+              <SegmentContent segment={segment} />
+            </span>
+          )
         ) : (
           <button
             type="button"
+            {...(isRoot
+              ? { title: "Click to open · double-click to rename" }
+              : {})}
             className={cn(
               "flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-sm text-muted-foreground transition-colors",
               "hover:bg-secondary hover:text-foreground",
               "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             )}
             onClick={() => navigateToDiagram(segment.diagramId)}
+            {...(isRoot ? { onDoubleClick: () => setRenaming(true) } : {})}
           >
             <SegmentContent segment={segment} />
           </button>
@@ -248,7 +369,14 @@ export function Breadcrumb(): React.JSX.Element {
     <nav
       ref={navRef}
       aria-label="Diagram hierarchy"
-      className="min-w-0 overflow-hidden"
+      /* A floor, not just `min-w-0`. This nav is the only shrinkable item in
+         the header strip, so when a right rail opens flexbox took the whole
+         difference out of it — it collapsed to zero width and the breadcrumb
+         vanished, taking the only way back up a level with it. The collapse
+         logic above is what handles a path that is genuinely too long (it
+         folds middles into `…`); flexbox squeezing the element out of
+         existence is not the same thing and must not happen. */
+      className="min-w-24 shrink overflow-hidden"
     >
       <ol className="flex min-w-0 items-center gap-1 whitespace-nowrap">
         {visible.map((segment, index) => {
