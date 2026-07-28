@@ -81,6 +81,7 @@ export function ViewerShell({
   initialDiagramId,
   share,
   onDiagramChange,
+  defaultImmersive = false,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -89,14 +90,24 @@ export function ViewerShell({
   share?: ShareSource;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
+  /**
+   * Start in immersive mode. For a page that exists only to show one model
+   * (`/view/[modelId]`) — where the diagram IS the page, so the site chrome is
+   * a frame around nothing else. Left off when the shell is embedded in a
+   * larger page: fixing it over the viewport would cover its own host.
+   */
+  defaultImmersive?: boolean;
 }): React.JSX.Element {
   // Structural read-only-ness: freeze once, before the canvas ever sees it.
   const frozenModel = useMemo(() => deepFreeze(model), [model]);
 
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const [isImmersive, setIsImmersive] = useState(false);
-  const immersiveRef = useRef(false);
+  // Initialised, not toggled: no announcement fires for the starting state
+  // (nothing changed yet), and the ref has to agree from the first render or
+  // Escape would not know it is immersive until the first manual toggle.
+  const [isImmersive, setIsImmersive] = useState(defaultImmersive);
+  const immersiveRef = useRef(defaultImmersive);
   const [announcement, setAnnouncement] = useState("");
 
   // The diagram on screen — drives the export and share controls (and is
