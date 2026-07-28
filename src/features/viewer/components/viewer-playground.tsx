@@ -316,35 +316,42 @@ export function ViewerPlayground(): React.JSX.Element {
   const stem = downloadStem(synced.model.title);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-10 sm:px-8">
-      <header className="max-w-3xl">
-        <Badge variant="accent" className="mb-4">
-          <span className="size-1.5 rounded-full bg-accent" />
-          View mode · live two-pane editor
-        </Badge>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Write your own model — text and JSON, in sync
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8">
+      {/* Deliberately compact. Every line here pushes the diagram down, and
+          the detail below is reference material people need once, not on
+          every visit — so it collapses instead of occupying the fold. */}
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          Write your own model
         </h1>
-        <p className="mt-3 leading-relaxed text-muted-foreground">
-          The same model in two languages:{" "}
-          <span className="font-mono text-sm text-foreground">.alab</span>{" "}
-          arch-lab text and{" "}
-          <span className="font-mono text-sm text-foreground">
-            .archlab.json
-          </span>
-          . Edit either pane and the other regenerates as you type — both are
-          lossless, so nothing is dropped in either direction. Mermaid C4 can be
-          imported (one-way). Everything stays in your browser: nothing you type
-          is uploaded or stored. New to the text format? Read the{" "}
+        <Badge variant="accent">
+          <span className="size-1.5 rounded-full bg-accent" />
+          live two-pane editor
+        </Badge>
+        <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
+          <span className="font-mono text-foreground">.alab</span> and{" "}
+          <span className="font-mono text-foreground">.archlab.json</span>, in
+          sync — edit either, nothing leaves your browser.{" "}
           <Link
             href="/syntax"
             className="font-medium text-primary hover:underline"
           >
-            .alab syntax reference
+            Syntax reference
           </Link>
-          .
         </p>
       </header>
+
+      <details className="group -mt-3 text-sm text-muted-foreground">
+        <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
+          How the two panes work
+        </summary>
+        <p className="mt-2 max-w-3xl leading-relaxed">
+          The same model in two languages. Edit either pane and the other
+          regenerates as you type — both are lossless, so nothing is dropped in
+          either direction. Mermaid C4 can be imported (one-way). Everything
+          stays in your browser: nothing you type is uploaded or stored.
+        </p>
+      </details>
 
       {/* One shared live region for sync state and errors. */}
       <p aria-live="polite" className="sr-only">
@@ -442,6 +449,31 @@ export function ViewerPlayground(): React.JSX.Element {
         </div>
       ) : null}
 
+      {/* ---- the rendered model ----------------------------------------------
+
+           FIRST, before the editors. This page is a diagram tool: the diagram
+           is the answer and the panes are the input, so the answer must be
+           what you see on arrival. It used to sit below two full-height
+           textareas under a hero block, which put it off-screen entirely —
+           you had to scroll to find out whether what you pasted had worked.
+
+           Height is clamped rather than a flat 75vh: on a short laptop the
+           old value left no hint that anything followed, and on a tall
+           monitor it grew past what the diagram needs. The lower bound keeps
+           it usable, the upper stops it from becoming the whole page. */}
+      <section
+        aria-label="Rendered diagram"
+        className="flex h-[clamp(28rem,68vh,54rem)] flex-col overflow-hidden rounded-xl border border-border shadow-sm"
+      >
+        <ViewerShell
+          key={shellEpoch}
+          model={synced.model}
+          initialDiagramId={sharedInitialDiagram ?? undefined}
+          share={{ kind: "payload", file: synced.file }}
+          onDiagramChange={handleDiagramChange}
+        />
+      </section>
+
       {/* ---- the two panes -------------------------------------------------- */}
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <EditorPane
@@ -480,20 +512,6 @@ export function ViewerPlayground(): React.JSX.Element {
         move focus out. Format rewrites a pane to its canonical form; nothing is
         reformatted while you type.
       </p>
-
-      {/* ---- the rendered model ---------------------------------------------- */}
-      <section
-        aria-label="Rendered diagram"
-        className="flex h-[75vh] min-h-96 flex-col overflow-hidden rounded-xl border border-border shadow-sm"
-      >
-        <ViewerShell
-          key={shellEpoch}
-          model={synced.model}
-          initialDiagramId={sharedInitialDiagram ?? undefined}
-          share={{ kind: "payload", file: synced.file }}
-          onDiagramChange={handleDiagramChange}
-        />
-      </section>
     </div>
   );
 }
