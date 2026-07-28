@@ -32,7 +32,7 @@
 import type { ArchLabFile, C4Diagram, C4Edge, C4Node } from "@/types";
 
 import { failAt } from "./errors";
-import { layoutNodes, NODE_SIZE } from "./layout";
+import { layoutNodes, LONE_NODE_POSITION, sizeForNodeType } from "./layout";
 import type { LayoutEdge } from "./layout";
 import { LEVEL_BY_DIAGRAM_TYPE, toNodeType } from "./mapping";
 import type { BoundaryKind } from "./mapping";
@@ -246,8 +246,8 @@ export function mermaidDocumentToArchLab(
       id: stmt.alias,
       type,
       name: stmt.label,
-      position: positions.get(stmt.alias) ?? { x: 40, y: 40 },
-      size: { ...NODE_SIZE },
+      position: positions.get(stmt.alias) ?? { ...LONE_NODE_POSITION },
+      size: sizeForNodeType(type),
     };
     if (stmt.description !== undefined) node.description = stmt.description;
     if (stmt.technology !== undefined) node.technology = stmt.technology;
@@ -305,8 +305,8 @@ export function mermaidDocumentToArchLab(
             id: scopeContainerId,
             type: "container",
             name: fileTitle,
-            position: { x: 40, y: 40 },
-            size: { ...NODE_SIZE },
+            position: { ...LONE_NODE_POSITION },
+            size: sizeForNodeType("container"),
             childDiagramId: mainId,
           },
         ],
@@ -331,8 +331,8 @@ export function mermaidDocumentToArchLab(
           id: scopeSystemId,
           type: "softwareSystem",
           name: fileTitle,
-          position: { x: 40, y: 40 },
-          size: { ...NODE_SIZE },
+          position: { ...LONE_NODE_POSITION },
+          size: sizeForNodeType("softwareSystem"),
           childDiagramId: childOfRoot,
         },
       ],

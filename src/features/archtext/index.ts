@@ -31,4 +31,9 @@ export {
   KEYWORD_BY_NODE_TYPE,
   NODE_TYPE_BY_KEYWORD,
 } from "./lib/keywords";
-export { DEFAULT_TIMESTAMP } from "./lib/defaults";
+export {
+  DEFAULT_TIMESTAMP,
+  defaultPositions,
+  defaultSizeFor,
+} from "./lib/defaults";
+export type { DefaultLayoutEdge } from "./lib/defaults";

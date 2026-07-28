@@ -10,8 +10,8 @@
  *   - A diagram's `in=` is omitted when it equals the diagram containing its
  *     owner node; `in=null` is written when a parent-less diagram has an
  *     owner (so inference would otherwise kick in).
- *   - A node's `(x,y w×h)` is omitted when both equal the grid default for
- *     its ordinal (sorted node ids) and its type default size.
+ *   - A node's `(x,y w×h)` is omitted when both equal the default layered
+ *     layout position for its diagram and its type default size.
  *   - An edge's `id=` is omitted when it equals `e-<source>-<target>`.
  *   - The `root` line is omitted when exactly one parentless `@context`
  *     diagram exists and it is the root.
@@ -28,12 +28,12 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { ArchLabFile, C4NodeType, EdgeDirection } from "@/types";
+import type { ArchLabFile, C4NodeType, EdgeDirection, Point } from "@/types";
 
 import {
   compareStrings,
   defaultEdgeId,
-  defaultPositionAt,
+  defaultPositions,
   defaultSizeFor,
   DEFAULT_TIMESTAMP,
 } from "./defaults";
@@ -427,8 +427,18 @@ function emitDiagram(
   });
 
   const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
+  // Same inputs the parser uses to fill omitted geometry in, so geometry that
+  // matches the default layout is omitted again here.
+  const layout = defaultPositions(
+    sortedIds,
+    edges.flatMap((edge) =>
+      typeof edge.source === "string" && typeof edge.target === "string"
+        ? [{ source: edge.source, target: edge.target }]
+        : [],
+    ),
+  );
   for (const node of nodes) {
-    emitNode(lines, node, sortedIds);
+    emitNode(lines, node, layout);
   }
   if (nodes.length > 0 && edges.length > 0) lines.push("");
   for (const edge of edges) {
@@ -439,7 +449,7 @@ function emitDiagram(
 function emitNode(
   lines: string[],
   node: Record<string, unknown>,
-  sortedIds: readonly string[],
+  layout: ReadonlyMap<string, Point>,
 ): void {
   const id = node.id as string;
   const name = node.name as string;
@@ -537,10 +547,10 @@ function emitNode(
   ) {
     invalid(`node "${id}".size`, size);
   }
-  const ordinal = sortedIds.indexOf(id);
-  const dp = defaultPositionAt(ordinal);
+  const dp = layout.get(id);
   const ds = defaultSizeFor(type as C4NodeType);
   const isDefault =
+    dp !== undefined &&
     Object.is(position.x, dp.x) &&
     Object.is(position.y, dp.y) &&
     Object.is(size.width, ds.width) &&
