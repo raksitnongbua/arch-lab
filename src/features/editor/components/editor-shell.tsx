@@ -12,10 +12,13 @@
  * mounts client-side only, with a token-styled placeholder to avoid a flash.
  */
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { Code2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toast";
 
+import { ModelTextPane } from "../text-pane";
 import { Breadcrumb } from "./breadcrumb";
 import { Canvas } from "./canvas";
 import { DirtyIndicator } from "./dirty-indicator";
@@ -35,6 +38,13 @@ export function EditorShell(): React.JSX.Element {
     () => false,
   );
 
+  // The text pane is opt-in rather than always mounted: it is a second way to
+  // author the SAME model, not a permanent panel, and three rails at once
+  // leaves the canvas too narrow to work in. Closed by default so the editor
+  // still opens on a canvas; local state, because which panels you have open
+  // is not part of the model and must never mark the document dirty.
+  const [textPaneOpen, setTextPaneOpen] = useState(false);
+
   return (
     <div className="flex min-h-0 flex-1">
       {/* Left rail — palette slot (T2-B fills the stub). */}
@@ -51,6 +61,19 @@ export function EditorShell(): React.JSX.Element {
           <Breadcrumb />
           <DirtyIndicator />
           <div className="flex-1" />
+          <Button
+            variant={textPaneOpen ? "secondary" : "ghost"}
+            size="sm"
+            aria-pressed={textPaneOpen}
+            /* Names the panel, not the verb: the pressed state already says
+               whether it is open, and a label that flips between Show/Hide
+               re-announces on every toggle. */
+            aria-label="Model text"
+            onClick={() => setTextPaneOpen((open) => !open)}
+          >
+            <Code2 aria-hidden="true" />
+            <span className="hidden lg:inline">Model text</span>
+          </Button>
           <FileActions />
         </header>
         <div className="relative min-h-96 flex-1 bg-canvas">
@@ -64,6 +87,22 @@ export function EditorShell(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      {/* Model text rail — the same model as text, live and editable.
+
+          Deliberately NOT hidden below a breakpoint, unlike the palette and
+          inspector rails: on a narrow viewport those two disappear and the
+          canvas becomes read-only in practice, so the text pane is the only
+          way left to add a node or write a description. It is opt-in, so it
+          costs nothing when closed. */}
+      {textPaneOpen ? (
+        <aside
+          aria-label="Model text"
+          className="flex w-full max-w-[28rem] shrink-0 border-l border-border bg-background sm:w-96"
+        >
+          <ModelTextPane />
+        </aside>
+      ) : null}
 
       {/* Right rail — inspector slot (T2-D fills the stub). */}
       <aside
