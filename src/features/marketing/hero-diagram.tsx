@@ -51,6 +51,14 @@ function delay(ms: number): CSSProperties {
 export function HeroDiagram({ className }: { className?: string }) {
   return (
     <div aria-hidden="true" className={cn("relative select-none", className)}>
+      {/* Ambient bloom under the whole stack, so the card sits in light rather
+          than on a flat panel. `blur-3xl` on a static element is painted once
+          and never re-rasterised — nothing here animates, unlike the edges. */}
+      {/* Painted first, so DOM order alone puts it behind the sheets and the
+          card. A negative z-index would risk dropping it behind an ancestor's
+          background instead of merely behind its siblings. */}
+      <div className="pointer-events-none absolute -inset-10 rounded-[3rem] bg-gradient-to-br from-primary/12 via-transparent to-accent/12 blur-3xl" />
+
       {/* Ghost sheets behind the card — the levels above the one in view. */}
       <div
         style={delay(BEAT.sheets + 90)}
@@ -81,6 +89,10 @@ export function HeroDiagram({ className }: { className?: string }) {
           }}
         />
 
+        {/* Sheen over the grid: the faintest diagonal tint, enough to stop the
+            card reading as a flat rectangle without competing with the nodes. */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/6 via-transparent to-accent/8" />
+
         {/* Header: level breadcrumb + the file the model lives in. */}
         <div className="relative flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5">
           <p className="flex items-center gap-1.5 font-mono text-[10px]">
@@ -98,7 +110,7 @@ export function HeroDiagram({ className }: { className?: string }) {
             </span>
             <span
               style={delay(BEAT.header + 120)}
-              className="af-hero-node rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary"
+              className="af-hero-node rounded bg-gradient-to-r from-primary/22 to-accent/16 px-1.5 py-0.5 font-medium text-primary"
             >
               L2 Container
             </span>
@@ -184,7 +196,7 @@ function MiniNode({
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="grid size-7 shrink-0 place-items-center rounded-md border border-primary/25 bg-primary/10 text-primary">
+        <span className="grid size-7 shrink-0 place-items-center rounded-md border border-primary/25 bg-gradient-to-br from-primary/20 to-accent/12 text-primary">
           <Icon className="size-4" />
         </span>
         <div className="min-w-0">
@@ -214,10 +226,72 @@ const EDGES: readonly { id: string; d: string; flowMs: number }[] = [
   { id: "api-cache", d: "M 276 188 L 276 244", flowMs: 2100 },
 ];
 
+/**
+ * The comet, one entry per pass over the curve, painted in this order.
+ *
+ * Every layer runs the identical animation at the identical speed; the only
+ * thing separating them is `lagMs`, so each rides a fixed distance behind the
+ * head and the group reads as one tapering streak rather than as three dots.
+ * Fading and narrowing together is what sells the taper — opacity alone looks
+ * like a dotted line, width alone looks like a tadpole.
+ *
+ * `lagMs` has to clear the head's own length or the layers simply stack on top
+ * of it and there is no visible tail: at FLOW_MS = 3200 the 0.08-long head
+ * occupies 256ms of travel, so the first tail starts at 230ms (a deliberate
+ * sliver of overlap, to keep the streak continuous) and the second at 430ms.
+ *
+ * The halo is a wide, faint copy rather than a blur filter. A filter would
+ * re-rasterise every path on every frame of a permanent animation — precisely
+ * the per-frame paint cost that makes motion stutter — while a wide round
+ * stroke at low alpha buys the same bloom for nothing.
+ */
+const TRAIL: readonly {
+  key: string;
+  /** Lit fraction of the curve. */
+  len: number;
+  width: number;
+  opacity: number;
+  /** How far behind the head this layer rides, in ms of travel. */
+  lagMs: number;
+}[] = [
+  { key: "halo", len: 0.18, width: 6, opacity: 0.18, lagMs: 0 },
+  { key: "tail-far", len: 0.14, width: 1.2, opacity: 0.2, lagMs: 980 },
+  { key: "tail-near", len: 0.16, width: 1.6, opacity: 0.45, lagMs: 520 },
+  { key: "head", len: 0.18, width: 1.9, opacity: 1, lagMs: 0 },
+];
+
 function Edges(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 350 336" fill="none" {...props}>
       <defs>
+        {/* The current's colour. `userSpaceOnUse` over the whole 350×336 board
+            rather than per-path object bounds: one gradient laid across the
+            diagram means a comet's hue depends on WHERE it is, so the four
+            edges are related instead of four copies of the same effect.
+            Running it corner to corner puts primary at the top-right, where
+            traffic enters from the Customer, and accent at the bottom-left,
+            where it settles into the data stores. */}
+        <linearGradient
+          id="hero-flow-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1="350"
+          y1="0"
+          x2="0"
+          y2="336"
+        >
+          {/* The stops sit at 25% and 60% rather than at the ends because the
+              four curves only occupy that slice of the axis — projected onto
+              it they land at t = 0.27, 0.42, 0.53 and 0.56. Ramping across the
+              full 0→100% put every edge in the first quarter and painted the
+              whole diagram one colour; ramping across the band they actually
+              occupy is what makes the Customer edge read purple and the two
+              lower ones read accent. */}
+          <stop offset="0%" stopColor="var(--primary)" />
+          <stop offset="25%" stopColor="var(--primary)" />
+          <stop offset="60%" stopColor="var(--accent)" />
+          <stop offset="100%" stopColor="var(--accent)" />
+        </linearGradient>
+
         {/* One marker per edge rather than one shared def: marker content is
             cloned per use and every clone runs the same animation timeline, so
             a single shared marker would pop all four arrowheads in at once
@@ -259,25 +333,31 @@ function Edges(props: SVGProps<SVGSVGElement>) {
         ))}
       </g>
 
-      {/* The current: the same curves again, lit, with a short band chasing
-          each one source → target. Drawn over the connectors and inheriting
-          none of their colour, so the resting line stays quiet. */}
-      <g
-        className="text-primary"
-        stroke="currentColor"
-        strokeWidth={1.6}
-        strokeLinecap="round"
-      >
-        {EDGES.map((edge) => (
-          <path
-            key={edge.id}
-            className="af-hero-flow"
-            style={delay(BEAT.flow + edge.flowMs)}
-            d={edge.d}
-            pathLength={1}
-          />
-        ))}
-      </g>
+      {/* The current: each curve drawn several times over, one pass per layer
+          of the comet. See TRAIL for how the taper is built. */}
+      {TRAIL.map((layer) => (
+        <g
+          key={layer.key}
+          stroke="url(#hero-flow-gradient)"
+          strokeWidth={layer.width}
+          opacity={layer.opacity}
+        >
+          {EDGES.map((edge) => (
+            <path
+              key={edge.id}
+              className="af-hero-flow"
+              /* `len (1 - len)` — one lit stretch, one dark one, summing to
+                 exactly one pathLength so the wrap is invisible. */
+              strokeDasharray={`${layer.len} ${1 - layer.len}`}
+              /* The lag is what separates this layer from the head: same
+                 speed, started later, so it rides a fixed distance behind. */
+              style={delay(BEAT.flow + edge.flowMs + layer.lagMs)}
+              d={edge.d}
+              pathLength={1}
+            />
+          ))}
+        </g>
+      ))}
     </svg>
   );
 }
