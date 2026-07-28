@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import type { CSSProperties, SVGProps } from "react";
 
 import { cn } from "@/lib/utils";
 import { GolangIcon } from "@/features/editor/lib/icons/svg/golang";
@@ -12,23 +12,64 @@ import { RedisIcon } from "@/features/editor/lib/icons/svg/redis";
  * with the editor's real stack icons, stacked over two ghost "sheets" that
  * hint at the levels beneath (the Context→Container drill-down).
  *
+ * It assembles itself on load — sheets settle, boxes land one at a time,
+ * connectors draw toward their arrowheads — and then keeps a slow current
+ * running along the edges, so the arrows read as traffic rather than
+ * decoration. The motion is pure CSS (see the "Hero diagram motion" block in
+ * globals.css); this file only owns the choreography, as `animationDelay`
+ * values on the elements themselves, so the running order can be read top to
+ * bottom here. That keeps the component a server component — no client
+ * bundle, no hydration — and the global `prefers-reduced-motion` rule plus
+ * the explicit opt-outs in that CSS block settle everything onto its final
+ * frame for anyone who asks for less movement.
+ *
  * Purely presentational — everything it depicts (levels, drill-down, JSON on
  * disk) is stated in the page copy — so the whole thing is `aria-hidden`.
  * It is fixed-size (24rem card) and only rendered at `lg:` and up; ghost
  * layers offset up/left only, so it can never introduce horizontal overflow.
  */
+
+/** One beat of the assembly, in ms — everything below is expressed in these. */
+const BEAT = {
+  sheets: 0,
+  card: 80,
+  header: 320,
+  /** Nodes land in reading order: the actor first, then down the stack. */
+  nodes: [420, 500, 580, 660, 740],
+  /** Each connector starts as its target lands, so the box "pulls" the line. */
+  edges: [560, 700, 840, 920],
+  /** The arrowhead appears as the line reaches it: edge delay + draw time. */
+  drawMs: 620,
+  /** The ambient current only begins once the drawing has finished. */
+  flow: 1800,
+} as const;
+
+function delay(ms: number): CSSProperties {
+  return { animationDelay: `${ms}ms` };
+}
+
 export function HeroDiagram({ className }: { className?: string }) {
   return (
     <div aria-hidden="true" className={cn("relative select-none", className)}>
       {/* Ghost sheets behind the card — the levels above the one in view. */}
-      <div className="absolute inset-0 -translate-x-5 -translate-y-5 rounded-xl border border-dashed border-border/70 bg-card/30" />
-      <div className="absolute inset-0 -translate-x-2.5 -translate-y-2.5 rounded-xl border border-border/60 bg-card/50" />
+      <div
+        style={delay(BEAT.sheets + 90)}
+        className="af-hero-sheet absolute inset-0 -translate-x-5 -translate-y-5 rounded-xl border border-dashed border-border/70 bg-card/30"
+      />
+      <div
+        style={delay(BEAT.sheets)}
+        className="af-hero-sheet absolute inset-0 -translate-x-2.5 -translate-y-2.5 rounded-xl border border-border/60 bg-card/50"
+      />
 
       {/* The sheet in view: Container level of a small system. */}
-      <div className="relative w-96 overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-primary/5">
-        {/* Faint canvas grid, matching the editor surface. */}
+      <div
+        style={delay(BEAT.card)}
+        className="af-hero-card relative w-96 overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-primary/5"
+      >
+        {/* Faint canvas grid, matching the editor surface. Drifting by exactly
+            one cell keeps the loop seamless — the pattern repeats onto itself. */}
         <div
-          className="absolute inset-0 opacity-[0.4] dark:opacity-[0.55]"
+          className="af-hero-grid absolute inset-0 opacity-[0.4] dark:opacity-[0.55]"
           style={{
             backgroundImage:
               "linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px)",
@@ -43,13 +84,29 @@ export function HeroDiagram({ className }: { className?: string }) {
         {/* Header: level breadcrumb + the file the model lives in. */}
         <div className="relative flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5">
           <p className="flex items-center gap-1.5 font-mono text-[10px]">
-            <span className="text-muted-foreground">L1 Context</span>
-            <span className="text-muted-foreground/50">›</span>
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+            <span
+              style={delay(BEAT.header)}
+              className="af-hero-fade text-muted-foreground"
+            >
+              L1 Context
+            </span>
+            <span
+              style={delay(BEAT.header + 60)}
+              className="af-hero-fade text-muted-foreground/50"
+            >
+              ›
+            </span>
+            <span
+              style={delay(BEAT.header + 120)}
+              className="af-hero-node rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary"
+            >
               L2 Container
             </span>
           </p>
-          <p className="truncate font-mono text-[10px] text-muted-foreground/70">
+          <p
+            style={delay(BEAT.header + 180)}
+            className="af-hero-fade truncate font-mono text-[10px] text-muted-foreground/70"
+          >
             web-shop.c4.json
           </p>
         </div>
@@ -59,7 +116,10 @@ export function HeroDiagram({ className }: { className?: string }) {
           <Edges className="absolute inset-0 h-full w-full text-muted-foreground/70" />
 
           {/* Person, outside the boundary. */}
-          <div className="absolute top-0 left-[280px] flex w-[72px] flex-col items-center gap-1">
+          <div
+            style={delay(BEAT.nodes[0])}
+            className="af-hero-node absolute top-0 left-[280px] flex w-[72px] flex-col items-center gap-1"
+          >
             <span className="grid size-9 place-items-center rounded-full border border-border bg-secondary/70 text-muted-foreground">
               <PersonIcon className="size-4.5" />
             </span>
@@ -72,24 +132,28 @@ export function HeroDiagram({ className }: { className?: string }) {
             icon={NextjsIcon}
             name="Web App"
             tech="Next.js · SSR"
+            delayMs={BEAT.nodes[1]}
             className="top-[46px] left-0"
           />
           <MiniNode
             icon={GolangIcon}
             name="API Service"
             tech="Go · REST"
+            delayMs={BEAT.nodes[2]}
             className="top-[128px] left-[184px]"
           />
           <MiniNode
             icon={PostgresqlIcon}
             name="Orders DB"
             tech="PostgreSQL"
+            delayMs={BEAT.nodes[3]}
             className="top-[224px] left-0"
           />
           <MiniNode
             icon={RedisIcon}
             name="Session Cache"
             tech="Redis"
+            delayMs={BEAT.nodes[4]}
             className="top-[252px] left-[184px]"
           />
         </div>
@@ -102,17 +166,20 @@ function MiniNode({
   icon: Icon,
   name,
   tech,
+  delayMs,
   className,
 }: {
   icon: React.FC<SVGProps<SVGSVGElement>>;
   name: string;
   tech: string;
+  delayMs: number;
   className?: string;
 }) {
   return (
     <div
+      style={delay(delayMs)}
       className={cn(
-        "absolute w-36 rounded-lg border border-border bg-card p-2.5 shadow-sm",
+        "af-hero-node absolute w-36 rounded-lg border border-border bg-card p-2.5 shadow-sm",
         className,
       )}
     >
@@ -134,45 +201,82 @@ function MiniNode({
 }
 
 /**
- * Connecting arrows, drawn in the same fixed 350×336 space as the nodes so
- * they meet node edges exactly at every rendering (the card never scales).
+ * The four connectors, in the same fixed 350×336 space as the nodes so they
+ * meet node edges exactly at every rendering (the card never scales).
+ *
+ * `flowMs` staggers the ambient current so the four packets never set off in
+ * lockstep, which would read as a progress bar rather than as traffic.
  */
+const EDGES: readonly { id: string; d: string; flowMs: number }[] = [
+  { id: "customer-web", d: "M 276 22 C 232 28 192 42 152 64", flowMs: 0 },
+  { id: "web-api", d: "M 72 102 C 72 138 130 150 176 153", flowMs: 700 },
+  { id: "api-db", d: "M 212 188 C 212 220 182 244 152 250", flowMs: 1400 },
+  { id: "api-cache", d: "M 276 188 L 276 244", flowMs: 2100 },
+];
+
 function Edges(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 350 336" fill="none" {...props}>
       <defs>
-        <marker
-          id="hero-diagram-arrow"
-          viewBox="0 0 8 8"
-          refX="6.5"
-          refY="4"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-        >
-          <path
-            d="M1.5 1 L6.5 4 L1.5 7"
-            stroke="currentColor"
-            strokeWidth={1.3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </marker>
+        {/* One marker per edge rather than one shared def: marker content is
+            cloned per use and every clone runs the same animation timeline, so
+            a single shared marker would pop all four arrowheads in at once
+            instead of each as its own line arrives. */}
+        {EDGES.map((edge, index) => (
+          <marker
+            key={edge.id}
+            id={`hero-edge-head-${edge.id}`}
+            viewBox="0 0 8 8"
+            refX="6.5"
+            refY="4"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path
+              className="af-hero-head"
+              style={delay(BEAT.edges[index] + BEAT.drawMs)}
+              d="M1.5 1 L6.5 4 L1.5 7"
+              stroke="currentColor"
+              strokeWidth={1.3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </marker>
+        ))}
       </defs>
+
+      <g stroke="currentColor" strokeWidth={1.3} strokeLinecap="round">
+        {EDGES.map((edge, index) => (
+          <path
+            key={edge.id}
+            className="af-hero-edge"
+            style={delay(BEAT.edges[index])}
+            d={edge.d}
+            pathLength={1}
+            markerEnd={`url(#hero-edge-head-${edge.id})`}
+          />
+        ))}
+      </g>
+
+      {/* The current: the same curves again, lit, with a short band chasing
+          each one source → target. Drawn over the connectors and inheriting
+          none of their colour, so the resting line stays quiet. */}
       <g
+        className="text-primary"
         stroke="currentColor"
-        strokeWidth={1.3}
+        strokeWidth={1.6}
         strokeLinecap="round"
-        markerEnd="url(#hero-diagram-arrow)"
       >
-        {/* Customer → Web App */}
-        <path d="M 276 22 C 232 28 192 42 152 64" />
-        {/* Web App → API Service */}
-        <path d="M 72 102 C 72 138 130 150 176 153" />
-        {/* API Service → Orders DB */}
-        <path d="M 212 188 C 212 220 182 244 152 250" />
-        {/* API Service → Session Cache */}
-        <path d="M 276 188 L 276 244" />
+        {EDGES.map((edge) => (
+          <path
+            key={edge.id}
+            className="af-hero-flow"
+            style={delay(BEAT.flow + edge.flowMs)}
+            d={edge.d}
+            pathLength={1}
+          />
+        ))}
       </g>
     </svg>
   );

@@ -283,3 +283,143 @@
     background-position: 25% 50%;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Hero diagram motion.
+
+   The landing hero (src/features/marketing/hero-diagram.tsx) assembles itself
+   the way you would draw a C4 diagram: the sheets settle, the boxes land one
+   by one, the connectors draw themselves toward their arrowheads, and then a
+   slow current runs along them to say the arrows mean traffic, not decoration.
+
+   Two rules the whole block obeys:
+
+     - Every entrance keyframe animates FROM a displaced state TO the element's
+       natural one and uses `both` fill, so the pre-animation frame is the
+       displaced one (no flash of final layout) and the post-animation frame is
+       exactly what the static markup would have rendered. That is also what
+       makes the global reduced-motion backstop (`animation-duration: 0.01ms`)
+       correct rather than merely fast: it lands on the natural state.
+     - Only `opacity`, `transform` and `stroke-dashoffset` animate — no layout
+       properties — so the whole sequence stays off the main thread's layout
+       path. Per-element timing comes from inline `animation-delay`, keeping the
+       choreography readable in the component instead of split across 12 classes.
+   --------------------------------------------------------------------------- */
+
+/* The ghost sheets slide OUT from under the card to their resting offsets.
+   Animating the `translate` property (not `transform`) is deliberate: it is
+   the same property the utility classes set, and an omitted `to` keyframe
+   interpolates toward the underlying value — so the sheets land exactly on
+   whatever offset the markup asks for, with no duplicated numbers here. */
+@keyframes af-hero-sheet {
+  from {
+    opacity: 0;
+    translate: 18px 18px;
+  }
+}
+
+@keyframes af-hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+}
+
+@keyframes af-hero-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Paths carry `pathLength="1"`, so one unit of dash is the whole curve
+   regardless of its real length — every connector draws in the same time. */
+@keyframes af-hero-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The travelling band: a short dash chasing the curve, source → target. */
+@keyframes af-hero-flow {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: -0.12;
+  }
+}
+
+/* A breath, not a blink — the card is large, so the movement must be tiny. */
+@keyframes af-hero-float {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes af-hero-grid-drift {
+  to {
+    background-position: 28px 28px;
+  }
+}
+
+.af-hero-sheet {
+  animation: af-hero-sheet 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.af-hero-card {
+  animation:
+    af-hero-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    af-hero-float 7s ease-in-out 1.4s infinite;
+}
+
+.af-hero-node {
+  animation: af-hero-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.af-hero-fade {
+  animation: af-hero-fade 520ms ease-out both;
+}
+
+.af-hero-grid {
+  animation: af-hero-grid-drift 24s linear infinite;
+}
+
+.af-hero-edge {
+  stroke-dasharray: 1;
+  animation: af-hero-draw 620ms cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+.af-hero-flow {
+  /* 12% of the curve lit, the rest dark — long enough to read as a packet in
+     motion, short enough that two of them never overlap on one edge. */
+  stroke-dasharray: 0.12 0.88;
+  /* The fade shares the element's `animation-delay`, so its backwards fill
+     holds the band at opacity 0 for exactly as long as the current is waiting
+     to start. Without it a stationary dash would sit at the head of every
+     connector all through the drawing sequence. */
+  animation:
+    af-hero-fade 400ms ease-out both,
+    af-hero-flow 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite both;
+}
+
+.af-hero-head {
+  animation: af-hero-fade 260ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The global backstop already collapses the entrances onto their natural
+     frame. The ambient loops need saying explicitly: parked, not sped up. */
+  .af-hero-card,
+  .af-hero-grid {
+    animation: none;
+  }
+
+  /* A connector with no current still has to look like a finished connector. */
+  .af-hero-flow {
+    animation: none;
+    opacity: 0;
+  }
+}
