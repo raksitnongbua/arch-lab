@@ -6,6 +6,14 @@
 
 export { useEditorStore } from "./store";
 
+/**
+ * The blank document, as the store's own initial state builds it. Exported
+ * because "New" has to produce exactly that and must not hand-roll a second
+ * definition of empty — a purely additive export; `model.ts` otherwise stays
+ * private to `state/`.
+ */
+export { createEmptyModel } from "./model";
+
 export type {
   BreadcrumbSegment,
   DeleteResult,

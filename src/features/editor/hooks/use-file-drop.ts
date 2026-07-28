@@ -31,6 +31,13 @@ function dragHasFiles(event: DragEvent): boolean {
   return event.dataTransfer?.types.includes("Files") ?? false;
 }
 
+/**
+ * How long to wait for the dropped item's file handle before opening without
+ * it. Generous — a real OS drag resolves this in microseconds, so anything
+ * approaching this bound means it is never going to settle.
+ */
+const HANDLE_TIMEOUT_MS = 1_000;
+
 export function useFileDrop(onFile: (file: DroppedFile) => void): void {
   useEffect(() => {
     function handleDragOver(event: DragEvent): void {
@@ -85,9 +92,22 @@ export function useFileDrop(onFile: (file: DroppedFile) => void): void {
           });
           return;
         }
+        // The handle is an upgrade, never a requirement: with it, Save can
+        // write back to the dropped file; without it, the open still works
+        // and Save falls back to a download. So the wait for it is bounded.
+        // `getAsFileSystemHandle()` is not guaranteed to settle — a
+        // synthetic DataTransfer leaves it pending forever, and an
+        // unsettled promise here used to mean the file silently never
+        // opened at all. Losing write-back is a far smaller failure than
+        // losing the open.
         let handle: FileSystemFileHandle | null = null;
         if (handlePromise !== null) {
-          const resolved = await handlePromise.catch(() => null);
+          const resolved = await Promise.race([
+            handlePromise.catch(() => null),
+            new Promise<null>((resolve) => {
+              window.setTimeout(() => resolve(null), HANDLE_TIMEOUT_MS);
+            }),
+          ]);
           if (resolved !== null && resolved.kind === "file") {
             handle = resolved as FileSystemFileHandle;
           }

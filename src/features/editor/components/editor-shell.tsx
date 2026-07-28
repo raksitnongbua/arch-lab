@@ -24,6 +24,7 @@ import { Canvas } from "./canvas";
 import { DirtyIndicator } from "./dirty-indicator";
 import { FileActions } from "./file-actions";
 import { InspectorPanel } from "./inspector/inspector-panel";
+import { OpenFileIndicator } from "./open-file-indicator";
 import { Palette } from "./palette";
 import { RecoveryPrompt } from "./recovery-prompt";
 import { ViewModeLink } from "./view-mode-link";
@@ -86,6 +87,7 @@ export function EditorShell(): React.JSX.Element {
             <Code2 aria-hidden="true" />
             <span className="hidden @[46rem]:inline">Model text</span>
           </Button>
+          <OpenFileIndicator />
           <DirtyIndicator />
           <div className="min-w-0 flex-1" />
           {/* One shrink-0 group: the row gives up space at the breadcrumb

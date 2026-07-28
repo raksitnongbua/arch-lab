@@ -23,7 +23,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { Braces, FolderOpen, Save } from "lucide-react";
+import { Braces, FilePlus2, FolderOpen, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -54,7 +54,7 @@ import {
   OPEN_ACCEPT,
   serializeModelAs,
 } from "../io/format";
-import { useEditorStore, type EditorModel } from "../state";
+import { createEmptyModel, useEditorStore, type EditorModel } from "../state";
 import { useFileDrop, type DroppedFile } from "../hooks/use-file-drop";
 import { useFileShortcuts } from "../hooks/use-file-shortcuts";
 
@@ -62,7 +62,14 @@ import { useFileShortcuts } from "../hooks/use-file-shortcuts";
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-type PendingOpen = { kind: "picker" } | ({ kind: "file" } & DroppedFile);
+/**
+ * Everything that replaces the current model, and therefore has to pass the
+ * unsaved-changes guard first. "new" joins the two open paths deliberately:
+ * starting a blank document discards work exactly as thoroughly as opening
+ * another file does, and must not be the one door that skips the prompt.
+ */
+type PendingOpen =
+  { kind: "picker" } | { kind: "new" } | ({ kind: "file" } & DroppedFile);
 
 interface SaveFailure {
   /** User-facing cause, e.g. a revoked handle or denied permission. */
@@ -233,6 +240,19 @@ export function FileActions(): React.JSX.Element {
 
   const runOpen = useCallback(
     async (pending: PendingOpen): Promise<void> => {
+      if (pending.kind === "new") {
+        // A blank document is a document with no file behind it: the handle
+        // and the last-saved text must go too, or Save would write this new
+        // model over whatever was open before.
+        setCurrentFileHandle(null);
+        setLastSavedText(null);
+        useEditorStore.getState().replaceModel(createEmptyModel(), {
+          markSaved: true,
+          fileHandleName: null,
+        });
+        toast({ message: "Started a new model." });
+        return;
+      }
       if (pending.kind === "file") {
         installOpenedFile(pending.text, pending.name, pending.handle);
         return;
@@ -376,6 +396,15 @@ export function FileActions(): React.JSX.Element {
       <Button
         variant="ghost"
         size="sm"
+        onClick={() => requestOpen({ kind: "new" })}
+        title="Start a new, empty model"
+      >
+        <FilePlus2 aria-hidden="true" />
+        <span className="hidden @[38rem]:inline">New</span>
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={handleOpenClick}
         title="Open a diagram file (Ctrl/Cmd+O)"
       >
@@ -406,7 +435,11 @@ export function FileActions(): React.JSX.Element {
         open={pendingOpen !== null}
         onClose={cancelPendingOpen}
         title="Unsaved changes"
-        description="This diagram has changes that are not saved to disk. Opening another file will replace it."
+        description={
+          pendingOpen?.kind === "new"
+            ? "This diagram has changes that are not saved to disk. Starting a new model will replace it."
+            : "This diagram has changes that are not saved to disk. Opening another file will replace it."
+        }
         footer={
           <>
             <Button variant="outline" size="sm" onClick={cancelPendingOpen}>
@@ -416,7 +449,9 @@ export function FileActions(): React.JSX.Element {
               Discard changes
             </Button>
             <Button variant="primary" size="sm" onClick={saveThenOpen}>
-              Save, then open
+              {pendingOpen?.kind === "new"
+                ? "Save, then start new"
+                : "Save, then open"}
             </Button>
           </>
         }
