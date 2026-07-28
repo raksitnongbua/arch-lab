@@ -7,6 +7,11 @@
  * tool the endpoint does not have, which is the failure mode that makes
  * integration docs worthless.
  *
+ * The `origin` prop comes from the route, which derives it from the request —
+ * so every snippet on the page advertises the host the reader actually
+ * reached, and a domain rename cannot leave this page pointing at a dead
+ * endpoint (it did once; see `lib/origin.ts`).
+ *
  * Written for the person deciding whether to bother: what it is, one line to
  * connect, what it actually does for them, and what it deliberately does not
  * do. The "what it does not do" part is not modesty — an agent already has
@@ -29,7 +34,6 @@ import {
   mcpEndpointUrl,
 } from "../catalog";
 import { MAX_SOURCE_CHARS } from "../lib/limits";
-import { publicOrigin } from "../lib/origin";
 import { CopySnippet } from "./copy-snippet";
 
 const SECTIONS: readonly { id: string; label: string }[] = [
@@ -40,8 +44,8 @@ const SECTIONS: readonly { id: string; label: string }[] = [
   { id: "limits", label: "Privacy & limits" },
 ];
 
-export function McpGuide(): React.JSX.Element {
-  const endpoint = mcpEndpointUrl(publicOrigin());
+export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
+  const endpoint = mcpEndpointUrl(origin);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-14 sm:px-8 sm:py-20">

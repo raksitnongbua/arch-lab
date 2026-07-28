@@ -109,6 +109,9 @@ const { decodeShareFragment } = await load(
   "src/features/viewer/share/codec.ts",
 );
 const { MAX_SOURCE_CHARS } = await load("src/features/mcp/lib/limits.ts");
+const { DEFAULT_PUBLIC_ORIGIN, documentedOrigin, requestOrigin } = await load(
+  "src/features/mcp/lib/origin.ts",
+);
 
 let failures = 0;
 const checks = [];
@@ -293,6 +296,68 @@ check("the server tells a connecting client it is beta", async () => {
     /MCP_BETA_NOTICE_SHORT/,
     "the initialize instructions must carry the beta notice",
   );
+});
+
+check("the advertised origin comes from the request, not a constant", () => {
+  // The regression this exists for: the subdomain changed, the hardcoded
+  // default went stale, and /mcp advertised an endpoint that 404'd. A page
+  // served from a host must be able to name that host.
+  const from = (headers) =>
+    requestOrigin((name) => headers[name.toLowerCase()] ?? null);
+
+  assert.equal(
+    from({ host: "arch-lab-dev.vercel.app" }),
+    "https://arch-lab-dev.vercel.app",
+  );
+  assert.equal(
+    from({ host: "internal:3000", "x-forwarded-host": "arch-lab.example" }),
+    "https://arch-lab.example",
+    "the proxy's client-facing host must win over the internal one",
+  );
+  assert.equal(
+    from({
+      "x-forwarded-host": "a.example, b.example",
+      "x-forwarded-proto": "https, http",
+    }),
+    "https://a.example",
+    "multi-hop headers: the FIRST entry is the client-facing one",
+  );
+  assert.equal(
+    from({ host: "localhost:3001" }),
+    "http://localhost:3001",
+    "localhost must not be assumed https",
+  );
+  assert.equal(from({}), null, "no host header means fall back to config");
+});
+
+check("an explicit override still beats the request", () => {
+  // This is what makes ARCHLAB_PUBLIC_ORIGIN=… pnpm dev behave.
+  // A header map, not a constant function: returning the same string for every
+  // name would also answer x-forwarded-proto and build a nonsense origin.
+  const served = (headers) => (name) => headers[name.toLowerCase()] ?? null;
+
+  const before = process.env.ARCHLAB_PUBLIC_ORIGIN;
+  try {
+    process.env.ARCHLAB_PUBLIC_ORIGIN = "http://localhost:3001/";
+    assert.equal(
+      documentedOrigin(served({ host: "someone-else.example" })),
+      "http://localhost:3001",
+      "explicit config wins, and its trailing slash is stripped",
+    );
+    delete process.env.ARCHLAB_PUBLIC_ORIGIN;
+    assert.equal(
+      documentedOrigin(served({ host: "served-from.example" })),
+      "https://served-from.example",
+      "with no override, the request host wins",
+    );
+  } finally {
+    if (before === undefined) delete process.env.ARCHLAB_PUBLIC_ORIGIN;
+    else process.env.ARCHLAB_PUBLIC_ORIGIN = before;
+  }
+});
+
+check("the fallback origin is a well-formed https origin with no path", () => {
+  assert.match(DEFAULT_PUBLIC_ORIGIN, /^https:\/\/[a-z0-9.-]+$/);
 });
 
 check("the endpoint url is built from the site origin", () => {
