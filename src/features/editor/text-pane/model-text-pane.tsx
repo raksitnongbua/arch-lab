@@ -169,7 +169,7 @@ export function ModelTextPane(): React.JSX.Element {
     return (
       <section
         aria-label="Model text"
-        className="flex h-full min-h-0 flex-col gap-2 bg-background p-3"
+        className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 bg-background p-3"
       >
         <p
           role="status"
@@ -195,7 +195,7 @@ export function ModelTextPane(): React.JSX.Element {
   return (
     <section
       aria-label="Model text"
-      className="flex h-full min-h-0 flex-col gap-2 bg-background p-3"
+      className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 bg-background p-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label
