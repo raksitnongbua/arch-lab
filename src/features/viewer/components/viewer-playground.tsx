@@ -32,6 +32,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   AlignLeft,
   ArrowDownToLine,
+  Braces,
   Check,
   Copy,
   Download,
@@ -41,7 +42,7 @@ import {
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { buttonClasses } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,13 @@ export function ViewerPlayground(): React.JSX.Element {
     string | null
   >(null);
 
+  // JSON is opt-in. `.alab` is the format this product asks people to write —
+  // it is what the syntax reference documents, what share links carry, and
+  // what reads in a diff. Showing both side by side gave them equal billing
+  // and made the page look like it had two answers; the JSON is the on-disk
+  // form, not a second thing to learn. Revealed by an explicit click, and
+  // never hidden while it is the pane reporting an error.
+  const [jsonVisible, setJsonVisible] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState<MermaidImportError | null>(
@@ -119,6 +127,10 @@ export function ViewerPlayground(): React.JSX.Element {
   const jsonPaneId = useId();
   const importTextareaId = useId();
   const editingHintId = useId();
+
+  // Forced open when the JSON pane is the one that failed: an error nobody
+  // can see is worse than an extra pane.
+  const showJson = jsonVisible || paneError?.pane === "json";
 
   /* ---- adopting a successfully parsed model --------------------------- */
 
@@ -326,12 +338,11 @@ export function ViewerPlayground(): React.JSX.Element {
         </h1>
         <Badge variant="accent">
           <span className="size-1.5 rounded-full bg-accent" />
-          live two-pane editor
+          live .alab editor
         </Badge>
         <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-          <span className="font-mono text-foreground">.alab</span> and{" "}
-          <span className="font-mono text-foreground">.archlab.json</span>, in
-          sync — edit either, nothing leaves your browser.{" "}
+          Write it in <span className="font-mono text-foreground">.alab</span> —
+          readable, diffable, and lossless. Nothing leaves your browser.{" "}
           <Link
             href="/syntax"
             className="font-medium text-primary hover:underline"
@@ -343,13 +354,18 @@ export function ViewerPlayground(): React.JSX.Element {
 
       <details className="group -mt-3 text-sm text-muted-foreground">
         <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
-          How the two panes work
+          How .alab and JSON relate
         </summary>
         <p className="mt-2 max-w-3xl leading-relaxed">
-          The same model in two languages. Edit either pane and the other
-          regenerates as you type — both are lossless, so nothing is dropped in
-          either direction. Mermaid C4 can be imported (one-way). Everything
-          stays in your browser: nothing you type is uploaded or stored.
+          <span className="font-mono text-foreground">.alab</span> is the format
+          to write: it is what the syntax reference documents, what share links
+          carry, and what reads cleanly in a code review.{" "}
+          <span className="font-mono text-foreground">.archlab.json</span> is
+          the same model on disk — the interchange form any other tool can read
+          without implementing a grammar. The two are lossless twins in both
+          directions (proved on every build), so you never have to write the
+          JSON by hand; show it when you want to see or paste it. Mermaid C4 can
+          be imported, one-way. Nothing you type is uploaded or stored.
         </p>
       </details>
 
@@ -474,8 +490,13 @@ export function ViewerPlayground(): React.JSX.Element {
         />
       </section>
 
-      {/* ---- the two panes -------------------------------------------------- */}
-      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* ---- the editor ------------------------------------------------------ */}
+      <div
+        className={cn(
+          "grid min-w-0 gap-4",
+          showJson ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1",
+        )}
+      >
         <EditorPane
           pane="aft"
           textareaId={aftPaneId}
@@ -491,24 +512,44 @@ export function ViewerPlayground(): React.JSX.Element {
           onFormat={handleFormat}
           onImportMermaid={handleImport}
         />
-        <EditorPane
-          pane="json"
-          textareaId={jsonPaneId}
-          hintId={editingHintId}
-          heading="arch-lab JSON"
-          extension={JSON_EXTENSION}
-          filename={`${stem}${JSON_EXTENSION}`}
-          mime="application/json"
-          value={jsonText}
-          error={paneError?.pane === "json" ? paneError.error : null}
-          onChange={handlePaneChange}
-          onKeyDown={handleEditorKeyDown}
-          onFormat={handleFormat}
-          onImportMermaid={handleImport}
-        />
+        {showJson ? (
+          <EditorPane
+            pane="json"
+            textareaId={jsonPaneId}
+            hintId={editingHintId}
+            heading="arch-lab JSON"
+            extension={JSON_EXTENSION}
+            filename={`${stem}${JSON_EXTENSION}`}
+            mime="application/json"
+            value={jsonText}
+            error={paneError?.pane === "json" ? paneError.error : null}
+            onChange={handlePaneChange}
+            onKeyDown={handleEditorKeyDown}
+            onFormat={handleFormat}
+            onImportMermaid={handleImport}
+          />
+        ) : null}
       </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Button
+          variant="outline"
+          size="sm"
+          aria-expanded={showJson}
+          onClick={() => setJsonVisible((open) => !open)}
+        >
+          <Braces aria-hidden="true" />
+          {showJson ? "Hide JSON" : "Show JSON"}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          {showJson
+            ? "Both panes stay in sync — edit either one."
+            : "The same model as .archlab.json, the format it saves to. You never have to write it by hand."}
+        </p>
+      </div>
+
       <p id={editingHintId} className="text-xs text-muted-foreground">
-        Tab inserts two spaces inside the editors — press Escape, then Tab, to
+        Tab inserts two spaces inside the editor — press Escape, then Tab, to
         move focus out. Format rewrites a pane to its canonical form; nothing is
         reformatted while you type.
       </p>
