@@ -25,6 +25,7 @@ export function CodeBlock({
   code,
   label,
   tryIt = false,
+  caption = ".alab",
 }: {
   /** The exact `.alab` source to display (and copy). */
   code: string;
@@ -32,13 +33,19 @@ export function CodeBlock({
   label: string;
   /** Adds an "Open in view mode" link carrying this snippet. */
   tryIt?: boolean;
+  /**
+   * The format label in the block's header. Defaults to `.alab` — override it
+   * for the few blocks that are not model source (e.g. `sh` install commands),
+   * so the caption never claims a shell snippet is a model.
+   */
+  caption?: string;
 }): React.JSX.Element {
   return (
     <figure className="min-w-0">
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-1.5">
           <figcaption className="font-mono text-xs text-muted-foreground">
-            .alab
+            {caption}
           </figcaption>
           <div className="flex flex-wrap items-center gap-1.5">
             {tryIt ? <TryItLink code={code} label={label} /> : null}

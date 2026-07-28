@@ -72,6 +72,21 @@ title "ShopFlow Platform"
 the same deterministic default layout, so terse files stay lossless. Full
 syntax: [`src/features/archtext/README.md`](src/features/archtext/README.md).
 
+### Editing `.alab` in VS Code
+
+Indentation is significant (0/2/4 spaces, never tabs), and an editor that does
+not know the extension renders it as plain text. This repo ships a VS Code
+extension that highlights the format and pins spaces-only indentation for
+`.alab` files, so the one mistake that matters is hard to make:
+
+```sh
+ln -s "$PWD/editors/vscode" ~/.vscode/extensions/alab-syntax
+```
+
+Reload the window and `.alab` files light up. Details, a `.vsix` route, and
+why you should _not_ associate `.alab` with YAML:
+[`editors/vscode/README.md`](editors/vscode/README.md).
+
 ## Mermaid C4 import
 
 `/view/new` imports Mermaid C4 source (`C4Context`, `C4Container`,
@@ -146,21 +161,22 @@ Then open <http://localhost:3000>.
 
 ## Scripts
 
-| Script                        | What it does                                                                                                                                                                                                                                                                                    |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                    | Start the dev server on :3000                                                                                                                                                                                                                                                                   |
-| `pnpm build`                  | Production build                                                                                                                                                                                                                                                                                |
-| `pnpm start`                  | Serve the production build (run `build` first)                                                                                                                                                                                                                                                  |
-| `pnpm lint`                   | ESLint (Next core-web-vitals + TypeScript rules)                                                                                                                                                                                                                                                |
-| `pnpm typecheck`              | `tsc --noEmit` against the strict config                                                                                                                                                                                                                                                        |
-| `pnpm format`                 | Prettier, writing changes in place                                                                                                                                                                                                                                                              |
-| `pnpm format:check`           | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                             |
-| `pnpm check:roundtrip`        | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named. |
-| `pnpm check:mermaid`          | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                     |
-| `pnpm check:archtext`         | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                  |
-| `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                 |
-| `pnpm check:validate-samples` | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                         |
-| `pnpm check:mcp`              | Proves the MCP server without booting a protocol: the tools it registers and the tools `/mcp` documents match exactly both ways, every tool works over real input, failures carry the parser's line and column, and a generated share link decodes back to the model that went into it.         |
+| Script                        | What it does                                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm dev`                    | Start the dev server on :3000                                                                                                                                                                                                                                                                    |
+| `pnpm build`                  | Production build                                                                                                                                                                                                                                                                                 |
+| `pnpm start`                  | Serve the production build (run `build` first)                                                                                                                                                                                                                                                   |
+| `pnpm lint`                   | ESLint (Next core-web-vitals + TypeScript rules)                                                                                                                                                                                                                                                 |
+| `pnpm typecheck`              | `tsc --noEmit` against the strict config                                                                                                                                                                                                                                                         |
+| `pnpm format`                 | Prettier, writing changes in place                                                                                                                                                                                                                                                               |
+| `pnpm format:check`           | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                              |
+| `pnpm check:roundtrip`        | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named.  |
+| `pnpm check:mermaid`          | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                      |
+| `pnpm check:archtext`         | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                   |
+| `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                  |
+| `pnpm check:validate-samples` | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                          |
+| `pnpm check:mcp`              | Proves the MCP server without booting a protocol: the tools it registers and the tools `/mcp` documents match exactly both ways, every tool works over real input, failures carry the parser's line and column, and a generated share link decodes back to the model that went into it.          |
+| `pnpm check:vscode-grammar`   | Proves the VS Code grammar in `editors/vscode` has not drifted from the parser: every node type, arrow and header keyword is present, then a sample — parsed by the real parser first — is tokenized with `vscode-textmate`, the engine VS Code itself runs, asserting the scope at each offset. |
 
 The `check:*` scripts load the **real** library code from `src/` (via
 Node's TypeScript type stripping and a resolve hook for the `@/*` alias), so
@@ -172,6 +188,7 @@ run them before touching the formats or converters.
 ```
 arch-lab/
 ├── docs/product/              Product specs (vision, user stories, data model, roadmap, dev handoff)
+├── editors/vscode/            VS Code extension: .alab grammar and indentation rules
 ├── public/                    Static assets
 ├── scripts/                   The check:* verification scripts
 └── src/

@@ -16,7 +16,8 @@
     "check:archtext": "node scripts/archtext-check.mjs",
     "check:syntax-docs": "node scripts/syntax-docs-check.mjs",
     "check:validate-samples": "node scripts/validate-samples-check.mjs",
-    "check:mcp": "node scripts/mcp-check.mjs"
+    "check:mcp": "node scripts/mcp-check.mjs",
+    "check:vscode-grammar": "node scripts/vscode-grammar-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -44,6 +45,8 @@
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   }
 }

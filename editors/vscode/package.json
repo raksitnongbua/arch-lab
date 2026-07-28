@@ -1,0 +1,61 @@
+{
+  "name": "alab-syntax",
+  "displayName": "arch-lab (.alab) syntax",
+  "description": "Syntax highlighting and indentation rules for the arch-lab text format (.alab).",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "raksitnongbua",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/raksitnongbua/arch-lab.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "alab",
+    "arch-lab",
+    "c4",
+    "architecture",
+    "diagram"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "alab",
+        "aliases": [
+          "arch-lab",
+          "alab"
+        ],
+        "extensions": [
+          ".alab"
+        ],
+        "configuration": "./language-configuration.json",
+        "firstLine": "^archlab\\s+\\d+\\.\\d+\\s*$"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "alab",
+        "scopeName": "source.alab",
+        "path": "./syntaxes/alab.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[alab]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2,
+        "editor.detectIndentation": false,
+        "editor.renderWhitespace": "boundary",
+        "editor.guides.indentation": true,
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true
+      }
+    }
+  }
+}
