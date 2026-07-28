@@ -39,8 +39,17 @@ const SECTIONS: readonly { id: string; label: string }[] = [
   { id: "edges", label: "Edges" },
   { id: "unknown-fields", label: "Unknown fields (! lines)" },
   { id: "errors", label: "Errors" },
+  { id: "editor-support", label: "Editor support" },
   { id: "try-it", label: "Where to use it" },
 ];
+
+/**
+ * Shell, not model source — so it deliberately lives here rather than in
+ * `../content/snippets`, every entry of which `pnpm check:syntax-docs` feeds
+ * to the real `.alab` parser.
+ */
+const VSCODE_INSTALL_SNIPPET = `git clone https://github.com/raksitnongbua/arch-lab.git
+ln -s "$PWD/arch-lab/editors/vscode" ~/.vscode/extensions/alab-syntax`;
 
 export function SyntaxReference(): React.JSX.Element {
   return (
@@ -142,7 +151,15 @@ export function SyntaxReference(): React.JSX.Element {
         <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
           <li>
             Any other indentation (3 spaces, a tab, …) is a parse error naming
-            the line and column.
+            the line and column. The{" "}
+            <a
+              href="#editor-support"
+              className="font-medium text-primary hover:underline"
+            >
+              VS Code extension
+            </a>{" "}
+            pins spaces-only indentation for <Code>.alab</Code> files, so this
+            is one mistake you can stop making.
           </li>
           <li>Blank lines are ignored.</li>
           <li>
@@ -362,6 +379,52 @@ export function SyntaxReference(): React.JSX.Element {
       </Section>
 
       {/* ---- 9. where to use it -------------------------------------------------------- */}
+      {/* ---- 9. editor support ------------------------------------------------- */}
+      <Section id="editor-support" title="Editor support">
+        <P>
+          Out of the box an editor sees <Code>.alab</Code> as an unknown
+          extension and renders it as plain text — unhelpful for a format with
+          significant indentation. The repo ships a VS Code extension in{" "}
+          <Code>editors/vscode</Code> that highlights every construct on this
+          page and, more usefully, makes the indentation rules impossible to
+          break: spaces only, two at a time, with indent guides on and any tab
+          shown as an error before you save.
+        </P>
+        <P>
+          It is not on the Marketplace yet. Symlink it into your extensions
+          folder from a clone of the repo and reload the window:
+        </P>
+        <CodeBlock
+          code={VSCODE_INSTALL_SNIPPET}
+          label="VS Code install commands"
+          caption="sh"
+        />
+        <P>
+          Prefer a package? Run{" "}
+          <Code>npx @vscode/vsce package --out alab-syntax.vsix</Code> inside{" "}
+          <Code>editors/vscode</Code>, then{" "}
+          <Code>code --install-extension alab-syntax.vsix</Code>.
+        </P>
+        <div className="max-w-3xl rounded-lg border border-border bg-card/60 p-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            <strong className="text-foreground">
+              One workaround to avoid:
+            </strong>{" "}
+            associating <Code>.alab</Code> with YAML (
+            <Code>{'"files.associations": { "*.alab": "yaml" }'}</Code>) is
+            worse than plain text. YAML treats <Code>#</Code> as a comment, so
+            tags like <Code>#critical-path</Code> grey out as comments while
+            real <Code>{"//"}</Code> comments colour as content — wrong in both
+            directions.
+          </p>
+        </div>
+        <P>
+          No extension for your editor yet? The grammar is a portable TextMate
+          grammar (<Code>editors/vscode/syntaxes/alab.tmLanguage.json</Code>),
+          which Neovim, Zed and Sublime can all consume.
+        </P>
+      </Section>
+
       <Section id="try-it" title="Where to use it">
         <P>
           The fastest way to learn the format is to write it live:{" "}
