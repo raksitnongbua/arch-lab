@@ -14,7 +14,8 @@
     "check:roundtrip": "node scripts/roundtrip-check.mjs",
     "check:mermaid": "node scripts/mermaid-check.mjs",
     "check:archtext": "node scripts/archtext-check.mjs",
-    "check:syntax-docs": "node scripts/syntax-docs-check.mjs"
+    "check:syntax-docs": "node scripts/syntax-docs-check.mjs",
+    "check:validate-samples": "node scripts/validate-samples-check.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.2",

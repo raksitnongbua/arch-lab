@@ -10,11 +10,13 @@ import { cn } from "@/lib/utils";
 /**
  * Primary navigation.
  *
- * Carries a single permanent entry — Syntax, the `.alab` text-format
- * reference — so the reference page is reachable from every route, not only
- * from the footer and the playground. The Demo entry was removed on request
- * (do not re-add it), and the Editor entry is gated behind EDITOR_ENABLED;
- * flipping that flag restores it alongside Syntax with no other change.
+ * Two permanent entries — Syntax (the `.alab` text-format reference) and
+ * Validate (the model checker) — so both are reachable from every route, not
+ * only from the footer and the playground. They are adjacent on purpose:
+ * reading the grammar and testing something against it are the same errand.
+ * The Demo entry was removed on request (do not re-add it), and the Editor
+ * entry is gated behind EDITOR_ENABLED; flipping that flag restores it
+ * alongside the other two with no other change.
  *
  * The empty-array guard on the <nav> below still matters if every entry is
  * ever removed again: an empty <nav> would expose a navigation landmark with
@@ -23,6 +25,7 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
   ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
   { href: "/syntax", label: "Syntax" },
+  { href: "/validate", label: "Validate" },
 ];
 
 export function Header() {
@@ -45,41 +48,54 @@ export function Header() {
           </span>
         </Link>
 
-        {/* Suppressed entirely when there are no links: an empty <nav> would
-            expose a navigation landmark with nothing in it, which is worse for
-            a screen reader than having no landmark at all. */}
-        {NAV_LINKS.length > 0 ? (
-          <nav aria-label="Primary" className="flex items-center gap-1">
-            {NAV_LINKS.map((link) => {
-              const isCurrent = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={isCurrent ? "page" : undefined}
-                  className={cn(
-                    "rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
-                    isCurrent
-                      ? "bg-secondary/70 font-medium text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
-        ) : null}
+        {/* Nav sits in the RIGHT-HAND group, not centred between the logo and
+            the actions: with only a couple of entries a centred nav floats in
+            the middle of a full-bleed header, far from both edges and from
+            everything else that is clickable. Grouped here it reads as one
+            cluster of controls, and it stays put as entries are added. */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Suppressed entirely when there are no links: an empty <nav> would
+              expose a navigation landmark with nothing in it, which is worse
+              for a screen reader than having no landmark at all. */}
+          {NAV_LINKS.length > 0 ? (
+            <nav aria-label="Primary" className="flex items-center gap-1">
+              {NAV_LINKS.map((link) => {
+                const isCurrent = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    aria-current={isCurrent ? "page" : undefined}
+                    className={cn(
+                      "rounded-md px-2.5 py-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+                      isCurrent
+                        ? "bg-secondary/70 font-medium text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          ) : null}
 
-        <div className="flex items-center gap-2">
           <a
             href="https://c4model.com"
             target="_blank"
             rel="noreferrer noopener"
-            className="hidden rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none sm:inline-flex"
+            className="hidden rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none sm:inline-flex"
           >
             About C4
           </a>
+
+          {/* Separates in-app routes from the theme control without adding a
+              third gap size. Hidden on narrow screens where the row is tight. */}
+          <span
+            aria-hidden="true"
+            className="mx-1 hidden h-5 w-px bg-border sm:block"
+          />
+
           <ThemeToggle />
         </div>
       </div>
