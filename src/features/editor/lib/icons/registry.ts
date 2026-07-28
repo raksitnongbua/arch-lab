@@ -1,37 +1,57 @@
 /**
  * The icon registry (dev-handoff §4.6, D15, AF-E4-S1/S2). Owned by T2-A.
  *
- * 38 hand-authored inline-SVG icons: 31 named marks plus 7
- * generics. Icons are referenced by slug; no SVG data or URL is ever written
- * into the model. All 16 are monochrome and follow `currentColor`, so they
- * stay legible in both themes with zero colour literals.
+ * 59 hand-authored inline-SVG icons: 38 named marks plus 21 generics and
+ * infrastructure primitives. Icons are referenced by slug; no SVG data or URL
+ * is ever written into the model. All of them are monochrome and follow
+ * `currentColor`, so they stay legible in both themes with zero colour
+ * literals.
+ *
+ * The named marks are stylised motifs, never traced trademarked logos.
  */
 
 import type { C4Node, C4NodeType } from "@/types";
 
 import { type IconCategory } from "./categories";
+import { AiModelIcon } from "./svg/ai-model";
+import { AnalyticsIcon } from "./svg/analytics";
+import { ApiIcon } from "./svg/api";
 import { AwsIcon } from "./svg/aws";
 import { AzureIcon } from "./svg/azure";
 import { BrowserIcon } from "./svg/browser";
+import { CassandraIcon } from "./svg/cassandra";
+import { ClickhouseIcon } from "./svg/clickhouse";
 import { CloudflareIcon } from "./svg/cloudflare";
 import { DatabaseIcon } from "./svg/database";
 import { DockerIcon } from "./svg/docker";
 import { DotnetIcon } from "./svg/dotnet";
+import { DynamodbIcon } from "./svg/dynamodb";
 import { ElasticsearchIcon } from "./svg/elasticsearch";
+import { EmailIcon } from "./svg/email";
+import { EnvoyIcon } from "./svg/envoy";
 import { ExternalIcon } from "./svg/external";
+import { FileIcon } from "./svg/file";
 import { FirebaseIcon } from "./svg/firebase";
+import { FirewallIcon } from "./svg/firewall";
 import { GcpIcon } from "./svg/gcp";
 import { GolangIcon } from "./svg/golang";
 import { GraphqlIcon } from "./svg/graphql";
 import { GrpcIcon } from "./svg/grpc";
+import { HaproxyIcon } from "./svg/haproxy";
+import { IdentityIcon } from "./svg/identity";
+import { InternetIcon } from "./svg/internet";
 import { JavaIcon } from "./svg/java";
 import { KafkaIcon } from "./svg/kafka";
 import { KongIcon } from "./svg/kong";
 import { KubernetesIcon } from "./svg/kubernetes";
 import { LambdaIcon } from "./svg/lambda";
+import { LoadBalancerIcon } from "./svg/load-balancer";
+import { MemcachedIcon } from "./svg/memcached";
 import { MobileIcon } from "./svg/mobile";
 import { MongodbIcon } from "./svg/mongodb";
+import { MonitoringIcon } from "./svg/monitoring";
 import { MysqlIcon } from "./svg/mysql";
+import { NatsIcon } from "./svg/nats";
 import { NextjsIcon } from "./svg/nextjs";
 import { NginxIcon } from "./svg/nginx";
 import { NodejsIcon } from "./svg/nodejs";
@@ -45,9 +65,13 @@ import { ReactIcon } from "./svg/react";
 import { RedisIcon } from "./svg/redis";
 import { RustIcon } from "./svg/rust";
 import { S3Icon } from "./svg/s3";
+import { SchedulerIcon } from "./svg/scheduler";
+import { SearchIcon } from "./svg/search";
 import { ServiceIcon } from "./svg/service";
+import { SqliteIcon } from "./svg/sqlite";
 import { TerraformIcon } from "./svg/terraform";
 import { TypescriptIcon } from "./svg/typescript";
+import { WebhookIcon } from "./svg/webhook";
 
 export type { IconCategory } from "./categories";
 
@@ -183,6 +207,38 @@ const ICON_DEFS: readonly IconDef[] = [
     Svg: ElasticsearchIcon,
     monochrome: true,
   },
+  {
+    slug: "cassandra",
+    name: "Cassandra",
+    aliases: ["apache cassandra", "scylla", "wide column"],
+    category: "databases",
+    Svg: CassandraIcon,
+    monochrome: true,
+  },
+  {
+    slug: "clickhouse",
+    name: "ClickHouse",
+    aliases: ["olap", "column store", "analytics db"],
+    category: "databases",
+    Svg: ClickhouseIcon,
+    monochrome: true,
+  },
+  {
+    slug: "dynamodb",
+    name: "DynamoDB",
+    aliases: ["dynamo", "ddb", "key value"],
+    category: "databases",
+    Svg: DynamodbIcon,
+    monochrome: true,
+  },
+  {
+    slug: "sqlite",
+    name: "SQLite",
+    aliases: ["sqlite3", "embedded db", "local db"],
+    category: "databases",
+    Svg: SqliteIcon,
+    monochrome: true,
+  },
   /* -- Caching & Messaging -------------------------------------------------- */
   {
     slug: "redis",
@@ -206,6 +262,22 @@ const ICON_DEFS: readonly IconDef[] = [
     aliases: ["amqp", "rabbit"],
     category: "messaging",
     Svg: RabbitmqIcon,
+    monochrome: true,
+  },
+  {
+    slug: "memcached",
+    name: "Memcached",
+    aliases: ["memcache", "cache", "in memory"],
+    category: "messaging",
+    Svg: MemcachedIcon,
+    monochrome: true,
+  },
+  {
+    slug: "nats",
+    name: "NATS",
+    aliases: ["jetstream", "pub sub", "messaging"],
+    category: "messaging",
+    Svg: NatsIcon,
     monochrome: true,
   },
   /* -- Networking & Edge ---------------------------------------------------- */
@@ -239,6 +311,46 @@ const ICON_DEFS: readonly IconDef[] = [
     aliases: ["rpc", "protobuf", "proto"],
     category: "networking",
     Svg: GrpcIcon,
+    monochrome: true,
+  },
+  {
+    slug: "envoy",
+    name: "Envoy",
+    aliases: ["sidecar", "service mesh", "istio", "proxy"],
+    category: "networking",
+    Svg: EnvoyIcon,
+    monochrome: true,
+  },
+  {
+    slug: "firewall",
+    name: "Firewall",
+    aliases: ["waf", "security group", "shield"],
+    category: "networking",
+    Svg: FirewallIcon,
+    monochrome: true,
+  },
+  {
+    slug: "haproxy",
+    name: "HAProxy",
+    aliases: ["ha proxy", "load balancer", "proxy"],
+    category: "networking",
+    Svg: HaproxyIcon,
+    monochrome: true,
+  },
+  {
+    slug: "internet",
+    name: "Internet",
+    aliases: ["globe", "www", "public network", "world"],
+    category: "networking",
+    Svg: InternetIcon,
+    monochrome: true,
+  },
+  {
+    slug: "load-balancer",
+    name: "Load balancer",
+    aliases: ["lb", "elb", "alb", "nlb", "fan out"],
+    category: "networking",
+    Svg: LoadBalancerIcon,
     monochrome: true,
   },
   /* -- Cloud ----------------------------------------------------------------- */
@@ -301,7 +413,7 @@ const ICON_DEFS: readonly IconDef[] = [
   {
     slug: "lambda",
     name: "Serverless",
-    aliases: ["function", "faas", "cloud function"],
+    aliases: ["function", "faas", "cloud function", "lambda", "worker"],
     category: "cloud",
     Svg: LambdaIcon,
     monochrome: true,
@@ -309,7 +421,7 @@ const ICON_DEFS: readonly IconDef[] = [
   {
     slug: "s3",
     name: "Object storage",
-    aliases: ["bucket", "blob", "gcs"],
+    aliases: ["bucket", "blob", "gcs", "s3", "minio", "object storage"],
     category: "cloud",
     Svg: S3Icon,
     monochrome: true,
@@ -323,6 +435,30 @@ const ICON_DEFS: readonly IconDef[] = [
     monochrome: true,
   },
   /* -- Generic ---------------------------------------------------------------- */
+  {
+    slug: "ai-model",
+    name: "AI model",
+    aliases: ["ml", "llm", "inference", "gpu", "model"],
+    category: "generic",
+    Svg: AiModelIcon,
+    monochrome: true,
+  },
+  {
+    slug: "analytics",
+    name: "Analytics",
+    aliases: ["bi", "warehouse", "reporting", "metrics", "chart"],
+    category: "generic",
+    Svg: AnalyticsIcon,
+    monochrome: true,
+  },
+  {
+    slug: "api",
+    name: "API",
+    aliases: ["rest", "endpoint", "json", "openapi"],
+    category: "generic",
+    Svg: ApiIcon,
+    monochrome: true,
+  },
   {
     slug: "browser",
     name: "Browser",
@@ -340,6 +476,14 @@ const ICON_DEFS: readonly IconDef[] = [
     monochrome: true,
   },
   {
+    slug: "email",
+    name: "Email",
+    aliases: ["mail", "smtp", "ses", "notification", "sendgrid"],
+    category: "generic",
+    Svg: EmailIcon,
+    monochrome: true,
+  },
+  {
     slug: "external",
     name: "External system",
     aliases: ["third party", "3rd party", "saas"],
@@ -348,11 +492,35 @@ const ICON_DEFS: readonly IconDef[] = [
     monochrome: true,
   },
   {
+    slug: "file",
+    name: "File store",
+    aliases: ["document", "nfs", "volume", "disk"],
+    category: "generic",
+    Svg: FileIcon,
+    monochrome: true,
+  },
+  {
+    slug: "identity",
+    name: "Identity provider",
+    aliases: ["auth", "sso", "oauth", "iam", "keycloak", "key"],
+    category: "generic",
+    Svg: IdentityIcon,
+    monochrome: true,
+  },
+  {
     slug: "mobile",
     name: "Mobile",
     aliases: ["phone", "ios", "android", "app"],
     category: "generic",
     Svg: MobileIcon,
+    monochrome: true,
+  },
+  {
+    slug: "monitoring",
+    name: "Monitoring",
+    aliases: ["observability", "grafana", "prometheus", "apm", "logs"],
+    category: "generic",
+    Svg: MonitoringIcon,
     monochrome: true,
   },
   {
@@ -372,11 +540,35 @@ const ICON_DEFS: readonly IconDef[] = [
     monochrome: true,
   },
   {
+    slug: "scheduler",
+    name: "Scheduler",
+    aliases: ["cron", "job", "timer", "batch", "worker"],
+    category: "generic",
+    Svg: SchedulerIcon,
+    monochrome: true,
+  },
+  {
+    slug: "search",
+    name: "Search",
+    aliases: ["index", "query", "find", "magnifier"],
+    category: "generic",
+    Svg: SearchIcon,
+    monochrome: true,
+  },
+  {
     slug: "service",
     name: "Service",
     aliases: ["application", "app", "system", "component"],
     category: "generic",
     Svg: ServiceIcon,
+    monochrome: true,
+  },
+  {
+    slug: "webhook",
+    name: "Webhook",
+    aliases: ["callback", "event", "hook", "push"],
+    category: "generic",
+    Svg: WebhookIcon,
     monochrome: true,
   },
 ];
