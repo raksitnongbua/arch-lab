@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 
 import { McpGuide } from "@/features/mcp/components/mcp-guide";
+import { documentedOrigin } from "@/features/mcp/lib/origin";
 
 export const metadata: Metadata = {
   title: "MCP server (beta) — use arch-lab from your AI agent",
@@ -16,7 +18,16 @@ export const metadata: Metadata = {
  * page imports the guide component directly rather than through the feature's
  * barrel, because that barrel is the SERVER surface and pulls in the MCP SDK —
  * see `src/features/mcp/README.md`.
+ *
+ * Reading `headers()` makes this route dynamic rather than prerendered, which
+ * is a deliberate trade: the page's entire job is to hand out a URL that
+ * works, and deriving that URL from the host actually being served is what
+ * survives a domain rename. It cost a production bug to learn — `/mcp` spent a
+ * day advertising an endpoint that 404'd after the subdomain changed. One
+ * function invocation per view is a cheap price for a page that cannot be
+ * wrong about itself.
  */
-export default function McpPage(): React.JSX.Element {
-  return <McpGuide />;
+export default async function McpPage(): Promise<React.JSX.Element> {
+  const headerList = await headers();
+  return <McpGuide origin={documentedOrigin((name) => headerList.get(name))} />;
 }

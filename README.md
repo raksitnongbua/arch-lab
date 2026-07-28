@@ -98,7 +98,7 @@ server, so Claude Code, Claude Desktop, Cursor and anything else speaking the
 protocol can work with `.alab` models:
 
 ```bash
-claude mcp add --transport http arch-lab https://arch-lab-virid.vercel.app/api/mcp
+claude mcp add --transport http arch-lab https://arch-lab-dev.vercel.app/api/mcp
 ```
 
 Eight read-only tools: `validate_model`, `format_model`, `convert_model`,
@@ -123,7 +123,7 @@ a response. The caveat also travels in the server's `initialize` instructions,
 for agents that connect without a human reading this.
 
 Details, per-client setup and the honest limits are on
-[`/mcp`](https://arch-lab-virid.vercel.app/mcp); the implementation is
+[`/mcp`](https://arch-lab-dev.vercel.app/mcp); the implementation is
 documented in `src/features/mcp/README.md`.
 
 ## Getting started
