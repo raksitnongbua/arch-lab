@@ -1,0 +1,339 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "arch-lab",
+  "scopeName": "source.alab",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#escape-line" },
+    { "include": "#header-line" },
+    { "include": "#diagram-line" },
+    { "include": "#desc-line" },
+    { "include": "#view-line" },
+    { "include": "#edge-line" },
+    { "include": "#node-line" },
+    { "include": "#stray-tab" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "^\\s*(//).*$",
+      "name": "comment.line.double-slash.alab",
+      "captures": {
+        "1": { "name": "punctuation.definition.comment.alab" }
+      }
+    },
+
+    "stray-tab": {
+      "comment": "Indentation is spaces-only; the parser rejects tabs with a line/column error. Flag them here so the mistake is visible before saving.",
+      "match": "^ *\\t+",
+      "name": "invalid.illegal.tab-indentation.alab"
+    },
+
+    "header-line": {
+      "comment": "Indent 0 header lines. `archlab` must be line 1.",
+      "begin": "^(archlab|schema|title|description|owner|tags|created|updated|reviewed|tagcolor|customicon|generator|root)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.header.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#timestamp" },
+        { "include": "#tag" },
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#null" },
+        { "include": "#bare-word" }
+      ]
+    },
+
+    "diagram-line": {
+      "comment": "`@context | @container | @component | @code` diagram headers at indent 0.",
+      "begin": "^(@)(context|container|component|code)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.keyword.alab" },
+        "2": { "name": "keyword.control.level.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#diagram-attribute" },
+        { "include": "#string" },
+        { "include": "#bare-word" }
+      ]
+    },
+
+    "diagram-attribute": {
+      "comment": "`owner=<node>` and `in=<diagram>` / `in=null`.",
+      "match": "\\b(owner|in)(=)((?:\"(?:[^\"\\\\]|\\\\.)*\")|null|[A-Za-z0-9_-]+)?",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.alab" },
+        "2": { "name": "punctuation.separator.key-value.alab" },
+        "3": { "name": "variable.other.id.alab" }
+      }
+    },
+
+    "desc-line": {
+      "comment": "`desc \"…\"` — diagram body (indent 2) and node/edge continuation (indent 4).",
+      "begin": "^\\s+(desc)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.desc.alab" }
+      },
+      "end": "$",
+      "patterns": [{ "include": "#comment" }, { "include": "#string" }]
+    },
+
+    "view-line": {
+      "comment": "`view <zoom> <x> <y>` — the diagram viewport.",
+      "begin": "^\\s+(view)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.view.alab" }
+      },
+      "end": "$",
+      "patterns": [{ "include": "#comment" }, { "include": "#number" }]
+    },
+
+    "escape-line": {
+      "comment": "`! <path> [after <anchor>] : <json>` — unknown / forward-compatible fields. Valid at every indent.",
+      "begin": "^\\s*(!)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.escape.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        {
+          "match": "\\b(after)\\b",
+          "name": "keyword.operator.anchor.alab"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.key-value.alab"
+        },
+        { "include": "#json-value" }
+      ]
+    },
+
+    "node-line": {
+      "comment": "`<id>:<type> \"Name\"` plus attributes in any order.",
+      "begin": "^\\s+((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)(:)(person|system|external|container|database|queue|component|code)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "entity.name.type.node.alab" },
+        "2": { "name": "punctuation.separator.type.alab" },
+        "3": { "name": "storage.type.node.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#icon" },
+        { "include": "#technology" },
+        { "include": "#tag" },
+        { "include": "#child-ref" },
+        { "include": "#child-diagram" },
+        { "include": "#external-ref" },
+        { "include": "#pin" },
+        { "include": "#geometry" },
+        { "include": "#string" }
+      ]
+    },
+
+    "edge-line": {
+      "comment": "`<source> <arrow> <target>` plus attributes. Arrows longest-first, matching the parser's order.",
+      "begin": "^\\s+((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)\\s+(<\\.\\.>|<->|\\.\\.>|->|\\.\\.|--)\\s+((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)",
+      "beginCaptures": {
+        "1": { "name": "variable.other.id.source.alab" },
+        "2": { "name": "keyword.operator.arrow.alab" },
+        "3": { "name": "variable.other.id.target.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#edge-label" },
+        { "include": "#technology" },
+        { "include": "#tag" },
+        { "include": "#realizes" },
+        { "include": "#edge-attribute" },
+        { "include": "#via" },
+        { "include": "#geometry" },
+        { "include": "#string" }
+      ]
+    },
+
+    "edge-label": {
+      "comment": "`: \"label\"` — the colon is only a label marker when a space follows it.",
+      "match": "(:)(?=\\s)",
+      "captures": {
+        "1": { "name": "punctuation.separator.label.alab" }
+      }
+    },
+
+    "edge-attribute": {
+      "comment": "`id=<edge>` and `style=solid`.",
+      "match": "\\b(id|style)(=)((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)?",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.alab" },
+        "2": { "name": "punctuation.separator.key-value.alab" },
+        "3": { "name": "variable.other.id.alab" }
+      }
+    },
+
+    "via": {
+      "match": "\\b(via)\\b",
+      "name": "keyword.other.via.alab"
+    },
+
+    "realizes": {
+      "comment": "`~<parent-edge>` — traceability to the parent-level edge.",
+      "match": "(~)((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)",
+      "captures": {
+        "1": { "name": "punctuation.definition.realizes.alab" },
+        "2": { "name": "entity.name.function.realizes.alab" }
+      }
+    },
+
+    "icon": {
+      "comment": "`@slug`, `@slug!` (explicit), `@slug~` (inferred).",
+      "match": "(@)((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)([!~])?",
+      "captures": {
+        "1": { "name": "punctuation.definition.icon.alab" },
+        "2": { "name": "constant.language.icon.alab" },
+        "3": { "name": "keyword.operator.icon-source.alab" }
+      }
+    },
+
+    "technology": {
+      "comment": "`[Go 1.22]` or `[\"weird ] tech\"]`.",
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.technology.begin.alab" }
+      },
+      "end": "\\]",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.technology.end.alab" }
+      },
+      "name": "meta.technology.alab",
+      "contentName": "constant.other.technology.alab",
+      "patterns": [{ "include": "#string" }]
+    },
+
+    "tag": {
+      "comment": "`#tag` or `#\"weird tag\"`. Note this is NOT a comment — do not associate .alab with YAML.",
+      "match": "(#)((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)",
+      "captures": {
+        "1": { "name": "punctuation.definition.tag.alab" },
+        "2": { "name": "entity.name.tag.alab" }
+      }
+    },
+
+    "child-ref": {
+      "comment": "`>>\"./billing.archlab.json\"` — an external child file. Must precede #child-diagram.",
+      "match": "(>>)((?:\"(?:[^\"\\\\]|\\\\.)*\")|[^\\s]+)",
+      "captures": {
+        "1": { "name": "keyword.operator.child-ref.alab" },
+        "2": { "name": "string.unquoted.path.alab" }
+      }
+    },
+
+    "child-diagram": {
+      "comment": "`>d-cmp-orders` / `>null` — drill-down target.",
+      "match": "(>)((?:\"(?:[^\"\\\\]|\\\\.)*\")|null|[A-Za-z0-9_-]+)",
+      "captures": {
+        "1": { "name": "keyword.operator.drilldown.alab" },
+        "2": { "name": "variable.other.id.alab" }
+      }
+    },
+
+    "external-ref": {
+      "comment": "`^d-cnt-shopflow/session-cache` — boundary placeholder.",
+      "match": "(\\^)([^\\s]+)",
+      "captures": {
+        "1": { "name": "keyword.operator.external-ref.alab" },
+        "2": { "name": "variable.other.id.external.alab" }
+      }
+    },
+
+    "pin": {
+      "match": "\\b(pin)(?:(=)(true|false))?\\b",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.alab" },
+        "2": { "name": "punctuation.separator.key-value.alab" },
+        "3": { "name": "constant.language.boolean.alab" }
+      }
+    },
+
+    "geometry": {
+      "comment": "`(656,616 176x88)` position + size, and `(640,700)` waypoints.",
+      "begin": "\\(",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.geometry.begin.alab" }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.geometry.end.alab" }
+      },
+      "name": "meta.geometry.alab",
+      "patterns": [
+        { "include": "#number" },
+        { "match": "[,x]", "name": "punctuation.separator.geometry.alab" }
+      ]
+    },
+
+    "json-value": {
+      "patterns": [
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#null" },
+        {
+          "match": "\\b(true|false)\\b",
+          "name": "constant.language.boolean.alab"
+        },
+        {
+          "match": "[{}\\[\\],:]",
+          "name": "punctuation.definition.json.alab"
+        }
+      ]
+    },
+
+    "string": {
+      "begin": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.alab" }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.alab" }
+      },
+      "name": "string.quoted.double.alab",
+      "patterns": [
+        {
+          "match": "\\\\(?:[\"\\\\/bfnrt]|u[0-9a-fA-F]{4})",
+          "name": "constant.character.escape.alab"
+        },
+        {
+          "match": "\\\\.",
+          "name": "invalid.illegal.unrecognized-string-escape.alab"
+        }
+      ]
+    },
+
+    "timestamp": {
+      "match": "\\b\\d{4}-\\d{2}-\\d{2}T[\\d:.]+(?:Z|[+-]\\d{2}:\\d{2})",
+      "name": "constant.other.timestamp.alab"
+    },
+
+    "number": {
+      "match": "-?\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b",
+      "name": "constant.numeric.alab"
+    },
+
+    "null": {
+      "match": "\\bnull\\b",
+      "name": "constant.language.null.alab"
+    },
+
+    "bare-word": {
+      "comment": "Unquoted ids and slugs in header and diagram lines.",
+      "match": "\\b[A-Za-z0-9_-]+\\b",
+      "name": "variable.other.id.alab"
+    }
+  }
+}
