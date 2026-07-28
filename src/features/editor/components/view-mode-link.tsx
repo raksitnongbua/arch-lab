@@ -104,7 +104,7 @@ export function ViewModeLink(): React.JSX.Element {
         )}
       >
         <ExternalLink aria-hidden="true" />
-        <span className="hidden lg:inline">View mode</span>
+        <span className="hidden @[46rem]:inline">View mode</span>
       </span>
     );
   }
@@ -118,7 +118,7 @@ export function ViewModeLink(): React.JSX.Element {
       className={buttonClasses({ variant: "ghost", size: "sm" })}
     >
       <ExternalLink aria-hidden="true" />
-      <span className="hidden lg:inline">View mode</span>
+      <span className="hidden @[46rem]:inline">View mode</span>
     </a>
   );
 }

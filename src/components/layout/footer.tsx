@@ -12,7 +12,7 @@ export function Footer() {
           architecture documentation. C4 today; more diagram types planned.
         </p>
         <p>
-          Saves to plain JSON. Diff it, review it, commit it.{" "}
+          Saves as plain text you can read. Diff it, review it, commit it.{" "}
           <Link
             href="/syntax"
             className="font-medium text-foreground hover:underline"

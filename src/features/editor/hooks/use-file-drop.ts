@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Window-level drag-and-drop of a `.archlab.json` file (T3-A, AF-E5-S2).
+ * Window-level drag-and-drop of a `.alab` or `.archlab.json` file
+ * (T3-A, AF-E5-S2).
  *
  * Reads the dropped file's text and — where the browser supports
  * `DataTransferItem.getAsFileSystemHandle` (feature-detected, D2/R3) — also
@@ -13,6 +14,7 @@
 import { useEffect } from "react";
 
 import { toast } from "@/components/ui/toast";
+import { isOpenableFileName } from "../io/format";
 
 export interface DroppedFile {
   text: string;
@@ -50,7 +52,9 @@ export function useFileDrop(onFile: (file: DroppedFile) => void): void {
         sawAnyFile = true;
         const candidate = item.getAsFile();
         if (candidate === null) continue;
-        if (!candidate.name.toLowerCase().endsWith(".json")) continue;
+        // Both readable formats, not just JSON — dropping the `.alab` the
+        // app now writes by default has to work.
+        if (!isOpenableFileName(candidate.name)) continue;
         file = candidate;
         const withHandle = item as DataTransferItemWithHandle;
         if (typeof withHandle.getAsFileSystemHandle === "function") {
@@ -62,7 +66,7 @@ export function useFileDrop(onFile: (file: DroppedFile) => void): void {
       if (file === null) {
         if (sawAnyFile) {
           toast({
-            message: "Drop a .archlab.json file to open it here.",
+            message: "Drop a .alab or .archlab.json file to open it here.",
             tone: "warning",
           });
         }

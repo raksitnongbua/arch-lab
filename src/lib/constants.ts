@@ -23,7 +23,7 @@ export const APP_NAME = "arch-lab";
 export const EDITOR_ENABLED: boolean = true;
 
 export const APP_DESCRIPTION =
-  "A local-first workspace for architecture documentation — C4 model diagrams today, with sequence diagrams, a data dictionary, and network diagrams planned. Everything saves as reviewable JSON.";
+  "A local-first workspace for architecture documentation — C4 model diagrams today, with sequence diagrams, a data dictionary, and network diagrams planned. Everything saves as plain, reviewable text you own.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

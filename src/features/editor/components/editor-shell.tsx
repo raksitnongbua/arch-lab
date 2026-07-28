@@ -58,7 +58,12 @@ export function EditorShell(): React.JSX.Element {
 
       {/* Centre column — header strip + canvas. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
+        {/* `@container`: the labels below hide on the width of THIS COLUMN, not the
+            viewport. A viewport breakpoint cannot see that opening a rail just
+            took 384px off the row — at 1440px wide the window is "large" while
+            the column is cramped, which is exactly how Save ended up
+            underneath the panel. */}
+        <header className="@container flex h-12 min-w-0 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
           {/* FIRST in the row, before the breadcrumb. Opening the pane takes
               width off this column, and flexbox settles that against whatever
               can shrink — so anything after a flexible sibling moves, and the
@@ -73,16 +78,21 @@ export function EditorShell(): React.JSX.Element {
                whether it is open, and a label that flips between Show/Hide
                re-announces on every toggle. */
             aria-label="Model text"
+            className="shrink-0"
             onClick={() => setTextPaneOpen((open) => !open)}
           >
             <Code2 aria-hidden="true" />
-            <span className="hidden lg:inline">Model text</span>
+            <span className="hidden @[46rem]:inline">Model text</span>
           </Button>
           <Breadcrumb />
           <DirtyIndicator />
-          <div className="flex-1" />
-          <ViewModeLink />
-          <FileActions />
+          <div className="min-w-0 flex-1" />
+          {/* One shrink-0 group: the row gives up space at the breadcrumb
+              and the spacer, never by clipping the controls at its end. */}
+          <div className="flex shrink-0 items-center gap-2">
+            <ViewModeLink />
+            <FileActions />
+          </div>
         </header>
         <div className="relative min-h-96 flex-1 bg-canvas">
           {mounted ? (
@@ -106,7 +116,11 @@ export function EditorShell(): React.JSX.Element {
       {textPaneOpen ? (
         <aside
           aria-label="Model text"
-          className="flex w-full max-w-[28rem] shrink-0 border-l border-border bg-background sm:w-96"
+          /* Narrower until there is room to spare. At 1280 the palette, the
+             inspector and a 24rem pane leave the centre column too little to
+             hold its own toolbar, which is how Save ended up under the panel
+             edge. */
+          className="flex w-full max-w-[28rem] shrink-0 border-l border-border bg-background sm:w-80 2xl:w-96"
         >
           <ModelTextPane />
         </aside>

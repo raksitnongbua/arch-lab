@@ -23,15 +23,16 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { FolderOpen, Save } from "lucide-react";
+import { Braces, FolderOpen, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 
+import { ArchTextParseError } from "@/features/archtext";
+
 import {
   deriveFileName,
-  deserializeModel,
   downloadTextFile,
   FileValidationError,
   getCurrentFileHandle,
@@ -39,13 +40,20 @@ import {
   pickFileViaInput,
   pickOpenHandle,
   pickSaveHandle,
-  serializeModel,
   setCurrentFileHandle,
   setLastSavedText,
   supportsOpenPicker,
   supportsSavePicker,
   writeTextToHandle,
 } from "../io";
+import {
+  DEFAULT_SAVE_FORMAT,
+  deriveFileNameFor,
+  deserializeModelFrom,
+  formatForFileName,
+  OPEN_ACCEPT,
+  serializeModelAs,
+} from "../io/format";
 import { useEditorStore, type EditorModel } from "../state";
 import { useFileDrop, type DroppedFile } from "../hooks/use-file-drop";
 import { useFileShortcuts } from "../hooks/use-file-shortcuts";
@@ -93,13 +101,24 @@ export function FileActions(): React.JSX.Element {
       return true;
     }
 
+    // Format-stickiness: a model that came from a file goes back in that
+    // file's format. Only a model that has never been written picks the
+    // default — silently rewriting somebody's .archlab.json as .alab because
+    // we prefer .alab is not ours to do.
+    const format =
+      state.fileHandleName === null
+        ? DEFAULT_SAVE_FORMAT
+        : formatForFileName(state.fileHandleName);
+
     // Determinism rule 6: bump updatedAt only when the model actually changed.
-    const text = serializeModel(
+    const text = serializeModelAs(
       state.model,
+      format,
       state.isDirty ? { updatedAt: new Date().toISOString() } : undefined,
     );
     const fileName =
-      state.fileHandleName ?? deriveFileName(state.model.metadata.title);
+      state.fileHandleName ??
+      deriveFileNameFor(state.model.metadata.title, format);
 
     const existing = getCurrentFileHandle();
     if (existing !== null) {
@@ -163,17 +182,39 @@ export function FileActions(): React.JSX.Element {
     return true;
   }, []);
 
+  /**
+   * A JSON copy, on demand. Save writes the model's own format; this is the
+   * escape hatch to the interchange one — for a tool that wants JSON, or a
+   * pipeline that will not learn a grammar. Always a download, never the
+   * save handle: exporting must not silently re-point Save at a .json file
+   * and quietly convert the document from then on.
+   */
+  const handleExportJson = useCallback(() => {
+    const state = useEditorStore.getState();
+    const fileName = deriveFileName(state.model.metadata.title);
+    try {
+      downloadTextFile(fileName, serializeModelAs(state.model, "json"));
+      toast({ message: `Exported ${fileName}.` });
+    } catch (error) {
+      toast({
+        message: `Could not export — ${describeError(error)}`,
+        tone: "error",
+      });
+    }
+  }, []);
+
   /* ------------------------------- opening ------------------------------ */
 
   const installOpenedFile = useCallback(
     (text: string, name: string, handle: FileSystemFileHandle | null): void => {
       let model: EditorModel;
       try {
-        model = deserializeModel(text);
+        model = deserializeModelFrom(text, formatForFileName(name));
       } catch (error) {
         // The previous model is untouched — deserialize never half-loads.
         const message =
-          error instanceof FileValidationError
+          error instanceof FileValidationError ||
+          error instanceof ArchTextParseError
             ? `Could not open "${name}" — ${error.message}`
             : `Could not read "${name}" — ${describeError(error)}`;
         toast({ message, tone: "error", durationMs: 12_000 });
@@ -225,7 +266,7 @@ export function FileActions(): React.JSX.Element {
         return;
       }
       // Fallback: <input type="file">. No writable handle comes back.
-      const file = await pickFileViaInput(".json,application/json");
+      const file = await pickFileViaInput(OPEN_ACCEPT);
       if (file === null) return;
       let text: string;
       try {
@@ -324,7 +365,11 @@ export function FileActions(): React.JSX.Element {
 
   return (
     <div
-      className="flex items-center gap-2"
+      /* `shrink-0`: these are the row's terminal controls. Letting flexbox
+         take width out of them squeezes Save under whatever panel just
+         opened, so the header's slack has to come from the breadcrumb (which
+         truncates) and the spacer, never from here. */
+      className="flex shrink-0 items-center gap-2"
       role="group"
       aria-label="File actions"
     >
@@ -335,7 +380,16 @@ export function FileActions(): React.JSX.Element {
         title="Open a diagram file (Ctrl/Cmd+O)"
       >
         <FolderOpen aria-hidden="true" />
-        Open
+        <span className="hidden @[38rem]:inline">Open</span>
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleExportJson}
+        title="Download a .archlab.json copy — the interchange format"
+      >
+        <Braces aria-hidden="true" />
+        <span className="hidden @[52rem]:inline">Export JSON</span>
       </Button>
       <Button
         variant="outline"
