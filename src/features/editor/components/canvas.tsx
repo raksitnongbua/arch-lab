@@ -34,6 +34,7 @@ import {
   applyNodeChanges,
   getNodesBounds,
   useReactFlow,
+  useStore as useReactFlowStore,
   type Connection,
   type EdgeChange,
   type FinalConnectionState,
@@ -331,11 +332,44 @@ function CanvasInner(): React.JSX.Element {
     nodesRef.current = nodes;
   }, [nodes]);
 
+  // True for the whole rubber-band gesture: React Flow sets it on the first
+  // move and clears it on release. While it holds, React Flow is the author
+  // of `selected` and the resync below must not answer back — see there.
+  const userSelectionActive = useReactFlowStore(
+    (state) => state.userSelectionActive,
+  );
+
   // Resync from the store using the render-time derived-state pattern,
   // preserving in-flight drag positions (rare — a store update landing
   // mid-drag, e.g. the drag-start selection mirror).
+  //
+  // Held off for the duration of a rubber-band selection, which otherwise
+  // runs away into "Maximum update depth exceeded" (React #185). Dragging a
+  // box across two nodes spins this cycle once per mouse move:
+  //
+  //   React Flow grows the rect and emits `select` changes for the nodes it
+  //   now covers  →  onSelectionChange mirrors those ids into our store  →
+  //   `selection` changes, so `useCanvasNodes` re-projects and, because it
+  //   maps over `diagram.nodes`, allocates a NEW object for every node  →
+  //   this resync replaces the whole local array with that projection  →
+  //   the `nodes` prop has a fresh identity, so React Flow's StoreUpdater
+  //   pushes it into React Flow's own store  →  which re-derives, against
+  //   those just-adopted objects, which of them the rect covers  →  more
+  //   `select` changes, and round again.
+  //
+  // Neither existing guard can catch it: `sameIdSets` in
+  // `handleSelectionChange` sees a genuinely different id set each time the
+  // rect crosses a node, and `sameNodes` in `handleNodesChange` sees
+  // genuinely different objects. Nothing is a no-op, so nothing bails —
+  // the cycle is sustained by re-adoption, not by an echoed no-op.
+  //
+  // While the gesture is live React Flow already holds the selection it
+  // just computed, so declining to hand it back costs nothing. Note we do
+  // NOT advance `prevStoreNodes` when holding off: a model change that
+  // lands mid-gesture stays pending and applies on the render triggered by
+  // `userSelectionActive` going false.
   const [prevStoreNodes, setPrevStoreNodes] = useState(storeNodes);
-  if (storeNodes !== prevStoreNodes) {
+  if (storeNodes !== prevStoreNodes && !userSelectionActive) {
     setPrevStoreNodes(storeNodes);
     if (draggingIds.size === 0) {
       setNodes(storeNodes);
@@ -353,8 +387,13 @@ function CanvasInner(): React.JSX.Element {
     }
   }
 
+  // Held off during a rubber-band selection for the same reason as the nodes
+  // above: the rect selects edges too (React Flow emits edge selection
+  // changes on the same mouse moves), the projection re-allocates every edge
+  // when `selection` changes, and handing that back re-adopts them mid-
+  // gesture. Same cycle, same fix.
   const [prevStoreEdges, setPrevStoreEdges] = useState(storeEdges);
-  if (storeEdges !== prevStoreEdges) {
+  if (storeEdges !== prevStoreEdges && !userSelectionActive) {
     setPrevStoreEdges(storeEdges);
     setEdges(storeEdges);
   }
