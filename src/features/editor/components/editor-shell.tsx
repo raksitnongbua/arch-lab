@@ -59,9 +59,12 @@ export function EditorShell(): React.JSX.Element {
       {/* Centre column — header strip + canvas. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
-          <Breadcrumb />
-          <DirtyIndicator />
-          <div className="flex-1" />
+          {/* FIRST in the row, before the breadcrumb. Opening the pane takes
+              width off this column, and flexbox settles that against whatever
+              can shrink — so anything after a flexible sibling moves, and the
+              button you just pressed slid out from under the cursor. Pinned
+              to the header's leading edge it has nothing to its left that can
+              resize, so its position is fixed whatever the panel does. */}
           <Button
             variant={textPaneOpen ? "secondary" : "ghost"}
             size="sm"
@@ -75,6 +78,9 @@ export function EditorShell(): React.JSX.Element {
             <Code2 aria-hidden="true" />
             <span className="hidden lg:inline">Model text</span>
           </Button>
+          <Breadcrumb />
+          <DirtyIndicator />
+          <div className="flex-1" />
           <ViewModeLink />
           <FileActions />
         </header>

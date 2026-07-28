@@ -369,7 +369,14 @@ export function Breadcrumb(): React.JSX.Element {
     <nav
       ref={navRef}
       aria-label="Diagram hierarchy"
-      className="min-w-0 overflow-hidden"
+      /* A floor, not just `min-w-0`. This nav is the only shrinkable item in
+         the header strip, so when a right rail opens flexbox took the whole
+         difference out of it — it collapsed to zero width and the breadcrumb
+         vanished, taking the only way back up a level with it. The collapse
+         logic above is what handles a path that is genuinely too long (it
+         folds middles into `…`); flexbox squeezing the element out of
+         existence is not the same thing and must not happen. */
+      className="min-w-24 shrink overflow-hidden"
     >
       <ol className="flex min-w-0 items-center gap-1 whitespace-nowrap">
         {visible.map((segment, index) => {
