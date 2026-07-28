@@ -289,6 +289,23 @@ const IS_MAC =
 /* The canvas                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Element-wise reference equality. Deliberately not a deep compare: React
+ * Flow reuses the node object whenever a change leaves that node alone, so
+ * identity is exactly the signal for "nothing happened here", and anything
+ * deeper would cost more than the re-render it saves.
+ */
+function sameNodes(
+  next: readonly C4FlowNode[],
+  previous: readonly C4FlowNode[],
+): boolean {
+  if (next.length !== previous.length) return false;
+  for (let i = 0; i < next.length; i += 1) {
+    if (next[i] !== previous[i]) return false;
+  }
+  return true;
+}
+
 function CanvasInner(): React.JSX.Element {
   const activeDiagramId = useEditorStore((s) => s.activeDiagramId);
   const { nodes: storeNodes, edges: storeEdges } = useCanvasNodes();
@@ -400,10 +417,22 @@ function CanvasInner(): React.JSX.Element {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<C4FlowNode>[]) => {
+      if (changes.length === 0) return;
       const processed = changes.map((change) =>
         change.type === "position" ? processPositionChange(change) : change,
       );
-      setNodes((previous) => applyNodeChanges(processed, previous));
+      setNodes((previous) => {
+        const next = applyNodeChanges(processed, previous);
+        // `applyNodeChanges` always allocates a new array, even when every
+        // node it returns is the object it was given. Handing that back would
+        // give the `nodes` prop a fresh identity for a change that changed
+        // nothing — and React Flow's StoreUpdater pushes any new identity
+        // straight back into its own store, which can emit another change,
+        // which lands here again. Returning `previous` when the result is
+        // element-wise identical breaks that echo at the only point where it
+        // is provably a no-op; a real change still allocates and still lands.
+        return sameNodes(next, previous) ? previous : next;
+      });
     },
     [processPositionChange],
   );
