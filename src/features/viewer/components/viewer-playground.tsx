@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * `/view/new` — the live two-pane editor: arch-lab text (`.alab`) and
- * arch-lab JSON side by side over the rendered diagram. Two views, one
- * model — edit either pane and the other follows.
+ * `/view/new` — the live two-pane editor: the rendered diagram on top, with
+ * arch-lab text (`.alab`) and arch-lab JSON side by side beneath it. Two
+ * views, one model — edit either pane and the other follows.
  *
  * Sync mechanics (the correctness story):
  *   - There is ONE pending edit slot `{pane, value}`. Typing in a pane
@@ -329,9 +329,35 @@ export function ViewerPlayground(): React.JSX.Element {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8">
-      {/* Deliberately compact. Every line here pushes the diagram down, and
-          the detail below is reference material people need once, not on
-          every visit — so it collapses instead of occupying the fold. */}
+      {/* ---- the rendered model ----------------------------------------------
+
+           FIRST — above the heading, the notices and the panes alike. This
+           page is a diagram tool: the diagram is the answer and everything
+           else is either input or reference, so the answer is what you see on
+           arrival with nothing to scroll past. (It used to sit below the hero
+           block and the import row, which cost most of a phone screen before
+           the canvas began.)
+
+           Height is clamped rather than a flat 75vh: on a short laptop the
+           old value left no hint that anything followed, and on a tall
+           monitor it grew past what the diagram needs. The lower bound keeps
+           it usable, the upper stops it from becoming the whole page. On a
+           phone svh tracks the retracting browser chrome, where vh does not. */}
+      <section
+        aria-label="Rendered diagram"
+        className="flex h-[clamp(26rem,70svh,54rem)] flex-col overflow-hidden rounded-xl border border-border shadow-sm"
+      >
+        <ViewerShell
+          key={shellEpoch}
+          model={synced.model}
+          initialDiagramId={sharedInitialDiagram ?? undefined}
+          share={{ kind: "payload", file: synced.file }}
+          onDiagramChange={handleDiagramChange}
+        />
+      </section>
+
+      {/* Deliberately compact: it is reference material people need once, not
+          on every visit, so the detail collapses instead of occupying space. */}
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
           Write your own model
@@ -464,31 +490,6 @@ export function ViewerPlayground(): React.JSX.Element {
           </button>
         </div>
       ) : null}
-
-      {/* ---- the rendered model ----------------------------------------------
-
-           FIRST, before the editors. This page is a diagram tool: the diagram
-           is the answer and the panes are the input, so the answer must be
-           what you see on arrival. It used to sit below two full-height
-           textareas under a hero block, which put it off-screen entirely —
-           you had to scroll to find out whether what you pasted had worked.
-
-           Height is clamped rather than a flat 75vh: on a short laptop the
-           old value left no hint that anything followed, and on a tall
-           monitor it grew past what the diagram needs. The lower bound keeps
-           it usable, the upper stops it from becoming the whole page. */}
-      <section
-        aria-label="Rendered diagram"
-        className="flex h-[clamp(28rem,68vh,54rem)] flex-col overflow-hidden rounded-xl border border-border shadow-sm"
-      >
-        <ViewerShell
-          key={shellEpoch}
-          model={synced.model}
-          initialDiagramId={sharedInitialDiagram ?? undefined}
-          share={{ kind: "payload", file: synced.file }}
-          onDiagramChange={handleDiagramChange}
-        />
-      </section>
 
       {/* ---- the editor ------------------------------------------------------ */}
       <div

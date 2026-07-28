@@ -104,6 +104,11 @@ function parseSource(source: ModelSource): ViewerModelResult {
         description: parsed.metadata.description ?? "",
         rootDiagramId: parsed.rootDiagramId,
         diagrams: parsed.diagrams,
+        file: {
+          version: parsed.version,
+          metadata: parsed.metadata,
+          unknownFields: parsed.unknownFields,
+        },
       },
     };
   } catch (error) {

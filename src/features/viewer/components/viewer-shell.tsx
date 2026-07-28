@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * The view-mode page body: a slim header naming the model (title, read-only
- * badge, and — while EDITOR_ENABLED — the way into the editor) over the
- * view-only canvas — plus the two ways the canvas can take the whole screen:
+ * The view-mode page body: the view-only canvas, with a slim strip under it
+ * naming the model (title, read-only badge, and — while EDITOR_ENABLED — the
+ * way into the editor) — plus the two ways the canvas can take the whole
+ * screen:
  *
  *  1. Native fullscreen — the Fullscreen API on this shell's root element,
  *     feature-detected, state tracked through `fullscreenchange` so the
@@ -11,7 +12,7 @@
  *  2. Immersive mode — an in-page fallback that fixes the shell over the
  *     viewport (the site header/footer are simply covered, never edited),
  *     for embedding contexts where the Fullscreen API is blocked. The shell
- *     header stays visible in both, so the exit is always one click away.
+ *     strip stays visible in both, so the exit is always one click away.
  *
  * Escape precedence, one ladder, one step per press:
  *   1. native fullscreen active → the BROWSER exits fullscreen; the viewer
@@ -36,8 +37,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ArrowRight, Expand, Maximize2, Minimize2, Shrink } from "lucide-react";
-import Link from "next/link";
+import { Expand, Maximize2, Minimize2, Shrink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import { EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import { ViewerExportButton } from "../export/export-button";
+import { EditModeLink } from "./edit-mode-link";
 import { ViewerShareButton, type ShareSource } from "../share/share-button";
 import { deepFreeze, getDiagram, type ViewerModel } from "../lib/model";
 import { ViewerCanvas } from "./viewer-canvas";
@@ -80,6 +81,7 @@ export function ViewerShell({
   initialDiagramId,
   share,
   onDiagramChange,
+  defaultImmersive = false,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -88,14 +90,24 @@ export function ViewerShell({
   share?: ShareSource;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
+  /**
+   * Start in immersive mode. For a page that exists only to show one model
+   * (`/view/[modelId]`) — where the diagram IS the page, so the site chrome is
+   * a frame around nothing else. Left off when the shell is embedded in a
+   * larger page: fixing it over the viewport would cover its own host.
+   */
+  defaultImmersive?: boolean;
 }): React.JSX.Element {
   // Structural read-only-ness: freeze once, before the canvas ever sees it.
   const frozenModel = useMemo(() => deepFreeze(model), [model]);
 
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const [isImmersive, setIsImmersive] = useState(false);
-  const immersiveRef = useRef(false);
+  // Initialised, not toggled: no announcement fires for the starting state
+  // (nothing changed yet), and the ref has to agree from the first render or
+  // Escape would not know it is immersive until the first manual toggle.
+  const [isImmersive, setIsImmersive] = useState(defaultImmersive);
+  const immersiveRef = useRef(defaultImmersive);
   const [announcement, setAnnouncement] = useState("");
 
   // The diagram on screen — drives the export and share controls (and is
@@ -209,7 +221,26 @@ export function ViewerShell({
         {announcement}
       </p>
 
-      <header className="border-b border-border/60 bg-background">
+      {/* The diagram comes FIRST, above the strip that names it. This is a
+          diagram viewer: the diagram is what you came for, so it gets the top
+          of the viewport and the identifying detail reads as its caption. It
+          matters most on a phone, where the title, description and five
+          controls used to wrap into ~370px of chrome and push the canvas
+          below the fold — you arrived at a diagram tool and saw no diagram. */}
+      {/* `flex-1` does the real work — on a standalone view page this takes
+          every pixel the site chrome leaves. The floor is only a guard against
+          a collapsed canvas, and is deliberately modest: the shell is also
+          embedded in the playground inside a clamped-height section, where a
+          tall floor would push itself past the bottom of its own frame. */}
+      <div className="relative min-h-56 flex-1 sm:min-h-80">
+        <ViewerCanvas
+          model={frozenModel}
+          initialDiagramId={initialDiagramId}
+          onDiagramChange={handleDiagramChange}
+        />
+      </div>
+
+      <header className="border-t border-border/60 bg-background">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -283,13 +314,7 @@ export function ViewerShell({
               </button>
             ) : null}
             {EDITOR_ENABLED ? (
-              <Link
-                href="/editor"
-                className={buttonClasses({ size: "sm", className: "shrink-0" })}
-              >
-                Build yours in the editor
-                <ArrowRight aria-hidden="true" />
-              </Link>
+              <EditModeLink model={frozenModel} diagramId={currentDiagramId} />
             ) : (
               <Badge variant="outline" className="shrink-0">
                 Editor — coming soon
@@ -298,14 +323,6 @@ export function ViewerShell({
           </div>
         </div>
       </header>
-
-      <div className="relative min-h-96 flex-1">
-        <ViewerCanvas
-          model={frozenModel}
-          initialDiagramId={initialDiagramId}
-          onDiagramChange={handleDiagramChange}
-        />
-      </div>
     </div>
   );
 }
