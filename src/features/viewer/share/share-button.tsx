@@ -43,6 +43,7 @@ import {
   type ShareExpiry,
 } from "./codec";
 import { mintExpiry } from "./mint-expiry";
+import { parseDurationList } from "./duration";
 import { canVerifyExpiry } from "./signature";
 
 /** Where the model being viewed came from — decides what a share link is. */
@@ -70,24 +71,28 @@ type LinkState =
 
 const DAY = 24 * 60 * 60;
 
+/** Used when the env var is unset — a sane spread, no sub-day options. */
+const DEFAULT_TTL_OPTIONS = "1d,7d,30d";
+
 /**
- * Expiry choices, in SECONDS. `null` = never, and it stays the default: expiry
- * is opt-in.
+ * Offered expiries, from `NEXT_PUBLIC_ARCHLAB_SHARE_TTL_OPTIONS` — a
+ * comma-separated list of duration tokens (`10s,30m,1d,7d,1M,1Y`). See
+ * `duration.ts` for the grammar.
  *
- * The 10-second entry is development-only. An expiry you cannot watch happen is
- * an expiry nobody tests, and the shortest real choice — one day — turns
- * verifying the refusal path into a two-day round trip. Gated on `NODE_ENV` so
- * the bundler drops it from production builds entirely, rather than trusting
- * nobody to pick it.
+ * Env-driven rather than hard-coded because the useful set is a property of the
+ * deployment, not of this component: seconds for testing the refusal path, hours
+ * for review links, days for a public demo. The previous `NODE_ENV` special case
+ * for a 10-second option is gone — the list itself now decides, so a developer
+ * adds `10s` locally instead of the component guessing who is running it.
+ *
+ * "Never" is always first and always present: expiry is opt-in, and a
+ * misconfigured env must never remove the ability to share at all.
  */
 const TTL_CHOICES: ReadonlyArray<{ label: string; seconds: number | null }> = [
   { label: "Never", seconds: null },
-  ...(process.env.NODE_ENV === "production"
-    ? []
-    : [{ label: "10 seconds (dev)", seconds: 10 }]),
-  { label: "1 day", seconds: DAY },
-  { label: "7 days", seconds: 7 * DAY },
-  { label: "30 days", seconds: 30 * DAY },
+  ...parseDurationList(
+    process.env.NEXT_PUBLIC_ARCHLAB_SHARE_TTL_OPTIONS ?? DEFAULT_TTL_OPTIONS,
+  ),
 ];
 
 /**
@@ -147,69 +152,83 @@ export function ViewerShareButton({
   // may land its result.
   const buildTokenRef = useRef(0);
 
-  const buildLink = useCallback(() => {
-    buildTokenRef.current += 1;
-    const token = buildTokenRef.current;
+  /**
+   * `ttl` is a PARAMETER, not read from state. It used to close over
+   * `ttlSeconds`, and because `buildLink` was only ever called when the panel
+   * opened, changing the dropdown recreated the callback but never ran it: the
+   * panel kept showing — and the Copy button kept handing over — the link built
+   * with the PREVIOUS choice. Silently wrong, which is worse than visibly
+   * broken. Passing the value in means the select's own handler can rebuild
+   * immediately with the value it just set, without waiting for a re-render.
+   */
+  const buildLink = useCallback(
+    (ttl: number | null) => {
+      buildTokenRef.current += 1;
+      const token = buildTokenRef.current;
 
-    if (share.kind === "bundled") {
-      const suffix = includeDiagram
-        ? `#${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagram.id)}`
-        : "";
-      // A bundled link points at a model that ships with the app; there is no
-      // payload to expire, so the TTL control is not offered for these.
-      setLink({
-        status: "ready",
-        url: `${window.location.origin}/view/${share.modelId}${suffix}`,
-        expiresAt: null,
-      });
-      return;
-    }
-
-    if (!canEncodeShare()) {
-      setLink({ status: "unsupported" });
-      return;
-    }
-
-    setLink({ status: "building" });
-    void (async () => {
-      const alabText = serializeArchText(share.file);
-
-      // Mint the expiry FIRST: it is the only step that can fail, and failing
-      // after building a link would mean discarding a good one.
-      let expiry: ShareExpiry | undefined;
-      let expiryNote: string | undefined;
-      if (ttlSeconds !== null) {
-        const minted = await mintExpiry(
-          await shareDigestFor(alabText),
-          ttlSeconds,
-        );
-        if (token !== buildTokenRef.current) return;
-        if (minted.status === "ok") {
-          expiry = { expiresAt: minted.expiresAt, signature: minted.signature };
-        } else {
-          expiryNote = `This link will not expire — ${minted.message}.`;
-        }
+      if (share.kind === "bundled") {
+        const suffix = includeDiagram
+          ? `#${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagram.id)}`
+          : "";
+        // A bundled link points at a model that ships with the app; there is no
+        // payload to expire, so the TTL control is not offered for these.
+        setLink({
+          status: "ready",
+          url: `${window.location.origin}/view/${share.modelId}${suffix}`,
+          expiresAt: null,
+        });
+        return;
       }
 
-      const fragment = await encodeShareFragment(
-        alabText,
-        includeDiagram ? diagram.id : null,
-        expiry,
-      );
-      if (token !== buildTokenRef.current) return;
-      const url = `${window.location.origin}/view/new#${fragment}`;
-      setLink(
-        url.length > MAX_SHARE_URL_LENGTH
-          ? { status: "too-long", length: url.length }
-          : {
-              status: "ready",
-              url,
-              expiresAt: expiry?.expiresAt ?? null,
-              expiryNote,
-            },
-      );
-    })();
-  }, [share, diagram.id, includeDiagram, ttlSeconds]);
+      if (!canEncodeShare()) {
+        setLink({ status: "unsupported" });
+        return;
+      }
+
+      setLink({ status: "building" });
+      void (async () => {
+        const alabText = serializeArchText(share.file);
+
+        // Mint the expiry FIRST: it is the only step that can fail, and failing
+        // after building a link would mean discarding a good one.
+        let expiry: ShareExpiry | undefined;
+        let expiryNote: string | undefined;
+        if (ttl !== null) {
+          const minted = await mintExpiry(await shareDigestFor(alabText), ttl);
+          if (token !== buildTokenRef.current) return;
+          if (minted.status === "ok") {
+            expiry = {
+              expiresAt: minted.expiresAt,
+              signature: minted.signature,
+            };
+          } else {
+            expiryNote = `This link will not expire — ${minted.message}.`;
+          }
+        }
+
+        const fragment = await encodeShareFragment(
+          alabText,
+          includeDiagram ? diagram.id : null,
+          expiry,
+        );
+        if (token !== buildTokenRef.current) return;
+        const url = `${window.location.origin}/view/new#${fragment}`;
+        setLink(
+          url.length > MAX_SHARE_URL_LENGTH
+            ? { status: "too-long", length: url.length }
+            : {
+                status: "ready",
+                url,
+                expiresAt: expiry?.expiresAt ?? null,
+                expiryNote,
+              },
+        );
+      })();
+    },
+    // `ttlSeconds` is deliberately NOT a dependency: the value arrives as an
+    // argument, so this callback is stable across dropdown changes.
+    [share, diagram.id, includeDiagram],
+  );
 
   const handleToggle = useCallback(() => {
     if (open) {
@@ -217,9 +236,18 @@ export function ViewerShareButton({
       return;
     }
     setCopied(false);
-    buildLink();
+    buildLink(ttlSeconds);
     setOpen(true);
-  }, [open, buildLink]);
+  }, [open, buildLink, ttlSeconds]);
+
+  /** Change the expiry and rebuild at once — the fix for the stale-link bug. */
+  const handleTtlChange = useCallback(
+    (next: number | null) => {
+      setTtlSeconds(next);
+      buildLink(next);
+    },
+    [buildLink],
+  );
 
   /* ---- open/close mechanics (same contract as the export menu) ------------ */
 
@@ -392,7 +420,7 @@ export function ViewerShareButton({
                       value={ttlSeconds === null ? "never" : String(ttlSeconds)}
                       onChange={(event) => {
                         const raw = event.target.value;
-                        setTtlSeconds(raw === "never" ? null : Number(raw));
+                        handleTtlChange(raw === "never" ? null : Number(raw));
                       }}
                       className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
