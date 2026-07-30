@@ -25,6 +25,7 @@ import { Canvas } from "./canvas";
 import { DirtyIndicator } from "./dirty-indicator";
 import { FileActions } from "./file-actions";
 import { InspectorPanel } from "./inspector/inspector-panel";
+import { ModelHandoff } from "./model-handoff";
 import { OpenFileIndicator } from "./open-file-indicator";
 import { Palette } from "./palette";
 import { RecoveryPrompt } from "./recovery-prompt";
@@ -50,6 +51,10 @@ export function EditorShell(): React.JSX.Element {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Renders nothing; opens the model in `#m=…` when arriving from view
+          mode's "Edit this diagram". Mounted before RecoveryPrompt so the
+          store already holds the handed-over model when recovery evaluates. */}
+      <ModelHandoff />
       {/* The toolbar spans the whole app, not the canvas column.
 
           It used to live inside that column, which made its width a function

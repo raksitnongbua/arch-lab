@@ -128,7 +128,17 @@ export function ViewerExportButton({
           id={menuId}
           role="menu"
           aria-label="Export the current diagram"
-          className="absolute right-0 z-50 mt-1.5 w-64 rounded-lg border border-border bg-card p-1.5 shadow-lg"
+          /* Opens UPWARD. Its host strip sits at the BOTTOM of the shell, so a
+             menu hanging below the trigger lands past the bottom of the
+             viewport — and in immersive mode the page cannot scroll, which
+             made Export unusable rather than merely awkward.
+
+             Right-aligned only from `sm` up. On a phone this trigger sits near
+             the LEFT of the strip, and a 16rem menu aligned to its right edge
+             started at -126px — off the screen. Same left/right flip the Share
+             panel uses, and the width is clamped to the viewport for the same
+             reason. */
+          className="absolute bottom-full left-0 z-50 mb-1.5 w-[min(16rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-1.5 shadow-lg sm:right-0 sm:left-auto"
         >
           <p className="px-2.5 pt-1 pb-2 text-xs leading-snug text-muted-foreground">
             Exports the diagram you are viewing:{" "}

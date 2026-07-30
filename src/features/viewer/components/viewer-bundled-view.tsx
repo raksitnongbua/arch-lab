@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * The client wrapper for `/view/[modelId]` — a bundled model's ViewerShell
- * plus the two share-related concerns the server page cannot handle:
+ * The client wrapper for `/view/[modelId]` — a bundled model's ViewerShell,
+ * opened immersive (this route shows one model and nothing else), plus the two
+ * share-related concerns the server page cannot handle:
  *
  *   1. It provides the `share` source (`kind: "bundled"`), so the Share
  *      panel offers the plain page URL — the shortest honest link for a
@@ -59,6 +60,11 @@ export function ViewerBundledView({
       model={model}
       initialDiagramId={initialDiagramId ?? undefined}
       share={{ kind: "bundled", modelId: model.id }}
+      // This route is one model and nothing else, so it opens immersive: the
+      // diagram takes the window and the site header/footer stay behind it.
+      // The exit is always on screen — the strip under the canvas keeps its
+      // "Exit immersive" control — and Escape at the top level leaves too.
+      defaultImmersive
     />
   );
 }
