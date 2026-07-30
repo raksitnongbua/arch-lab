@@ -31,6 +31,7 @@ import { Check, Copy, Download, Share2 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import { ARCHTEXT_EXTENSION, serializeArchText } from "@/features/archtext";
+import { cn } from "@/lib/utils";
 import type { ArchLabFile, C4Diagram } from "@/types";
 
 import { fileStem } from "../export/download";
@@ -138,6 +139,13 @@ export function ViewerShareButton({
   const [link, setLink] = useState<LinkState>({ status: "building" });
   /** Seconds; null = never expires, which stays the default (opt-in). */
   const [ttlSeconds, setTtlSeconds] = useState<number | null>(null);
+  /**
+   * A link is on screen and a newer one is being built. Distinct from the
+   * `building` status: that one has nothing to show, this one has something
+   * STALE to show, and the difference decides whether the panel may be torn
+   * down and whether Copy is safe to press.
+   */
+  const [rebuilding, setRebuilding] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -151,6 +159,12 @@ export function ViewerShareButton({
   // Guards a slow encode against a close-and-reopen: only the newest build
   // may land its result.
   const buildTokenRef = useRef(0);
+  /**
+   * Whether a link is already on screen. A ref, not the `link` state, so
+   * `buildLink` can branch on it without taking `link` as a dependency — that
+   * would recreate the callback on every build and defeat its own stability.
+   */
+  const hasLinkRef = useRef(false);
 
   /**
    * `ttl` is a PARAMETER, not read from state. It used to close over
@@ -185,7 +199,16 @@ export function ViewerShareButton({
         return;
       }
 
-      setLink({ status: "building" });
+      // Rebuilding an existing link keeps the panel MOUNTED and just marks it
+      // stale. Dropping to `building` tore down the whole ready state —
+      // including the very dropdown that triggered the rebuild — so the control
+      // vanished and reappeared under the cursor on every change. Only the first
+      // build, with nothing to show yet, gets the "building" state.
+      if (hasLinkRef.current) {
+        setRebuilding(true);
+      } else {
+        setLink({ status: "building" });
+      }
       void (async () => {
         const alabText = serializeArchText(share.file);
 
@@ -213,8 +236,10 @@ export function ViewerShareButton({
         );
         if (token !== buildTokenRef.current) return;
         const url = `${window.location.origin}/view#${fragment}`;
+        const tooLong = url.length > MAX_SHARE_URL_LENGTH;
+        hasLinkRef.current = !tooLong;
         setLink(
-          url.length > MAX_SHARE_URL_LENGTH
+          tooLong
             ? { status: "too-long", length: url.length }
             : {
                 status: "ready",
@@ -223,6 +248,7 @@ export function ViewerShareButton({
                 expiryNote,
               },
         );
+        setRebuilding(false);
       })();
     },
     // `ttlSeconds` is deliberately NOT a dependency: the value arrives as an
@@ -393,8 +419,15 @@ export function ViewerShareButton({
                 readOnly
                 value={link.url}
                 aria-label="Share link"
+                // While rebuilding, this URL is the PREVIOUS one. Marked
+                // busy and dimmed so it does not read as the current answer,
+                // and the actions below are disabled so it cannot be copied.
+                aria-busy={rebuilding}
                 onFocus={(event) => event.currentTarget.select()}
-                className="mt-3 w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className={cn(
+                  "mt-3 w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                  rebuilding && "opacity-50",
+                )}
               />
               {share.kind === "payload" ? (
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -455,14 +488,21 @@ export function ViewerShareButton({
                 <button
                   type="button"
                   onClick={() => handleCopy(link.url)}
-                  className={buttonClasses({ size: "sm" })}
+                  // Disabled mid-rebuild: the URL above is still the previous
+                  // one, and handing over a link that does not match the
+                  // expiry on screen is the exact bug this panel just had.
+                  disabled={rebuilding}
+                  className={cn(
+                    buttonClasses({ size: "sm" }),
+                    rebuilding && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   {copied ? (
                     <Check aria-hidden="true" />
                   ) : (
                     <Copy aria-hidden="true" />
                   )}
-                  {copied ? "Copied" : "Copy link"}
+                  {rebuilding ? "Updating…" : copied ? "Copied" : "Copy link"}
                 </button>
                 {canWebShare ? (
                   <button
