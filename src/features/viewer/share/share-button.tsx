@@ -68,20 +68,47 @@ type LinkState =
   /** This browser cannot build compressed links (no CompressionStream). */
   | { status: "unsupported" };
 
-/** Expiry choices. `null` = never, and it is the default (opt-in). */
-const TTL_CHOICES: ReadonlyArray<{ label: string; days: number | null }> = [
-  { label: "Never", days: null },
-  { label: "1 day", days: 1 },
-  { label: "7 days", days: 7 },
-  { label: "30 days", days: 30 },
+const DAY = 24 * 60 * 60;
+
+/**
+ * Expiry choices, in SECONDS. `null` = never, and it stays the default: expiry
+ * is opt-in.
+ *
+ * The 10-second entry is development-only. An expiry you cannot watch happen is
+ * an expiry nobody tests, and the shortest real choice — one day — turns
+ * verifying the refusal path into a two-day round trip. Gated on `NODE_ENV` so
+ * the bundler drops it from production builds entirely, rather than trusting
+ * nobody to pick it.
+ */
+const TTL_CHOICES: ReadonlyArray<{ label: string; seconds: number | null }> = [
+  { label: "Never", seconds: null },
+  ...(process.env.NODE_ENV === "production"
+    ? []
+    : [{ label: "10 seconds (dev)", seconds: 10 }]),
+  { label: "1 day", seconds: DAY },
+  { label: "7 days", seconds: 7 * DAY },
+  { label: "30 days", seconds: 30 * DAY },
 ];
 
-function formatExpiryDate(expiresAt: number): string {
-  return new Date(expiresAt * 1000).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+/**
+ * Date alone for a distant expiry; a clock time when it is under a day away.
+ * "Stops working on 31 July 2026" tells you nothing about a link that dies in
+ * ten seconds.
+ */
+function formatExpiry(expiresAt: number): string {
+  const secondsAway = expiresAt - Math.floor(Date.now() / 1000);
+  const when = new Date(expiresAt * 1000);
+  return secondsAway < DAY
+    ? when.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : when.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
 }
 
 export interface ViewerShareButtonProps {
@@ -104,8 +131,8 @@ export function ViewerShareButton({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [link, setLink] = useState<LinkState>({ status: "building" });
-  /** null = never expires, and that stays the default: expiry is opt-in. */
-  const [ttlDays, setTtlDays] = useState<number | null>(null);
+  /** Seconds; null = never expires, which stays the default (opt-in). */
+  const [ttlSeconds, setTtlSeconds] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -151,10 +178,10 @@ export function ViewerShareButton({
       // after building a link would mean discarding a good one.
       let expiry: ShareExpiry | undefined;
       let expiryNote: string | undefined;
-      if (ttlDays !== null) {
+      if (ttlSeconds !== null) {
         const minted = await mintExpiry(
           await shareDigestFor(alabText),
-          ttlDays,
+          ttlSeconds,
         );
         if (token !== buildTokenRef.current) return;
         if (minted.status === "ok") {
@@ -182,7 +209,7 @@ export function ViewerShareButton({
             },
       );
     })();
-  }, [share, diagram.id, includeDiagram, ttlDays]);
+  }, [share, diagram.id, includeDiagram, ttlSeconds]);
 
   const handleToggle = useCallback(() => {
     if (open) {
@@ -362,17 +389,19 @@ export function ViewerShareButton({
                     <span>Expires</span>
                     <select
                       id={`${panelId}-ttl`}
-                      value={ttlDays === null ? "never" : String(ttlDays)}
+                      value={ttlSeconds === null ? "never" : String(ttlSeconds)}
                       onChange={(event) => {
                         const raw = event.target.value;
-                        setTtlDays(raw === "never" ? null : Number(raw));
+                        setTtlSeconds(raw === "never" ? null : Number(raw));
                       }}
                       className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       {TTL_CHOICES.map((choice) => (
                         <option
                           key={choice.label}
-                          value={choice.days === null ? "never" : choice.days}
+                          value={
+                            choice.seconds === null ? "never" : choice.seconds
+                          }
                         >
                           {choice.label}
                         </option>
@@ -383,7 +412,7 @@ export function ViewerShareButton({
                     <p className="text-xs text-muted-foreground">
                       This link stops working on{" "}
                       <span className="font-medium text-foreground">
-                        {formatExpiryDate(link.expiresAt)}
+                        {formatExpiry(link.expiresAt)}
                       </span>
                       . It is not a secret — anyone with the link can read the
                       model until then.

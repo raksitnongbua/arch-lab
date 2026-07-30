@@ -17,18 +17,20 @@ export type MintedExpiry =
   | { status: "ok"; expiresAt: number; signature: string }
   | { status: "unavailable"; message: string };
 
-/** Seconds per day, named so the arithmetic below reads as intent. */
-const DAY_SECONDS = 24 * 60 * 60;
-
 /**
  * `digest` comes from `shareDigestFor(alabText)` in the codec, so compression
  * details stay in one place and this module only speaks HTTP.
+ *
+ * The unit is SECONDS, not days: the dev-only "10 seconds" choice exists so an
+ * expiry can actually be watched to happen, and days cannot express it. The MCP
+ * tool keeps a `ttl_days` argument — that is a public API where whole days are
+ * the sensible unit — and converts before it signs.
  */
 export async function mintExpiry(
   digest: string,
-  ttlDays: number,
+  ttlSeconds: number,
 ): Promise<MintedExpiry> {
-  const expiresAt = Math.floor(Date.now() / 1000) + ttlDays * DAY_SECONDS;
+  const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
 
   try {
     const response = await fetch("/api/share/sign", {
