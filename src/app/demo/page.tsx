@@ -145,7 +145,7 @@ export default function DemoPage(): React.JSX.Element {
         <span className="font-mono text-foreground">.archlab.json</span> or
         Mermaid C4 code — into{" "}
         <Link
-          href="/view/new"
+          href="/view"
           className="font-medium text-primary hover:underline"
         >
           view mode

@@ -105,7 +105,7 @@ export async function createShareLink(
     diagramId ?? null,
     expiry,
   );
-  const url = `${publicOrigin()}/view/new#${fragment}`;
+  const url = `${publicOrigin()}/view#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
     return errorResult(
@@ -117,7 +117,7 @@ export async function createShareLink(
           `break the link for whoever receives it).`,
         "Send the model as a file instead — call convert_model with " +
           'to="alab" and save the result as a `.alab` file, which the ' +
-          "two-pane editor at /view/new accepts by paste or drop.",
+          "two-pane editor at /view accepts by paste or drop.",
       ),
     );
   }

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * `/view/new` — the live two-pane editor: the rendered diagram on top, with
+ * `/view` — the live two-pane editor: the rendered diagram on top, with
  * arch-lab text (`.alab`) and arch-lab JSON side by side beneath it. Two
  * views, one model — edit either pane and the other follows.
  *
@@ -60,7 +60,13 @@ import {
   type PaneId,
   type SyncedModel,
 } from "../input/sync";
-import { decodeShareFragment } from "../share/codec";
+import {
+  canEncodeShare,
+  decodeShareFragment,
+  encodeShareFragment,
+  MAX_SHARE_URL_LENGTH,
+} from "../share/codec";
+import { ShareExpired } from "../share/share-expired";
 import { ViewerShell } from "./viewer-shell";
 
 /**
@@ -69,6 +75,13 @@ import { ViewerShell } from "./viewer-shell";
  * the mirror still feels live.
  */
 const SYNC_DEBOUNCE_MS = 300;
+
+/**
+ * How long the model rests before the URL is rewritten. Longer than the pane
+ * sync: rewriting costs a compress, and the address bar is not something anyone
+ * watches keystroke by keystroke.
+ */
+const URL_SYNC_DEBOUNCE_MS = 800;
 
 const JSON_EXTENSION = ".archlab.json";
 
@@ -101,13 +114,15 @@ export function ViewerPlayground(): React.JSX.Element {
   const [shellEpoch, setShellEpoch] = useState(0);
   const currentDiagramRef = useRef(SEED_MODEL.model.rootDiagramId);
 
-  // Share links (`/view/new#m=…`): the model arrives inside the fragment.
+  // Share links (`/view#m=…`): the model arrives inside the fragment.
   const [sharedNotice, setSharedNotice] = useState<SharedLinkNotice | null>(
     null,
   );
   const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
     string | null
   >(null);
+  /** Epoch seconds when a lapsed link expired; non-null takes over the page. */
+  const [expired, setExpired] = useState<number | null>(null);
 
   // JSON is opt-in. `.alab` is the format this product asks people to write —
   // it is what the syntax reference documents, what share links carry, and
@@ -205,15 +220,13 @@ export function ViewerPlayground(): React.JSX.Element {
       }
 
       if (decoded.status === "expired") {
-        // Not a failure: the link worked and its author set it to stop. Say
-        // when, and what to do about it, instead of implying damage.
-        const on = new Date(decoded.expiresAt * 1000).toLocaleDateString(
-          undefined,
-          { year: "numeric", month: "long", day: "numeric" },
+        // Takes over the whole page rather than showing a banner above the seed
+        // model — see `share/share-expired.tsx` for why a notice over a working
+        // editor actively misleads.
+        setExpired(decoded.expiresAt);
+        setAnnouncement(
+          "This share link has expired. The model it carried is not shown.",
         );
-        const message = `it expired on ${on} — ask whoever shared it for a fresh link`;
-        setSharedNotice({ kind: "error", message });
-        setAnnouncement(`This share link has expired — ${message}.`);
         return;
       }
 
@@ -252,6 +265,60 @@ export function ViewerPlayground(): React.JSX.Element {
       window.removeEventListener("hashchange", onHashChange);
     };
   }, [adoptSynced]);
+
+  /* ---- keeping the URL shareable as you edit ---------------------------- */
+  /**
+   * Rewrites `#m=…` to match the model on screen, so the address bar is always
+   * a link you can paste — no Share click required.
+   *
+   * `history.replaceState`, for two reasons that both matter:
+   *   - It does NOT fire `hashchange`. The effect above listens for that and
+   *     re-decodes the fragment into both panes; if writing the URL triggered
+   *     it, every keystroke would round-trip through a decode and stamp on the
+   *     caret. `replaceState` is what makes this safe rather than a loop.
+   *   - It does not push history. `pushState` per edit would bury the Back
+   *     button under dozens of entries and make leaving the page a chore.
+   *
+   * Skipped while the model is still the untouched seed: landing on `/view` and
+   * having the URL instantly grow a payload looks like something happened when
+   * nothing did.
+   *
+   * Any `exp`/`sig` from an incoming link is deliberately dropped once the model
+   * changes — that signature covers the ORIGINAL payload's digest and cannot be
+   * valid for edited content. Keeping it would produce a link that refuses to
+   * open; minting a fresh expiry belongs to the Share panel.
+   */
+  useEffect(() => {
+    if (synced === SEED_MODEL) return;
+    if (!canEncodeShare()) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const fragment = await encodeShareFragment(
+          synced.aftText,
+          currentDiagramRef.current === synced.model.rootDiagramId
+            ? null
+            : currentDiagramRef.current,
+        );
+        if (cancelled) return;
+        const url = `${window.location.origin}${window.location.pathname}#${fragment}`;
+        // Too long to be a working link: clear the fragment rather than leave a
+        // stale one, so the address bar never claims to be shareable when the
+        // Share panel would refuse to hand it over.
+        window.history.replaceState(
+          null,
+          "",
+          url.length > MAX_SHARE_URL_LENGTH
+            ? window.location.pathname
+            : `#${fragment}`,
+        );
+      })();
+    }, URL_SYNC_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [synced]);
 
   /* ---- pane interactions ----------------------------------------------- */
 
@@ -339,6 +406,23 @@ export function ViewerPlayground(): React.JSX.Element {
   /* ---- render ------------------------------------------------------------ */
 
   const stem = downloadStem(synced.model.title);
+
+  // An expired link takes over the page. Returned BEFORE the editor so the seed
+  // model is never on screen next to the message — the whole point is that
+  // there is nothing here to mistake for what was shared.
+  if (expired !== null) {
+    return (
+      <ShareExpired
+        expiresAt={expired}
+        onStartFresh={() => {
+          // Drop the fragment without a reload, so the editor appears on the
+          // clean `/view` URL and the dead link is not left in the address bar.
+          window.history.replaceState(null, "", window.location.pathname);
+          setExpired(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8">

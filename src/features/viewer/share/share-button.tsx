@@ -212,7 +212,7 @@ export function ViewerShareButton({
           expiry,
         );
         if (token !== buildTokenRef.current) return;
-        const url = `${window.location.origin}/view/new#${fragment}`;
+        const url = `${window.location.origin}/view#${fragment}`;
         setLink(
           url.length > MAX_SHARE_URL_LENGTH
             ? { status: "too-long", length: url.length }

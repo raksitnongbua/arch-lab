@@ -3,7 +3,7 @@
 /**
  * A `.alab` code block for the syntax reference: `<pre><code>` semantics, a
  * copy button with announced feedback, and (optionally) an "Open in view
- * mode" link that carries the snippet to `/view/new` inside a share-link
+ * mode" link that carries the snippet to `/view` inside a share-link
  * fragment — the same codec the viewer's Share button uses, so the reference
  * doubles as a playground launcher.
  *
@@ -133,7 +133,7 @@ function TryItLink({
     if (!canEncodeShare()) return;
     void encodeShareFragment(code, null).then((fragment) => {
       if (cancelled) return;
-      const target = `/view/new#${fragment}`;
+      const target = `/view#${fragment}`;
       if (`${window.location.origin}${target}`.length <= MAX_SHARE_URL_LENGTH) {
         setHref(target);
       }

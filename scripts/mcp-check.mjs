@@ -634,7 +634,9 @@ check(
     );
     const url = text.split("\n").find((line) => line.startsWith("http"));
     assert.ok(url !== undefined, `no URL in:\n${text}`);
-    assert.match(url, /\/view\/new#m=AF1\./);
+    // `/view`, not `/view/new`: the `new` segment was dropped, and the old path
+    // is gone rather than redirected.
+    assert.match(url, /\/view#m=AF1\./);
 
     const decoded = await decodeShareFragment(new URL(url).hash);
     assert.equal(decoded.status, "ok");
