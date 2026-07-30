@@ -1,5 +1,5 @@
 /**
- * The two-pane sync engine for `/view/new`: arch-lab text (`.alab`) on one
+ * The two-pane sync engine for `/view`: arch-lab text (`.alab`) on one
  * side, arch-lab JSON on the other, one model behind both. Everything here
  * is a pure function over the REAL readers and writers — `parseArchText` /
  * `serializeArchText` from the archtext feature, `deserializeModel` /

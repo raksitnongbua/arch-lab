@@ -44,6 +44,12 @@ export interface C4NodeData extends Record<string, unknown> {
   childCount: number;
   /** node.externalRef present ⇒ read-only boundary placeholder. */
   isPlaceholder: boolean;
+  /**
+   * For a placeholder, the LEVEL of the diagram it references — drives the
+   * `↑ <level>` chip. Null when the node is first-class, or when the
+   * referenced diagram cannot be resolved (a dangling `^ref`).
+   */
+  refSourceLevel: C4Level | null;
   isEditingLabel: boolean;
   /** Icon slug after type-default resolution. Never empty. */
   resolvedIcon: string;

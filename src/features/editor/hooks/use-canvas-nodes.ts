@@ -66,13 +66,25 @@ export function useCanvasNodes(): CanvasProjection {
 
     const nodes: C4FlowNode[] = diagram.nodes.map((node) => {
       const placeholder = isBoundaryPlaceholder(node);
-      const withChildren = hasChildDiagram(node);
+      // A `childDiagramId` pointing at an EMPTY diagram is not a drill-down
+      // affordance — a badge reading "0" advertises nothing to open. The badge
+      // is gated on the child count, never on the pointer merely existing.
+      // (`mod+ArrowDown` still drills in, so an empty child stays reachable.)
+      const childCount = hasChildDiagram(node)
+        ? selectChildCount(state, node.id)
+        : 0;
       const data: C4NodeData = {
         node,
         level: diagram.level,
-        hasChildren: withChildren,
-        childCount: withChildren ? selectChildCount(state, node.id) : 0,
+        hasChildren: childCount > 0,
+        childCount,
         isPlaceholder: placeholder,
+        // A dangling `^ref` (referenced diagram deleted) resolves to null and
+        // simply renders no chip — never a crash, never a "↑ undefined".
+        refSourceLevel:
+          placeholder && node.externalRef !== undefined
+            ? (model.diagrams[node.externalRef.diagramId]?.level ?? null)
+            : null,
         isEditingLabel: labelEdit?.kind === "node" && labelEdit.id === node.id,
         resolvedIcon: node.icon ?? FALLBACK_ICON_BY_TYPE[node.type],
       };
@@ -83,7 +95,13 @@ export function useCanvasNodes(): CanvasProjection {
         width: node.size.width,
         height: node.size.height,
         selected: selectedNodeIds.has(node.id),
-        draggable: !placeholder,
+        // Placeholders ARE draggable. "Read-only" means their identity is owned
+        // elsewhere — name, type and technology mirror the original — but
+        // `position` and `size` are per-diagram presentation and deliberately
+        // NOT mirrored (see `REF_MIRRORED_KEYS`). Pinning them made every
+        // reference land on the same spot with no way to separate them, which
+        // is unusable in the one diagram whose whole job is layout.
+        draggable: true,
         data,
       };
     });

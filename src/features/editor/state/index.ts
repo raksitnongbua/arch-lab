@@ -31,8 +31,10 @@ export {
   selectBreadcrumb,
   selectChildCount,
   selectParallelEdgeGroups,
+  selectReferenceableNodes,
   selectValidNodeTypes,
 } from "./selectors";
+export type { ReferenceableNode } from "./selectors";
 
 export {
   CrossDiagramEdgeError,

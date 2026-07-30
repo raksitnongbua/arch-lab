@@ -846,6 +846,13 @@ function ViewerCanvasInner({
     const flowNodes: ViewerFlowNode[] = diagram.nodes.map((node) => {
       const drillable =
         hasChildDiagram(node) && typeof node.childDiagramId === "string";
+      // Gated on the child COUNT, not on `childDiagramId` merely existing: a
+      // pointer at an empty diagram is nothing to zoom into, and a chip
+      // reading "0" is an affordance that lies.
+      const childCount =
+        drillable && node.childDiagramId
+          ? getDiagram(model, node.childDiagramId).nodes.length
+          : 0;
       return {
         id: node.id,
         type: "c4" as const,
@@ -860,14 +867,18 @@ function ViewerCanvasInner({
           node,
           level: diagram.level,
           isPlaceholder: isBoundaryPlaceholder(node),
+          // A dangling `^ref` resolves to null and renders no chip.
+          refSourceLevel:
+            node.externalRef !== undefined
+              ? (model.diagrams[node.externalRef.diagramId]?.level ?? null)
+              : null,
           onDrill: drillInto,
           drill:
-            drillable && node.childDiagramId && childLevel !== null
+            node.childDiagramId && childLevel !== null && childCount > 0
               ? {
                   childDiagramId: node.childDiagramId,
                   childLevelLabel: childLevel,
-                  childCount: getDiagram(model, node.childDiagramId).nodes
-                    .length,
+                  childCount,
                 }
               : null,
         },
@@ -983,13 +994,13 @@ function ViewerCanvasInner({
         otherName: nameById.get(edge.source) ?? edge.source,
       }));
     const childLevel = childLevelOf(diagram.level);
+    // Same rule as the canvas chip: an empty child diagram is not a drill-down.
+    const childCount =
+      hasChildDiagram(node) && node.childDiagramId
+        ? getDiagram(model, node.childDiagramId).nodes.length
+        : 0;
     const drill =
-      hasChildDiagram(node) && node.childDiagramId && childLevel !== null
-        ? {
-            childCount: getDiagram(model, node.childDiagramId).nodes.length,
-            childLevel,
-          }
-        : null;
+      childCount > 0 && childLevel !== null ? { childCount, childLevel } : null;
     return { node, level: diagram.level, outgoing, incoming, drill };
   }, [model, diagram, selectedNodeId]);
 

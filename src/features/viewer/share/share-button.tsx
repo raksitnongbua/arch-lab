@@ -31,6 +31,7 @@ import { Check, Copy, Download, Share2 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import { ARCHTEXT_EXTENSION, serializeArchText } from "@/features/archtext";
+import { cn } from "@/lib/utils";
 import type { ArchLabFile, C4Diagram } from "@/types";
 
 import { fileStem } from "../export/download";
@@ -39,7 +40,12 @@ import {
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
   SHARE_PARAM_DIAGRAM,
+  shareDigestFor,
+  type ShareExpiry,
 } from "./codec";
+import { mintExpiry } from "./mint-expiry";
+import { parseDurationList } from "./duration";
+import { canVerifyExpiry } from "./signature";
 
 /** Where the model being viewed came from — decides what a share link is. */
 export type ShareSource =
@@ -47,11 +53,69 @@ export type ShareSource =
 
 type LinkState =
   | { status: "building" }
-  | { status: "ready"; url: string }
+  /**
+   * `expiresAt` is epoch seconds when the sharer asked for an expiry and the
+   * server signed one, else null. `expiryNote` explains a requested expiry that
+   * could NOT be minted — the link is still handed over, permanently, and the
+   * note says so rather than pretending the choice took effect.
+   */
+  | {
+      status: "ready";
+      url: string;
+      expiresAt: number | null;
+      expiryNote?: string;
+    }
   /** The encoded link would exceed the safe URL length — no link is offered. */
   | { status: "too-long"; length: number }
   /** This browser cannot build compressed links (no CompressionStream). */
   | { status: "unsupported" };
+
+const DAY = 24 * 60 * 60;
+
+/** Used when the env var is unset — a sane spread, no sub-day options. */
+const DEFAULT_TTL_OPTIONS = "1d,7d,30d";
+
+/**
+ * Offered expiries, from `NEXT_PUBLIC_ARCHLAB_SHARE_TTL_OPTIONS` — a
+ * comma-separated list of duration tokens (`10s,30m,1d,7d,1M,1Y`). See
+ * `duration.ts` for the grammar.
+ *
+ * Env-driven rather than hard-coded because the useful set is a property of the
+ * deployment, not of this component: seconds for testing the refusal path, hours
+ * for review links, days for a public demo. The previous `NODE_ENV` special case
+ * for a 10-second option is gone — the list itself now decides, so a developer
+ * adds `10s` locally instead of the component guessing who is running it.
+ *
+ * "Never" is always first and always present: expiry is opt-in, and a
+ * misconfigured env must never remove the ability to share at all.
+ */
+const TTL_CHOICES: ReadonlyArray<{ label: string; seconds: number | null }> = [
+  { label: "Never", seconds: null },
+  ...parseDurationList(
+    process.env.NEXT_PUBLIC_ARCHLAB_SHARE_TTL_OPTIONS ?? DEFAULT_TTL_OPTIONS,
+  ),
+];
+
+/**
+ * Date alone for a distant expiry; a clock time when it is under a day away.
+ * "Stops working on 31 July 2026" tells you nothing about a link that dies in
+ * ten seconds.
+ */
+function formatExpiry(expiresAt: number): string {
+  const secondsAway = expiresAt - Math.floor(Date.now() / 1000);
+  const when = new Date(expiresAt * 1000);
+  return secondsAway < DAY
+    ? when.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : when.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+}
 
 export interface ViewerShareButtonProps {
   share: ShareSource;
@@ -73,6 +137,15 @@ export function ViewerShareButton({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [link, setLink] = useState<LinkState>({ status: "building" });
+  /** Seconds; null = never expires, which stays the default (opt-in). */
+  const [ttlSeconds, setTtlSeconds] = useState<number | null>(null);
+  /**
+   * A link is on screen and a newer one is being built. Distinct from the
+   * `building` status: that one has nothing to show, this one has something
+   * STALE to show, and the difference decides whether the panel may be torn
+   * down and whether Copy is safe to press.
+   */
+  const [rebuilding, setRebuilding] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -86,42 +159,102 @@ export function ViewerShareButton({
   // Guards a slow encode against a close-and-reopen: only the newest build
   // may land its result.
   const buildTokenRef = useRef(0);
+  /**
+   * Whether a link is already on screen. A ref, not the `link` state, so
+   * `buildLink` can branch on it without taking `link` as a dependency — that
+   * would recreate the callback on every build and defeat its own stability.
+   */
+  const hasLinkRef = useRef(false);
 
-  const buildLink = useCallback(() => {
-    buildTokenRef.current += 1;
-    const token = buildTokenRef.current;
+  /**
+   * `ttl` is a PARAMETER, not read from state. It used to close over
+   * `ttlSeconds`, and because `buildLink` was only ever called when the panel
+   * opened, changing the dropdown recreated the callback but never ran it: the
+   * panel kept showing — and the Copy button kept handing over — the link built
+   * with the PREVIOUS choice. Silently wrong, which is worse than visibly
+   * broken. Passing the value in means the select's own handler can rebuild
+   * immediately with the value it just set, without waiting for a re-render.
+   */
+  const buildLink = useCallback(
+    (ttl: number | null) => {
+      buildTokenRef.current += 1;
+      const token = buildTokenRef.current;
 
-    if (share.kind === "bundled") {
-      const suffix = includeDiagram
-        ? `#${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagram.id)}`
-        : "";
-      setLink({
-        status: "ready",
-        url: `${window.location.origin}/view/${share.modelId}${suffix}`,
-      });
-      return;
-    }
+      if (share.kind === "bundled") {
+        const suffix = includeDiagram
+          ? `#${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagram.id)}`
+          : "";
+        // A bundled link points at a model that ships with the app; there is no
+        // payload to expire, so the TTL control is not offered for these.
+        setLink({
+          status: "ready",
+          url: `${window.location.origin}/view/${share.modelId}${suffix}`,
+          expiresAt: null,
+        });
+        return;
+      }
 
-    if (!canEncodeShare()) {
-      setLink({ status: "unsupported" });
-      return;
-    }
+      if (!canEncodeShare()) {
+        setLink({ status: "unsupported" });
+        return;
+      }
 
-    setLink({ status: "building" });
-    void (async () => {
-      const fragment = await encodeShareFragment(
-        serializeArchText(share.file),
-        includeDiagram ? diagram.id : null,
-      );
-      if (token !== buildTokenRef.current) return;
-      const url = `${window.location.origin}/view/new#${fragment}`;
-      setLink(
-        url.length > MAX_SHARE_URL_LENGTH
-          ? { status: "too-long", length: url.length }
-          : { status: "ready", url },
-      );
-    })();
-  }, [share, diagram.id, includeDiagram]);
+      // Rebuilding an existing link keeps the panel MOUNTED and just marks it
+      // stale. Dropping to `building` tore down the whole ready state —
+      // including the very dropdown that triggered the rebuild — so the control
+      // vanished and reappeared under the cursor on every change. Only the first
+      // build, with nothing to show yet, gets the "building" state.
+      if (hasLinkRef.current) {
+        setRebuilding(true);
+      } else {
+        setLink({ status: "building" });
+      }
+      void (async () => {
+        const alabText = serializeArchText(share.file);
+
+        // Mint the expiry FIRST: it is the only step that can fail, and failing
+        // after building a link would mean discarding a good one.
+        let expiry: ShareExpiry | undefined;
+        let expiryNote: string | undefined;
+        if (ttl !== null) {
+          const minted = await mintExpiry(await shareDigestFor(alabText), ttl);
+          if (token !== buildTokenRef.current) return;
+          if (minted.status === "ok") {
+            expiry = {
+              expiresAt: minted.expiresAt,
+              signature: minted.signature,
+            };
+          } else {
+            expiryNote = `This link will not expire — ${minted.message}.`;
+          }
+        }
+
+        const fragment = await encodeShareFragment(
+          alabText,
+          includeDiagram ? diagram.id : null,
+          expiry,
+        );
+        if (token !== buildTokenRef.current) return;
+        const url = `${window.location.origin}/view#${fragment}`;
+        const tooLong = url.length > MAX_SHARE_URL_LENGTH;
+        hasLinkRef.current = !tooLong;
+        setLink(
+          tooLong
+            ? { status: "too-long", length: url.length }
+            : {
+                status: "ready",
+                url,
+                expiresAt: expiry?.expiresAt ?? null,
+                expiryNote,
+              },
+        );
+        setRebuilding(false);
+      })();
+    },
+    // `ttlSeconds` is deliberately NOT a dependency: the value arrives as an
+    // argument, so this callback is stable across dropdown changes.
+    [share, diagram.id, includeDiagram],
+  );
 
   const handleToggle = useCallback(() => {
     if (open) {
@@ -129,9 +262,18 @@ export function ViewerShareButton({
       return;
     }
     setCopied(false);
-    buildLink();
+    buildLink(ttlSeconds);
     setOpen(true);
-  }, [open, buildLink]);
+  }, [open, buildLink, ttlSeconds]);
+
+  /** Change the expiry and rebuild at once — the fix for the stale-link bug. */
+  const handleTtlChange = useCallback(
+    (next: number | null) => {
+      setTtlSeconds(next);
+      buildLink(next);
+    },
+    [buildLink],
+  );
 
   /* ---- open/close mechanics (same contract as the export menu) ------------ */
 
@@ -277,8 +419,15 @@ export function ViewerShareButton({
                 readOnly
                 value={link.url}
                 aria-label="Share link"
+                // While rebuilding, this URL is the PREVIOUS one. Marked
+                // busy and dimmed so it does not read as the current answer,
+                // and the actions below are disabled so it cannot be copied.
+                aria-busy={rebuilding}
                 onFocus={(event) => event.currentTarget.select()}
-                className="mt-3 w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className={cn(
+                  "mt-3 w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                  rebuilding && "opacity-50",
+                )}
               />
               {share.kind === "payload" ? (
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -287,18 +436,73 @@ export function ViewerShareButton({
                   limit that keeps links intact in chat apps and email.
                 </p>
               ) : null}
+
+              {/* Offered only for payload links (a bundled link has no payload
+                  to expire) and only where the deployment can verify — without
+                  a public key the RECIPIENT could not check the expiry, so
+                  minting one would produce a link nobody can open. */}
+              {share.kind === "payload" && canVerifyExpiry() ? (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <label
+                    htmlFor={`${panelId}-ttl`}
+                    className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                  >
+                    <span>Expires</span>
+                    <select
+                      id={`${panelId}-ttl`}
+                      value={ttlSeconds === null ? "never" : String(ttlSeconds)}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        handleTtlChange(raw === "never" ? null : Number(raw));
+                      }}
+                      className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      {TTL_CHOICES.map((choice) => (
+                        <option
+                          key={choice.label}
+                          value={
+                            choice.seconds === null ? "never" : choice.seconds
+                          }
+                        >
+                          {choice.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {link.expiresAt !== null ? (
+                    <p className="text-xs text-muted-foreground">
+                      This link stops working on{" "}
+                      <span className="font-medium text-foreground">
+                        {formatExpiry(link.expiresAt)}
+                      </span>
+                      . It is not a secret — anyone with the link can read the
+                      model until then.
+                    </p>
+                  ) : null}
+                  {link.expiryNote !== undefined ? (
+                    <p className="text-xs text-warning">{link.expiryNote}</p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => handleCopy(link.url)}
-                  className={buttonClasses({ size: "sm" })}
+                  // Disabled mid-rebuild: the URL above is still the previous
+                  // one, and handing over a link that does not match the
+                  // expiry on screen is the exact bug this panel just had.
+                  disabled={rebuilding}
+                  className={cn(
+                    buttonClasses({ size: "sm" }),
+                    rebuilding && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   {copied ? (
                     <Check aria-hidden="true" />
                   ) : (
                     <Copy aria-hidden="true" />
                   )}
-                  {copied ? "Copied" : "Copy link"}
+                  {rebuilding ? "Updating…" : copied ? "Copied" : "Copy link"}
                 </button>
                 {canWebShare ? (
                   <button

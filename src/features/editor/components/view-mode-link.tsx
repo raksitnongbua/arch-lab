@@ -66,7 +66,7 @@ export function ViewModeLink(): React.JSX.Element {
       }
       void encodeShareFragment(text, activeDiagramId).then((fragment) => {
         if (cancelled) return;
-        const target = `/view/new#${fragment}`;
+        const target = `/view#${fragment}`;
         // The codec's honest limit: a link that might arrive truncated is
         // worse than one that is plainly unavailable.
         if (

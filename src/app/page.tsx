@@ -128,7 +128,7 @@ export default function Home() {
                     <ArrowRight aria-hidden="true" />
                   </Link>
                   <Link
-                    href="/view/new"
+                    href="/view"
                     className={buttonClasses({
                       variant: "outline",
                       size: "lg",
@@ -247,7 +247,7 @@ export default function Home() {
                         <ArrowRight aria-hidden="true" />
                       </Link>
                       <Link
-                        href="/view/new"
+                        href="/view"
                         className={buttonClasses({
                           variant: "outline",
                           size: "md",

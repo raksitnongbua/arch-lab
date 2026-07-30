@@ -26,6 +26,11 @@ next-env.d.ts
 .env
 .env.*
 !.env.example
+# Dotless variants too. `node scripts/gen-share-keys.mjs > env` is one missing
+# dot away from `.env`, and its output is a PRIVATE signing key — the rules
+# above would not have caught it, and `git add -A` would have staged it.
+env
+env.*
 
 # typescript / tooling caches
 *.tsbuildinfo

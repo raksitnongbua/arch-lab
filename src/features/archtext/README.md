@@ -76,7 +76,26 @@ when omitted. The `root` line may be omitted when exactly one parentless
 ```
 
 One line per node: `<id>:<type> "Name"` then attributes in any order
-(canonical order shown):
+(canonical order shown).
+
+The name may be omitted on a node carrying `^diagram/node`, where it is derived
+from the node being referenced — the same rule the diagram title follows when it
+equals its owner node's name:
+
+```
+  userRef:person ^d-ctx-root/user (40,40 176x88)
+  userRef:person "Local override" ^d-ctx-root/user (40,40 176x88)
+```
+
+Both forms are valid. The writer omits the name exactly when it equals the
+referenced node's, so a round-trip stays byte-identical either way, and an
+explicitly different name is kept — a reference is a pointer, not a rename.
+Resolution follows placeholder chains; a reference that does not resolve, or
+whose chain is circular, is an error naming the line. Omitting the name on a node
+with **no** `^ref` is always an error.
+
+In the JSON model the name is always present: optional in the text, derived into
+the model, so every consumer reads `node.name` unconditionally.
 
 | Attribute                           | Field                                     |
 | ----------------------------------- | ----------------------------------------- |

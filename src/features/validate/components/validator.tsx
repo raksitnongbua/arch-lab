@@ -372,7 +372,7 @@ function IssueRow({ issue }: { issue: CheckIssue }): React.JSX.Element {
 
 /**
  * A valid model should be one click from being seen. The canonical `.alab`
- * text is carried to `/view/new` inside a share-link fragment — the same
+ * text is carried to `/view` inside a share-link fragment — the same
  * codec the viewer's Share button and the syntax reference use, so no new
  * hand-off channel is invented here.
  *
@@ -400,7 +400,7 @@ function OpenInViewMode({
     if (!canEncodeShare()) return;
     void encodeShareFragment(aftText, null).then((fragment) => {
       if (cancelled) return;
-      const target = `/view/new#${fragment}`;
+      const target = `/view#${fragment}`;
       if (`${window.location.origin}${target}`.length <= MAX_SHARE_URL_LENGTH) {
         setEncoded({ source: aftText, href: target });
       }

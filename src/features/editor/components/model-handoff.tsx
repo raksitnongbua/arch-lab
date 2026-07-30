@@ -69,6 +69,22 @@ export function ModelHandoff(): null {
         return;
       }
 
+      if (decoded.status === "expired") {
+        // The link worked and its author set it to lapse; say when, rather
+        // than implying it arrived damaged. Required, not optional: this
+        // branch adds `expired` to the decode result, so omitting the case
+        // leaves a non-exhaustive match that does not compile.
+        const on = new Date(decoded.expiresAt * 1000).toLocaleDateString(
+          undefined,
+          { year: "numeric", month: "long", day: "numeric" },
+        );
+        clearHash();
+        toast({
+          message: `That editor link expired on ${on} — ask whoever shared it for a fresh one.`,
+        });
+        return;
+      }
+
       const store = useEditorStore.getState();
       if (store.isDirty) {
         toast({

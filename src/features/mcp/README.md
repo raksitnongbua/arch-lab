@@ -76,6 +76,14 @@ parser, which `MAX_SOURCE_CHARS` caps before parsing starts.
 `encodeShareFragment` the Share button uses, so the model travels in the URL
 fragment and is never uploaded — not even to this server, on open.
 
+**Expiry is signed, not stored.** With `ttl_days`, this tool signs a SHA-256 of
+the payload plus the expiry using `ARCHLAB_SHARE_PRIVATE_KEY` (directly, via
+`share/sign-server.ts` — it already runs server-side, so it does not call
+`/api/share/sign`, which exists for the browser). Still stateless: a fingerprint
+is signed, never the model, and no link record is kept. The honest limit is that
+this endpoint is unauthenticated, so expiry resists editing a URL rather than a
+determined re-mint — `scripts/share-expiry-check.mjs` proves the former.
+
 **The syntax reference is generated, never written.** Every example in
 `content/syntax-sections.ts` comes from
 `src/features/syntax-docs/content/snippets.ts`, which

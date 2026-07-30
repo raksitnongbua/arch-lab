@@ -36,6 +36,12 @@ const NAV_LINKS: ReadonlyArray<{
   status?: string;
 }> = [
   ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
+  // View comes first of the permanent entries: it is the one place you can
+  // actually put a model on screen, and until now it was only reachable from
+  // the landing page or a share link — the header offered three ways to read
+  // ABOUT the format and none to use it. This is not the removed Demo entry:
+  // that pointed at the bundled examples index, this is the playground itself.
+  { href: "/view", label: "View" },
   { href: "/syntax", label: "Syntax" },
   { href: "/validate", label: "Validate" },
   { href: "/mcp", label: "MCP", status: MCP_STATUS_LABEL },
@@ -83,7 +89,14 @@ export function Header() {
               className="flex items-center gap-0.5 sm:gap-1"
             >
               {NAV_LINKS.map((link) => {
-                const isCurrent = pathname === link.href;
+                // A descendant counts as current: `/view/shopflow` is still
+                // "View", and highlighting only the exact path would leave a
+                // reader on a bundled model with no indication of where they
+                // are. Safe because no entry is "/" — that would match
+                // everything.
+                const isCurrent =
+                  pathname === link.href ||
+                  pathname.startsWith(`${link.href}/`);
                 return (
                   <Link
                     key={link.href}

@@ -18,28 +18,60 @@
  * confirm-vs-immediate rule.
  */
 
-import { Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { isBoundaryPlaceholder } from "@/types";
 
+import { useClipboardShortcuts } from "../../hooks/use-clipboard-shortcuts";
 import { useDeleteShortcut } from "../../hooks/use-delete-shortcut";
+import { duplicateSelection } from "../../lib/duplicate";
 import { selectActiveDiagram, useEditorStore } from "../../state";
 import { requestDeleteSelection } from "../overlays/delete-confirm-dialog";
 import { DiagramInspector } from "./diagram-inspector";
 import { EdgeInspector } from "./edge-inspector";
 import { NodeInspector } from "./node-inspector";
+import { RefInspector } from "./ref-inspector";
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function DeleteSelectionButton({
-  label,
+/**
+ * The pinned action footer. Actions share one `mt-auto` container so they sit
+ * on a single divider — two separately-pinned blocks would stack two borders
+ * and only the first would reach the bottom.
+ *
+ * Duplicate lives here rather than on the node itself: the node's corner grip
+ * is spent on *relate*, which is a spatial gesture (drag to where the new
+ * element goes) and so has to be on the canvas. Duplicate needs no aim, so a
+ * panel button serves it fine — and it still has right-click and
+ * `mod+c`/`mod+v`.
+ *
+ * `duplicateLabel` is omitted for selections that cannot be duplicated: an edge
+ * alone (a relationship without its endpoints is meaningless) and read-only
+ * boundary placeholders.
+ */
+function SelectionActions({
+  deleteLabel,
+  duplicateLabel,
 }: {
-  label: string;
+  deleteLabel: string;
+  duplicateLabel?: string;
 }): React.JSX.Element {
   return (
-    <div className="mt-auto border-t border-border pt-3">
+    <div className="mt-auto flex flex-col gap-2 border-t border-border pt-3">
+      {duplicateLabel !== undefined ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => duplicateSelection()}
+        >
+          <Copy aria-hidden="true" />
+          {duplicateLabel}
+        </Button>
+      ) : null}
       <Button
         variant="outline"
         size="sm"
@@ -47,7 +79,7 @@ function DeleteSelectionButton({
         onClick={() => requestDeleteSelection()}
       >
         <Trash2 aria-hidden="true" />
-        {label}
+        {deleteLabel}
       </Button>
     </div>
   );
@@ -79,6 +111,7 @@ function MultiSelectionSummary({
 
 export function InspectorPanel(): React.JSX.Element {
   useDeleteShortcut();
+  useClipboardShortcuts();
 
   const diagram = useEditorStore(selectActiveDiagram);
   const selection = useEditorStore((s) => s.selection);
@@ -108,13 +141,29 @@ export function InspectorPanel(): React.JSX.Element {
 
       {singleNode !== undefined ? (
         <>
-          <NodeInspector
-            key={singleNode.id}
-            diagramId={diagram.id}
-            node={singleNode}
-            level={diagram.level}
+          {/* A placeholder's identity is owned by its original, so it gets a
+              read-only panel with a route to the source instead of editable
+              fields whose edits `syncRefPlaceholders` would overwrite. */}
+          {isBoundaryPlaceholder(singleNode) ? (
+            <RefInspector key={singleNode.id} node={singleNode} />
+          ) : (
+            <NodeInspector
+              key={singleNode.id}
+              diagramId={diagram.id}
+              node={singleNode}
+              level={diagram.level}
+            />
+          )}
+          <SelectionActions
+            deleteLabel={
+              isBoundaryPlaceholder(singleNode)
+                ? "Remove reference"
+                : "Delete node"
+            }
+            duplicateLabel={
+              isBoundaryPlaceholder(singleNode) ? undefined : "Duplicate node"
+            }
           />
-          <DeleteSelectionButton label="Delete node" />
         </>
       ) : singleEdge !== undefined ? (
         <>
@@ -124,7 +173,7 @@ export function InspectorPanel(): React.JSX.Element {
             edge={singleEdge}
             nodes={diagram.nodes}
           />
-          <DeleteSelectionButton label="Delete relationship" />
+          <SelectionActions deleteLabel="Delete relationship" />
         </>
       ) : isEmpty ? (
         <DiagramInspector key={diagram.id} diagram={diagram} />
@@ -134,7 +183,16 @@ export function InspectorPanel(): React.JSX.Element {
             nodeCount={selectedNodes.length}
             edgeCount={selectedEdges.length}
           />
-          <DeleteSelectionButton label="Delete selection" />
+          <SelectionActions
+            deleteLabel="Delete selection"
+            // Nodes present ⇒ duplicable. Edges ride along automatically when
+            // both their endpoints are in the selection.
+            duplicateLabel={
+              selectedNodes.length > 0
+                ? `Duplicate ${plural(selectedNodes.length, "node")}`
+                : undefined
+            }
+          />
         </>
       )}
     </div>

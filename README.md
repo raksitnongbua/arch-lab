@@ -16,7 +16,7 @@ Be precise about what this repo is right now:
 | Area                                                     | State                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Read-only C4 viewer**                                  | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Diagrams export as SVG or PNG (rasterised at 2×).                                                                              |
-| **View-mode playground** (`/view/new`)                   | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                |
+| **View-mode playground** (`/view`)                   | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                |
 | **`.alab` ⇄ JSON conversion**                            | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                        |
 | **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                  |
 | **C4 editor**                                            | Feature-complete in the codebase but **gated off for this release** behind `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts). `/editor` renders a coming-soon page and the editor code is excluded from the deployed bundle. See [Enabling the editor](#enabling-the-editor). |
@@ -30,7 +30,7 @@ Be precise about what this repo is right now:
 | `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
 | `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                                     |
 | `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
-| `/view/new`       | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                              |
+| `/view`       | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                              |
 | `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
 | `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers.                                                                      |
 | `/mcp`            | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
@@ -89,7 +89,7 @@ why you should _not_ associate `.alab` with YAML:
 
 ## Mermaid C4 import
 
-`/view/new` imports Mermaid C4 source (`C4Context`, `C4Container`,
+`/view` imports Mermaid C4 source (`C4Context`, `C4Container`,
 `C4Component`, `C4Dynamic`, `C4Deployment`) and converts it into both panes.
 The conversion is **one-way and lossy**, and the UI says so at the point of
 import:
@@ -130,6 +130,21 @@ the grammar in a second place and drift from it.
 Nothing is stored. Every tool is a pure function of the text it is sent, and
 `create_share_link` encodes the model into a URL _fragment_, which browsers
 never transmit — so even a shared link uploads nothing.
+
+**Expiring links.** `create_share_link` takes an optional `ttl_days`, and the
+Share button offers the same choice; omit it and links never expire, which stays
+the default. There is still no storage: the server signs a SHA-256 _fingerprint_
+of the payload together with the expiry, and the browser verifies it — so the
+model is never uploaded even for an expiring link, and no per-link record exists
+anywhere. Generate the keypair with `pnpm gen:share-keys`.
+
+Be precise about what that buys. A signed expiry cannot be moved by editing the
+URL, which is the thing people actually do. It is **not** access control: anyone
+holding the link can decode the model and read it for as long as the link lives,
+the expiry is checked by the reader's own browser against the reader's own clock,
+and the signing endpoint is unauthenticated like everything else here, so a
+determined holder can mint a fresh signature. Treat it as "this link goes
+stale", never as revocation.
 
 **This integration is in beta.** The endpoint URL and the `.alab` format are
 stable, but tool names, arguments and response wording may still change, and
@@ -192,7 +207,7 @@ arch-lab/
 ├── public/                    Static assets
 ├── scripts/                   The check:* verification scripts
 └── src/
-    ├── app/                   App Router: /, /demo, /view/[modelId], /view/new, /syntax, /validate, /mcp, /api/mcp, /editor
+    ├── app/                   App Router: /, /demo, /view/[modelId], /view, /syntax, /validate, /mcp, /api/mcp, /editor
     ├── components/
     │   ├── ui/                Generic primitives (button, card, badge, dialog, tooltip, toast, …)
     │   └── layout/            App chrome (header, footer, theme-toggle)
@@ -202,7 +217,7 @@ arch-lab/
     │   ├── marketing/         Landing-page hero diagram
     │   ├── mcp/               The MCP server behind /api/mcp, plus the /mcp page (see its README)
     │   ├── mermaid/           Mermaid C4 ⇄ arch-lab converter (pure, dependency-free)
-    │   └── viewer/            Read-only viewer, /view/new playground, SVG/PNG export, model service
+    │   └── viewer/            Read-only viewer, /view playground, SVG/PNG export, model service
     ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy)
     └── types/                 C4 model types — mirrors docs/product/data-model.md
 ```

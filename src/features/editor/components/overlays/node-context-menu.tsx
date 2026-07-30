@@ -40,6 +40,7 @@ import {
 } from "@/types";
 
 import { canDrillInto, drillIntoNode } from "../../hooks/use-level-navigation";
+import { duplicateNodes } from "../../lib/duplicate";
 import { useEditorStore } from "../../state";
 import { setContextMenu, useCanvasInteraction } from "../canvas";
 
@@ -168,6 +169,16 @@ export function NodeContextMenu(): React.JSX.Element | null {
     hint: "F2",
     run: () =>
       useEditorStore.getState().beginLabelEdit({ kind: "node", id: node.id }),
+  });
+  items.push({
+    id: "duplicate",
+    label: "Duplicate",
+    // No hint: there is no single-key duplicate binding, and advertising one
+    // that does not exist is worse than showing nothing.
+    // Right-clicking a node does not necessarily select it, so this duplicates
+    // the node under the CURSOR rather than `selection` — what the user
+    // actually pointed at. The clone is selected, so a drag moves the copy.
+    run: () => duplicateNodes([node.id]),
   });
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
