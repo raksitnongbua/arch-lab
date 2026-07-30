@@ -71,7 +71,9 @@ export function ModelHandoff(): null {
 
       if (decoded.status === "expired") {
         // The link worked and its author set it to lapse; say when, rather
-        // than implying it arrived damaged.
+        // than implying it arrived damaged. Required, not optional: this
+        // branch adds `expired` to the decode result, so omitting the case
+        // leaves a non-exhaustive match that does not compile.
         const on = new Date(decoded.expiresAt * 1000).toLocaleDateString(
           undefined,
           { year: "numeric", month: "long", day: "numeric" },
