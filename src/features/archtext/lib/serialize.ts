@@ -438,7 +438,7 @@ function emitDiagram(
     ),
   );
   for (const node of nodes) {
-    emitNode(lines, node, layout);
+    emitNode(lines, node, layout, nodeHome);
   }
   if (nodes.length > 0 && edges.length > 0) lines.push("");
   for (const edge of edges) {
@@ -450,6 +450,7 @@ function emitNode(
   lines: string[],
   node: Record<string, unknown>,
   layout: ReadonlyMap<string, Point>,
+  nodeHome: ReadonlyMap<string, { diagramId: string; name: string }>,
 ): void {
   const id = node.id as string;
   const name = node.name as string;
@@ -460,7 +461,30 @@ function emitNode(
       : undefined;
   if (keyword === undefined) invalid(`node "${id}".type`, type);
 
-  let line = `  ${idToken(id)}:${keyword} ${JSON.stringify(name)}`;
+  // A `^ref` whose name already equals the referenced node's writes no name:
+  // the parser derives it back, so this stays byte-identical through a
+  // round-trip while keeping one source of truth in the file. The same
+  // omit-when-equal test the diagram title uses.
+  //
+  // An explicitly DIFFERENT name is still written — the format allows a local
+  // override, and silently dropping one would lose data.
+  const refForName = node.externalRef;
+  let omitName = false;
+  if (isRecord(refForName)) {
+    const refNodeId = refForName.nodeId;
+    const refDiagramId = refForName.diagramId;
+    if (typeof refNodeId === "string" && typeof refDiagramId === "string") {
+      const target = nodeHome.get(refNodeId);
+      omitName =
+        target !== undefined &&
+        target.diagramId === refDiagramId &&
+        target.name === name;
+    }
+  }
+
+  let line = omitName
+    ? `  ${idToken(id)}:${keyword}`
+    : `  ${idToken(id)}:${keyword} ${JSON.stringify(name)}`;
   const fallback: [string, unknown][] = [];
 
   const description = node.description;

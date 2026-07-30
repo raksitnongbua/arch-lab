@@ -29,6 +29,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import type { C4Level, C4Node, C4NodeType } from "@/types";
 
+import { RefBadge } from "@/features/editor/components/nodes/ref-badge";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 import {
   NodeShapeLayer,
@@ -56,6 +57,12 @@ export interface ViewerNodeData extends Record<string, unknown> {
   /** Drill into this node's child diagram — the canvas owns navigation. */
   onDrill: (nodeId: string) => void;
   isPlaceholder: boolean;
+  /**
+   * For a placeholder, the LEVEL of the diagram it references — drives the
+   * `↑ <level>` chip. Null when first-class, or when the referenced diagram
+   * cannot be resolved (a dangling `^ref`).
+   */
+  refSourceLevel: C4Level | null;
 }
 
 export type ViewerFlowNode = Node<ViewerNodeData, "c4">;
@@ -142,7 +149,7 @@ function outlinePath(type: C4NodeType, width: number, height: number): string {
 function ViewerNodeInner({
   data,
 }: NodeProps<ViewerFlowNode>): React.JSX.Element {
-  const { node, drill, onDrill, isPlaceholder } = data;
+  const { node, drill, onDrill, isPlaceholder, refSourceLevel } = data;
   const { def } = resolveIcon(node);
   const Icon = def.Svg;
 
@@ -322,6 +329,9 @@ function ViewerNodeInner({
           <ZoomIn aria-hidden="true" className="size-3" />
           {drill.childCount}
         </button>
+      ) : null}
+      {refSourceLevel !== null ? (
+        <RefBadge sourceLevel={refSourceLevel} nodeName={node.name} />
       ) : null}
     </div>
   );

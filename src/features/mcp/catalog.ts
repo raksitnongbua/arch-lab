@@ -224,7 +224,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "human can see the diagram. The model is encoded into the URL " +
       "fragment, which browsers never send to a server — nothing is " +
       "uploaded or stored. Refuses models too large to fit a link that " +
-      "would survive being pasted into chat or mail.",
+      "would survive being pasted into chat or mail. Can optionally expire " +
+      "after a number of days.",
     args: [
       SOURCE_ARG,
       FORMAT_ARG,
@@ -233,6 +234,15 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
         required: false,
         description:
           "Open the link at this diagram. Defaults to the root diagram.",
+      },
+      {
+        name: "ttl_days",
+        required: false,
+        description:
+          "Stop the link working after this many days (1-400). Omit for a " +
+          "link that never expires. The expiry is signed so it cannot be " +
+          "edited in the URL, but it is not access control — anyone holding " +
+          "the link can read the model until it lapses.",
       },
     ],
   },

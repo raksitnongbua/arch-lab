@@ -204,6 +204,19 @@ export function ViewerPlayground(): React.JSX.Element {
         return;
       }
 
+      if (decoded.status === "expired") {
+        // Not a failure: the link worked and its author set it to stop. Say
+        // when, and what to do about it, instead of implying damage.
+        const on = new Date(decoded.expiresAt * 1000).toLocaleDateString(
+          undefined,
+          { year: "numeric", month: "long", day: "numeric" },
+        );
+        const message = `it expired on ${on} — ask whoever shared it for a fresh link`;
+        setSharedNotice({ kind: "error", message });
+        setAnnouncement(`This share link has expired — ${message}.`);
+        return;
+      }
+
       const result = parsePane("aft", decoded.aftText);
       if (result.status !== "ok") {
         const message =

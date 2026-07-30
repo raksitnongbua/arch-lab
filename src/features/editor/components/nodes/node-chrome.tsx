@@ -2,8 +2,12 @@
 
 /**
  * The shared node frame (T2-A): shape layer, icon + name / technology /
- * description hierarchy, inline label editor, child-count badge, unknown-icon
- * warning marker, and the four connection handles the canvas relies on.
+ * description hierarchy, inline label editor, child-count badge, `^ref`
+ * source-layer chip, unknown-icon warning marker, and the four connection
+ * handles the canvas relies on.
+ *
+ * Corner budget — each marker owns one corner, so they never overlap:
+ * top-left unknown-icon dot, top-right child badge, bottom-left ref chip.
  *
  * Colours are exclusively semantic tokens: `--node`, `--node-foreground`,
  * `--node-border`, plus the shadcn set. Zero colour literals.
@@ -14,15 +18,18 @@ import { Handle, Position } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import type { C4NodeType } from "@/types";
 
+import { goToOriginal } from "../../lib/goto-original";
 import { resolveIcon } from "../../lib/icons/registry";
 import { ChildBadge } from "./child-badge";
 import type { C4NodeData } from "./c4-node";
+import { RelateGrip } from "./relate-grip";
 import { InlineLabel } from "./inline-label";
 import {
   hasSvgSilhouette,
   NodeShapeLayer,
   SHAPE_WRAPPER_CLASSES,
 } from "./node-shapes";
+import { RefBadge } from "./ref-badge";
 
 export const TYPE_LABEL: Record<C4NodeType, string> = {
   person: "Person",
@@ -154,6 +161,23 @@ export function NodeChrome({
 
       {data.hasChildren ? <ChildBadge count={data.childCount} /> : null}
 
+      {data.refSourceLevel !== null ? (
+        <RefBadge
+          sourceLevel={data.refSourceLevel}
+          nodeName={node.name}
+          onOpen={() => goToOriginal(node)}
+        />
+      ) : null}
+
+      {/* Placeholders DO get the relate grip. "Read-only" governs identity —
+          you cannot rename, retype or duplicate one — but drawing a
+          relationship FROM a boundary element is the entire reason to put it in
+          the diagram (`userRef -> accounts` in a container view). The
+          connection handles were already available on placeholders; withholding
+          the grip only made the two disagree.
+          Suppressed mid-rename, where no node should sprout extra controls. */}
+      {!data.isEditingLabel ? <RelateGrip node={node} /> : null}
+
       {HANDLES.map((handle) => (
         <Handle
           key={handle.id}
@@ -162,7 +186,20 @@ export function NodeChrome({
           position={handle.position}
           // Reveal timing (and connect-state feedback) lives in
           // styles/canvas-motion.css on `--motion-hover`.
-          className="!size-2 !border-node-border !bg-node-foreground/60 opacity-0 group-hover:opacity-100"
+          //
+          // The dot stays 8px, but `after:-inset-2` gives it a transparent
+          // 24px hit area — the visual weight of a small dot with the
+          // targetability of a button. Handles are the ONLY way to start a
+          // relationship, so an 8px target was the single biggest source of
+          // missed connection drags.
+          //
+          // Revealed on selection as well as hover: after clicking a node,
+          // its handles stay put instead of vanishing the moment the pointer
+          // drifts off, which is exactly when you reach for one.
+          className={cn(
+            "!size-2 !border-node-border !bg-node-foreground/60 transition-opacity duration-150 after:absolute after:-inset-2 after:content-[''] hover:!size-3 hover:!bg-primary motion-reduce:transition-none",
+            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
         />
       ))}
     </div>

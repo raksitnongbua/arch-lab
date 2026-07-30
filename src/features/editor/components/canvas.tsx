@@ -89,6 +89,9 @@ import {
 import { DeleteConfirmDialog } from "./overlays/delete-confirm-dialog";
 import { LevelTransition } from "./overlays/level-transition";
 import { NodeContextMenu } from "./overlays/node-context-menu";
+import { goToOriginal } from "../lib/goto-original";
+import { ConnectHint } from "./overlays/connect-hint";
+import { CreateNodeDialog } from "./overlays/create-node-dialog";
 import { QuickAddMenu } from "./overlays/quick-add-menu";
 import { ZoomIndicator } from "./zoom-indicator";
 
@@ -115,14 +118,22 @@ export interface ContextMenuTarget {
   screenPosition: Point;
 }
 
+/** An empty-canvas double-click asking for a new element at that spot. */
+export interface PendingCreate {
+  /** Where the new node's CENTRE should land, in flow coordinates. */
+  flowPosition: Point;
+}
+
 interface CanvasInteractionState {
   pendingConnect: PendingConnect | null;
   contextMenu: ContextMenuTarget | null;
+  pendingCreate: PendingCreate | null;
 }
 
 export const useCanvasInteraction = create<CanvasInteractionState>(() => ({
   pendingConnect: null,
   contextMenu: null,
+  pendingCreate: null,
 }));
 
 export function setPendingConnect(value: PendingConnect | null): void {
@@ -131,6 +142,10 @@ export function setPendingConnect(value: PendingConnect | null): void {
 
 export function setContextMenu(value: ContextMenuTarget | null): void {
   useCanvasInteraction.setState({ contextMenu: value });
+}
+
+export function setPendingCreate(value: PendingCreate | null): void {
+  useCanvasInteraction.setState({ pendingCreate: value });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -666,7 +681,15 @@ function CanvasInner(): React.JSX.Element {
       const store = useEditorStore.getState();
       const diagram = store.model.diagrams[store.activeDiagramId];
       const node = diagram?.nodes.find((n) => n.id === flowNode.id);
-      if (!node || isBoundaryPlaceholder(node)) return;
+      if (!node) return;
+      // A placeholder has nothing to drill into and nothing renameable, so the
+      // gesture was previously dead on it. Reuse it for the one navigation that
+      // makes sense: jump to the original it names. Consistent with the
+      // non-placeholder meaning — double-click goes to where the detail lives.
+      if (isBoundaryPlaceholder(node)) {
+        goToOriginal(node);
+        return;
+      }
       // D5: double-click drills when a child diagram exists, renames when not.
       if (hasChildDiagram(node) && node.childDiagramId) {
         store.setActiveDiagram(node.childDiagramId);
@@ -696,6 +719,38 @@ function CanvasInner(): React.JSX.Element {
     setContextMenu(null);
     setPendingConnect(null);
   }, []);
+
+  /**
+   * Double-click on empty canvas → the create dialog (AF-E1-S2's third entry
+   * point, after palette drag and palette double-click).
+   *
+   * React Flow exposes `onPaneClick` but has no `onPaneDoubleClick`, so this
+   * listens on the container and identifies the pane by its own class. The
+   * check matters: without it a double-click on a node — which means "drill in
+   * or rename" (D5) — would also open the dialog, and `onNodeDoubleClick`
+   * fires on the same gesture.
+   *
+   * Safe to claim because `zoomOnDoubleClick` is already `false`, so nothing
+   * else wanted this gesture.
+   */
+  const handleContainerDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (
+        !(target instanceof Element) ||
+        !target.classList.contains("react-flow__pane")
+      ) {
+        return;
+      }
+      setPendingCreate({
+        flowPosition: screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        }),
+      });
+    },
+    [screenToFlowPosition],
+  );
 
   /* ---- camera persistence --------------------------------------------------- */
 
@@ -838,7 +893,11 @@ function CanvasInner(): React.JSX.Element {
   /* ---- render ---------------------------------------------------------------- */
 
   return (
-    <div ref={containerRef} className="size-full">
+    <div
+      ref={containerRef}
+      className="size-full"
+      onDoubleClick={handleContainerDoubleClick}
+    >
       <ReactFlow<C4FlowNode, C4FlowEdge>
         nodes={nodes}
         edges={edges}
@@ -882,6 +941,8 @@ function CanvasInner(): React.JSX.Element {
           color="var(--canvas-grid)"
         />
         <AlignmentGuides />
+        <ConnectHint />
+        <CreateNodeDialog />
         <QuickAddMenu />
         <LevelTransition />
         <DeleteConfirmDialog />

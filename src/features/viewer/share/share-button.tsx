@@ -39,7 +39,11 @@ import {
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
   SHARE_PARAM_DIAGRAM,
+  shareDigestFor,
+  type ShareExpiry,
 } from "./codec";
+import { mintExpiry } from "./mint-expiry";
+import { canVerifyExpiry } from "./signature";
 
 /** Where the model being viewed came from — decides what a share link is. */
 export type ShareSource =
@@ -47,11 +51,38 @@ export type ShareSource =
 
 type LinkState =
   | { status: "building" }
-  | { status: "ready"; url: string }
+  /**
+   * `expiresAt` is epoch seconds when the sharer asked for an expiry and the
+   * server signed one, else null. `expiryNote` explains a requested expiry that
+   * could NOT be minted — the link is still handed over, permanently, and the
+   * note says so rather than pretending the choice took effect.
+   */
+  | {
+      status: "ready";
+      url: string;
+      expiresAt: number | null;
+      expiryNote?: string;
+    }
   /** The encoded link would exceed the safe URL length — no link is offered. */
   | { status: "too-long"; length: number }
   /** This browser cannot build compressed links (no CompressionStream). */
   | { status: "unsupported" };
+
+/** Expiry choices. `null` = never, and it is the default (opt-in). */
+const TTL_CHOICES: ReadonlyArray<{ label: string; days: number | null }> = [
+  { label: "Never", days: null },
+  { label: "1 day", days: 1 },
+  { label: "7 days", days: 7 },
+  { label: "30 days", days: 30 },
+];
+
+function formatExpiryDate(expiresAt: number): string {
+  return new Date(expiresAt * 1000).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
 
 export interface ViewerShareButtonProps {
   share: ShareSource;
@@ -73,6 +104,8 @@ export function ViewerShareButton({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [link, setLink] = useState<LinkState>({ status: "building" });
+  /** null = never expires, and that stays the default: expiry is opt-in. */
+  const [ttlDays, setTtlDays] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -95,9 +128,12 @@ export function ViewerShareButton({
       const suffix = includeDiagram
         ? `#${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagram.id)}`
         : "";
+      // A bundled link points at a model that ships with the app; there is no
+      // payload to expire, so the TTL control is not offered for these.
       setLink({
         status: "ready",
         url: `${window.location.origin}/view/${share.modelId}${suffix}`,
+        expiresAt: null,
       });
       return;
     }
@@ -109,19 +145,44 @@ export function ViewerShareButton({
 
     setLink({ status: "building" });
     void (async () => {
+      const alabText = serializeArchText(share.file);
+
+      // Mint the expiry FIRST: it is the only step that can fail, and failing
+      // after building a link would mean discarding a good one.
+      let expiry: ShareExpiry | undefined;
+      let expiryNote: string | undefined;
+      if (ttlDays !== null) {
+        const minted = await mintExpiry(
+          await shareDigestFor(alabText),
+          ttlDays,
+        );
+        if (token !== buildTokenRef.current) return;
+        if (minted.status === "ok") {
+          expiry = { expiresAt: minted.expiresAt, signature: minted.signature };
+        } else {
+          expiryNote = `This link will not expire — ${minted.message}.`;
+        }
+      }
+
       const fragment = await encodeShareFragment(
-        serializeArchText(share.file),
+        alabText,
         includeDiagram ? diagram.id : null,
+        expiry,
       );
       if (token !== buildTokenRef.current) return;
       const url = `${window.location.origin}/view/new#${fragment}`;
       setLink(
         url.length > MAX_SHARE_URL_LENGTH
           ? { status: "too-long", length: url.length }
-          : { status: "ready", url },
+          : {
+              status: "ready",
+              url,
+              expiresAt: expiry?.expiresAt ?? null,
+              expiryNote,
+            },
       );
     })();
-  }, [share, diagram.id, includeDiagram]);
+  }, [share, diagram.id, includeDiagram, ttlDays]);
 
   const handleToggle = useCallback(() => {
     if (open) {
@@ -283,6 +344,52 @@ export function ViewerShareButton({
                   the ~{MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character
                   limit that keeps links intact in chat apps and email.
                 </p>
+              ) : null}
+
+              {/* Offered only for payload links (a bundled link has no payload
+                  to expire) and only where the deployment can verify — without
+                  a public key the RECIPIENT could not check the expiry, so
+                  minting one would produce a link nobody can open. */}
+              {share.kind === "payload" && canVerifyExpiry() ? (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <label
+                    htmlFor={`${panelId}-ttl`}
+                    className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                  >
+                    <span>Expires</span>
+                    <select
+                      id={`${panelId}-ttl`}
+                      value={ttlDays === null ? "never" : String(ttlDays)}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        setTtlDays(raw === "never" ? null : Number(raw));
+                      }}
+                      className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      {TTL_CHOICES.map((choice) => (
+                        <option
+                          key={choice.label}
+                          value={choice.days === null ? "never" : choice.days}
+                        >
+                          {choice.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {link.expiresAt !== null ? (
+                    <p className="text-xs text-muted-foreground">
+                      This link stops working on{" "}
+                      <span className="font-medium text-foreground">
+                        {formatExpiryDate(link.expiresAt)}
+                      </span>
+                      . It is not a secret — anyone with the link can read the
+                      model until then.
+                    </p>
+                  ) : null}
+                  {link.expiryNote !== undefined ? (
+                    <p className="text-xs text-warning">{link.expiryNote}</p>
+                  ) : null}
+                </div>
               ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button

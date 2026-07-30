@@ -40,6 +40,7 @@ import {
 } from "./errors";
 import { createHistory } from "./history";
 import {
+  applyDeleteCascade,
   attachChildDiagram,
   clampSize,
   collectDeleteCascade,
@@ -53,9 +54,12 @@ import {
   findNode,
   findNodeAnywhere,
   getDiagramOrThrow,
+  mirrorRefIdentity,
+  PASTE_OFFSET,
   slugify,
   roundPoint,
   snapPoint,
+  syncRefPlaceholders,
   uniqueId,
 } from "./model";
 
@@ -136,6 +140,53 @@ export interface EditorActions {
   moveNodes(diagramId: string, positions: Record<string, Point>): void;
 
   deleteNodes(diagramId: string, nodeIds: string[]): DeleteResult;
+
+  /**
+   * Clones `nodes` — plus the subset of `edges` whose BOTH endpoints are among
+   * them — into `diagramId` as exactly ONE undo entry, and selects the result.
+   *
+   * Ids are regenerated file-wide, so a clipboard payload can be pasted
+   * repeatedly and into a different diagram. A paste is a FLAT clone:
+   * `childDiagramId`, `childRef` and `externalRef` are dropped rather than
+   * aliased, so two nodes never point at one subtree.
+   *
+   * Throws `InvalidNodeTypeError` when any node's type is illegal at the
+   * target diagram's level (AF-E2-S1 is enforced here, not in the UI).
+   */
+  pasteNodes(input: {
+    diagramId: string;
+    nodes: C4Node[];
+    edges: C4Edge[];
+    /** Added to every pasted position before snapping. Defaults to PASTE_OFFSET. */
+    offset?: Point;
+    /**
+     * Whether to select the clones. Default true. Alt+drag-to-clone passes
+     * false: it leaves a copy behind and keeps dragging the ORIGINAL, so
+     * stealing the selection mid-gesture would drop the drag.
+     */
+    select?: boolean;
+  }): { nodeIds: string[]; edgeIds: string[] };
+
+  /**
+   * Places a read-only boundary placeholder in `diagramId` pointing at
+   * `sourceNodeId` in `sourceDiagramId` — the `^ctx-x/user` form in .alab.
+   * ONE undo entry; returns the new node's id.
+   *
+   * Identity fields (name, type, technology, icon, description) are COPIED,
+   * not read through the pointer, because the renderer and the serializer both
+   * treat a node as self-describing. The `externalRef` records provenance so
+   * the chip can say where it came from and validation can check the target
+   * still exists.
+   *
+   * Throws `InvalidNodeTypeError` when the source's type is illegal at the
+   * target level — a reference is not an escape hatch from the level rules.
+   */
+  createRefNode(input: {
+    diagramId: string;
+    sourceDiagramId: string;
+    sourceNodeId: string;
+    position: Point;
+  }): string;
 
   createEdge(input: {
     diagramId: string;
@@ -401,6 +452,12 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
       const before = structuredClone(node);
       applyPatch(node, normalized, NODE_REQUIRED_KEYS);
       if (jsonEqual(before, node)) return; // no-op edits pollute neither model nor history
+      // A `^ref` placeholder mirrors its original's identity. Renaming the
+      // original has to reach every placeholder or the file goes stale — the
+      // .alab stores the name on the ref line, so "fix it on render" would
+      // still write the old string to disk. Same undo entry: one edit, one
+      // history step, however many diagrams it touches.
+      syncRefPlaceholders(next, diagramId, nodeId);
       commitModel(next, opts?.coalesceKey);
     },
 
@@ -431,16 +488,11 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
         return { removedNodes: 0, removedEdges: 0, removedDiagrams: 0 };
       }
       const next = structuredClone(state.model);
-      const nextDiagram = getDiagramOrThrow(next, diagramId);
-      nextDiagram.nodes = nextDiagram.nodes.filter(
-        (node) => !cascade.nodeIds.has(node.id),
-      );
-      nextDiagram.edges = nextDiagram.edges.filter(
-        (edge) => !cascade.edgeIds.has(edge.id),
-      );
-      for (const removedDiagramId of cascade.diagramIds) {
-        delete next.diagrams[removedDiagramId];
-      }
+      // Delegated rather than inlined: this used to be a hand-rolled copy of
+      // `applyDeleteCascade`, which left that helper dead and let the two
+      // drift — the reason cross-diagram `^ref` cleanup was missing here.
+      // One cascade, one applier.
+      applyDeleteCascade(next, diagramId, cascade);
       // View-state cleanup for removed diagrams (never a history entry).
       const viewportByDiagramId = { ...state.viewportByDiagramId };
       const lastSelectedByDiagramId = { ...state.lastSelectedByDiagramId };
@@ -462,6 +514,157 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
         removedEdges: cascade.removedEdges,
         removedDiagrams: cascade.removedDiagrams,
       };
+    },
+
+    pasteNodes(input) {
+      const state = get();
+      const diagram = getDiagramOrThrow(state.model, input.diagramId);
+
+      // Level rules first: reject the whole payload before mutating anything,
+      // so a failed paste leaves no half-cloned diagram behind.
+      for (const node of input.nodes) {
+        if (!isNodeTypeValidAtLevel(node.type, diagram.level)) {
+          throw new InvalidNodeTypeError(
+            diagram.level,
+            node.type,
+            VALID_NODE_TYPES_BY_LEVEL[diagram.level],
+          );
+        }
+      }
+
+      const offset = input.offset ?? { x: PASTE_OFFSET, y: PASTE_OFFSET };
+      // Mutated as we go: ids must be unique file-wide, and two clones in one
+      // paste must not collide with each other either.
+      const takenNodeIds = collectNodeIds(state.model);
+      const takenEdgeIds = collectEdgeIds(state.model);
+
+      /** Original node id → clone's node id. Rewires the copied edges. */
+      const idMap = new Map<string, string>();
+
+      const nodeClones: C4Node[] = input.nodes.map((node) => {
+        const id = uniqueId(
+          slugify(node.name, slugify(node.type)),
+          takenNodeIds,
+        );
+        takenNodeIds.add(id);
+        idMap.set(node.id, id);
+        const clone: C4Node = {
+          ...structuredClone(node),
+          id,
+          position: snapPoint({
+            x: node.position.x + offset.x,
+            y: node.position.y + offset.y,
+          }),
+          size: clampSize(node.size),
+        };
+        // A paste is a FLAT clone. Copying these pointers would alias the
+        // original's subtree (two nodes owning one child diagram) or its
+        // external file — both break the model's tree invariant.
+        delete clone.childDiagramId;
+        delete clone.childRef;
+        delete clone.externalRef;
+        return clone;
+      });
+
+      // TODO(human): build `edgeClones` from `input.edges`.
+      //
+      // Two rules, both load-bearing:
+      //  1. Keep an edge ONLY if `idMap` has BOTH its `source` and its
+      //     `target`. An edge with one endpoint outside the payload has
+      //     nothing to attach to in the target diagram — dropping it silently
+      //     is correct (C4Edge requires both endpoints in the SAME diagram).
+      //  2. For a kept edge, `structuredClone` it, then rewire `source` and
+      //     `target` through `idMap`, and mint a fresh id with
+      //     `uniqueId(`e-${newSource}-${newTarget}`, takenEdgeIds)` —
+      //     remembering to `takenEdgeIds.add(...)` so two pasted edges
+      //     between the same pair don't collide.
+      //
+      // Also drop `realizes`: it points at an edge id one level up that this
+      // clone does not implement.
+      const edgeClones: C4Edge[] = [];
+
+      const next = structuredClone(state.model);
+      const target = getDiagramOrThrow(next, input.diagramId);
+      target.nodes.push(...nodeClones);
+      target.edges.push(...edgeClones);
+
+      const nodeIds = nodeClones.map((node) => node.id);
+      const edgeIds = edgeClones.map((edge) => edge.id);
+      // Selecting the clones (never a history entry of its own — it rides
+      // along in this commit) lets an immediate drag or nudge move the paste.
+      commitModel(
+        next,
+        undefined,
+        input.select === false
+          ? undefined
+          : { selection: { nodeIds, edgeIds } },
+      );
+      return { nodeIds, edgeIds };
+    },
+
+    createRefNode(input) {
+      const state = get();
+      const diagram = getDiagramOrThrow(state.model, input.diagramId);
+      const sourceDiagram = getDiagramOrThrow(
+        state.model,
+        input.sourceDiagramId,
+      );
+      const source = findNodeOrThrow(sourceDiagram, input.sourceNodeId);
+
+      if (source.externalRef !== undefined) {
+        throw new Error(
+          `Node "${source.id}" is itself a boundary placeholder — reference the original instead.`,
+        );
+      }
+      // A reference is NOT an escape hatch from the level rules.
+      if (!isNodeTypeValidAtLevel(source.type, diagram.level)) {
+        throw new InvalidNodeTypeError(
+          diagram.level,
+          source.type,
+          VALID_NODE_TYPES_BY_LEVEL[diagram.level],
+        );
+      }
+      // One placeholder per original per diagram.
+      const duplicate = diagram.nodes.find(
+        (node) =>
+          node.externalRef?.diagramId === input.sourceDiagramId &&
+          node.externalRef?.nodeId === input.sourceNodeId,
+      );
+      if (duplicate !== undefined) {
+        throw new Error(
+          `"${source.name}" is already referenced in this diagram.`,
+        );
+      }
+
+      const id = uniqueId(
+        slugify(`${source.name}-ref`, slugify(source.type)),
+        collectNodeIds(state.model),
+      );
+      const node: C4Node = {
+        id,
+        type: source.type,
+        name: source.name,
+        position: snapPoint(input.position),
+        size: clampSize(source.size),
+        externalRef: {
+          diagramId: input.sourceDiagramId,
+          nodeId: input.sourceNodeId,
+        },
+      };
+      // The SAME mirror the rename cascade uses (`REF_MIRRORED_KEYS`), so a
+      // freshly placed reference and a re-synced one always carry identical
+      // fields. Optional keys are only set when present, so the serializer
+      // never emits empty ones.
+      mirrorRefIdentity(node, source);
+
+      const next = structuredClone(state.model);
+      getDiagramOrThrow(next, input.diagramId).nodes.push(node);
+      // Placeholders are read-only, so there is nothing to rename or edit on
+      // creation — select it so the user can see and position it, no more.
+      commitModel(next, undefined, {
+        selection: { nodeIds: [id], edgeIds: [] },
+      });
+      return id;
     },
 
     createEdge(input) {

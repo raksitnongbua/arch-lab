@@ -63,7 +63,12 @@ interface Loc {
 interface PendingNode extends Loc {
   id: string;
   type: C4NodeType;
-  name: string;
+  /**
+   * Absent when a `^ref` line omitted it; the resolve pass derives it from the
+   * referenced node and every node reaches `assemble` with a name. Optional
+   * here only, never in `C4Node`.
+   */
+  name?: string;
   description?: string;
   technology?: string;
   icon?: string;
@@ -1060,9 +1065,18 @@ function parseNodeLine(
     );
   }
   cursor.skipSpaces();
-  const name = cursor.readQuoted("the node name");
-  if (name === "") {
-    cursor.fail("the node name must not be empty");
+  // The name is optional on a `^ref` line, where it is derived from the node
+  // being referenced (resolve pass below) — the same rule the diagram title
+  // already follows when it equals its owner node's name. Peeking for the
+  // opening quote keeps the error message for every OTHER node unchanged:
+  // omitting a name without a `^ref` still fails, just later, once we know no
+  // ref was present.
+  let name: string | undefined;
+  if (cursor.peek() === '"') {
+    name = cursor.readQuoted("the node name");
+    if (name === "") {
+      cursor.fail("the node name must not be empty");
+    }
   }
 
   const node: PendingNode = {
@@ -1199,6 +1213,18 @@ function parseNodeLine(
       attrLoc.column,
       `"${word}" is not a node attribute — expected pin, @icon, [technology], #tag, >child, >>"file", ^diagram/node or (x,y w×h)`,
       word,
+    );
+  }
+
+  // Only a `^ref` may go unnamed. Checked here rather than at the quote, so we
+  // know whether a ref turned up — attributes are order-free, and `^ref` can
+  // follow anything on the line.
+  if (node.name === undefined && node.externalRef === undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      `node "${id}" has no name — only a node with a ^diagram/node reference may omit it, because there it is derived from the node being referenced`,
+      id,
     );
   }
 
@@ -1382,7 +1408,13 @@ function parseEdgeLine(
 /* -------------------------------------------------------------------------- */
 
 function isNode(member: PendingNode | PendingEdge): member is PendingNode {
-  return "name" in member;
+  // Discriminate on `type`, NOT on `name`. `name` is now absent on a `^ref`
+  // line that omitted it, and a `"name" in member` test would silently route
+  // that node's `desc` / `!` continuations into the edge branch — a wrong
+  // answer rather than an error, which is the worst kind.
+  // `type` is a C4NodeType that only nodes carry and is always set by
+  // `parseNodeLine` before any continuation can be dispatched.
+  return "type" in member;
 }
 
 function parseContinuation(
@@ -1442,6 +1474,60 @@ function parseContinuation(
 /* -------------------------------------------------------------------------- */
 /* Resolve pass                                                               */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * The name for a `^ref` node that omitted one: the name of the node it points
+ * at, following the chain if that node is itself an unnamed placeholder.
+ *
+ * Transitive because placeholder chains are legal (data-model.md:767), and
+ * cycle-guarded because a hand-written file can point two refs at each other —
+ * without the guard that is an infinite loop rather than a parse error.
+ *
+ * Runs in the resolve pass, not while reading the line: a ref may point forward
+ * at a diagram declared later in the file, so the lookup table is only complete
+ * once every line has been read.
+ */
+function deriveRefName(
+  node: PendingNode,
+  nodeHome: Map<string, { diagram: PendingDiagram; node: PendingNode }>,
+): string {
+  const seen = new Set<string>([node.id]);
+  let cursor = node;
+  for (;;) {
+    const ref = cursor.externalRef;
+    if (ref === undefined) {
+      // Reached a node with no ref and no name — only possible if a named
+      // ancestor was expected. `parseNodeLine` already rejects that case, so
+      // this is a guard against future edits, not a reachable user error.
+      failAt(
+        node.line,
+        node.column,
+        `node "${node.id}" omits its name but the node it references has none either`,
+        node.id,
+      );
+    }
+    const target = nodeHome.get(ref.nodeId);
+    if (target === undefined || target.diagram.id !== ref.diagramId) {
+      failAt(
+        node.line,
+        node.column,
+        `node "${node.id}" omits its name, but its reference ^${ref.diagramId}/${ref.nodeId} does not resolve — name it explicitly or fix the reference`,
+        node.id,
+      );
+    }
+    if (target.node.name !== undefined) return target.node.name;
+    if (seen.has(target.node.id)) {
+      failAt(
+        node.line,
+        node.column,
+        `node "${node.id}" omits its name and its reference chain is circular — one node in the chain must have a name`,
+        node.id,
+      );
+    }
+    seen.add(target.node.id);
+    cursor = target.node;
+  }
+}
 
 function resolve(
   header: Header,
@@ -1604,6 +1690,13 @@ function resolve(
     const layout = defaultPositions(sortedIds, diagram.edges);
     const finalNodes: Record<string, unknown>[] = [];
     for (const node of diagram.nodes) {
+      // Fill in a derived name before assembly, so the JSON model always
+      // carries one — `validate.ts` requires it and every consumer (viewer,
+      // mermaid, MCP describe) reads it unconditionally. Optional in TEXT,
+      // always present in the MODEL.
+      if (node.name === undefined) {
+        node.name = deriveRefName(node, nodeHome);
+      }
       const geometry = node.geometry ?? {
         ...(layout.get(node.id) ?? { x: 40, y: 40 }),
         ...defaultSizeFor(node.type),

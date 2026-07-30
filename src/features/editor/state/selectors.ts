@@ -13,6 +13,7 @@ import {
   VALID_NODE_TYPES_BY_LEVEL,
   type C4Diagram,
   type C4Level,
+  type C4Node,
   type C4NodeType,
 } from "@/types";
 
@@ -86,6 +87,85 @@ export function selectBreadcrumb(s: EditorState): BreadcrumbSegment[] {
 
   byDiagram.set(active.id, segments);
   return segments;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Referenceable ancestor nodes (`^ref` authoring)                             */
+/* -------------------------------------------------------------------------- */
+
+export interface ReferenceableNode {
+  /** The diagram the original lives in. */
+  sourceDiagramId: string;
+  sourceLevel: C4Level;
+  node: C4Node;
+}
+
+const referenceableCache = new WeakMap<
+  EditorModel,
+  Map<string, ReferenceableNode[]>
+>();
+
+/**
+ * Nodes from ANCESTOR diagrams that may be placed into the active diagram as
+ * boundary placeholders (`externalRef`).
+ *
+ * Only ancestors, never siblings or descendants: a `^ref` exists to draw the
+ * people and systems at *this* diagram's boundary, which are by definition
+ * things established further out. Referencing sideways or inwards would let
+ * two diagrams claim the same element without a containment relationship.
+ *
+ * Three filters, each ruling out a way the model could go wrong:
+ * - Level rules still apply. A `softwareSystem` is legal at `context` but not
+ *   at `container`, so it never appears in a container diagram's list — the
+ *   same `VALID_NODE_TYPES_BY_LEVEL` gate as a fresh node.
+ * - A placeholder is never itself referenced. Chains of refs pointing at refs
+ *   have no meaning; the reference must name the original.
+ * - Anything already referenced here is dropped, so the list cannot produce a
+ *   second placeholder for the same element in one diagram.
+ *
+ * Memoized on model identity + active diagram, like `selectBreadcrumb`.
+ */
+export function selectReferenceableNodes(s: EditorState): ReferenceableNode[] {
+  let byDiagram = referenceableCache.get(s.model);
+  if (byDiagram === undefined) {
+    byDiagram = new Map();
+    referenceableCache.set(s.model, byDiagram);
+  }
+  const active = selectActiveDiagram(s);
+  const cached = byDiagram.get(active.id);
+  if (cached !== undefined) return cached;
+
+  const validTypes: readonly C4NodeType[] =
+    VALID_NODE_TYPES_BY_LEVEL[active.level];
+  // Already-referenced originals, keyed the same way `externalRef` stores them.
+  const taken = new Set(
+    active.nodes
+      .filter((node) => node.externalRef !== undefined)
+      .map(
+        (node) => `${node.externalRef?.diagramId}/${node.externalRef?.nodeId}`,
+      ),
+  );
+
+  // `selectBreadcrumb` is root → active; drop the last segment to get ancestors.
+  const ancestors = selectBreadcrumb(s).slice(0, -1);
+  const result: ReferenceableNode[] = [];
+  for (const segment of ancestors) {
+    const diagram = s.model.diagrams[segment.diagramId];
+    if (diagram === undefined) continue;
+    for (const node of diagram.nodes) {
+      if (node.externalRef !== undefined) continue;
+      if (!validTypes.includes(node.type)) continue;
+      if (taken.has(`${diagram.id}/${node.id}`)) continue;
+      result.push({
+        sourceDiagramId: diagram.id,
+        sourceLevel: diagram.level,
+        node,
+      });
+    }
+  }
+
+  byDiagram.set(active.id, result);
+  return result;
 }
 
 /* -------------------------------------------------------------------------- */

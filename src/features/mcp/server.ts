@@ -208,10 +208,23 @@ export function registerArchLabMcp(server: McpServer): void {
           .string()
           .optional()
           .describe("Open the link at this diagram. Defaults to the root."),
+        ttl_days: z
+          .number()
+          .int()
+          .min(1)
+          .max(400)
+          .optional()
+          .describe(
+            "Make the link stop working after this many days. Omit for a link " +
+              "that never expires (the default). The expiry is signed, so it " +
+              "cannot be edited in the URL — but it is NOT access control: " +
+              "anyone holding the link can read the model until it lapses. " +
+              "Requires a share signing key on the deployment.",
+          ),
       },
     },
-    async ({ source, format, diagram_id }) =>
-      createShareLink(source, format as CheckChoice, diagram_id),
+    async ({ source, format, diagram_id, ttl_days }) =>
+      createShareLink(source, format as CheckChoice, diagram_id, ttl_days),
   );
 
   registerResources(server);

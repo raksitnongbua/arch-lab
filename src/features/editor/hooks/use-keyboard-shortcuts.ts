@@ -15,7 +15,7 @@
  * Combos reserved by Batch 1: `mod+z`, `mod+shift+z`, `mod+a`, `Escape`,
  * `shift+1`, `shift+0`, arrow keys (plain and `shift+`). Claimed elsewhere:
  * `mod+ArrowDown`/`mod+ArrowUp` (T2-C), `Delete`/`Backspace` (T2-D),
- * `F2`/`Enter` (T2-A), `mod+s`/`mod+o` (T3-A).
+ * `F2`/`Enter` (T2-A), `mod+s`/`mod+o` (T3-A), `mod+c`/`mod+v` (T2-E).
  */
 
 import { useEffect } from "react";

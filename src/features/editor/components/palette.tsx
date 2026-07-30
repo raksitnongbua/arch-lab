@@ -22,11 +22,8 @@ import {
   type Point,
 } from "@/types";
 
-import {
-  DEFAULT_NODE_SIZE,
-  GRID_SIZE,
-  PASTE_OFFSET,
-} from "../lib/canvas-constants";
+import { DEFAULT_NODE_SIZE, GRID_SIZE } from "../lib/canvas-constants";
+import { findFreePosition } from "../lib/placement";
 import {
   selectActiveLevel,
   selectValidNodeTypes,
@@ -34,6 +31,7 @@ import {
 } from "../state";
 import { C4_LEVEL_META } from "@/lib/constants";
 import { PaletteItem } from "./palette-item";
+import { RefPickerDialog } from "./ref-picker-dialog";
 
 /** Display order and grouping of the palette; filtered per level at render. */
 const PALETTE_GROUPS: ReadonlyArray<{
@@ -88,18 +86,10 @@ function createAtViewportCentre(type: C4NodeType): void {
   if (!diagram) return;
 
   const centre = viewportCentreFlowPosition(diagramId);
-  let position: Point = {
+  const position = findFreePosition(diagram, DEFAULT_NODE_SIZE, {
     x: snap(centre.x - DEFAULT_NODE_SIZE.width / 2),
     y: snap(centre.y - DEFAULT_NODE_SIZE.height / 2),
-  };
-  // Offset (16px, grid-aligned) until no existing node sits at exactly the
-  // same spot, so repeated creates never stack invisibly.
-  const occupied = new Set(
-    diagram.nodes.map((node) => `${node.position.x}:${node.position.y}`),
-  );
-  while (occupied.has(`${position.x}:${position.y}`)) {
-    position = { x: position.x + PASTE_OFFSET, y: position.y + PASTE_OFFSET };
-  }
+  });
 
   try {
     const nodeId = store.createNode({ diagramId, type, position });
@@ -111,6 +101,44 @@ function createAtViewportCentre(type: C4NodeType): void {
         error instanceof Error
           ? error.message
           : "That element type is not valid at this level.",
+      tone: "warning",
+    });
+  }
+}
+
+/**
+ * Places a `^ref` boundary placeholder at the viewport centre. Mirrors
+ * `createAtViewportCentre` minus the label edit — a placeholder is read-only,
+ * so there is nothing to rename on arrival.
+ */
+function placeRefAtViewportCentre(
+  sourceDiagramId: string,
+  sourceNodeId: string,
+): void {
+  const store = useEditorStore.getState();
+  const diagramId = store.activeDiagramId;
+  const diagram = store.model.diagrams[diagramId];
+  if (!diagram) return;
+
+  const centre = viewportCentreFlowPosition(diagramId);
+  const position = findFreePosition(diagram, DEFAULT_NODE_SIZE, {
+    x: snap(centre.x - DEFAULT_NODE_SIZE.width / 2),
+    y: snap(centre.y - DEFAULT_NODE_SIZE.height / 2),
+  });
+
+  try {
+    store.createRefNode({
+      diagramId,
+      sourceDiagramId,
+      sourceNodeId,
+      position,
+    });
+  } catch (error) {
+    toast({
+      message:
+        error instanceof Error
+          ? error.message
+          : "Could not reference that element here.",
       tone: "warning",
     });
   }
@@ -171,6 +199,11 @@ export function Palette(): React.JSX.Element {
       ))}
 
       <div className="mt-auto flex flex-col gap-2">
+        {/* One button, not a list: the rail stays the same height whether the
+            model has three referenceable elements or three hundred. Renders
+            nothing at the root, or once everything eligible is placed. */}
+        <RefPickerDialog onPlace={placeRefAtViewportCentre} />
+
         {/* The palette can only ever offer types legal at THIS level, so the
             level below is unreachable from here by construction. Users read
             that absence as "arch-lab cannot make containers" — say where they

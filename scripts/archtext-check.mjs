@@ -299,6 +299,7 @@ root d-ctx-a
   db-a:database "Kitchen DB" @postgresql [PostgreSQL 16] >null pin=false (48,320 176x88)
   q-a:queue "Kitchen Bus" (288,320 176x88)
   web-a:container "Kitchen Web" ^d-ctx-a/alice (528,320 176x88)
+  alice-ref:person ^d-ctx-a/alice (768,320 176x88)
 
   db-a .. q-a
   q-a -- web-a : "Peers with"
@@ -736,6 +737,24 @@ expectParseError(
   "a continuation with no node or edge above is refused",
   `${OK_HEAD}@context d "C"\n    desc "floating"\n`,
   "no node or edge line above",
+);
+
+/* --- an omitted node name is legal ONLY with a resolvable ^ref --- */
+
+expectParseError(
+  "an omitted name with no ^ref is refused",
+  `${OK_HEAD}@context d "C"\n  lonely:person\n`,
+  "only a node with a ^diagram/node reference may omit it",
+);
+expectParseError(
+  "an omitted name whose ^ref does not resolve is refused",
+  `${OK_HEAD}@context d "C"\n  a:person "A"\n  s:system "S" >k\n@container k owner=s\n  bad:person ^d/nope\n`,
+  "does not resolve",
+);
+expectParseError(
+  "an omitted name on a circular ^ref chain is refused",
+  `${OK_HEAD}@context d "C"\n  a:person "A"\n  s:system "S" >k\n@container k owner=s\n  x:person ^k/y\n  y:person ^k/x\n`,
+  "circular",
 );
 
 /* --- all-or-nothing: a failing parse never returns a partial model --- */

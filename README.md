@@ -131,6 +131,21 @@ Nothing is stored. Every tool is a pure function of the text it is sent, and
 `create_share_link` encodes the model into a URL _fragment_, which browsers
 never transmit — so even a shared link uploads nothing.
 
+**Expiring links.** `create_share_link` takes an optional `ttl_days`, and the
+Share button offers the same choice; omit it and links never expire, which stays
+the default. There is still no storage: the server signs a SHA-256 _fingerprint_
+of the payload together with the expiry, and the browser verifies it — so the
+model is never uploaded even for an expiring link, and no per-link record exists
+anywhere. Generate the keypair with `pnpm gen:share-keys`.
+
+Be precise about what that buys. A signed expiry cannot be moved by editing the
+URL, which is the thing people actually do. It is **not** access control: anyone
+holding the link can decode the model and read it for as long as the link lives,
+the expiry is checked by the reader's own browser against the reader's own clock,
+and the signing endpoint is unauthenticated like everything else here, so a
+determined holder can mint a fresh signature. Treat it as "this link goes
+stale", never as revocation.
+
 **This integration is in beta.** The endpoint URL and the `.alab` format are
 stable, but tool names, arguments and response wording may still change, and
 there is no protocol-level versioning yet — so pin nothing to the exact text of

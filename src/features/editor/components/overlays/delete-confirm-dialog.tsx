@@ -30,6 +30,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 import type { C4Diagram } from "@/types";
 
+import { findRefPlaceholders } from "../../state/model";
 import {
   selectActiveDiagram,
   useEditorStore,
@@ -55,6 +56,14 @@ export interface DeletePreview {
   descendantDiagrams: number;
   /** Distinct deeper levels those diagrams span. */
   descendantLevels: number;
+  /**
+   * `^ref` placeholders in OTHER diagrams that name a node being deleted, and
+   * the titles of the diagrams losing them. Deleting an original destroys
+   * content the user is not looking at, so this always forces a confirmation
+   * even when there is no child-diagram subtree involved.
+   */
+  referencingPlaceholders: number;
+  referencingDiagramNames: string[];
 }
 
 interface PendingDeleteState {
@@ -114,6 +123,35 @@ function buildPreview(
     }
   }
 
+  // Placeholders naming any doomed node — the directly-selected ones and
+  // everything inside the subtrees above. Uses the store's own
+  // `findRefPlaceholders` predicate rather than re-deriving the match, so the
+  // number shown here cannot disagree with what the delete actually removes.
+  const doomed: Array<{ diagramId: string; nodeId: string }> =
+    selectedNodes.map((node) => ({ diagramId: diagram.id, nodeId: node.id }));
+  for (const descendantId of visited) {
+    const child = model.diagrams[descendantId];
+    if (child === undefined) continue;
+    for (const node of child.nodes) {
+      doomed.push({ diagramId: descendantId, nodeId: node.id });
+    }
+  }
+  const removedDiagramIds = new Set(visited);
+  let referencingPlaceholders = 0;
+  const referencingDiagramNames = new Set<string>();
+  for (const target of doomed) {
+    for (const { diagram: host } of findRefPlaceholders(
+      model,
+      target.diagramId,
+      target.nodeId,
+    )) {
+      // A diagram being deleted outright is not "losing a reference".
+      if (host.id === diagram.id || removedDiagramIds.has(host.id)) continue;
+      referencingPlaceholders += 1;
+      referencingDiagramNames.add(host.title || host.id);
+    }
+  }
+
   return {
     diagramId: diagram.id,
     nodeIds: selectedNodes.map((node) => node.id),
@@ -123,6 +161,8 @@ function buildPreview(
     descendantNodes,
     descendantDiagrams,
     descendantLevels: levels.size,
+    referencingPlaceholders,
+    referencingDiagramNames: [...referencingDiagramNames],
   };
 }
 
@@ -195,7 +235,9 @@ export function requestDeleteSelection(): void {
   if (nodeIds.length === 0 && edgeIds.length === 0) return;
   const preview = buildPreview(store.model, diagram, nodeIds, edgeIds);
   if (preview.nodeIds.length === 0 && preview.edgeIds.length === 0) return;
-  if (preview.descendantDiagrams > 0) {
+  // Confirm whenever the delete reaches beyond what the user can see: a nested
+  // subtree, or placeholders in sibling diagrams that name this node.
+  if (preview.descendantDiagrams > 0 || preview.referencingPlaceholders > 0) {
     usePendingDelete.setState({ pending: preview });
   } else {
     performDelete(preview);
@@ -211,6 +253,38 @@ function dialogTitle(preview: DeletePreview): string {
   return `Delete ${preview.nodeIds.length} elements?`;
 }
 
+/**
+ * The dialog now has two independent triggers — a nested subtree, or references
+ * in sibling diagrams — so the lead sentence has to name the one that actually
+ * fired. Telling a user their node "owns a nested diagram" when it merely
+ * happens to be referenced elsewhere is simply false, and false explanations
+ * teach people to dismiss confirmations without reading them.
+ */
+function dialogDescription(preview: DeletePreview): string {
+  const nested = preview.descendantDiagrams > 0;
+  const referenced = preview.referencingPlaceholders > 0;
+  const tail = " One undo restores all of it.";
+  if (nested && referenced) {
+    return (
+      "This selection owns a nested diagram and is referenced from other levels." +
+      " Deleting it removes everything below and every reference to it." +
+      tail
+    );
+  }
+  if (nested) {
+    return (
+      "This selection owns a nested diagram. Deleting it removes everything" +
+      " below —" +
+      tail
+    );
+  }
+  return (
+    "This selection is referenced from other levels. Deleting it also removes" +
+    " those references, in diagrams you are not currently viewing." +
+    tail
+  );
+}
+
 function consequenceLines(preview: DeletePreview): string[] {
   const lines: string[] = [];
   lines.push(
@@ -224,11 +298,21 @@ function consequenceLines(preview: DeletePreview): string[] {
   if (preview.edges > 0) {
     lines.push(`${plural(preview.edges, "connected relationship")}`);
   }
-  lines.push(
-    `Its nested subtree: ${plural(preview.descendantNodes, "descendant node")} across ` +
-      `${plural(preview.descendantLevels, "deeper level")} ` +
-      `(${plural(preview.descendantDiagrams, "diagram")})`,
-  );
+  if (preview.descendantDiagrams > 0) {
+    lines.push(
+      `Its nested subtree: ${plural(preview.descendantNodes, "descendant node")} across ` +
+        `${plural(preview.descendantLevels, "deeper level")} ` +
+        `(${plural(preview.descendantDiagrams, "diagram")})`,
+    );
+  }
+  if (preview.referencingPlaceholders > 0) {
+    // Names the diagrams, because this is the one consequence the user cannot
+    // see from where they are standing.
+    lines.push(
+      `${plural(preview.referencingPlaceholders, "reference")} to it in ` +
+        preview.referencingDiagramNames.map((name) => `“${name}”`).join(", "),
+    );
+  }
   return lines;
 }
 
@@ -251,7 +335,7 @@ export function DeleteConfirmDialog(): React.JSX.Element | null {
       open
       onClose={close}
       title={dialogTitle(pending)}
-      description="This selection owns a nested diagram. Deleting it removes everything below — one undo restores all of it."
+      description={dialogDescription(pending)}
       footer={
         <>
           <Button variant="outline" size="sm" onClick={close}>
