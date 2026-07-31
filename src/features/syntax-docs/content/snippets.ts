@@ -499,8 +499,15 @@ export const NODE_ATTR_ROWS: readonly NodeAttrRow[] = [
   {
     attr: "^diagram/node",
     mapsTo: "externalRef",
-    example: 'shop-ref:container "Shop (boundary)" ^ctx-root/shop',
-    notes: "Boundary placeholder for a node that lives in another diagram.",
+    // The terse form is the canonical one: the writer omits a name that equals
+    // the referenced node's, so documenting `"Shop (boundary)" ^ctx-root/shop`
+    // taught a form the tool immediately rewrites — copy it, press Format, and
+    // watch the name disappear.
+    example: "shop-ref:container ^ctx-root/shop",
+    notes:
+      "Boundary placeholder for a node that lives in another diagram. The " +
+      "name is omitted here because it is derived from the referenced node; " +
+      'give one ("Shop (boundary)") only to override it locally.',
   },
   {
     attr: "pin / pin=false",
