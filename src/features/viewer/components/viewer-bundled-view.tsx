@@ -60,11 +60,12 @@ export function ViewerBundledView({
       model={model}
       initialDiagramId={initialDiagramId ?? undefined}
       share={{ kind: "bundled", modelId: model.id }}
-      // This route is one model and nothing else, so it opens immersive: the
-      // diagram takes the window and the site header/footer stay behind it.
-      // The exit is always on screen — the strip under the canvas keeps its
-      // "Exit immersive" control — and Escape at the top level leaves too.
-      defaultImmersive
+      // Deliberately NOT immersive by default any more. Hiding the site chrome
+      // on arrival dropped a reader somewhere with no visible route back to the
+      // rest of the app, and made this route behave unlike `/view` for a reason
+      // nobody could infer from the screen. Immersive is still one click away on
+      // the strip under the canvas — a choice now, rather than a state you have
+      // to notice and undo.
     />
   );
 }

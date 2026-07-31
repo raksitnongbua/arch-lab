@@ -237,9 +237,18 @@ export function importMermaid(source: string): MermaidImportResult {
 /**
  * The example the page opens with — small but demonstrating every headline
  * feature of the text format: two C4 levels, drill-down (`>d-cnt`), icons
- * (`@golang!`), technology (`[Go]`), tags (`#demo`), descriptions, and
- * dashed edges. Hand-written, then canonicalised through the real parser
- * and serializer at module load so it can never drift from the grammar.
+ * (`@golang!`), technology (`[Go]`), tags (`#demo`), descriptions, dashed
+ * edges, and boundary placeholders (`^d-ctx/customer`).
+ *
+ * The two placeholders are the point of the container view, not decoration: a
+ * container diagram should show the people and external systems at its
+ * boundary, and before them this one showed three boxes talking only to each
+ * other — incomplete C4 in the first example anyone reads. They also
+ * demonstrate the terse ref form, where the name is DERIVED from the node being
+ * referenced rather than repeated, so the file has one source of truth for it.
+ *
+ * Hand-written, then canonicalised through the real parser and serializer at
+ * module load so it can never drift from the grammar.
  */
 const SEED_SOURCE = `archlab 1.0
 title "Coffee Shop"
@@ -259,12 +268,16 @@ tags #demo
 
 @container d-cnt "Coffee Shop System — Containers" owner=shop
   desc "Deployable units inside the coffee shop system."
+  customerRef:person ^d-ctx/customer
   app:container "Ordering App" @nextjs! [Next.js] #demo
   api:container "Order API" @golang! [Go]
   db:database "Order Store" @postgresql! [PostgreSQL]
+  paymentsRef:external ^d-ctx/payments
 
+  customerRef -> app : "Orders through" [HTTPS]
   app -> api : "Calls" [JSON/HTTPS]
   api -> db : "Reads and writes" [SQL]
+  api ..> paymentsRef : "Charges cards via" [REST]
 `;
 
 /** The synced model the page opens with. */

@@ -91,6 +91,7 @@ import { LevelTransition } from "./overlays/level-transition";
 import { NodeContextMenu } from "./overlays/node-context-menu";
 import { goToOriginal } from "../lib/goto-original";
 import { ConnectHint } from "./overlays/connect-hint";
+import { ShortcutHint } from "./overlays/shortcut-hint";
 import { CreateNodeDialog } from "./overlays/create-node-dialog";
 import { QuickAddMenu } from "./overlays/quick-add-menu";
 import { ZoomIndicator } from "./zoom-indicator";
@@ -942,6 +943,7 @@ function CanvasInner(): React.JSX.Element {
         />
         <AlignmentGuides />
         <ConnectHint />
+        <ShortcutHint />
         <CreateNodeDialog />
         <QuickAddMenu />
         <LevelTransition />

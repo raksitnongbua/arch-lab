@@ -629,6 +629,35 @@ function ViewerCanvasInner({
     [model, navigateTo],
   );
 
+  /**
+   * Jump from a `^ref` placeholder to the node it names, in the diagram that
+   * owns it. Reaches the original from view mode, where a placeholder was
+   * previously a dead end: it announced "this lives at the context level" and
+   * gave you no way to get there.
+   *
+   * `"climb"` because a reference always points at an ANCESTOR diagram — that is
+   * what `selectReferenceableNodes` enforces — so the transition should read as
+   * zooming out, matching what the breadcrumb is about to show.
+   *
+   * The target node is passed as the anchor, so it is selected on arrival and
+   * its detail panel is already open: the reason to follow a reference is to see
+   * the real thing.
+   */
+  const openReference = useCallback(
+    (nodeId: string) => {
+      const current = getDiagram(model, diagramIdRef.current);
+      const node = findNode(current, nodeId);
+      const ref = node?.externalRef;
+      if (ref === undefined) return;
+      // A dangling ref is possible in a hand-written file; do nothing rather
+      // than navigate to a diagram that is not there.
+      const target = model.diagrams[ref.diagramId];
+      if (target === undefined || findNode(target, ref.nodeId) === null) return;
+      navigateTo(ref.diagramId, "climb", ref.nodeId);
+    },
+    [model, navigateTo],
+  );
+
   // Element selection routes through React Flow's onNodeClick, not a handler
   // inside the node component: with every interactive flag off (draggable /
   // selectable / connectable all false), React Flow sets `pointer-events:
@@ -873,6 +902,7 @@ function ViewerCanvasInner({
               ? (model.diagrams[node.externalRef.diagramId]?.level ?? null)
               : null,
           onDrill: drillInto,
+          onOpenReference: openReference,
           drill:
             node.childDiagramId && childLevel !== null && childCount > 0
               ? {
@@ -886,7 +916,7 @@ function ViewerCanvasInner({
     });
 
     return flowNodes;
-  }, [model, diagram, drillInto]);
+  }, [model, diagram, drillInto, openReference]);
 
   const edges = useMemo(() => {
     const groups = parallelGroups(diagram.edges);
@@ -1112,11 +1142,9 @@ function ViewerCanvasInner({
         className="bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing"
       >
         <Panel position="top-left" className="max-w-full">
-          <ViewerToolbar
-            crumbs={crumbs}
-            currentLevel={diagram.level}
-            onNavigate={climbTo}
-          />
+          {/* No `currentLevel`: the last crumb already carries it, and two
+              sources for one fact can disagree. */}
+          <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
         </Panel>
         <Panel
           position="top-right"
