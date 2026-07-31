@@ -142,6 +142,7 @@ export function ViewerPlayground(): React.JSX.Element {
   const jsonPaneId = useId();
   const importTextareaId = useId();
   const editingHintId = useId();
+  const sourceSectionId = useId();
 
   // Forced open when the JSON pane is the one that failed: an error nobody
   // can see is worse than an extra pane.
@@ -440,9 +441,18 @@ export function ViewerPlayground(): React.JSX.Element {
            monitor it grew past what the diagram needs. The lower bound keeps
            it usable, the upper stops it from becoming the whole page. On a
            phone svh tracks the retracting browser chrome, where vh does not. */}
+      {/* Fills the screen rather than 70% of it. The diagram is the reason the
+          page exists; leaving a slice of the .alab pane peeking below the fold
+          bought nothing and cost the canvas a third of its height on a laptop.
+
+          `100svh` minus the sticky `h-16` header (4rem) and this container's
+          `py-5` (1.25rem top and bottom) — `svh` so a phone's retracting browser
+          chrome is tracked, which `vh` does not do. The `min-h` keeps it usable
+          on a short window, where filling the viewport would leave a canvas too
+          small to read. */}
       <section
         aria-label="Rendered diagram"
-        className="flex h-[clamp(26rem,70svh,54rem)] flex-col overflow-hidden rounded-xl border border-border shadow-sm"
+        className="flex h-[calc(100svh-6.5rem)] min-h-[24rem] flex-col overflow-hidden rounded-xl border border-border shadow-sm"
       >
         <ViewerShell
           key={shellEpoch}
@@ -452,6 +462,23 @@ export function ViewerPlayground(): React.JSX.Element {
           onDiagramChange={handleDiagramChange}
         />
       </section>
+
+      {/* Now that the canvas fills the viewport, the panes below are ALWAYS off
+          screen on arrival — so the page needs to say they exist. A button, not
+          a decorative chevron: it does the scroll for you, and it is reachable
+          by keyboard, which a "scroll down" instruction is not. */}
+      <button
+        type="button"
+        onClick={() => {
+          document
+            .getElementById(sourceSectionId)
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+        className="mx-auto flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <ArrowDownToLine aria-hidden="true" className="size-3.5" />
+        Scroll for the <span className="font-mono">.alab</span> source
+      </button>
 
       {/* Deliberately compact: it is reference material people need once, not
           on every visit, so the detail collapses instead of occupying space. */}
@@ -590,8 +617,11 @@ export function ViewerPlayground(): React.JSX.Element {
 
       {/* ---- the editor ------------------------------------------------------ */}
       <div
+        // The scroll-hint button's target. `scroll-mt` clears the sticky header,
+        // which would otherwise sit over the top of the pane we just scrolled to.
+        id={sourceSectionId}
         className={cn(
-          "grid min-w-0 gap-4",
+          "grid min-w-0 scroll-mt-20 gap-4",
           showJson ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1",
         )}
       >
