@@ -63,6 +63,8 @@ export interface ViewerNodeData extends Record<string, unknown> {
    * cannot be resolved (a dangling `^ref`).
    */
   refSourceLevel: C4Level | null;
+  /** Follow this placeholder to the node it names, and select it there. */
+  onOpenReference: (nodeId: string) => void;
 }
 
 export type ViewerFlowNode = Node<ViewerNodeData, "c4">;
@@ -149,7 +151,14 @@ function outlinePath(type: C4NodeType, width: number, height: number): string {
 function ViewerNodeInner({
   data,
 }: NodeProps<ViewerFlowNode>): React.JSX.Element {
-  const { node, drill, onDrill, isPlaceholder, refSourceLevel } = data;
+  const {
+    node,
+    drill,
+    onDrill,
+    isPlaceholder,
+    refSourceLevel,
+    onOpenReference,
+  } = data;
   const { def } = resolveIcon(node);
   const Icon = def.Svg;
 
@@ -331,7 +340,11 @@ function ViewerNodeInner({
         </button>
       ) : null}
       {refSourceLevel !== null ? (
-        <RefBadge sourceLevel={refSourceLevel} nodeName={node.name} />
+        <RefBadge
+          sourceLevel={refSourceLevel}
+          nodeName={node.name}
+          onOpen={() => onOpenReference(node.id)}
+        />
       ) : null}
     </div>
   );
