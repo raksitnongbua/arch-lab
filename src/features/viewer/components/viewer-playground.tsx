@@ -450,35 +450,44 @@ export function ViewerPlayground(): React.JSX.Element {
           chrome is tracked, which `vh` does not do. The `min-h` keeps it usable
           on a short window, where filling the viewport would leave a canvas too
           small to read. */}
-      <section
-        aria-label="Rendered diagram"
-        className="flex h-[calc(100svh-6.5rem)] min-h-[24rem] flex-col overflow-hidden rounded-xl border border-border shadow-sm"
-      >
-        <ViewerShell
-          key={shellEpoch}
-          model={synced.model}
-          initialDiagramId={sharedInitialDiagram ?? undefined}
-          share={{ kind: "payload", file: synced.file }}
-          onDiagramChange={handleDiagramChange}
-        />
-      </section>
+      {/* The viewport-height budget lives on this WRAPPER, not on the canvas,
+          and the two children split it: canvas `flex-1 min-h-0`, hint
+          `shrink-0`. That is what keeps the hint on screen.
 
-      {/* Now that the canvas fills the viewport, the panes below are ALWAYS off
-          screen on arrival — so the page needs to say they exist. A button, not
-          a decorative chevron: it does the scroll for you, and it is reachable
-          by keyboard, which a "scroll down" instruction is not. */}
-      <button
-        type="button"
-        onClick={() => {
-          document
-            .getElementById(sourceSectionId)
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }}
-        className="mx-auto flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
-        <ArrowDownToLine aria-hidden="true" className="size-3.5" />
-        Scroll for the <span className="font-mono">.alab</span> source
-      </button>
+          Sizing the canvas itself to `100svh - 6.5rem` and appending the hint
+          after it pushed their combined height past the viewport, so the one
+          element whose job was to say "there is more below" was itself below the
+          fold. Subtracting the hint's height instead would have worked until
+          someone changed its padding. */}
+      <div className="flex h-[calc(100svh-6.5rem)] min-h-[24rem] flex-col gap-2">
+        <section
+          aria-label="Rendered diagram"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border shadow-sm"
+        >
+          <ViewerShell
+            key={shellEpoch}
+            model={synced.model}
+            initialDiagramId={sharedInitialDiagram ?? undefined}
+            share={{ kind: "payload", file: synced.file }}
+            onDiagramChange={handleDiagramChange}
+          />
+        </section>
+
+        {/* A button, not a decorative chevron: it performs the scroll, and it is
+            reachable by keyboard — "scroll down" as prose is not. */}
+        <button
+          type="button"
+          onClick={() => {
+            document
+              .getElementById(sourceSectionId)
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+          className="mx-auto flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <ArrowDownToLine aria-hidden="true" className="size-3.5" />
+          Scroll for the <span className="font-mono">.alab</span> source
+        </button>
+      </div>
 
       {/* Deliberately compact: it is reference material people need once, not
           on every visit, so the detail collapses instead of occupying space. */}
