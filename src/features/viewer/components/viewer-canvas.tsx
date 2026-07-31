@@ -1112,11 +1112,9 @@ function ViewerCanvasInner({
         className="bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing"
       >
         <Panel position="top-left" className="max-w-full">
-          <ViewerToolbar
-            crumbs={crumbs}
-            currentLevel={diagram.level}
-            onNavigate={climbTo}
-          />
+          {/* No `currentLevel`: the last crumb already carries it, and two
+              sources for one fact can disagree. */}
+          <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
         </Panel>
         <Panel
           position="top-right"
