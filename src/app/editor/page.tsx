@@ -13,9 +13,10 @@ import { EditorShell } from "@/features/editor";
  */
 
 export const metadata: Metadata = {
-  title: "Editor",
+  title: "C4 editor — draw architecture diagrams on a canvas",
   description:
-    "The arch-lab C4 canvas — draw your system, drill from Context to Code.",
+    "The arch-lab C4 editor: drag, snap, and connect nodes on an interactive canvas, drill from Context down to Code, and save the whole model as one diff-reviewable .alab text file. Local-first — no account, nothing leaves your browser.",
+  alternates: { canonical: "/editor" },
 };
 
 export default function EditorPage(): React.JSX.Element {

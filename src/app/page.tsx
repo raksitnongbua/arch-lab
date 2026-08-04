@@ -13,6 +13,7 @@ import {
   Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,8 +25,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
-import { APP_NAME, C4_LEVEL_META, EDITOR_ENABLED } from "@/lib/constants";
+import { publicOrigin } from "@/features/mcp/lib/origin";
+import {
+  APP_DESCRIPTION,
+  APP_NAME,
+  C4_LEVEL_META,
+  EDITOR_ENABLED,
+} from "@/lib/constants";
 import type { C4Level } from "@/types";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 const LEVEL_ICONS: Record<C4Level, LucideIcon> = {
   context: Globe2,
@@ -63,9 +74,50 @@ const PLANNED_DIAGRAM_TYPES: readonly PlannedDiagramType[] = [
   },
 ];
 
+/**
+ * Structured data for the one page that represents the product. Two nodes:
+ * `WebSite` names the site (with the spaced "arch lab" as an alternateName,
+ * since that is how people type it into a search box), and
+ * `SoftwareApplication` describes what the site IS — free, browser-based, a
+ * developer tool. Serialized inline because there are no user-controlled
+ * strings here; everything comes from constants this file already owns.
+ */
+function homeJsonLd(): string {
+  const origin = publicOrigin();
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        name: APP_NAME,
+        alternateName: "arch lab",
+        url: origin,
+        description: APP_DESCRIPTION,
+      },
+      {
+        "@type": "SoftwareApplication",
+        name: APP_NAME,
+        url: origin,
+        description: APP_DESCRIPTION,
+        applicationCategory: "DeveloperApplication",
+        operatingSystem: "Web browser",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+        },
+      },
+    ],
+  });
+}
+
 export default function Home() {
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: homeJsonLd() }}
+      />
       <Backdrop />
 
       {/* ---------------------------------------------------------------- hero */}
@@ -80,7 +132,7 @@ export default function Home() {
             </Badge>
 
             <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
-              Architecture diagrams that{" "}
+              C4 architecture diagrams that{" "}
               <span className="af-running-gradient bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
                 survive code review
               </span>
