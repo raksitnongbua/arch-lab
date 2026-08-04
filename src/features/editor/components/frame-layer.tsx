@@ -21,7 +21,8 @@
  * than as two overlapping washes.
  */
 
-import { ViewportPortal } from "@xyflow/react";
+import { useCallback } from "react";
+import { useReactFlow, ViewportPortal } from "@xyflow/react";
 
 import { placeFrames, FRAME_LABEL_BAND } from "../lib/frame-layout";
 import type { C4Diagram } from "@/types";
@@ -30,8 +31,32 @@ export interface FrameLayerProps {
   diagram: C4Diagram;
 }
 
+/** Breathing room around a frame when zooming to it. */
+const FOCUS_PADDING = 0.12;
+
+/** Matches the canvas's own camera easing; 0 under reduced motion. */
+const FOCUS_DURATION = 320;
+
 export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
+  const { fitBounds } = useReactFlow();
   const frames = placeFrames(diagram);
+
+  const focusFrame = useCallback(
+    (rect: { x: number; y: number; width: number; height: number }) => {
+      // Read at click time, not at mount: the OS setting can change while the
+      // page is open, and a camera flight is exactly the kind of motion the
+      // preference exists to stop.
+      const reduced =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      fitBounds(rect, {
+        padding: FOCUS_PADDING,
+        duration: reduced ? 0 : FOCUS_DURATION,
+      });
+    },
+    [fitBounds],
+  );
+
   if (frames.length === 0) return <></>;
 
   return (
@@ -63,19 +88,33 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
        * label. Raising just the text — never the rectangle — keeps the frame
        * behind the diagram while its name stays readable. The band the
        * geometry reserves is empty of nodes, so nothing is hidden by this.
+       *
+       * NOT aria-hidden: these are real buttons, and hiding a focusable
+       * control from assistive tech is worse than not offering it at all. The
+       * LAYER keeps pointer-events none so only the buttons take clicks —
+       * making the whole rectangle a hit target was the obvious reading of
+       * "click a frame" and is wrong here, because swallowing drags across
+       * the middle of a diagram would cost panning, the most-used gesture on
+       * this canvas, to buy a shortcut.
        */}
       <ViewportPortal>
         <div
-          aria-hidden="true"
           className="pointer-events-none absolute top-0 left-0"
           style={{ zIndex: 5 }}
         >
           {frames.map((frame) => (
-            <span
+            <button
               key={frame.id}
+              type="button"
+              onClick={() => {
+                focusFrame(frame);
+              }}
+              // The name says what the control DOES; the frame's own label is
+              // already inside it.
+              aria-label={`Zoom to the ${frame.label} frame`}
               // `bg-canvas` punches a gap through the dashed border and any
               // edge behind it, the way a boundary caption is normally drawn.
-              className="absolute truncate rounded bg-canvas px-1.5 font-medium text-muted-foreground"
+              className="pointer-events-auto absolute cursor-zoom-in truncate rounded bg-canvas px-1.5 font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               style={{
                 transform: `translate(${frame.x + 10}px, ${frame.y + (FRAME_LABEL_BAND - 16) / 2}px)`,
                 maxWidth: Math.max(0, frame.width - 20),
@@ -84,7 +123,7 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
               }}
             >
               {frame.label}
-            </span>
+            </button>
           ))}
         </div>
       </ViewportPortal>
