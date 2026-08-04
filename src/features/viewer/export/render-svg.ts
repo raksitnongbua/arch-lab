@@ -540,16 +540,35 @@ export function renderDiagramSvg(
   // Outermost first (placeFrames guarantees the order), and before the edge
   // layer: a frame is scenery, so nothing it encloses should be dimmed by it.
   const framesMarkup = placedFrames
-    .map((frame) => {
-      const label = escapeXml(frame.label);
-      return (
-        `<g>` +
+    .map(
+      (frame) =>
         `<rect x="${fmt(frame.x)}" y="${fmt(frame.y)}" width="${fmt(frame.width)}" height="${fmt(frame.height)}" rx="12" ` +
         // Same ink and the same two alphas the on-screen layer uses
         // (`bg-node-border/[0.06]`, `border-node-border/70`), so an export
         // and the canvas cannot drift apart as the theme changes.
-        `fill="${theme.nodeBorder}" fill-opacity="0.06" stroke="${theme.nodeBorder}" stroke-opacity="0.7" stroke-width="1" stroke-dasharray="6 4"/>` +
-        `<text x="${fmt(frame.x + 12)}" y="${fmt(frame.y + FRAME_LABEL_BAND - 8)}" font-family="${FONT_SANS}" font-size="11" font-weight="500" fill="${theme.mutedForeground}">${label}</text>` +
+        `fill="${theme.nodeBorder}" fill-opacity="0.06" stroke="${theme.nodeBorder}" stroke-opacity="0.7" stroke-width="1" stroke-dasharray="6 4"/>`,
+    )
+    .join("");
+
+  // Captions are emitted AFTER the nodes, mirroring the canvas: the rectangle
+  // belongs behind the diagram, but an edge crossing the top band would paint
+  // over the name. A canvas-filled rect behind the text punches the same gap
+  // through the dashed border that `bg-canvas` does on screen. Width is
+  // estimated from the character count — the exporter has no text metrics, and
+  // a slightly generous plate is invisible against the canvas whereas a short
+  // one would clip the border gap.
+  const frameLabelsMarkup = placedFrames
+    .map((frame) => {
+      const plateWidth = Math.min(
+        Math.max(0, frame.width - 20),
+        frame.label.length * 6.1 + 12,
+      );
+      const x = frame.x + 10;
+      const y = frame.y + (FRAME_LABEL_BAND - 16) / 2;
+      return (
+        `<g>` +
+        `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(plateWidth)}" height="16" rx="3" fill="${theme.canvas}"/>` +
+        `<text x="${fmt(x + 6)}" y="${fmt(y + 12)}" font-family="${FONT_SANS}" font-size="11" font-weight="500" fill="${theme.mutedForeground}">${escapeXml(frame.label)}</text>` +
         `</g>`
       );
     })
@@ -587,6 +606,7 @@ export function renderDiagramSvg(
     framesMarkup +
     edgeMarkup(diagram, theme, markerId) +
     nodesMarkup +
+    frameLabelsMarkup +
     emptyNotice +
     `</g>` +
     `</svg>`;

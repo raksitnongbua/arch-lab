@@ -35,40 +35,59 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
   if (frames.length === 0) return <></>;
 
   return (
-    <ViewportPortal>
-      <div
-        // Presentational: the frames repeat grouping that the node list and
-        // the `[Type]` lines already carry, so announcing each one would add
-        // noise to a screen reader without adding information.
-        aria-hidden="true"
-        className="pointer-events-none absolute top-0 left-0"
-      >
-        {frames.map((frame) => (
-          <div
-            key={frame.id}
-            className="absolute rounded-xl border border-dashed border-node-border/70 bg-node-border/[0.06]"
-            style={{
-              transform: `translate(${frame.x}px, ${frame.y}px)`,
-              width: frame.width,
-              height: frame.height,
-            }}
-          >
-            <span
-              className="absolute left-3 truncate font-medium text-muted-foreground"
+    <>
+      {/* Rectangles: behind everything, because a frame is scenery. */}
+      <ViewportPortal>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 left-0"
+        >
+          {frames.map((frame) => (
+            <div
+              key={frame.id}
+              className="absolute rounded-xl border border-dashed border-node-border/70 bg-node-border/[0.06]"
               style={{
-                // Sits INSIDE the band the geometry reserved, so a nested
-                // frame pressed against the top edge cannot slide under it.
-                top: (FRAME_LABEL_BAND - 14) / 2,
-                maxWidth: Math.max(0, frame.width - 24),
+                transform: `translate(${frame.x}px, ${frame.y}px)`,
+                width: frame.width,
+                height: frame.height,
+              }}
+            />
+          ))}
+        </div>
+      </ViewportPortal>
+
+      {/*
+       * Captions in a SEPARATE layer, lifted above the edge layer.
+       * A backdrop alone would not be enough: the rectangles sit under the
+       * edges, so a connector crossing the top band painted straight over the
+       * label. Raising just the text — never the rectangle — keeps the frame
+       * behind the diagram while its name stays readable. The band the
+       * geometry reserves is empty of nodes, so nothing is hidden by this.
+       */}
+      <ViewportPortal>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 left-0"
+          style={{ zIndex: 5 }}
+        >
+          {frames.map((frame) => (
+            <span
+              key={frame.id}
+              // `bg-canvas` punches a gap through the dashed border and any
+              // edge behind it, the way a boundary caption is normally drawn.
+              className="absolute truncate rounded bg-canvas px-1.5 font-medium text-muted-foreground"
+              style={{
+                transform: `translate(${frame.x + 10}px, ${frame.y + (FRAME_LABEL_BAND - 16) / 2}px)`,
+                maxWidth: Math.max(0, frame.width - 20),
                 fontSize: 11,
-                lineHeight: "14px",
+                lineHeight: "16px",
               }}
             >
               {frame.label}
             </span>
-          </div>
-        ))}
-      </div>
-    </ViewportPortal>
+          ))}
+        </div>
+      </ViewportPortal>
+    </>
   );
 }
