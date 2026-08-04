@@ -21,7 +21,7 @@
  * than as two overlapping washes.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useReactFlow, ViewportPortal } from "@xyflow/react";
 
 import { placeFrames, FRAME_LABEL_BAND } from "../lib/frame-layout";
@@ -66,6 +66,37 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
     setFocusedId((cur) => (cur === id ? null : id));
   }, []);
 
+  // Anything else dismisses it: a node, an edge, empty canvas, Escape.
+  //
+  // Listening on the document rather than wiring `onPaneClick` and
+  // `onNodeClick` through both canvases — the viewer and the editor each own
+  // their own handlers, and threading a callback through both to clear one
+  // piece of local state would couple three files to it. `pointerdown` in the
+  // CAPTURE phase so this still runs when a handler underneath stops
+  // propagation, which the canvas does for its own selection.
+  useEffect(() => {
+    if (focusedId === null) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("[data-frame-hit]") !== null
+      ) {
+        return;
+      }
+      setFocusedId(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFocusedId(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [focusedId]);
+
   if (frames.length === 0) return <></>;
 
   return (
@@ -93,11 +124,40 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
                * the same way.
                */}
               <svg
-                className="absolute inset-0"
+                className="absolute inset-0 overflow-visible"
                 width={frame.width}
                 height={frame.height}
                 aria-hidden="true"
               >
+                {/*
+                 * The clickable band: a fat transparent stroke along the
+                 * perimeter, hit-tested on the STROKE only. The caption alone
+                 * was a small target, but making the whole rectangle clickable
+                 * would swallow drags across the middle of a diagram and cost
+                 * panning. The border is the frame's own edge, so it is both a
+                 * big target and an unsurprising one — and the interior stays
+                 * pass-through for nodes and the pane underneath.
+                 */}
+                <rect
+                  data-frame-hit=""
+                  x={1}
+                  y={1}
+                  width={Math.max(0, frame.width - 2)}
+                  height={Math.max(0, frame.height - 2)}
+                  rx={11}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={16}
+                  className="cursor-zoom-in"
+                  // `stroke` — hit-tested on the band only, so the frame's
+                  // interior never intercepts a click meant for a node or a
+                  // drag meant for the pane.
+                  style={{ pointerEvents: "stroke" }}
+                  onClick={() => {
+                    focusFrame(frame);
+                    toggleFocus(frame.id);
+                  }}
+                />
                 <rect
                   className={
                     focusedId === frame.id ? "af-frame-march" : undefined
@@ -161,6 +221,7 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
               // already inside it.
               // A toggle now, so it has to say so: the caption both zooms and
               // marks the frame as focused, and pressing it again clears that.
+              data-frame-hit=""
               aria-pressed={focusedId === frame.id}
               aria-label={`Zoom to the ${frame.label} frame`}
               // `bg-canvas` punches a gap through the dashed border and any
