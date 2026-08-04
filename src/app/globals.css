@@ -437,10 +437,38 @@
   animation: af-frame-march 600ms linear infinite;
 }
 
+/**
+ * The focused frame's dashes also cycle hue, so the marching band reads as a
+ * running rainbow rather than a moving grey.
+ *
+ * Hue rotation on ONE element, not per-stop keyframes: the stroke already
+ * carries a multi-stop spectrum, and spinning its hue is a single compositor
+ * filter rather than six animated colour interpolations. Only the focused
+ * frame ever mounts it, so there is at most one of these on screen.
+ *
+ * Slower than the march on purpose. Two rates on one object at similar speeds
+ * fight each other; a hue sweep well behind the dash travel reads as one
+ * effect with depth instead of two competing ones.
+ */
+@keyframes af-frame-hue {
+  from {
+    filter: hue-rotate(0deg);
+  }
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+.af-frame-hue {
+  animation: af-frame-hue 3200ms linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .af-frame-march {
-    /* Only the walking stops. The dashes ARE the border, so they stay, and
-       the focused frame keeps its heavier stroke to stay distinguishable. */
+  .af-frame-march,
+  .af-frame-hue {
+    /* Only the motion stops. The dashes ARE the border, so they stay, and the
+       focused frame keeps its heavier stroke and its colour — the indicator
+       still reads, it just holds still. */
     animation: none;
   }
 }
