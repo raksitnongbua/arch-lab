@@ -313,8 +313,12 @@ function ViewerNodeInner({
     (drill !== null ? ". Double-click to zoom in" : "");
 
   return (
-    // The lift lives on this wrapper so body and chip travel together.
-    <div className="group relative size-full transition-transform duration-150 will-change-transform focus-within:-translate-y-0.5 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:focus-within:translate-y-0 motion-reduce:hover:translate-y-0">
+    // The lift lives on this wrapper so body and chip travel together; the
+    // one-shot entrance (viewer-node-enter, choreographed by the canvas
+    // stylesheet with a per-node --viewer-enter-delay) animates the same
+    // element — inner wrapper, never the React Flow wrapper, whose
+    // transform IS the node's position.
+    <div className="viewer-node-enter group relative size-full transition-transform duration-150 will-change-transform focus-within:-translate-y-0.5 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:focus-within:translate-y-0 motion-reduce:hover:translate-y-0">
       <button
         type="button"
         aria-label={detailLabel}
@@ -322,11 +326,21 @@ function ViewerNodeInner({
         className={cn(
           frameClasses,
           "cursor-pointer",
-          !svgSilhouette &&
-            "group-hover:shadow-lg group-hover:shadow-primary/10",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas focus-visible:outline-none",
         )}
       >
+        {/* Role-tinted glow under the hover/focus lift — replaces the old
+            generic shadow-primary/10, so a database glows teal and a person
+            violet (`.af-node-glow`, globals.css, has the full rationale
+            including why only opacity transitions). Skipped for the SVG
+            silhouettes exactly like shadow-sm — a rectangular glow would
+            draw the box the cylinder/pipe shapes exist to avoid. */}
+        {!svgSilhouette ? (
+          <span
+            aria-hidden="true"
+            className="af-node-glow pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
+          />
+        ) : null}
         {content}
       </button>
       {drill !== null ? (

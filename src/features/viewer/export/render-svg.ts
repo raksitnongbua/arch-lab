@@ -167,8 +167,23 @@ const clamp = (value: number, min: number, max: number): number =>
 /* The surface wash                                                            */
 /* -------------------------------------------------------------------------- */
 
-/** How much border colour the wash folds into the top of a fill (= CSS). */
-const WASH_STROKE_FRACTION = 0.1;
+/**
+ * How much border colour the wash folds into a fill (= CSS .af-node-wash):
+ * the lit top edge, and the shallow grounding fold at the bottom. Kept as a
+ * pair so a future retune stays one edit next to the CSS it mirrors.
+ *
+ * ANIMATION IS DELIBERATELY FLATTENED HERE. The canvas's motion — the
+ * staggered entrance, the hover lift and role-tinted glow, the selection
+ * comet — is all interaction state, and an SVG file has no interactions:
+ * the export renders the diagram's RESTING frame (every node landed, no
+ * glow, no comet), which is exactly what the screen shows once you stop
+ * touching it. Rejected alternative: SMIL/CSS animation inside the SVG —
+ * most rasterisers and design tools ignore it, so it would only make the
+ * file's first paint disagree with its own thumbnail. The gradients, which
+ * ARE part of the resting frame, export for real via the defs below.
+ */
+const WASH_STROKE_FRACTION = 0.14;
+const WASH_BOTTOM_FRACTION = 0.07;
 
 /** Parse the exporter's concrete colours: `#rrggbb` or `rgba(r, g, b, a)`. */
 function parseSrgb(color: string): [number, number, number] | null {
@@ -194,15 +209,20 @@ function parseSrgb(color: string): [number, number, number] | null {
  * the browser's oklab pipeline would buy nothing and cost the module its
  * DOM-freeness). Falls back to the flat fill when a colour fails to parse.
  */
-function washTopColor(fill: string, stroke: string): string {
+function washMixColor(fill: string, stroke: string, fraction: number): string {
   const f = parseSrgb(fill);
   const s = parseSrgb(stroke);
   if (f === null || s === null) return fill;
   const mix = (a: number, b: number): number =>
-    Math.round(a + (b - a) * WASH_STROKE_FRACTION);
+    Math.round(a + (b - a) * fraction);
   const hex = (channel: number): string =>
     channel.toString(16).padStart(2, "0");
   return `#${hex(mix(f[0], s[0]))}${hex(mix(f[1], s[1]))}${hex(mix(f[2], s[2]))}`;
+}
+
+/** The wash's deepest (top-edge) stop — also the flat paint for rim/tabs. */
+function washTopColor(fill: string, stroke: string): string {
+  return washMixColor(fill, stroke, WASH_STROKE_FRACTION);
 }
 
 /**
@@ -222,10 +242,14 @@ class WashRegistry {
     if (existing !== undefined) return `url(#${existing})`;
     const id = `af-wash-${this.idByKey.size}`;
     this.idByKey.set(key, id);
+    // Four stops, mirroring `.af-node-wash` exactly: lit 14% top edge, the
+    // flat middle band the text sits on, and the 7% grounding bottom.
     this.defs.push(
       `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
         `<stop offset="0" stop-color="${washTopColor(fill, stroke)}"/>` +
         `<stop offset="0.55" stop-color="${fill}"/>` +
+        `<stop offset="0.82" stop-color="${fill}"/>` +
+        `<stop offset="1" stop-color="${washMixColor(fill, stroke, WASH_BOTTOM_FRACTION)}"/>` +
         `</linearGradient>`,
     );
     return `url(#${id})`;

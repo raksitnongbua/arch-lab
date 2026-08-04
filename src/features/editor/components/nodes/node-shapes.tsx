@@ -56,11 +56,12 @@ export interface NodeShapeLayerProps {
 }
 
 /**
- * The two stops of the surface wash, as an SVG gradient the silhouettes can
+ * The stops of the surface wash, as an SVG gradient the silhouettes can
  * reference — the exact recipe `.af-node-wash` paints on box nodes
- * (globals.css), rebuilt here because a CSS background cannot follow a
- * cylinder or pipe path. Per-instance id: a shared one would make every
- * node paint with whichever defs mounted first.
+ * (globals.css: lit 14% top edge, flat middle band, 7% grounding bottom),
+ * rebuilt here because a CSS background cannot follow a cylinder or pipe
+ * path. Per-instance id: a shared one would make every node paint with
+ * whichever defs mounted first.
  */
 function WashGradient({ id }: { id: string }): React.JSX.Element {
   return (
@@ -74,10 +75,18 @@ function WashGradient({ id }: { id: string }): React.JSX.Element {
           offset="0"
           style={{
             stopColor:
-              "color-mix(in oklab, var(--node-stroke) 10%, var(--node-fill))",
+              "color-mix(in oklab, var(--node-stroke) 14%, var(--node-fill))",
           }}
         />
         <stop offset="0.55" style={{ stopColor: "var(--node-fill)" }} />
+        <stop offset="0.82" style={{ stopColor: "var(--node-fill)" }} />
+        <stop
+          offset="1"
+          style={{
+            stopColor:
+              "color-mix(in oklab, var(--node-stroke) 7%, var(--node-fill))",
+          }}
+        />
       </linearGradient>
     </defs>
   );
