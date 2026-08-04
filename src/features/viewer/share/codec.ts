@@ -46,14 +46,59 @@ export const SHARE_PARAM_MODEL = "m";
 export const SHARE_PARAM_DIAGRAM = "d";
 
 /**
- * The longest share URL we are willing to hand out. Deliberately
- * conservative: plenty of tools (older proxies, some chat apps, email
- * clients, spreadsheet cells) truncate or refuse URLs beyond ~2000
- * characters, and a truncated link fails for the RECIPIENT — silently
- * producing one would make the feature untrustworthy. Past this, the UI
- * offers the `.alab` file download instead.
+ * Share-link length is a GRADIENT of carrier risk, not one number — so there
+ * are two thresholds, and it matters why each is where it is.
+ *
+ * What is NOT the constraint, and why it is not:
+ *   - Browsers. Chrome navigates URLs into the megabytes; Firefox and Safari
+ *     handle tens of thousands of characters. No supported browser chokes at
+ *     these sizes.
+ *   - Servers. The whole payload lives in the fragment after `#`, which the
+ *     browser never transmits (see the module comment above) — so Apache's
+ *     ~8 KB `LimitRequestLine`, nginx's `large_client_header_buffers`, and
+ *     every other request-line ceiling that drives the usual "long URL"
+ *     advice simply never sees these bytes. `/api/share/sign` receives only
+ *     a SHA-256 digest, never the model.
+ *   - "2000 characters" itself. That figure is folklore inherited from
+ *     Internet Explorer's 2,083-character cap; the URL standard defines no
+ *     maximum, and the number outlived the browser it described.
+ *
+ * What IS the constraint: the carrier application. Chat apps, linkifiers,
+ * link scanners and spreadsheet cells each have their own tolerance, and
+ * plain-text email is bound by RFC 5322's 998-octet line limit — under HALF
+ * of even the folklore 2000, which means no realistic model ever fits, and a
+ * flat "email-safe" ceiling is a promise that cannot be kept at any useful
+ * size. (An earlier revision here capped everything at 2000 citing email
+ * truncation; every demo model this app ships encodes past 2000, so that
+ * limit was simultaneously too strict to be usable and too loose to deliver
+ * what it claimed.)
+ *
+ * Hence tiers instead of one refusal:
+ *   - `SHARE_URL_SAFE_LENGTH` and under — safe in essentially any carrier;
+ *     hand the link out with no caveat.
+ *   - between the two — fine in every modern browser and chat app; handed
+ *     out WITH an honest caveat that plain-text email may wrap and break it.
+ *   - past `MAX_SHARE_URL_LENGTH` — refused. Deep in individual carriers'
+ *     failure territory, and a truncated link fails silently for the
+ *     RECIPIENT; the UI offers the `.alab` file instead.
  */
-export const MAX_SHARE_URL_LENGTH = 2000;
+
+/** At or under this, a link is safe in essentially any carrier. */
+export const SHARE_URL_SAFE_LENGTH = 2000;
+
+/** Hard ceiling: past this we refuse rather than hand out something fragile. */
+export const MAX_SHARE_URL_LENGTH = 8000;
+
+/**
+ * A separate, far higher ceiling for SAME-MACHINE hand-offs — links that
+ * carry a model from one route to another in the user's own browser ("Edit
+ * this diagram", "Open in view mode", the docs' "Try it" links). No chat app
+ * or mail client ever sees those URLs, so carrier truncation — the entire
+ * reason the share tiers above exist — does not apply; the fragment never
+ * reaches a server either. This is only a runaway guard for a pathological
+ * model that plainly belongs in a file rather than a URL.
+ */
+export const MAX_HANDOFF_URL_LENGTH = 64_000;
 
 /* -------------------------------------------------------------------------- */
 /* Feature detection                                                           */

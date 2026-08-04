@@ -11,31 +11,162 @@
  * so it is never sent to any server — not even this one, on open — and the
  * link is therefore identical to one a human would have produced by hand.
  *
- * The length ceiling is enforced honestly. Past `MAX_SHARE_URL_LENGTH` the
- * codec's own limit applies (plenty of chat apps and mail clients truncate
- * long URLs, and a truncated link fails silently for the RECIPIENT), so
- * rather than hand back a link that might not survive the trip, this refuses
- * and says what to do instead.
+ * Length is reported in the codec's honest tiers (see the reasoning on the
+ * constants in `codec.ts`): under `SHARE_URL_SAFE_LENGTH` the link goes out
+ * clean; up to `MAX_SHARE_URL_LENGTH` it goes out WITH a caveat that
+ * plain-text email may break it; past the ceiling this refuses — but
+ * usefully, with the canonical `.alab` text inline and, when one fits, a
+ * measured diagram-scoped link, so the caller is never sent away for another
+ * round trip.
  */
 
+import { parseArchText, serializeArchText } from "@/features/archtext";
 import type { CheckChoice } from "@/features/validate/lib/check";
 import {
   canEncodeShare,
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
+  SHARE_URL_SAFE_LENGTH,
   shareDigestFor,
   type ShareExpiry,
 } from "@/features/viewer/share/codec";
 import { signExpiry } from "@/features/viewer/share/sign-server";
+import type { ArchLabFile, C4Node } from "@/types";
 
 import { publicOrigin } from "../lib/origin";
 import { readSource } from "../lib/read";
 import {
   errorResult,
+  fence,
   joinSections,
   textResult,
   type McpTextResult,
 } from "../lib/render";
+
+/**
+ * The caveat handed out with links in the middle tier, and with scoped links
+ * that land there. One string so the wording cannot drift between the two.
+ */
+const EMAIL_CAVEAT =
+  "Caveat: plain-text email wraps lines at 998 octets (RFC 5322), so a " +
+  "link this long can arrive broken from a plain-text mail client. It is " +
+  "fine in browsers and chat apps; for email, send the model as a `.alab` " +
+  "file instead.";
+
+/**
+ * The model cut down to one diagram plus the ancestor chain it hangs from.
+ *
+ * The chain is kept — not just the one diagram — because the parser requires
+ * the root to be a parentless `@context`, so a bare `@container` cannot stand
+ * alone as a file. Ancestors are what make the scoped model valid, and they
+ * are cheap: it is sibling SUBTREES, usually the bulk of a big model, that
+ * get dropped. Nodes whose drill-down pointer leads into a dropped subtree
+ * lose the pointer (they become leaves); `null` markers and pointers into the
+ * kept chain survive untouched.
+ *
+ * Returns `null` when no valid scoped file exists (a broken or cyclic parent
+ * chain) — the caller simply does not offer that diagram.
+ */
+function scopedTo(file: ArchLabFile, diagramId: string): ArchLabFile | null {
+  const byId = new Map(file.diagrams.map((diagram) => [diagram.id, diagram]));
+  const keep = new Set<string>();
+  for (
+    let current = byId.get(diagramId);
+    current !== undefined;
+    current =
+      current.parentDiagramId === null
+        ? undefined
+        : byId.get(current.parentDiagramId)
+  ) {
+    if (keep.has(current.id)) return null; // cyclic parent chain
+    keep.add(current.id);
+  }
+  if (!keep.has(file.rootDiagramId)) return null;
+
+  return {
+    ...file,
+    diagrams: file.diagrams
+      .filter((diagram) => keep.has(diagram.id))
+      .map((diagram) => ({
+        ...diagram,
+        nodes: diagram.nodes.map((node) => {
+          if (node.childDiagramId == null || keep.has(node.childDiagramId)) {
+            return node;
+          }
+          // The key must be ABSENT (not undefined) for the serializer to
+          // treat the node as a leaf, hence delete on a copy.
+          const leaf: C4Node = { ...node };
+          delete leaf.childDiagramId;
+          return leaf;
+        }),
+      })),
+  };
+}
+
+/** A diagram-scoped link that was actually built and measured to fit. */
+interface ScopedOffer {
+  diagramId: string;
+  title: string;
+  url: string;
+}
+
+/**
+ * Tries to build a fitting diagram-scoped link for every diagram, requested
+ * one first. Every offer returned here was genuinely encoded, measured under
+ * the ceiling, and its scoped text re-parsed — nothing is promised that was
+ * not computed.
+ *
+ * When the caller asked for an expiry, each scoped link gets its OWN signed
+ * expiry (the main link's signature covers a different payload digest and
+ * cannot be reused). A candidate whose signing fails is skipped rather than
+ * emitted permanent: the caller asked for expiring links, and a link that
+ * quietly lacks one is worse than one fewer offer.
+ */
+async function scopedOffers(
+  file: ArchLabFile,
+  requestedDiagramId: string | undefined,
+  origin: string,
+  expiresAt: number | undefined,
+): Promise<ScopedOffer[]> {
+  const ordered = [...file.diagrams].sort((a, b) =>
+    a.id === requestedDiagramId ? -1 : b.id === requestedDiagramId ? 1 : 0,
+  );
+
+  const offers: ScopedOffer[] = [];
+  for (const diagram of ordered) {
+    const scoped = scopedTo(file, diagram.id);
+    if (scoped === null) continue;
+    // Scoping dropped nothing — the "smaller" link would be the same size.
+    if (scoped.diagrams.length === file.diagrams.length) continue;
+
+    const scopedText = serializeArchText(scoped);
+    try {
+      parseArchText(scopedText);
+    } catch {
+      continue; // never offer a link whose payload does not round-trip
+    }
+
+    let expiry: ShareExpiry | undefined;
+    if (expiresAt !== undefined) {
+      const signed = await signExpiry(
+        await shareDigestFor(scopedText),
+        expiresAt,
+      );
+      if (signed.status !== "ok") continue;
+      expiry = { expiresAt, signature: signed.signature };
+    }
+
+    const fragment = await encodeShareFragment(
+      scopedText,
+      diagram.id === file.rootDiagramId ? null : diagram.id,
+      expiry,
+    );
+    const url = `${origin}/view#${fragment}`;
+    if (url.length > MAX_SHARE_URL_LENGTH) continue;
+    offers.push({ diagramId: diagram.id, title: diagram.title, url });
+  }
+  return offers;
+}
 
 export async function createShareLink(
   source: string,
@@ -108,26 +239,57 @@ export async function createShareLink(
   const url = `${publicOrigin()}/view#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
+    // Refuse — but leave the caller holding something actionable in THIS
+    // response: the canonical `.alab` text, and any diagram-scoped link that
+    // was measured to fit. The previous behaviour ("go run convert_model")
+    // cost another round trip for text this tool already had in hand.
+    const offers = await scopedOffers(
+      file,
+      diagramId,
+      publicOrigin(),
+      expiry?.expiresAt,
+    );
+    const anyOfferOverSafe = offers.some(
+      (offer) => offer.url.length > SHARE_URL_SAFE_LENGTH,
+    );
     return errorResult(
       joinSections(
         `This model does not fit in a share link: the URL would be ` +
           `${url.length.toLocaleString("en-US")} characters, over the ` +
-          `${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character limit ` +
-          `(many chat and mail clients truncate longer URLs, which would ` +
-          `break the link for whoever receives it).`,
-        "Send the model as a file instead — call convert_model with " +
-          'to="alab" and save the result as a `.alab` file, which the ' +
-          "two-pane editor at /view accepts by paste or drop.",
+          `${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character ceiling ` +
+          `past which enough carrier apps truncate that the link would fail ` +
+          `silently for whoever receives it.`,
+        offers.length === 0
+          ? null
+          : joinSections(
+              "A smaller, diagram-scoped link fits. Each carries just that " +
+                "diagram plus the ancestors it drills down from:",
+              ...offers.map(
+                (offer) =>
+                  `\`${offer.diagramId}\` ${JSON.stringify(offer.title)} — ` +
+                  `${offer.url.length.toLocaleString("en-US")} characters:\n` +
+                  offer.url,
+              ),
+              anyOfferOverSafe ? EMAIL_CAVEAT : null,
+            ),
+        "To share the WHOLE model, save the canonical `.alab` text below as " +
+          "a `.alab` file and send that — the two-pane editor at /view " +
+          "accepts it by paste or drop:",
+        fence("", aftText),
       ),
     );
   }
 
+  const withinSafeLength = url.length <= SHARE_URL_SAFE_LENGTH;
   return textResult(
     joinSections(
       `Share link for ${JSON.stringify(summary.title)} ` +
-        `(${url.length.toLocaleString("en-US")} characters, within the ` +
-        `${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")} limit):`,
+        `(${url.length.toLocaleString("en-US")} characters — ` +
+        (withinSafeLength
+          ? `under ${SHARE_URL_SAFE_LENGTH.toLocaleString("en-US")}, safe in essentially any app):`
+          : `within the ${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character ceiling):`),
       url,
+      withinSafeLength ? null : EMAIL_CAVEAT,
       diagramId === undefined
         ? "Opens in the two-pane viewer at the model's root diagram."
         : `Opens in the two-pane viewer at diagram \`${diagramId}\`.`,

@@ -14,10 +14,12 @@
  * Either way, the link carries the diagram being viewed (`d=…`) when it is
  * not the root, so the recipient opens on what the sharer was looking at.
  *
- * Honesty about limits: past `MAX_SHARE_URL_LENGTH` the panel refuses to
- * mint a link that chat apps and email clients would truncate, says exactly
- * why, and offers the `.alab` file download instead. Browsers without
- * `CompressionStream` get the same honest fallback.
+ * Honesty about limits, in the codec's tiers (see the reasoning on the
+ * constants in `codec.ts`): under `SHARE_URL_SAFE_LENGTH` the link is handed
+ * out clean; up to `MAX_SHARE_URL_LENGTH` it is handed out WITH a caveat
+ * that plain-text email may break it; past the ceiling the panel refuses,
+ * says exactly why, and offers the `.alab` file download instead. Browsers
+ * without `CompressionStream` get the same honest fallback.
  *
  * Keyboard/a11y: normal trigger button (`aria-expanded`/`aria-haspopup`),
  * panel is a labelled non-modal dialog that receives focus on open, Escape
@@ -39,6 +41,7 @@ import {
   canEncodeShare,
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
+  SHARE_URL_SAFE_LENGTH,
   SHARE_PARAM_DIAGRAM,
   shareDigestFor,
   type ShareExpiry,
@@ -64,8 +67,14 @@ type LinkState =
       url: string;
       expiresAt: number | null;
       expiryNote?: string;
+      /**
+       * The middle tier: past `SHARE_URL_SAFE_LENGTH` but under the hard
+       * ceiling. The link is still handed out — every modern browser and chat
+       * app carries it — with an honest caveat that plain-text email may not.
+       */
+      overSafeLength: boolean;
     }
-  /** The encoded link would exceed the safe URL length — no link is offered. */
+  /** The encoded link would exceed the hard ceiling — no link is offered. */
   | { status: "too-long"; length: number }
   /** This browser cannot build compressed links (no CompressionStream). */
   | { status: "unsupported" };
@@ -190,6 +199,7 @@ export function ViewerShareButton({
           status: "ready",
           url: `${window.location.origin}/view/${share.modelId}${suffix}`,
           expiresAt: null,
+          overSafeLength: false,
         });
         return;
       }
@@ -246,6 +256,7 @@ export function ViewerShareButton({
                 url,
                 expiresAt: expiry?.expiresAt ?? null,
                 expiryNote,
+                overSafeLength: url.length > SHARE_URL_SAFE_LENGTH,
               },
         );
         setRebuilding(false);
@@ -430,11 +441,24 @@ export function ViewerShareButton({
                 )}
               />
               {share.kind === "payload" ? (
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  {link.url.length.toLocaleString("en-US")} characters — within
-                  the ~{MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character
-                  limit that keeps links intact in chat apps and email.
-                </p>
+                link.overSafeLength ? (
+                  /* The middle tier: a working link with an honest caveat,
+                     not a refusal — browsers and chat apps carry links this
+                     long without trouble; plain-text email is the one carrier
+                     that reliably cannot (RFC 5322 wraps lines at 998 octets,
+                     so no model-carrying link is truly email-proof). */
+                  <p className="mt-1.5 text-xs leading-relaxed text-warning">
+                    {link.url.length.toLocaleString("en-US")} characters — fine
+                    in browsers and chat apps, but plain-text email can wrap and
+                    break a link this long. For email, download the{" "}
+                    {ARCHTEXT_EXTENSION} file below and send that instead.
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {link.url.length.toLocaleString("en-US")} characters — short
+                    enough to stay intact in essentially any app.
+                  </p>
+                )
               ) : null}
 
               {/* Offered only for payload links (a bundled link has no payload
@@ -539,11 +563,11 @@ export function ViewerShareButton({
                     Too large to share as a link.
                   </span>{" "}
                   This model encodes to {link.length.toLocaleString("en-US")}{" "}
-                  characters, and links beyond ~
-                  {MAX_SHARE_URL_LENGTH.toLocaleString("en-US")} characters get
-                  truncated by many chat apps, email clients and tools — the
-                  recipient would open a broken diagram. Download the{" "}
-                  {ARCHTEXT_EXTENSION} file and send that instead.
+                  characters, past the{" "}
+                  {MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character
+                  ceiling where enough apps truncate links that the recipient
+                  would open a broken diagram. Download the {ARCHTEXT_EXTENSION}{" "}
+                  file and send that instead.
                 </p>
               </div>
               <div className="mt-3">
