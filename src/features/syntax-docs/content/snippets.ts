@@ -86,6 +86,29 @@ title "ShopFlow Platform"
 `,
 };
 
+/** Frames: a nested boundary, and the nodes that sit inside each one. */
+export const FRAME_EXAMPLE: DocSnippet = {
+  id: "frames",
+  code: `archlab 1.0
+title "ShopFlow Platform"
+
+@context ctx-root "ShopFlow Platform"
+  shop:system "ShopFlow Platform" >cnt-shop
+
+@container cnt-shop "ShopFlow — Containers" owner=shop
+  frame internal "Internal"
+  frame storage "Data Layer" in=internal
+  web:container "Web App" in=internal
+  orders:container "Orders Service" [Go 1.22] in=internal
+  orders-db:database "Orders DB" [PostgreSQL 16] in=storage
+  ext-pay:external "Payment Provider"
+
+  web -> orders : "Submits the order"
+  orders -> orders-db : "Reads and writes orders"
+  orders -> ext-pay : "Authorises payment"
+`,
+};
+
 /** A node line carrying every attribute, with a desc continuation. */
 export const NODE_EXAMPLE: DocSnippet = {
   id: "node-anatomy",
@@ -158,6 +181,7 @@ export const FULL_SNIPPETS: readonly DocSnippet[] = [
   MINIMAL_EXAMPLE,
   HEADER_EXAMPLE,
   DIAGRAM_EXAMPLE,
+  FRAME_EXAMPLE,
   NODE_EXAMPLE,
   EDGE_EXAMPLE,
   UNKNOWN_FIELDS_EXAMPLE,
@@ -508,6 +532,17 @@ export const NODE_ATTR_ROWS: readonly NodeAttrRow[] = [
       "Boundary placeholder for a node that lives in another diagram. The " +
       "name is omitted here because it is derived from the referenced node; " +
       'give one ("Shop (boundary)") only to override it locally.',
+  },
+  {
+    attr: "in=<frame>",
+    mapsTo: "frameId",
+    // Two lines, because the attribute is only meaningful next to the frame
+    // it names — a lone `in=internal` would be a dangling reference, and the
+    // page's snippets are all parsed for real.
+    example: 'frame internal "Internal"\napi:container "API" in=internal',
+    notes:
+      "Puts the node inside a frame declared on the same diagram. Name the " +
+      "INNERMOST frame; nesting is recorded on the frame itself.",
   },
   {
     attr: "pin / pin=false",

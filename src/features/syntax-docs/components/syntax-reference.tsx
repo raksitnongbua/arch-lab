@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 
 import {
   DIAGRAM_EXAMPLE,
+  FRAME_EXAMPLE,
   EDGE_ARROW_ROWS,
   EDGE_ATTR_ROWS,
   EDGE_EXAMPLE,
@@ -252,9 +253,29 @@ export function SyntaxReference(): React.JSX.Element {
               <Code key="m">viewport</Code>,
               "A body line at indent 2; three numbers.",
             ],
+            [
+              <Code key="s">frame &lt;id&gt; {'"Label"'}</Code>,
+              <Code key="m">frames[]</Code>,
+              <>
+                A body line at indent 2, before the nodes. Add{" "}
+                <Code>in=&lt;frame&gt;</Code> to nest one frame in another.
+              </>,
+            ],
           ]}
         />
         <CodeBlock code={DIAGRAM_EXAMPLE.code} label="diagram header" tryIt />
+        <P>
+          A <strong>frame</strong> is a labelled rectangle drawn behind a group
+          of nodes — the C4 boundary. Declare it in the diagram body, then put
+          nodes in it with <Code>in=&lt;frame&gt;</Code> on the node line. Frame
+          ids are unique within their diagram, not across the file.
+        </P>
+        <P>
+          Frames carry no geometry: the rectangle is derived from its
+          members&apos; bounding box, so it follows them when they move. A frame
+          with no members is not drawn.
+        </P>
+        <CodeBlock code={FRAME_EXAMPLE.code} label="frames" tryIt />
       </Section>
 
       {/* ---- 5. nodes ------------------------------------------------------------ */}
