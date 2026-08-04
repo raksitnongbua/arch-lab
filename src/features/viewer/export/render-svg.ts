@@ -14,8 +14,10 @@
  *
  * Shapes mirror the viewer's per-type silhouettes: person's rounded
  * shoulders, the software system's heavier border, the external system's
- * dashed muted box, the database cylinder, the queue pipe, the component's
- * UML tab glyph, the code element's sharp corners and mono name. Text is
+ * dashed receding box, the database cylinder, the queue pipe, the
+ * component's UML tab glyph, the code element's sharp corners and mono
+ * name. Colours mirror the canvas's role palette and `tagColors` overrides
+ * (`node-colors.ts` is the one table both consult). Text is
  * laid out with a conservative character-width estimate (SVG has no
  * automatic wrapping), wrapped to the node's width and ellipsised where the
  * viewer clamps.
@@ -30,6 +32,11 @@ import {
   labelBiasByEdgeId,
   type NodeRect,
 } from "@/features/editor/lib/edge-geometry";
+import {
+  colorRoleForNode,
+  EXTERNAL_NODE_OPACITY,
+  resolveTagColor,
+} from "@/features/editor/lib/node-colors";
 
 import { TYPE_LABEL } from "../lib/labels";
 import { embeddedIconSvg } from "./icon-markup";
@@ -157,6 +164,79 @@ const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
 /* -------------------------------------------------------------------------- */
+/* The surface wash                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** How much border colour the wash folds into the top of a fill (= CSS). */
+const WASH_STROKE_FRACTION = 0.1;
+
+/** Parse the exporter's concrete colours: `#rrggbb` or `rgba(r, g, b, a)`. */
+function parseSrgb(color: string): [number, number, number] | null {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (hex !== null) {
+    const value = parseInt(hex[1], 16);
+    return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
+  }
+  const rgba = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(color.trim());
+  if (rgba !== null) {
+    return [Number(rgba[1]), Number(rgba[2]), Number(rgba[3])];
+  }
+  return null;
+}
+
+/**
+ * The wash's top-stop colour: 10% stroke folded into the fill. On screen
+ * this is `color-mix(in oklab, …)`; here it is a plain sRGB lerp because
+ * this module is deliberately DOM-free (see resolveTagPaint's counter-case:
+ * THERE the browser must do the work, because an author mix is 100% of the
+ * fill — a wrong space would visibly recolour the card. At a 10% fold the
+ * two spaces differ by well under one 8-bit channel step, so duplicating
+ * the browser's oklab pipeline would buy nothing and cost the module its
+ * DOM-freeness). Falls back to the flat fill when a colour fails to parse.
+ */
+function washTopColor(fill: string, stroke: string): string {
+  const f = parseSrgb(fill);
+  const s = parseSrgb(stroke);
+  if (f === null || s === null) return fill;
+  const mix = (a: number, b: number): number =>
+    Math.round(a + (b - a) * WASH_STROKE_FRACTION);
+  const hex = (channel: number): string =>
+    channel.toString(16).padStart(2, "0");
+  return `#${hex(mix(f[0], s[0]))}${hex(mix(f[1], s[1]))}${hex(mix(f[2], s[2]))}`;
+}
+
+/**
+ * One wash gradient per DISTINCT paint pair (not per node — parallel
+ * containers share one def), collected while nodes render and emitted into
+ * `<defs>`. `objectBoundingBox` units (the SVG default) make a single def
+ * correct for every node that references it, wherever it sits.
+ */
+class WashRegistry {
+  private readonly idByKey = new Map<string, string>();
+  private readonly defs: string[] = [];
+
+  /** The `url(#…)` fill reference for this paint pair. */
+  ref(fill: string, stroke: string): string {
+    const key = `${fill}|${stroke}`;
+    const existing = this.idByKey.get(key);
+    if (existing !== undefined) return `url(#${existing})`;
+    const id = `af-wash-${this.idByKey.size}`;
+    this.idByKey.set(key, id);
+    this.defs.push(
+      `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
+        `<stop offset="0" stop-color="${washTopColor(fill, stroke)}"/>` +
+        `<stop offset="0.55" stop-color="${fill}"/>` +
+        `</linearGradient>`,
+    );
+    return `url(#${id})`;
+  }
+
+  markup(): string {
+    return this.defs.join("");
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Node silhouettes                                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -168,11 +248,43 @@ interface ShapeResult {
   contentSideInset: number;
 }
 
-function nodeShape(node: C4Node, theme: ExportTheme): ShapeResult {
+/**
+ * Fill/stroke for one node, mirroring the canvas exactly: the author's
+ * `tagColors` entry (materialised by `paintForTagColor`, since the on-screen
+ * wash is a CSS `color-mix` the file cannot carry) wins, then the colour
+ * role's resolved tokens. Same precedence, same one table — node-colors.ts.
+ */
+function nodePaint(
+  node: C4Node,
+  theme: ExportTheme,
+  tagColors: Readonly<Record<string, string>> | undefined,
+  paintForTagColor: (tagColor: string) => { fill: string; stroke: string },
+): { fill: string; stroke: string } {
+  const tagColor = resolveTagColor(node, tagColors);
+  if (tagColor !== null) return paintForTagColor(tagColor);
+  const role = theme.nodeRoles[colorRoleForNode(node)];
+  return { fill: role.fill, stroke: role.border };
+}
+
+function nodeShape(
+  node: C4Node,
+  theme: ExportTheme,
+  paint: { fill: string; stroke: string },
+  wash: WashRegistry,
+): ShapeResult {
   const { x, y } = node.position;
   const { width: w, height: h } = node.size;
-  const stroke = `stroke="${theme.nodeBorder}"`;
-  const fill = `fill="${theme.node}"`;
+  const stroke = `stroke="${paint.stroke}"`;
+  // Every surface except the externalSystem card takes the wash gradient —
+  // keyed off the TYPE, exactly like `SHAPE_WRAPPER_CLASSES` (the wash
+  // rides the per-type class list on screen). A tag-external person is
+  // therefore washed here too, matching the canvas pixel for pixel; its
+  // grey-on-grey wash is imperceptible anyway.
+  const washed = node.type !== "externalSystem";
+  const fill = `fill="${washed ? wash.ref(paint.fill, paint.stroke) : paint.fill}"`;
+  // Small details that sit in the washed band (cylinder rim, glyph tabs)
+  // paint the wash TOP flat — mirrors `.af-node-wash-fill`.
+  const washTop = washed ? washTopColor(paint.fill, paint.stroke) : paint.fill;
 
   switch (node.type) {
     case "person":
@@ -188,8 +300,10 @@ function nodeShape(node: C4Node, theme: ExportTheme): ShapeResult {
         contentSideInset: 0,
       };
     case "externalSystem":
+      // Dashed border as ever; the receding grey now comes from the
+      // `external` role's fill rather than a hardcoded --muted read.
       return {
-        markup: `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8" fill="${theme.muted}" ${stroke} stroke-width="1.5" stroke-dasharray="6 4"/>`,
+        markup: `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8" ${fill} ${stroke} stroke-width="1.5" stroke-dasharray="6 4"/>`,
         contentTopInset: 0,
         contentSideInset: 0,
       };
@@ -203,11 +317,12 @@ function nodeShape(node: C4Node, theme: ExportTheme): ShapeResult {
       // Box + the UML component glyph in the top-left corner.
       const gx = x + 6;
       const gy = y + 6;
+      // Glyph in the node's accent + wash-top tab fills — node-shapes.tsx.
       const glyph =
-        `<g fill="none" stroke="${theme.mutedForeground}" stroke-width="1.2">` +
+        `<g fill="none" stroke="${paint.stroke}" stroke-width="1.2">` +
         `<path d="M ${fmt(gx + 4.5)} ${fmt(gy + 1.5)} h 8 v 11 h -8"/>` +
-        `<rect x="${fmt(gx + 1)}" y="${fmt(gy + 3.5)}" width="6" height="2.6" fill="${theme.node}"/>` +
-        `<rect x="${fmt(gx + 1)}" y="${fmt(gy + 7.9)}" width="6" height="2.6" fill="${theme.node}"/>` +
+        `<rect x="${fmt(gx + 1)}" y="${fmt(gy + 3.5)}" width="6" height="2.6" fill="${washTop}"/>` +
+        `<rect x="${fmt(gx + 1)}" y="${fmt(gy + 7.9)}" width="6" height="2.6" fill="${washTop}"/>` +
         `</g>`;
       return {
         markup:
@@ -237,7 +352,8 @@ function nodeShape(node: C4Node, theme: ExportTheme): ShapeResult {
       return {
         markup:
           `<path d="${body}" ${fill} ${stroke} stroke-width="1.5"/>` +
-          `<ellipse cx="${fmt(x + w / 2)}" cy="${fmt(y + rim)}" rx="${fmt(rx)}" ry="${fmt(rim)}" ${fill} ${stroke} stroke-width="1.5"/>`,
+          // Flat wash-top rim: the lit face of the cylinder (node-shapes).
+          `<ellipse cx="${fmt(x + w / 2)}" cy="${fmt(y + rim)}" rx="${fmt(rx)}" ry="${fmt(rim)}" fill="${washTop}" ${stroke} stroke-width="1.5"/>`,
         contentTopInset: rim,
         contentSideInset: 0,
       };
@@ -271,6 +387,7 @@ function nodeContent(
   node: C4Node,
   theme: ExportTheme,
   shape: ShapeResult,
+  paint: { fill: string; stroke: string },
 ): string {
   const { x, y } = node.position;
   const { width: w, height: h } = node.size;
@@ -324,7 +441,8 @@ function nodeContent(
       rowLeft,
       cursorY + nameBlockHeight / 2 - ICON_SIZE / 2,
       ICON_SIZE,
-      theme.nodeForeground,
+      // Accent-tinted, like the renderers (node-chrome.tsx explains).
+      paint.stroke,
     ),
   );
   for (const line of nameLines) {
@@ -334,14 +452,17 @@ function nodeContent(
     cursorY += nameLineHeight;
   }
 
+  // nodeMeta, not mutedForeground — the ON-fill secondary text token, and
+  // the description drops its old opacity for the same measured-contrast
+  // reason as the renderers (node-chrome.tsx).
   parts.push(
-    `<text x="${fmt(cx)}" y="${fmt(cursorY + smallLineHeight * 0.72)}" text-anchor="middle" font-family="${FONT_SANS}" font-size="${metaSize}" fill="${theme.mutedForeground}">${escapeXml(ellipsize(meta, metaSize, innerWidth))}</text>`,
+    `<text x="${fmt(cx)}" y="${fmt(cursorY + smallLineHeight * 0.72)}" text-anchor="middle" font-family="${FONT_SANS}" font-size="${metaSize}" fill="${theme.nodeMeta}">${escapeXml(ellipsize(meta, metaSize, innerWidth))}</text>`,
   );
   cursorY += smallLineHeight;
 
   if (description !== null) {
     parts.push(
-      `<text x="${fmt(cx)}" y="${fmt(cursorY + smallLineHeight * 0.72)}" text-anchor="middle" font-family="${FONT_SANS}" font-size="${descSize}" fill="${theme.mutedForeground}" opacity="0.85">${escapeXml(description)}</text>`,
+      `<text x="${fmt(cx)}" y="${fmt(cursorY + smallLineHeight * 0.72)}" text-anchor="middle" font-family="${FONT_SANS}" font-size="${descSize}" fill="${theme.nodeMeta}">${escapeXml(description)}</text>`,
     );
   }
 
@@ -479,6 +600,17 @@ export interface RenderedSvg {
   height: number;
 }
 
+export interface RenderDiagramOptions {
+  /** The model's `metadata.tagColors` — the author's colour overrides. */
+  tagColors?: Readonly<Record<string, string>>;
+  /**
+   * Materialises an author tag colour into a concrete fill/stroke pair
+   * (`export/theme.ts: resolveTagPaint`). Injected rather than imported so
+   * this module stays DOM-free — the mix needs the browser's colour parser.
+   */
+  paintForTagColor?: (tagColor: string) => { fill: string; stroke: string };
+}
+
 /**
  * Renders one diagram of a model to a complete standalone SVG document.
  * `theme` must come from `resolveExportTheme()` at export time so the file
@@ -488,6 +620,7 @@ export function renderDiagramSvg(
   diagram: C4Diagram,
   modelTitle: string,
   theme: ExportTheme,
+  options: RenderDiagramOptions = {},
 ): RenderedSvg {
   // Bounds over the model geometry (the viewer's own fit logic).
   let minX = Infinity;
@@ -523,15 +656,35 @@ export function renderDiagramSvg(
     `${diagram.nodes.length === 1 ? "" : "s"}, ${diagram.edges.length} relationship` +
     `${diagram.edges.length === 1 ? "" : "s"}`;
 
+  // Without an injected materialiser (an older caller), author overrides
+  // degrade to role colours rather than shipping an unresolvable color-mix.
+  const paintForTagColor = options.paintForTagColor;
+  const tagColors =
+    paintForTagColor !== undefined ? options.tagColors : undefined;
+
+  // Populated as a side effect of rendering the nodes below, then emitted
+  // into <defs> — one gradient per distinct paint pair, not per node.
+  const wash = new WashRegistry();
+
   const nodesMarkup = diagram.nodes
     .map((node) => {
-      const shape = nodeShape(node, theme);
+      const paint = nodePaint(
+        node,
+        theme,
+        tagColors,
+        paintForTagColor ??
+          (() => ({ fill: theme.node, stroke: theme.nodeBorder })),
+      );
+      const shape = nodeShape(node, theme, paint, wash);
+      // Same dim ladder as the renderers, from the same constants: a
+      // placeholder recedes furthest; an external-ROLE element (type or
+      // Mermaid-residue tag) recedes a step.
       const opacity = isBoundaryPlaceholder(node)
         ? ' opacity="0.6"'
-        : node.type === "externalSystem"
-          ? ' opacity="0.9"'
+        : colorRoleForNode(node) === "external"
+          ? ` opacity="${EXTERNAL_NODE_OPACITY}"`
           : "";
-      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape)}</g>`;
+      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape, paint)}</g>`;
     })
     .join("");
 
@@ -547,6 +700,7 @@ export function renderDiagramSvg(
     `<marker id="${markerId}" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse">` +
     `<path d="M 1 1 L 11 6 L 1 11 Z" fill="${theme.edge}"/>` +
     `</marker>` +
+    wash.markup() +
     `</defs>` +
     `<rect width="${width}" height="${height}" fill="${theme.canvas}"/>` +
     `<text x="${PADDING}" y="${PADDING - 22}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +

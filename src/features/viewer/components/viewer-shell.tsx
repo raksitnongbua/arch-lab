@@ -270,6 +270,7 @@ export function ViewerShell({
             <ViewerExportButton
               modelTitle={frozenModel.title}
               diagram={currentDiagram}
+              tagColors={frozenModel.file.metadata.tagColors}
             />
             <button
               type="button"

@@ -24,7 +24,7 @@ import type { C4Diagram } from "@/types";
 
 import { downloadPng, downloadSvg, fileStem, PNG_SCALE } from "./download";
 import { renderDiagramSvg } from "./render-svg";
-import { resolveExportTheme } from "./theme";
+import { resolveExportTheme, resolveTagPaint } from "./theme";
 
 const LEVEL_LABEL: Record<C4Diagram["level"], string> = {
   context: "Context",
@@ -37,11 +37,14 @@ export interface ViewerExportButtonProps {
   modelTitle: string;
   /** The diagram currently on screen — exactly what gets exported. */
   diagram: C4Diagram;
+  /** The model's `metadata.tagColors`, so exports keep author overrides. */
+  tagColors?: Readonly<Record<string, string>>;
 }
 
 export function ViewerExportButton({
   modelTitle,
   diagram,
+  tagColors,
 }: ViewerExportButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
@@ -83,11 +86,11 @@ export function ViewerExportButton({
       setOpen(false);
       const filename = `${fileStem(modelTitle)}-${diagram.level}.${kind}`;
       try {
-        const rendered = renderDiagramSvg(
-          diagram,
-          modelTitle,
-          resolveExportTheme(),
-        );
+        const theme = resolveExportTheme();
+        const rendered = renderDiagramSvg(diagram, modelTitle, theme, {
+          tagColors,
+          paintForTagColor: (tagColor) => resolveTagPaint(tagColor, theme),
+        });
         if (kind === "svg") downloadSvg(rendered, filename);
         else await downloadPng(rendered, filename);
         setAnnouncement(`Exported ${filename}.`);
@@ -96,7 +99,7 @@ export function ViewerExportButton({
         setAnnouncement(`Export failed: ${detail}`);
       }
     },
-    [diagram, modelTitle],
+    [diagram, modelTitle, tagColors],
   );
 
   const itemClasses =

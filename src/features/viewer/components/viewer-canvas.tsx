@@ -64,6 +64,7 @@ import { childLevelOf, hasChildDiagram, isBoundaryPlaceholder } from "@/types";
 
 import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
+import { nodeColorStyle } from "@/features/editor/lib/node-colors";
 
 import {
   breadcrumbFor,
@@ -892,6 +893,10 @@ function ViewerCanvasInner({
         connectable: false,
         selectable: false,
         focusable: false,
+        // Same colour plumbing as the editor's projection: two custom
+        // properties on the wrapper, inherited by the shape classes.
+        // Author tagColors (frozen in model metadata) beat the type default.
+        style: nodeColorStyle(node, model.file.metadata.tagColors),
         data: {
           node,
           level: diagram.level,
