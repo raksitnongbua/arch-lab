@@ -403,41 +403,42 @@
    interpolates toward the underlying value — so the sheets land exactly on
    whatever offset the markup asks for, with no duplicated numbers here. */
 /**
- * Frame focus trace: a gradient band running once around a frame's outline
- * when its caption is clicked. Confirms WHICH frame the camera just flew to —
- * after a zoom the viewport has changed under you, and the border is the only
- * thing that still identifies the group.
+ * Frame focus march: the frame's OWN dashed border walking, while that frame
+ * is the focused one.
  *
- * `pathLength="100"` normalises the rect's perimeter, so one band is a
- * percentage of the outline whatever the frame's size — the same trick the
- * edge comets use, and the reason a small frame and a huge one trace at the
- * same visual speed.
+ * Animating the real border rather than overlaying a second ring — an earlier
+ * pass drew a gradient band on top, which meant two outlines on the same
+ * pixels. The border is already dashed, so offsetting it is both the smaller
+ * change and the more honest one, and it matches the dashes the SVG exporter
+ * writes.
  *
- * Two iterations, not infinite. A permanently marching border would be a
- * distraction on a document you are trying to read, and the repo already
- * rejected default-on looping motion for that reason; this is a flourish that
- * answers "which one?" and then gets out of the way.
+ * It LOOPS, unlike the one-shot entrance elsewhere on this canvas, and the
+ * distinction is deliberate: this is a selection indicator the reader asked
+ * for and can dismiss, not ambient decoration that runs whether you want it
+ * or not. A focused frame stays legible as the focused frame for as long as
+ * it is focused.
+ *
+ * `pathLength="100"` normalises the perimeter, so a small frame and a large
+ * one march at the same visual speed — the trick the edge comets already use.
  */
-@keyframes af-frame-trace {
+@keyframes af-frame-march {
   from {
     stroke-dashoffset: 0;
   }
   to {
-    stroke-dashoffset: -100;
+    stroke-dashoffset: -8;
   }
 }
 
-.af-frame-trace {
-  stroke-dasharray: 22 78;
-  animation: af-frame-trace 1100ms linear 2;
+.af-frame-march {
+  animation: af-frame-march 700ms linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .af-frame-trace {
+  .af-frame-march {
+    /* Only the walking stops. The dashes ARE the border, so they stay, and
+       the focused frame keeps its heavier stroke to stay distinguishable. */
     animation: none;
-    /* No dashes either: a static gap ring would read as a broken border. */
-    stroke-dasharray: none;
-    opacity: 0;
   }
 }
 

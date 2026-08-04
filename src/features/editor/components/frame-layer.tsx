@@ -21,7 +21,7 @@
  * than as two overlapping washes.
  */
 
-import { useCallback, useId, useState } from "react";
+import { useCallback, useState } from "react";
 import { useReactFlow, ViewportPortal } from "@xyflow/react";
 
 import { placeFrames, FRAME_LABEL_BAND } from "../lib/frame-layout";
@@ -40,10 +40,9 @@ const FOCUS_DURATION = 320;
 export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
   const { fitBounds } = useReactFlow();
   const frames = placeFrames(diagram);
-  // Which frame is mid-trace. Cleared by the animation's own end event rather
-  // than a timer, so the two can never disagree about when it finished.
-  const [tracingId, setTracingId] = useState<string | null>(null);
-  const gradientId = useId();
+  // The focused frame. Persists — this is a selection indicator the reader
+  // asked for, so it stays until they point somewhere else.
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const focusFrame = useCallback(
     (rect: { x: number; y: number; width: number; height: number }) => {
@@ -61,14 +60,10 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
     [fitBounds],
   );
 
-  const traceFrame = useCallback((id: string) => {
-    // Restart even when the same caption is clicked twice: dropping to null
-    // first unmounts the animated rect, so React remounts it and the
-    // animation replays instead of silently doing nothing.
-    setTracingId(null);
-    requestAnimationFrame(() => {
-      setTracingId(id);
-    });
+  // Clicking the focused frame's own caption clears it, so the indicator can
+  // be dismissed without hunting for somewhere neutral to click.
+  const toggleFocus = useCallback((id: string) => {
+    setFocusedId((cur) => (cur === id ? null : id));
   }, []);
 
   if (frames.length === 0) return <></>;
@@ -84,54 +79,45 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
           {frames.map((frame) => (
             <div
               key={frame.id}
-              className="absolute rounded-xl border border-dashed border-node-border/70 bg-node-border/[0.06]"
+              className="absolute"
               style={{
                 transform: `translate(${frame.x}px, ${frame.y}px)`,
                 width: frame.width,
                 height: frame.height,
               }}
             >
-              {tracingId === frame.id ? (
-                <svg
-                  className="absolute inset-0 overflow-visible"
-                  width={frame.width}
-                  height={frame.height}
-                  aria-hidden="true"
-                >
-                  <defs>
-                    <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-                      <stop
-                        offset="0%"
-                        stopColor="var(--primary)"
-                        stopOpacity="0"
-                      />
-                      <stop offset="50%" stopColor="var(--primary)" />
-                      <stop
-                        offset="100%"
-                        stopColor="var(--accent)"
-                        stopOpacity="0"
-                      />
-                    </linearGradient>
-                  </defs>
-                  <rect
-                    className="af-frame-trace"
-                    // Inset by half the stroke so the band sits ON the border
-                    // rather than straddling outside it.
-                    x={1}
-                    y={1}
-                    width={Math.max(0, frame.width - 2)}
-                    height={Math.max(0, frame.height - 2)}
-                    rx={11}
-                    fill="none"
-                    stroke={`url(#${gradientId})`}
-                    strokeWidth={2}
-                    pathLength={100}
-                    onAnimationEnd={() => {
-                      setTracingId((cur) => (cur === frame.id ? null : cur));
-                    }}
-                  />
-                </svg>
-              ) : null}
+              {/*
+               * The border is SVG, not a CSS `border-dashed`, because CSS
+               * cannot offset a border's dashes — and offsetting them is the
+               * whole effect. It also means screen and export draw the outline
+               * the same way.
+               */}
+              <svg
+                className="absolute inset-0"
+                width={frame.width}
+                height={frame.height}
+                aria-hidden="true"
+              >
+                <rect
+                  className={
+                    focusedId === frame.id ? "af-frame-march" : undefined
+                  }
+                  // Inset by half the stroke so the outline sits inside the
+                  // measured rectangle instead of straddling its edge.
+                  x={1}
+                  y={1}
+                  width={Math.max(0, frame.width - 2)}
+                  height={Math.max(0, frame.height - 2)}
+                  rx={11}
+                  fill="var(--node-border)"
+                  fillOpacity={0.06}
+                  stroke="var(--node-border)"
+                  strokeOpacity={focusedId === frame.id ? 1 : 0.7}
+                  strokeWidth={focusedId === frame.id ? 2 : 1}
+                  strokeDasharray="6 4"
+                  pathLength={100}
+                />
+              </svg>
             </div>
           ))}
         </div>
@@ -164,10 +150,13 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
               type="button"
               onClick={() => {
                 focusFrame(frame);
-                traceFrame(frame.id);
+                toggleFocus(frame.id);
               }}
               // The name says what the control DOES; the frame's own label is
               // already inside it.
+              // A toggle now, so it has to say so: the caption both zooms and
+              // marks the frame as focused, and pressing it again clears that.
+              aria-pressed={focusedId === frame.id}
               aria-label={`Zoom to the ${frame.label} frame`}
               // `bg-canvas` punches a gap through the dashed border and any
               // edge behind it, the way a boundary caption is normally drawn.
