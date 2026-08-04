@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/app/providers";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
+import { publicOrigin } from "@/features/mcp/lib/origin";
 import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 
 import "./globals.css";
@@ -20,15 +21,56 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+const DEFAULT_TITLE = EDITOR_ENABLED
+  ? `${APP_NAME} — C4 architecture editor`
+  : `${APP_NAME} — C4 architecture diagrams`;
+
 export const metadata: Metadata = {
+  // The same resolution order share links use (env override → Vercel
+  // production host → the committed fallback), so pointing the app at a
+  // custom domain fixes canonicals, OG urls, and the sitemap in one place
+  // instead of leaving a second constant to go stale.
+  metadataBase: new URL(publicOrigin()),
   title: {
-    default: EDITOR_ENABLED
-      ? `${APP_NAME} — C4 architecture editor`
-      : `${APP_NAME} — C4 architecture diagrams`,
+    default: DEFAULT_TITLE,
     template: `%s · ${APP_NAME}`,
   },
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
+  // The phrases people actually type — including the spaced "arch lab",
+  // which the hyphenated name alone would never match.
+  keywords: [
+    "arch lab",
+    "arch-lab",
+    "C4 model",
+    "C4 diagram",
+    "C4 architecture diagram",
+    "architecture diagram as code",
+    "diagram as code",
+    "software architecture diagram",
+    ".alab",
+    "C4 editor",
+    "local-first",
+  ],
+  authors: [{ name: APP_NAME }],
+  creator: APP_NAME,
+  category: "developer tools",
+  // og:image and twitter:image come from the file convention
+  // (`opengraph-image.tsx` beside this layout), so neither block names an
+  // image here — only the card shape and the text that travels with it.
+  openGraph: {
+    type: "website",
+    siteName: APP_NAME,
+    title: DEFAULT_TITLE,
+    description: APP_DESCRIPTION,
+    url: "/",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_TITLE,
+    description: APP_DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {

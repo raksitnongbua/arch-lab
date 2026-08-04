@@ -22,8 +22,14 @@ export async function generateMetadata({
   const result = loadViewerModel(modelId);
   if (result.status !== "ok") return { title: "View mode" };
   return {
-    title: `${result.model.title} — view mode`,
-    description: result.model.description,
+    title: `${result.model.title} — example C4 model`,
+    // A registered model can have an empty description; falling back keeps
+    // the meta tag saying something true rather than shipping it blank.
+    description:
+      result.model.description !== ""
+        ? result.model.description
+        : `${result.model.title} — a complete example C4 architecture model, explorable from Context down to Code in the arch-lab viewer.`,
+    alternates: { canonical: `/view/${modelId}` },
   };
 }
 

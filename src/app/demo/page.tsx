@@ -13,9 +13,10 @@ import { listViewerModels } from "@/features/viewer";
 import { C4_LEVEL_META, EDITOR_ENABLED } from "@/lib/constants";
 
 export const metadata: Metadata = {
-  title: "Live demo",
+  title: "Live demo — explore example C4 models",
   description:
-    "Read-only example models. Open one in view mode — click into any layer, from Context down to Code, and zoom back out.",
+    "Read-only example C4 models. Open one in view mode — click into any layer, from Context down to Code, and zoom back out.",
+  alternates: { canonical: "/demo" },
 };
 
 /**
@@ -144,10 +145,7 @@ export default function DemoPage(): React.JSX.Element {
         Have a model of your own? Paste it —{" "}
         <span className="font-mono text-foreground">.archlab.json</span> or
         Mermaid C4 code — into{" "}
-        <Link
-          href="/view"
-          className="font-medium text-primary hover:underline"
-        >
+        <Link href="/view" className="font-medium text-primary hover:underline">
           view mode
         </Link>{" "}
         to render it right here in the browser.{" "}
