@@ -424,6 +424,36 @@
  * exactly one dash + gap (6 + 4), so the loop is seamless, and a constant
  * pixels-per-second march looks the same on every frame regardless of size.
  */
+/**
+ * Hue cycle for a selected node's comet outline. On the SVG root so the glow,
+ * tail and head bands all shift together — filtering each band separately
+ * would let them drift into different hues and read as three lights instead
+ * of one.
+ *
+ * The canvas's selection stylesheet is what makes the outline visible at all;
+ * this only spins the colour, so an unselected node pays nothing for it beyond
+ * an inert class. Slower than the 1600ms comet on purpose: a hue keeping pace
+ * with the travel cancels the sense of one light moving.
+ */
+@keyframes af-node-hue {
+  from {
+    filter: hue-rotate(0deg);
+  }
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+.viewer-node-outline.af-node-hue {
+  animation: af-node-hue 4200ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer-node-outline.af-node-hue {
+    animation: none;
+  }
+}
+
 @keyframes af-frame-march {
   from {
     stroke-dashoffset: 0;
