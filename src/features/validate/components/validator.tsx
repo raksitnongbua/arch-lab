@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   canEncodeShare,
   encodeShareFragment,
-  MAX_SHARE_URL_LENGTH,
+  MAX_HANDOFF_URL_LENGTH,
 } from "@/features/viewer/share/codec";
 import { cn } from "@/lib/utils";
 
@@ -378,9 +378,10 @@ function IssueRow({ issue }: { issue: CheckIssue }): React.JSX.Element {
  *
  * Encoding needs the platform's CompressionStream, so it happens on the
  * client and the link renders only once the fragment exists. When the
- * browser cannot encode, or the model is large enough that the URL would
- * exceed the codec's honest limit, nothing is rendered: a link that might
- * arrive truncated is worse than no link.
+ * browser cannot encode, or the model exceeds the codec's HANDOFF ceiling,
+ * nothing is rendered. That ceiling — not the share tiers — is the right
+ * test here: this is same-origin navigation the user clicks themselves, so
+ * carrier truncation cannot happen to it; only the runaway guard applies.
  */
 function OpenInViewMode({
   aftText,
@@ -401,7 +402,9 @@ function OpenInViewMode({
     void encodeShareFragment(aftText, null).then((fragment) => {
       if (cancelled) return;
       const target = `/view#${fragment}`;
-      if (`${window.location.origin}${target}`.length <= MAX_SHARE_URL_LENGTH) {
+      if (
+        `${window.location.origin}${target}`.length <= MAX_HANDOFF_URL_LENGTH
+      ) {
         setEncoded({ source: aftText, href: target });
       }
     });

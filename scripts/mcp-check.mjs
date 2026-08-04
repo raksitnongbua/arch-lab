@@ -105,9 +105,8 @@ const { getSyntaxReference, SYNTAX_SECTION_IDS } = await load(
   "src/features/mcp/tools/syntax.ts",
 );
 const { createShareLink } = await load("src/features/mcp/tools/share.ts");
-const { decodeShareFragment } = await load(
-  "src/features/viewer/share/codec.ts",
-);
+const { decodeShareFragment, SHARE_URL_SAFE_LENGTH, MAX_SHARE_URL_LENGTH } =
+  await load("src/features/viewer/share/codec.ts");
 const { MAX_SOURCE_CHARS } = await load("src/features/mcp/lib/limits.ts");
 const { DEFAULT_PUBLIC_ORIGIN, documentedOrigin, requestOrigin } = await load(
   "src/features/mcp/lib/origin.ts",
@@ -662,27 +661,89 @@ check("create_share_link rejects an unknown diagram id", async () => {
   assert.match(text, /no diagram `nope`/);
 });
 
-check("create_share_link refuses a model too big for a URL", async () => {
-  // Many small nodes: valid, and comfortably past the URL ceiling once
-  // compressed.
+/** A valid model whose share URL length scales with `count`. */
+function sizedModel(count, title) {
   const nodes = Array.from(
-    { length: 400 },
+    { length: count },
     (_, index) =>
       `  n${index}:container "Service number ${index} with a deliberately ` +
       `verbose and incompressible-ish name ${index}" [Runtime ${index}]`,
   ).join("\n");
-  const big = `archlab 1.0
-title "Too big to link"
+  return `archlab 1.0
+title "${title}"
 
-@context ctx-root "Too big to link"
+@context ctx-root "${title}"
   shop:system "Shop" >cnt-shop
 
 @container cnt-shop owner=shop
 ${nodes}
 `;
+}
+
+check(
+  "create_share_link hands out a caveat-tier link instead of refusing",
+  async () => {
+    // ~200 verbose nodes encode past the safe length but under the hard
+    // ceiling — the middle tier. The old behaviour refused everything past
+    // 2000, which refused every demo model the app ships; the link must now
+    // be handed out, WITH the plain-text-email caveat.
+    const text = expectOk(
+      await createShareLink(
+        sizedModel(200, "Caveat tier"),
+        "auto",
+        undefined,
+        undefined,
+      ),
+    );
+    const url = text.split("\n").find((line) => line.startsWith("http"));
+    assert.ok(url !== undefined, `no URL in:\n${text}`);
+    assert.ok(
+      url.length > SHARE_URL_SAFE_LENGTH && url.length <= MAX_SHARE_URL_LENGTH,
+      `fixture must land between the tiers, got ${url.length}`,
+    );
+    assert.match(text, /plain-text email/);
+    assert.match(text, /RFC 5322/);
+
+    const decoded = await decodeShareFragment(new URL(url).hash);
+    assert.equal(decoded.status, "ok");
+  },
+);
+
+check("create_share_link refuses past the hard ceiling, usefully", async () => {
+  // ~900 verbose nodes: valid, and comfortably past the hard ceiling once
+  // compressed. The refusal must leave the caller with something actionable
+  // in the SAME response — the canonical `.alab` text inline, and a measured
+  // diagram-scoped link when one fits (here: the small context diagram; the
+  // giant container diagram is the very thing that does not fit).
+  const big = sizedModel(900, "Too big to link");
   const text = expectError(await createShareLink(big, "auto", undefined));
   assert.match(text, /does not fit in a share link/);
-  assert.match(text, /convert_model/);
+
+  // The canonical model text is inline — no convert_model round trip.
+  assert.match(text, /```\narchlab 1\.0/);
+  assert.match(text, /title "Too big to link"/);
+
+  // The scoped offer names the diagram and carries a real, measured URL.
+  assert.match(text, /diagram-scoped link fits/);
+  assert.match(text, /`ctx-root`/);
+  const scopedUrl = text.split("\n").find((line) => line.startsWith("http"));
+  assert.ok(scopedUrl !== undefined, `no scoped URL in:\n${text}`);
+  assert.ok(
+    scopedUrl.length <= MAX_SHARE_URL_LENGTH,
+    "an offered scoped link must itself fit under the ceiling",
+  );
+  const decoded = await decodeShareFragment(new URL(scopedUrl).hash);
+  assert.equal(decoded.status, "ok");
+  assert.match(
+    decoded.aftText,
+    /ctx-root/,
+    "the scoped payload must contain the offered diagram",
+  );
+  assert.doesNotMatch(
+    decoded.aftText,
+    /n899/,
+    "the scoped payload must have dropped the oversized sibling subtree",
+  );
 });
 
 /* ----------------------------------------------------------------------- */

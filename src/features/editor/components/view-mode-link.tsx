@@ -26,7 +26,7 @@ import { buttonClasses } from "@/components/ui/button";
 import {
   canEncodeShare,
   encodeShareFragment,
-  MAX_SHARE_URL_LENGTH,
+  MAX_HANDOFF_URL_LENGTH,
 } from "@/features/viewer/share/codec";
 import { cn } from "@/lib/utils";
 
@@ -67,10 +67,11 @@ export function ViewModeLink(): React.JSX.Element {
       void encodeShareFragment(text, activeDiagramId).then((fragment) => {
         if (cancelled) return;
         const target = `/view#${fragment}`;
-        // The codec's honest limit: a link that might arrive truncated is
-        // worse than one that is plainly unavailable.
+        // The HANDOFF ceiling, not the share tiers: this link is same-origin
+        // navigation the user clicks in their own browser, so the carrier
+        // truncation the share limits guard against cannot happen to it.
         if (
-          `${window.location.origin}${target}`.length > MAX_SHARE_URL_LENGTH
+          `${window.location.origin}${target}`.length > MAX_HANDOFF_URL_LENGTH
         ) {
           setBlocked("too-large");
           return;

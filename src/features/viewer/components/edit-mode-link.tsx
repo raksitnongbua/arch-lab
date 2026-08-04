@@ -18,13 +18,15 @@
  *
  * ---- On the length ceiling ----
  *
- * `MAX_SHARE_URL_LENGTH` (2000) deliberately does NOT apply here. That limit
- * exists because a *shared* link gets pasted through chat apps and mail
- * clients that truncate, and a truncated link fails silently for the
- * recipient. This link is same-origin navigation the user clicks themselves:
- * the fragment never reaches a server, so no server URL limit is in play, and
- * every model this app ships would be refused under 2000 (they encode to
- * 2–5 kB). The ceiling below is only a runaway guard for a pathological model.
+ * The share tiers (`SHARE_URL_SAFE_LENGTH` / `MAX_SHARE_URL_LENGTH`)
+ * deliberately do NOT apply here. Those exist because a *shared* link gets
+ * pasted through chat apps and mail clients that truncate, and a truncated
+ * link fails silently for the recipient. This link is same-origin navigation
+ * the user clicks themselves: the fragment never reaches a server, so no
+ * server URL limit is in play, and no carrier ever touches it. It uses the
+ * codec's `MAX_HANDOFF_URL_LENGTH` — a runaway guard for a pathological
+ * model, shared with every other same-machine hand-off — where this file's
+ * reasoning originated before the constant moved to the codec.
  */
 
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -35,14 +37,11 @@ import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { archLabFileFrom, type ViewerModel } from "../lib/model";
-import { canEncodeShare, encodeShareFragment } from "../share/codec";
-
-/**
- * Refuse past this. Browsers handle fragments far longer, so this is not a
- * compatibility limit — it is the point where a model plainly belongs in a
- * file rather than a URL.
- */
-const MAX_HANDOFF_URL_LENGTH = 64_000;
+import {
+  canEncodeShare,
+  encodeShareFragment,
+  MAX_HANDOFF_URL_LENGTH,
+} from "../share/codec";
 
 /* `canEncodeShare` is a client-only capability check, constant for the page's
  * life. Read through useSyncExternalStore rather than an effect: false on the

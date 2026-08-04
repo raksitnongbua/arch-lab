@@ -303,9 +303,10 @@ export function ViewerPlayground(): React.JSX.Element {
         );
         if (cancelled) return;
         const url = `${window.location.origin}${window.location.pathname}#${fragment}`;
-        // Too long to be a working link: clear the fragment rather than leave a
-        // stale one, so the address bar never claims to be shareable when the
-        // Share panel would refuse to hand it over.
+        // Past the share HARD ceiling — not the handoff guard — because the
+        // address bar's whole point here is to be copyable as a link: it must
+        // track what the Share panel would hand over, and clear rather than
+        // leave a stale fragment when the panel would refuse.
         window.history.replaceState(
           null,
           "",

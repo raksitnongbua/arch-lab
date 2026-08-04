@@ -18,7 +18,7 @@ import { buttonClasses } from "@/components/ui/button";
 import {
   canEncodeShare,
   encodeShareFragment,
-  MAX_SHARE_URL_LENGTH,
+  MAX_HANDOFF_URL_LENGTH,
 } from "@/features/viewer/share/codec";
 
 export function CodeBlock({
@@ -116,8 +116,9 @@ function CopyButton({
  * Encodes the snippet with the real share codec on the client (it needs the
  * platform's CompressionStream). Renders nothing until the fragment is ready,
  * and nothing at all when the browser cannot encode or the resulting URL
- * would exceed the codec's honest length limit — a link that might arrive
- * truncated is worse than no link.
+ * would exceed the codec's HANDOFF ceiling — this is same-origin navigation
+ * the reader clicks themselves, so the share tiers' carrier-truncation worry
+ * does not apply; only the runaway guard does.
  */
 function TryItLink({
   code,
@@ -134,7 +135,9 @@ function TryItLink({
     void encodeShareFragment(code, null).then((fragment) => {
       if (cancelled) return;
       const target = `/view#${fragment}`;
-      if (`${window.location.origin}${target}`.length <= MAX_SHARE_URL_LENGTH) {
+      if (
+        `${window.location.origin}${target}`.length <= MAX_HANDOFF_URL_LENGTH
+      ) {
         setHref(target);
       }
     });
