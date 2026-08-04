@@ -21,7 +21,7 @@
  * than as two overlapping washes.
  */
 
-import { useCallback } from "react";
+import { useCallback, useId, useState } from "react";
 import { useReactFlow, ViewportPortal } from "@xyflow/react";
 
 import { placeFrames, FRAME_LABEL_BAND } from "../lib/frame-layout";
@@ -40,6 +40,10 @@ const FOCUS_DURATION = 320;
 export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
   const { fitBounds } = useReactFlow();
   const frames = placeFrames(diagram);
+  // Which frame is mid-trace. Cleared by the animation's own end event rather
+  // than a timer, so the two can never disagree about when it finished.
+  const [tracingId, setTracingId] = useState<string | null>(null);
+  const gradientId = useId();
 
   const focusFrame = useCallback(
     (rect: { x: number; y: number; width: number; height: number }) => {
@@ -56,6 +60,16 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
     },
     [fitBounds],
   );
+
+  const traceFrame = useCallback((id: string) => {
+    // Restart even when the same caption is clicked twice: dropping to null
+    // first unmounts the animated rect, so React remounts it and the
+    // animation replays instead of silently doing nothing.
+    setTracingId(null);
+    requestAnimationFrame(() => {
+      setTracingId(id);
+    });
+  }, []);
 
   if (frames.length === 0) return <></>;
 
@@ -76,7 +90,49 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
                 width: frame.width,
                 height: frame.height,
               }}
-            />
+            >
+              {tracingId === frame.id ? (
+                <svg
+                  className="absolute inset-0 overflow-visible"
+                  width={frame.width}
+                  height={frame.height}
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+                      <stop
+                        offset="0%"
+                        stopColor="var(--primary)"
+                        stopOpacity="0"
+                      />
+                      <stop offset="50%" stopColor="var(--primary)" />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--accent)"
+                        stopOpacity="0"
+                      />
+                    </linearGradient>
+                  </defs>
+                  <rect
+                    className="af-frame-trace"
+                    // Inset by half the stroke so the band sits ON the border
+                    // rather than straddling outside it.
+                    x={1}
+                    y={1}
+                    width={Math.max(0, frame.width - 2)}
+                    height={Math.max(0, frame.height - 2)}
+                    rx={11}
+                    fill="none"
+                    stroke={`url(#${gradientId})`}
+                    strokeWidth={2}
+                    pathLength={100}
+                    onAnimationEnd={() => {
+                      setTracingId((cur) => (cur === frame.id ? null : cur));
+                    }}
+                  />
+                </svg>
+              ) : null}
+            </div>
           ))}
         </div>
       </ViewportPortal>
@@ -108,6 +164,7 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
               type="button"
               onClick={() => {
                 focusFrame(frame);
+                traceFrame(frame.id);
               }}
               // The name says what the control DOES; the frame's own label is
               // already inside it.
