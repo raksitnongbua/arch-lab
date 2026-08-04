@@ -114,8 +114,13 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
                   stroke="var(--node-border)"
                   strokeOpacity={focusedId === frame.id ? 1 : 0.7}
                   strokeWidth={focusedId === frame.id ? 2 : 1}
+                  // Absolute units, NOT pathLength-normalised: with
+                  // pathLength=100 a dash is a PERCENTAGE of the perimeter, so
+                  // the outer frame drew ~200px dashes while a small one drew
+                  // tiny ones. Real pixels keep every frame's dash identical,
+                  // and a constant px offset per second means they all march
+                  // at the same speed too.
                   strokeDasharray="6 4"
-                  pathLength={100}
                 />
               </svg>
             </div>

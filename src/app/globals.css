@@ -418,20 +418,23 @@
  * or not. A focused frame stays legible as the focused frame for as long as
  * it is focused.
  *
- * `pathLength="100"` normalises the perimeter, so a small frame and a large
- * one march at the same visual speed — the trick the edge comets already use.
+ * The dash pattern is in absolute pixels, not pathLength-normalised units: a
+ * normalised dash is a PERCENTAGE of the perimeter, which drew ~200px dashes
+ * on the outermost frame and tiny ones on a small child. One offset cycle is
+ * exactly one dash + gap (6 + 4), so the loop is seamless, and a constant
+ * pixels-per-second march looks the same on every frame regardless of size.
  */
 @keyframes af-frame-march {
   from {
     stroke-dashoffset: 0;
   }
   to {
-    stroke-dashoffset: -8;
+    stroke-dashoffset: -10;
   }
 }
 
 .af-frame-march {
-  animation: af-frame-march 700ms linear infinite;
+  animation: af-frame-march 600ms linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
