@@ -32,6 +32,10 @@ import type { C4Level, C4Node, C4NodeType } from "@/types";
 import { RefBadge } from "@/features/editor/components/nodes/ref-badge";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 import {
+  colorRoleForNode,
+  EXTERNAL_DIM_CLASS,
+} from "@/features/editor/lib/node-colors";
+import {
   NodeShapeLayer,
   SHAPE_WRAPPER_CLASSES,
   hasSvgSilhouette,
@@ -187,7 +191,11 @@ function ViewerNodeInner({
     node.type === "queue" && "px-8",
     svgSilhouette && "rounded-lg",
     isPlaceholder && "opacity-60",
-    !isPlaceholder && node.type === "externalSystem" && "opacity-90",
+    // External elements (by type OR by the Mermaid-residue `external` tag)
+    // recede — the shared constant, not a per-renderer literal.
+    !isPlaceholder &&
+      colorRoleForNode(node) === "external" &&
+      EXTERNAL_DIM_CLASS,
   );
 
   const content = (
@@ -215,7 +223,11 @@ function ViewerNodeInner({
       <NodeShapeLayer type={node.type} />
       <div className="relative z-[1] flex w-full min-w-0 flex-col items-center gap-px overflow-hidden">
         <div className="flex w-full min-w-0 items-center justify-center gap-1.5">
-          <Icon aria-hidden="true" className="size-4 shrink-0" />
+          {/* Accent-tinted icon — same rule and rationale as node-chrome. */}
+          <Icon
+            aria-hidden="true"
+            className="size-4 shrink-0 text-(--node-stroke)"
+          />
           <span
             className={cn(
               "line-clamp-3 min-w-0 text-sm leading-tight font-medium break-words",
@@ -225,11 +237,13 @@ function ViewerNodeInner({
             {node.name}
           </span>
         </div>
-        <span className="w-full truncate text-[10px] leading-tight text-muted-foreground">
+        {/* text-node-meta on the coloured fills — same rule and measured
+            ratios as node-chrome (which also explains the dropped /80). */}
+        <span className="w-full truncate text-[10px] leading-tight text-node-meta">
           [{meta}]
         </span>
         {node.description !== undefined && node.description !== "" ? (
-          <span className="line-clamp-1 w-full text-[10px] leading-tight break-words text-muted-foreground/80">
+          <span className="line-clamp-1 w-full text-[10px] leading-tight break-words text-node-meta">
             {node.description}
           </span>
         ) : null}
@@ -299,8 +313,12 @@ function ViewerNodeInner({
     (drill !== null ? ". Double-click to zoom in" : "");
 
   return (
-    // The lift lives on this wrapper so body and chip travel together.
-    <div className="group relative size-full transition-transform duration-150 will-change-transform focus-within:-translate-y-0.5 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:focus-within:translate-y-0 motion-reduce:hover:translate-y-0">
+    // The lift lives on this wrapper so body and chip travel together; the
+    // one-shot entrance (viewer-node-enter, choreographed by the canvas
+    // stylesheet with a per-node --viewer-enter-delay) animates the same
+    // element — inner wrapper, never the React Flow wrapper, whose
+    // transform IS the node's position.
+    <div className="viewer-node-enter group relative size-full transition-transform duration-150 will-change-transform focus-within:-translate-y-0.5 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:focus-within:translate-y-0 motion-reduce:hover:translate-y-0">
       <button
         type="button"
         aria-label={detailLabel}
@@ -308,11 +326,21 @@ function ViewerNodeInner({
         className={cn(
           frameClasses,
           "cursor-pointer",
-          !svgSilhouette &&
-            "group-hover:shadow-lg group-hover:shadow-primary/10",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas focus-visible:outline-none",
         )}
       >
+        {/* Role-tinted glow under the hover/focus lift — replaces the old
+            generic shadow-primary/10, so a database glows teal and a person
+            violet (`.af-node-glow`, globals.css, has the full rationale
+            including why only opacity transitions). Skipped for the SVG
+            silhouettes exactly like shadow-sm — a rectangular glow would
+            draw the box the cylinder/pipe shapes exist to avoid. */}
+        {!svgSilhouette ? (
+          <span
+            aria-hidden="true"
+            className="af-node-glow pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
+          />
+        ) : null}
         {content}
       </button>
       {drill !== null ? (

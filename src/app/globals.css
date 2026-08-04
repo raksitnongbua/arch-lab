@@ -66,8 +66,66 @@
   --node-foreground: oklch(0.21 0.02 265);
   /* AF-E6-S1: ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
   --node-border: oklch(0.62 0.012 265);
+  /* Secondary text ON node fills (the [Type] line + description). Split off
+     --muted-foreground because the vivid fills below sit ~ΔL 0.04 deeper
+     than the old near-white cards; the shared muted tone slid under 4.5:1
+     there, and darkening --muted-foreground app-wide to fix a node problem
+     would have punished every panel. Measured per fill below. */
+  --node-meta: oklch(0.45 0.025 265);
+
+  /* Per-role node colours (see editor/lib/node-colors.ts for the type→role
+     table and the co-occurrence reasoning). Five roles, four genuinely
+     coloured hue families anchored to the house palette — person on the
+     primary violet, internal on a confident blue, database on the accent
+     teal, queue on its green neighbour (data-at-rest / data-in-flight, one
+     family) — plus a receding near-neutral grey for external, the only
+     colour that MEANS something ("not ours") and therefore the only one
+     kept deliberately quiet. Fills carry real chroma at L≈0.93; text on
+     them switches to --node-meta above for the secondary lines.
+     Ratios below are computed (oklch → sRGB → WCAG relative luminance) by
+     the audit script kept with the palette job, and re-annotated whenever a
+     value moves: name is --node-foreground vs fill, meta is --node-meta vs
+     fill, border is each role's border vs ITS OWN fill; the wash-top triple
+     repeats them against the surface wash's DEEPEST stop (14% border folded
+     into the fill — see .af-node-wash; the shallower 7% grounding stop at
+     the bottom edge is measured by the same script and sits between the
+     flat-fill and wash-top rows on every pair, so wash-top stays the worst
+     case). Thresholds: text ≥4.5:1, border and the border-tinted icon
+     ≥3:1. */
+  /* name 14.36:1, meta 6.05:1, border 4.56:1 (wash-top: 11.95 / 5.04 / 3.79) */
+  --node-person: oklch(0.93 0.036 295);
+  --node-person-border: oklch(0.53 0.16 295);
+  /* name 14.44:1, meta 6.09:1, border 4.46:1 (wash-top: 12.10 / 5.10 / 3.74) */
+  --node-internal: oklch(0.93 0.034 250);
+  --node-internal-border: oklch(0.52 0.13 250);
+  /* name 15.57:1, meta 6.56:1, border 3.20:1 (no wash — external stays matte) */
+  --node-external: oklch(0.955 0.004 265);
+  --node-external-border: oklch(0.62 0.012 265);
+  /* name 14.72:1, meta 6.21:1, border 4.76:1 (wash-top: 12.24 / 5.16 / 3.96) */
+  --node-database: oklch(0.93 0.055 195);
+  --node-database-border: oklch(0.5 0.084 195);
+  /* name 14.98:1, meta 6.31:1, border 4.43:1 (wash-top: 12.54 / 5.29 / 3.71) */
+  --node-queue: oklch(0.935 0.055 150);
+  --node-queue-border: oklch(0.52 0.11 150);
+
+  /* tagColors fills are REBUILT from the author's colour rather than mixed:
+     oklch(from <tag> var(--tag-fill-l) min(c, var(--tag-fill-c)) h) — the
+     author's hue at OUR lightness (node-colors.ts: tagFillCss has the full
+     rationale). These two pins are what guarantee a tag fill lands on the
+     same measured lightness band as the role fills above, whatever hex the
+     author typed. */
+  --tag-fill-l: 0.93;
+  --tag-fill-c: 0.055;
+
   --edge: oklch(0.6 0.02 265);
   --selection: oklch(0.58 0.2 280 / 0.18);
+
+  /* The two properties node shapes actually paint with. Each node overrides
+     them inline (node-colors.ts: role token, or the author's tagColors hex);
+     these root defaults only cover node chrome rendered outside a canvas
+     node — and keep such a stray exactly the colour every node used to be. */
+  --node-fill: var(--node);
+  --node-stroke: var(--node-border);
 }
 
 /* --- Theme: dark (the intentional default) ------------------------------- */
@@ -112,6 +170,34 @@
   --node-foreground: oklch(0.96 0.006 275);
   /* AF-E6-S1: ≥3:1 against --node (measured 3.61:1; was L 0.33 at 1.43:1). */
   --node-border: oklch(0.55 0.024 275);
+  /* Secondary text on node fills (light block has the design notes). */
+  --node-meta: oklch(0.79 0.02 275);
+
+  /* Dark counterparts of the per-role node colours (light block has the
+     design notes). Fills carry real chroma at L≈0.30; borders brighten to
+     L≈0.66 so each card reads as a lit, coloured object on the dark canvas.
+     Ratios (audit script): name is --node-foreground vs fill, meta is
+     --node-meta vs fill, border vs its own fill. */
+  /* name 11.93:1, meta 6.95:1, border 4.46:1 (wash-top: 9.82 / 5.72 / 3.67) */
+  --node-person: oklch(0.31 0.07 295);
+  --node-person-border: oklch(0.68 0.14 295);
+  /* name 11.82:1, meta 6.88:1, border 4.48:1 (wash-top: 9.78 / 5.70 / 3.71) */
+  --node-internal: oklch(0.305 0.06 250);
+  --node-internal-border: oklch(0.67 0.12 250);
+  /* name 14.80:1, meta 8.62:1, border 3.44:1 (no wash — external stays matte) */
+  --node-external: oklch(0.235 0.012 265);
+  --node-external-border: oklch(0.55 0.024 275);
+  /* name 11.78:1, meta 6.86:1, border 4.50:1 (wash-top: 9.73 / 5.67 / 3.72) */
+  --node-database: oklch(0.3 0.055 195);
+  --node-database-border: oklch(0.66 0.11 195);
+  /* name 11.59:1, meta 6.75:1, border 4.57:1 (wash-top: 9.53 / 5.55 / 3.76) */
+  --node-queue: oklch(0.305 0.055 150);
+  --node-queue-border: oklch(0.67 0.11 150);
+
+  /* Dark pins for the rebuilt tagColors fills (light block explains). */
+  --tag-fill-l: 0.305;
+  --tag-fill-c: 0.06;
+
   --edge: oklch(0.62 0.02 275);
   --selection: oklch(0.68 0.19 285 / 0.24);
 }
@@ -176,9 +262,14 @@
 
   --color-canvas: var(--canvas);
   --color-canvas-grid: var(--canvas-grid);
+  /* The per-role node tokens (--node-person …) are deliberately NOT mapped
+     to utilities: nothing may hardcode a role — shapes paint through the
+     --node-fill/--node-stroke indirection (`bg-(--node-fill)`), which is
+     what lets an author's tagColors hex slot in with no extra classes. */
   --color-node: var(--node);
   --color-node-foreground: var(--node-foreground);
   --color-node-border: var(--node-border);
+  --color-node-meta: var(--node-meta);
   --color-edge: var(--edge);
   --color-selection: var(--selection);
 
@@ -442,6 +533,78 @@
     animation: none;
     opacity: 0;
   }
+}
+
+/* ---- node surface wash (editor + viewer) ----------------------------------
+ * The polish layer over the flat role fills: a soft top-light gradient that
+ * folds the node's own border colour into its fill, deepest at the top edge
+ * and returning faintly at the bottom. Because it is built from the SAME two
+ * custom properties the shapes already paint with (--node-stroke over
+ * --node-fill), it needs no per-role rules and follows tagColors overrides
+ * for free.
+ *
+ * Three zones rather than the original two stops: 14% stroke at the very
+ * top (the lit edge — the card reads as catching light from above in both
+ * themes, because the stroke is the saturated pole of each role's pair),
+ * the flat fill through the middle band where the name and meta text sit,
+ * and a shallow 7% fold at the bottom edge that grounds the card so the
+ * deeper top no longer makes it look like a sticker peeling upward — the
+ * first pass tried top-only at 14% and got exactly that. The percentages
+ * are deliberate: the audit script measures text and border contrast
+ * against BOTH gradient extremes as well as the flat fill (14% is the
+ * worst case; every pair passes with the ratios annotated on the tokens
+ * above), and pushing the top past ~16% takes the light-theme queue border
+ * under 3.5:1 with no visible gain.
+ *
+ * Box-type nodes take `.af-node-wash` as a background-image over their
+ * bg-(--node-fill) backstop. The SVG silhouettes (cylinder, pipe) get the
+ * same stops from a per-instance <linearGradient> in node-shapes.tsx —
+ * CSS backgrounds cannot follow a path, and a shared gradient id would
+ * repaint the wrong node. `.af-node-wash-fill` is the matching paint for
+ * small SVG details that must sit ON the washed area (the component glyph's
+ * tab rects, which punch through strokes near the top of the card).
+ * The exporter (viewer/export/render-svg.ts) mirrors the same four stops.
+ * External cards take NO wash anywhere — matte is their meaning. */
+
+.af-node-wash {
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--node-stroke) 14%, var(--node-fill)),
+    var(--node-fill) 55%,
+    var(--node-fill) 82%,
+    color-mix(in oklab, var(--node-stroke) 7%, var(--node-fill))
+  );
+}
+
+.af-node-wash-fill {
+  fill: color-mix(in oklab, var(--node-stroke) 14%, var(--node-fill));
+}
+
+/* ---- node hover/focus glow (editor + viewer) -------------------------------
+ * The role-tinted answer to the generic primary-tinted hover shadow: an
+ * always-mounted overlay whose box-shadow is derived from the node's OWN
+ * accent (--node-stroke), so a database glows teal, a person violet — and an
+ * external card, whose stroke is deliberately near-neutral, glows a quiet
+ * grey for free: the affordance is uniform, the restraint is semantic.
+ *
+ * The glow lives on its own span and only OPACITY transitions (lit by
+ * group-hover/group-focus-within in the node components). Rejected
+ * alternative: transitioning box-shadow on the card itself — a box-shadow
+ * transition repaints on every frame, while an opacity fade on a
+ * pre-painted shadow stays on the compositor; with dozens of nodes on a
+ * React Flow canvas that difference is the budget. Not applied to the SVG
+ * silhouettes (cylinder, pipe) for the same reason they skip shadow-sm: a
+ * rectangular glow around a non-rectangular silhouette draws the box the
+ * shape layer exists to avoid.
+ *
+ * No reduced-motion rule needed: this is a hover STATE, not an animation —
+ * the global backstop collapses the fade to instant and the information
+ * (which node is hovered) survives untouched. */
+
+.af-node-glow {
+  box-shadow:
+    0 1px 3px 0 color-mix(in oklab, var(--node-stroke) 22%, transparent),
+    0 14px 30px -10px color-mix(in oklab, var(--node-stroke) 45%, transparent);
 }
 
 /* ---- canvas stacking order (editor + viewer) ------------------------------

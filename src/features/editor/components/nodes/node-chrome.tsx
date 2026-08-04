@@ -9,8 +9,9 @@
  * Corner budget — each marker owns one corner, so they never overlap:
  * top-left unknown-icon dot, top-right child badge, bottom-left ref chip.
  *
- * Colours are exclusively semantic tokens: `--node`, `--node-foreground`,
- * `--node-border`, plus the shadcn set. Zero colour literals.
+ * Colours are exclusively semantic tokens: the per-node `--node-fill` /
+ * `--node-stroke` pair (set by `lib/node-colors.ts` on the flow-node
+ * wrapper), `--node-foreground`, plus the shadcn set. Zero colour literals.
  */
 
 import { Handle, Position } from "@xyflow/react";
@@ -20,6 +21,7 @@ import type { C4NodeType } from "@/types";
 
 import { goToOriginal } from "../../lib/goto-original";
 import { resolveIcon } from "../../lib/icons/registry";
+import { colorRoleForNode, EXTERNAL_DIM_CLASS } from "../../lib/node-colors";
 import { ChildBadge } from "./child-badge";
 import type { C4NodeData } from "./c4-node";
 import { RelateGrip } from "./relate-grip";
@@ -99,16 +101,32 @@ export function NodeChrome({
         node.type === "queue" && "px-8",
         svgSilhouette && "rounded-lg",
         // Drag ghost at 60% opacity (AF-E6-S2); otherwise the static
-        // placeholder / external-system treatments.
+        // placeholder / external-element treatments. External is decided by
+        // COLOUR ROLE (type or the Mermaid-residue `external` tag) through
+        // the shared constant — this used to be an `externalSystem` literal
+        // duplicated here and in viewer-node.tsx.
         dragging
           ? "opacity-60 shadow-lg"
           : data.isPlaceholder
             ? "opacity-60"
-            : node.type === "externalSystem" && "opacity-90",
+            : colorRoleForNode(node) === "external" && EXTERNAL_DIM_CLASS,
         entering && "af-node-enter",
       )}
     >
       <NodeShapeLayer type={node.type} />
+
+      {/* Role-tinted hover glow — same `.af-node-glow` (globals.css) as the
+          viewer's node, so the two canvases keep one hover language. Rides
+          UNDER the existing shadow-sm→shadow-md elevation step rather than
+          replacing it: the neutral shadow says "this lifts", the tinted
+          glow says which role is lifting. Opacity-only; skipped for SVG
+          silhouettes exactly like the box shadows above. */}
+      {!svgSilhouette ? (
+        <span
+          aria-hidden="true"
+          className="af-node-glow pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
+        />
+      ) : null}
 
       {/* Selection outline: always mounted so it can fade in AND out over
           `--motion-selection` (AF-E6-S2). Sits 4px outside the node bounds,
@@ -123,7 +141,12 @@ export function NodeChrome({
 
       <div className="relative z-[1] flex w-full min-w-0 flex-col items-center gap-px overflow-hidden">
         <div className="flex w-full min-w-0 items-center justify-center gap-1.5">
-          <Icon className="size-4 shrink-0" />
+          {/* The icon takes the node's accent (--node-stroke): the border
+              colour on 16px of artwork is what makes each role read as a
+              designed card rather than a tinted rectangle — and it follows
+              tagColors / external greying for free. Contrast is the same
+              measured border-vs-fill pair (≥3:1, WCAG 1.4.11). */}
+          <Icon className="size-4 shrink-0 text-(--node-stroke)" />
           {data.isEditingLabel ? (
             <InlineLabel
               value={node.name}
@@ -141,11 +164,16 @@ export function NodeChrome({
             </span>
           )}
         </div>
-        <span className="w-full truncate text-[10px] leading-tight text-muted-foreground">
+        {/* text-node-meta, not text-muted-foreground: the meta/description
+            lines sit ON the coloured fills, and the muted token is only
+            measured against panel surfaces. Description drops its old /80
+            alpha for the same reason — blending 20% of the fill back into
+            the ink took the pair under 4.5:1 on the vivid fills. */}
+        <span className="w-full truncate text-[10px] leading-tight text-node-meta">
           [{meta}]
         </span>
         {node.description !== undefined && node.description !== "" ? (
-          <span className="line-clamp-1 w-full text-[10px] leading-tight break-words text-muted-foreground/80">
+          <span className="line-clamp-1 w-full text-[10px] leading-tight break-words text-node-meta">
             {node.description}
           </span>
         ) : null}

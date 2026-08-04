@@ -19,6 +19,7 @@ import {
 import type { C4EdgeData, C4FlowEdge } from "../components/edges/c4-edge";
 import type { C4FlowNode, C4NodeData } from "../components/nodes/c4-node";
 import { labelBiasByEdgeId } from "../lib/edge-geometry";
+import { nodeColorStyle } from "../lib/node-colors";
 import {
   selectChildCount,
   selectParallelEdgeGroups,
@@ -102,6 +103,11 @@ export function useCanvasNodes(): CanvasProjection {
         // reference land on the same spot with no way to separate them, which
         // is unusable in the one diagram whose whole job is layout.
         draggable: true,
+        // Colour rides the flow-node wrapper as two custom properties
+        // (--node-fill/--node-stroke) that the shape classes inherit — NOT a
+        // C4NodeData field, so the frozen §4.2 contract stays untouched.
+        // Precedence (tagColors > external tag > type) lives in node-colors.
+        style: nodeColorStyle(node, model.metadata.tagColors),
         data,
       };
     });
