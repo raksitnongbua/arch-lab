@@ -5,12 +5,7 @@
     "title": "Atlas Shop",
     "description": "Global event-sourced order shop. Commands append immutable events to a regional event store, Kafka carries the stream, projections build eventually-consistent read models, and MirrorMaker 2 mirrors events between regions. The diagrams show one regional stamp (EU); the US region runs the identical topology.",
     "owner": "orders-platform",
-    "tags": [
-      "commerce",
-      "event-sourcing",
-      "kafka",
-      "multi-region"
-    ],
+    "tags": ["commerce", "event-sourcing", "kafka", "multi-region"],
     "createdAt": "2026-07-28T00:00:00Z",
     "updatedAt": "2026-07-28T00:00:00Z",
     "tagColors": {
@@ -173,9 +168,7 @@
           "technology": "Kafka protocol",
           "direction": "forward",
           "style": "dashed",
-          "tags": [
-            "async"
-          ],
+          "tags": ["async"],
           "realizes": "e-commands-kafka"
         },
         {
@@ -234,10 +227,7 @@
             "width": 208,
             "height": 96
           },
-          "tags": [
-            "regional",
-            "write-side"
-          ],
+          "tags": ["regional", "write-side"],
           "frameId": "write-side"
         },
         {
@@ -290,9 +280,7 @@
             "width": 240,
             "height": 96
           },
-          "tags": [
-            "regional"
-          ],
+          "tags": ["regional"],
           "frameId": "regional-stamp"
         },
         {
@@ -311,10 +299,7 @@
             "width": 208,
             "height": 96
           },
-          "tags": [
-            "regional",
-            "write-side"
-          ],
+          "tags": ["regional", "write-side"],
           "childDiagramId": "d-cmp-order-command",
           "frameId": "write-side"
         },
@@ -334,10 +319,7 @@
             "width": 208,
             "height": 96
           },
-          "tags": [
-            "read-side",
-            "regional"
-          ],
+          "tags": ["read-side", "regional"],
           "frameId": "read-side"
         },
         {
@@ -356,10 +338,7 @@
             "width": 208,
             "height": 96
           },
-          "tags": [
-            "read-side",
-            "regional"
-          ],
+          "tags": ["read-side", "regional"],
           "frameId": "read-side"
         },
         {
@@ -378,9 +357,7 @@
             "width": 192,
             "height": 96
           },
-          "tags": [
-            "regional"
-          ],
+          "tags": ["regional"],
           "frameId": "regional-stamp"
         },
         {
@@ -397,9 +374,7 @@
             "width": 240,
             "height": 96
           },
-          "tags": [
-            "region-us"
-          ]
+          "tags": ["region-us"]
         }
       ],
       "edges": [
@@ -419,9 +394,7 @@
           "technology": "Kafka protocol",
           "direction": "forward",
           "style": "dashed",
-          "tags": [
-            "async"
-          ]
+          "tags": ["async"]
         },
         {
           "id": "e-commands-payment",
@@ -440,9 +413,7 @@
           "technology": "MirrorMaker 2",
           "direction": "bidirectional",
           "style": "dashed",
-          "tags": [
-            "async"
-          ]
+          "tags": ["async"]
         },
         {
           "id": "e-projections-kafka",
@@ -452,9 +423,7 @@
           "technology": "Kafka protocol",
           "direction": "forward",
           "style": "dashed",
-          "tags": [
-            "async"
-          ]
+          "tags": ["async"]
         },
         {
           "id": "e-projections-readstore",
