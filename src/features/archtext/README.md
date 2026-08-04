@@ -22,11 +22,11 @@ Round-trip guarantees (proved by `scripts/archtext-check.mjs`):
 
 Line-structured with significant indentation (spaces only):
 
-| Indent | Meaning                                                   |
-| ------ | --------------------------------------------------------- |
-| 0      | header lines, `@level` diagram headers                    |
-| 2      | diagram body: `desc`, `view`, `!`, node lines, edge lines |
-| 4      | node/edge continuations: `desc`, `!`                      |
+| Indent | Meaning                                                                |
+| ------ | ---------------------------------------------------------------------- |
+| 0      | header lines, `@level` diagram headers                                 |
+| 2      | diagram body: `desc`, `view`, `!`, frame lines, node lines, edge lines |
+| 4      | node/edge continuations: `desc`, `!`                                   |
 
 Blank lines are ignored; `//` starts a full-line comment (comments are the
 one thing not preserved by a round trip — they are text-only sugar, not
@@ -105,6 +105,7 @@ the model, so every consumer reads `node.name` unconditionally.
 | `>d-cmp-orders` / `>null`           | `childDiagramId` (drill-down)             |
 | `>>"./billing.archlab.json"`        | `childRef`                                |
 | `^d-cnt-shopflow/session-cache`     | `externalRef` (boundary placeholder)      |
+| `in=internal`                       | `frameId` (the frame this node sits in)   |
 | `pin` / `pin=false`                 | `pinned`                                  |
 | `(x,y w×h)` e.g. `(656,616 176x88)` | `position` + `size`                       |
 | `desc "…"` continuation             | `description`                             |
@@ -119,6 +120,43 @@ each target at least one row below, rows centred under their parents — plus a
 per-type default size. Parser and serializer compute it from the same inputs
 (sorted node ids + the canonical edge set), so terse files stay lossless and
 an agent can write pure structure and still get a readable diagram.
+
+## Frames
+
+A frame is a labelled rectangle drawn _behind_ a group of nodes — the C4
+boundary ("Internal", "AWS Region", a trust boundary). Note the name: in this
+codebase "boundary" already means an `externalRef` placeholder, a node borrowed
+from an ancestor diagram, so the grouping construct is named for what it draws.
+
+```
+@container d-cnt-shopflow "ShopFlow — Containers" owner=shopflow-platform
+  frame internal "Internal"
+  frame storage "Data Layer" in=internal
+  orders-service:container "Orders Service" [Go 1.22] in=internal (320,48 176x88)
+  orders-db:database "Orders DB" [PostgreSQL 16] in=storage (320,240 176x88)
+```
+
+- `frame <id> "Label"` declares one; ids are unique **within the diagram**, not
+  file-wide like node ids — a frame is scoped to the canvas it is drawn on, and
+  forcing "Internal" to be unique across every diagram would be a rule authors
+  trip over for no benefit.
+- `in=<frame>` nests one frame in another; `in=null` states top level
+  explicitly. Absent, `in=null` and an id are three distinct values and all
+  three survive the round trip. Cycles are refused with a line and column.
+- Membership is declared on the **node**, as `in=<frame>`, naming the
+  _innermost_ frame it sits in. One direction only: a list on the frame as well
+  would let the two disagree, and node-side membership is what the Mermaid
+  importer already produces (`boundary:<id>` tags), so imported boundaries
+  convert without reshaping.
+- Frame lines come before node lines, so a reader meets the boundary before its
+  members.
+
+Frames carry **no geometry**. The rectangle is derived from the bounding box of
+its members plus padding, the same reasoning as omitted node geometry: a stored
+rect drifts out of step the moment a member moves, and "the frame is wrong" is
+a worse failure than "the frame is auto-sized". A frame with no members has no
+rectangle and is not drawn — it is kept rather than dropped, so emptying one
+while editing is not destructive.
 
 ## Edges
 

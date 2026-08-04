@@ -92,6 +92,7 @@ import { NodeContextMenu } from "./overlays/node-context-menu";
 import { goToOriginal } from "../lib/goto-original";
 import { ConnectHint } from "./overlays/connect-hint";
 import { ShortcutHint } from "./overlays/shortcut-hint";
+import { FrameLayer } from "./frame-layer";
 import { CreateNodeDialog } from "./overlays/create-node-dialog";
 import { QuickAddMenu } from "./overlays/quick-add-menu";
 import { ZoomIndicator } from "./zoom-indicator";
@@ -325,6 +326,12 @@ function sameNodes(
 
 function CanvasInner(): React.JSX.Element {
   const activeDiagramId = useEditorStore((s) => s.activeDiagramId);
+  // Frames follow their members, so this re-reads on every model change. The
+  // selector returns the stored diagram object, which is referentially stable
+  // between edits that do not touch it.
+  const activeDiagram = useEditorStore(
+    (s) => s.model.diagrams[s.activeDiagramId],
+  );
   const { nodes: storeNodes, edges: storeEdges } = useCanvasNodes();
   const { fitView, screenToFlowPosition, setCenter, setViewport } =
     useReactFlow<C4FlowNode, C4FlowEdge>();
@@ -722,6 +729,34 @@ function CanvasInner(): React.JSX.Element {
   }, []);
 
   /**
+   * Drop the canvas selection. Focusing a frame is a "this is what you are
+   * looking at" claim, and so is a selected node — leaving both lit means the
+   * diagram asserts two focal points at once.
+   *
+   * Deselects in local React Flow state rather than going through the store:
+   * selection is view state here, and routing it through the model would put
+   * a no-op on the undo stack.
+   */
+  const clearCanvasSelection = useCallback(() => {
+    setContextMenu(null);
+    setPendingConnect(null);
+    setNodes((current) =>
+      current.some((node) => node.selected)
+        ? current.map((node) =>
+            node.selected ? { ...node, selected: false } : node,
+          )
+        : current,
+    );
+    setEdges((current) =>
+      current.some((edge) => edge.selected)
+        ? current.map((edge) =>
+            edge.selected ? { ...edge, selected: false } : edge,
+          )
+        : current,
+    );
+  }, []);
+
+  /**
    * Double-click on empty canvas → the create dialog (AF-E1-S2's third entry
    * point, after palette drag and palette double-click).
    *
@@ -935,6 +970,9 @@ function CanvasInner(): React.JSX.Element {
         nodeDragThreshold={1}
         className="bg-canvas [&_.react-flow__pane]:cursor-default [&_.react-flow__selection]:rounded-sm [&_.react-flow__selection]:border [&_.react-flow__selection]:border-ring/60 [&_.react-flow__selection]:bg-selection"
       >
+        {activeDiagram !== undefined ? (
+          <FrameLayer diagram={activeDiagram} onFocus={clearCanvasSelection} />
+        ) : null}
         <Background
           variant={BackgroundVariant.Dots}
           gap={GRID_SIZE * 2}

@@ -416,6 +416,42 @@ function emitDiagram(
     lines.push(`  ${bangLine([u.key], u.after, u.value)}`);
   }
 
+  // Frames precede nodes so a reader meets the boundary before its members,
+  // and because a node's `in=` is only meaningful once its frame is declared.
+  // Emitted in stored order: the JSON writer already sorted `frames` by id.
+  const framesValue = diagram.frames;
+  if (framesValue !== undefined) {
+    if (!Array.isArray(framesValue)) {
+      invalid(`diagram "${id}".frames`, framesValue);
+    }
+    framesValue.forEach((frame, i) => {
+      if (!isRecord(frame)) invalid(`diagram "${id}".frames[${i}]`, frame);
+      const frameId = frame.id;
+      const label = frame.label;
+      if (typeof frameId !== "string" || frameId === "") {
+        invalid(`diagram "${id}".frames[${i}].id`, frameId);
+      }
+      if (typeof label !== "string" || label === "") {
+        invalid(`diagram "${id}".frames[${i}].label`, label);
+      }
+      let line = `  frame ${idToken(frameId)} ${JSON.stringify(label)}`;
+      // `parentFrameId` is three-valued and all three must survive: absent
+      // (no attribute), explicit null (`in=null`) and an id. Writing absent
+      // and null the same way would collapse them on the next read.
+      if ("parentFrameId" in frame) {
+        const parent = frame.parentFrameId;
+        if (parent === null) {
+          line += " in=null";
+        } else if (typeof parent === "string" && parent !== "") {
+          line += ` in=${idToken(parent)}`;
+        } else {
+          invalid(`diagram "${id}".frames[${i}].parentFrameId`, parent);
+        }
+      }
+      lines.push(line);
+    });
+  }
+
   const nodes = (diagram.nodes as unknown[]).map(
     (node) => node as Record<string, unknown>,
   );
@@ -548,6 +584,13 @@ function emitNode(
       invalid(`node "${id}".externalRef`, externalRef);
     }
     line += ` ^${idToken(externalRef.diagramId)}/${idToken(externalRef.nodeId)}`;
+  }
+
+  const frameId = node.frameId;
+  if (typeof frameId === "string" && frameId !== "") {
+    line += ` in=${idToken(frameId)}`;
+  } else if (frameId !== undefined) {
+    fallback.push(["frameId", frameId]);
   }
 
   const pinned = node.pinned;

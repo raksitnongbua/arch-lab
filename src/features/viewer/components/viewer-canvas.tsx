@@ -84,6 +84,7 @@ import {
   type EdgeEmphasis,
   type ViewerFlowEdge,
 } from "./viewer-edge";
+import { FrameLayer } from "@/features/editor/components/frame-layer";
 import { ViewerNode, type ViewerFlowNode } from "./viewer-node";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { ViewerZoomControls } from "./viewer-zoom-controls";
@@ -1216,6 +1217,8 @@ function ViewerCanvasInner({
         deleteKeyCode={null}
         className="bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing"
       >
+        {/* Before every Panel so frames sit behind the nodes and the chrome. */}
+        <FrameLayer diagram={diagram} onFocus={clearSelection} />
         <Panel position="top-left" className="max-w-full">
           {/* No `currentLevel`: the last crumb already carries it, and two
               sources for one fact can disagree. */}

@@ -279,10 +279,21 @@ function ViewerNodeInner({
         className="viewer-node-outline pointer-events-none absolute inset-0 z-[2] size-full overflow-visible"
       >
         <defs>
+          {/*
+           * Built from the node's OWN role colour (`--node-stroke`, set per
+           * node by node-colors.ts), not a fixed ramp: a database's comet
+           * runs teal, a person's violet, so the moving light belongs to the
+           * thing it is tracing. A rainbow was tried and rejected — it read as
+           * decoration bolted on rather than as this node being selected, and
+           * it fought the palette the canvas had just been given.
+           */}
           <linearGradient id={outlineGradientId} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="var(--primary)" />
-            <stop offset="55%" stopColor="var(--primary)" />
-            <stop offset="100%" stopColor="var(--accent)" />
+            <stop offset="0%" stopColor="var(--node-stroke, var(--primary))" />
+            <stop offset="55%" stopColor="var(--node-stroke, var(--primary))" />
+            <stop
+              offset="100%"
+              stopColor="color-mix(in oklch, var(--node-stroke, var(--primary)) 35%, var(--accent))"
+            />
           </linearGradient>
         </defs>
         <path d={outline} className="viewer-node-outline-base" />

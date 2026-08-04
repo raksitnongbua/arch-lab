@@ -42,6 +42,7 @@ type SchemaKind =
   | "customIcon"
   | "diagram"
   | "viewport"
+  | "frame"
   | "node"
   | "point"
   | "size"
@@ -104,14 +105,16 @@ const SPECS: Readonly<Record<Exclude<SchemaKind, "unknown">, KindSpec>> = {
       "ownerNodeId",
       "parentDiagramId",
       "viewport",
+      "frames",
       "nodes",
       "edges",
     ],
     child: { viewport: "viewport" },
-    element: { nodes: "node", edges: "edge" },
-    sortById: ["nodes", "edges"],
+    element: { frames: "frame", nodes: "node", edges: "edge" },
+    sortById: ["frames", "nodes", "edges"],
   },
   viewport: { order: ["zoom", "x", "y"] },
+  frame: { order: ["id", "label", "parentFrameId"] },
   node: {
     order: [
       "id",
@@ -127,6 +130,7 @@ const SPECS: Readonly<Record<Exclude<SchemaKind, "unknown">, KindSpec>> = {
       "childDiagramId",
       "childRef",
       "externalRef",
+      "frameId",
       "pinned",
     ],
     child: { position: "point", size: "size", externalRef: "externalRef" },
