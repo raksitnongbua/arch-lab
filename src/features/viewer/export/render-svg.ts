@@ -30,6 +30,10 @@ import {
   labelBiasByEdgeId,
   type NodeRect,
 } from "@/features/editor/lib/edge-geometry";
+import {
+  placeFrames,
+  FRAME_LABEL_BAND,
+} from "@/features/editor/lib/frame-layout";
 
 import { TYPE_LABEL } from "../lib/labels";
 import { embeddedIconSvg } from "./icon-markup";
@@ -500,6 +504,16 @@ export function renderDiagramSvg(
     maxX = Math.max(maxX, node.position.x + node.size.width);
     maxY = Math.max(maxY, node.position.y + node.size.height);
   }
+  // Frames extend past their members by the layout pad, so the bounds have to
+  // grow with them — otherwise the outermost border is clipped off the edge of
+  // the exported image, which is exactly the part a reader looks for.
+  const placedFrames = placeFrames(diagram);
+  for (const frame of placedFrames) {
+    minX = Math.min(minX, frame.x);
+    minY = Math.min(minY, frame.y);
+    maxX = Math.max(maxX, frame.x + frame.width);
+    maxY = Math.max(maxY, frame.y + frame.height);
+  }
   if (minX === Infinity) {
     minX = 0;
     minY = 0;
@@ -522,6 +536,24 @@ export function renderDiagramSvg(
     `${LEVEL_LABEL[diagram.level]} view — ${diagram.nodes.length} element` +
     `${diagram.nodes.length === 1 ? "" : "s"}, ${diagram.edges.length} relationship` +
     `${diagram.edges.length === 1 ? "" : "s"}`;
+
+  // Outermost first (placeFrames guarantees the order), and before the edge
+  // layer: a frame is scenery, so nothing it encloses should be dimmed by it.
+  const framesMarkup = placedFrames
+    .map((frame) => {
+      const label = escapeXml(frame.label);
+      return (
+        `<g>` +
+        `<rect x="${fmt(frame.x)}" y="${fmt(frame.y)}" width="${fmt(frame.width)}" height="${fmt(frame.height)}" rx="12" ` +
+        // Same ink and the same two alphas the on-screen layer uses
+        // (`bg-node-border/[0.06]`, `border-node-border/70`), so an export
+        // and the canvas cannot drift apart as the theme changes.
+        `fill="${theme.nodeBorder}" fill-opacity="0.06" stroke="${theme.nodeBorder}" stroke-opacity="0.7" stroke-width="1" stroke-dasharray="6 4"/>` +
+        `<text x="${fmt(frame.x + 12)}" y="${fmt(frame.y + FRAME_LABEL_BAND - 8)}" font-family="${FONT_SANS}" font-size="11" font-weight="500" fill="${theme.mutedForeground}">${label}</text>` +
+        `</g>`
+      );
+    })
+    .join("");
 
   const nodesMarkup = diagram.nodes
     .map((node) => {
@@ -552,6 +584,7 @@ export function renderDiagramSvg(
     `<text x="${PADDING}" y="${PADDING - 22}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +
     `<text x="${PADDING}" y="${PADDING - 2}" font-family="${FONT_SANS}" font-size="11" fill="${theme.mutedForeground}">${escapeXml(subtitle)}</text>` +
     `<g transform="translate(${fmt(translateX)} ${fmt(translateY)})">` +
+    framesMarkup +
     edgeMarkup(diagram, theme, markerId) +
     nodesMarkup +
     emptyNotice +

@@ -5,7 +5,12 @@
     "title": "Atlas Shop",
     "description": "Global event-sourced order shop. Commands append immutable events to a regional event store, Kafka carries the stream, projections build eventually-consistent read models, and MirrorMaker 2 mirrors events between regions. The diagrams show one regional stamp (EU); the US region runs the identical topology.",
     "owner": "orders-platform",
-    "tags": ["commerce", "event-sourcing", "kafka", "multi-region"],
+    "tags": [
+      "commerce",
+      "event-sourcing",
+      "kafka",
+      "multi-region"
+    ],
     "createdAt": "2026-07-28T00:00:00Z",
     "updatedAt": "2026-07-28T00:00:00Z",
     "tagColors": {
@@ -168,7 +173,9 @@
           "technology": "Kafka protocol",
           "direction": "forward",
           "style": "dashed",
-          "tags": ["async"],
+          "tags": [
+            "async"
+          ],
           "realizes": "e-commands-kafka"
         },
         {
@@ -194,6 +201,22 @@
         "x": 0,
         "y": 0
       },
+      "frames": [
+        {
+          "id": "read-side",
+          "label": "Read side",
+          "parentFrameId": "regional-stamp"
+        },
+        {
+          "id": "regional-stamp",
+          "label": "Regional stamp (us-east-1)"
+        },
+        {
+          "id": "write-side",
+          "label": "Write side",
+          "parentFrameId": "regional-stamp"
+        }
+      ],
       "nodes": [
         {
           "id": "event-store",
@@ -211,7 +234,11 @@
             "width": 208,
             "height": 96
           },
-          "tags": ["regional", "write-side"]
+          "tags": [
+            "regional",
+            "write-side"
+          ],
+          "frameId": "write-side"
         },
         {
           "id": "ext-payment",
@@ -263,7 +290,10 @@
             "width": 240,
             "height": 96
           },
-          "tags": ["regional"]
+          "tags": [
+            "regional"
+          ],
+          "frameId": "regional-stamp"
         },
         {
           "id": "order-command-service",
@@ -281,8 +311,12 @@
             "width": 208,
             "height": 96
           },
-          "tags": ["regional", "write-side"],
-          "childDiagramId": "d-cmp-order-command"
+          "tags": [
+            "regional",
+            "write-side"
+          ],
+          "childDiagramId": "d-cmp-order-command",
+          "frameId": "write-side"
         },
         {
           "id": "order-projection-service",
@@ -300,7 +334,11 @@
             "width": 208,
             "height": 96
           },
-          "tags": ["read-side", "regional"]
+          "tags": [
+            "read-side",
+            "regional"
+          ],
+          "frameId": "read-side"
         },
         {
           "id": "read-store",
@@ -318,7 +356,11 @@
             "width": 208,
             "height": 96
           },
-          "tags": ["read-side", "regional"]
+          "tags": [
+            "read-side",
+            "regional"
+          ],
+          "frameId": "read-side"
         },
         {
           "id": "storefront",
@@ -336,7 +378,10 @@
             "width": 192,
             "height": 96
           },
-          "tags": ["regional"]
+          "tags": [
+            "regional"
+          ],
+          "frameId": "regional-stamp"
         },
         {
           "id": "us-region",
@@ -352,7 +397,9 @@
             "width": 240,
             "height": 96
           },
-          "tags": ["region-us"]
+          "tags": [
+            "region-us"
+          ]
         }
       ],
       "edges": [
@@ -372,7 +419,9 @@
           "technology": "Kafka protocol",
           "direction": "forward",
           "style": "dashed",
-          "tags": ["async"]
+          "tags": [
+            "async"
+          ]
         },
         {
           "id": "e-commands-payment",
@@ -391,7 +440,9 @@
           "technology": "MirrorMaker 2",
           "direction": "bidirectional",
           "style": "dashed",
-          "tags": ["async"]
+          "tags": [
+            "async"
+          ]
         },
         {
           "id": "e-projections-kafka",
@@ -401,7 +452,9 @@
           "technology": "Kafka protocol",
           "direction": "forward",
           "style": "dashed",
-          "tags": ["async"]
+          "tags": [
+            "async"
+          ]
         },
         {
           "id": "e-projections-readstore",

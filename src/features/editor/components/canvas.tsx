@@ -92,6 +92,7 @@ import { NodeContextMenu } from "./overlays/node-context-menu";
 import { goToOriginal } from "../lib/goto-original";
 import { ConnectHint } from "./overlays/connect-hint";
 import { ShortcutHint } from "./overlays/shortcut-hint";
+import { FrameLayer } from "./frame-layer";
 import { CreateNodeDialog } from "./overlays/create-node-dialog";
 import { QuickAddMenu } from "./overlays/quick-add-menu";
 import { ZoomIndicator } from "./zoom-indicator";
@@ -325,6 +326,12 @@ function sameNodes(
 
 function CanvasInner(): React.JSX.Element {
   const activeDiagramId = useEditorStore((s) => s.activeDiagramId);
+  // Frames follow their members, so this re-reads on every model change. The
+  // selector returns the stored diagram object, which is referentially stable
+  // between edits that do not touch it.
+  const activeDiagram = useEditorStore(
+    (s) => s.model.diagrams[s.activeDiagramId],
+  );
   const { nodes: storeNodes, edges: storeEdges } = useCanvasNodes();
   const { fitView, screenToFlowPosition, setCenter, setViewport } =
     useReactFlow<C4FlowNode, C4FlowEdge>();
@@ -935,6 +942,9 @@ function CanvasInner(): React.JSX.Element {
         nodeDragThreshold={1}
         className="bg-canvas [&_.react-flow__pane]:cursor-default [&_.react-flow__selection]:rounded-sm [&_.react-flow__selection]:border [&_.react-flow__selection]:border-ring/60 [&_.react-flow__selection]:bg-selection"
       >
+        {activeDiagram !== undefined ? (
+          <FrameLayer diagram={activeDiagram} />
+        ) : null}
         <Background
           variant={BackgroundVariant.Dots}
           gap={GRID_SIZE * 2}
