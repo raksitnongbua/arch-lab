@@ -729,6 +729,34 @@ function CanvasInner(): React.JSX.Element {
   }, []);
 
   /**
+   * Drop the canvas selection. Focusing a frame is a "this is what you are
+   * looking at" claim, and so is a selected node — leaving both lit means the
+   * diagram asserts two focal points at once.
+   *
+   * Deselects in local React Flow state rather than going through the store:
+   * selection is view state here, and routing it through the model would put
+   * a no-op on the undo stack.
+   */
+  const clearCanvasSelection = useCallback(() => {
+    setContextMenu(null);
+    setPendingConnect(null);
+    setNodes((current) =>
+      current.some((node) => node.selected)
+        ? current.map((node) =>
+            node.selected ? { ...node, selected: false } : node,
+          )
+        : current,
+    );
+    setEdges((current) =>
+      current.some((edge) => edge.selected)
+        ? current.map((edge) =>
+            edge.selected ? { ...edge, selected: false } : edge,
+          )
+        : current,
+    );
+  }, []);
+
+  /**
    * Double-click on empty canvas → the create dialog (AF-E1-S2's third entry
    * point, after palette drag and palette double-click).
    *
@@ -943,7 +971,7 @@ function CanvasInner(): React.JSX.Element {
         className="bg-canvas [&_.react-flow__pane]:cursor-default [&_.react-flow__selection]:rounded-sm [&_.react-flow__selection]:border [&_.react-flow__selection]:border-ring/60 [&_.react-flow__selection]:bg-selection"
       >
         {activeDiagram !== undefined ? (
-          <FrameLayer diagram={activeDiagram} />
+          <FrameLayer diagram={activeDiagram} onFocus={clearCanvasSelection} />
         ) : null}
         <Background
           variant={BackgroundVariant.Dots}

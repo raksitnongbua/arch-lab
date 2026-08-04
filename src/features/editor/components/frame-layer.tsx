@@ -29,6 +29,15 @@ import type { C4Diagram } from "@/types";
 
 export interface FrameLayerProps {
   diagram: C4Diagram;
+  /**
+   * Clear whatever the canvas currently has selected. Focusing a frame and
+   * selecting a node are two different "this is what you are looking at"
+   * indicators, and they live in different components — the canvas owns node
+   * selection, this owns frame focus — so neither can turn the other off on
+   * its own. Without this, focusing a frame left a node's comet still running
+   * and the diagram claimed two focal points at once.
+   */
+  onFocus?: () => void;
 }
 
 /** Breathing room around a frame when zooming to it. */
@@ -37,7 +46,10 @@ const FOCUS_PADDING = 0.12;
 /** Matches the canvas's own camera easing; 0 under reduced motion. */
 const FOCUS_DURATION = 320;
 
-export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
+export function FrameLayer({
+  diagram,
+  onFocus,
+}: FrameLayerProps): React.JSX.Element {
   const { fitBounds } = useReactFlow();
   const frames = placeFrames(diagram);
   // The focused frame. Persists — this is a selection indicator the reader
@@ -62,9 +74,18 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
 
   // Clicking the focused frame's own caption clears it, so the indicator can
   // be dismissed without hunting for somewhere neutral to click.
-  const toggleFocus = useCallback((id: string) => {
-    setFocusedId((cur) => (cur === id ? null : id));
-  }, []);
+  const toggleFocus = useCallback(
+    (id: string) => {
+      setFocusedId((cur) => {
+        const next = cur === id ? null : id;
+        // Only when taking focus, not when giving it up: clearing on release
+        // would wipe a selection the reader made after focusing the frame.
+        if (next !== null) onFocus?.();
+        return next;
+      });
+    },
+    [onFocus],
+  );
 
   // Anything else dismisses it: a node, an edge, empty canvas, Escape.
   //

@@ -1218,7 +1218,7 @@ function ViewerCanvasInner({
         className="bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing"
       >
         {/* Before every Panel so frames sit behind the nodes and the chrome. */}
-        <FrameLayer diagram={diagram} />
+        <FrameLayer diagram={diagram} onFocus={clearSelection} />
         <Panel position="top-left" className="max-w-full">
           {/* No `currentLevel`: the last crumb already carries it, and two
               sources for one fact can disagree. */}
