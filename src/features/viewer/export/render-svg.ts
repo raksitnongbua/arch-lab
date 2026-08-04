@@ -33,14 +33,14 @@ import {
   type NodeRect,
 } from "@/features/editor/lib/edge-geometry";
 import {
-  placeFrames,
-  FRAME_LABEL_BAND,
-} from "@/features/editor/lib/frame-layout";
-import {
   colorRoleForNode,
   EXTERNAL_NODE_OPACITY,
   resolveTagColor,
 } from "@/features/editor/lib/node-colors";
+import {
+  placeFrames,
+  FRAME_LABEL_BAND,
+} from "@/features/editor/lib/frame-layout";
 
 import { TYPE_LABEL } from "../lib/labels";
 import { embeddedIconSvg } from "./icon-markup";
@@ -171,8 +171,23 @@ const clamp = (value: number, min: number, max: number): number =>
 /* The surface wash                                                            */
 /* -------------------------------------------------------------------------- */
 
-/** How much border colour the wash folds into the top of a fill (= CSS). */
-const WASH_STROKE_FRACTION = 0.1;
+/**
+ * How much border colour the wash folds into a fill (= CSS .af-node-wash):
+ * the lit top edge, and the shallow grounding fold at the bottom. Kept as a
+ * pair so a future retune stays one edit next to the CSS it mirrors.
+ *
+ * ANIMATION IS DELIBERATELY FLATTENED HERE. The canvas's motion — the
+ * staggered entrance, the hover lift and role-tinted glow, the selection
+ * comet — is all interaction state, and an SVG file has no interactions:
+ * the export renders the diagram's RESTING frame (every node landed, no
+ * glow, no comet), which is exactly what the screen shows once you stop
+ * touching it. Rejected alternative: SMIL/CSS animation inside the SVG —
+ * most rasterisers and design tools ignore it, so it would only make the
+ * file's first paint disagree with its own thumbnail. The gradients, which
+ * ARE part of the resting frame, export for real via the defs below.
+ */
+const WASH_STROKE_FRACTION = 0.14;
+const WASH_BOTTOM_FRACTION = 0.07;
 
 /** Parse the exporter's concrete colours: `#rrggbb` or `rgba(r, g, b, a)`. */
 function parseSrgb(color: string): [number, number, number] | null {
@@ -198,15 +213,20 @@ function parseSrgb(color: string): [number, number, number] | null {
  * the browser's oklab pipeline would buy nothing and cost the module its
  * DOM-freeness). Falls back to the flat fill when a colour fails to parse.
  */
-function washTopColor(fill: string, stroke: string): string {
+function washMixColor(fill: string, stroke: string, fraction: number): string {
   const f = parseSrgb(fill);
   const s = parseSrgb(stroke);
   if (f === null || s === null) return fill;
   const mix = (a: number, b: number): number =>
-    Math.round(a + (b - a) * WASH_STROKE_FRACTION);
+    Math.round(a + (b - a) * fraction);
   const hex = (channel: number): string =>
     channel.toString(16).padStart(2, "0");
   return `#${hex(mix(f[0], s[0]))}${hex(mix(f[1], s[1]))}${hex(mix(f[2], s[2]))}`;
+}
+
+/** The wash's deepest (top-edge) stop — also the flat paint for rim/tabs. */
+function washTopColor(fill: string, stroke: string): string {
+  return washMixColor(fill, stroke, WASH_STROKE_FRACTION);
 }
 
 /**
@@ -226,10 +246,14 @@ class WashRegistry {
     if (existing !== undefined) return `url(#${existing})`;
     const id = `af-wash-${this.idByKey.size}`;
     this.idByKey.set(key, id);
+    // Four stops, mirroring `.af-node-wash` exactly: lit 14% top edge, the
+    // flat middle band the text sits on, and the 7% grounding bottom.
     this.defs.push(
       `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
         `<stop offset="0" stop-color="${washTopColor(fill, stroke)}"/>` +
         `<stop offset="0.55" stop-color="${fill}"/>` +
+        `<stop offset="0.82" stop-color="${fill}"/>` +
+        `<stop offset="1" stop-color="${washMixColor(fill, stroke, WASH_BOTTOM_FRACTION)}"/>` +
         `</linearGradient>`,
     );
     return `url(#${id})`;
@@ -670,6 +694,16 @@ export function renderDiagramSvg(
     `${diagram.nodes.length === 1 ? "" : "s"}, ${diagram.edges.length} relationship` +
     `${diagram.edges.length === 1 ? "" : "s"}`;
 
+  // Without an injected materialiser (an older caller), author overrides
+  // degrade to role colours rather than shipping an unresolvable color-mix.
+  const paintForTagColor = options.paintForTagColor;
+  const tagColors =
+    paintForTagColor !== undefined ? options.tagColors : undefined;
+
+  // Populated as a side effect of rendering the nodes below, then emitted
+  // into <defs> — one gradient per distinct paint pair, not per node.
+  const wash = new WashRegistry();
+
   // Outermost first (placeFrames guarantees the order), and before the edge
   // layer: a frame is scenery, so nothing it encloses should be dimmed by it.
   const framesMarkup = placedFrames
@@ -677,19 +711,18 @@ export function renderDiagramSvg(
       (frame) =>
         `<rect x="${fmt(frame.x)}" y="${fmt(frame.y)}" width="${fmt(frame.width)}" height="${fmt(frame.height)}" rx="12" ` +
         // Same ink and the same two alphas the on-screen layer uses
-        // (`bg-node-border/[0.06]`, `border-node-border/70`), so an export
-        // and the canvas cannot drift apart as the theme changes.
+        // (`bg-node-border/[0.06]`, `border-node-border/70`), so an export and
+        // the canvas cannot drift apart as the theme changes.
         `fill="${theme.nodeBorder}" fill-opacity="0.06" stroke="${theme.nodeBorder}" stroke-opacity="0.7" stroke-width="1" stroke-dasharray="6 4"/>`,
     )
     .join("");
 
-  // Captions are emitted AFTER the nodes, mirroring the canvas: the rectangle
-  // belongs behind the diagram, but an edge crossing the top band would paint
-  // over the name. A canvas-filled rect behind the text punches the same gap
-  // through the dashed border that `bg-canvas` does on screen. Width is
-  // estimated from the character count — the exporter has no text metrics, and
-  // a slightly generous plate is invisible against the canvas whereas a short
-  // one would clip the border gap.
+  // Captions emit AFTER the nodes, mirroring the canvas: the rectangle belongs
+  // behind the diagram, but an edge crossing the top band would paint over the
+  // name. A canvas-filled plate punches the same gap through the dashed border
+  // that `bg-canvas` does on screen. Its width is estimated from the character
+  // count — the exporter has no text metrics, and a slightly generous plate is
+  // invisible against the canvas whereas a short one would clip the gap.
   const frameLabelsMarkup = placedFrames
     .map((frame) => {
       const plateWidth = Math.min(
@@ -706,15 +739,6 @@ export function renderDiagramSvg(
       );
     })
     .join("");
-  // Without an injected materialiser (an older caller), author overrides
-  // degrade to role colours rather than shipping an unresolvable color-mix.
-  const paintForTagColor = options.paintForTagColor;
-  const tagColors =
-    paintForTagColor !== undefined ? options.tagColors : undefined;
-
-  // Populated as a side effect of rendering the nodes below, then emitted
-  // into <defs> — one gradient per distinct paint pair, not per node.
-  const wash = new WashRegistry();
 
   const nodesMarkup = diagram.nodes
     .map((node) => {

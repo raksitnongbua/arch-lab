@@ -115,6 +115,19 @@ export function NodeChrome({
     >
       <NodeShapeLayer type={node.type} />
 
+      {/* Role-tinted hover glow — same `.af-node-glow` (globals.css) as the
+          viewer's node, so the two canvases keep one hover language. Rides
+          UNDER the existing shadow-sm→shadow-md elevation step rather than
+          replacing it: the neutral shadow says "this lifts", the tinted
+          glow says which role is lifting. Opacity-only; skipped for SVG
+          silhouettes exactly like the box shadows above. */}
+      {!svgSilhouette ? (
+        <span
+          aria-hidden="true"
+          className="af-node-glow pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none"
+        />
+      ) : null}
+
       {/* Selection outline: always mounted so it can fade in AND out over
           `--motion-selection` (AF-E6-S2). Sits 4px outside the node bounds,
           replacing the previous instant ring+offset. */}

@@ -216,6 +216,40 @@ const EDGE_INTERACTION_CSS = `
   stroke-width: 3;
   stroke-dasharray: 9 91;
 }
+/*
+ * One-shot entrance: each node fades in with a slight rise (hero-diagram's
+ * af-hero-rise vocabulary at canvas scale), offset per node in reading order
+ * via --viewer-enter-delay (set inline by the projection); connectors fade
+ * in as one layer once the first cards have landed. Both animate only
+ * opacity/transform, on the node's INNER wrapper — never the React Flow
+ * wrapper, whose transform is the node's position. \`backwards\` fill (not
+ * \`both\`) holds a card invisible through its delay but releases the
+ * property after finishing, so the forwards fill can never pin transform
+ * against the hover lift that animates the same element.
+ *
+ * Why this cannot re-trigger on pan/zoom: a CSS animation restarts only
+ * when its ELEMENT remounts, and these elements outlive interaction —
+ * pan/zoom transforms only .react-flow__viewport, node data is stable
+ * across selection (see the projection notes), and ViewerNode is memoised.
+ * Remount happens exactly when a diagram enters — load, drill, climb —
+ * which is exactly the moment the entrance belongs to. No will-change:
+ * the animation is one-shot, and a permanent hint on every node would
+ * cost compositor memory for the 99% of the time nothing moves.
+ */
+.viewer-canvas .viewer-node-enter {
+  animation: viewer-node-enter ${VIEWER_DURATIONS.nodeEnter}ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--viewer-enter-delay, 0ms);
+}
+.viewer-canvas .react-flow__edge {
+  animation: viewer-edge-enter ${VIEWER_DURATIONS.edgeEnter}ms ease-out backwards;
+  animation-delay: ${VIEWER_DURATIONS.edgeEnterDelay}ms;
+}
+@keyframes viewer-node-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@keyframes viewer-edge-enter {
+  from { opacity: 0; }
+}
 @keyframes viewer-edge-flow-glow {
   from { stroke-dashoffset: 30; }
   to { stroke-dashoffset: -70; }
@@ -234,6 +268,13 @@ const EDGE_INTERACTION_CSS = `
   100% { fill: var(--accent); stroke: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
+  /* Entrances: parked on the natural frame, not merely sped up — with
+     animation: none the backwards fill (and its stagger delay) never holds
+     a card or connector invisible, so the whole diagram is simply there. */
+  .viewer-canvas .viewer-node-enter,
+  .viewer-canvas .react-flow__edge {
+    animation: none;
+  }
   .viewer-canvas .viewer-edge-flow,
   .viewer-canvas .viewer-edge-flow-arrow {
     animation: none;
@@ -874,6 +915,28 @@ function ViewerCanvasInner({
   const nodes = useMemo(() => {
     const childLevel = childLevelOf(diagram.level);
 
+    // Entrance order = reading order (top-left → bottom-right), not array
+    // order: the stagger should look like the diagram being drawn, and a
+    // hand-edited .alab file's node order is whatever the author typed.
+    // Delay is capped so a large diagram finishes settling with the level
+    // transition instead of trickling in after it. Computed HERE (not in the
+    // node component) because it needs the whole diagram; it rides the same
+    // inline style as the colour variables, so nothing new re-renders.
+    const enterDelay = new Map<string, number>();
+    [...diagram.nodes]
+      .sort(
+        (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
+      )
+      .forEach((node, rank) => {
+        enterDelay.set(
+          node.id,
+          Math.min(
+            rank * VIEWER_DURATIONS.nodeEnterStagger,
+            VIEWER_DURATIONS.nodeEnterMaxDelay,
+          ),
+        );
+      });
+
     const flowNodes: ViewerFlowNode[] = diagram.nodes.map((node) => {
       const drillable =
         hasChildDiagram(node) && typeof node.childDiagramId === "string";
@@ -897,7 +960,14 @@ function ViewerCanvasInner({
         // Same colour plumbing as the editor's projection: two custom
         // properties on the wrapper, inherited by the shape classes.
         // Author tagColors (frozen in model metadata) beat the type default.
-        style: nodeColorStyle(node, model.file.metadata.tagColors),
+        // The entrance delay rides along as a third custom property — the
+        // wrapper's inline style is already the per-node channel, and the
+        // animation itself lives on the INNER element (viewer-node.tsx), so
+        // React Flow's positioning transform is never animated.
+        style: {
+          ...nodeColorStyle(node, model.file.metadata.tagColors),
+          "--viewer-enter-delay": `${enterDelay.get(node.id) ?? 0}ms`,
+        } as React.CSSProperties,
         data: {
           node,
           level: diagram.level,
