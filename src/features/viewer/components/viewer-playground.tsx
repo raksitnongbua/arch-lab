@@ -66,6 +66,7 @@ import {
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
 } from "../share/codec";
+import { ShareBroken } from "../share/share-broken";
 import { ShareExpired } from "../share/share-expired";
 import { ViewerShell } from "./viewer-shell";
 
@@ -95,8 +96,10 @@ interface PaneErrorState {
   error: PaneErrorDetail;
 }
 
-/** Outcome of trying to open a `#m=…` share link on this page. */
-type SharedLinkNotice = { kind: "opened" } | { kind: "error"; message: string };
+// A share link used to have two inline outcomes here, success and failure.
+// Failure now takes over the page (`share/share-broken.tsx`), so the only thing
+// left to say in place is that the model below arrived inside the URL — which is
+// a flag, not a union.
 
 export function ViewerPlayground(): React.JSX.Element {
   /* ---- state ---------------------------------------------------------- */
@@ -115,14 +118,14 @@ export function ViewerPlayground(): React.JSX.Element {
   const currentDiagramRef = useRef(SEED_MODEL.model.rootDiagramId);
 
   // Share links (`/view#m=…`): the model arrives inside the fragment.
-  const [sharedNotice, setSharedNotice] = useState<SharedLinkNotice | null>(
-    null,
-  );
+  const [openedFromShare, setOpenedFromShare] = useState(false);
   const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
     string | null
   >(null);
   /** Epoch seconds when a lapsed link expired; non-null takes over the page. */
   const [expired, setExpired] = useState<number | null>(null);
+  /** Why a link could not be read; non-null takes over the page. */
+  const [broken, setBroken] = useState<string | null>(null);
 
   // JSON is opt-in. `.alab` is the format this product asks people to write —
   // it is what the syntax reference documents, what share links carry, and
@@ -202,21 +205,33 @@ export function ViewerPlayground(): React.JSX.Element {
   // The fragment never reaches the server, so only the client can read it.
   // Read on mount (and again on hashchange, for a second link clicked in the
   // same tab); a decoded model replaces both panes exactly as an import
-  // does, and a corrupt or truncated payload becomes a visible error — the
-  // seed model keeps rendering underneath.
+  // does, while a corrupt, truncated or lapsed payload takes over the page
+  // instead of annotating the seed model with someone else's failure.
 
   useEffect(() => {
     let cancelled = false;
 
     const openFromHash = async () => {
       const decoded = await decodeShareFragment(window.location.hash);
-      if (cancelled || decoded.status === "none") return;
+      if (cancelled) return;
+
+      // Clear every previous outcome before recording this one. `hashchange`
+      // fires for a second link opened in the same tab, and a takeover left
+      // standing would describe a link that is no longer in the address bar —
+      // worse, a GOOD link would adopt its model invisibly behind the stale
+      // error page. Reset covers "none" too: a fragment with no payload is not
+      // a share link, so nothing about one should still be on screen.
+      setExpired(null);
+      setBroken(null);
+      setOpenedFromShare(false);
+
+      if (decoded.status === "none") return;
 
       if (decoded.status === "error") {
-        setSharedNotice({ kind: "error", message: decoded.message });
-        setAnnouncement(
-          `This share link could not be opened — ${decoded.message}.`,
-        );
+        // Takes over the page, like expiry. No `setAnnouncement`: the polite
+        // live region lives in the editor JSX below, which this path never
+        // renders — `ShareBroken` carries its own `role="alert"` instead.
+        setBroken(decoded.message);
         return;
       }
 
@@ -233,10 +248,14 @@ export function ViewerPlayground(): React.JSX.Element {
 
       const result = parsePane("aft", decoded.aftText);
       if (result.status !== "ok") {
-        const message =
-          "the model inside it does not parse — the link was probably truncated or altered by the app that carried it";
-        setSharedNotice({ kind: "error", message });
-        setAnnouncement(`This share link could not be opened — ${message}.`);
+        // Decoding succeeded and the text still will not parse, which in
+        // practice means characters went missing from the MIDDLE of the URL:
+        // a payload cut short at the end fails earlier, in `decodeShareFragment`.
+        setBroken(
+          "the model inside it does not parse — characters appear to be " +
+            "missing from the middle of the link, which happens when a long " +
+            "URL is copied across a line wrap",
+        );
         return;
       }
 
@@ -250,7 +269,7 @@ export function ViewerPlayground(): React.JSX.Element {
       currentDiagramRef.current = target;
       setSharedInitialDiagram(target);
       setShellEpoch((epoch) => epoch + 1);
-      setSharedNotice({ kind: "opened" });
+      setOpenedFromShare(true);
       setAnnouncement(
         "Opened a model from a share link — nothing was uploaded; both panes hold its source.",
       );
@@ -409,21 +428,24 @@ export function ViewerPlayground(): React.JSX.Element {
 
   const stem = downloadStem(synced.model.title);
 
-  // An expired link takes over the page. Returned BEFORE the editor so the seed
-  // model is never on screen next to the message — the whole point is that
-  // there is nothing here to mistake for what was shared.
+  // A link that did not open takes over the page. Returned BEFORE the editor so
+  // the seed model is never on screen next to the message — the whole point is
+  // that there is nothing here to mistake for what was shared.
+  //
+  // Drop the fragment without a reload, so the editor appears on the clean
+  // `/view` URL and the dead link is not left in the address bar.
+  const startFresh = () => {
+    window.history.replaceState(null, "", window.location.pathname);
+    setExpired(null);
+    setBroken(null);
+  };
+
   if (expired !== null) {
-    return (
-      <ShareExpired
-        expiresAt={expired}
-        onStartFresh={() => {
-          // Drop the fragment without a reload, so the editor appears on the
-          // clean `/view` URL and the dead link is not left in the address bar.
-          window.history.replaceState(null, "", window.location.pathname);
-          setExpired(null);
-        }}
-      />
-    );
+    return <ShareExpired expiresAt={expired} onStartFresh={startFresh} />;
+  }
+
+  if (broken !== null) {
+    return <ShareBroken reason={broken} onStartFresh={startFresh} />;
   }
 
   return (
@@ -535,37 +557,18 @@ export function ViewerPlayground(): React.JSX.Element {
       </p>
 
       {/* ---- share-link outcome --------------------------------------------- */}
-      {sharedNotice !== null ? (
-        <div
-          className={cn(
-            "flex items-start justify-between gap-3 rounded-lg border px-4 py-3",
-            sharedNotice.kind === "opened"
-              ? "border-accent/40 bg-accent/10"
-              : "border-destructive/40 bg-destructive/5",
-          )}
-        >
+      {/* Success only. Failure never reaches here — it took over the page. */}
+      {openedFromShare ? (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
           <p className="text-sm leading-relaxed text-foreground">
-            {sharedNotice.kind === "opened" ? (
-              <>
-                <span className="font-semibold">Opened from a share link.</span>{" "}
-                The model below travelled inside the link itself — nothing was
-                uploaded, and nothing is stored. Both panes hold its source; any
-                edits stay in your browser.
-              </>
-            ) : (
-              <>
-                <span className="font-semibold">
-                  This share link could not be opened
-                </span>{" "}
-                — {sharedNotice.message}. Ask the sender to re-copy the link, or
-                to send the <span className="font-mono text-xs">.alab</span>{" "}
-                file instead. The example model is shown below.
-              </>
-            )}
+            <span className="font-semibold">Opened from a share link.</span> The
+            model below travelled inside the link itself — nothing was uploaded,
+            and nothing is stored. Both panes hold its source; any edits stay in
+            your browser.
           </p>
           <button
             type="button"
-            onClick={() => setSharedNotice(null)}
+            onClick={() => setOpenedFromShare(false)}
             aria-label="Dismiss the share link notice"
             className={buttonClasses({
               variant: "ghost",
