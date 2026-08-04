@@ -126,6 +126,15 @@ export interface C4Node {
   childRef?: string;
   /** Present => read-only boundary placeholder. */
   externalRef?: ExternalRef;
+  /**
+   * The INNERMOST frame this node sits in, from `C4Diagram.frames`. Absent =>
+   * the node is loose on the canvas.
+   *
+   * Innermost only, never a list: nesting is already recorded once, on the
+   * frame's own `parentFrameId`. Storing the full ancestry per node would let
+   * the two disagree, and every consumer that needs the chain can walk it.
+   */
+  frameId?: string;
   /** Excluded from Tidy layout (AF-E1-S10). */
   pinned?: boolean;
 }
@@ -161,6 +170,38 @@ export interface C4Edge {
 /* Diagrams                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A labelled grouping frame drawn *behind* a set of nodes — the C4 boundary
+ * ("Internal", "AWS Region", a trust boundary). Purely a view construct: a
+ * frame owns no behaviour and carries no relationships, so it never appears as
+ * an edge endpoint.
+ *
+ * Membership lives on the NODE (`C4Node.frameId`), not as a list here. One
+ * direction only, because a list on both sides is a synchronisation bug
+ * waiting to happen — and node-side membership is what the Mermaid importer
+ * already produces (`boundary:<id>` tags, see `mermaid/lib/mapping.ts`), so
+ * imported boundaries convert without reshaping.
+ *
+ * Deliberately NO geometry. A frame's rectangle is derived from the bounding
+ * box of its members plus padding, the same reasoning as `.alab`'s omitted
+ * node geometry (`archtext/lib/defaults.ts`): a stored rect would drift out of
+ * step the moment a member moves, and "the frame is wrong" is a worse failure
+ * than "the frame is auto-sized". A frame with no members therefore has no
+ * rectangle and is not drawn — it is kept in the model rather than dropped so
+ * that emptying a frame while editing is not a destructive act.
+ */
+export interface C4Frame {
+  /** Slug, unique within its diagram. */
+  id: string;
+  /** Shown on the frame's edge, e.g. "Internal". */
+  label: string;
+  /**
+   * Enclosing frame in the same diagram, for nested boundaries. `null` or
+   * absent => top level. Cycles are rejected at validation.
+   */
+  parentFrameId?: string | null;
+}
+
 export interface C4Diagram {
   /** Slug, unique in file. Convention `d-<level>-<owner-slug>`. */
   id: string;
@@ -172,6 +213,8 @@ export interface C4Diagram {
   /** `null` only for the root Context diagram. */
   parentDiagramId: string | null;
   viewport?: Viewport;
+  /** Grouping frames drawn behind the nodes. Sorted by `id` on write. */
+  frames?: C4Frame[];
   /** Sorted by `id` on write. */
   nodes: C4Node[];
   /** Sorted by `id` on write. */
