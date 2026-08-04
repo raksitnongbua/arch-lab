@@ -45,6 +45,7 @@ export const DIAGRAM_KEYS = [
   "ownerNodeId",
   "parentDiagramId",
   "viewport",
+  "frames",
   "nodes",
   "edges",
 ] as const;
@@ -63,6 +64,7 @@ export const NODE_KEYS = [
   "childDiagramId",
   "childRef",
   "externalRef",
+  "frameId",
   "pinned",
 ] as const;
 

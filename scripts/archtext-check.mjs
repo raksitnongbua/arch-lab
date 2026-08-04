@@ -296,9 +296,12 @@ root d-ctx-a
   solo:person "Solo"
 
 @container d-cnt-a owner=sys-a
-  db-a:database "Kitchen DB" @postgresql [PostgreSQL 16] >null pin=false (48,320 176x88)
-  q-a:queue "Kitchen Bus" (288,320 176x88)
-  web-a:container "Kitchen Web" ^d-ctx-a/alice (528,320 176x88)
+  frame internal "Internal"
+  frame loose "Explicitly Top Level" in=null
+  frame storage "Data Layer" in=internal
+  db-a:database "Kitchen DB" @postgresql [PostgreSQL 16] >null in=storage pin=false (48,320 176x88)
+  q-a:queue "Kitchen Bus" in=internal (288,320 176x88)
+  web-a:container "Kitchen Web" ^d-ctx-a/alice in=loose (528,320 176x88)
   alice-ref:person ^d-ctx-a/alice (768,320 176x88)
 
   db-a .. q-a
@@ -621,6 +624,44 @@ function expectParseError(label, source, expectFragment) {
 }
 
 const OK_HEAD = 'archlab 1.0\ntitle "T"\n';
+
+/* ---- frames ---- */
+const FRAME_HEAD = `${OK_HEAD}@context d-x "X"\n`;
+expectParseError(
+  "a duplicate frame id is refused",
+  `${FRAME_HEAD}  frame f "One"\n  frame f "Two"\n  n:person "N"\n`,
+  "duplicate frame id",
+);
+expectParseError(
+  "an empty frame label is refused",
+  `${FRAME_HEAD}  frame f ""\n  n:person "N"\n`,
+  "must not be empty",
+);
+expectParseError(
+  "a frame nesting inside a missing frame is refused",
+  `${FRAME_HEAD}  frame f "F" in=nope\n  n:person "N"\n`,
+  "does not name a frame",
+);
+expectParseError(
+  "a frame enclosing itself is refused",
+  `${FRAME_HEAD}  frame f "F" in=f\n  n:person "N"\n`,
+  "its own enclosing frame",
+);
+expectParseError(
+  "a frame cycle is refused",
+  `${FRAME_HEAD}  frame a "A" in=b\n  frame b "B" in=a\n  n:person "N"\n`,
+  "encloses itself",
+);
+expectParseError(
+  "a node in a missing frame is refused",
+  `${FRAME_HEAD}  n:person "N" in=nope\n`,
+  "does not name a frame",
+);
+expectParseError(
+  "an unknown frame attribute is refused",
+  `${FRAME_HEAD}  frame f "F" nope=1\n  n:person "N"\n`,
+  "not a frame attribute",
+);
 
 expectParseError("empty source is refused", "", "archlab");
 expectParseError(

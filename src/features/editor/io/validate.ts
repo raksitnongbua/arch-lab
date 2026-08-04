@@ -268,6 +268,93 @@ export function validateArchLabFile(input: unknown): ArchLabFile {
       }
     }
 
+    /* ------------------------------ frames ------------------------------ */
+
+    // Collected before nodes so a node's `frameId` can be checked against a
+    // known set. Ids are unique per DIAGRAM, not file-wide like node ids: a
+    // frame is a view construct scoped to the canvas it is drawn on, and
+    // forcing "Internal" to be unique across every diagram would be a rule
+    // authors would trip over for no benefit.
+    const frameIds = new Set<string>();
+    if (diagram.frames !== undefined) {
+      const frames = diagram.frames;
+      if (!Array.isArray(frames)) {
+        problem(
+          `${dPath}.frames`,
+          `${describe(frames)} — expected an array of frames`,
+        );
+      } else {
+        frames.forEach((frame: unknown, j: number) => {
+          const fPath = `${dPath}.frames[${j}]`;
+          if (!isRecord(frame)) {
+            problem(fPath, `${describe(frame)} — expected a frame object`);
+            return;
+          }
+          if (!isNonEmptyString(frame.id)) {
+            problem(
+              `${fPath}.id`,
+              `${describe(frame.id)} — expected a non-empty string`,
+            );
+          } else if (frameIds.has(frame.id)) {
+            problem(
+              `${fPath}.id`,
+              `duplicate frame id "${frame.id}" in this diagram — frame ids must be unique within a diagram`,
+            );
+          } else {
+            frameIds.add(frame.id);
+          }
+          if (!isNonEmptyString(frame.label)) {
+            problem(
+              `${fPath}.label`,
+              `${describe(frame.label)} — expected a non-empty string`,
+            );
+          }
+          if (
+            frame.parentFrameId !== undefined &&
+            frame.parentFrameId !== null &&
+            !isNonEmptyString(frame.parentFrameId)
+          ) {
+            problem(
+              `${fPath}.parentFrameId`,
+              `${describe(frame.parentFrameId)} — expected a frame id, null or absent`,
+            );
+          }
+        });
+        // Resolution and cycles need the whole set, so they run in a second
+        // pass. A frame nesting inside a missing parent would otherwise draw
+        // at top level, silently losing the author's grouping.
+        const parentOf = new Map<string, string | null>();
+        frames.forEach((frame: unknown, j: number) => {
+          if (!isRecord(frame) || !isNonEmptyString(frame.id)) return;
+          const parent = frame.parentFrameId;
+          const resolved = isNonEmptyString(parent) ? parent : null;
+          parentOf.set(frame.id, resolved);
+          if (resolved !== null && !frameIds.has(resolved)) {
+            problem(
+              `${dPath}.frames[${j}].parentFrameId`,
+              `"${resolved}" does not resolve to a frame in this diagram — a frame may only nest inside another frame of the same diagram`,
+            );
+          }
+        });
+        frames.forEach((frame: unknown, j: number) => {
+          if (!isRecord(frame) || !isNonEmptyString(frame.id)) return;
+          const seen = new Set<string>([frame.id]);
+          let cur = parentOf.get(frame.id) ?? null;
+          while (cur !== null && frameIds.has(cur)) {
+            if (seen.has(cur)) {
+              problem(
+                `${dPath}.frames[${j}].parentFrameId`,
+                `frame "${frame.id}" encloses itself — nested frames must form a tree`,
+              );
+              break;
+            }
+            seen.add(cur);
+            cur = parentOf.get(cur) ?? null;
+          }
+        });
+      }
+    }
+
     /* ------------------------------ nodes ------------------------------- */
 
     const nodes = diagram.nodes;
@@ -379,6 +466,19 @@ export function validateArchLabFile(input: unknown): ArchLabFile {
             problem(
               `${nPath}.externalRef`,
               `${describe(ref)} — expected { "diagramId": string, "nodeId": string }`,
+            );
+          }
+        }
+        if (node.frameId !== undefined) {
+          if (!isNonEmptyString(node.frameId)) {
+            problem(
+              `${nPath}.frameId`,
+              `${describe(node.frameId)} — expected a frame id or absent`,
+            );
+          } else if (!frameIds.has(node.frameId)) {
+            problem(
+              `${nPath}.frameId`,
+              `"${node.frameId}" does not resolve to a frame in this diagram — a node may only sit in a frame declared on its own canvas`,
             );
           }
         }

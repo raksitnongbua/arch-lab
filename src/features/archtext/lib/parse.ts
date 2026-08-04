@@ -79,6 +79,8 @@ interface PendingNode extends Loc {
   childRefValue?: string;
   childRefLoc?: Loc;
   externalRef?: { diagramId: string; nodeId: string };
+  frameId?: string;
+  frameIdLoc?: Loc;
   pinned?: boolean;
   geometry?: { x: number; y: number; width: number; height: number };
   raw: Map<string, Pend>;
@@ -86,6 +88,16 @@ interface PendingNode extends Loc {
   positionUnknowns: Pend[];
   sizeUnknowns: Pend[];
   externalRefUnknowns: Pend[];
+}
+
+/** A `frame <id> "Label" [in=<parent>]` line, before cross-checking. */
+interface PendingFrame extends Loc {
+  id: string;
+  label: string;
+  /** Meaningful only when `hasIn` is true; `null` = explicit `in=null`. */
+  parentFrameId?: string | null;
+  hasIn: boolean;
+  inLoc?: Loc;
 }
 
 interface PendingEdge extends Loc {
@@ -117,6 +129,7 @@ interface PendingDiagram extends Loc {
   inLoc?: Loc;
   description?: string;
   viewport?: { zoom: number; x: number; y: number };
+  frames: PendingFrame[];
   nodes: PendingNode[];
   edges: PendingEdge[];
   raw: Map<string, Pend>;
@@ -749,6 +762,7 @@ function parseDiagramHeader(
     id,
     level: levelWord as C4Level,
     hasIn: false,
+    frames: [],
     nodes: [],
     edges: [],
     raw: new Map(),
@@ -856,6 +870,50 @@ function parseBodyLine(
       return null;
     }
   }
+  if (first === "frame" && cursor.peek() === " ") {
+    cursor.skipSpaces();
+    const idLoc = { line: cursor.line, column: cursor.column };
+    const id = cursor.readIdToken("the frame id");
+    const duplicate = diagram.frames.find((f) => f.id === id);
+    if (duplicate !== undefined) {
+      failAt(
+        idLoc.line,
+        idLoc.column,
+        `duplicate frame id "${id}" — already declared on line ${duplicate.line}; frame ids must be unique within a diagram`,
+        id,
+      );
+    }
+    cursor.skipSpaces();
+    const label = cursor.readQuoted("the frame label");
+    if (label === "") {
+      cursor.fail("the frame label must not be empty");
+    }
+    const frame: PendingFrame = { ...idLoc, id, label, hasIn: false };
+    cursor.skipSpaces();
+    if (!cursor.atEnd()) {
+      const inLoc = { line: cursor.line, column: cursor.column };
+      const word = cursor.readBare(/^[a-z]+/, 'the "in=" attribute');
+      if (word !== "in") {
+        failAt(
+          inLoc.line,
+          inLoc.column,
+          `"${word}" is not a frame attribute — only in=<frame> is allowed`,
+          word,
+        );
+      }
+      cursor.expect("=", '"=" after "in"');
+      const parent = cursor.readBare(
+        /^[A-Za-z0-9_][A-Za-z0-9_.-]*/,
+        'an enclosing frame id (or "null")',
+      );
+      frame.parentFrameId = parent === "null" ? null : parent;
+      frame.hasIn = true;
+      frame.inLoc = inLoc;
+    }
+    cursor.expectEnd('the "frame" line');
+    diagram.frames.push(frame);
+    return null;
+  }
   if (first === "view" && cursor.peek() === " ") {
     if (diagram.viewport !== undefined) {
       failAt(
@@ -885,6 +943,7 @@ const DIAGRAM_KEYS_SET: ReadonlySet<string> = new Set([
   "ownerNodeId",
   "parentDiagramId",
   "viewport",
+  "frames",
   "nodes",
   "edges",
 ]);
@@ -1188,6 +1247,18 @@ function parseNodeLine(
       continue;
     }
     const word = cursor.readBare(/^[a-z]+/, "a node attribute");
+    if (word === "in") {
+      if (node.frameId !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, 'duplicate "in=" attribute');
+      }
+      cursor.expect("=", '"=" after "in"');
+      node.frameId = cursor.readBare(
+        /^[A-Za-z0-9_][A-Za-z0-9_.-]*/,
+        "a frame id",
+      );
+      node.frameIdLoc = attrLoc;
+      continue;
+    }
     if (word === "pin") {
       if (node.pinned !== undefined) {
         failAt(attrLoc.line, attrLoc.column, 'duplicate "pin" attribute');
@@ -1211,7 +1282,7 @@ function parseNodeLine(
     failAt(
       attrLoc.line,
       attrLoc.column,
-      `"${word}" is not a node attribute — expected pin, @icon, [technology], #tag, >child, >>"file", ^diagram/node or (x,y w×h)`,
+      `"${word}" is not a node attribute — expected pin, in=<frame>, @icon, [technology], #tag, >child, >>"file", ^diagram/node or (x,y w×h)`,
       word,
     );
   }
@@ -1786,6 +1857,7 @@ function resolve(
       if (hasChild) pairs.push(["childDiagramId", child ?? null]);
       add("childRef", childRef);
       add("externalRef", externalRef);
+      add("frameId", node.frameId);
       add("pinned", pick(node.pinned, node.raw, "pinned"));
       finalNodes.push(assemble(pairs, node.unknowns));
     }
@@ -1881,6 +1953,77 @@ function resolve(
       finalEdges.push(assemble(pairs, edge.unknowns));
     }
 
+    /* frames — cross-checked here, where every frame and node of this
+       diagram is known. Membership and nesting are both by id, so a typo is
+       otherwise a silently missing frame rather than an error. */
+    const frameIdSet = new Set(diagram.frames.map((f) => f.id));
+    const finalFrames: Record<string, unknown>[] = [];
+    for (const frame of diagram.frames) {
+      const parentId = frame.parentFrameId;
+      if (frame.hasIn && parentId !== null && parentId !== undefined) {
+        const at = frame.inLoc ?? { line: frame.line, column: frame.column };
+        if (parentId === frame.id) {
+          failAt(
+            at.line,
+            at.column,
+            `frame "${frame.id}" is its own enclosing frame`,
+            frame.id,
+          );
+        }
+        if (!frameIdSet.has(parentId)) {
+          failAt(
+            at.line,
+            at.column,
+            `in=${parentId} does not name a frame in diagram "${diagram.id}" — a frame may only nest inside another frame of the same diagram`,
+            parentId,
+          );
+        }
+      }
+      const pairs: (readonly [string, unknown])[] = [
+        ["id", frame.id],
+        ["label", frame.label],
+      ];
+      if (frame.hasIn)
+        pairs.push(["parentFrameId", frame.parentFrameId ?? null]);
+      finalFrames.push(assemble(pairs, []));
+    }
+    // Walk each chain to its root. Cheap (frames per diagram are few) and it
+    // reports the frame the author can actually see, not an internal cycle set.
+    const parentOf = new Map<string, string | null>(
+      diagram.frames.map((f) => [
+        f.id,
+        f.hasIn ? (f.parentFrameId ?? null) : null,
+      ]),
+    );
+    for (const frame of diagram.frames) {
+      const seen = new Set<string>([frame.id]);
+      let cur = parentOf.get(frame.id) ?? null;
+      while (cur !== null) {
+        if (seen.has(cur)) {
+          const at = frame.inLoc ?? { line: frame.line, column: frame.column };
+          failAt(
+            at.line,
+            at.column,
+            `frame "${frame.id}" encloses itself through in= — nested frames must form a tree`,
+            frame.id,
+          );
+        }
+        seen.add(cur);
+        cur = parentOf.get(cur) ?? null;
+      }
+    }
+    for (const node of diagram.nodes) {
+      if (node.frameId !== undefined && !frameIdSet.has(node.frameId)) {
+        const at = node.frameIdLoc ?? { line: node.line, column: node.column };
+        failAt(
+          at.line,
+          at.column,
+          `in=${node.frameId} does not name a frame in diagram "${diagram.id}" — declare it with a "frame ${node.frameId} \"…\"" line`,
+          node.frameId,
+        );
+      }
+    }
+
     /* the diagram object */
     let viewport: Record<string, unknown> | undefined;
     if (diagram.viewport !== undefined) {
@@ -1910,6 +2053,7 @@ function resolve(
     pairs.push(["ownerNodeId", owner]);
     pairs.push(["parentDiagramId", parent]);
     if (viewport !== undefined) pairs.push(["viewport", viewport]);
+    if (finalFrames.length > 0) pairs.push(["frames", finalFrames]);
     pairs.push(["nodes", finalNodes]);
     pairs.push(["edges", finalEdges]);
     finalDiagrams.push(assemble(pairs, diagram.unknowns));
