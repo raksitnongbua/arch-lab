@@ -21,7 +21,7 @@
  * than as two overlapping washes.
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useReactFlow, ViewportPortal } from "@xyflow/react";
 
 import { placeFrames, FRAME_LABEL_BAND } from "../lib/frame-layout";
@@ -43,9 +43,6 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
   // The focused frame. Persists — this is a selection indicator the reader
   // asked for, so it stays until they point somewhere else.
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  // Scoped per component instance: the viewer and the editor can both be
-  // mounted, and duplicate SVG ids would make one steal the other's paint.
-  const rainbowId = useId();
 
   const focusFrame = useCallback(
     (rect: { x: number; y: number; width: number; height: number }) => {
@@ -161,29 +158,9 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
                     toggleFocus(frame.id);
                   }}
                 />
-                {focusedId === frame.id ? (
-                  <defs>
-                    {/*
-                     * A full spectrum around the outline. `gradientUnits`
-                     * defaults to the bounding box, so the sweep spans the
-                     * frame whatever its size — a fixed user-space gradient
-                     * would compress to a single hue on a small child frame.
-                     */}
-                    <linearGradient id={rainbowId} x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="oklch(0.72 0.19 20)" />
-                      <stop offset="20%" stopColor="oklch(0.78 0.17 70)" />
-                      <stop offset="40%" stopColor="oklch(0.8 0.17 140)" />
-                      <stop offset="60%" stopColor="oklch(0.75 0.15 195)" />
-                      <stop offset="80%" stopColor="oklch(0.68 0.19 280)" />
-                      <stop offset="100%" stopColor="oklch(0.72 0.19 20)" />
-                    </linearGradient>
-                  </defs>
-                ) : null}
                 <rect
                   className={
-                    focusedId === frame.id
-                      ? "af-frame-march af-frame-hue"
-                      : undefined
+                    focusedId === frame.id ? "af-frame-march" : undefined
                   }
                   // Inset by half the stroke so the outline sits inside the
                   // measured rectangle instead of straddling its edge.
@@ -194,11 +171,7 @@ export function FrameLayer({ diagram }: FrameLayerProps): React.JSX.Element {
                   rx={11}
                   fill="var(--node-border)"
                   fillOpacity={0.06}
-                  stroke={
-                    focusedId === frame.id
-                      ? `url(#${rainbowId})`
-                      : "var(--node-border)"
-                  }
+                  stroke="var(--node-border)"
                   strokeOpacity={focusedId === frame.id ? 1 : 0.7}
                   strokeWidth={focusedId === frame.id ? 2 : 1}
                   // Absolute units, NOT pathLength-normalised: with

@@ -424,36 +424,6 @@
  * exactly one dash + gap (6 + 4), so the loop is seamless, and a constant
  * pixels-per-second march looks the same on every frame regardless of size.
  */
-/**
- * Hue cycle for a selected node's comet outline. On the SVG root so the glow,
- * tail and head bands all shift together — filtering each band separately
- * would let them drift into different hues and read as three lights instead
- * of one.
- *
- * The canvas's selection stylesheet is what makes the outline visible at all;
- * this only spins the colour, so an unselected node pays nothing for it beyond
- * an inert class. Slower than the 1600ms comet on purpose: a hue keeping pace
- * with the travel cancels the sense of one light moving.
- */
-@keyframes af-node-hue {
-  from {
-    filter: hue-rotate(0deg);
-  }
-  to {
-    filter: hue-rotate(360deg);
-  }
-}
-
-.viewer-node-outline.af-node-hue {
-  animation: af-node-hue 4200ms linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .viewer-node-outline.af-node-hue {
-    animation: none;
-  }
-}
-
 @keyframes af-frame-march {
   from {
     stroke-dashoffset: 0;
@@ -467,38 +437,10 @@
   animation: af-frame-march 600ms linear infinite;
 }
 
-/**
- * The focused frame's dashes also cycle hue, so the marching band reads as a
- * running rainbow rather than a moving grey.
- *
- * Hue rotation on ONE element, not per-stop keyframes: the stroke already
- * carries a multi-stop spectrum, and spinning its hue is a single compositor
- * filter rather than six animated colour interpolations. Only the focused
- * frame ever mounts it, so there is at most one of these on screen.
- *
- * Slower than the march on purpose. Two rates on one object at similar speeds
- * fight each other; a hue sweep well behind the dash travel reads as one
- * effect with depth instead of two competing ones.
- */
-@keyframes af-frame-hue {
-  from {
-    filter: hue-rotate(0deg);
-  }
-  to {
-    filter: hue-rotate(360deg);
-  }
-}
-
-.af-frame-hue {
-  animation: af-frame-hue 3200ms linear infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .af-frame-march,
-  .af-frame-hue {
-    /* Only the motion stops. The dashes ARE the border, so they stay, and the
-       focused frame keeps its heavier stroke and its colour — the indicator
-       still reads, it just holds still. */
+  .af-frame-march {
+    /* Only the walking stops. The dashes ARE the border, so they stay, and
+       the focused frame keeps its heavier stroke to remain distinguishable. */
     animation: none;
   }
 }

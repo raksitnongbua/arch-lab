@@ -276,24 +276,24 @@ function ViewerNodeInner({
         aria-hidden="true"
         viewBox={`0 0 ${node.size.width} ${node.size.height}`}
         preserveAspectRatio="none"
-        className="viewer-node-outline af-node-hue pointer-events-none absolute inset-0 z-[2] size-full overflow-visible"
+        className="viewer-node-outline pointer-events-none absolute inset-0 z-[2] size-full overflow-visible"
       >
         <defs>
           {/*
-           * A full spectrum, not primary → accent. The comet's shape already
-           * says "selected"; the two-token ramp spent that motion on a colour
-           * the canvas uses everywhere else, so on a busy diagram the moving
-           * light was the only thing distinguishing it. First and last stop
-           * share a hue so the ramp meets itself and the band does not flash
-           * as it wraps the perimeter.
+           * Built from the node's OWN role colour (`--node-stroke`, set per
+           * node by node-colors.ts), not a fixed ramp: a database's comet
+           * runs teal, a person's violet, so the moving light belongs to the
+           * thing it is tracing. A rainbow was tried and rejected — it read as
+           * decoration bolted on rather than as this node being selected, and
+           * it fought the palette the canvas had just been given.
            */}
           <linearGradient id={outlineGradientId} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="oklch(0.72 0.19 20)" />
-            <stop offset="20%" stopColor="oklch(0.78 0.17 70)" />
-            <stop offset="40%" stopColor="oklch(0.8 0.17 140)" />
-            <stop offset="60%" stopColor="oklch(0.75 0.15 195)" />
-            <stop offset="80%" stopColor="oklch(0.68 0.19 280)" />
-            <stop offset="100%" stopColor="oklch(0.72 0.19 20)" />
+            <stop offset="0%" stopColor="var(--node-stroke, var(--primary))" />
+            <stop offset="55%" stopColor="var(--node-stroke, var(--primary))" />
+            <stop
+              offset="100%"
+              stopColor="color-mix(in oklch, var(--node-stroke, var(--primary)) 35%, var(--accent))"
+            />
           </linearGradient>
         </defs>
         <path d={outline} className="viewer-node-outline-base" />
