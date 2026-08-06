@@ -41,7 +41,7 @@ import {
   hasSvgSilhouette,
 } from "@/features/editor/components/nodes/node-shapes";
 
-import { TYPE_LABEL } from "../lib/labels";
+import { C4_ABSTRACTION } from "../lib/labels";
 
 export interface ViewerNodeData extends Record<string, unknown> {
   /** The (frozen) model node. */
@@ -178,8 +178,8 @@ function ViewerNodeInner({
 
   const meta =
     node.technology !== undefined && node.technology !== ""
-      ? `${TYPE_LABEL[node.type]}: ${node.technology}`
-      : TYPE_LABEL[node.type];
+      ? `${C4_ABSTRACTION[node.type]}: ${node.technology}`
+      : C4_ABSTRACTION[node.type];
 
   const svgSilhouette = hasSvgSilhouette(node.type);
 

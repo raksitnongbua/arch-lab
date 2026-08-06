@@ -2,9 +2,10 @@
 
 /**
  * Empty-selection inspector (AF-E3-S2's fallback): the active diagram's
- * `title` and `description`, plus the model's read-only `updatedAt`. Text
- * fields use the same one-undo-per-session semantics as node fields, through
- * `updateDiagram`'s `coalesceKey`.
+ * `title` and `description`, its grouping boundaries (`./frame-list.tsx`), and
+ * the model's read-only `updatedAt`. Text fields use the same
+ * one-undo-per-session semantics as node fields, through `updateDiagram`'s
+ * `coalesceKey`.
  */
 
 import { useSyncExternalStore } from "react";
@@ -15,6 +16,7 @@ import type { C4Diagram } from "@/types";
 
 import { useEditorStore } from "../../state";
 import { Field, InspectorSection } from "./field";
+import { FrameList } from "./frame-list";
 import { useInspectorField } from "./use-inspector-field";
 
 const LEVEL_LABELS: Record<C4Diagram["level"], string> = {
@@ -109,6 +111,8 @@ export function DiagramInspector({
           }}
         />
       </Field>
+
+      <FrameList diagram={diagram} />
 
       <dl className="flex items-baseline justify-between gap-2 border-t border-border pt-3">
         <dt className="text-xs font-medium text-muted-foreground">

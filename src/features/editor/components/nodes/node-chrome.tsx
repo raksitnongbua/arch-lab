@@ -17,7 +17,8 @@
 import { Handle, Position } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
-import type { C4NodeType } from "@/types";
+
+import { C4_ABSTRACTION, SHAPE_LABEL } from "@/features/viewer/lib/labels";
 
 import { goToOriginal } from "../../lib/goto-original";
 import { resolveIcon } from "../../lib/icons/registry";
@@ -33,16 +34,12 @@ import {
 } from "./node-shapes";
 import { RefBadge } from "./ref-badge";
 
-export const TYPE_LABEL: Record<C4NodeType, string> = {
-  person: "Person",
-  softwareSystem: "Software System",
-  externalSystem: "External System",
-  container: "Container",
-  database: "Database",
-  queue: "Queue",
-  component: "Component",
-  codeElement: "Code Element",
-};
+/**
+ * Re-exported for the editor's own consumers. The tables themselves live in
+ * `viewer/lib/labels.ts` — one vocabulary for both renderers, the same
+ * centralisation rule `node-colors.ts` follows.
+ */
+export { C4_ABSTRACTION, SHAPE_LABEL };
 
 const HANDLES = [
   { id: "top", position: Position.Top },
@@ -71,11 +68,13 @@ export function NodeChrome({
   const { def, isFallback } = resolveIcon(node);
   const Icon = def.Svg;
 
-  // C4 metadata convention: [Container: Go] — type always, technology when set.
+  // C4 metadata convention: [Container: Go] — the ABSTRACTION always (never
+  // the silhouette's name: a cylinder is still a Container), technology when
+  // set.
   const meta =
     node.technology !== undefined && node.technology !== ""
-      ? `${TYPE_LABEL[node.type]}: ${node.technology}`
-      : TYPE_LABEL[node.type];
+      ? `${C4_ABSTRACTION[node.type]}: ${node.technology}`
+      : C4_ABSTRACTION[node.type];
 
   // Name (and description) in full on hover (AF-E1-S6 / AF-E3-S2).
   const hoverText =
@@ -181,8 +180,8 @@ export function NodeChrome({
 
       {isFallback ? (
         <span
-          aria-label={`Unknown icon "${node.icon ?? ""}" — showing the generic ${TYPE_LABEL[node.type]} icon`}
-          title={`Unknown icon "${node.icon ?? ""}" — showing the generic ${TYPE_LABEL[node.type]} icon`}
+          aria-label={`Unknown icon "${node.icon ?? ""}" — showing the generic ${SHAPE_LABEL[node.type].toLowerCase()} icon`}
+          title={`Unknown icon "${node.icon ?? ""}" — showing the generic ${SHAPE_LABEL[node.type].toLowerCase()} icon`}
           className="absolute top-1 left-1 z-[2] size-2 rounded-full bg-warning"
         />
       ) : null}

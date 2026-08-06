@@ -13,15 +13,15 @@ them before making product decisions.
 
 Be precise about what this repo is right now:
 
-| Area                                                     | State                                                                                                                                                                                                                                                                                          |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Read-only C4 viewer**                                  | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Diagrams export as SVG or PNG (rasterised at 2×).                                                                              |
-| **View-mode playground** (`/view`)                   | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                |
-| **`.alab` ⇄ JSON conversion**                            | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                        |
-| **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                  |
-| **C4 editor**                                            | Feature-complete in the codebase but **gated off for this release** behind `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts). `/editor` renders a coming-soon page and the editor code is excluded from the deployed bundle. See [Enabling the editor](#enabling-the-editor). |
-| **MCP server** (`/api/mcp`)                              | **Beta.** Eight read-only tools, a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                     |
-| **Sequence diagrams, data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                            |
+| Area                                                     | State                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Read-only C4 viewer**                                  | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Connectors carry a marching dash so flow direction reads without hunting for the arrowhead. Export as SVG or PNG (rasterised at 2×), either the view you are on or [every diagram as one `.zip`](#exporting-images). |
+| **View-mode playground** (`/view`)                       | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                                                                                                      |
+| **`.alab` ⇄ JSON conversion**                            | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                                                                                                              |
+| **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
+| **C4 editor**                                            | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; flip it to `false` and `/editor` degrades to a coming-soon page — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                    |
+| **MCP server** (`/api/mcp`)                              | **Beta.** Eight read-only tools, a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                                                           |
+| **Sequence diagrams, data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Routes
 
@@ -30,12 +30,12 @@ Be precise about what this repo is right now:
 | `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
 | `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                                     |
 | `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
-| `/view`       | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                              |
+| `/view`           | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                              |
 | `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
-| `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers.                                                                      |
+| `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
 | `/mcp`            | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
 | `/api/mcp`        | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
-| `/editor`         | Coming-soon page while the editor is gated.                                                                                                                                         |
+| `/editor`         | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Degrades to a coming-soon page when `EDITOR_ENABLED` is off.                    |
 
 ## The two model formats
 
@@ -86,6 +86,123 @@ ln -s "$PWD/editors/vscode" ~/.vscode/extensions/alab-syntax
 Reload the window and `.alab` files light up. Details, a `.vsix` route, and
 why you should _not_ associate `.alab` with YAML:
 [`editors/vscode/README.md`](editors/vscode/README.md).
+
+## Grouping boundaries
+
+A **boundary** is C4's labelled group drawn behind a set of elements —
+"Internal", an AWS region, a trust boundary. It owns no behaviour and carries no
+relationships, so it is never an endpoint of a connector.
+
+In the editor, boundaries live in two places, split by what you have selected:
+
+- **Wrap a selection.** Select one or more elements and use _Group N nodes in a
+  boundary_ in the inspector's action footer. Creating the boundary and moving
+  the elements into it is a **single undo entry** — it was one gesture.
+- **Manage them.** With nothing selected, the diagram inspector grows a
+  **Boundaries** panel: rename in place, nest one inside another, see how many
+  elements each holds, and delete. An element's own membership is a **Boundary**
+  field on its node inspector.
+
+Deleting a boundary **never deletes anything else**. Its member elements and any
+nested boundaries are re-homed one level out, so removing the outer of two
+leaves the inner one intact at the top level. That asymmetry with deleting a
+node is deliberate: a frame is scenery, and cascading from it would destroy
+elements nobody pointed at.
+
+Two rules are enforced in the store rather than the UI, because
+[`io/validate.ts`](src/features/editor/io/validate.ts) refuses a file that
+breaks them and the editor must never write a document it cannot read back: a
+boundary cannot nest inside itself or its own descendants, and a label cannot be
+blank. `pnpm check:frames` proves both, plus the undo semantics and the
+re-homing.
+
+Boundaries carry no geometry. The rectangle is derived from the bounding box of
+the members plus padding ([`frame-layout.ts`](src/features/editor/lib/frame-layout.ts)),
+so it cannot drift out of step when an element moves — and an empty boundary has
+no rectangle and is simply not drawn.
+
+In `.alab` they are one line each, with membership on the element:
+
+```
+@container cnt-shop "ShopFlow — Containers"
+  frame f-aws "AWS eu-west-1"
+  frame f-private "Private subnet" in=f-aws
+  api:container "Order API" [Go 1.22] in=f-private
+```
+
+## Exporting images
+
+The **Export** menu in view mode asks two independent questions: how much, and
+what format.
+
+- **This view** — the diagram on screen, as one `.svg` or `.png`.
+- **All N views** — every diagram in the model, in drill order, as a single
+  `.zip` of SVGs or PNGs. Entries are named
+  `01-context-shopflow-platform-system-context.svg`; the numeric prefix is what
+  keeps `unzip -l` and every file manager showing them in drill order instead of
+  alphabetically.
+
+A single archive rather than N downloads because browsers throttle or block
+consecutive downloads after the first, and loose files give no sign they belong
+together. The ZIP writer is [hand-rolled](src/features/viewer/export/zip.ts),
+store-only, no dependency — the same call `render-svg.ts` and `download.ts`
+already made for SVG rendering and PNG rasterisation. `pnpm check:export-archive`
+parses its output back byte-for-byte and hands it to the system `unzip` as a
+second opinion.
+
+Every exported image carries the [key](#c4-conformance), and the theme is
+resolved once per export so a multi-diagram archive is never half light and half
+dark.
+
+## C4 conformance
+
+Measured against [c4model.com](https://c4model.com/) — where the tool follows
+the model, and where it knowingly does not.
+
+**What it enforces.** The four levels (`context → container → component →
+code`) with a legality matrix for which element types may appear at each
+(`VALID_NODE_TYPES_BY_LEVEL` in [`src/types/c4.ts`](src/types/c4.ts)). A node's
+level is never stored on the node — it is the level of the diagram containing
+it — so an element cannot claim an altitude its view contradicts.
+
+**Notation.** Every element renders its C4 **classification** — Person,
+Software System, Container, Component, Code — in the `[...]` metadata line,
+with its technology when set. Note that the classification is not the same as
+the silhouette: a Postgres store draws as a teal cylinder but labels itself
+`[Container: PostgreSQL 16]`, because "Database" is not one of C4's
+abstractions. `C4_ABSTRACTION` maps the eight drawable node types onto the five
+classifications; `SHAPE_LABEL` (in
+[`viewer/lib/labels.ts`](src/features/viewer/lib/labels.ts)) names the
+silhouettes, and the two are reconciled in the exported key and in the node
+detail panel.
+
+**Every exported diagram carries a key**, as C4 requires — shapes, colours,
+border styles, line styles and arrow heads, each row derived from what the
+diagram actually contains rather than from a fixed list. Titles and the level
+are stamped above the diagram. Pass `includeLegend: false` to
+`renderDiagramSvg` for a diagram going somewhere that already has a shared key.
+
+**Review notes.** `/validate` and the MCP `validate_model` tool report the
+checklist items a parser cannot see — a container or component with no
+technology, an element with no description, an unlabelled relationship, a
+contentless label like "Uses", a bidirectional line where C4 asks for two
+one-way ones, a container relationship naming no protocol. They never change
+the verdict: a valid model stays valid. Rules and their citations live in
+[`validate/lib/advisories.ts`](src/features/validate/lib/advisories.ts) and are
+proven by `pnpm check:advisories`.
+
+**Deliberate divergences.**
+
+- **`bidirectional` stays in the model** even though C4 asks for unidirectional
+  lines, because Mermaid's `BiRel` has to import losslessly. The advisory
+  discourages it; the format still represents it.
+- **Eight node types, not five**, because `database` and `queue` earn their own
+  silhouette and hue (see the co-occurrence argument in
+  [`node-colors.ts`](src/features/editor/lib/node-colors.ts)). They are
+  Containers, and now say so.
+- **No system landscape, dynamic or deployment diagrams.** `C4Dynamic` and
+  `C4Deployment` Mermaid sources import at container level; call ordering and
+  deployment topology are not part of the model.
 
 ## Mermaid C4 import
 
@@ -190,6 +307,9 @@ Then open <http://localhost:3000>.
 | `pnpm check:archtext`         | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                   |
 | `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                  |
 | `pnpm check:validate-samples` | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                          |
+| `pnpm check:advisories`       | Proves the [C4 review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites a reason from the C4 model.                                                                      |
+| `pnpm check:export-archive`   | Proves the multi-diagram export: the hand-rolled ZIP writer emits an archive that parses back byte-for-byte with valid CRC-32s (and that the system `unzip` accepts, when one is installed), drill order survives, and archive names stay unique.                                                |
+| `pnpm check:frames`           | Proves boundary editing: creating one around a selection is a single undo entry, refused input leaves the model untouched, nesting cycles are impossible, deleting a boundary re-homes rather than cascades, and the file the editor would save passes the real validator.                       |
 | `pnpm check:mcp`              | Proves the MCP server without booting a protocol: the tools it registers and the tools `/mcp` documents match exactly both ways, every tool works over real input, failures carry the parser's line and column, and a generated share link decodes back to the model that went into it.          |
 | `pnpm check:vscode-grammar`   | Proves the VS Code grammar in `editors/vscode` has not drifted from the parser: every node type, arrow and header keyword is present, then a sample — parsed by the real parser first — is tokenized with `vscode-textmate`, the engine VS Code itself runs, asserting the scope at each offset. |
 
@@ -245,27 +365,28 @@ click away in the header.
 
 ## Enabling the editor
 
-The editor is built and gated, not vaporware. Two steps bring it back:
+The editor is **on** — `EDITOR_ENABLED` in
+[`src/lib/constants.ts`](src/lib/constants.ts) is `true`, and
+`src/app/editor/page.tsx` renders `<EditorShell />`.
 
-1. Flip the flag in [`src/lib/constants.ts`](src/lib/constants.ts):
+Turning it back off is two steps, in this order:
 
-   ```ts
-   export const EDITOR_ENABLED: boolean = true;
-   ```
-
-2. Restore the two commented lines at the top of `src/app/editor/page.tsx`
-   (while gated, that file deliberately imports nothing from
-   `@/features/editor`, which is what keeps the editor UI out of the deployed
-   bundle):
+1. Flip the flag:
 
    ```ts
-   import { EditorShell } from "@/features/editor";
-   export default function EditorPage() { return <EditorShell />; }
+   export const EDITOR_ENABLED: boolean = false;
    ```
+
+2. Drop the `EditorShell` import and render from `src/app/editor/page.tsx`,
+   replacing them with the coming-soon page and its metadata. This step is not
+   optional: while gated, that route must import **nothing** from
+   `@/features/editor`, because that import is what pulls the editor UI into the
+   deployed bundle. A conditional render would leave the code shipping while the
+   flag claimed otherwise. The file's own comment says the same.
 
 Everything else — the header's Editor nav entry, the landing-page CTAs, the
-capability copy on the demo index and in view mode — reads the flag and
-switches back on its own.
+capability copy on the demo index and in view mode — reads the flag and switches
+on its own.
 
 ## Known limitations
 

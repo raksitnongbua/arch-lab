@@ -32,7 +32,11 @@ import type { C4Edge, C4Level, C4Node } from "@/types";
 
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 
-import { TYPE_LABEL } from "../lib/labels";
+import {
+  C4_ABSTRACTION,
+  SHAPE_LABEL,
+  shapeAddsInformation,
+} from "../lib/labels";
 
 /** One relationship touching the selected element, in the current diagram. */
 export interface NodeConnection {
@@ -203,7 +207,17 @@ export function ViewerNodeDetail({
       </p>
 
       <dl className="mt-2 space-y-1 border-t border-border/60 pt-2">
-        <MetaRow term="Type">{TYPE_LABEL[node.type]}</MetaRow>
+        {/*
+         * The C4 classification, plus the silhouette in parentheses whenever
+         * the two differ ("Container (database)"). This panel is the one
+         * place with room to say both, so it is where a reader who wonders
+         * why a cylinder is labelled Container finds the answer.
+         */}
+        <MetaRow term="Type">
+          {shapeAddsInformation(node.type)
+            ? `${C4_ABSTRACTION[node.type]} (${SHAPE_LABEL[node.type].toLowerCase()})`
+            : C4_ABSTRACTION[node.type]}
+        </MetaRow>
         {node.technology !== undefined && node.technology !== "" ? (
           <MetaRow term="Technology">
             <span className="font-mono">{node.technology}</span>

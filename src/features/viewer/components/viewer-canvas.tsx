@@ -75,7 +75,7 @@ import {
   type ViewerModel,
 } from "../lib/model";
 import { FIT_PADDING, MAX_ZOOM, MIN_ZOOM } from "../lib/canvas-constants";
-import { TYPE_LABEL } from "../lib/labels";
+import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
 import { ViewerNodeDetail, type NodeDetail } from "./viewer-node-detail";
@@ -99,6 +99,17 @@ const edgeTypes: EdgeTypes = { c4: ViewerEdge };
 
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
+
+/*
+ * The resting marching dash, in `pathLength=100` units — so these are
+ * PERCENTAGES of a connector, not pixels, and every edge shows the same
+ * rhythm whatever its length. Roughly seven dashes per connector: enough for
+ * the direction to be unmistakable, few enough that a short edge still gets
+ * two or three and does not read as a dotted line.
+ */
+const EDGE_DASH_ON = 5;
+const EDGE_DASH_OFF = 9;
+const EDGE_DASH_PERIOD = EDGE_DASH_ON + EDGE_DASH_OFF;
 
 /**
  * Connector interaction styling, in one scoped stylesheet: hover affordance,
@@ -145,6 +156,47 @@ const EDGE_INTERACTION_CSS = `
   stroke: var(--primary);
   stroke-width: 2.5;
   opacity: 0.35;
+}
+/*
+ * The resting marching dash — a repeating pattern travelling source → target
+ * on every connector (geometry in viewer-edge.tsx).
+ *
+ * The pattern advances by exactly ONE PERIOD (${EDGE_DASH_PERIOD} path units,
+ * dash + gap) per cycle, which is what makes the loop seamless: after one
+ * period the pattern is in a state identical to where it began, so an
+ * infinite repeat never shows a jump. The keyframes and the dasharray
+ * therefore have to stay in step — both are derived from the constants above
+ * them, never typed out twice.
+ *
+ * Three things keep it from becoming noise on a twenty-edge diagram:
+ *
+ *   - it is SLOW (roughly four seconds for a dash to cross a connector) and
+ *     thinner than the base stroke;
+ *   - it is a lift of the edge ink TOWARD primary, not a new hue, so the
+ *     palette still belongs to the nodes and nothing competes with them;
+ *   - it rides on top of the base stroke rather than replacing it, so a
+ *     connector still reads as a continuous line first and a moving one
+ *     second.
+ *
+ * It hands over to the selection comet rather than layering with it, and
+ * disappears entirely on a dimmed edge — see the render guard.
+ */
+.viewer-canvas .viewer-edge-drift {
+  fill: none;
+  stroke: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.85;
+  stroke-dasharray: ${EDGE_DASH_ON} ${EDGE_DASH_OFF};
+  animation: viewer-edge-drift ${VIEWER_DURATIONS.edgeDrift}ms linear infinite;
+}
+/* Pointing at a connector brightens its dashes and speeds them up — "which
+   way does this go?" is a question asked by hovering. */
+.viewer-canvas .react-flow__edge:hover .viewer-edge-drift {
+  stroke: var(--primary);
+  opacity: 1;
+  stroke-width: 2;
+  animation-duration: ${Math.round(VIEWER_DURATIONS.edgeDrift / 2.5)}ms;
 }
 .viewer-canvas .viewer-edge-flow {
   fill: none;
@@ -250,6 +302,10 @@ const EDGE_INTERACTION_CSS = `
 @keyframes viewer-edge-enter {
   from { opacity: 0; }
 }
+@keyframes viewer-edge-drift {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -${EDGE_DASH_PERIOD}; }
+}
 @keyframes viewer-edge-flow-glow {
   from { stroke-dashoffset: 30; }
   to { stroke-dashoffset: -70; }
@@ -279,6 +335,10 @@ const EDGE_INTERACTION_CSS = `
   .viewer-canvas .viewer-edge-flow-arrow {
     animation: none;
   }
+  /* The resting dash is motion and nothing else — a parked band would just be
+     a stray bright segment sitting on one connector, so it goes away entirely
+     rather than freezing mid-path. */
+  .viewer-canvas .viewer-edge-drift { display: none; }
   .viewer-canvas .viewer-edge-flow-tail { visibility: hidden; }
   .viewer-canvas .viewer-edge-flow-head {
     stroke-dasharray: none;
@@ -547,7 +607,7 @@ function ViewerCanvasInner({
         ? " Use the zoom button to open its child view."
         : "";
       setAnnouncement(
-        `Element selected: ${node.name} — ${TYPE_LABEL[node.type]}. ` +
+        `Element selected: ${node.name} — ${C4_ABSTRACTION[node.type]}. ` +
           `Details panel updated.${drillHint} Press Escape to deselect.`,
       );
     },

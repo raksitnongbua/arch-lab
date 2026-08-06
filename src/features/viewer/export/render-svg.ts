@@ -23,7 +23,7 @@
  * viewer clamps.
  */
 
-import type { C4Diagram, C4Edge, C4Node } from "@/types";
+import type { C4Diagram, C4Edge, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
 
 import {
@@ -34,6 +34,7 @@ import {
 } from "@/features/editor/lib/edge-geometry";
 import {
   colorRoleForNode,
+  COLOR_ROLE_BY_TYPE,
   EXTERNAL_NODE_OPACITY,
   resolveTagColor,
 } from "@/features/editor/lib/node-colors";
@@ -42,7 +43,11 @@ import {
   FRAME_LABEL_BAND,
 } from "@/features/editor/lib/frame-layout";
 
-import { TYPE_LABEL } from "../lib/labels";
+import {
+  C4_ABSTRACTION,
+  SHAPE_LABEL,
+  shapeAddsInformation,
+} from "../lib/labels";
 import { embeddedIconSvg } from "./icon-markup";
 import type { ExportTheme } from "./theme";
 
@@ -437,8 +442,8 @@ function nodeContent(
   );
   const meta =
     node.technology !== undefined && node.technology !== ""
-      ? `[${TYPE_LABEL[node.type]}: ${node.technology}]`
-      : `[${TYPE_LABEL[node.type]}]`;
+      ? `[${C4_ABSTRACTION[node.type]}: ${node.technology}]`
+      : `[${C4_ABSTRACTION[node.type]}]`;
   const description =
     node.description !== undefined && node.description !== ""
       ? ellipsize(node.description, descSize, innerWidth)
@@ -619,6 +624,282 @@ function edgeMarkup(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Legend                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The key. c4model.com/diagrams/notation: "all diagrams must include a key
+ * explaining notation (shapes, colors, borders, line types, arrow heads)."
+ *
+ * On screen a reader can click a node and read the detail panel; an exported
+ * image has no such recourse — it lands in a wiki page where five colours and
+ * six silhouettes are on their own. So the key ships with the FILE, and it is
+ * the export, not the canvas, that grew one.
+ *
+ * Every row is DERIVED from the diagram, never a fixed list: one row per node
+ * type actually drawn, relationship rows only for the line styles actually
+ * used, a boundary row only when frames exist. A key describing a queue on a
+ * diagram with no queue is noise, and worse, it invites the reader to hunt
+ * for one.
+ */
+
+const LEGEND_GAP_ABOVE = 30;
+const LEGEND_TITLE_SIZE = 11;
+const LEGEND_TITLE_HEIGHT = 20;
+const LEGEND_ROW_HEIGHT = 20;
+const LEGEND_TEXT_SIZE = 10;
+const LEGEND_SWATCH_WIDTH = 34;
+const LEGEND_SWATCH_HEIGHT = 13;
+const LEGEND_SWATCH_GAP = 8;
+const LEGEND_COLUMN_GAP = 26;
+/** Arrow-head size for the key's sample lines — see `legendLine`. */
+const LEGEND_MARKER_SIZE = 9;
+
+interface LegendRow {
+  /** Swatch markup, drawn in a 26×13 box whose top-left is (0, 0). */
+  swatch: (x: number, y: number) => string;
+  text: string;
+}
+
+/**
+ * A miniature of the real silhouette, in the same role colours the node
+ * itself is painted with — shape, fill, border weight and dash all reproduced,
+ * because those are the four things the key exists to explain. Drawn from the
+ * same `theme.nodeRoles` table the nodes read, so a key cannot describe a
+ * palette the image does not have.
+ */
+function legendSwatch(
+  type: C4NodeType,
+  theme: ExportTheme,
+): (x: number, y: number) => string {
+  const role = COLOR_ROLE_BY_TYPE[type];
+  const paint = theme.nodeRoles[role];
+  const w = LEGEND_SWATCH_WIDTH;
+  const h = LEGEND_SWATCH_HEIGHT;
+
+  return (x, y) => {
+    const base =
+      `fill="${paint.fill}" stroke="${paint.border}" ` +
+      (type === "softwareSystem" ? 'stroke-width="2"' : 'stroke-width="1"') +
+      (type === "externalSystem" ? ' stroke-dasharray="3 2"' : "");
+    const dim =
+      type === "externalSystem" ? ` opacity="${EXTERNAL_NODE_OPACITY}"` : "";
+
+    if (type === "database") {
+      // Cylinder: the same rim-ellipse + body construction as nodeShape,
+      // scaled into the swatch box.
+      const ry = 2.5;
+      return (
+        `<g${dim}>` +
+        `<path d="M ${fmt(x)} ${fmt(y + ry)} A ${fmt(w / 2)} ${fmt(ry)} 0 0 1 ${fmt(x + w)} ${fmt(y + ry)} ` +
+        `L ${fmt(x + w)} ${fmt(y + h - ry)} A ${fmt(w / 2)} ${fmt(ry)} 0 0 1 ${fmt(x)} ${fmt(y + h - ry)} Z" ${base}/>` +
+        `<path d="M ${fmt(x)} ${fmt(y + ry)} A ${fmt(w / 2)} ${fmt(ry)} 0 0 0 ${fmt(x + w)} ${fmt(y + ry)}" ` +
+        `fill="none" stroke="${paint.border}" stroke-width="1"/>` +
+        `</g>`
+      );
+    }
+    if (type === "queue") {
+      // Pipe: rounded end caps, open left rim.
+      const rx = 3.5;
+      return (
+        `<g${dim}>` +
+        `<path d="M ${fmt(x + rx)} ${fmt(y)} L ${fmt(x + w - rx)} ${fmt(y)} ` +
+        `A ${fmt(rx)} ${fmt(h / 2)} 0 0 1 ${fmt(x + w - rx)} ${fmt(y + h)} ` +
+        `L ${fmt(x + rx)} ${fmt(y + h)} ` +
+        `A ${fmt(rx)} ${fmt(h / 2)} 0 0 1 ${fmt(x + rx)} ${fmt(y)} Z" ${base}/>` +
+        `</g>`
+      );
+    }
+    if (type === "person") {
+      // Rounded shoulders: a big top radius, a modest bottom one.
+      return `<g${dim}><path d="${roundedRectPath(x, y, w, h, 5, 5, 2, 2)}" ${base}/></g>`;
+    }
+    const r = type === "codeElement" ? 1 : type === "component" ? 2 : 3;
+    return `<g${dim}><path d="${roundedRectPath(x, y, w, h, r, r, r, r)}" ${base}/></g>`;
+  };
+}
+
+/**
+ * A sample relationship line, arrow head included.
+ *
+ * Draws with `LEGEND_MARKER_SIZE`, not the diagram's 14px head: at that size
+ * two heads on a 34px swatch overlap into an unreadable blob, and the row
+ * that most needs to be legible is exactly the bidirectional one.
+ */
+function legendLine(
+  theme: ExportTheme,
+  markerId: string,
+  { dashed = false, bidirectional = false } = {},
+): (x: number, y: number) => string {
+  const w = LEGEND_SWATCH_WIDTH;
+  return (x, y) => {
+    const mid = y + LEGEND_SWATCH_HEIGHT / 2;
+    // The head overhangs the path end, so the line stops short of the box.
+    return (
+      `<path d="M ${fmt(x + (bidirectional ? 4 : 0))} ${fmt(mid)} L ${fmt(x + w - 4)} ${fmt(mid)}" ` +
+      `fill="none" stroke="${theme.edge}" stroke-width="1.5"` +
+      (dashed ? ' stroke-dasharray="4 3"' : "") +
+      ` marker-end="url(#${markerId})"` +
+      (bidirectional ? ` marker-start="url(#${markerId})"` : "") +
+      `/>`
+    );
+  };
+}
+
+/**
+ * The rows this diagram needs, in reading order: elements first (the boxes a
+ * reader decodes before anything else), then line styles, then scenery.
+ */
+function legendRowsFor(
+  diagram: C4Diagram,
+  theme: ExportTheme,
+  markerId: string,
+): LegendRow[] {
+  const rows: LegendRow[] = [];
+
+  // One row per node TYPE present, not per colour role: two types can share a
+  // role (a person tagged `external` goes grey) and the reader still has two
+  // different silhouettes in front of them.
+  const typesPresent: C4NodeType[] = [];
+  for (const node of diagram.nodes) {
+    if (!typesPresent.includes(node.type)) typesPresent.push(node.type);
+  }
+  typesPresent.sort(
+    (a, b) => LEGEND_TYPE_ORDER.indexOf(a) - LEGEND_TYPE_ORDER.indexOf(b),
+  );
+  for (const type of typesPresent) {
+    rows.push({
+      swatch: legendSwatch(type, theme),
+      // "Database — Container" rather than a bare "Database": the whole point
+      // of the relabelling is that the silhouette and the classification are
+      // different facts, and the key is where they are reconciled. Only where
+      // they ARE different, though — `shapeAddsInformation` is what keeps this
+      // from emitting "Software system — Software System".
+      text: shapeAddsInformation(type)
+        ? `${SHAPE_LABEL[type]} — ${C4_ABSTRACTION[type]}`
+        : SHAPE_LABEL[type],
+    });
+  }
+
+  if (diagram.nodes.some((node) => isBoundaryPlaceholder(node))) {
+    rows.push({
+      swatch: (x, y) =>
+        `<g opacity="0.6"><path d="${roundedRectPath(x, y, LEGEND_SWATCH_WIDTH, LEGEND_SWATCH_HEIGHT, 3, 3, 3, 3)}" ` +
+        `fill="${theme.node}" stroke="${theme.nodeBorder}" stroke-width="1"/></g>`,
+      text: "Faded — shown for context, defined one level up",
+    });
+  }
+
+  const edges = diagram.edges;
+  if (edges.some((edge) => edge.style !== "dashed")) {
+    rows.push({
+      swatch: legendLine(theme, markerId),
+      text: "Relationship, in the arrow's direction",
+    });
+  }
+  if (edges.some((edge) => edge.style === "dashed")) {
+    rows.push({
+      swatch: legendLine(theme, markerId, { dashed: true }),
+      text: "Asynchronous relationship",
+    });
+  }
+  if (edges.some((edge) => edge.direction === "bidirectional")) {
+    rows.push({
+      swatch: legendLine(theme, markerId, { bidirectional: true }),
+      text: "Relationship in both directions",
+    });
+  }
+
+  if ((diagram.frames ?? []).length > 0) {
+    rows.push({
+      swatch: (x, y) =>
+        `<rect x="${fmt(x)}" y="${fmt(y)}" width="${LEGEND_SWATCH_WIDTH}" height="${LEGEND_SWATCH_HEIGHT}" rx="3" ` +
+        `fill="${theme.nodeBorder}" fill-opacity="0.06" stroke="${theme.nodeBorder}" stroke-opacity="0.7" ` +
+        `stroke-width="1" stroke-dasharray="4 3"/>`,
+      text: "Boundary — a labelled grouping, not a deployable thing",
+    });
+  }
+
+  return rows;
+}
+
+/** Reading order for the key: actors, then software, then the data layer. */
+const LEGEND_TYPE_ORDER: readonly C4NodeType[] = [
+  "person",
+  "softwareSystem",
+  "container",
+  "component",
+  "codeElement",
+  "database",
+  "queue",
+  "externalSystem",
+];
+
+interface LegendLayout {
+  rows: LegendRow[];
+  columns: number;
+  rowsPerColumn: number;
+  columnWidth: number;
+  /** Total vertical space the block claims, gap above included. */
+  height: number;
+  /** Narrowest page content width that renders without clipping. */
+  minContentWidth: number;
+}
+
+function layoutLegend(rows: LegendRow[], contentWidth: number): LegendLayout {
+  const widest = rows.reduce(
+    (max, row) => Math.max(max, estimateWidth(row.text, LEGEND_TEXT_SIZE)),
+    0,
+  );
+  const columnWidth =
+    LEGEND_SWATCH_WIDTH + LEGEND_SWATCH_GAP + widest + LEGEND_COLUMN_GAP;
+  const columns = Math.max(
+    1,
+    Math.min(rows.length, Math.floor(contentWidth / columnWidth)),
+  );
+  const rowsPerColumn = Math.ceil(rows.length / columns);
+  return {
+    rows,
+    columns,
+    rowsPerColumn,
+    columnWidth,
+    height:
+      LEGEND_GAP_ABOVE +
+      LEGEND_TITLE_HEIGHT +
+      rowsPerColumn * LEGEND_ROW_HEIGHT,
+    // One column, minus the trailing gutter that has nothing after it.
+    minContentWidth: columnWidth - LEGEND_COLUMN_GAP,
+  };
+}
+
+/** Emits the key at page coordinates — outside the diagram's transform. */
+function legendMarkup(
+  layout: LegendLayout,
+  left: number,
+  top: number,
+  theme: ExportTheme,
+): string {
+  const parts = [
+    `<text x="${fmt(left)}" y="${fmt(top + LEGEND_TITLE_SIZE)}" font-family="${FONT_SANS}" ` +
+      `font-size="${LEGEND_TITLE_SIZE}" font-weight="600" fill="${theme.foreground}">Key</text>`,
+  ];
+  layout.rows.forEach((row, index) => {
+    const column = Math.floor(index / layout.rowsPerColumn);
+    const rowIndex = index % layout.rowsPerColumn;
+    const x = left + column * layout.columnWidth;
+    const y = top + LEGEND_TITLE_HEIGHT + rowIndex * LEGEND_ROW_HEIGHT;
+    const swatchTop = y + (LEGEND_ROW_HEIGHT - LEGEND_SWATCH_HEIGHT) / 2;
+    parts.push(row.swatch(x, swatchTop));
+    parts.push(
+      `<text x="${fmt(x + LEGEND_SWATCH_WIDTH + LEGEND_SWATCH_GAP)}" ` +
+        `y="${fmt(swatchTop + LEGEND_SWATCH_HEIGHT - 3)}" font-family="${FONT_SANS}" ` +
+        `font-size="${LEGEND_TEXT_SIZE}" fill="${theme.mutedForeground}">${escapeXml(row.text)}</text>`,
+    );
+  });
+  return `<g>${parts.join("")}</g>`;
+}
+
+/* -------------------------------------------------------------------------- */
 /* The document                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -637,6 +918,13 @@ export interface RenderDiagramOptions {
    * this module stays DOM-free — the mix needs the browser's colour parser.
    */
   paintForTagColor?: (tagColor: string) => { fill: string; stroke: string };
+  /**
+   * Draw the key beneath the diagram. Defaults to TRUE: c4model.com requires
+   * one, and the exported file is precisely the artefact whose reader cannot
+   * click a node to find out what grey means. Opt out for a diagram being
+   * embedded somewhere that already carries a shared key.
+   */
+  includeLegend?: boolean;
 }
 
 /**
@@ -678,12 +966,33 @@ export function renderDiagramSvg(
     maxY = 120;
   }
 
-  const width = Math.ceil(maxX - minX + PADDING * 2);
-  const height = Math.ceil(maxY - minY + PADDING * 2 + HEADER_HEIGHT);
+  const markerId = "af-arrow";
+
+  // The key is laid out BEFORE the page is sized: it can widen a narrow
+  // diagram (a two-node context view is narrower than one legend column) and
+  // it always lengthens the page. Both have to be known before `width` and
+  // `height` are fixed, or the key renders off the edge of its own image.
+  const legendMarkerId = `${markerId}-key`;
+  const legendRows =
+    (options.includeLegend ?? true) && diagram.nodes.length > 0
+      ? legendRowsFor(diagram, theme, legendMarkerId)
+      : [];
+  const diagramWidth = maxX - minX;
+  const legend =
+    legendRows.length > 0 ? layoutLegend(legendRows, diagramWidth) : null;
+  const contentWidth =
+    legend === null
+      ? diagramWidth
+      : Math.max(diagramWidth, legend.minContentWidth);
+
+  const width = Math.ceil(contentWidth + PADDING * 2);
+  const height = Math.ceil(
+    maxY - minY + PADDING * 2 + HEADER_HEIGHT + (legend?.height ?? 0),
+  );
   const translateX = PADDING - minX;
   const translateY = PADDING + HEADER_HEIGHT - minY;
+  const legendTop = PADDING + HEADER_HEIGHT + (maxY - minY) + LEGEND_GAP_ABOVE;
 
-  const markerId = "af-arrow";
   // The root diagram's title usually IS the model title — don't say it twice.
   const heading =
     diagram.title === modelTitle
@@ -774,6 +1083,13 @@ export function renderDiagramSvg(
     `<marker id="${markerId}" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse">` +
     `<path d="M 1 1 L 11 6 L 1 11 Z" fill="${theme.edge}"/>` +
     `</marker>` +
+    (legend !== null
+      ? `<marker id="${legendMarkerId}" viewBox="0 0 12 12" refX="10" refY="6" ` +
+        `markerWidth="${LEGEND_MARKER_SIZE}" markerHeight="${LEGEND_MARKER_SIZE}" ` +
+        `markerUnits="userSpaceOnUse" orient="auto-start-reverse">` +
+        `<path d="M 1 1 L 11 6 L 1 11 Z" fill="${theme.edge}"/>` +
+        `</marker>`
+      : "") +
     wash.markup() +
     `</defs>` +
     `<rect width="${width}" height="${height}" fill="${theme.canvas}"/>` +
@@ -786,6 +1102,9 @@ export function renderDiagramSvg(
     frameLabelsMarkup +
     emptyNotice +
     `</g>` +
+    // Page furniture, not model space: emitted outside the transform so the
+    // key keeps its own scale and left margin whatever the diagram's origin.
+    (legend !== null ? legendMarkup(legend, PADDING, legendTop, theme) : "") +
     `</svg>`;
 
   return { svg, width, height };

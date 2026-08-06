@@ -15,6 +15,24 @@ export const VIEWER_DURATIONS = {
    * purpose: it must read as steady directional current, not a blink.
    */
   edgeFlow: 1600,
+  /**
+   * Time for the resting marching dash to advance by exactly ONE dash period
+   * — not one traversal of the connector.
+   *
+   * Per-period is what makes the loop seamless: the pattern repeats along the
+   * whole path, so shifting it by one full period lands on a state
+   * indistinguishable from the start, and the animation can restart with no
+   * visible hitch however long the connector is. Per-traversal timing would
+   * instead make every edge's dashes travel at a different speed, since
+   * `pathLength` normalisation fixes the pattern's length in path units, not
+   * in pixels.
+   *
+   * At this value a dash crosses a whole connector in roughly four seconds:
+   * clearly moving, never hurried. The selected edge's comet (`edgeFlow`)
+   * stays much brighter and faster so selecting a connector still reads as an
+   * escalation.
+   */
+  edgeDrift: 900,
   /** Cross-fade when the rest of the diagram dims behind a selection. */
   edgeFocus: DURATIONS.nodeIn,
   /** Hover emphasis on a connector — mirrors the editor's hover band. */

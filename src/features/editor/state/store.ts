@@ -24,6 +24,7 @@ import {
   type ArchLabMetadata,
   type C4Diagram,
   type C4Edge,
+  type C4Frame,
   type C4Level,
   type C4Node,
   type C4NodeType,
@@ -213,6 +214,60 @@ export interface EditorActions {
   ): void;
   updateMetadata(patch: Partial<ArchLabMetadata>): void;
 
+  /* ---- frames: the C4 grouping boundaries drawn behind the nodes ---- */
+
+  /**
+   * Adds a frame to `diagramId` and returns its id.
+   *
+   * `nodeIds` are moved INTO the new frame as part of the same history entry,
+   * which is the whole gesture in one step: the way a boundary gets created is
+   * by selecting the things that belong in it. Passing none is allowed — an
+   * empty frame is legal in the model (see `C4Frame`) and is how you make a
+   * boundary before the elements exist.
+   *
+   * Throws when `parentFrameId` names a frame that is not in this diagram, or
+   * when a node id is not.
+   */
+  createFrame(input: {
+    diagramId: string;
+    label?: string;
+    nodeIds?: readonly string[];
+    parentFrameId?: string | null;
+  }): string;
+
+  /**
+   * Renames or re-parents a frame. Re-parenting is refused when it would make
+   * the frame enclose itself — the file validator rejects such a file, so the
+   * editor must never be able to produce one.
+   */
+  updateFrame(
+    diagramId: string,
+    frameId: string,
+    patch: Partial<Omit<C4Frame, "id">>,
+    opts?: { coalesceKey?: string },
+  ): void;
+
+  /**
+   * Removes a frame. NEVER removes anything else: member nodes and nested
+   * frames are re-homed to the deleted frame's own parent, so deleting the
+   * outer of two boundaries leaves the inner one intact one level out.
+   *
+   * That asymmetry with `deleteNodes` is deliberate. A frame is scenery — it
+   * owns no behaviour and carries no relationships — so cascading from it
+   * would destroy elements the user never pointed at.
+   */
+  deleteFrame(diagramId: string, frameId: string): void;
+
+  /**
+   * Puts `nodeIds` in `frameId`, or takes them out of any frame when it is
+   * `null`. One history entry for the whole batch.
+   */
+  setNodeFrame(
+    diagramId: string,
+    nodeIds: readonly string[],
+    frameId: string | null,
+  ): void;
+
   /** Creates the child diagram one level deeper and sets BOTH pointers. Throws MaxDepthError at `code`. */
   createChildDiagram(diagramId: string, nodeId: string): string; // child diagram id
 
@@ -299,6 +354,56 @@ const DIAGRAM_PATCH_KEYS: ReadonlySet<string> = new Set([
   "description",
 ]);
 const DIAGRAM_REQUIRED_KEYS: ReadonlySet<string> = new Set(["title"]);
+const FRAME_PATCH_KEYS: ReadonlySet<string> = new Set([
+  "label",
+  "parentFrameId",
+]);
+// `label` is required: the file validator rejects a frame with an empty one,
+// and a frame's label is the only thing identifying it on the canvas.
+const FRAME_REQUIRED_KEYS: ReadonlySet<string> = new Set(["label"]);
+
+/** The default label for a new boundary — C4's most common one by far. */
+const DEFAULT_FRAME_LABEL = "Internal";
+
+function findFrameOrThrow(diagram: C4Diagram, frameId: string): C4Frame {
+  const frame = (diagram.frames ?? []).find((each) => each.id === frameId);
+  if (frame === undefined) {
+    throw new Error(
+      `Frame "${frameId}" does not exist in diagram "${diagram.id}".`,
+    );
+  }
+  return frame;
+}
+
+/**
+ * Whether making `parentId` the parent of `frameId` would close a loop.
+ *
+ * Walks up from the proposed parent looking for the frame itself. The file
+ * validator already refuses a cyclic file (`io/validate.ts`), so the editor
+ * producing one would mean writing a document it then cannot read back — the
+ * check belongs on both sides.
+ */
+function wouldCycle(
+  frames: readonly C4Frame[],
+  frameId: string,
+  parentId: string,
+): boolean {
+  const parentOf = new Map(
+    frames.map((frame) => [frame.id, frame.parentFrameId ?? null]),
+  );
+  let cursor: string | null = parentId;
+  // Bounded by the frame count: a chain longer than that has already revisited.
+  for (let step = 0; cursor !== null && step <= frames.length; step += 1) {
+    if (cursor === frameId) return true;
+    cursor = parentOf.get(cursor) ?? null;
+  }
+  return false;
+}
+
+/** Frames sorted by id — the order the serializer writes, kept in memory too. */
+function sortFrames(frames: C4Frame[]): C4Frame[] {
+  return frames.sort((a, b) => a.id.localeCompare(b.id));
+}
 
 function findNodeOrThrow(diagram: C4Diagram, nodeId: string): C4Node {
   const node = findNode(diagram, nodeId);
@@ -760,6 +865,124 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
         new Set(["title", "createdAt", "updatedAt"]),
       );
       if (jsonEqual(before, next.metadata)) return;
+      commitModel(next);
+    },
+
+    createFrame({ diagramId, label, nodeIds = [], parentFrameId = null }) {
+      const state = get();
+      const existing = getDiagramOrThrow(state.model, diagramId);
+      const trimmed = (label ?? "").trim();
+      const frameLabel = trimmed === "" ? DEFAULT_FRAME_LABEL : trimmed;
+
+      // Validate against the CURRENT model, before cloning: a throw must
+      // leave the store exactly as it was, with no history entry.
+      const frames = existing.frames ?? [];
+      if (parentFrameId !== null && parentFrameId !== undefined) {
+        findFrameOrThrow(existing, parentFrameId);
+      }
+      for (const nodeId of nodeIds) findNodeOrThrow(existing, nodeId);
+
+      // Frame ids are unique WITHIN a diagram (data-model.md), not file-wide,
+      // so the taken set is this diagram's frames — not every frame in the
+      // file, which would needlessly suffix ids that cannot collide.
+      const frameId = uniqueId(
+        `f-${slugify(frameLabel, "frame")}`,
+        new Set(frames.map((frame) => frame.id)),
+      );
+
+      const next = structuredClone(state.model);
+      const diagram = getDiagramOrThrow(next, diagramId);
+      const frame: C4Frame = { id: frameId, label: frameLabel };
+      if (parentFrameId !== null && parentFrameId !== undefined) {
+        frame.parentFrameId = parentFrameId;
+      }
+      diagram.frames = sortFrames([...(diagram.frames ?? []), frame]);
+      // The members move in the SAME entry — creating a boundary around a
+      // selection is one action, so undo must put it back in one step.
+      for (const nodeId of nodeIds) {
+        findNodeOrThrow(diagram, nodeId).frameId = frameId;
+      }
+      commitModel(next);
+      return frameId;
+    },
+
+    updateFrame(diagramId, frameId, patch, opts) {
+      const state = get();
+      const current = getDiagramOrThrow(state.model, diagramId);
+      const frames = current.frames ?? [];
+      findFrameOrThrow(current, frameId);
+
+      const parent = patch.parentFrameId;
+      if (parent !== undefined && parent !== null) {
+        findFrameOrThrow(current, parent);
+        if (parent === frameId || wouldCycle(frames, frameId, parent)) {
+          throw new Error(
+            `Frame "${frameId}" cannot nest inside "${parent}" — ` +
+              "that would make it enclose itself.",
+          );
+        }
+      }
+
+      const next = structuredClone(state.model);
+      const diagram = getDiagramOrThrow(next, diagramId);
+      const frame = findFrameOrThrow(diagram, frameId);
+      const before = structuredClone(frame);
+      applyPatch(frame, patch, FRAME_REQUIRED_KEYS, FRAME_PATCH_KEYS);
+      // An all-whitespace rename would produce a file the validator refuses.
+      if (typeof frame.label === "string" && frame.label.trim() === "") {
+        frame.label = before.label;
+      }
+      if (jsonEqual(before, frame)) return;
+      commitModel(next, opts?.coalesceKey);
+    },
+
+    deleteFrame(diagramId, frameId) {
+      const state = get();
+      const current = getDiagramOrThrow(state.model, diagramId);
+      const doomed = findFrameOrThrow(current, frameId);
+      // Where everything the frame held goes: one level out. `undefined`
+      // rather than `null` for a top-level home, because `C4Node.frameId` is
+      // absent-or-set and the serializer omits absent fields.
+      const grandparent = doomed.parentFrameId ?? null;
+
+      const next = structuredClone(state.model);
+      const diagram = getDiagramOrThrow(next, diagramId);
+      diagram.frames = (diagram.frames ?? []).filter(
+        (frame) => frame.id !== frameId,
+      );
+      for (const frame of diagram.frames) {
+        if ((frame.parentFrameId ?? null) === frameId) {
+          if (grandparent === null) delete frame.parentFrameId;
+          else frame.parentFrameId = grandparent;
+        }
+      }
+      for (const node of diagram.nodes) {
+        if (node.frameId === frameId) {
+          if (grandparent === null) delete node.frameId;
+          else node.frameId = grandparent;
+        }
+      }
+      // An empty `frames` array and an absent one mean the same thing; drop it
+      // so a diagram that never had boundaries round-trips byte-identically.
+      if (diagram.frames.length === 0) delete diagram.frames;
+      commitModel(next);
+    },
+
+    setNodeFrame(diagramId, nodeIds, frameId) {
+      const state = get();
+      const current = getDiagramOrThrow(state.model, diagramId);
+      if (frameId !== null) findFrameOrThrow(current, frameId);
+      for (const nodeId of nodeIds) findNodeOrThrow(current, nodeId);
+
+      const next = structuredClone(state.model);
+      const diagram = getDiagramOrThrow(next, diagramId);
+      const before = structuredClone(diagram.nodes);
+      for (const nodeId of nodeIds) {
+        const node = findNodeOrThrow(diagram, nodeId);
+        if (frameId === null) delete node.frameId;
+        else node.frameId = frameId;
+      }
+      if (jsonEqual(before, diagram.nodes)) return;
       commitModel(next);
     },
 

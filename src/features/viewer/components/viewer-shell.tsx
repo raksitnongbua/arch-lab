@@ -47,7 +47,12 @@ import { cn } from "@/lib/utils";
 import { ViewerExportButton } from "../export/export-button";
 import { EditModeLink } from "./edit-mode-link";
 import { ViewerShareButton, type ShareSource } from "../share/share-button";
-import { deepFreeze, getDiagram, type ViewerModel } from "../lib/model";
+import {
+  deepFreeze,
+  diagramsInDrillOrder,
+  getDiagram,
+  type ViewerModel,
+} from "../lib/model";
 import { ViewerCanvas } from "./viewer-canvas";
 
 /* ---- fullscreen state, as an external store ------------------------------- */
@@ -128,6 +133,12 @@ export function ViewerShell({
     [onDiagramChange],
   );
   const currentDiagram = getDiagram(frozenModel, currentDiagramId);
+  // Drill order for the export-all archive. Memoised on the model, not the
+  // current diagram: navigating levels must not re-walk the hierarchy.
+  const allDiagrams = useMemo(
+    () => diagramsInDrillOrder(frozenModel),
+    [frozenModel],
+  );
 
   /* ---- native fullscreen ---------------------------------------------------- */
 
@@ -270,6 +281,7 @@ export function ViewerShell({
             <ViewerExportButton
               modelTitle={frozenModel.title}
               diagram={currentDiagram}
+              allDiagrams={allDiagrams}
               tagColors={frozenModel.file.metadata.tagColors}
             />
             <button

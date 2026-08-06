@@ -110,6 +110,52 @@ export function ownerNodeOf(
   );
 }
 
+/**
+ * Every diagram in DRILL order: the root first, then each of its children in
+ * the order their owner nodes appear, depth-first.
+ *
+ * This is the order a reader met the diagrams in, so it is the order a
+ * multi-diagram export should hand them over in — a zip listing then reads
+ * top-down like the model does, instead of alphabetically by id, which
+ * scatters the levels.
+ *
+ * Walks the DOWNWARD pointers (`childDiagramId` on nodes) rather than sorting
+ * on `level`, because level alone cannot order two sibling component diagrams,
+ * and it would put an unreachable diagram somewhere plausible instead of last.
+ * Any diagram the walk never reaches — an orphan the file kept but nothing
+ * points at — is appended at the end by id, so an export is never quietly
+ * missing part of the file.
+ */
+export function diagramsInDrillOrder(model: ViewerModel): C4Diagram[] {
+  const ordered: C4Diagram[] = [];
+  const seen = new Set<string>();
+
+  const walk = (diagramId: string): void => {
+    if (seen.has(diagramId)) return;
+    const diagram = model.diagrams[diagramId];
+    if (diagram === undefined) return;
+    seen.add(diagramId);
+    ordered.push(diagram);
+    // Node order is the file's own (sorted by id on write), which is what
+    // makes this deterministic across runs.
+    for (const node of diagram.nodes) {
+      if (
+        typeof node.childDiagramId === "string" &&
+        node.childDiagramId !== ""
+      ) {
+        walk(node.childDiagramId);
+      }
+    }
+  };
+
+  walk(model.rootDiagramId);
+
+  for (const id of Object.keys(model.diagrams).sort()) {
+    if (!seen.has(id)) ordered.push(model.diagrams[id]);
+  }
+  return ordered;
+}
+
 export interface Crumb {
   diagramId: string;
   label: string;

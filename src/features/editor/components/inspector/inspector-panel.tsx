@@ -18,7 +18,7 @@
  * confirm-vs-immediate rule.
  */
 
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, SquareDashed, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { isBoundaryPlaceholder } from "@/types";
@@ -52,15 +52,64 @@ function plural(count: number, noun: string): string {
  * alone (a relationship without its endpoints is meaningless) and read-only
  * boundary placeholders.
  */
+/**
+ * Wraps the selected nodes in a new boundary, then leaves the selection alone
+ * so the group can be renamed straight away in the boundaries panel.
+ *
+ * Lives on the SELECTION footer, not in the boundaries panel, because that
+ * panel sits on the diagram inspector — which by definition is only on screen
+ * when nothing is selected. A "group the selection" button there could never
+ * be pressed with a selection to group.
+ */
+function GroupIntoBoundaryButton({
+  diagramId,
+  nodeIds,
+}: {
+  diagramId: string;
+  nodeIds: readonly string[];
+}): React.JSX.Element {
+  const createFrame = useEditorStore((s) => s.createFrame);
+  const clearSelection = useEditorStore((s) => s.clearSelection);
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="w-full"
+      onClick={() => {
+        createFrame({ diagramId, nodeIds });
+        // Drop to the diagram inspector, which is where the new boundary's
+        // label field is — otherwise the boundary appears on the canvas with a
+        // default name and no visible way to rename it.
+        clearSelection();
+      }}
+    >
+      <SquareDashed aria-hidden="true" />
+      {nodeIds.length === 1
+        ? "Wrap in a boundary"
+        : `Group ${plural(nodeIds.length, "node")} in a boundary`}
+    </Button>
+  );
+}
+
 function SelectionActions({
   deleteLabel,
   duplicateLabel,
+  groupNodeIds,
+  diagramId,
 }: {
   deleteLabel: string;
   duplicateLabel?: string;
+  /** Nodes to wrap in a new boundary. Omit (or empty) to hide the action. */
+  groupNodeIds?: readonly string[];
+  diagramId?: string;
 }): React.JSX.Element {
   return (
     <div className="mt-auto flex flex-col gap-2 border-t border-border pt-3">
+      {groupNodeIds !== undefined &&
+      groupNodeIds.length > 0 &&
+      diagramId !== undefined ? (
+        <GroupIntoBoundaryButton diagramId={diagramId} nodeIds={groupNodeIds} />
+      ) : null}
       {duplicateLabel !== undefined ? (
         <Button
           variant="outline"
@@ -163,6 +212,12 @@ export function InspectorPanel(): React.JSX.Element {
             duplicateLabel={
               isBoundaryPlaceholder(singleNode) ? undefined : "Duplicate node"
             }
+            // A placeholder belongs to its original's diagram, so grouping it
+            // here would put a boundary around something defined elsewhere.
+            groupNodeIds={
+              isBoundaryPlaceholder(singleNode) ? undefined : [singleNode.id]
+            }
+            diagramId={diagram.id}
           />
         </>
       ) : singleEdge !== undefined ? (
@@ -192,6 +247,10 @@ export function InspectorPanel(): React.JSX.Element {
                 ? `Duplicate ${plural(selectedNodes.length, "node")}`
                 : undefined
             }
+            groupNodeIds={selectedNodes
+              .filter((node) => !isBoundaryPlaceholder(node))
+              .map((node) => node.id)}
+            diagramId={diagram.id}
           />
         </>
       )}
