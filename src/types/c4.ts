@@ -63,6 +63,42 @@ export const VALID_NODE_TYPES_BY_LEVEL = {
 export type C4NodeTypeForLevel<L extends C4Level> =
   (typeof VALID_NODE_TYPES_BY_LEVEL)[L][number];
 
+/**
+ * The five C4 classifications an element can BE, as they should appear in the
+ * `[...]` metadata line: c4model.com/diagrams/notation requires each element's
+ * classification (Person, Software System, Container, Component) to be
+ * explicit, and "Code" for the innermost level.
+ */
+export type C4Abstraction =
+  "Person" | "Software System" | "Container" | "Component" | "Code";
+
+/**
+ * Which C4 abstraction each of our eight node types actually IS (AF-E3-S1's
+ * companion table).
+ *
+ * The eight types collapse onto five abstractions for the same reason
+ * `COLOR_ROLE_BY_TYPE` collapses them onto five colour roles: `database` and
+ * `queue` are CONTAINERS that earn a silhouette of their own, not a fifth and
+ * sixth kind of thing, and `externalSystem` is a software system that happens
+ * to belong to somebody else. Shape and colour carry those distinctions —
+ * this table carries the classification, and a renderer that shows
+ * `[Database: PostgreSQL 16]` is naming the silhouette where C4 asks it to
+ * name the abstraction.
+ *
+ * `codeElement` maps to "Code" rather than "Code Element": C4's fourth level
+ * is called Code, and the extra word only ever restated the obvious.
+ */
+export const C4_ABSTRACTION: Record<C4NodeType, C4Abstraction> = {
+  person: "Person",
+  softwareSystem: "Software System",
+  externalSystem: "Software System",
+  container: "Container",
+  database: "Container",
+  queue: "Container",
+  component: "Component",
+  codeElement: "Code",
+};
+
 /* -------------------------------------------------------------------------- */
 /* Geometry                                                                    */
 /* -------------------------------------------------------------------------- */

@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { C4NodeType } from "@/types";
 
+import { SHAPE_LABEL } from "@/features/viewer/lib/labels";
+
 import {
   ICON_CATEGORY_LABELS,
   ICON_CATEGORY_ORDER,
@@ -34,16 +36,9 @@ import {
 /** Grid columns — arrow Up/Down move by one visual row. */
 const GRID_COLUMNS = 5;
 
-const TYPE_LABEL: Record<C4NodeType, string> = {
-  person: "person",
-  softwareSystem: "software system",
-  externalSystem: "external system",
-  container: "container",
-  database: "database",
-  queue: "queue",
-  component: "component",
-  codeElement: "code element",
-};
+// The generic-icon affordance names the SILHOUETTE, not the C4 abstraction:
+// the user is picking a picture here, and "use generic container icon" for a
+// queue would hand them the wrong one.
 
 /** T2-D imports exactly this (dev-handoff §4.6 — frozen). */
 export function IconPicker(props: {
@@ -205,7 +200,7 @@ export function IconPicker(props: {
               onClick={() => select(genericSlug)}
               className="rounded-md border border-border bg-secondary px-3 py-1.5 text-sm text-secondary-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              Use generic {TYPE_LABEL[nodeType]} icon
+              Use generic {SHAPE_LABEL[nodeType].toLowerCase()} icon
             </button>
           </div>
         ) : null}

@@ -17,7 +17,7 @@ import { ArrowDown, ArrowUpDown, Minus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { C4Edge, C4Level, C4Node, EdgeDirection } from "@/types";
 
-import { TYPE_LABEL } from "../lib/labels";
+import { C4_ABSTRACTION } from "../lib/labels";
 
 export interface EdgeDetail {
   edge: C4Edge;
@@ -42,8 +42,8 @@ const LEVEL_TITLE: Record<C4Level, string> = {
 
 function nodeMeta(node: C4Node): string {
   return node.technology !== undefined && node.technology !== ""
-    ? `${TYPE_LABEL[node.type]} · ${node.technology}`
-    : TYPE_LABEL[node.type];
+    ? `${C4_ABSTRACTION[node.type]} · ${node.technology}`
+    : C4_ABSTRACTION[node.type];
 }
 
 function MetaRow({

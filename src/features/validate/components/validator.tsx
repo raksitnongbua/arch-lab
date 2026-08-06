@@ -30,6 +30,11 @@ import {
 import { cn } from "@/lib/utils";
 
 import {
+  ADVISORY_RULES,
+  groupAdvisories,
+  type Advisory,
+} from "../lib/advisories";
+import {
   CHECK_CHOICES,
   CHECK_FORMAT_LABEL,
   MERMAID_CAVEAT,
@@ -284,7 +289,85 @@ function ValidCard({ result }: { result: CheckOk }): React.JSX.Element {
 
         <OpenInViewMode aftText={result.aftText} />
       </div>
+
+      <AdvisoryPanel advisories={result.advisories} />
     </div>
+  );
+}
+
+/**
+ * The C4 review notes, under the green tick and visually subordinate to it —
+ * the document IS valid, and nothing here changes that. Grouped by rule so a
+ * model missing twenty descriptions reads as one finding with twenty
+ * instances rather than twenty findings, and each group leads with C4's own
+ * reason so the note argues from the model rather than from our taste.
+ */
+function AdvisoryPanel({
+  advisories,
+}: {
+  advisories: readonly Advisory[];
+}): React.JSX.Element | null {
+  if (advisories.length === 0) return null;
+  const groups = groupAdvisories(advisories);
+  const count = advisories.length;
+
+  return (
+    <details className="border-t border-border/60 bg-muted/25">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        <Info aria-hidden="true" className="size-4 shrink-0 text-warning" />
+        <span className="font-medium">
+          {count === 1 ? "1 C4 review note" : `${count} C4 review notes`}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          — style, not validity
+        </span>
+      </summary>
+
+      <div className="space-y-4 px-4 pt-1 pb-4">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          These come from the review checklist at{" "}
+          <a
+            href="https://c4model.com/diagrams/notation"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            c4model.com
+          </a>
+          . The model is valid either way — a diagram in progress is expected to
+          have some of these.
+        </p>
+
+        {groups.map((group) => (
+          <section key={group.rule}>
+            <h3 className="text-xs font-medium text-foreground">
+              {ADVISORY_RULES[group.rule].title}
+              <span className="ml-1.5 font-normal text-muted-foreground">
+                ({group.items.length})
+              </span>
+            </h3>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              {ADVISORY_RULES[group.rule].because}
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {group.items.map((advisory) => (
+                <li
+                  key={`${advisory.rule}-${advisory.where}`}
+                  className="flex flex-wrap items-baseline gap-x-2 text-xs"
+                >
+                  <code className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                    {advisory.where}
+                  </code>
+                  <span className="min-w-0 text-foreground">
+                    {advisory.message}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </details>
   );
 }
 

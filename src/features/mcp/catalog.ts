@@ -109,8 +109,11 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "breaks. Runs the real arch-lab parser and reports the line, column " +
       "and offending source line, so a failure can be fixed directly. On " +
       "success, reports what the model contains (diagrams, levels, counts) " +
-      "rather than echoing it back. Use this after writing or editing any " +
-      ".alab file — it is the fastest way to confirm the result is loadable.",
+      "rather than echoing it back, plus any C4 review notes — missing " +
+      "technologies, unlabelled or vague relationships, bidirectional lines " +
+      "— which do not affect validity but are what a reviewer will raise. " +
+      "Use this after writing or editing any .alab file: it is the fastest " +
+      "way to confirm the result is both loadable and worth reviewing.",
     args: [SOURCE_ARG, FORMAT_ARG],
   },
   {

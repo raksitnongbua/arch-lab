@@ -19,6 +19,7 @@
 
 import type { ArchLabFile, C4Level } from "@/types";
 
+import { advise, type Advisory } from "./advisories";
 import { detectFormat } from "@/features/viewer/input/detect";
 import {
   importMermaid,
@@ -101,6 +102,12 @@ export interface CheckOk {
   /** True when `format` came from auto-detection rather than the user. */
   autoDetected: boolean;
   summary: CheckSummary;
+  /**
+   * C4 review notes (`./advisories.ts`). Never affects `status`: the document
+   * IS valid — these are the things c4model.com's own checklist would raise
+   * about it, which no parser can see.
+   */
+  advisories: readonly Advisory[];
   file: ArchLabFile;
   /** Canonical `.alab` text — what a "format this" action would produce. */
   aftText: string;
@@ -179,6 +186,7 @@ function ok(
     format,
     autoDetected,
     summary: summarize(synced.file),
+    advisories: advise(synced.file),
     file: synced.file,
     aftText: synced.aftText,
     jsonText: synced.jsonText,

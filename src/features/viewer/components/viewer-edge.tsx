@@ -137,6 +137,9 @@ function ViewerEdgeInner({
   // The comet flows on the selected edge alone — a selected NODE runs its
   // own outline comet (viewer-node.tsx) while its touching edges hold still.
   const showFlow = isSelected;
+  // The resting dash runs on every connector that is neither escalated to the
+  // comet nor pushed into the background.
+  const showRestingDash = !isSelected && !isDimmed;
 
   const joiner = data?.edge.direction === "bidirectional" ? "and" : "to";
   const chipText = label || technology || "Unlabelled relationship";
@@ -174,6 +177,40 @@ function ViewerEdgeInner({
           strokeDasharray: data?.edge.style === "dashed" ? "6 4" : undefined,
         }}
       />
+      {showRestingDash ? (
+        /*
+         * The resting dash: a repeating dash pattern marching source → target
+         * along the real bezier, on every connector, all the time. This is the
+         * diagram's answer to "which way does this go?" without having to
+         * find the arrowhead.
+         *
+         * Why an OVERLAY rather than animating the base stroke's own dash
+         * pattern: `C4Edge.style` uses solid-vs-dashed to mean
+         * synchronous-vs-asynchronous, so the base stroke's pattern carries
+         * MEANING and cannot be borrowed for motion. Marching the base dash
+         * would also have animated only the async edges, leaving a diagram
+         * with two dashed relationships looking untouched — and it would have
+         * made a solid edge indistinguishable from a dashed one the moment it
+         * started moving.
+         *
+         * `pathLength={100}` normalises the dash arithmetic the same way the
+         * selection comet does, so the pattern is a fixed number of dashes per
+         * connector regardless of pixel length. An 80px edge and an 800px one
+         * therefore show the same rhythm instead of one looking finely
+         * stippled and the other sparse.
+         *
+         * Suppressed while this edge is selected (the comet takes over — two
+         * lights on one wire reads as a glitch) and while it is dimmed (a
+         * dimmed edge is explicitly not part of what the reader asked about,
+         * and motion defeats dimming).
+         */
+        <path
+          aria-hidden="true"
+          className="viewer-edge-drift pointer-events-none"
+          d={path}
+          pathLength={100}
+        />
+      ) : null}
       {showFlow ? (
         // The flow overlay: one fixed gradient along this edge's anchors,
         // painted onto three dash bands that ride the exact same bezier

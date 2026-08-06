@@ -26,9 +26,12 @@ import {
   isNodeTypeValidAtLevel,
   VALID_NODE_TYPES_BY_LEVEL,
   type C4Level,
+  type C4Frame,
   type C4Node,
   type C4NodeType,
 } from "@/types";
+
+import { SHAPE_LABEL } from "@/features/viewer/lib/labels";
 
 import { InvalidNodeTypeError, useEditorStore } from "../../state";
 import { canDrillInto, drillIntoNode } from "../../hooks/use-level-navigation";
@@ -39,18 +42,23 @@ import { TagInput } from "./tag-input";
 import { TechnologyInput } from "./technology-input";
 import { useInspectorField } from "./use-inspector-field";
 
-export const NODE_TYPE_LABELS: Record<C4NodeType, string> = {
-  person: "Person",
-  softwareSystem: "Software System",
-  externalSystem: "External System",
-  container: "Container",
-  database: "Database",
-  queue: "Queue",
-  component: "Component",
-  codeElement: "Code Element",
-};
+/**
+ * The type control picks a SILHOUETTE (the eight node types), not one of the
+ * five C4 abstractions — so it speaks `SHAPE_LABEL`. The abstraction each
+ * choice maps to is what the node's own `[...]` line then renders.
+ *
+ * @deprecated Import `SHAPE_LABEL` from `@/features/viewer/lib/labels`.
+ */
+export const NODE_TYPE_LABELS = SHAPE_LABEL;
 
 const DESCRIPTION_MAX = 500;
+
+/**
+ * Stable empty array for the frames selector. A fresh `[]` on every call would
+ * be a new reference each time, and Zustand's default identity comparison would
+ * then re-render this inspector on every unrelated store change.
+ */
+const EMPTY_FRAMES: readonly C4Frame[] = [];
 
 export function NodeInspector({
   diagramId,
@@ -62,6 +70,12 @@ export function NodeInspector({
   level: C4Level;
 }): React.JSX.Element {
   const updateNode = useEditorStore((s) => s.updateNode);
+  const setNodeFrame = useEditorStore((s) => s.setNodeFrame);
+  // This diagram's boundaries. Read straight off the model rather than passed
+  // in, so adding a boundary in the panel populates this select immediately.
+  const frames = useEditorStore(
+    (s) => s.model.diagrams[diagramId]?.frames ?? EMPTY_FRAMES,
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const keyBase = `inspector:node:${diagramId}:${node.id}`;
@@ -180,6 +194,38 @@ export function NodeInspector({
           ))}
         </Select>
       </Field>
+
+      {/*
+       * Membership is edited from the ELEMENT side, because the element is what
+       * has a selection and an inspector — the boundaries panel on the diagram
+       * inspector owns the frames themselves. Hidden entirely when the diagram
+       * has no boundaries: a select with one "— none" option is a control that
+       * cannot do anything.
+       */}
+      {frames.length > 0 ? (
+        <Field id="inspector-node-frame" label="Boundary">
+          <Select
+            id="inspector-node-frame"
+            value={node.frameId ?? ""}
+            onChange={(event) =>
+              setNodeFrame(
+                diagramId,
+                [node.id],
+                event.currentTarget.value === ""
+                  ? null
+                  : event.currentTarget.value,
+              )
+            }
+          >
+            <option value="">— none</option>
+            {frames.map((frame) => (
+              <option key={frame.id} value={frame.id}>
+                {frame.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
 
       <Field id="inspector-node-icon" label="Icon">
         <button
