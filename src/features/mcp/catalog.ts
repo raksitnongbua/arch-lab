@@ -11,8 +11,12 @@
  * `scripts/mcp-check.mjs` asserts the two can never disagree — a documented
  * tool that isn't registered (or vice versa) fails the check.
  *
- * No React, no zod, no SDK — importable from anywhere.
+ * No React, no zod, no SDK — importable from anywhere. The one import is the
+ * syntax section ids, so the `get_syntax_reference` argument documentation is
+ * generated from the sections that actually exist.
  */
+
+import { SYNTAX_SECTION_IDS } from "./content/syntax-sections";
 
 /** Where the server lives, relative to the site root. */
 export const MCP_ENDPOINT_PATH = "/api/mcp";
@@ -167,8 +171,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
         name: "include_contents",
         required: false,
         description:
-          "Also list every node and edge of every diagram. Defaults to " +
-          "false, which returns the hierarchy only.",
+          "Also list every boundary, node and edge of every diagram, in " +
+          ".alab form. Defaults to false, which returns the hierarchy only.",
       },
     ],
   },
@@ -185,9 +189,13 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       {
         name: "section",
         required: false,
+        // Derived, never typed out: this list drifting from the real section
+        // table is how a caller ends up being told a section exists that the
+        // tool then rejects. Adding a section to `syntax-sections.ts` updates
+        // this sentence, the /mcp page and the tool's own schema at once.
         description:
-          "One of: overview, example, layout, header, diagrams, nodes, " +
-          "edges, unknown-fields, errors. Omit for the whole reference.",
+          `One of: ${SYNTAX_SECTION_IDS.join(", ")}. ` +
+          "Omit for the whole reference.",
       },
     ],
   },
