@@ -26,38 +26,108 @@
  * what keeps the live region from chattering.
  */
 
-import { useEffect } from "react";
-import { Panel, useConnection } from "@xyflow/react";
+import { useCallback, useEffect } from "react";
+import {
+  Panel,
+  useConnection,
+  useStore as useReactFlowStore,
+  useStoreApi as useReactFlowStoreApi,
+} from "@xyflow/react";
 
 import { useEditorStore } from "../../state";
 import { captionFor, verdictFor } from "../../lib/connect-verdict";
 
 /**
- * Marks the document while a connection is in flight, so CSS can suppress
- * things that would eat the drop — currently every relate-grip (see
- * `canvas-motion.css`). An attribute on `<html>` rather than prop-drilling
- * through every node: the same approach `canvas-motion-runtime.ts` already
- * takes, and it reaches nodes this component does not render.
+ * Disarms click-to-connect on the next pointer-down that is not on a handle.
+ *
+ * The armed mode is a popover-shaped thing — it persists until dismissed — so
+ * it gets a popover's dismissal: click outside, and it closes. React Flow
+ * clears it only on a second handle click, and `onPaneClick` cannot stand in
+ * because `selectionOnDrag` makes the Pane swallow its own click event
+ * (`selectionInProgress` short-circuits the handler before `onPaneClick` runs).
+ * A capture-phase listener sidesteps all of that and covers clicks on the pane,
+ * the palette, the inspector and the chrome alike.
+ *
+ * The handle exemption is load-bearing: React Flow completes the connection on
+ * the target's `click`, which fires AFTER this `pointerdown`. Disarming here
+ * without the exemption would cancel the mode a fraction of a second before the
+ * thing it exists to do.
  */
-function useConnectingFlag(active: boolean): void {
+function useClickConnectDismiss(armed: boolean, disarm: () => void): void {
+  useEffect(() => {
+    if (!armed) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(".react-flow__handle") !== null
+      ) {
+        return;
+      }
+      disarm();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [armed, disarm]);
+}
+
+/**
+ * Marks the document while a connection is in flight, so CSS can suppress
+ * things that would eat the drop — every relate-grip, and the node content that
+ * would otherwise sit above the drop target (see `canvas-motion.css`). An
+ * attribute on `<html>` rather than prop-drilling through every node: the same
+ * approach `canvas-motion-runtime.ts` already takes, and it reaches nodes this
+ * component does not render.
+ */
+function useConnectingFlag(active: boolean, armedByClick: boolean): void {
   useEffect(() => {
     if (!active) return;
     const root = document.documentElement;
     root.setAttribute("data-af-connecting", "");
-    return () => root.removeAttribute("data-af-connecting");
-  }, [active]);
+    // A second flag for the click route only. During a DRAG the pointer is
+    // already down and React Flow marks the hovered target itself; while merely
+    // ARMED there is no pointer gesture at all, so the "which element will this
+    // land on" affordance has to come from plain :hover — and that must not
+    // apply during a drag, where hovering a node you are not dragging over
+    // would light it up wrongly.
+    if (armedByClick) root.setAttribute("data-af-click-connecting", "");
+    return () => {
+      root.removeAttribute("data-af-connecting");
+      root.removeAttribute("data-af-click-connecting");
+    };
+  }, [active, armedByClick]);
 }
 
 export function ConnectHint(): React.JSX.Element | null {
-  const fromId = useConnection((connection) =>
+  const draggingFromId = useConnection((connection) =>
     connection.inProgress ? (connection.fromNode?.id ?? "") : null,
   );
   const toId = useConnection((connection) =>
     connection.inProgress ? (connection.toNode?.id ?? "") : "",
   );
+  /*
+   * Click-to-connect is armed. This lives in a DIFFERENT React Flow field from
+   * the drag: `useConnection().inProgress` stays false for the whole
+   * click-armed mode, which is precisely why React Flow's own version showed no
+   * feedback at all. Reading the field directly is what lets both routes share
+   * one caption, one halo and one set of escape hatches.
+   */
+  const clickFromId = useReactFlowStore(
+    (state) => state.connectionClickStartHandle?.nodeId ?? null,
+  );
   const diagram = useEditorStore((s) => s.model.diagrams[s.activeDiagramId]);
 
-  useConnectingFlag(fromId !== null);
+  const fromId = draggingFromId !== null ? draggingFromId : clickFromId;
+  const isArmedByClick = draggingFromId === null && clickFromId !== null;
+
+  const flowStore = useReactFlowStoreApi();
+  const disarm = useCallback(() => {
+    flowStore.setState({ connectionClickStartHandle: null });
+  }, [flowStore]);
+
+  useConnectingFlag(fromId !== null && fromId !== "", isArmedByClick);
+  useClickConnectDismiss(isArmedByClick, disarm);
 
   if (fromId === null || fromId === "" || diagram === undefined) return null;
 
@@ -69,11 +139,11 @@ export function ConnectHint(): React.JSX.Element | null {
     targetNodeId: toId === "" ? null : toId,
     diagram,
   });
-  const caption = captionFor(
-    verdict,
-    nameOf(fromId),
-    toId === "" ? null : nameOf(toId),
-  );
+  // While armed by click there is no target yet — the caption has to say what
+  // the NEXT click will do, not what a release would.
+  const caption = isArmedByClick
+    ? `Click an element to relate it to ${nameOf(fromId)} — Esc to cancel`
+    : captionFor(verdict, nameOf(fromId), toId === "" ? null : nameOf(toId));
 
   return (
     // `Panel` is how this canvas positions overlays (see the zoom indicator);

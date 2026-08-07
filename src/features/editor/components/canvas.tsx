@@ -35,6 +35,7 @@ import {
   getNodesBounds,
   useReactFlow,
   useStore as useReactFlowStore,
+  useStoreApi as useReactFlowStoreApi,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -733,6 +734,29 @@ function CanvasInner(): React.JSX.Element {
     [],
   );
 
+  /**
+   * Disarms click-to-connect, for the Escape binding below.
+   *
+   * React Flow clears `connectionClickStartHandle` on a second HANDLE click and
+   * nowhere else, so without this the mode outlives every gesture a user would
+   * expect to abort it. Reaching into the React Flow store is the only route:
+   * the field has no public setter, and duplicating it into our own store would
+   * give one piece of state two owners.
+   *
+   * Click-outside is NOT wired here. `onPaneClick` cannot serve it — with
+   * `selectionOnDrag` on, the Pane short-circuits its own click handler before
+   * `onPaneClick` runs — so dismissal lives in `connect-hint.tsx`, on a
+   * capture-phase listener that also covers the palette and the inspector.
+   */
+  const flowStore = useReactFlowStoreApi();
+
+  const clearClickConnect = useCallback(() => {
+    const state = flowStore.getState();
+    if (state.connectionClickStartHandle !== null) {
+      flowStore.setState({ connectionClickStartHandle: null });
+    }
+  }, [flowStore]);
+
   const handlePaneClick = useCallback(() => {
     setContextMenu(null);
     setPendingConnect(null);
@@ -882,6 +906,13 @@ function CanvasInner(): React.JSX.Element {
         id: "canvas.escape",
         combo: "Escape",
         run: ({ store }) => {
+          // Armed click-to-connect goes first: it is the most recent thing the
+          // user did, so it is what Escape should undo — and leaving it armed
+          // while clearing the selection would be the invisible-mode bug again.
+          if (flowStore.getState().connectionClickStartHandle !== null) {
+            clearClickConnect();
+            return;
+          }
           const interaction = useCanvasInteraction.getState();
           if (interaction.pendingConnect || interaction.contextMenu) {
             setPendingConnect(null);
@@ -932,7 +963,7 @@ function CanvasInner(): React.JSX.Element {
       },
       ...nudgeBindings,
     ];
-  }, [fitView, screenToFlowPosition, setCenter]);
+  }, [clearClickConnect, fitView, flowStore, screenToFlowPosition, setCenter]);
 
   useShortcuts(bindings);
 
@@ -977,14 +1008,20 @@ function CanvasInner(): React.JSX.Element {
         // full-bleed body handle (node-chrome.tsx), NOT by this radius, so it
         // deliberately stays small enough never to reach a neighbour.
         connectionRadius={CONNECT_SNAP_RADIUS}
-        // Click-to-connect is off. React Flow arms it on a single handle click
-        // and clears it only on a second handle click — not on a pane click,
-        // not on Escape — while `useConnection().inProgress` stays false, so
-        // the hint never shows and nothing on screen indicates the mode. A
-        // user who clicked instead of dragging entered an invisible state that
-        // fired minutes later on an unrelated click. Dragging is the whole
-        // gesture; the keyboard route is Escape-able and announced.
-        connectOnClick={false}
+        // Click a dot, then click the element to relate to — the no-drag route,
+        // and the only one that works on a trackpad without holding a button
+        // across the whole canvas.
+        //
+        // React Flow's own version of this is unusable as shipped: it arms on a
+        // handle click and clears ONLY on a second handle click — not on a pane
+        // click, not on Escape — while `useConnection().inProgress` stays false,
+        // so nothing on screen says the mode is active. It is armed here only
+        // because all three gaps are closed: `connect-hint.tsx` reads
+        // `connectionClickStartHandle` straight off the React Flow store and
+        // shows the same caption the drag gets, the stylesheet lights the armed
+        // dot and the source node, and `clearClickConnect` below is wired to
+        // both Escape and a pane click.
+        connectOnClick
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
         panOnScroll

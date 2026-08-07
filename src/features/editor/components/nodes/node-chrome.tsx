@@ -268,7 +268,14 @@ export function NodeChrome({
           // its handles stay put instead of vanishing the moment the pointer
           // drifts off, which is exactly when you reach for one.
           className={cn(
-            "!size-2 !border-node-border !bg-node-foreground/60 transition-opacity duration-150 after:absolute after:-inset-3 after:content-[''] hover:!size-3 hover:!bg-primary motion-reduce:transition-none",
+            // Size and colour live in canvas-motion.css, NOT here. Tailwind
+            // emits utilities inside `@layer utilities`, and for `!important`
+            // declarations layer order is reversed — a layered `!important`
+            // beats an unlayered one whatever the specificity. So `!size-2`
+            // and `!bg-*` here would silently outrank the armed and
+            // drop-target states the stylesheet needs to paint. What stays is
+            // the transparent 32px hit area and the reveal transition.
+            "af-node-dot after:absolute after:-inset-3 after:content-['']",
             selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
           )}
         />
