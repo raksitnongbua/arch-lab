@@ -127,13 +127,70 @@
 
 .react-flow__handle.valid {
   opacity: 1 !important;
-  background-color: var(--ring) !important;
-  border-color: var(--ring) !important;
+  background-color: var(--success) !important;
+  border-color: var(--success) !important;
 }
 
-/* The live connection preview line follows the selection accent instead of
- * React Flow's default grey, in both themes (AF-E6-S1 parity). */
-.react-flow__connection-path {
-  stroke: var(--ring);
-  stroke-width: 1.5;
+/* ---- drop target: the whole node lights up --------------------------------
+ *
+ * `.af-node-drop` is the full-bleed body handle (node-chrome.tsx). React Flow
+ * puts `connectingto` on whatever handle the pointer has acquired and adds
+ * `valid` when `isValidConnection` agrees, so these two selectors cover the
+ * entire "where am I about to drop" question with no React state and no
+ * re-render per pointer move.
+ *
+ * `--success`, not `--primary`: the latter is byte-identical to `--ring`,
+ * which already means selected AND hovered, so a primary halo is invisible on
+ * a node that happens to be selected. The connection line reads the same
+ * verdict from `lib/connect-verdict.ts`; this is the node half of it. */
+
+.react-flow__handle.af-node-drop {
+  opacity: 1 !important;
+  /* Owns its own background, rather than a Tailwind `!bg-transparent` on the
+   * element: layered `!important` utilities outrank unlayered ones regardless
+   * of specificity, so the tint below could never have won against one. */
+  background-color: transparent;
+  transition:
+    background-color var(--motion-hover, 0ms) ease-out,
+    box-shadow var(--motion-hover, 0ms) ease-out;
 }
+
+.react-flow__handle.af-node-drop.connectingto.valid {
+  background-color: color-mix(
+    in oklab,
+    var(--success) 16%,
+    transparent
+  ) !important;
+  box-shadow: 0 0 0 2px var(--success);
+}
+
+/* Back on the element the drag started from. `isValidConnection` refuses only
+ * this case, so `:not(.valid)` names it exactly. Neutral, never destructive —
+ * returning to where you started is how every gesture is cancelled, and
+ * painting that red teaches people the escape hatch is a mistake. */
+.react-flow__handle.af-node-drop.connectingto:not(.valid) {
+  box-shadow: 0 0 0 2px var(--muted-foreground);
+}
+
+/* The source keeps its ring for the whole gesture, so "where did this come
+ * from" never depends on remembering. Reuses the always-mounted selection ring
+ * element rather than adding DOM. */
+.react-flow__node:has(.react-flow__handle.connectingfrom) .af-selection-ring {
+  opacity: 1;
+}
+
+/* A neighbour's relate-grip would otherwise sit above its own node under the
+ * pointer: `elementFromPoint` returns the grip's <button>, no handle is
+ * acquired, and the drop silently becomes "create a new element" — the exact
+ * bug the body handle exists to kill, reached by another route. The attribute
+ * is stamped on <html> by connect-hint.tsx while a drag is in flight. */
+[data-af-connecting] .af-relate-grip {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* The preview line's stroke is owned by `edges/connection-line.tsx`, which
+ * paints it from the verdict table — there is deliberately no rule for
+ * `.react-flow__connection-path` here any more. A second definition of the
+ * line's colour is exactly how the preview came to disagree with the edge it
+ * was previewing. */

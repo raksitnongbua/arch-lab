@@ -205,6 +205,50 @@ export function NodeChrome({
           Suppressed mid-rename, where no node should sprout extra controls. */}
       {!data.isEditingLabel ? <RelateGrip node={node} /> : null}
 
+      {/*
+       * THE WHOLE NODE IS A DROP TARGET.
+       *
+       * React Flow only records a target when the release lands on a handle:
+       * `toNode` is `result.toHandle ? … : null` (@xyflow/system, buildConnection),
+       * and `elementFromPoint` is only consulted for elements carrying
+       * `.react-flow__handle`. With four 8px dots plus the default 20-unit snap
+       * radius, that covered roughly a sixth of a 176x88 node — and everywhere
+       * else, including dead centre where people aim, the drop fell through to
+       * "released over empty canvas" and opened the quick-add menu ON TOP of
+       * the node being aimed at. Not confusing feedback: the wrong outcome,
+       * silently.
+       *
+       * A full-bleed target handle makes every pixel of the node a target,
+       * exactly, with no bleed into the gaps between nodes. Raising
+       * `connectionRadius` to node scale was the other option and is worse: at
+       * a radius big enough to cover this node's interior it also reaches into
+       * the NEXT node's, and `getClosestHandle` would silently retarget in a
+       * dense diagram.
+       *
+       * `isConnectableStart={false}` is what keeps this inert at rest, with no
+       * new state to track: React Flow's own stylesheet sets
+       * `pointer-events: none` on every handle and grants `pointer-events: all`
+       * only to `.connectionindicator`, which a start-disabled handle earns
+       * only while a connection is in flight. So it cannot swallow a node drag,
+       * a click, or the double-click that drills in.
+       *
+       * Rendered FIRST so the four dots paint above it, and carrying no id that
+       * ever reaches the model — `handleConnect` drops sourceHandle/targetHandle
+       * outright and floating anchors remain the only routing authority.
+       */}
+      <Handle
+        id="body"
+        type="target"
+        position={Position.Left}
+        isConnectableStart={false}
+        // No `!bg-transparent` here: Tailwind emits utilities inside
+        // `@layer utilities`, and for `!important` declarations layer order is
+        // REVERSED — a layered `!important` beats an unlayered one whatever
+        // the specificity. It silently won over the drop-target tint in
+        // canvas-motion.css, which owns this element's background instead.
+        className="af-node-drop !absolute !inset-0 !size-auto !transform-none !rounded-[inherit] !border-0"
+      />
+
       {HANDLES.map((handle) => (
         <Handle
           key={handle.id}
@@ -214,8 +258,8 @@ export function NodeChrome({
           // Reveal timing (and connect-state feedback) lives in
           // styles/canvas-motion.css on `--motion-hover`.
           //
-          // The dot stays 8px, but `after:-inset-2` gives it a transparent
-          // 24px hit area — the visual weight of a small dot with the
+          // The dot stays 8px, but `after:-inset-3` gives it a transparent
+          // 32px hit area — the visual weight of a small dot with the
           // targetability of a button. Handles are the ONLY way to start a
           // relationship, so an 8px target was the single biggest source of
           // missed connection drags.
@@ -224,7 +268,7 @@ export function NodeChrome({
           // its handles stay put instead of vanishing the moment the pointer
           // drifts off, which is exactly when you reach for one.
           className={cn(
-            "!size-2 !border-node-border !bg-node-foreground/60 transition-opacity duration-150 after:absolute after:-inset-2 after:content-[''] hover:!size-3 hover:!bg-primary motion-reduce:transition-none",
+            "!size-2 !border-node-border !bg-node-foreground/60 transition-opacity duration-150 after:absolute after:-inset-3 after:content-[''] hover:!size-3 hover:!bg-primary motion-reduce:transition-none",
             selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
           )}
         />

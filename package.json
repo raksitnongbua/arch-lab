@@ -19,6 +19,7 @@
     "check:advisories": "node scripts/advisories-check.mjs",
     "check:export-archive": "node scripts/export-archive-check.mjs",
     "check:frames": "node scripts/frames-check.mjs",
+    "check:connect-verdict": "node scripts/connect-verdict-check.mjs",
     "check:mcp": "node scripts/mcp-check.mjs",
     "check:share-expiry": "node scripts/share-expiry-check.mjs",
     "check:shortcuts": "node scripts/shortcut-catalog-check.mjs",

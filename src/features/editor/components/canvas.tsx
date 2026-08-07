@@ -36,6 +36,7 @@ import {
   useReactFlow,
   useStore as useReactFlowStore,
   type Connection,
+  type Edge,
   type EdgeChange,
   type FinalConnectionState,
   type NodeChange,
@@ -66,6 +67,7 @@ import {
 } from "../hooks/use-keyboard-shortcuts";
 import {
   ALIGNMENT_THRESHOLD,
+  CONNECT_SNAP_RADIUS,
   DEFAULT_NODE_SIZE,
   FIT_VIEW_PADDING_PX,
   GRID_SIZE,
@@ -92,6 +94,7 @@ import { NodeContextMenu } from "./overlays/node-context-menu";
 import { goToOriginal } from "../lib/goto-original";
 import { ConnectHint } from "./overlays/connect-hint";
 import { ShortcutHint } from "./overlays/shortcut-hint";
+import { ConnectionLine } from "./edges/connection-line";
 import { FrameLayer } from "./frame-layer";
 import { CreateNodeDialog } from "./overlays/create-node-dialog";
 import { QuickAddMenu } from "./overlays/quick-add-menu";
@@ -580,6 +583,16 @@ function CanvasInner(): React.JSX.Element {
 
   /* ---- edge creation (T2-B builds on these) -------------------------------- */
 
+  /**
+   * The one rule that makes a drop invalid. Kept here rather than inline so the
+   * stylesheet's `.connectingto:not(.valid)` selector has a single, stated
+   * meaning: "you are back on the element you started from".
+   */
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => connection.source !== connection.target,
+    [],
+  );
+
   const handleConnect = useCallback((connection: Connection) => {
     const store = useEditorStore.getState();
     try {
@@ -610,19 +623,16 @@ function CanvasInner(): React.JSX.Element {
 
   const handleConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      // Already committed by `onConnect` — the only legitimate no-op.
       if (connectionState.isValid) return;
       const sourceNodeId = connectionState.fromNode?.id;
       if (!sourceNodeId) return;
-      if (connectionState.toNode) {
-        if (connectionState.toNode.id === sourceNodeId) {
-          toast({
-            message:
-              "Self-relationships are not supported yet — release over a different element.",
-            tone: "info",
-          });
-        }
-        return;
-      }
+      // Released on a node that `isValidConnection` refused, which today can
+      // only be the source itself. Returning to where a gesture started is the
+      // universal abort, so it does exactly nothing — no toast, no menu. The
+      // old code showed an "info" toast about self-relationships here, which
+      // scolded people for cancelling.
+      if (connectionState.toNode) return;
       // Released over empty canvas → the quick-add menu (T2-B) takes over.
       const point =
         "changedTouches" in event
@@ -954,6 +964,27 @@ function CanvasInner(): React.JSX.Element {
         onPaneClick={handlePaneClick}
         onMoveEnd={handleMoveEnd}
         connectionMode={ConnectionMode.Loose}
+        connectionLineComponent={ConnectionLine}
+        // The only false case is dropping back on the source. That gives the
+        // source's own body handle `connectingto` WITHOUT `valid`, which is
+        // what lets the stylesheet style "release to cancel" differently from
+        // "release to relate" with no React state at all. Without this,
+        // React Flow's `alwaysValid` marks the source's own handles valid and
+        // the cancel gesture looks identical to a successful one.
+        isValidConnection={isValidConnection}
+        // Matches the dots' 32px hit box: one decision — how far off a dot
+        // still counts — expressed once. Node interiors are covered by the
+        // full-bleed body handle (node-chrome.tsx), NOT by this radius, so it
+        // deliberately stays small enough never to reach a neighbour.
+        connectionRadius={CONNECT_SNAP_RADIUS}
+        // Click-to-connect is off. React Flow arms it on a single handle click
+        // and clears it only on a second handle click — not on a pane click,
+        // not on Escape — while `useConnection().inProgress` stays false, so
+        // the hint never shows and nothing on screen indicates the mode. A
+        // user who clicked instead of dragging entered an invisible state that
+        // fired minutes later on an unrelated click. Dragging is the whole
+        // gesture; the keyboard route is Escape-able and announced.
+        connectOnClick={false}
         minZoom={MIN_ZOOM}
         maxZoom={MAX_ZOOM}
         panOnScroll
