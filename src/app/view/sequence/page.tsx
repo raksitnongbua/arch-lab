@@ -10,8 +10,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * `/view/sequence` — the sequence playground: text pane on the left, the
- * click-to-focus viewer on the right. Like its `c4` sibling this is a STATIC
+ * `/view/sequence` — the sequence playground: the click-to-focus viewer on
+ * top at full width, the collapsible source pane underneath (see
+ * sequence-playground.tsx for why). Like its `c4` sibling this is a STATIC
  * segment shadowing `/view/[modelId]`, so `sequence` is a reserved model id
  * (asserted at build time in the `[modelId]` page).
  *

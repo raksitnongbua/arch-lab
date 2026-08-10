@@ -36,7 +36,14 @@
  * happen in event handlers.
  */
 
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import type { SequenceLabFile } from "@/types";
 
@@ -158,11 +165,62 @@ export function SequenceViewer({
   /* ---- keyboard ----------------------------------------------------------- */
 
   /**
+   * ESCAPE — rung 2 of the PAGE's ladder (rung 1 is native fullscreen, owned
+   * by the browser; rung 3, leaving immersive mode, belongs to the
+   * playground shell around this viewer). A WINDOW listener rather than the
+   * wrapper's onKeyDown because the rung must fire wherever DOM focus sits —
+   * e.g. on the shell's immersive toggle button, which is outside this
+   * component — or one press would skip straight to rung 3 with a focus
+   * still held.
+   *
+   * Registered ONCE (empty deps; the changing values are read through refs):
+   * a re-registered window listener moves to the BACK of the window's
+   * listener order, behind the shell's rung-3 listener, and the ladder would
+   * run bottom-up. Child effects run before parent effects, so registering
+   * once here guarantees this listener always runs first. preventDefault is
+   * the "consumed" signal the shell checks before exiting immersive mode.
+   *
+   * Form fields are exempt: Escape inside the source textarea belongs to its
+   * Tab-escape-hatch (see sequence-playground.tsx), not to diagram focus.
+   */
+  const focusRef = useRef<SequenceFocus>(null);
+  const clearFocusRef = useRef(handleClearFocus);
+  // The "latest ref" update lives in an effect (not in render — the
+  // react-hooks/refs rule forbids that), which is still always ahead of any
+  // keydown: effects flush before the user can press another key.
+  useEffect(() => {
+    focusRef.current = focus;
+    clearFocusRef.current = handleClearFocus;
+  }, [focus, handleClearFocus]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (document.fullscreenElement !== null) return; // rung 1 — browser's turn
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "TEXTAREA" ||
+          target.tagName === "INPUT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (focusRef.current === null) return; // nothing to clear — rung 3 may act
+      event.preventDefault();
+      clearFocusRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  /**
    * Arrows walk focus through the messages in model order — the keyboard
    * equivalent of clicking each arrow in turn. From nothing (or from a
    * participant focus, which has no position in the story), both directions
    * land on the FIRST message: "start reading" is the only honest answer to
-   * "previous" when there is no current position.
+   * "previous" when there is no current position. (Escape is NOT handled
+   * here — it lives on window, above, so the page's Escape ladder works
+   * wherever DOM focus sits.)
    */
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -179,14 +237,11 @@ export function SequenceViewer({
           event.preventDefault();
           handleFocusMessage(current === 0 ? 1 : Math.max(1, current - 1));
           break;
-        case "Escape":
-          handleClearFocus();
-          break;
         default:
           break;
       }
     },
-    [focus, layout.stepCount, handleFocusMessage, handleClearFocus],
+    [focus, layout.stepCount, handleFocusMessage],
   );
 
   /* ---- render -------------------------------------------------------------- */
@@ -217,9 +272,9 @@ export function SequenceViewer({
   return (
     <div
       className="flex h-full min-h-0 flex-col"
-      // Keyboard shortcuts live on the wrapper, not on window: a global
-      // listener would steal the arrow keys from the text pane next to this
-      // viewer.
+      // Arrow keys live on the wrapper, not on window: a global listener
+      // would steal them from the source pane below this viewer. (Escape is
+      // the exception — see the ladder comment above handleKeyDown.)
       onKeyDown={handleKeyDown}
       style={motionVars}
     >

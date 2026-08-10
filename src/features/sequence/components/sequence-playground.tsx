@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * `/view/sequence` — the sequence playground: text on the left, the complete
- * click-to-focus diagram on the right, re-rendering as you type. Mirrors the
- * C4
- * playground's contract (`viewer/components/viewer-playground.tsx`) at the
- * pieces that matter, and deliberately drops what does not apply:
+ * `/view/sequence` — the sequence playground: the complete click-to-focus
+ * diagram ON TOP at full width, the source pane UNDERNEATH, re-rendering as
+ * you type. Mirrors the C4 playground's contract
+ * (`viewer/components/viewer-playground.tsx`) at the pieces that matter, and
+ * deliberately drops what does not apply:
  *
  *   - Same 300 ms debounce, same "last good model keeps rendering" rule:
  *     while the pane fails to parse, the diagram shows the previous good
@@ -22,11 +22,49 @@
  *     open. When the codec learns sequence payloads, the button belongs
  *     here too.
  *
+ * WHY diagram-over-source rather than the C4 playground's side-by-side: a
+ * sequence diagram's participants spread HORIZONTALLY, so width is the axis
+ * the diagram actually consumes — halving it to seat a text column forces
+ * either a shrunken diagram or sideways scrolling on every real flow. The
+ * source pane is a full-width strip below, COLLAPSIBLE (a real button with
+ * aria-expanded) so a reader can fold the text away without losing it; an
+ * active parse error stays visible even while collapsed, because an error
+ * hidden behind a fold is an error the user stops fixing.
+ *
+ * IMMERSIVE MODE — the same in-page pattern as `viewer-shell.tsx` (its
+ * fullscreen-blocked fallback, promoted to the primary control here): the
+ * diagram section fixes itself over the viewport — site chrome is simply
+ * covered, never edited — and the source pane is additionally `hidden` so it
+ * also leaves the tab order. The toolbar strip stays visible in immersive so
+ * the exit is always one click away, not only one keystroke.
+ *
+ * ESCAPE precedence — one ladder, one step per press (the viewer-shell
+ * discipline, restated for THIS page's rungs):
+ *   1. native fullscreen active → the BROWSER exits it; every listener here
+ *      stands down (guarded even though this page has no fullscreen button —
+ *      an embedding context may have put us there);
+ *   2. the diagram has a focused message or participant → the viewer clears
+ *      it. SequenceViewer owns this rung with its own window listener, which
+ *      calls preventDefault when it consumes the key — and it runs first
+ *      because child effects register before parent effects;
+ *   3. immersive mode on → leave immersive mode (here, the parent — it acts
+ *      only when rung 2 left the event unconsumed).
+ * Focus clears BEFORE immersive exits, deliberately: "un-focus what I zoomed
+ * in on" is always the smaller retreat, and one press must never do two
+ * things or skip a level.
+ *
  * Everything runs in the browser; nothing typed here is uploaded or stored.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ArrowDownToLine, Info } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ChevronDown,
+  ChevronUp,
+  Expand,
+  Info,
+  Shrink,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -56,9 +94,64 @@ export function SequencePlayground(): React.JSX.Element {
   const [error, setError] = useState<SequenceInputError | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [pending, setPending] = useState<string | null>(null);
+  /** Source pane fold. Open by default: the pane is how the page teaches. */
+  const [sourceOpen, setSourceOpen] = useState(true);
 
   const textareaId = useId();
   const hintId = useId();
+  const sourceBodyId = useId();
+
+  /* ---- immersive mode -------------------------------------------------------
+   * State + ref pair, exactly as viewer-shell.tsx keeps them: the ref exists
+   * so the once-registered Escape listener below can read the CURRENT value
+   * without re-registering — a re-registered window listener moves to the
+   * back of the listener order, BEHIND the viewer's rung-2 listener, and the
+   * ladder would run bottom-up (see the header comment). */
+
+  const [isImmersive, setIsImmersive] = useState(false);
+  const immersiveRef = useRef(false);
+
+  const setImmersive = useCallback((next: boolean) => {
+    immersiveRef.current = next;
+    setIsImmersive(next);
+    // The page's ONE polite live region carries this too — same channel as
+    // parse results, and the two never race (parsing is debounced, this is
+    // a click).
+    setAnnouncement(
+      next
+        ? "Immersive mode on — the diagram fills the window and the source pane is hidden. Press Escape to exit (a focused message clears first)."
+        : "Immersive mode off — the source pane is back.",
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!isImmersive) return;
+    // The fixed section covers the page; stop the page behind it scrolling.
+    const previous = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = previous;
+    };
+  }, [isImmersive]);
+
+  // Escape rung 3 — leave immersive mode, only once the viewer has passed on
+  // the event (its rung-2 listener preventDefaults when it clears a focus,
+  // and it registered first — child effects run before parent effects — so
+  // it always runs first). Registered once: `setImmersive` is stable and the
+  // current mode is read through the ref.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (document.fullscreenElement !== null) return; // rung 1 — browser's turn
+      if (!immersiveRef.current) return;
+      event.preventDefault();
+      setImmersive(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [setImmersive]);
+
+  /* ---- parsing --------------------------------------------------------------- */
 
   const applyParse = useCallback((value: string) => {
     const result = parseSequenceInput(value);
@@ -102,7 +195,10 @@ export function SequencePlayground(): React.JSX.Element {
   );
 
   // Tab indents (two spaces) with the same documented Escape hatch the C4
-  // playground's panes have.
+  // playground's panes have. (This textarea-local Escape sits OUTSIDE the
+  // page's Escape ladder on purpose: the viewer's rung-2 listener exempts
+  // form fields, so pressing Escape here only arms the Tab hatch — it never
+  // clears a diagram focus the user was not looking at.)
   const tabEscapeRef = useRef(false);
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -147,7 +243,7 @@ export function SequencePlayground(): React.JSX.Element {
         </p>
       </header>
 
-      {/* One shared polite live region for parse state. */}
+      {/* One shared polite live region: parse state AND immersive toggles. */}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -166,13 +262,97 @@ export function SequencePlayground(): React.JSX.Element {
         </div>
       ) : null}
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        {/* ---- the text pane ---- */}
-        <section
-          aria-label="Sequence source editor"
-          className="flex min-w-0 flex-col gap-2"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* ---- the diagram pane — TOP, full width ----
+          Height is viewport-derived (not flex-grown) because the SVG inside
+          scales to its box: an unbounded box would let a tall diagram set
+          the page's height instead of scrolling within its pane. Folding
+          the source pane hands its rows to the diagram — the taller clamp —
+          so collapsing visibly buys diagram, never blank page. */}
+      <section
+        aria-label="Rendered sequence diagram"
+        className={cn(
+          "flex min-w-0 flex-col overflow-hidden bg-background",
+          isImmersive
+            ? // Immersive: cover the viewport. Site chrome and the source
+              // pane are BEHIND the fixed section, untouched — the same
+              // "cover, never edit" rule as viewer-shell.tsx.
+              "fixed inset-0 z-50"
+            : cn(
+                "rounded-xl border border-border shadow-sm",
+                sourceOpen
+                  ? "h-[56svh] min-h-[24rem]"
+                  : "h-[calc(100svh-16rem)] min-h-[24rem]",
+              ),
+        )}
+      >
+        {/* The toolbar strip stays visible in immersive mode too — the exit
+            must always be one click away, not only one keystroke. */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
+          <span className="truncate text-xs text-muted-foreground">
+            {isImmersive
+              ? "Immersive — Escape exits (a focused message clears first)"
+              : "Diagram"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setImmersive(!isImmersive)}
+            aria-pressed={isImmersive}
+            aria-label={
+              isImmersive
+                ? "Exit immersive mode (Escape at the top level)"
+                : "Enter immersive mode — hide the site chrome and the source pane"
+            }
+            title={isImmersive ? "Exit immersive mode" : "Immersive mode"}
+            className={buttonClasses({ variant: "ghost", size: "sm" })}
+          >
+            {isImmersive ? (
+              <Shrink aria-hidden="true" />
+            ) : (
+              <Expand aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">
+              {isImmersive ? "Exit immersive" : "Immersive"}
+            </span>
+          </button>
+        </div>
+        {parsed !== null ? (
+          <SequenceViewer file={parsed.file} />
+        ) : (
+          // Only reachable when the SEED itself failed to parse — a build
+          // break, not a user state (the seed is parser-verified at module
+          // load). Still: never a silently blank canvas.
+          <p className="p-6 text-sm text-muted-foreground">
+            Nothing to render yet — fix the error shown under the text pane.
+          </p>
+        )}
+      </section>
+
+      {/* ---- the source pane — BOTTOM, full width, collapsible ----
+          `hidden` (never unmounted) in BOTH the folded and the immersive
+          case: the textarea keeps its DOM — and with it the browser's undo
+          stack — so hiding the pane can never cost the user their editing
+          history. In immersive the fixed section already covers this
+          visually; `hidden` additionally removes it from the tab order. */}
+      <section
+        aria-label="Sequence source editor"
+        className={cn("flex min-w-0 flex-col gap-2", isImmersive && "hidden")}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSourceOpen((open) => !open)}
+              aria-expanded={sourceOpen}
+              aria-controls={sourceBodyId}
+              className={buttonClasses({ variant: "ghost", size: "sm" })}
+            >
+              {sourceOpen ? (
+                <ChevronUp aria-hidden="true" />
+              ) : (
+                <ChevronDown aria-hidden="true" />
+              )}
+              {sourceOpen ? "Hide source" : "Show source"}
+            </button>
             <label
               htmlFor={textareaId}
               className="text-sm font-medium text-foreground"
@@ -182,26 +362,31 @@ export function SequencePlayground(): React.JSX.Element {
                 (.alab or Mermaid)
               </span>
             </label>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => loadExample(SEQUENCE_EXAMPLE)}
-                className={buttonClasses({ variant: "ghost", size: "sm" })}
-              >
-                <ArrowDownToLine aria-hidden="true" />
-                .alab example
-              </button>
-              <button
-                type="button"
-                onClick={() => loadExample(MERMAID_SEQUENCE_EXAMPLE)}
-                className={buttonClasses({ variant: "ghost", size: "sm" })}
-              >
-                <ArrowDownToLine aria-hidden="true" />
-                Mermaid example
-              </button>
-            </div>
           </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => loadExample(SEQUENCE_EXAMPLE)}
+              className={buttonClasses({ variant: "ghost", size: "sm" })}
+            >
+              <ArrowDownToLine aria-hidden="true" />
+              .alab example
+            </button>
+            <button
+              type="button"
+              onClick={() => loadExample(MERMAID_SEQUENCE_EXAMPLE)}
+              className={buttonClasses({ variant: "ghost", size: "sm" })}
+            >
+              <ArrowDownToLine aria-hidden="true" />
+              Mermaid example
+            </button>
+          </div>
+        </div>
 
+        <div
+          id={sourceBodyId}
+          className={cn("flex flex-col gap-2", !sourceOpen && "hidden")}
+        >
           <textarea
             id={textareaId}
             value={text}
@@ -210,39 +395,23 @@ export function SequencePlayground(): React.JSX.Element {
             aria-describedby={hintId}
             aria-invalid={error !== null}
             spellCheck={false}
-            rows={24}
+            rows={12}
             className={cn(
-              "min-h-[24rem] w-full min-w-0 flex-1 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              "min-h-[14rem] w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               error !== null ? "border-destructive/60" : "border-border",
             )}
           />
-
-          {error !== null ? <SequenceErrorBox error={error} /> : null}
-
           <p id={hintId} className="text-xs text-muted-foreground">
             Tab inserts two spaces — press Escape, then Tab, to move focus out.
             The diagram re-renders as you type; while the text fails to parse it
             keeps showing the last good version.
           </p>
-        </section>
+        </div>
 
-        {/* ---- the diagram pane ---- */}
-        <section
-          aria-label="Rendered sequence diagram"
-          className="flex min-h-[32rem] min-w-0 flex-col overflow-hidden rounded-xl border border-border shadow-sm lg:h-[calc(100svh-11rem)] lg:min-h-[24rem]"
-        >
-          {parsed !== null ? (
-            <SequenceViewer file={parsed.file} />
-          ) : (
-            // Only reachable when the SEED itself failed to parse — a build
-            // break, not a user state (the seed is parser-verified at module
-            // load). Still: never a silently blank canvas.
-            <p className="p-6 text-sm text-muted-foreground">
-              Nothing to render yet — fix the error shown under the text pane.
-            </p>
-          )}
-        </section>
-      </div>
+        {/* OUTSIDE the fold on purpose: an active parse error stays visible
+            even while the source is collapsed. */}
+        {error !== null ? <SequenceErrorBox error={error} /> : null}
+      </section>
     </div>
   );
 }
