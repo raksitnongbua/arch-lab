@@ -40,7 +40,8 @@ Explicitly **not** targeted: non-technical diagramming (org charts, mind maps, m
 Deliberate noes. Revisited only with evidence.
 
 - **No cloud backend, no accounts, no real-time multiplayer.** Collaboration is git. Two people editing one file at once is resolved by merge conflict, not CRDT.
-- **No general-purpose diagramming.** No freeform shapes, sticky notes, swimlanes, sequence diagrams, ERDs. If it isn't a C4 element or relationship, it doesn't belong on the canvas.
+- **No general-purpose diagramming.** No freeform shapes, sticky notes, swimlanes, ERDs. If it isn't part of a named, structured diagram type we support, it doesn't belong on a canvas.
+  - **Sequence diagrams are IN, as of v0.4** — a deliberate reversal of this line, which used to name them alongside sticky notes. The distinction that matters is not "C4 or nothing", it is *structured model* versus *freeform drawing*: a sequence diagram has participants, ordered messages and typed fragments, it round-trips losslessly through `.alab`, and it answers "what happens when…?" where C4 answers "what is this made of?". Sticky notes and freeform shapes have no model behind them, and they stay out for exactly that reason.
 - **No live infrastructure discovery.** We do not scan your Kubernetes cluster, cloud account, or source to auto-generate the model. Humans author intent.
 - **No auto-layout as the primary mode.** Engineers want their boxes where they put them. Layout *assist* may exist; layout *takeover* does not.
 - **Not a Structurizr replacement.** We may interop with its formats later (see roadmap); we do not chase DSL parity.

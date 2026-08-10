@@ -450,7 +450,7 @@ export function SyntaxReference(): React.JSX.Element {
         <P>
           The fastest way to learn the format is to write it live:{" "}
           <Link
-            href="/view"
+            href="/view/c4"
             className="font-medium text-primary hover:underline"
           >
             view mode

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../features/editor/styles/canvas-motion.css";
+@import "../features/sequence/styles/sequence-motion.css";
 
 /* ---------------------------------------------------------------------------
  * arch-lab theming
@@ -664,4 +665,22 @@
 
 .react-flow__nodes {
   z-index: 2;
+}
+
+/* ---- /view share-link forwarding -----------------------------------------
+ * A share link minted before `/view/c4` existed lands on `/view` with the
+ * model in the URL fragment. The fragment never reaches the server, so the
+ * chooser's markup is rendered regardless (it has to be: `/view` is in the
+ * sitemap, and a body-less route is not indexable) and an inline script in
+ * `app/view/page.tsx` stamps this attribute during HTML parse — before the
+ * first paint — when it spots a payload. Hiding here rather than in React is
+ * the whole point: by the time React can read the fragment, the chooser has
+ * already been painted.
+ *
+ * `display: none`, not `visibility: hidden`: the chooser is two large cards,
+ * and reserving their space would leave the forwarding user staring at a
+ * page-sized gap instead of nothing at all. */
+
+[data-share-forward] .af-view-chooser {
+  display: none;
 }

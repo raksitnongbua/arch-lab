@@ -180,7 +180,7 @@ export default function Home() {
                     <ArrowRight aria-hidden="true" />
                   </Link>
                   <Link
-                    href="/view"
+                    href="/view/c4"
                     className={buttonClasses({
                       variant: "outline",
                       size: "lg",
@@ -299,7 +299,7 @@ export default function Home() {
                         <ArrowRight aria-hidden="true" />
                       </Link>
                       <Link
-                        href="/view"
+                        href="/view/c4"
                         className={buttonClasses({
                           variant: "outline",
                           size: "md",

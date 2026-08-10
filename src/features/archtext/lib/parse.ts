@@ -47,7 +47,11 @@ const SUPPORTED_MAJOR_VERSION = 1;
 /* Pending structures collected during the line pass                          */
 /* -------------------------------------------------------------------------- */
 
-interface Pend {
+/* Exported (with the helpers below) for the sequence grammar in
+   `./sequence/parse.ts`: both `.alab` document types share one `!` escape
+   and one attribute vocabulary, so the code that reads them must be shared
+   too — a copy would be a second source of truth waiting to drift. */
+export interface Pend {
   key: string;
   after: string | null;
   value: unknown;
@@ -55,7 +59,7 @@ interface Pend {
   column: number;
 }
 
-interface Loc {
+export interface Loc {
   line: number;
   column: number;
 }
@@ -161,7 +165,7 @@ interface Header {
   fileUnknowns: Pend[];
 }
 
-interface PathSegment {
+export interface PathSegment {
   value: string | number;
   quoted: boolean;
   line: number;
@@ -178,7 +182,7 @@ interface PathSegment {
  * `after` anchor — the inverse of `splitUnknowns`, so the editor's JSON
  * serializer reproduces the original key positions byte-for-byte.
  */
-function assemble(
+export function assemble(
   pairs: readonly (readonly [string, unknown])[],
   unknowns: readonly Pend[],
 ): Record<string, unknown> {
@@ -214,7 +218,7 @@ function assemble(
 }
 
 /** Sugar value and raw `!` value for the same key are mutually exclusive. */
-function pick<T>(
+export function pick<T>(
   sugar: T | undefined,
   raw: Map<string, Pend>,
   key: string,
@@ -233,14 +237,14 @@ function pick<T>(
   return sugar;
 }
 
-function readTag(cursor: LineCursor): string {
+export function readTag(cursor: LineCursor): string {
   cursor.expect("#", 'a tag ("#name")');
   if (cursor.peek() === '"') return cursor.readQuoted("tag");
   return cursor.readBare(/^[A-Za-z0-9_][A-Za-z0-9_.:-]*/, "a tag name");
 }
 
 /** Reads a `!` path: `seg(.seg)*` where a segment is bare, quoted or an index. */
-function readPath(cursor: LineCursor): PathSegment[] {
+export function readPath(cursor: LineCursor): PathSegment[] {
   const segments: PathSegment[] = [];
   for (;;) {
     const line = cursor.line;
@@ -264,7 +268,7 @@ function readPath(cursor: LineCursor): PathSegment[] {
 }
 
 /** Parses the shared tail of a `!` line: `[after <key>] : <json>`. */
-function readBangTail(cursor: LineCursor): {
+export function readBangTail(cursor: LineCursor): {
   after: string | null;
   value: unknown;
 } {
@@ -287,7 +291,7 @@ function readBangTail(cursor: LineCursor): {
   return { after, value };
 }
 
-function segString(segment: PathSegment, what: string): string {
+export function segString(segment: PathSegment, what: string): string {
   if (typeof segment.value !== "string") {
     failAt(
       segment.line,
@@ -456,7 +460,7 @@ export function parseArchText(source: string): ArchLabFile {
 /* Header lines                                                               */
 /* -------------------------------------------------------------------------- */
 
-function onceString(
+export function onceString(
   cursor: LineCursor,
   existing: string | undefined,
   keyword: string,
@@ -1304,7 +1308,7 @@ function parseNodeLine(
   return node;
 }
 
-function readTechnology(cursor: LineCursor): string {
+export function readTechnology(cursor: LineCursor): string {
   cursor.expect("[", '"["');
   if (cursor.peek() === '"') {
     const value = cursor.readQuoted("technology");

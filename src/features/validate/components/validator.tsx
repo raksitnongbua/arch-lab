@@ -484,7 +484,7 @@ function OpenInViewMode({
     if (!canEncodeShare()) return;
     void encodeShareFragment(aftText, null).then((fragment) => {
       if (cancelled) return;
-      const target = `/view#${fragment}`;
+      const target = `/view/c4#${fragment}`;
       if (
         `${window.location.origin}${target}`.length <= MAX_HANDOFF_URL_LENGTH
       ) {

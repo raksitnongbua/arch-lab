@@ -633,9 +633,10 @@ check(
     );
     const url = text.split("\n").find((line) => line.startsWith("http"));
     assert.ok(url !== undefined, `no URL in:\n${text}`);
-    // `/view`, not `/view/new`: the `new` segment was dropped, and the old path
-    // is gone rather than redirected.
-    assert.match(url, /\/view#m=AF1\./);
+    // `/view/c4` — the C4 playground's address since `/view` became the
+    // chooser. Legacy `/view#m=…` links are forwarded by the chooser, but new
+    // links must mint against the real page and skip that hop.
+    assert.match(url, /\/view\/c4#m=AF1\./);
 
     const decoded = await decodeShareFragment(new URL(url).hash);
     assert.equal(decoded.status, "ok");

@@ -245,7 +245,10 @@ export function ViewerShareButton({
           expiry,
         );
         if (token !== buildTokenRef.current) return;
-        const url = `${window.location.origin}/view#${fragment}`;
+        // Minted against /view/c4 — the playground's real address since /view
+        // became the chooser. Legacy /view#m= links still open (the chooser
+        // forwards them), but new links skip that hop.
+        const url = `${window.location.origin}/view/c4#${fragment}`;
         const tooLong = url.length > MAX_SHARE_URL_LENGTH;
         hasLinkRef.current = !tooLong;
         setLink(

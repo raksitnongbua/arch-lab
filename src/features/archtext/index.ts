@@ -22,6 +22,18 @@
  * barrel.
  */
 
+/*
+ * The feature carries BOTH `.alab` document types — the C4 grammar and the
+ * sequence grammar (`./lib/sequence/`). They share the header line, the
+ * `!` escape, the cursor, the error type and the token classes, which is
+ * why the sequence grammar lives here rather than as a sibling feature:
+ *
+ *   - `parseSequenceText` / `serializeSequenceText` — `.alab` sequence
+ *     text ⇄ `SequenceLabFile`, lossless both ways, same error contract.
+ *   - `detectAlabKind` — which grammar a source belongs to, from its first
+ *     meaningful line ("archlab 1.0" = C4, "archlab 1.0 sequence" = sequence).
+ */
+
 export { parseArchText } from "./lib/parse";
 export { serializeArchText } from "./lib/serialize";
 export { ArchTextParseError } from "./lib/errors";
@@ -37,3 +49,13 @@ export {
   defaultSizeFor,
 } from "./lib/defaults";
 export type { DefaultLayoutEdge } from "./lib/defaults";
+export { parseSequenceText } from "./lib/sequence/parse";
+export { serializeSequenceText } from "./lib/sequence/serialize";
+export { detectAlabKind } from "./lib/sequence/detect";
+export type { AlabDocumentKind } from "./lib/sequence/detect";
+export {
+  SEQUENCE_ARROWS,
+  ARROW_BY_MESSAGE_KIND,
+  FRAGMENT_KIND_BY_KEYWORD,
+  PARTICIPANT_KIND_BY_KEYWORD,
+} from "./lib/sequence/keywords";

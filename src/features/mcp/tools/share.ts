@@ -161,7 +161,7 @@ async function scopedOffers(
       diagram.id === file.rootDiagramId ? null : diagram.id,
       expiry,
     );
-    const url = `${origin}/view#${fragment}`;
+    const url = `${origin}/view/c4#${fragment}`;
     if (url.length > MAX_SHARE_URL_LENGTH) continue;
     offers.push({ diagramId: diagram.id, title: diagram.title, url });
   }
@@ -236,7 +236,10 @@ export async function createShareLink(
     diagramId ?? null,
     expiry,
   );
-  const url = `${publicOrigin()}/view#${fragment}`;
+  // Minted against /view/c4 — the C4 playground's address since /view became
+  // the chooser. Links minted before the move (`/view#m=…`) still resolve:
+  // the chooser forwards them with the fragment intact.
+  const url = `${publicOrigin()}/view/c4#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
     // Refuse — but leave the caller holding something actionable in THIS
@@ -273,7 +276,7 @@ export async function createShareLink(
               anyOfferOverSafe ? EMAIL_CAVEAT : null,
             ),
         "To share the WHOLE model, save the canonical `.alab` text below as " +
-          "a `.alab` file and send that — the two-pane editor at /view " +
+          "a `.alab` file and send that — the two-pane editor at /view/c4 " +
           "accepts it by paste or drop:",
         fence("", aftText),
       ),

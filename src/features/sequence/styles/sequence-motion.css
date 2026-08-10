@@ -1,0 +1,199 @@
+/* ---------------------------------------------------------------------------
+ * Sequence player motion + focus states.
+ *
+ * Every duration reads a `--seq-*` custom property that the player writes
+ * from `lib/motion.ts` (`sequenceMotionVars()`), so reduced-motion collapses
+ * every animation to 0ms in exactly one place — the same contract
+ * `canvas-motion.css` has with the editor's motion runtime. The `0ms`
+ * fallbacks mean nothing animates before the player mounts (SSR markup is
+ * static and complete). Zero colour literals: every colour is a semantic
+ * token via var().
+ *
+ * Only `opacity` and `stroke-dashoffset` animate — never a layout property —
+ * so a long diagram stays compositor/paint-bound during playback.
+ * ------------------------------------------------------------------------- */
+
+/* ---- playback reveal states ------------------------------------------------
+ * data-reveal is computed by the player per element:
+ *   "pending" — after the current step: not yet part of the story. Hidden but
+ *               MOUNTED, so stepping is a class flip, not a DOM churn, and
+ *               geometry never reflows.
+ *   "new"     — the element whose step IS the current step: the arrow draws,
+ *               the head fades in after it, and the whole message carries the
+ *               emphasis colour.
+ *   "shown"   — before the current step: fully visible at rest. A sequence
+ *               diagram is a record of what happened, so earlier steps never
+ *               dim or vanish during playback (focus is a different, explicit
+ *               gesture — see .af-seq-dim).
+ */
+
+.af-seq-reveal[data-reveal="pending"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.af-seq-reveal {
+  transition: opacity var(--seq-scaffold, 0ms) ease-out;
+}
+
+/* ---- the arrow draw ---------------------------------------------------------
+ * Solid arrows (sync, async) carry pathLength="1", so one dash unit is the
+ * whole line and every arrow draws in the same time regardless of span —
+ * the `.af-edge-draw` technique from canvas-motion.css.
+ *
+ * REPLY arrows deliberately do NOT use the dashoffset draw: their resting
+ * style is a dash pattern, and stroke-dasharray can only serve one master —
+ * a pathLength-normalised draw would either destroy the dashes or march
+ * them. Replies fade in instead (af-seq-fade below), which keeps them dashed
+ * from their first frame; the message still arrives as an event because the
+ * head fade and the emphasis colour are shared with the drawn kinds.
+ */
+
+.af-seq-msg[data-reveal="new"] .af-seq-draw {
+  stroke-dasharray: 1;
+  animation: af-seq-draw var(--seq-draw, 0ms) ease-out both;
+}
+
+@keyframes af-seq-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.af-seq-msg[data-reveal="new"] .af-seq-fade-in {
+  animation: af-seq-fade var(--seq-draw, 0ms) ease-out both;
+}
+
+/* Heads (and self-loop labels) arrive just after the line reaches them. */
+.af-seq-msg[data-reveal="new"] .af-seq-head {
+  animation: af-seq-fade var(--seq-head, 0ms) ease-out both;
+  animation-delay: var(--seq-head-delay, 0ms);
+}
+
+@keyframes af-seq-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- focus (click-to-focus) -------------------------------------------------
+ * The player stamps .af-seq-dim on everything OUTSIDE the focus set; the set
+ * itself keeps full strength. Opacity only, transitioned, so entering and
+ * leaving focus is a cross-fade — and under reduced motion (--seq-focus: 0ms)
+ * it is an instant, still perfectly meaningful state change.
+ */
+
+.af-seq-dimmable {
+  transition: opacity var(--seq-focus, 0ms) ease-out;
+}
+
+.af-seq-dim {
+  opacity: 0.22;
+}
+
+/* ---- colour roles ------------------------------------------------------------
+ * One definition per role, as CLASSES rather than SVG presentation attributes,
+ * because the emphasis state below must override them and a CSS rule cannot
+ * outrank a presentation attribute set inline in the markup. Every value is a
+ * semantic token; the sequence renderer never names a colour.
+ */
+
+.af-seq-line {
+  stroke: var(--edge);
+  stroke-width: 1.5;
+}
+
+.af-seq-head-fill {
+  fill: var(--edge);
+}
+
+.af-seq-head-line {
+  stroke: var(--edge);
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.af-seq-label {
+  fill: var(--foreground);
+}
+
+.af-seq-label-meta {
+  fill: var(--muted-foreground);
+}
+
+/* The CURRENT step is emphasised: primary-coloured and a shade heavier, the
+ * same escalation the viewer gives a selected connector. Past steps rest on
+ * --edge; the distinction is colour+weight, not opacity, so history stays
+ * fully readable. */
+.af-seq-msg[data-reveal="new"] .af-seq-line {
+  stroke: var(--primary);
+  stroke-width: 2.25;
+}
+
+.af-seq-msg[data-reveal="new"] .af-seq-head-fill {
+  fill: var(--primary);
+}
+
+.af-seq-msg[data-reveal="new"] .af-seq-head-line {
+  stroke: var(--primary);
+}
+
+.af-seq-msg[data-reveal="new"] .af-seq-label {
+  font-weight: 600;
+}
+
+/* A focused message keeps the emphasis colour even once playback moves on. */
+.af-seq-msg[data-focused="true"] .af-seq-line {
+  stroke: var(--primary);
+  stroke-width: 2.25;
+}
+
+.af-seq-msg[data-focused="true"] .af-seq-head-fill {
+  fill: var(--primary);
+}
+
+.af-seq-msg[data-focused="true"] .af-seq-head-line {
+  stroke: var(--primary);
+}
+
+/* Clickable hit areas — generous, invisible, and honest about being buttons. */
+.af-seq-hit {
+  stroke: transparent;
+  fill: none;
+  stroke-width: 18;
+  cursor: pointer;
+}
+
+.af-seq-hit:focus-visible {
+  outline: none;
+}
+
+/* Keyboard focus ring for in-SVG buttons: a stroke on the element itself,
+ * since CSS outline does not follow an SVG path's shape. */
+.af-seq-msg:has(.af-seq-hit:focus-visible) .af-seq-line,
+.af-seq-participant:has(.af-seq-hit:focus-visible) .af-seq-header-box {
+  stroke: var(--ring);
+}
+
+/* ---- reduced motion ---------------------------------------------------------
+ * The `--seq-*` properties are already 0ms (lib/motion.ts zeroes them), and
+ * the global backstop in globals.css collapses anything that slips through.
+ * This block exists for the one case a zero DURATION is not enough: the
+ * "new" arrow's draw rule replaces a reply-less path's resting state with
+ * stroke-dasharray: 1, and a 0ms animation still leaves that dasharray
+ * applied. Parking means the complete, natural line — so the dasharray goes
+ * too, not just the timing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .af-seq-msg[data-reveal="new"] .af-seq-draw {
+    animation: none;
+    stroke-dasharray: none;
+  }
+  .af-seq-msg[data-reveal="new"] .af-seq-head,
+  .af-seq-msg[data-reveal="new"] .af-seq-fade-in {
+    animation: none;
+  }
+}
