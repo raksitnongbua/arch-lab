@@ -1,60 +1,74 @@
 /* ---------------------------------------------------------------------------
- * Sequence player motion + focus states.
+ * Sequence viewer motion + focus states.
  *
- * Every duration reads a `--seq-*` custom property that the player writes
+ * THE MODEL: the diagram renders complete and settled — nothing here reveals
+ * or hides content. All motion serves FOCUS: clicking a message re-draws
+ * that arrow and holds it emphasised; clicking a participant re-draws its
+ * message set in step order, staggered; everything outside the focus set
+ * recedes via .af-seq-dim. The viewer marks each animating message with
+ * `data-animate="a"` or `"b"` (see below for why two) plus a `--seq-rank`
+ * custom property that becomes its stagger delay.
+ *
+ * Every duration reads a `--seq-*` custom property that the viewer writes
  * from `lib/motion.ts` (`sequenceMotionVars()`), so reduced-motion collapses
  * every animation to 0ms in exactly one place — the same contract
  * `canvas-motion.css` has with the editor's motion runtime. The `0ms`
- * fallbacks mean nothing animates before the player mounts (SSR markup is
+ * fallbacks mean nothing animates before the viewer mounts (SSR markup is
  * static and complete). Zero colour literals: every colour is a semantic
  * token via var().
  *
  * Only `opacity` and `stroke-dashoffset` animate — never a layout property —
- * so a long diagram stays compositor/paint-bound during playback.
+ * so a long diagram stays compositor/paint-bound during a focus draw.
  * ------------------------------------------------------------------------- */
 
-/* ---- playback reveal states ------------------------------------------------
- * data-reveal is computed by the player per element:
- *   "pending" — after the current step: not yet part of the story. Hidden but
- *               MOUNTED, so stepping is a class flip, not a DOM churn, and
- *               geometry never reflows.
- *   "new"     — the element whose step IS the current step: the arrow draws,
- *               the head fades in after it, and the whole message carries the
- *               emphasis colour.
- *   "shown"   — before the current step: fully visible at rest. A sequence
- *               diagram is a record of what happened, so earlier steps never
- *               dim or vanish during playback (focus is a different, explicit
- *               gesture — see .af-seq-dim).
- */
-
-.af-seq-reveal[data-reveal="pending"] {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.af-seq-reveal {
-  transition: opacity var(--seq-scaffold, 0ms) ease-out;
-}
-
-/* ---- the arrow draw ---------------------------------------------------------
+/* ---- the focus draw ----------------------------------------------------------
  * Solid arrows (sync, async) carry pathLength="1", so one dash unit is the
  * whole line and every arrow draws in the same time regardless of span —
  * the `.af-edge-draw` technique from canvas-motion.css.
  *
+ * WHY TWO IDENTICAL ANIMATIONS ("a"/"b"): a CSS animation does not restart
+ * when its selector already matches — re-clicking the focused message would
+ * change nothing the style system can see. Remounting the SVG node would
+ * restart it, but that drops keyboard focus from the hit target. Instead
+ * the viewer flips data-animate between "a" and "b" on every focus gesture
+ * (nonce parity), and since a CHANGED animation-name always restarts the
+ * animation, a repeat click replays without touching the DOM tree. The -a/-b
+ * keyframe pairs are byte-identical on purpose.
+ *
  * REPLY arrows deliberately do NOT use the dashoffset draw: their resting
  * style is a dash pattern, and stroke-dasharray can only serve one master —
  * a pathLength-normalised draw would either destroy the dashes or march
- * them. Replies fade in instead (af-seq-fade below), which keeps them dashed
+ * them. Replies fade in instead (.af-seq-fade-in), which keeps them dashed
  * from their first frame; the message still arrives as an event because the
- * head fade and the emphasis colour are shared with the drawn kinds.
+ * head fade is shared with the drawn kinds.
+ *
+ * The stagger: each animating message's delay is `--seq-rank` (its position
+ * in the focus set, in step order) × `--seq-stagger`. `both` fill matters —
+ * a delayed message holds its from-frame (undrawn, label invisible) until
+ * its turn, so a participant's message set reveals as one ordered gesture.
  */
 
-.af-seq-msg[data-reveal="new"] .af-seq-draw {
-  stroke-dasharray: 1;
-  animation: af-seq-draw var(--seq-draw, 0ms) ease-out both;
+.af-seq-msg[data-animate] {
+  --seq-delay: calc(var(--seq-rank, 0) * var(--seq-stagger, 0ms));
 }
 
-@keyframes af-seq-draw {
+.af-seq-msg[data-animate] .af-seq-draw {
+  stroke-dasharray: 1;
+  animation-duration: var(--seq-draw, 0ms);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: var(--seq-delay);
+}
+
+.af-seq-msg[data-animate="a"] .af-seq-draw {
+  animation-name: af-seq-draw-a;
+}
+
+.af-seq-msg[data-animate="b"] .af-seq-draw {
+  animation-name: af-seq-draw-b;
+}
+
+@keyframes af-seq-draw-a {
   from {
     stroke-dashoffset: 1;
   }
@@ -63,24 +77,55 @@
   }
 }
 
-.af-seq-msg[data-reveal="new"] .af-seq-fade-in {
-  animation: af-seq-fade var(--seq-draw, 0ms) ease-out both;
+@keyframes af-seq-draw-b {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Labels and reply lines fade in alongside the draw. */
+.af-seq-msg[data-animate] .af-seq-fade-in {
+  animation-duration: var(--seq-draw, 0ms);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: var(--seq-delay);
 }
 
 /* Heads (and self-loop labels) arrive just after the line reaches them. */
-.af-seq-msg[data-reveal="new"] .af-seq-head {
-  animation: af-seq-fade var(--seq-head, 0ms) ease-out both;
-  animation-delay: var(--seq-head-delay, 0ms);
+.af-seq-msg[data-animate] .af-seq-head {
+  animation-duration: var(--seq-head, 0ms);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: calc(var(--seq-delay) + var(--seq-head-delay, 0ms));
 }
 
-@keyframes af-seq-fade {
+.af-seq-msg[data-animate="a"] .af-seq-fade-in,
+.af-seq-msg[data-animate="a"] .af-seq-head {
+  animation-name: af-seq-fade-a;
+}
+
+.af-seq-msg[data-animate="b"] .af-seq-fade-in,
+.af-seq-msg[data-animate="b"] .af-seq-head {
+  animation-name: af-seq-fade-b;
+}
+
+@keyframes af-seq-fade-a {
   from {
     opacity: 0;
   }
 }
 
-/* ---- focus (click-to-focus) -------------------------------------------------
- * The player stamps .af-seq-dim on everything OUTSIDE the focus set; the set
+@keyframes af-seq-fade-b {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- focus dim (click-to-focus) -----------------------------------------------
+ * The viewer stamps .af-seq-dim on everything OUTSIDE the focus set; the set
  * itself keeps full strength. Opacity only, transitioned, so entering and
  * leaving focus is a cross-fade — and under reduced motion (--seq-focus: 0ms)
  * it is an instant, still perfectly meaningful state change.
@@ -124,28 +169,11 @@
   fill: var(--muted-foreground);
 }
 
-/* The CURRENT step is emphasised: primary-coloured and a shade heavier, the
- * same escalation the viewer gives a selected connector. Past steps rest on
- * --edge; the distinction is colour+weight, not opacity, so history stays
- * fully readable. */
-.af-seq-msg[data-reveal="new"] .af-seq-line {
-  stroke: var(--primary);
-  stroke-width: 2.25;
-}
-
-.af-seq-msg[data-reveal="new"] .af-seq-head-fill {
-  fill: var(--primary);
-}
-
-.af-seq-msg[data-reveal="new"] .af-seq-head-line {
-  stroke: var(--primary);
-}
-
-.af-seq-msg[data-reveal="new"] .af-seq-label {
-  font-weight: 600;
-}
-
-/* A focused message keeps the emphasis colour even once playback moves on. */
+/* The FOCUSED message is emphasised — primary-coloured and a shade heavier,
+ * the same escalation the viewer gives a selected connector — and it HOLDS
+ * that emphasis after its draw finishes: the animation announces the focus,
+ * the colour keeps announcing it. The distinction from its dimmed peers is
+ * colour+weight, not opacity, so it reads in both themes. */
 .af-seq-msg[data-focused="true"] .af-seq-line {
   stroke: var(--primary);
   stroke-width: 2.25;
@@ -157,6 +185,10 @@
 
 .af-seq-msg[data-focused="true"] .af-seq-head-line {
   stroke: var(--primary);
+}
+
+.af-seq-msg[data-focused="true"] .af-seq-label {
+  font-weight: 600;
 }
 
 /* Clickable hit areas — generous, invisible, and honest about being buttons. */
@@ -182,18 +214,19 @@
  * The `--seq-*` properties are already 0ms (lib/motion.ts zeroes them), and
  * the global backstop in globals.css collapses anything that slips through.
  * This block exists for the one case a zero DURATION is not enough: the
- * "new" arrow's draw rule replaces a reply-less path's resting state with
+ * focus draw replaces the solid line's resting state with
  * stroke-dasharray: 1, and a 0ms animation still leaves that dasharray
  * applied. Parking means the complete, natural line — so the dasharray goes
- * too, not just the timing.
+ * too, not just the timing. Focus dim and the detail panel are untouched:
+ * they are state, not motion.
  */
 @media (prefers-reduced-motion: reduce) {
-  .af-seq-msg[data-reveal="new"] .af-seq-draw {
+  .af-seq-msg[data-animate] .af-seq-draw {
     animation: none;
     stroke-dasharray: none;
   }
-  .af-seq-msg[data-reveal="new"] .af-seq-head,
-  .af-seq-msg[data-reveal="new"] .af-seq-fade-in {
+  .af-seq-msg[data-animate] .af-seq-head,
+  .af-seq-msg[data-animate] .af-seq-fade-in {
     animation: none;
   }
 }

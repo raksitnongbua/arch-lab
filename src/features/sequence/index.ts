@@ -7,11 +7,11 @@
  * The FORMAT layer deliberately does not live here: parsing/serializing
  * `.alab` sequence text belongs to `features/archtext`, the Mermaid importer
  * to `features/mermaid`. This feature consumes both and owns only layout,
- * playback and the playground UI.
+ * the focus interaction and the playground UI.
  */
 
 export { SequencePlayground } from "./components/sequence-playground";
-export { SequencePlayer } from "./components/sequence-player";
+export { SequenceViewer } from "./components/sequence-viewer";
 export { layoutSequence, SEQ } from "./lib/layout";
 export type { SequenceLayout } from "./lib/layout";
 export { SEQUENCE_EXAMPLE } from "./input/example";

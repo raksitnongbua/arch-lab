@@ -1,49 +1,49 @@
 "use client";
 
 /**
- * The sequence PLAYER: layout + playback + focus, composed around the pure
+ * The sequence VIEWER: layout + focus, composed around the pure
  * `SequenceDiagram` renderer. This component owns every piece of interaction
- * state; the renderer below it stays a function of (layout, step, focus).
+ * state; the renderer below it stays a function of (layout, focus).
  *
- * PLAYBACK ⟂ FOCUS — the composition rule, stated once:
- *   Focusing anything PAUSES playback, and pressing Play CLEARS focus.
- *   The alternative — letting auto-play advance under a focus — was rejected
- *   because focus dims most of the canvas, so new arrows would arrive
- *   pre-dimmed and unexplained; and a focus that auto-clears on the next
- *   tick makes the detail panel a 1.3-second toaster. Pause-on-focus means
- *   "I am reading this" and play-clears-focus means "carry on", which are
- *   the two intents the gestures already express.
+ * THE DIAGRAM IS COMPLETE FROM FIRST PAINT. There is no playback: a sequence
+ * diagram is a record of what happened, and the record is the content — so
+ * the whole story is on screen immediately, and the animation budget is
+ * spent where it answers a question the user just asked:
  *
- * REDUCED MOTION parks the player on the MEANINGFUL frame: the complete
- * diagram. A sequence diagram is a record of what happened, so "finished" is
- * the static truth — a merely faster replay would still be a replay.
- * Stepping and focus stay fully usable from there; pressing Play still walks
- * the steps at the same readable cadence, just without draw animations
- * (every `--seq-*` duration is 0 — see lib/motion.ts).
+ *   - Clicking a MESSAGE re-draws that one arrow (the stroke-dashoffset
+ *     draw in sequence-motion.css) and holds it emphasised; the detail
+ *     panel below names sender, receiver, label, technology, kind and step.
+ *   - Clicking a PARTICIPANT re-draws its whole message set in step order,
+ *     lightly staggered so it reads as one gesture; the panel says how many
+ *     messages it takes part in, and which.
+ *   - Everything outside the focus set recedes (opacity only); Escape — or
+ *     clicking empty canvas — brings the full diagram back.
  *
- * State discipline: the step is DERIVED (`rawStep ?? reduced-motion
- * default`, clamped to the current model) rather than synchronised by
+ * Re-clicking a focused target REPLAYS its animation: every focus gesture
+ * bumps `focusNonce`, and the diagram maps the nonce's parity onto one of
+ * two identical keyframe animations — see the `focusNonce` prop in
+ * sequence-diagram.tsx for why parity rather than the raw number.
+ *
+ * REDUCED MOTION costs this model nothing: the complete diagram was already
+ * the resting state. The focus draw simply does not animate (every `--seq-*`
+ * duration is 0 — see lib/motion.ts); dimming and the detail panel are
+ * instant, equally meaningful state changes.
+ *
+ * State discipline: focus is VALIDATED at read time (`rawFocus` may point at
+ * a message or participant a re-parse removed) rather than synchronised by
  * effects — no setState in an effect body, per the same eslint rule
  * `editor/components/view-mode-link.tsx` documents. The only state writes
- * happen in event handlers and the auto-play timer callback.
+ * happen in event handlers.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import type { SequenceLabFile } from "@/types";
 
 import { layoutSequence } from "../lib/layout";
-import { SEQUENCE_DURATIONS, sequenceMotionVars } from "../lib/motion";
+import { sequenceMotionVars } from "../lib/motion";
 import type { SequenceFocus } from "./sequence-diagram";
 import { SequenceDiagram } from "./sequence-diagram";
-import { SequenceControls } from "./sequence-controls";
 
 /* -------------------------------------------------------------------------- */
 /* Reduced motion, hydration-safe                                               */
@@ -72,10 +72,10 @@ function useReducedMotion(): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
-/* The player                                                                   */
+/* The viewer                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export function SequencePlayer({
+export function SequenceViewer({
   file,
 }: {
   file: SequenceLabFile;
@@ -90,119 +90,44 @@ export function SequencePlayer({
   const reduced = useReducedMotion();
 
   /**
-   * `null` = "the user has not stepped yet, use the default": 0 normally
-   * (play from the start), the final step under reduced motion. Clamping at
-   * READ time — not with a state-sync effect — is what keeps a re-parse that
-   * shrank the model from ever rendering a step that no longer exists.
+   * Focus and its nonce live in ONE state cell because they only ever change
+   * together: every focus gesture — including re-focusing the SAME target —
+   * bumps the nonce, and the nonce is what lets the diagram restart the draw
+   * animation on a repeat click. Splitting them into two states would invite
+   * a set-one-forget-the-other bug no compiler could catch.
    */
-  const [rawStep, setRawStep] = useState<number | null>(null);
-  const step = Math.min(
-    rawStep ?? (reduced ? layout.stepCount : 0),
-    layout.stepCount,
-  );
-  // The auto-play timer needs the CURRENT step without re-arming per tick;
-  // a render-synchronised ref is the standard escape hatch.
-  const stepRef = useRef(step);
-  useEffect(() => {
-    stepRef.current = step;
-  });
-
-  const [playing, setPlaying] = useState(false);
-  const [rawFocus, setRawFocus] = useState<SequenceFocus>(null);
+  const [rawFocus, setRawFocus] = useState<{
+    focus: NonNullable<SequenceFocus>;
+    nonce: number;
+  } | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
-  // Focus is validated at read time too: a re-parse can remove the focused
-  // message or participant, and a focus pointing at nothing must read as no
-  // focus. A message focus beyond the current step (possible after stepping
-  // back) also clears — the message is no longer on screen.
+  // Focus is validated at read time, not with a state-sync effect: a
+  // re-parse can remove the focused message or participant, and a focus
+  // pointing at nothing must read as no focus.
   const focus: SequenceFocus =
     rawFocus === null
       ? null
-      : rawFocus.kind === "message"
-        ? rawFocus.step <= Math.min(step, layout.stepCount)
-          ? rawFocus
+      : rawFocus.focus.kind === "message"
+        ? rawFocus.focus.step >= 1 && rawFocus.focus.step <= layout.stepCount
+          ? rawFocus.focus
           : null
-        : nameById.has(rawFocus.id)
-          ? rawFocus
+        : nameById.has(rawFocus.focus.id)
+          ? rawFocus.focus
           : null;
-
-  const announceStep = useCallback(
-    (nextStep: number) => {
-      if (nextStep === 0) {
-        setAnnouncement("At the start — nothing has happened yet.");
-        return;
-      }
-      const message = layout.messages.find((m) => m.step === nextStep);
-      if (message === undefined) return;
-      setAnnouncement(
-        `Step ${nextStep} of ${layout.stepCount}: ` +
-          `${nameById.get(message.from) ?? message.from} to ` +
-          `${nameById.get(message.to) ?? message.to} — ${message.label}` +
-          (nextStep === layout.stepCount ? ". End of diagram." : ""),
-      );
-    },
-    [layout, nameById],
-  );
-
-  /* ---- playback ---------------------------------------------------------- */
-
-  useEffect(() => {
-    if (!playing) return;
-    const interval = window.setInterval(() => {
-      // Cadence is unchanged under reduced motion: steps must stay readable
-      // EVENTS; only the per-arrow animation inside each step is parked.
-      const next = Math.min(stepRef.current + 1, layout.stepCount);
-      setRawStep(next);
-      announceStep(next);
-      if (next >= layout.stepCount) setPlaying(false);
-    }, SEQUENCE_DURATIONS.autoAdvance);
-    return () => window.clearInterval(interval);
-  }, [playing, layout.stepCount, announceStep]);
-
-  const handlePlayPause = useCallback(() => {
-    setRawFocus(null); // play means "carry on" — the composition rule above
-    if (playing) {
-      setPlaying(false);
-      setAnnouncement("Paused.");
-      return;
-    }
-    // Play at the end restarts; anywhere else it resumes.
-    if (step >= layout.stepCount) setRawStep(0);
-    setPlaying(true);
-    setAnnouncement("Playing.");
-  }, [playing, step, layout.stepCount]);
-
-  const handleStepForward = useCallback(() => {
-    setPlaying(false);
-    const next = Math.min(step + 1, layout.stepCount);
-    setRawStep(next);
-    announceStep(next);
-  }, [step, layout.stepCount, announceStep]);
-
-  const handleStepBack = useCallback(() => {
-    setPlaying(false);
-    const next = Math.max(0, step - 1);
-    setRawStep(next);
-    announceStep(next);
-  }, [step, announceStep]);
-
-  const handleRestart = useCallback(() => {
-    setPlaying(false);
-    setRawFocus(null);
-    setRawStep(0);
-    setAnnouncement("Restarted — at the start.");
-  }, []);
 
   /* ---- focus ------------------------------------------------------------- */
 
   const handleFocusMessage = useCallback(
     (focusedStep: number) => {
-      setPlaying(false); // focusing pauses playback
-      setRawFocus({ kind: "message", step: focusedStep });
+      setRawFocus((prev) => ({
+        focus: { kind: "message", step: focusedStep },
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
       const message = layout.messages.find((m) => m.step === focusedStep);
       if (message !== undefined) {
         setAnnouncement(
-          `Focused message ${focusedStep}: ${nameById.get(message.from) ?? message.from} to ${nameById.get(message.to) ?? message.to} — ${message.label}. Details below the diagram; Escape clears focus.`,
+          `Message ${focusedStep} of ${layout.stepCount}: ${nameById.get(message.from) ?? message.from} to ${nameById.get(message.to) ?? message.to} — ${message.label}. Details below the diagram; Escape clears focus.`,
         );
       }
     },
@@ -211,13 +136,18 @@ export function SequencePlayer({
 
   const handleFocusParticipant = useCallback(
     (id: string) => {
-      setPlaying(false); // focusing pauses playback
-      setRawFocus({ kind: "participant", id });
+      setRawFocus((prev) => ({
+        focus: { kind: "participant", id },
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
+      const steps = layout.messages
+        .filter((m) => m.from === id || m.to === id)
+        .map((m) => m.step);
       setAnnouncement(
-        `Focused participant ${nameById.get(id) ?? id} — its messages stay highlighted. Escape clears focus.`,
+        `Focused participant ${nameById.get(id) ?? id} — takes part in ${steps.length} of ${layout.stepCount} messages${steps.length > 0 ? ` (steps ${steps.join(", ")})` : ""}. Escape clears focus.`,
       );
     },
-    [nameById],
+    [layout, nameById],
   );
 
   const handleClearFocus = useCallback(() => {
@@ -227,48 +157,36 @@ export function SequencePlayer({
 
   /* ---- keyboard ----------------------------------------------------------- */
 
+  /**
+   * Arrows walk focus through the messages in model order — the keyboard
+   * equivalent of clicking each arrow in turn. From nothing (or from a
+   * participant focus, which has no position in the story), both directions
+   * land on the FIRST message: "start reading" is the only honest answer to
+   * "previous" when there is no current position.
+   */
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      // Buttons handle their own Space/Enter; don't double-fire play/pause
-      // when the event started on one (or on an in-SVG button, which stops
-      // propagation itself).
-      const onButton =
-        event.target instanceof Element &&
-        event.target.closest("button") !== null;
+      if (layout.stepCount === 0) return;
+      const current = focus?.kind === "message" ? focus.step : 0;
       switch (event.key) {
-        case " ":
-          if (onButton) return;
-          event.preventDefault();
-          handlePlayPause();
-          break;
         case "ArrowRight":
         case "ArrowDown":
           event.preventDefault();
-          handleStepForward();
+          handleFocusMessage(Math.min(current + 1, layout.stepCount));
           break;
         case "ArrowLeft":
         case "ArrowUp":
           event.preventDefault();
-          handleStepBack();
+          handleFocusMessage(current === 0 ? 1 : Math.max(1, current - 1));
           break;
         case "Escape":
           handleClearFocus();
-          break;
-        case "Home":
-          event.preventDefault();
-          handleRestart();
           break;
         default:
           break;
       }
     },
-    [
-      handlePlayPause,
-      handleStepForward,
-      handleStepBack,
-      handleClearFocus,
-      handleRestart,
-    ],
+    [focus, layout.stepCount, handleFocusMessage, handleClearFocus],
   );
 
   /* ---- render -------------------------------------------------------------- */
@@ -285,16 +203,27 @@ export function SequencePlayer({
     focus?.kind === "participant"
       ? (file.participants.find((p) => p.id === focus.id) ?? null)
       : null;
+  const focusedParticipantSteps =
+    focusedParticipant === null
+      ? []
+      : layout.messages
+          .filter(
+            (m) =>
+              m.from === focusedParticipant.id ||
+              m.to === focusedParticipant.id,
+          )
+          .map((m) => m.step);
 
   return (
     <div
       className="flex h-full min-h-0 flex-col"
       // Keyboard shortcuts live on the wrapper, not on window: a global
-      // listener would steal Space from the text pane next to this player.
+      // listener would steal the arrow keys from the text pane next to this
+      // viewer.
       onKeyDown={handleKeyDown}
       style={motionVars}
     >
-      {/* One polite live region for playback AND focus announcements. */}
+      {/* One polite live region — its announcements describe focus only. */}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -303,21 +232,23 @@ export function SequencePlayer({
         className="min-h-0 flex-1 overflow-auto bg-canvas p-3"
         tabIndex={0}
         role="application"
-        aria-label="Sequence diagram player. Space plays or pauses, arrow keys step, Escape clears focus. Messages and participants are buttons — Tab reaches them."
+        aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages and participants are buttons — Tab reaches them."
       >
         <SequenceDiagram
           layout={layout}
           title={file.metadata.title}
           autonumber={file.autonumber === true}
-          step={step}
           focus={focus}
+          focusNonce={rawFocus?.nonce ?? 0}
           onFocusMessage={handleFocusMessage}
           onFocusParticipant={handleFocusParticipant}
           onClearFocus={handleClearFocus}
         />
       </div>
 
-      {/* ---- detail panel (click-to-focus) ---- */}
+      {/* ---- detail panel (click-to-focus) ----
+          With playback and its counter gone, this panel is the ONLY place a
+          step number appears — "Step N of M" leads for exactly that reason. */}
       {focusedMessage !== null ? (
         <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1 border-t border-border bg-card px-4 py-2.5 text-sm">
           <Detail
@@ -366,32 +297,30 @@ export function SequencePlayer({
           {focusedParticipant.description !== undefined ? (
             <Detail term="Description" value={focusedParticipant.description} />
           ) : null}
+          {/* Not just a count: WHICH steps it touches is what lets the user
+              jump from this panel back into the story with the arrow keys. */}
           <Detail
             term="Messages"
-            value={String(
-              layout.messages.filter(
-                (m) =>
-                  m.from === focusedParticipant.id ||
-                  m.to === focusedParticipant.id,
-              ).length,
-            )}
+            value={
+              focusedParticipantSteps.length === 0
+                ? "none"
+                : `${focusedParticipantSteps.length} of ${layout.stepCount} — steps ${focusedParticipantSteps.join(", ")}`
+            }
             mono
           />
         </dl>
       ) : null}
 
-      <SequenceControls
-        step={step}
-        stepCount={layout.stepCount}
-        playing={playing}
-        onPlayPause={handlePlayPause}
-        onStepBack={handleStepBack}
-        onStepForward={handleStepForward}
-        onRestart={handleRestart}
-      />
+      {/* The keyboard hint that used to live in the control strip — the
+          controls are gone, the affordances are not. */}
+      <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
+        Click a message or participant to focus it · ← → move between messages ·
+        Esc clears focus
+      </p>
 
       {/* Text alternative: the whole story as an ordered list, for readers
-          the SVG serves poorly. Kept in sync for free — it reads the same
+          the SVG serves poorly — with playback gone this is the only LINEAR
+          reading of the diagram. Kept in sync for free — it reads the same
           layout the diagram does. */}
       <ol className="sr-only">
         {layout.messages.map((message) => (

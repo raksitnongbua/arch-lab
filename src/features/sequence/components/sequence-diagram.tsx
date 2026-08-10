@@ -3,8 +3,10 @@
 /**
  * The read-only sequence diagram: pure SVG drawn from `layoutSequence`'s
  * result. This component computes NO geometry of its own — every x/y it
- * paints comes off the layout, which is what keeps the renderer, the check
- * script and the playback engine agreeing.
+ * paints comes off the layout, which is what keeps the renderer and the
+ * check script agreeing. The diagram renders COMPLETE: every message, note,
+ * fragment and activation bar is present and settled from the first frame;
+ * the only motion is the focus draw described below.
  *
  * WHY all-SVG rather than SVG lines + absolutely-positioned DOM text: the two
  * approaches were weighed and DOM text lost on three counts. (1) One
@@ -18,9 +20,17 @@
  * detaching from arrows. The cost — no native text wrapping — is absorbed by
  * the layout's width estimates, which reserve space per label.
  *
+ * FOCUS DRAW: focusing a message re-draws that one arrow; focusing a
+ * participant re-draws its whole message set in step order, staggered. Each
+ * animated message carries `data-animate` plus a `--seq-rank` custom
+ * property — its position within the focus set, derived from message (step)
+ * order, never from a render index that could reshuffle — and the CSS turns
+ * rank into an animation delay. See `focusNonce` below for how a repeat
+ * click replays.
+ *
  * Interactivity: messages and participant headers are real keyboard-operable
  * controls (role="button", tabIndex, Enter/Space), not bare onClick shapes —
- * the SVG is NOT aria-hidden, and the player adds a text alternative beside
+ * the SVG is NOT aria-hidden, and the viewer adds a text alternative beside
  * it. Clicking the backdrop clears focus.
  */
 
@@ -47,20 +57,21 @@ export interface SequenceDiagramProps {
   title: string;
   /** Messages are numbered on the canvas when the file says `autonumber`. */
   autonumber: boolean;
-  /** Current playback step, 0..stepCount. Steps ≤ this are visible. */
-  step: number;
   focus: SequenceFocus;
+  /**
+   * Bumped by the viewer on EVERY focus gesture, including re-focusing the
+   * SAME target. A CSS animation does not restart on its own when the
+   * animating class/attribute is already present, so the nonce's PARITY
+   * picks between two identical keyframe animations (`data-animate="a"` /
+   * `"b"` in sequence-motion.css): each gesture flips the animation-name,
+   * and a changed animation-name IS a restart. Parity — not the raw number —
+   * because CSS can only branch on discrete attribute values, and two names
+   * are enough to make every consecutive pair of gestures differ.
+   */
+  focusNonce: number;
   onFocusMessage: (step: number) => void;
   onFocusParticipant: (id: string) => void;
   onClearFocus: () => void;
-}
-
-type Reveal = "shown" | "new" | "pending";
-
-function revealOfMessage(messageStep: number, step: number): Reveal {
-  if (messageStep < step) return "shown";
-  if (messageStep === step) return "new";
-  return "pending";
 }
 
 /** Everything outside the focus set recedes; the set keeps full strength. */
@@ -111,8 +122,8 @@ export function SequenceDiagram({
   layout,
   title,
   autonumber,
-  step,
   focus,
+  focusNonce,
   onFocusMessage,
   onFocusParticipant,
   onClearFocus,
@@ -132,22 +143,33 @@ export function SequenceDiagram({
   };
 
   /**
-   * Activation bars GROW with playback: a bar revealed at step N is drawn
-   * only down to the frontier of the current step, so work-in-progress reads
-   * as still in progress. At the final step the clamp lifts entirely.
+   * The focus set's draw order: step → stagger rank. Ranks are assigned by
+   * walking `layout.messages`, which the layout guarantees is in step
+   * (model) order — so the delay each message gets is a function of WHERE
+   * it sits in the story, never of a filtered render index that could
+   * reshuffle. A message focus is the degenerate one-element set (rank 0,
+   * no delay).
    */
-  const frontierY =
-    step >= layout.stepCount
-      ? Number.POSITIVE_INFINITY
-      : step > 0
-        ? (layout.yByStep[step - 1] ?? 0) + 12
-        : 0;
+  const animateRankByStep = new Map<number, number>();
+  if (focus?.kind === "message") {
+    animateRankByStep.set(focus.step, 0);
+  } else if (focus?.kind === "participant") {
+    let rank = 0;
+    for (const m of layout.messages) {
+      if (m.from === focus.id || m.to === focus.id) {
+        animateRankByStep.set(m.step, rank);
+        rank += 1;
+      }
+    }
+  }
+  const animateToken = focusNonce % 2 === 0 ? "a" : "b";
 
   const keyActivate =
     (action: () => void) => (event: React.KeyboardEvent<SVGElement>) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        // Stop the player's space-= play/pause shortcut from also firing.
+        // Stop the key from also reaching the viewer's wrapper handler and
+        // from scrolling the pane (Space scrolls by default).
         event.stopPropagation();
         action();
       }
@@ -164,7 +186,7 @@ export function SequenceDiagram({
     >
       {/* Backdrop — clicking empty space clears focus. Not a button: it is
           the ABSENCE of a target, and tabbing onto "nothing" would be noise
-          (Escape already covers keyboard users, in the player). */}
+          (Escape already covers keyboard users, in the viewer). */}
       <rect
         x={layout.minX}
         y={0}
@@ -179,10 +201,9 @@ export function SequenceDiagram({
         <g
           key={`frag-${index}`}
           className={cn(
-            "af-seq-reveal af-seq-dimmable pointer-events-none",
+            "af-seq-dimmable pointer-events-none",
             isDimmed(focus, { type: "scaffold" }) && "af-seq-dim",
           )}
-          data-reveal={fragment.revealStep <= step ? "shown" : "pending"}
         >
           <rect
             x={fragment.x}
@@ -227,11 +248,7 @@ export function SequenceDiagram({
             </text>
           ) : null}
           {fragment.dividers.map((divider, dividerIndex) => (
-            <g
-              key={`div-${dividerIndex}`}
-              className="af-seq-reveal"
-              data-reveal={divider.revealStep <= step ? "shown" : "pending"}
-            >
+            <g key={`div-${dividerIndex}`}>
               <line
                 x1={fragment.x}
                 y1={divider.y}
@@ -269,44 +286,40 @@ export function SequenceDiagram({
         />
       ))}
 
-      {/* ---- activation bars (over lifelines, under arrows) ---- */}
-      {layout.activations.map((bar, index) => {
-        const bottom = Math.min(bar.y1, Math.max(frontierY, bar.y0 + 6));
-        return (
-          <rect
-            key={`act-${index}`}
-            className={cn(
-              "af-seq-reveal af-seq-dimmable pointer-events-none",
-              isDimmed(focus, {
-                type: "activation",
-                participantId: bar.participantId,
-              }) && "af-seq-dim",
-            )}
-            data-reveal={bar.revealStep <= step ? "shown" : "pending"}
-            x={bar.x}
-            y={bar.y0}
-            width={bar.width}
-            height={Math.max(0, bottom - bar.y0)}
-            fill="var(--secondary)"
-            stroke="var(--node-border)"
-            strokeWidth={1}
-            rx={2}
-          />
-        );
-      })}
+      {/* ---- activation bars (over lifelines, under arrows) ----
+          Bars always draw their full extent — the diagram is complete. */}
+      {layout.activations.map((bar, index) => (
+        <rect
+          key={`act-${index}`}
+          className={cn(
+            "af-seq-dimmable pointer-events-none",
+            isDimmed(focus, {
+              type: "activation",
+              participantId: bar.participantId,
+            }) && "af-seq-dim",
+          )}
+          x={bar.x}
+          y={bar.y0}
+          width={bar.width}
+          height={Math.max(0, bar.y1 - bar.y0)}
+          fill="var(--secondary)"
+          stroke="var(--node-border)"
+          strokeWidth={1}
+          rx={2}
+        />
+      ))}
 
       {/* ---- notes ---- */}
       {layout.notes.map((note, index) => (
         <g
           key={`note-${index}`}
           className={cn(
-            "af-seq-reveal af-seq-dimmable pointer-events-none",
+            "af-seq-dimmable pointer-events-none",
             isDimmed(focus, {
               type: "note",
               participants: note.participants,
             }) && "af-seq-dim",
           )}
-          data-reveal={note.revealStep <= step ? "shown" : "pending"}
         >
           {/* The classic dog-eared note, tinted with the WARNING token: the
               one house colour that already means "an aside demanding
@@ -342,7 +355,8 @@ export function SequenceDiagram({
           key={`msg-${message.step}`}
           message={message}
           autonumber={autonumber}
-          reveal={revealOfMessage(message.step, step)}
+          animateRank={animateRankByStep.get(message.step) ?? null}
+          animateToken={animateToken}
           focused={focus?.kind === "message" && focus.step === message.step}
           dimmed={isDimmed(focus, { type: "message", message })}
           onFocus={() => onFocusMessage(message.step)}
@@ -473,7 +487,8 @@ function ParticipantColumn({
 function Message({
   message,
   autonumber,
-  reveal,
+  animateRank,
+  animateToken,
   focused,
   dimmed,
   onFocus,
@@ -481,7 +496,9 @@ function Message({
 }: {
   message: LaidMessage;
   autonumber: boolean;
-  reveal: Reveal;
+  /** Stagger rank within the focus set, or null when not animating. */
+  animateRank: number | null;
+  animateToken: "a" | "b";
   focused: boolean;
   dimmed: boolean;
   onFocus: () => void;
@@ -510,11 +527,15 @@ function Message({
   return (
     <g
       className={cn("af-seq-msg af-seq-dimmable", dimmed && "af-seq-dim")}
-      data-reveal={reveal}
       data-focused={focused || undefined}
-      // A pending message must not be reachable at all — it has not happened.
+      data-animate={animateRank !== null ? animateToken : undefined}
+      // The rank rides along as a custom property so the stylesheet can turn
+      // it into a delay (`rank × --seq-stagger`) without a per-element
+      // inline millisecond — durations stay owned by lib/motion.ts.
       style={
-        reveal === "pending" ? { opacity: 0, pointerEvents: "none" } : undefined
+        animateRank !== null
+          ? ({ "--seq-rank": animateRank } as React.CSSProperties)
+          : undefined
       }
     >
       {kind === "reply" ? (
@@ -561,10 +582,7 @@ function Message({
         className="af-seq-hit"
         d={linePath}
         role="button"
-        // A pending message has not happened yet: unreachable by Tab and
-        // invisible to AT, not merely transparent.
-        tabIndex={reveal === "pending" ? -1 : 0}
-        aria-hidden={reveal === "pending" || undefined}
+        tabIndex={0}
         aria-label={ariaLabel}
         onClick={(event) => {
           event.stopPropagation();

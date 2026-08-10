@@ -29,7 +29,7 @@
  */
 
 import { useEffect, useSyncExternalStore } from "react";
-import { ArrowRight, GitBranch, Play } from "lucide-react";
+import { ArrowRight, GitBranch, MousePointerClick } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -119,15 +119,15 @@ export function ViewChooser(): React.JSX.Element {
         <li>
           <ChooserCard
             href="/view/sequence"
-            icon={<Play aria-hidden="true" className="size-5" />}
+            icon={<MousePointerClick aria-hidden="true" className="size-5" />}
             title="Sequence diagram"
             body={
               <>
                 Behaviour: one flow, message by message, in order. Write{" "}
                 <span className="font-mono">.alab</span> sequence text or paste
                 a Mermaid <span className="font-mono">sequenceDiagram</span>,
-                then <em>play</em> it — arrows draw step by step, and clicking a
-                message or participant focuses it.
+                then <em>explore</em> it — click a message or participant and
+                watch its arrows draw while the rest recedes.
               </>
             }
             cta="Open the sequence playground"

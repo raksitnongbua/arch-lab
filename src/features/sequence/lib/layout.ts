@@ -1,7 +1,7 @@
 /**
  * Sequence-diagram layout — the ONE place geometry is derived from a
- * `SequenceLabFile`. The renderer, the playback engine and the layout check
- * script (`scripts/sequence-layout-check.mjs`) all read this result; none of
+ * `SequenceLabFile`. The renderer, the viewer and the layout check script
+ * (`scripts/sequence-layout-check.mjs`) all read this result; none of
  * them ever computes a coordinate of its own. Same single-source-of-truth
  * discipline as `editor/lib/frame-layout.ts`, and for the same reason: two
  * geometry computations WILL disagree, and the disagreement only shows up as
@@ -18,17 +18,20 @@
  * The estimate over-reserves slightly, which costs a little horizontal air
  * and buys byte-stable geometry everywhere.
  *
- * Playback model produced alongside the geometry:
+ * Step model produced alongside the geometry:
  *   - Every MESSAGE is one step, numbered 1..stepCount in document order —
  *     messages are the events of a sequence diagram; notes and fragment
- *     frames are commentary and scaffolding around them.
- *   - Every other element carries a `revealStep`: the step at which it
- *     becomes visible. A note reveals with the message that precedes it
- *     (0 = visible before playback starts); a fragment frame and each of its
- *     branch dividers reveal with the first message inside them, so the box
- *     appears exactly when the story enters it. Deriving reveal order here
- *     rather than in the player keeps "what is on screen at step N" a pure
- *     function of the model.
+ *     frames are commentary and scaffolding around them. The viewer uses
+ *     steps for focus order and the detail panel's "Step N of M" readout.
+ *   - Every other element carries a `revealStep`: the first step of the
+ *     story it belongs to. A note attaches to the message that precedes it
+ *     (0 = before the first message); a fragment frame and each of its
+ *     branch dividers attach to the first message inside them. The viewer
+ *     renders everything at once and does not read these fields; the check
+ *     script still asserts them, because they pin down "which part of the
+ *     story does this element belong to" as a pure function of the model —
+ *     a property any future consumer (export, tour, playback) inherits
+ *     for free.
  */
 
 import type {
@@ -126,7 +129,7 @@ export interface LaidParticipant {
 }
 
 export interface LaidMessage {
-  /** 1-based playback step, in document order. */
+  /** 1-based step number, in document order. */
   step: number;
   from: string;
   to: string;

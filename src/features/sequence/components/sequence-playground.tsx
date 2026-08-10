@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * `/view/sequence` — the sequence playground: text on the left, the animated
- * diagram on the right, re-rendering as you type. Mirrors the C4
+ * `/view/sequence` — the sequence playground: text on the left, the complete
+ * click-to-focus diagram on the right, re-rendering as you type. Mirrors the
+ * C4
  * playground's contract (`viewer/components/viewer-playground.tsx`) at the
  * pieces that matter, and deliberately drops what does not apply:
  *
@@ -40,14 +41,14 @@ import {
   type ParsedSequence,
   type SequenceInputError,
 } from "../input/parse";
-import { SequencePlayer } from "./sequence-player";
+import { SequenceViewer } from "./sequence-viewer";
 
 /** Same rest-before-parse the C4 playground uses — one convention. */
 const PARSE_DEBOUNCE_MS = 300;
 
 export function SequencePlayground(): React.JSX.Element {
   const [text, setText] = useState(SEQUENCE_EXAMPLE);
-  /** The last GOOD parse — what the player renders, error or not. */
+  /** The last GOOD parse — what the viewer renders, error or not. */
   const [parsed, setParsed] = useState<ParsedSequence | null>(() => {
     const seeded = parseSequenceInput(SEQUENCE_EXAMPLE);
     return seeded.status === "ok" ? seeded.value : null;
@@ -124,18 +125,19 @@ export function SequencePlayground(): React.JSX.Element {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8">
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-          Play a sequence diagram
+          Explore a sequence diagram
         </h1>
         <Badge variant="accent">
           <span className="size-1.5 rounded-full bg-accent" />
-          animated playback
+          click to focus
         </Badge>
         <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
           Write <span className="font-mono text-foreground">.alab</span>{" "}
           sequence text or paste a Mermaid{" "}
           <span className="font-mono text-foreground">sequenceDiagram</span> —
-          auto-detected, rendered live, played step by step. Nothing leaves your
-          browser. Building a C4 model instead?{" "}
+          auto-detected, rendered live and complete; click any message or
+          participant to spotlight it. Nothing leaves your browser. Building a
+          C4 model instead?{" "}
           <Link
             href="/view/c4"
             className="font-medium text-primary hover:underline"
@@ -230,7 +232,7 @@ export function SequencePlayground(): React.JSX.Element {
           className="flex min-h-[32rem] min-w-0 flex-col overflow-hidden rounded-xl border border-border shadow-sm lg:h-[calc(100svh-11rem)] lg:min-h-[24rem]"
         >
           {parsed !== null ? (
-            <SequencePlayer file={parsed.file} />
+            <SequenceViewer file={parsed.file} />
           ) : (
             // Only reachable when the SEED itself failed to parse — a build
             // break, not a user state (the seed is parser-verified at module

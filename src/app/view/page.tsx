@@ -7,7 +7,7 @@ import { ViewChooser } from "./view-chooser";
 export const metadata: Metadata = {
   title: "View a model — C4 or sequence diagram",
   description:
-    "Choose your playground: the two-pane C4 model editor (.alab text and JSON in lossless sync) or the animated sequence diagram player (step-through playback, Mermaid import). Everything runs in your browser.",
+    "Choose your playground: the two-pane C4 model editor (.alab text and JSON in lossless sync) or the sequence diagram viewer (click-to-focus animation, Mermaid import). Everything runs in your browser.",
   alternates: { canonical: "/view" },
 };
 
