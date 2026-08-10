@@ -113,6 +113,16 @@ function estimateWidth(text: string, fontSize: number): number {
   return Math.ceil(text.length * fontSize * SEQ.charWidthRatio);
 }
 
+/**
+ * The renderer needs a handful of text extents the layout does not store
+ * (fragment guard-label hit boxes). Exporting the ESTIMATOR — not letting the
+ * renderer invent one — keeps the character-width ratio a single fact: if the
+ * estimate ever changes, hit boxes and reserved gaps move together.
+ */
+export function estimateTextWidth(text: string, fontSize: number): number {
+  return estimateWidth(text, fontSize);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Result shapes                                                               */
 /* -------------------------------------------------------------------------- */
@@ -142,6 +152,12 @@ export interface LaidMessage {
   /** Endpoint x — already offset to the edge of any open activation bar. */
   fromX: number;
   toX: number;
+  /**
+   * Reserved width of the label (technology suffix included, padding
+   * included) — the same estimate column planning used, exported per message
+   * so the renderer's label HIT BOX and the reserved gap can never disagree.
+   */
+  labelWidth: number;
 }
 
 export interface LaidNote {
@@ -161,7 +177,30 @@ export interface LaidDivider {
   revealStep: number;
 }
 
+/**
+ * One branch of a fragment, with the message steps its subtree contains —
+ * RECURSIVELY, nested fragments included. `branches[i]` pairs with the
+ * fragment's `dividers[i - 1]` for i ≥ 1 (branch 0 has no divider; its guard
+ * label is drawn beside the kind chip) — the renderer relies on that pairing
+ * to wire each guard label to its branch.
+ */
+export interface LaidBranch {
+  /** The guard label (`alt "card accepted"` → `card accepted`), if any. */
+  label?: string;
+  /** Every message step inside this branch, ascending. */
+  steps: number[];
+}
+
 export interface LaidFragment {
+  /**
+   * Stable identity: `frag-N` where N is the fragment's pre-order position
+   * in the document (== its index in `fragments[]`, which is built
+   * outermost-first). Stable because it is a pure function of the model's
+   * structure — the viewer validates a focused id at read time anyway, so a
+   * re-parse that reshapes the document simply drops the focus, same as a
+   * removed message does.
+   */
+  id: string;
   kind: SequenceFragment["kind"];
   /** First branch's guard label — drawn beside the kind chip. */
   label?: string;
@@ -173,6 +212,16 @@ export interface LaidFragment {
   depth: number;
   revealStep: number;
   dividers: LaidDivider[];
+  /**
+   * Every message step inside the fragment — all branches, RECURSIVELY
+   * through nested fragments — ascending. Computed here, in layout, because
+   * "which steps belong to this fragment" is model structure, not
+   * presentation: the viewer's focus-a-whole-flow feature and the check
+   * script must read the same answer.
+   */
+  steps: number[];
+  /** Per-branch step sets, in branch order. See LaidBranch. */
+  branches: LaidBranch[];
 }
 
 export interface LaidActivation {
@@ -464,6 +513,7 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
       y,
       fromX,
       toX,
+      labelWidth: messageLabelWidth(item),
     });
     yByStep.push(y);
     cursorY += rowHeight;
@@ -511,12 +561,26 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
     cursorY += SEQ.noteHeight + SEQ.noteGap;
   };
 
+  /** Steps strictly after `after`, up to and including `upTo`, ascending. */
+  const stepsBetween = (after: number, upTo: number): number[] => {
+    const out: number[] = [];
+    for (let s = after + 1; s <= upTo; s += 1) out.push(s);
+    return out;
+  };
+
   const placeFragment = (item: SequenceFragment, depth: number) => {
     const startY = cursorY;
     const stepBefore = stepCounter;
     cursorY += SEQ.fragmentLabelBand;
 
     const dividers: LaidDivider[] = [];
+    // Per-branch step sets. A branch's set is simply the step-counter SPAN
+    // of its walk: steps are numbered in document order and a branch's
+    // subtree — nested fragments included — is walked contiguously, so
+    // "everything numbered while inside the branch" IS its recursive message
+    // set. No second recursive walk exists that could disagree with the one
+    // that numbered the steps.
+    const branchSets: LaidBranch[] = [];
     // Index into `fragments` is reserved BEFORE walking the contents so the
     // array stays outermost-first — the paint order renderers rely on, same
     // contract as placeFrames().
@@ -524,9 +588,9 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
     fragments.push(null as unknown as LaidFragment);
 
     item.branches.forEach((branch, index) => {
+      const branchStepBefore = stepCounter;
       if (index > 0) {
         const dividerY = cursorY + SEQ.fragmentDividerHeight / 2;
-        const branchStepBefore = stepCounter;
         cursorY += SEQ.fragmentDividerHeight;
         walk(branch.items, depth + 1);
         dividers.push({
@@ -542,6 +606,10 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
       } else {
         walk(branch.items, depth + 1);
       }
+      branchSets.push({
+        ...(branch.label !== undefined ? { label: branch.label } : {}),
+        steps: stepsBetween(branchStepBefore, stepCounter),
+      });
     });
 
     cursorY += SEQ.fragmentBottomPad;
@@ -556,6 +624,9 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
       innerDepth(item.branches.flatMap((b) => b.items)) * SEQ.fragmentPadStep;
 
     fragments[slot] = {
+      // The reserved slot doubles as the pre-order document position — the
+      // one number that is stable for a given model structure.
+      id: `frag-${slot}`,
       kind: item.kind,
       ...(item.branches[0]?.label !== undefined
         ? { label: item.branches[0].label }
@@ -567,6 +638,10 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
       depth,
       revealStep: stepCounter > stepBefore ? stepBefore + 1 : stepBefore,
       dividers,
+      // Same span argument as the branches, one level up: the fragment's
+      // recursive message set is the counter span of walking all branches.
+      steps: stepsBetween(stepBefore, stepCounter),
+      branches: branchSets,
     };
   };
 
@@ -613,10 +688,7 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
   }
   for (const m of messages) {
     if (m.self) {
-      maxX = Math.max(
-        maxX,
-        m.fromX + SEQ.selfLoopWidth + messageLabelWidth_(m) + 8,
-      );
+      maxX = Math.max(maxX, m.fromX + SEQ.selfLoopWidth + m.labelWidth + 8);
     }
   }
 
@@ -636,10 +708,4 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
     stepCount: stepCounter,
     yByStep,
   };
-}
-
-/** Label width of an already-laid message (self-loop extent accounting). */
-function messageLabelWidth_(m: LaidMessage): number {
-  const tech = m.technology === undefined ? "" : ` [${m.technology}]`;
-  return estimateWidth(m.label + tech, SEQ.labelFontSize) + 24;
 }

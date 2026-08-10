@@ -10,12 +10,19 @@
  * the whole story is on screen immediately, and the animation budget is
  * spent where it answers a question the user just asked:
  *
- *   - Clicking a MESSAGE re-draws that one arrow (the stroke-dashoffset
- *     draw in sequence-motion.css) and holds it emphasised; the detail
- *     panel below names sender, receiver, label, technology, kind and step.
+ *   - Clicking a MESSAGE (its arrow OR its label — one hit target covers
+ *     both) re-draws that one arrow (the stroke-dashoffset draw in
+ *     sequence-motion.css) and holds it emphasised; the detail panel below
+ *     names sender, receiver, label, technology, kind and step.
  *   - Clicking a PARTICIPANT re-draws its whole message set in step order,
  *     lightly staggered so it reads as one gesture; the panel says how many
  *     messages it takes part in, and which.
+ *   - Clicking a FRAGMENT's kind chip re-draws every message in the
+ *     fragment — all branches, nested fragments included; clicking a branch
+ *     GUARD label re-draws just that branch's flow. The step sets come from
+ *     the layout (LaidFragment.steps / .branches), never recomputed here;
+ *     the panel names the fragment, the branch, the steps and the
+ *     participants involved.
  *   - Everything outside the focus set recedes (opacity only); Escape — or
  *     clicking empty canvas — brings the full diagram back.
  *
@@ -50,7 +57,7 @@ import type { SequenceLabFile } from "@/types";
 import { layoutSequence } from "../lib/layout";
 import { sequenceMotionVars } from "../lib/motion";
 import type { SequenceFocus } from "./sequence-diagram";
-import { SequenceDiagram } from "./sequence-diagram";
+import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
 
 /* -------------------------------------------------------------------------- */
 /* Reduced motion, hydration-safe                                               */
@@ -84,14 +91,29 @@ function useReducedMotion(): boolean {
 
 export function SequenceViewer({
   file,
+  onAnnounce,
 }: {
   file: SequenceLabFile;
+  /**
+   * Where focus announcements go. The viewer OWNS no live region: the page
+   * hosting it (the playground) renders the single polite region, and this
+   * prop plumbs focus messages into it — two polite regions updated near
+   * each other race, and the loser's announcement is swallowed. The host
+   * owns the region because it renders unconditionally (this viewer can be
+   * replaced by the seed-failure fallback) and already announces parse and
+   * immersive state.
+   */
+  onAnnounce: (message: string) => void;
 }): React.JSX.Element {
   // ONE layout call per model — the single source of geometric truth.
   const layout = useMemo(() => layoutSequence(file), [file]);
   const nameById = useMemo(
     () => new Map(file.participants.map((p) => [p.id, p.name])),
     [file],
+  );
+  const fragmentById = useMemo(
+    () => new Map(layout.fragments.map((f) => [f.id, f])),
+    [layout],
   );
 
   const reduced = useReducedMotion();
@@ -107,21 +129,27 @@ export function SequenceViewer({
     focus: NonNullable<SequenceFocus>;
     nonce: number;
   } | null>(null);
-  const [announcement, setAnnouncement] = useState("");
 
   // Focus is validated at read time, not with a state-sync effect: a
-  // re-parse can remove the focused message or participant, and a focus
-  // pointing at nothing must read as no focus.
-  const focus: SequenceFocus =
-    rawFocus === null
-      ? null
-      : rawFocus.focus.kind === "message"
-        ? rawFocus.focus.step >= 1 && rawFocus.focus.step <= layout.stepCount
-          ? rawFocus.focus
-          : null
-        : nameById.has(rawFocus.focus.id)
-          ? rawFocus.focus
+  // re-parse can remove the focused message, participant or fragment, and a
+  // focus pointing at nothing must read as no focus.
+  const focus: SequenceFocus = (() => {
+    if (rawFocus === null) return null;
+    const raw = rawFocus.focus;
+    switch (raw.kind) {
+      case "message":
+        return raw.step >= 1 && raw.step <= layout.stepCount ? raw : null;
+      case "participant":
+        return nameById.has(raw.id) ? raw : null;
+      case "fragment": {
+        const fragment = fragmentById.get(raw.id);
+        if (fragment === undefined) return null;
+        return raw.branch === null || raw.branch < fragment.branches.length
+          ? raw
           : null;
+      }
+    }
+  })();
 
   /* ---- focus ------------------------------------------------------------- */
 
@@ -133,12 +161,12 @@ export function SequenceViewer({
       }));
       const message = layout.messages.find((m) => m.step === focusedStep);
       if (message !== undefined) {
-        setAnnouncement(
+        onAnnounce(
           `Message ${focusedStep} of ${layout.stepCount}: ${nameById.get(message.from) ?? message.from} to ${nameById.get(message.to) ?? message.to} — ${message.label}. Details below the diagram; Escape clears focus.`,
         );
       }
     },
-    [layout, nameById],
+    [layout, nameById, onAnnounce],
   );
 
   const handleFocusParticipant = useCallback(
@@ -150,17 +178,38 @@ export function SequenceViewer({
       const steps = layout.messages
         .filter((m) => m.from === id || m.to === id)
         .map((m) => m.step);
-      setAnnouncement(
+      onAnnounce(
         `Focused participant ${nameById.get(id) ?? id} — takes part in ${steps.length} of ${layout.stepCount} messages${steps.length > 0 ? ` (steps ${steps.join(", ")})` : ""}. Escape clears focus.`,
       );
     },
-    [layout, nameById],
+    [layout, nameById, onAnnounce],
+  );
+
+  const handleFocusFragment = useCallback(
+    (id: string, branch: number | null) => {
+      setRawFocus((prev) => ({
+        focus: { kind: "fragment", id, branch },
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
+      const fragment = layout.fragments.find((f) => f.id === id);
+      if (fragment === undefined) return;
+      const steps =
+        branch === null
+          ? fragment.steps
+          : (fragment.branches[branch]?.steps ?? []);
+      const guard =
+        branch === null ? undefined : fragment.branches[branch]?.label;
+      onAnnounce(
+        `Focused ${fragment.kind} fragment${guard !== undefined ? ` branch [${guard}]` : ""} — ${steps.length} of ${layout.stepCount} messages${steps.length > 0 ? ` (steps ${steps.join(", ")})` : ""}. Details below the diagram; Escape clears focus.`,
+      );
+    },
+    [layout, onAnnounce],
   );
 
   const handleClearFocus = useCallback(() => {
-    if (focus !== null) setAnnouncement("Focus cleared.");
+    if (focus !== null) onAnnounce("Focus cleared.");
     setRawFocus(null);
-  }, [focus]);
+  }, [focus, onAnnounce]);
 
   /* ---- keyboard ----------------------------------------------------------- */
 
@@ -269,6 +318,36 @@ export function SequenceViewer({
           )
           .map((m) => m.step);
 
+  // Fragment focus detail — the steps come from the SAME resolver the
+  // diagram dims with, so the panel can never describe a different flow
+  // than the one lit up.
+  const focusedFragment =
+    focus?.kind === "fragment" ? (fragmentById.get(focus.id) ?? null) : null;
+  const focusedFragmentGuard =
+    focus?.kind === "fragment" && focus.branch !== null
+      ? focusedFragment?.branches[focus.branch]?.label
+      : undefined;
+  const focusedFragmentSteps =
+    focusedFragment === null ? null : resolveFocusSteps(layout, focus);
+  const focusedFragmentStepList =
+    focusedFragmentSteps === null
+      ? []
+      : layout.messages
+          .filter((m) => focusedFragmentSteps.has(m.step))
+          .map((m) => m.step);
+  const focusedFragmentParticipants =
+    focusedFragmentSteps === null
+      ? []
+      : layout.participants
+          .filter((p) =>
+            layout.messages.some(
+              (m) =>
+                focusedFragmentSteps.has(m.step) &&
+                (m.from === p.id || m.to === p.id),
+            ),
+          )
+          .map((p) => p.name);
+
   return (
     <div
       className="flex h-full min-h-0 flex-col"
@@ -278,16 +357,13 @@ export function SequenceViewer({
       onKeyDown={handleKeyDown}
       style={motionVars}
     >
-      {/* One polite live region — its announcements describe focus only. */}
-      <p aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
-
+      {/* No live region here — the hosting page owns the single polite
+          region and focus announcements travel through `onAnnounce`. */}
       <div
         className="min-h-0 flex-1 overflow-auto bg-canvas p-3"
         tabIndex={0}
         role="application"
-        aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages and participants are buttons — Tab reaches them."
+        aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages, participants and fragment chips are buttons — Tab reaches them."
       >
         <SequenceDiagram
           layout={layout}
@@ -297,6 +373,7 @@ export function SequenceViewer({
           focusNonce={rawFocus?.nonce ?? 0}
           onFocusMessage={handleFocusMessage}
           onFocusParticipant={handleFocusParticipant}
+          onFocusFragment={handleFocusFragment}
           onClearFocus={handleClearFocus}
         />
       </div>
@@ -365,12 +442,42 @@ export function SequenceViewer({
           />
         </dl>
       ) : null}
+      {focusedFragment !== null ? (
+        <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1 border-t border-border bg-card px-4 py-2.5 text-sm">
+          <Detail term="Fragment" value={focusedFragment.kind} mono />
+          {focusedFragmentGuard !== undefined ? (
+            <Detail term="Branch" value={`[${focusedFragmentGuard}]`} />
+          ) : (
+            <Detail
+              term="Branches"
+              value={`${focusedFragment.branches.length} (all focused)`}
+            />
+          )}
+          <Detail
+            term="Messages"
+            value={
+              focusedFragmentStepList.length === 0
+                ? "none"
+                : `${focusedFragmentStepList.length} of ${layout.stepCount} — steps ${focusedFragmentStepList.join(", ")}`
+            }
+            mono
+          />
+          <Detail
+            term="Participants"
+            value={
+              focusedFragmentParticipants.length === 0
+                ? "none"
+                : focusedFragmentParticipants.join(", ")
+            }
+          />
+        </dl>
+      ) : null}
 
       {/* The keyboard hint that used to live in the control strip — the
           controls are gone, the affordances are not. */}
       <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
-        Click a message or participant to focus it · ← → move between messages ·
-        Esc clears focus
+        Click a message, participant, or fragment chip to focus it · ← → move
+        between messages · Esc clears focus
       </p>
 
       {/* Text alternative: the whole story as an ordered list, for readers

@@ -23,6 +23,13 @@
  *      deactivating one, and sit on their participant's lifeline.
  *   8. Reveal steps are sane: notes reveal with the preceding message and
  *      fragments with the first message inside them.
+ *   9. Fragment identity and step sets: every fragment carries a unique,
+ *      document-order `frag-N` id, its RECURSIVE message-step set, and a
+ *      per-branch step set — a branch's set is a subset of its fragment's
+ *      (strict when the fragment has more than one branch), branch sets
+ *      partition the fragment's set, and a nested fragment's set is
+ *      contained in its parent's. This is the data the viewer's
+ *      focus-a-whole-flow feature runs on.
  *
  * Exits non-zero on any failure. Run with: pnpm check:sequence-layout
  */
@@ -298,6 +305,54 @@ check(
   );
 }
 
+{
+  const sameSet = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  check(
+    "fragment ids are unique and in document (pre-order) position",
+    layout.fragments.every((f, i) => f.id === `frag-${i}`),
+    layout.fragments.map((f) => f.id).join(", "),
+  );
+
+  // The bundled example's flows, by hand: the alt spans steps 4–10
+  // (branch "card accepted" = 4–9 including the nested par's 7 and 8,
+  // branch "card declined" = 10); the par spans 7–8, one step per branch.
+  const alt = layout.fragments.find((f) => f.kind === "alt");
+  const par = layout.fragments.find((f) => f.kind === "par");
+  check(
+    "the alt's recursive step set spans both branches, nested par included",
+    alt !== undefined &&
+      sameSet(alt.steps, [4, 5, 6, 7, 8, 9, 10]) &&
+      sameSet(alt.branches[0]?.steps, [4, 5, 6, 7, 8, 9]) &&
+      sameSet(alt.branches[1]?.steps, [10]) &&
+      alt.branches[0]?.label === "card accepted" &&
+      alt.branches[1]?.label === "card declined",
+    JSON.stringify({ steps: alt?.steps, branches: alt?.branches }),
+  );
+  check(
+    "the nested par's step set is one step per branch, contained in the alt's",
+    par !== undefined &&
+      sameSet(par.steps, [7, 8]) &&
+      sameSet(par.branches[0]?.steps, [7]) &&
+      sameSet(par.branches[1]?.steps, [8]) &&
+      par.steps.every((s) => alt.steps.includes(s)),
+    JSON.stringify({ steps: par?.steps, branches: par?.branches }),
+  );
+  check(
+    "every fragment: branch sets are subsets (strict when multi-branch) and partition the fragment's set",
+    layout.fragments.every((f) => {
+      const union = f.branches.flatMap((b) => b.steps).sort((a, b) => a - b);
+      return (
+        sameSet(union, f.steps) &&
+        f.branches.every(
+          (b) =>
+            b.steps.every((s) => f.steps.includes(s)) &&
+            (f.branches.length === 1 || b.steps.length < f.steps.length),
+        )
+      );
+    }),
+  );
+}
+
 check(
   "notes reveal with the message that precedes them; fragments with the first message inside",
   layout.notes.every(
@@ -374,6 +429,46 @@ check(
     );
   })(),
 );
+
+{
+  // Step sets at every level of the 3-deep nest. Document order: step 1 is
+  // buried inside opt⊂loop⊂alt-branch-0, step 2 ("middle tail") sits in
+  // alt branch 0 AFTER the loop, step 3 ("done") is the else branch.
+  const sameSet = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  check(
+    "three-deep nest reports the right step set at every level",
+    sameSet(inner.steps, [1]) &&
+      sameSet(middle.steps, [1]) &&
+      sameSet(outer.steps, [1, 2, 3]),
+    JSON.stringify({
+      inner: inner.steps,
+      middle: middle.steps,
+      outer: outer.steps,
+    }),
+  );
+  check(
+    "the alt's branch sets are STRICT subsets of its own set and partition it",
+    sameSet(outer.branches[0]?.steps, [1, 2]) &&
+      sameSet(outer.branches[1]?.steps, [3]) &&
+      outer.branches.every(
+        (b) =>
+          b.steps.length < outer.steps.length &&
+          b.steps.every((s) => outer.steps.includes(s)),
+      ),
+    JSON.stringify(outer.branches),
+  );
+  check(
+    "single-branch fragments carry their whole set as the one branch's set",
+    sameSet(middle.branches[0]?.steps, middle.steps) &&
+      sameSet(inner.branches[0]?.steps, inner.steps),
+    JSON.stringify({ middle: middle.branches, inner: inner.branches }),
+  );
+  check(
+    "nesting containment: inner ⊆ middle ⊆ outer as STEP SETS too",
+    inner.steps.every((s) => middle.steps.includes(s)) &&
+      middle.steps.every((s) => outer.steps.includes(s)),
+  );
+}
 
 /* ----------------------------------------------------------------------- */
 

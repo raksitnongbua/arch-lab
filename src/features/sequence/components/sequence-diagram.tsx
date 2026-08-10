@@ -21,27 +21,33 @@
  * the layout's width estimates, which reserve space per label.
  *
  * FOCUS DRAW: focusing a message re-draws that one arrow; focusing a
- * participant re-draws its whole message set in step order, staggered. Each
- * animated message carries `data-animate` plus a `--seq-rank` custom
- * property — its position within the focus set, derived from message (step)
- * order, never from a render index that could reshuffle — and the CSS turns
- * rank into an animation delay. See `focusNonce` below for how a repeat
- * click replays.
+ * participant re-draws its whole message set in step order, staggered;
+ * focusing a FRAGMENT (its kind chip) or one BRANCH (its guard label)
+ * re-draws that flow's message set the same way. Every focus kind reduces to
+ * one thing — a SET OF STEPS (`resolveFocusSteps`) — and dimming, stagger
+ * ranks and the participant highlight are all derived from that set, so a
+ * new focus kind can never invent a second dimming rule. Each animated
+ * message carries `data-animate` plus a `--seq-rank` custom property — its
+ * position within the focus set, derived from message (step) order, never
+ * from a render index that could reshuffle — and the CSS turns rank into an
+ * animation delay. See `focusNonce` below for how a repeat click replays.
  *
- * Interactivity: messages and participant headers are real keyboard-operable
- * controls (role="button", tabIndex, Enter/Space), not bare onClick shapes —
- * the SVG is NOT aria-hidden, and the viewer adds a text alternative beside
- * it. Clicking the backdrop clears focus.
+ * Interactivity: messages, participant headers, fragment kind chips and
+ * branch guard labels are real keyboard-operable controls (role="button",
+ * tabIndex, Enter/Space), not bare onClick shapes — the SVG is NOT
+ * aria-hidden, and the viewer adds a text alternative beside it. Clicking
+ * the backdrop clears focus.
  */
 
 import { cn } from "@/lib/utils";
 
 import type {
+  LaidFragment,
   LaidMessage,
   LaidParticipant,
   SequenceLayout,
 } from "../lib/layout";
-import { SEQ } from "../lib/layout";
+import { estimateTextWidth, SEQ } from "../lib/layout";
 
 /* -------------------------------------------------------------------------- */
 /* Focus model                                                                  */
@@ -50,7 +56,44 @@ import { SEQ } from "../lib/layout";
 export type SequenceFocus =
   | { kind: "message"; step: number }
   | { kind: "participant"; id: string }
+  /** `branch: null` = the whole fragment; a number = that branch only. */
+  | { kind: "fragment"; id: string; branch: number | null }
   | null;
+
+/**
+ * THE focus set: which message steps a focus selects. One function, exported,
+ * because two consumers need the same answer — this renderer (dimming +
+ * stagger ranks) and the viewer (announcement + detail panel) — and a
+ * fragment flow computed twice is a fragment flow that can disagree.
+ * Returns null for no focus AND for a dangling focus (a fragment id a
+ * re-parse removed): a focus pointing at nothing must read as no focus,
+ * the same validated-at-read-time rule the viewer applies.
+ */
+export function resolveFocusSteps(
+  layout: SequenceLayout,
+  focus: SequenceFocus,
+): ReadonlySet<number> | null {
+  if (focus === null) return null;
+  switch (focus.kind) {
+    case "message":
+      return new Set([focus.step]);
+    case "participant":
+      return new Set(
+        layout.messages
+          .filter((m) => m.from === focus.id || m.to === focus.id)
+          .map((m) => m.step),
+      );
+    case "fragment": {
+      const fragment = layout.fragments.find((f) => f.id === focus.id);
+      if (fragment === undefined) return null;
+      const steps =
+        focus.branch === null
+          ? fragment.steps
+          : (fragment.branches[focus.branch]?.steps ?? null);
+      return steps === null ? null : new Set(steps);
+    }
+  }
+}
 
 export interface SequenceDiagramProps {
   layout: SequenceLayout;
@@ -71,47 +114,9 @@ export interface SequenceDiagramProps {
   focusNonce: number;
   onFocusMessage: (step: number) => void;
   onFocusParticipant: (id: string) => void;
+  /** `branch: null` focuses the whole fragment, a number that branch only. */
+  onFocusFragment: (id: string, branch: number | null) => void;
   onClearFocus: () => void;
-}
-
-/** Everything outside the focus set recedes; the set keeps full strength. */
-function isDimmed(
-  focus: SequenceFocus,
-  element:
-    | { type: "message"; message: LaidMessage }
-    | { type: "participant"; id: string }
-    | { type: "note"; participants: readonly string[] }
-    | { type: "scaffold" }
-    | { type: "activation"; participantId: string },
-): boolean {
-  if (focus === null) return false;
-  if (focus.kind === "message") {
-    switch (element.type) {
-      case "message":
-        return element.message.step !== focus.step;
-      case "participant":
-        return false; // resolved by the caller, which knows the focused ends
-      case "activation":
-        return true;
-      default:
-        return true;
-    }
-  }
-  // participant focus
-  switch (element.type) {
-    case "message":
-      return (
-        element.message.from !== focus.id && element.message.to !== focus.id
-      );
-    case "participant":
-      return element.id !== focus.id;
-    case "note":
-      return !element.participants.includes(focus.id);
-    case "activation":
-      return element.participantId !== focus.id;
-    default:
-      return true;
-  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -126,20 +131,73 @@ export function SequenceDiagram({
   focusNonce,
   onFocusMessage,
   onFocusParticipant,
+  onFocusFragment,
   onClearFocus,
 }: SequenceDiagramProps): React.JSX.Element {
-  const focusedMessage =
-    focus?.kind === "message"
-      ? (layout.messages.find((m) => m.step === focus.step) ?? null)
-      : null;
+  /**
+   * Every dim decision below derives from THIS set (see resolveFocusSteps):
+   * a focus is a set of steps, and everything else — which participants
+   * stay lit, which notes and bars belong to the story, which fragment
+   * boxes frame it — is membership arithmetic on that set. One rule.
+   */
+  const focusSteps = resolveFocusSteps(layout, focus);
+
+  const messageDimmed = (m: LaidMessage): boolean =>
+    focusSteps !== null && !focusSteps.has(m.step);
 
   const participantDimmed = (id: string): boolean => {
-    if (focus === null) return false;
+    if (focus === null || focusSteps === null) return false;
+    // Participant focus dims every OTHER participant — even the ones its
+    // messages touch: the question asked was "this column", not "this
+    // column's correspondents".
     if (focus.kind === "participant") return id !== focus.id;
-    // Message focus: the two endpoints stay lit with their message.
-    return focusedMessage === null
-      ? false
-      : focusedMessage.from !== id && focusedMessage.to !== id;
+    // Message and fragment focus: the endpoints of the focused set stay
+    // lit with their messages.
+    return !layout.messages.some(
+      (m) => focusSteps.has(m.step) && (m.from === id || m.to === id),
+    );
+  };
+
+  const noteDimmed = (note: {
+    participants: readonly string[];
+    revealStep: number;
+  }): boolean => {
+    if (focus === null) return false;
+    if (focus.kind === "participant")
+      return !note.participants.includes(focus.id);
+    // Fragment focus: a note reveals with the message before it, so
+    // membership of that step tells us whether the note sits inside the
+    // focused flow — the same "belongs to the story" test the check script
+    // pins revealStep down for.
+    if (focus.kind === "fragment")
+      return focusSteps === null ? false : !focusSteps.has(note.revealStep);
+    return true; // message focus: notes are commentary around the one arrow
+  };
+
+  const activationDimmed = (bar: {
+    participantId: string;
+    revealStep: number;
+  }): boolean => {
+    if (focus === null) return false;
+    if (focus.kind === "participant") return bar.participantId !== focus.id;
+    // Fragment focus: a bar opened by a message inside the flow is part of
+    // the flow (same revealStep-membership test as notes).
+    if (focus.kind === "fragment")
+      return focusSteps === null ? false : !focusSteps.has(bar.revealStep);
+    return true; // message focus
+  };
+
+  const fragmentDimmed = (f: LaidFragment): boolean => {
+    if (focus === null) return false;
+    // Message/participant focus: fragment boxes are scaffolding and recede,
+    // exactly as before fragments became focusable.
+    if (focus.kind !== "fragment") return true;
+    if (focusSteps === null) return false;
+    if (f.id === focus.id) return false; // the focused frame itself
+    // A nested fragment WHOLLY inside the focused flow is part of the story
+    // being told (an `alt` focus keeps its inner `par` frame lit); anything
+    // only partially covered — an ancestor, a sibling — recedes.
+    return f.steps.length === 0 || !f.steps.every((s) => focusSteps.has(s));
   };
 
   /**
@@ -151,12 +209,10 @@ export function SequenceDiagram({
    * no delay).
    */
   const animateRankByStep = new Map<number, number>();
-  if (focus?.kind === "message") {
-    animateRankByStep.set(focus.step, 0);
-  } else if (focus?.kind === "participant") {
+  if (focusSteps !== null) {
     let rank = 0;
     for (const m of layout.messages) {
-      if (m.from === focus.id || m.to === focus.id) {
+      if (focusSteps.has(m.step)) {
         animateRankByStep.set(m.step, rank);
         rank += 1;
       }
@@ -196,60 +252,36 @@ export function SequenceDiagram({
         onClick={onClearFocus}
       />
 
-      {/* ---- fragments, outermost first (paint order = nesting order) ---- */}
-      {layout.fragments.map((fragment, index) => (
+      {/* ---- fragments, outermost first (paint order = nesting order) ----
+          The BOX stays decoration (pointer-events-none — a fragment can
+          cover half the diagram, and a giant click target would swallow
+          every message inside it). What IS clickable, precisely: the kind
+          chip (focus the whole fragment) and each branch's guard label
+          (focus that branch) — small, labelled, and exactly where the eye
+          reads "this is the alt / this is the [card accepted] case". */}
+      {layout.fragments.map((fragment) => (
         <g
-          key={`frag-${index}`}
+          key={fragment.id}
           className={cn(
-            "af-seq-dimmable pointer-events-none",
-            isDimmed(focus, { type: "scaffold" }) && "af-seq-dim",
+            "af-seq-dimmable",
+            fragmentDimmed(fragment) && "af-seq-dim",
           )}
         >
-          <rect
-            x={fragment.x}
-            y={fragment.y}
-            width={fragment.width}
-            height={fragment.height}
-            rx={8}
-            fill="var(--canvas)"
-            fillOpacity={0.5}
-            stroke="var(--node-border)"
-            strokeWidth={1}
-          />
-          {/* Kind chip + guard label in the label band. */}
-          <rect
-            x={fragment.x}
-            y={fragment.y}
-            width={34}
-            height={18}
-            rx={6}
-            fill="var(--secondary)"
-            stroke="var(--border)"
-          />
-          <text
-            x={fragment.x + 17}
-            y={fragment.y + 13}
-            textAnchor="middle"
-            fontSize={SEQ.fragmentFontSize}
-            fontFamily="var(--font-mono)"
-            fill="var(--secondary-foreground)"
-          >
-            {fragment.kind}
-          </text>
-          {fragment.label !== undefined ? (
-            <text
-              x={fragment.x + 42}
-              y={fragment.y + 13}
-              fontSize={SEQ.fragmentFontSize}
-              fontStyle="italic"
-              fill="var(--muted-foreground)"
-            >
-              [{fragment.label}]
-            </text>
-          ) : null}
-          {fragment.dividers.map((divider, dividerIndex) => (
-            <g key={`div-${dividerIndex}`}>
+          <g className="pointer-events-none">
+            <rect
+              x={fragment.x}
+              y={fragment.y}
+              width={fragment.width}
+              height={fragment.height}
+              rx={8}
+              fill="var(--canvas)"
+              fillOpacity={0.5}
+              stroke="var(--node-border)"
+              strokeWidth={1}
+            />
+            {fragment.dividers.map((divider, dividerIndex) => (
               <line
+                key={`div-${dividerIndex}`}
                 x1={fragment.x}
                 y1={divider.y}
                 x2={fragment.x + fragment.width}
@@ -258,8 +290,89 @@ export function SequenceDiagram({
                 strokeWidth={1}
                 strokeDasharray="5 4"
               />
-              {divider.label !== undefined ? (
+            ))}
+          </g>
+
+          {/* Kind chip — clicking it focuses the WHOLE fragment. */}
+          <FragmentControl
+            ariaLabel={`Focus the ${fragment.kind} fragment — every message in ${
+              fragment.branches.length > 1
+                ? `all ${fragment.branches.length} branches`
+                : "it"
+            }`}
+            hitX={fragment.x - 2}
+            hitY={fragment.y - 2}
+            hitWidth={38}
+            hitHeight={22}
+            onFocus={() => onFocusFragment(fragment.id, null)}
+          >
+            <rect
+              className="af-seq-chip"
+              x={fragment.x}
+              y={fragment.y}
+              width={34}
+              height={18}
+              rx={6}
+              fill="var(--secondary)"
+              stroke="var(--border)"
+            />
+            <text
+              x={fragment.x + 17}
+              y={fragment.y + 13}
+              textAnchor="middle"
+              fontSize={SEQ.fragmentFontSize}
+              fontFamily="var(--font-mono)"
+              fill="var(--secondary-foreground)"
+            >
+              {fragment.kind}
+            </text>
+          </FragmentControl>
+
+          {/* Branch 0's guard label sits beside the chip; branches 1+ label
+              their dividers (dividers[i] pairs with branches[i + 1] — the
+              layout's documented contract). Each guard focuses ITS branch. */}
+          {fragment.label !== undefined ? (
+            <FragmentControl
+              ariaLabel={`Focus the [${fragment.label}] branch of the ${fragment.kind} fragment`}
+              hitX={fragment.x + 40}
+              hitY={fragment.y - 2}
+              hitWidth={
+                estimateTextWidth(`[${fragment.label}]`, SEQ.fragmentFontSize) +
+                4
+              }
+              hitHeight={22}
+              onFocus={() => onFocusFragment(fragment.id, 0)}
+            >
+              <text
+                className="af-seq-guard"
+                x={fragment.x + 42}
+                y={fragment.y + 13}
+                fontSize={SEQ.fragmentFontSize}
+                fontStyle="italic"
+                fill="var(--muted-foreground)"
+              >
+                [{fragment.label}]
+              </text>
+            </FragmentControl>
+          ) : null}
+          {fragment.dividers.map((divider, dividerIndex) =>
+            divider.label !== undefined ? (
+              <FragmentControl
+                key={`guard-${dividerIndex}`}
+                ariaLabel={`Focus the [${divider.label}] branch of the ${fragment.kind} fragment`}
+                hitX={fragment.x + 8}
+                hitY={divider.y - 18}
+                hitWidth={
+                  estimateTextWidth(
+                    `[${divider.label}]`,
+                    SEQ.fragmentFontSize,
+                  ) + 4
+                }
+                hitHeight={18}
+                onFocus={() => onFocusFragment(fragment.id, dividerIndex + 1)}
+              >
                 <text
+                  className="af-seq-guard"
                   x={fragment.x + 10}
                   y={divider.y - 5}
                   fontSize={SEQ.fragmentFontSize}
@@ -268,9 +381,9 @@ export function SequenceDiagram({
                 >
                   [{divider.label}]
                 </text>
-              ) : null}
-            </g>
-          ))}
+              </FragmentControl>
+            ) : null,
+          )}
         </g>
       ))}
 
@@ -293,10 +406,7 @@ export function SequenceDiagram({
           key={`act-${index}`}
           className={cn(
             "af-seq-dimmable pointer-events-none",
-            isDimmed(focus, {
-              type: "activation",
-              participantId: bar.participantId,
-            }) && "af-seq-dim",
+            activationDimmed(bar) && "af-seq-dim",
           )}
           x={bar.x}
           y={bar.y0}
@@ -315,10 +425,7 @@ export function SequenceDiagram({
           key={`note-${index}`}
           className={cn(
             "af-seq-dimmable pointer-events-none",
-            isDimmed(focus, {
-              type: "note",
-              participants: note.participants,
-            }) && "af-seq-dim",
+            noteDimmed(note) && "af-seq-dim",
           )}
         >
           {/* The classic dog-eared note, tinted with the WARNING token: the
@@ -358,12 +465,70 @@ export function SequenceDiagram({
           animateRank={animateRankByStep.get(message.step) ?? null}
           animateToken={animateToken}
           focused={focus?.kind === "message" && focus.step === message.step}
-          dimmed={isDimmed(focus, { type: "message", message })}
+          dimmed={messageDimmed(message)}
           onFocus={() => onFocusMessage(message.step)}
           onKeyDown={keyActivate(() => onFocusMessage(message.step))}
         />
       ))}
     </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Fragment chip / guard-label control                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One clickable unit inside a fragment's label band: the visible children
+ * (chip rect + text, or a guard-label text) plus an invisible hit rect ON
+ * TOP that owns the button semantics. The visuals are pointer-events-none so
+ * the hit rect is the ONE target; the wrapper `<g>` carries the
+ * `.af-seq-frag-ctl` class the stylesheet uses to paint hover/focus onto the
+ * visible children (`:has()` — the same in-SVG focus-ring trick the message
+ * and participant hits use, since CSS outline cannot follow SVG shapes).
+ */
+function FragmentControl({
+  ariaLabel,
+  hitX,
+  hitY,
+  hitWidth,
+  hitHeight,
+  onFocus,
+  children,
+}: {
+  ariaLabel: string;
+  hitX: number;
+  hitY: number;
+  hitWidth: number;
+  hitHeight: number;
+  onFocus: () => void;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <g className="af-seq-frag-ctl">
+      <g className="pointer-events-none">{children}</g>
+      <rect
+        className="af-seq-hit af-seq-hit-region"
+        x={hitX}
+        y={hitY}
+        width={hitWidth}
+        height={hitHeight}
+        role="button"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        onClick={(event) => {
+          event.stopPropagation();
+          onFocus();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            onFocus();
+          }
+        }}
+      />
+    </g>
   );
 }
 
@@ -459,9 +624,11 @@ function ParticipantColumn({
           [{participant.technology}]
         </text>
       ) : null}
-      {/* The whole header is the participant's click/keyboard target. */}
+      {/* The whole header is the participant's click/keyboard target —
+          `af-seq-hit-region` makes the rect's INTERIOR hit-testable
+          (pointer-events: all), not just an 18px stroke band around it. */}
       <rect
-        className="af-seq-hit"
+        className="af-seq-hit af-seq-hit-region"
         x={x - headerWidth / 2}
         y={SEQ.marginTop}
         width={headerWidth}
@@ -522,6 +689,28 @@ function Message({
   const labelX = self ? fromX + SEQ.selfLoopWidth + 10 : midX;
   const labelY = self ? y + SEQ.selfLoopHeight / 2 + 4 : y - 7;
 
+  /**
+   * ONE hit target per message, covering the arrow AND its label — a user's
+   * instinct is to click the words, and two separate targets would double
+   * the tab stops and split the accessible name. Built as closed rect
+   * subpaths (hit-tested by fill via `.af-seq-hit-region`, no stroke) so the
+   * bounds are EXACT — the old 18px-stroke trick would halo 9px past every
+   * edge and let a label box steal clicks from its neighbour.
+   *
+   * Bounding: message rows are 44px tall with the arrow mid-row, so this
+   * row's territory is y±22. The line band is y±10; the label band
+   * (y−24 … y−4, width from the layout's own reserved `labelWidth`) hugs the
+   * text and stops 10px short of the arrow above (its line band ends at
+   * y−34) — close together, never overlapping. Self-messages get the loop's
+   * bounding box plus the label hanging to its right.
+   */
+  const w = message.labelWidth;
+  const hitPath = self
+    ? `M ${fromX - 4} ${y - 10} H ${fromX + SEQ.selfLoopWidth + 10} V ${y + SEQ.selfLoopHeight + 10} H ${fromX - 4} Z ` +
+      `M ${labelX - 2} ${y + SEQ.selfLoopHeight / 2 - 12} H ${labelX + w} V ${y + SEQ.selfLoopHeight / 2 + 10} H ${labelX - 2} Z`
+    : `M ${Math.min(fromX, toX) - 6} ${y - 10} H ${Math.max(fromX, toX) + 6} V ${y + 10} H ${Math.min(fromX, toX) - 6} Z ` +
+      `M ${labelX - w / 2} ${y - 24} H ${labelX + w / 2} V ${y - 4} H ${labelX - w / 2} Z`;
+
   const ariaLabel = `Step ${message.step}: ${message.from} to ${message.to}, ${kind}${self ? ", self-message" : ""} — ${message.label}`;
 
   return (
@@ -579,8 +768,8 @@ function Message({
       </text>
 
       <path
-        className="af-seq-hit"
-        d={linePath}
+        className="af-seq-hit af-seq-hit-region"
+        d={hitPath}
         role="button"
         tabIndex={0}
         aria-label={ariaLabel}

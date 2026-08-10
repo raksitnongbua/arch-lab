@@ -199,6 +199,22 @@
   cursor: pointer;
 }
 
+/* Region-shaped hits (message arrow+label outline, participant header,
+ * fragment chips and guards): closed shapes whose EXACT bounds are the
+ * target. `pointer-events: all` hit-tests the interior regardless of paint;
+ * `stroke: none` matters just as much — the 18px stroke above would halo
+ * 9px past every edge, which is exactly how a label box would steal clicks
+ * from the message one row up. Declared after .af-seq-hit so it wins.
+ * stroke-width must be ZEROED too, not just the paint: pointer-events: all
+ * hit-tests the stroke REGION whether or not it is painted, so an inherited
+ * 18px width would quietly resurrect the halo. */
+.af-seq-hit-region {
+  stroke: none;
+  stroke-width: 0;
+  fill: transparent;
+  pointer-events: all;
+}
+
 .af-seq-hit:focus-visible {
   outline: none;
 }
@@ -208,6 +224,25 @@
 .af-seq-msg:has(.af-seq-hit:focus-visible) .af-seq-line,
 .af-seq-participant:has(.af-seq-hit:focus-visible) .af-seq-header-box {
   stroke: var(--ring);
+}
+
+/* Fragment chips and branch guard labels must LOOK clickable, not merely be
+ * clickable: hover and keyboard focus paint the same affordance (ring-
+ * coloured chip border / primary-coloured underlined guard) onto the visible
+ * element, via :has() on the control group because the visuals are
+ * pointer-events-none and the invisible hit rect is what actually hovers.
+ * These are state changes, not motion — nothing here needs a reduced-motion
+ * branch. */
+.af-seq-frag-ctl:has(.af-seq-hit:hover) .af-seq-chip,
+.af-seq-frag-ctl:has(.af-seq-hit:focus-visible) .af-seq-chip {
+  stroke: var(--ring);
+  stroke-width: 1.5;
+}
+
+.af-seq-frag-ctl:has(.af-seq-hit:hover) .af-seq-guard,
+.af-seq-frag-ctl:has(.af-seq-hit:focus-visible) .af-seq-guard {
+  fill: var(--primary);
+  text-decoration: underline;
 }
 
 /* ---- reduced motion ---------------------------------------------------------

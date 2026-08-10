@@ -243,7 +243,12 @@ export function SequencePlayground(): React.JSX.Element {
         </p>
       </header>
 
-      {/* One shared polite live region: parse state AND immersive toggles. */}
+      {/* THE one polite live region on this page: parse state, immersive
+          toggles AND the viewer's focus announcements (plumbed up through
+          its onAnnounce prop). One region, deliberately — two polite regions
+          updated near each other race, and the loser's announcement is
+          swallowed; this page owns it because it renders unconditionally
+          while the viewer can be replaced by the seed-failure fallback. */}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -316,7 +321,7 @@ export function SequencePlayground(): React.JSX.Element {
           </button>
         </div>
         {parsed !== null ? (
-          <SequenceViewer file={parsed.file} />
+          <SequenceViewer file={parsed.file} onAnnounce={setAnnouncement} />
         ) : (
           // Only reachable when the SEED itself failed to parse — a build
           // break, not a user state (the seed is parser-verified at module
