@@ -21,7 +21,7 @@ Be precise about what this repo is right now:
 | **Mermaid C4 import**                 | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
 | **C4 editor**                         | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; flip it to `false` and `/editor` degrades to a coming-soon page — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                    |
 | **MCP server** (`/api/mcp`)           | **Beta.** Eight read-only tools, a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                                                           |
-| **Sequence diagrams**                 | **View mode works today** (`/view/sequence`): `.alab` sequence text or a pasted Mermaid `sequenceDiagram`, rendered complete with focus-driven animation — click any message or participant to spotlight it. No editor canvas and no share links for them yet — see [Sequence diagrams](#sequence-diagrams).                                                                         |
+| **Sequence diagrams**                 | **View mode works today** (`/view/sequence`): `.alab` sequence text or a pasted Mermaid `sequenceDiagram`, rendered complete with focus-driven animation — click any message, participant, or fragment to spotlight its flow. No editor canvas and no share links for them yet — see [Sequence diagrams](#sequence-diagrams).                                                        |
 | **Data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Routes
@@ -33,7 +33,7 @@ Be precise about what this repo is right now:
 | `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
 | `/view`           | Chooser: C4 model or sequence diagram. Also where legacy `/view#m=…` share links land — they forward to `/view/c4` with the fragment intact.                                        |
 | `/view/c4`        | The paste-your-own C4 playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                           |
-| `/view/sequence`  | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message or participant to animate and inspect it.                 |
+| `/view/sequence`  | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message, participant, or fragment to animate and inspect it.      |
 | `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
 | `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
 | `/mcp`            | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
@@ -243,18 +243,26 @@ auto-detection depends on. Arrows are `->` synchronous, `~>` asynchronous,
 a dedent already says where a fragment stops. Conversion is lossless in both
 directions, proven by `pnpm check:sequence`.
 
-**The whole story, then the part you asked about.** The diagram renders
-complete — a sequence diagram is a record of what happened, so the record is
-what you see first. Animation is spent on **focus**: click a message and that
-arrow re-draws itself and holds emphasised while the rest recedes, with a
-panel naming the sender, receiver, label, technology, kind and step number.
-Click a participant and its whole message set re-draws in step order — one
-calm staggered sweep — with a panel saying how many messages it takes part
-in, and which. Click the same thing again and the animation replays. Arrow
-keys walk focus through the messages in order; Escape (or empty canvas)
-clears. Under `prefers-reduced-motion` nothing draws — focus dims and the
-detail panel appears instantly, which is the same information without the
-motion.
+**The whole story, then the part you asked about.** The diagram sits on top
+at full width (participants spread horizontally — width is the axis a
+sequence diagram consumes) with the source pane a collapsible strip below,
+and an immersive mode that gives the diagram the whole viewport. The diagram
+renders complete — a sequence diagram is a record of what happened, so the
+record is what you see first. Animation is spent on **focus**: click a
+message (its arrow or its label) and that arrow re-draws itself and holds
+emphasised while the rest recedes; a details dock on the right (a bottom
+sheet on small screens) names the sender and receiver with their
+technologies, the message's kind, step number and the fragment guard path it
+sits inside (`alt [card accepted] › par [receipt]`). Click a participant and
+its whole message set re-draws in step order — one calm staggered sweep —
+with the dock listing each of its messages as a click-to-refocus button.
+Click a fragment's kind chip (`alt`, `loop`, `opt`, `par`) to focus every
+message in it, or a branch guard like `[card accepted]` to focus just that
+case's flow. Click the same thing again and the animation replays. Arrow
+keys walk focus through the messages in order; Escape (or empty canvas, or
+the dock's close button) clears, then a second Escape exits immersive mode.
+Under `prefers-reduced-motion` nothing draws — focus dims and the details
+dock appears instantly, which is the same information without the motion.
 
 **Mermaid import is lossy, and says so.** Eight arrowheads collapse onto three
 kinds, `autonumber` arguments are dropped, and an `activate`/`deactivate` that

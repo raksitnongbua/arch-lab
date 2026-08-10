@@ -126,8 +126,8 @@ export function ViewChooser(): React.JSX.Element {
                 Behaviour: one flow, message by message, in order. Write{" "}
                 <span className="font-mono">.alab</span> sequence text or paste
                 a Mermaid <span className="font-mono">sequenceDiagram</span>,
-                then <em>explore</em> it — click a message or participant and
-                watch its arrows draw while the rest recedes.
+                then <em>explore</em> it — click a message, participant, or
+                fragment and watch its arrows draw while the rest recedes.
               </>
             }
             cta="Open the sequence playground"
