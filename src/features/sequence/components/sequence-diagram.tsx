@@ -57,14 +57,15 @@ import type {
 import { estimateTextWidth, SEQ } from "../lib/layout";
 
 /**
- * Where the message gradients place their stops, 0 = sender … 1 = receiver.
- * Six evenly spaced stops: enough that a brightening stop reads as a light
- * sliding along the line rather than a lamp switching on in three places, few
- * enough that eleven resting messages animate 66 gradient stops and not
- * hundreds. The count is coupled to the stagger divisor in the stylesheet's
- * `.af-seq-glint` rule — `check:sequence-motion` asserts they agree.
+ * A point on a message's colour ramp: the sender's lane at `t` 0, the
+ * receiver's at 1, muted toward `--edge` so a resting line never competes with
+ * the `--primary` focus line. Both the line's gradient and its comet bands
+ * paint from this, so the light is always the line's own colour.
  */
-const GLINT_STOPS = [0, 0.2, 0.4, 0.6, 0.8, 1] as const;
+function laneMix(fromLane: number, toLane: number, t: number): string {
+  const between = `color-mix(in oklch, var(--seq-lane-${fromLane}) ${Math.round((1 - t) * 100)}%, var(--seq-lane-${toLane}))`;
+  return `color-mix(in oklch, ${between} 55%, var(--edge))`;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Focus model                                                                  */
@@ -995,36 +996,25 @@ function Message({
         } as React.CSSProperties
       }
     >
-      {/* THIS MESSAGE'S GRADIENT, defined INSIDE its group — not in a shared
-          <defs> at the top of the SVG, and that placement is load-bearing
-          rather than tidiness. The stylesheet reaches the glinting stops with
-          `.af-seq-msg[data-idle]:not([data-kind="reply"]) .af-seq-glint`, a
-          DESCENDANT selector: stops parked in a top-level <defs> are not
-          descendants of any message group, so that rule silently matches
-          nothing and the light never runs. (It shipped that way for one build.
-          check:sequence-motion now asserts the nesting.) A gradient is legal
-          anywhere in the document — it paints nothing itself, it is only
-          referenced by id — so keeping it with the one line that uses it costs
-          nothing and keeps the selector honest.
+      {/* THIS MESSAGE'S GRADIENT, defined INSIDE its group rather than in a
+          shared <defs> at the top of the SVG. Both the line and its comet
+          bands reference it by id, and the stylesheet reaches the bands with a
+          DESCENDANT selector rooted at .af-seq-msg — anything the CSS must
+          match has to be nested here, and keeping the paint beside the one
+          line that uses it keeps that honest. (A gradient is legal anywhere in
+          the document; it paints nothing itself.)
 
           Direction: `gradientUnits="userSpaceOnUse"` with the message's OWN
           endpoints, so a reply's right-to-left run ramps right-to-left too and
           a self-loop ramps diagonally across the loop. objectBoundingBox units
           would flip nothing and squash the loop's tall box.
 
-          Every stop is MUTED toward --edge: at full lane strength a resting
+          Both stops are MUTED toward --edge: at full lane strength a resting
           line competes with the --primary focus line, and the three-state
           vocabulary (--edge at rest → --primary on focus) is what makes focus
           read as escalation rather than as one more coloured line. Muting also
           keeps it legible in both themes, since the lane hues were validated
-          against each other and the card surface, never as 1.5px strokes.
-
-          SIX STOPS FOR A TWO-COLOUR RAMP: two would draw the identical
-          gradient. These exist so the light can travel by brightening each
-          stop in turn — the motion lives in the stroke's own paint, which is
-          how a sync arrow stays one unbroken solid line while something moves
-          along it. With the animation off the stops hold their base colours
-          and the ramp is exactly the two-stop one. */}
+          against each other and the card surface, never as 1.5px strokes. */}
       {paintId !== null && fromLane !== null && toLane !== null ? (
         <defs>
           <linearGradient
@@ -1035,34 +1025,55 @@ function Message({
             x2={self ? fromX + SEQ.selfLoopWidth : toX}
             y2={self ? y + SEQ.selfLoopHeight : y}
           >
-            {GLINT_STOPS.map((t, index) => {
-              const base =
-                `color-mix(in oklch, ` +
-                `color-mix(in oklch, var(--seq-lane-${fromLane}) ${Math.round((1 - t) * 100)}%, var(--seq-lane-${toLane})) ` +
-                `55%, var(--edge))`;
-              return (
-                <stop
-                  key={index}
-                  className="af-seq-glint"
-                  offset={`${t * 100}%`}
-                  stopColor={base}
-                  style={
-                    {
-                      "--glint-base": base,
-                      // Brighter than its OWN base, in its own hue, through the
-                      // house relative-colour idiom (see tagFillCss). The shift
-                      // is a theme token because "brighter" means +L on a dark
-                      // canvas and −L on a light one; one fixed direction would
-                      // make the highlight vanish in one theme.
-                      "--glint-lit": `oklch(from ${base} calc(l + var(--seq-glint-l)) calc(c + 0.05) h)`,
-                      "--glint-i": index,
-                    } as React.CSSProperties
-                  }
-                />
-              );
-            })}
+            <stop offset="0%" stopColor={laneMix(fromLane, toLane, 0)} />
+            <stop offset="100%" stopColor={laneMix(fromLane, toLane, 1)} />
           </linearGradient>
         </defs>
+      ) : null}
+
+      {/* THE COMET — the C4 viewer's edge flow, same construction and same
+          numbers: a blurred glow under a soft tail under a sharp head, three
+          paths over the untouched line, each `pathLength=100` so the dash
+          maths are percentages of the true path (straight, self-loop, any
+          length). The widths transfer verbatim rather than scaled because
+          C4's `.viewer-edge-drift` line is stroke-width 1.5 and so is this
+          one — the same comet over the same weight of line reads the same.
+          `check:sequence-motion` reads viewer-canvas.tsx and asserts the
+          dasharrays and keyframes still MATCH C4's, so "same as the C4"
+          survives someone tuning one of the two.
+
+          This is why solid arrows need no marching dash: a dash on a solid
+          line makes it read as async-or-reply, whereas short bands of light
+          travelling over an unbroken line leave the kind alone. The bands are
+          low duty (the head is 9 of 100) — that is the boundary between a
+          travelling highlight and a second line, and the reason four earlier
+          overlay designs read as doubled was that they crossed it.
+
+          Colour is the line's OWN ramp, not C4's --primary → --accent: primary
+          is this view's FOCUS colour, and a resting comet wearing it would say
+          "selected" on every message at once.
+
+          Rendered only at rest, so the focused set has no comet to fight the
+          draw, and gated in CSS by `data-seq-march` — a comet frozen by the
+          toggle would be three bright stripes parked on every line. */}
+      {idle && kind !== "reply" && paintId !== null ? (
+        <g className="af-seq-flow" aria-hidden="true">
+          <path
+            className="af-seq-flow-band af-seq-flow-glow"
+            d={linePath}
+            pathLength={100}
+          />
+          <path
+            className="af-seq-flow-band af-seq-flow-tail"
+            d={linePath}
+            pathLength={100}
+          />
+          <path
+            className="af-seq-flow-band af-seq-flow-head"
+            d={linePath}
+            pathLength={100}
+          />
+        </g>
       ) : null}
 
       {kind === "reply" ? (

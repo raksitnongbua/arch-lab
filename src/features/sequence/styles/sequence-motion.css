@@ -157,9 +157,12 @@
  * --primary, a neutral one, one pitch-matched to the reply dash, a travelling
  * dot, then a glow-plus-head comet. Three read as a doubled, fuzzy line, and
  * each time the fix was sought in the overlay's colour, pitch or duty cycle.
- * The overlay WAS the bug. The glint has no overlay: it is the stroke's own
- * paint changing, so there is still exactly one path per message line BY
- * CONSTRUCTION rather than by keeping a second one subtle.
+ * The overlay was not itself the bug — the LENGTH of what they overlaid was.
+ * The rule is "never a second LINE'S WORTH of stroke": their dashes ran long or
+ * continuous, so they read as a doubled, fuzzy line. C4's comet is three SHORT
+ * bands (the head is 9 of 100 path units) sliding over the line, which reads as
+ * light passing along it. Keep the duty low and the bands are safe; lengthen
+ * them and the old bug returns wearing new clothes.
  *
  * WHAT ELSE OWNS THESE PROPERTIES. The focus draw animates stroke-dashoffset
  * on the same element, so idle motion is suppressed on the focused and
@@ -196,43 +199,113 @@
   animation-iteration-count: infinite;
 }
 
-/* The SOLID kinds get no dash at all — they stay one unbroken line and a
- * LIGHT travels along them instead, by brightening each gradient stop in turn.
- * This is the whole point: a marching dash made a sync arrow look dashed, and
- * "dashed" already means async or reply here, so the motion was overwriting the
- * meaning. The highlight lives inside the stroke’s own paint, so there is
- * still exactly one line and no overlay path (see the retired-designs note
- * above for why an overlay is never the answer).
- *
- * The stagger is what makes it travel: stop i peaks at i/6 of the cycle, so the
- * bright band slides sender → receiver. The divisor is the STOP COUNT from
- * sequence-diagram.tsx’s GLINT_STOPS — one fact in two files, asserted by
- * check:sequence-motion. The lit window is short (12%) so it reads as a passing
- * highlight rather than the whole line pulsing. */
+/* The SOLID kinds get no dash — they stay one unbroken line and a COMET of
+ * light travels over them instead. A dash on a solid arrow makes it read as
+ * async-or-reply, so marching them overwrote the kind; short bands of light do
+ * not touch it. */
 [data-seq-march="on"]
   .af-seq-msg[data-idle]:not([data-kind="reply"])
   .af-seq-line {
   stroke-dasharray: none;
 }
 
-[data-seq-march="on"]
-  .af-seq-msg[data-idle]:not([data-kind="reply"])
-  .af-seq-glint {
-  animation-name: af-seq-glint;
-  animation-duration: var(--seq-glint, 2600ms);
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  animation-delay: calc(var(--glint-i, 0) * var(--seq-glint, 2600ms) / 6);
+/* ---- the comet: the C4 viewer's edge flow, verbatim -------------------------
+ * Same construction, same dasharrays, same keyframes, same 1600ms clock as
+ * `.viewer-edge-flow-*` in viewer/components/viewer-canvas.tsx — blurred glow,
+ * soft tail, sharp head, all sliding by stroke-dashoffset over an untouched
+ * line. The WIDTHS transfer verbatim rather than scaled because C4's
+ * `.viewer-edge-drift` line is stroke-width 1.5 and so is `.af-seq-line`: the
+ * same comet over the same weight of line is the same comet.
+ * check:sequence-motion reads the C4 file and asserts they still agree, so
+ * "same as the C4" cannot rot when one side is tuned.
+ *
+ * TWO DELIBERATE DEPARTURES, both forced by this view rather than preference:
+ *   1. COLOUR is the line's own sender→receiver ramp (--seq-line-paint), not
+ *      C4's --primary → --accent. Primary is this view's FOCUS colour; a
+ *      resting comet wearing it would say "selected" on every message at once.
+ *   2. C4 shows its comet on the SELECTED edge, one at a time. Here it runs on
+ *      every resting message, so the head keeps C4's 9%-of-path duty and
+ *      nothing is brightened beyond it — eleven at once has to stay ambient.
+ *
+ * The bands are separate paths, which is the one thing four earlier idle
+ * designs got wrong. The rule they broke was not "never overlay" but "never a
+ * second LINE'S WORTH of stroke": their dashes were long or continuous, so they
+ * read as a doubled, fuzzy line. A 9-of-100 head is a highlight passing over
+ * the line. Keep the duty low and this stays on the right side of that line;
+ * lengthen the bands and the old bug is back.
+ *
+ * DISPLAY-GATED, not merely animation-gated: a comet frozen by the toggle or by
+ * reduced motion would be three bright stripes parked on every message, which
+ * is not a resting state. Hidden by default so SSR paints none until the viewer
+ * mounts; the renderer also omits the bands entirely on the focused set, where
+ * the draw owns the line. */
+.af-seq-flow {
+  display: none;
 }
 
-@keyframes af-seq-glint {
-  0%,
-  12%,
-  100% {
-    stop-color: var(--glint-base);
+[data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-flow {
+  display: inline;
+}
+
+.af-seq-flow-band {
+  fill: none;
+  /* The line's own ramp — same var the stroke reads, so the comet can never
+     drift from the colour of the line it rides. */
+  stroke: var(--seq-line-paint, var(--edge));
+  stroke-linecap: round;
+  animation-duration: var(--seq-flow, 1600ms);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.af-seq-flow-glow {
+  stroke-width: 7;
+  opacity: 0.35;
+  filter: blur(2.5px);
+  stroke-dasharray: 30 70;
+  animation-name: af-seq-flow-glow;
+}
+
+.af-seq-flow-tail {
+  stroke-width: 2.5;
+  opacity: 0.5;
+  stroke-dasharray: 22 78;
+  animation-name: af-seq-flow-tail;
+}
+
+.af-seq-flow-head {
+  stroke-width: 3;
+  stroke-dasharray: 9 91;
+  animation-name: af-seq-flow-head;
+}
+
+/* Each band starts at its own dash length and travels one whole path, which is
+   what aligns all three leading edges on one clock — C4's trick, and the reason
+   the three layers read as one comet rather than three chasing bands. */
+@keyframes af-seq-flow-glow {
+  from {
+    stroke-dashoffset: 30;
   }
-  6% {
-    stop-color: var(--glint-lit);
+  to {
+    stroke-dashoffset: -70;
+  }
+}
+
+@keyframes af-seq-flow-tail {
+  from {
+    stroke-dashoffset: 22;
+  }
+  to {
+    stroke-dashoffset: -78;
+  }
+}
+
+@keyframes af-seq-flow-head {
+  from {
+    stroke-dashoffset: 9;
+  }
+  to {
+    stroke-dashoffset: -91;
   }
 }
 
@@ -439,13 +512,16 @@
      back on its resting pattern explicitly — solid for sync/async, 6/5 for
      replies. Withdrawing the dasharray wholesale here would quietly turn
      every reply into a solid line, which reads as a call rather than a
-     return. The glint needs no such care: stopped, its stops simply hold
-     their base colours, which is the resting gradient. `sequenceMarchState`
-     is the JS route to the same end (it also carries the user's toggle); this
-     block holds before hydration. */
-  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line,
-  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-glint {
+     return. The COMET cannot park at all — three stopped bands are bright
+     stripes sitting on every line, not a resting state — so it goes by
+     DISPLAY, the same treatment the C4 viewer gives .viewer-edge-drift.
+     `sequenceMarchState` is the JS route to the same end (it also carries the
+     user's toggle); this block holds before hydration. */
+  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line {
     animation: none;
+  }
+  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-flow {
+    display: none;
   }
   [data-seq-march="on"]
     .af-seq-msg[data-idle]:not([data-kind="reply"])

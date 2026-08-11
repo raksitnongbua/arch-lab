@@ -148,13 +148,6 @@
   --seq-lane-4: #e87ba4;
   --seq-lane-5: #4a3aa7;
 
-  /* How much LIGHTER the travelling highlight is than the line it rides (the
-     `l` delta in `.af-seq-glint`). NEGATIVE on the light theme on purpose:
-     "brighter" on a pale canvas means more ink, not less — raising lightness
-     there would wash the highlight out against the surface instead of making
-     it visible. The dark override below flips the sign. */
-  --seq-glint-l: -0.13;
-
   /* The two properties node shapes actually paint with. Each node overrides
      them inline (node-colors.ts: role token, or the author's tagColors hex);
      these root defaults only cover node chrome rendered outside a canvas
@@ -244,10 +237,6 @@
   --seq-lane-3: #3987e5;
   --seq-lane-4: #d55181;
   --seq-lane-5: #9085e9;
-
-  /* Positive here: on a dark canvas the highlight is genuinely lighter than
-     the line. See the light-theme value for why the sign has to flip. */
-  --seq-glint-l: 0.16;
 }
 
 /* --- EXTENSION POINT: adding a third theme ------------------------------------

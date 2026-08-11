@@ -7,26 +7,29 @@
  *
  *   - Replies march their dash (React Flow's animated edge). Safe, because
  *     `..>` is dashed at rest anyway, so moving the pattern overwrites nothing.
- *   - Sync and async keep an unbroken SOLID line and a travelling highlight
- *     inside the line's own gradient instead. Marching them was tried and was
- *     wrong: giving a solid arrow a dasharray makes it read as async-or-reply,
- *     so the motion silently overwrote the message kind.
+ *   - Sync and async keep an unbroken SOLID line and the C4 viewer's COMET
+ *     travels over them instead. Marching them was tried and was wrong: giving
+ *     a solid arrow a dasharray makes it read as async-or-reply, so the motion
+ *     silently overwrote the message kind.
  *
  * What this asserts, and why each one is here rather than left to review:
  *
- *   1. Solid kinds are never given a dasharray while idle, and DO get the
- *      glint. This is the regression guard for the whole design.
+ *   1. Solid kinds are never given a dasharray while idle. This is the
+ *      regression guard for the whole design.
  *   2. The reply's keyframes advance exactly its own dash period (a seamless
  *      loop), and `MARCH_PERIOD` agrees with the dasharray the stylesheet
  *      marches. CSS cannot import from TypeScript, so those numbers genuinely
  *      are duplicated; this asserts the duplication agrees.
- *   3. The glint's stagger divisor equals the STOP COUNT the renderer emits.
- *      Disagree and the highlight either never reaches the end of the line or
- *      jumps back before it does — an animation that still runs and still
- *      looks plausible, which is exactly what review misses.
- *   4. Reduced motion stops both mechanisms and parks each kind on the
- *      appearance that carries its meaning.
- *   5. No overlay path survives — the doubled-line bug four designs died on.
+ *   3. The comet still MATCHES the C4 viewer's — every band's dasharray, every
+ *      keyframe pair and the clock are read out of the C4 stylesheet and
+ *      compared. "Looks the same as C4" was a requirement, and a requirement
+ *      met by copying once is a requirement that rots the first time either
+ *      side is tuned.
+ *   4. Reduced motion removes the comet rather than freezing it, and parks each
+ *      kind on the appearance that carries its meaning.
+ *   5. The head stays low-duty. The rule the earlier overlay designs broke was
+ *      never "no overlay" but "no second LINE'S WORTH of stroke" — short bands
+ *      are a highlight passing, long ones are a doubled line.
  */
 
 import { readFileSync } from "node:fs";
@@ -39,7 +42,6 @@ const read = (relative) => readFileSync(join(root, relative), "utf8");
 const css = read("src/features/sequence/styles/sequence-motion.css");
 const motion = read("src/features/sequence/lib/motion.ts");
 const diagram = read("src/features/sequence/components/sequence-diagram.tsx");
-const globals = read("src/app/globals.css");
 
 let assertions = 0;
 let failures = 0;
@@ -92,14 +94,14 @@ check(
   solidLine !== null && !/animation-name/.test(solidLine),
 );
 
-const glint = ruleBody(':not\\(\\[data-kind="reply"\\]\\)\\s*\\.af-seq-glint');
-check("idle solid lines drive the glint", glint !== null);
+const band = css.match(/\.af-seq-flow-band\s*\{([^}]*)\}/s);
+check("the comet bands share one rule", band !== null);
 check(
-  "the glint runs forever, on the glint clock",
-  glint !== null &&
-    /animation-name:\s*af-seq-glint/.test(glint) &&
-    /animation-iteration-count:\s*infinite/.test(glint) &&
-    /var\(--seq-glint/.test(glint),
+  "the bands run forever, on the comet clock",
+  band !== null &&
+    /animation-iteration-count:\s*infinite/.test(band[1]) &&
+    /animation-duration:\s*var\(--seq-flow/.test(band[1]) &&
+    /animation-timing-function:\s*linear/.test(band[1]),
 );
 
 /* ---- 2. the reply march's arithmetic ------------------------------------ */
@@ -152,96 +154,102 @@ if (speed !== null && replyPeriod !== null) {
   );
 }
 
-/* ---- 3. the glint's stagger matches the stop count ---------------------- */
-
-const stops = diagram.match(/GLINT_STOPS\s*=\s*\[([^\]]*)\]/);
-check("GLINT_STOPS is declared in the renderer", stops !== null);
-const stopCount = stops === null ? null : stops[1].split(",").length;
-check(
-  "the stops span the whole line, sender to receiver",
-  stops !== null && /^\s*0\s*,/.test(stops[1]) && /,\s*1\s*$/.test(stops[1]),
-);
+/* ---- 3. the comet IS the C4 viewer's comet ------------------------------- */
 
 /*
- * The divisor is the STOP COUNT, not the count minus one. With N stops the
- * phases must be i/N so the last stop sits one step BEFORE the wrap; dividing
- * by N−1 gives the final stop a full-cycle delay, which puts it in phase with
- * stop 0 and lights both ends of the line simultaneously instead of travelling.
+ * "Same as the C4" is a requirement, so it is asserted against the C4 file
+ * itself rather than copied once and trusted. Each band's dasharray and each
+ * keyframe pair is read out of viewer/components/viewer-canvas.tsx and compared
+ * with this stylesheet's. Tune either side alone and this fails — which is the
+ * only way "the two look the same" survives contact with time.
  */
-const divisor = glint?.match(/var\(--glint-i[^)]*\)\s*\*[^/]*\/\s*(\d+)/);
-check(
-  "the glint stagger divides by the stop count — off by one and the light appears at both ends at once",
-  divisor != null && stopCount !== null && Number(divisor[1]) === stopCount,
-);
+const c4 = read("src/features/viewer/components/viewer-canvas.tsx");
 
-/*
- * THE SELECTOR MUST BE ABLE TO MATCH. The glint rule is a DESCENDANT selector
- * rooted at `.af-seq-msg`, so the gradient carrying the stops has to live
- * inside the message's own group. It shipped once in a shared top-level
- * <defs>, where the stops are not descendants of any message group: the rule
- * matched nothing, no error was raised anywhere, and the light simply never
- * ran. Everything else about that build was correct — the stops existed, the
- * vars were stamped, the keyframes were valid — which is exactly why this
- * needs an assertion rather than a reading.
- */
+/** `stroke-dasharray` inside a named class rule, from either stylesheet. */
+function dashOf(source, className) {
+  const rule = source.match(
+    new RegExp(`\\.${className}\\s*\\{([^}]*)\\}`, "s"),
+  );
+  if (rule === null) return null;
+  const dash = rule[1].match(/stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/);
+  return dash === null ? null : `${dash[1]} ${dash[2]}`;
+}
+
+/** A keyframes block's from/to dashoffset pair, from either stylesheet. */
+function offsetsOf(source, name) {
+  const block = source.match(
+    new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`),
+  );
+  if (block === null) return null;
+  const from = block[1].match(/from\s*\{\s*stroke-dashoffset:\s*(-?[\d.]+)/);
+  const to = block[1].match(/to\s*\{\s*stroke-dashoffset:\s*(-?[\d.]+)/);
+  return from === null || to === null ? null : `${from[1]} to ${to[1]}`;
+}
+
+for (const band of ["glow", "tail", "head"]) {
+  const ours = dashOf(css, `af-seq-flow-${band}`);
+  const theirs = dashOf(c4, `viewer-edge-flow-${band}`);
+  check(
+    `the ${band} band's dasharray matches the C4 viewer's (${theirs ?? "?"})`,
+    ours !== null && ours === theirs,
+  );
+  const ourOffsets = offsetsOf(css, `af-seq-flow-${band}`);
+  const theirOffsets = offsetsOf(c4, `viewer-edge-flow-${band}`);
+  check(
+    `the ${band} band travels the C4 viewer's offsets (${theirOffsets ?? "?"})`,
+    ourOffsets !== null && ourOffsets === theirOffsets,
+  );
+}
+
 check(
-  "the glint rule is scoped under .af-seq-msg (so it needs the gradient nested there)",
-  /\.af-seq-msg\[data-idle\][^{]*\.af-seq-glint/.test(css),
-);
-check(
-  "the renderer defines each message's gradient INSIDE the message group, where that selector can reach it",
+  "the comet runs on the same clock as the C4 viewer's edgeFlow",
   (() => {
-    // Split on the Message component: everything before it is the diagram
-    // shell, which owns the top-level <defs>. The glinting stops must appear
-    // only after that boundary — i.e. inside the per-message subtree.
-    const boundary = diagram.indexOf("function Message(");
-    if (boundary < 0) return false;
-    const shell = diagram.slice(0, boundary);
-    const perMessage = diagram.slice(boundary);
-    // The class as APPLIED, not merely mentioned: the shell legitimately
-    // names it in a doc comment, and legitimately holds the participant CARD
-    // gradients (which never glint).
-    const applied = /className="af-seq-glint"/;
+    const viewer = read("src/features/viewer/lib/motion.ts").match(
+      /edgeFlow:\s*(\d+)/,
+    );
+    const ours = motion.match(/idleFlow:\s*(\d+)/);
+    return viewer !== null && ours !== null && viewer[1] === ours[1];
+  })(),
+);
+
+check(
+  "the bands are normalised with pathLength=100, so the dash maths are percentages of any path",
+  /className="af-seq-flow-band[\s\S]{0,140}?pathLength=\{100\}/.test(diagram),
+);
+
+check(
+  "the comet paints from the LINE'S OWN ramp, never --primary (this view's focus colour)",
+  (() => {
+    const rule = css.match(/\.af-seq-flow-band\s*\{([^}]*)\}/s);
     return (
-      !applied.test(shell) &&
-      /<linearGradient/.test(perMessage) &&
-      applied.test(perMessage)
+      rule !== null &&
+      /stroke:\s*var\(--seq-line-paint,\s*var\(--edge\)\)/.test(rule[1]) &&
+      !/--primary/.test(rule[1])
     );
   })(),
 );
 
-const glintFrames = css.match(/@keyframes af-seq-glint\s*\{(.*?)\n\}/s);
-check("the glint keyframes exist", glintFrames !== null);
 check(
-  "the glint returns to its base colour, so a stop's resting paint is the gradient's own",
-  glintFrames !== null &&
-    /100%\s*\{[^}]*stop-color:\s*var\(--glint-base\)/s.test(glintFrames[1]),
-);
-check(
-  "the lit window is a short passing highlight, not the whole line pulsing",
-  glintFrames !== null &&
-    (() => {
-      const lit = glintFrames[1].match(
-        /(\d+)%\s*\{\s*stop-color:\s*var\(--glint-lit\)/,
-      );
-      return lit !== null && Number(lit[1]) <= 20;
-    })(),
-);
-
-/* ---- the highlight is derived from its own base, in both themes --------- */
-
-check(
-  "the lit colour is the stop's OWN base brightened, not a fourth colour system",
-  /--glint-lit":\s*`oklch\(from \$\{base\}/.test(diagram),
-);
-check(
-  "the brightness shift is a theme token, defined in BOTH themes with opposite signs — 'brighter' is +L on dark and −L on light",
+  "the head stays a LOW-DUTY band — the boundary between a passing highlight and a second line",
   (() => {
-    const all = [...globals.matchAll(/--seq-glint-l:\s*(-?[\d.]+)/g)].map((m) =>
-      Number(m[1]),
-    );
-    return all.length === 2 && all[0] * all[1] < 0;
+    const dash = dashOf(css, "af-seq-flow-head");
+    if (dash === null) return false;
+    const [on, off] = dash.split(" ").map(Number);
+    return on / (on + off) <= 0.12;
   })(),
+);
+
+check(
+  "the comet is DISPLAY-gated, not just animation-gated — three parked bands are stripes, not a resting state",
+  /\.af-seq-flow\s*\{[^}]*display:\s*none/s.test(css) &&
+    /\[data-seq-march="on"\][^{]*\.af-seq-flow\s*\{[^}]*display:\s*inline/s.test(
+      css,
+    ),
+);
+
+check(
+  "the renderer omits the comet on replies and on the focused set",
+  /idle && kind !== "reply" && paintId !== null/.test(diagram),
 );
 
 /* ---- 4. reduced motion parks on the MEANINGFUL appearance --------------- */
@@ -251,11 +259,16 @@ const reduced = css.match(
 );
 check("the stylesheet has a reduced-motion block", reduced !== null);
 check(
-  "reduced motion stops the march AND the glint",
+  "reduced motion stops the reply march",
   reduced !== null &&
-    /\.af-seq-line,[\s\S]{0,200}?\.af-seq-glint\s*\{[^}]*animation:\s*none/.test(
+    /\.af-seq-msg\[data-idle\]\s*\.af-seq-line\s*\{[^}]*animation:\s*none/s.test(
       reduced[1],
     ),
+);
+check(
+  "reduced motion REMOVES the comet rather than freezing it — parked bands are bright stripes on every line",
+  reduced !== null &&
+    /\.af-seq-flow\s*\{[^}]*display:\s*none/s.test(reduced[1]),
 );
 check(
   "reduced motion puts replies BACK on 6/5 rather than withdrawing the dash — a dashless reply reads as a call, not a return",

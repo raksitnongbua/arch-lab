@@ -50,12 +50,13 @@ export const SEQUENCE_DURATIONS = {
   idleMarchSpeed: 10,
 
   /**
-   * One full traversal of the travelling highlight on a SOLID line, in ms.
-   * Unrelated to the march speed and deliberately slower than a dash cycle:
-   * this is a soft brightening rather than a moving edge, and eleven of them
-   * run at once, so it should register as ambient rather than as traffic.
+   * One full traversal of the COMET on a solid line, in ms — the same 1600ms
+   * as the C4 viewer's `edgeFlow` (viewer/lib/motion.ts), because the comet
+   * here IS that comet: same bands, same dash maths, same clock. Matching the
+   * clock is part of matching the look; a faster or slower copy of the same
+   * geometry does not read as the same thing.
    */
-  idleGlint: 2600,
+  idleFlow: 1600,
 } as const;
 
 /**
@@ -70,7 +71,7 @@ export const SEQUENCE_DURATIONS = {
  * There is no `solid` entry any more, and that absence is the design: sync and
  * async lines are never given a dasharray, because "dashed" already means
  * async-or-reply on a sequence diagram and marching a solid arrow overwrote
- * its kind. They carry the glint instead.
+ * its kind. They carry the comet instead.
  */
 const MARCH_PERIOD = { dashed: 6 + 5 } as const;
 
@@ -104,9 +105,9 @@ export function sequenceMotionVars(reduced: boolean): Record<string, string> {
     "--seq-focus": ms(SEQUENCE_DURATIONS.focusFade),
     // One dash period per cycle — see MARCH_PERIOD.
     "--seq-march-dashed": marchMs(MARCH_PERIOD.dashed),
-    // Not routed through `ms()` either: the glint is withdrawn by the same
-    // gate, so it never needs a 0ms duration.
-    "--seq-glint": `${SEQUENCE_DURATIONS.idleGlint}ms`,
+    // Not routed through `ms()` either: the comet is withdrawn by display, not
+    // parked, so it never needs a 0ms duration.
+    "--seq-flow": `${SEQUENCE_DURATIONS.idleFlow}ms`,
   };
 }
 
