@@ -194,7 +194,7 @@
 [data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
   stroke-dasharray: 6 5;
   animation-name: af-seq-march-dashed;
-  animation-duration: var(--seq-march-dashed, 1100ms);
+  animation-duration: var(--seq-march-dashed, 1833ms);
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
@@ -210,10 +210,12 @@
 }
 
 /* ---- the comet: the C4 viewer's edge flow, verbatim -------------------------
- * Same construction, same dasharrays, same keyframes, same 1600ms clock as
- * `.viewer-edge-flow-*` in viewer/components/viewer-canvas.tsx — blurred glow,
- * soft tail, sharp head, all sliding by stroke-dashoffset over an untouched
- * line. The WIDTHS transfer verbatim rather than scaled because C4's
+ * Same construction, same dasharrays, same keyframes as `.viewer-edge-flow-*`
+ * in viewer/components/viewer-canvas.tsx — blurred glow, soft tail, sharp head,
+ * all sliding by stroke-dashoffset over an untouched line. Only the CLOCK
+ * differs, deliberately slower: C4 runs one comet on the edge you just
+ * selected, this runs on every resting message at once (see `idleFlow` in
+ * lib/motion.ts). The WIDTHS transfer verbatim rather than scaled because C4's
  * `.viewer-edge-drift` line is stroke-width 1.5 and so is `.af-seq-line`: the
  * same comet over the same weight of line is the same comet.
  * check:sequence-motion reads the C4 file and asserts they still agree, so
@@ -253,7 +255,7 @@
      drift from the colour of the line it rides. */
   stroke: var(--seq-line-paint, var(--edge));
   stroke-linecap: round;
-  animation-duration: var(--seq-flow, 1600ms);
+  animation-duration: var(--seq-flow, 2600ms);
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }

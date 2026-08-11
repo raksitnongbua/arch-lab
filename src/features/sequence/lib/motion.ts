@@ -39,24 +39,32 @@ export const SEQUENCE_DURATIONS = {
   /**
    * The reply dash's march SPEED, in user units per second — React Flow's
    * animated edge (`stroke-dasharray: 5; animation: dashdraw .5s linear
-   * infinite`, i.e. one 10-unit period every 500ms = 20 u/s) at half rate,
-   * because theirs animates one hovered edge on demand and ours runs
-   * continuously, full diagram width.
+   * infinite`, i.e. one 10-unit period every 500ms = 20 u/s) at under a third
+   * of that rate, because theirs animates one hovered edge on demand and ours
+   * runs continuously on every reply, full diagram width.
    *
    * A SPEED rather than a duration so the derived cycle time always matches
    * the pattern it moves: change the dash and the duration follows, instead of
    * a hand-tuned pair silently drifting into a crawl.
    */
-  idleMarchSpeed: 10,
+  idleMarchSpeed: 6,
 
   /**
-   * One full traversal of the COMET on a solid line, in ms — the same 1600ms
-   * as the C4 viewer's `edgeFlow` (viewer/lib/motion.ts), because the comet
-   * here IS that comet: same bands, same dash maths, same clock. Matching the
-   * clock is part of matching the look; a faster or slower copy of the same
-   * geometry does not read as the same thing.
+   * One full traversal of the COMET on a solid line, in ms.
+   *
+   * DELIBERATELY SLOWER than the C4 viewer's `edgeFlow` (1600ms), and this is
+   * the one place the two diverge. Everything that makes the comet LOOK like
+   * C4's is identical and asserted against C4's own stylesheet — the three
+   * bands, their dasharrays, their keyframe offsets, their widths. Only the
+   * pace differs, because the two views are not doing the same job with it:
+   * C4 runs one comet on the edge you just selected, where brisk reads as
+   * responsive, while this runs on every resting message at once, where the
+   * same pace reads as busy. Same light, calmer.
+   *
+   * `check:sequence-motion` enforces exactly that: bands identical to C4's,
+   * clock strictly slower, so neither half of the intent can quietly rot.
    */
-  idleFlow: 1600,
+  idleFlow: 2600,
 } as const;
 
 /**

@@ -201,14 +201,24 @@ for (const band of ["glow", "tail", "head"]) {
   );
 }
 
+/*
+ * The CLOCK is the one thing allowed to differ, and it must differ in one
+ * direction only. C4 runs a single comet on the edge you just selected, where
+ * brisk reads as responsive; this runs on every resting message at once, where
+ * the same pace reads as busy. So: strictly slower, never faster, never equal —
+ * an equal clock would mean someone "restored" the match by undoing the
+ * slowdown, and a faster one is simply wrong for eleven at a time.
+ */
 check(
-  "the comet runs on the same clock as the C4 viewer's edgeFlow",
+  "the comet is deliberately SLOWER than the C4 viewer's edgeFlow, never faster",
   (() => {
     const viewer = read("src/features/viewer/lib/motion.ts").match(
       /edgeFlow:\s*(\d+)/,
     );
     const ours = motion.match(/idleFlow:\s*(\d+)/);
-    return viewer !== null && ours !== null && viewer[1] === ours[1];
+    return (
+      viewer !== null && ours !== null && Number(ours[1]) > Number(viewer[1])
+    );
   })(),
 );
 
