@@ -15,10 +15,11 @@
  * `viewer/export/render-svg.ts`, which is all-SVG for export parity. (2) The
  * dim/emphasis states apply uniformly: one class on one <g> covers a
  * message's line, head AND label, where a DOM overlay needs a parallel
- * class-toggling pass. (3) The diagram scales as one object (`viewBox` +
- * `width: 100%`), so long diagrams shrink coherently instead of text
- * detaching from arrows. The cost — no native text wrapping — is absorbed by
- * the layout's width estimates, which reserve space per label.
+ * class-toggling pass. (3) The diagram scales as one object (`viewBox` plus
+ * the fit/zoom sizing described on the `zoom` prop), so whole diagrams
+ * shrink coherently instead of text detaching from arrows. The cost — no
+ * native text wrapping — is absorbed by the layout's width estimates, which
+ * reserve space per label.
  *
  * FOCUS DRAW: focusing a message re-draws that one arrow; focusing a
  * participant re-draws its whole message set in step order, staggered;
@@ -112,6 +113,16 @@ export interface SequenceDiagramProps {
    * are enough to make every consecutive pair of gestures differ.
    */
   focusNonce: number;
+  /**
+   * How the SVG is sized in its pane — the hand-rolled equivalent of the C4
+   * viewer's fitView/zoomTo pair:
+   *   - `"fit"`: width and height 100% with preserveAspectRatio "meet", so
+   *     the WHOLE diagram scales down (or up) to sit inside the pane — the
+   *     last message is on screen without scrolling, like fitView.
+   *   - a number: explicit pixel size (`layout × zoom`), 1 = one SVG user
+   *     unit per CSS pixel — "actual size". The pane scrolls (= pans).
+   */
+  zoom: number | "fit";
   onFocusMessage: (step: number) => void;
   onFocusParticipant: (id: string) => void;
   /** `branch: null` focuses the whole fragment, a number that branch only. */
@@ -129,6 +140,7 @@ export function SequenceDiagram({
   autonumber,
   focus,
   focusNonce,
+  zoom,
   onFocusMessage,
   onFocusParticipant,
   onFocusFragment,
@@ -234,11 +246,23 @@ export function SequenceDiagram({
   return (
     <svg
       viewBox={`${layout.minX} 0 ${layout.width} ${layout.height}`}
-      width="100%"
+      // Fit mode fills the pane on BOTH axes and lets preserveAspectRatio
+      // "meet" letterbox the drawing inside — the whole flow is visible at
+      // once, like the C4 viewer's fitView. A numeric zoom pins the SVG to
+      // explicit pixels (1 = actual size); the pane's scrollbars become the
+      // pan. The old width-only fit (`width="100%" h-auto`) is gone on
+      // purpose: it let a long flow overrun the pane's height, which is
+      // exactly what "fit" must never do.
+      {...(zoom === "fit"
+        ? { width: "100%", height: "100%" }
+        : {
+            width: Math.round(layout.width * zoom),
+            height: Math.round(layout.height * zoom),
+          })}
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`Sequence diagram: ${title}. ${layout.participants.length} participants, ${layout.stepCount} messages. A text listing of every step follows the diagram.`}
-      className="block h-auto max-w-full"
-      style={{ maxHeight: "100%" }}
+      className="block"
     >
       {/* Backdrop — clicking empty space clears focus. Not a button: it is
           the ABSENCE of a target, and tabbing onto "nothing" would be noise

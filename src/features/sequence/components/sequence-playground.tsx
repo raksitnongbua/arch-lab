@@ -26,10 +26,12 @@
  * sequence diagram's participants spread HORIZONTALLY, so width is the axis
  * the diagram actually consumes — halving it to seat a text column forces
  * either a shrunken diagram or sideways scrolling on every real flow. The
- * source pane is a full-width strip below, COLLAPSIBLE (a real button with
- * aria-expanded) so a reader can fold the text away without losing it; an
- * active parse error stays visible even while collapsed, because an error
- * hidden behind a fold is an error the user stops fixing.
+ * diagram section OWNS the first screenful (viewport-height pane; the
+ * viewer fits the whole flow inside it, C4-fitView style, with zoom
+ * controls for detail) and the source is a full-width strip BELOW THE
+ * FOLD — scrolling the page is how you reach the text. The collapse toggle
+ * this pane once had is gone: it existed to hand the source's rows to the
+ * diagram, and the diagram no longer needs them.
  *
  * IMMERSIVE MODE — the same in-page pattern as `viewer-shell.tsx` (its
  * fullscreen-blocked fallback, promoted to the primary control here): the
@@ -57,14 +59,7 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import {
-  ArrowDownToLine,
-  ChevronDown,
-  ChevronUp,
-  Expand,
-  Info,
-  Shrink,
-} from "lucide-react";
+import { ArrowDownToLine, Expand, Info, Shrink } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -94,12 +89,9 @@ export function SequencePlayground(): React.JSX.Element {
   const [error, setError] = useState<SequenceInputError | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [pending, setPending] = useState<string | null>(null);
-  /** Source pane fold. Open by default: the pane is how the page teaches. */
-  const [sourceOpen, setSourceOpen] = useState(true);
 
   const textareaId = useId();
   const hintId = useId();
-  const sourceBodyId = useId();
 
   /* ---- immersive mode -------------------------------------------------------
    * State + ref pair, exactly as viewer-shell.tsx keeps them: the ref exists
@@ -267,12 +259,14 @@ export function SequencePlayground(): React.JSX.Element {
         </div>
       ) : null}
 
-      {/* ---- the diagram pane — TOP, full width ----
-          Height is viewport-derived (not flex-grown) because the SVG inside
-          scales to its box: an unbounded box would let a tall diagram set
-          the page's height instead of scrolling within its pane. Folding
-          the source pane hands its rows to the diagram — the taller clamp —
-          so collapsing visibly buys diagram, never blank page. */}
+      {/* ---- the diagram pane — it OWNS the screen ----
+          Height is the viewport minus the chrome above (site header + page
+          header + this page's padding ≈ 12rem), so the diagram section fills
+          the first screenful and the whole flow FITS inside it (the viewer
+          scales the SVG to this box — its fit mode needs a definite height,
+          which is why this is a clamp and not flex-grown). The source pane
+          sits below the fold in normal page flow: scrolling the PAGE is how
+          you reach the text. */}
       <section
         aria-label="Rendered sequence diagram"
         className={cn(
@@ -282,12 +276,12 @@ export function SequencePlayground(): React.JSX.Element {
               // pane are BEHIND the fixed section, untouched — the same
               // "cover, never edit" rule as viewer-shell.tsx.
               "fixed inset-0 z-50"
-            : cn(
-                "rounded-xl border border-border shadow-sm",
-                sourceOpen
-                  ? "h-[56svh] min-h-[24rem]"
-                  : "h-[calc(100svh-16rem)] min-h-[24rem]",
-              ),
+            : // 10.5rem = the chrome above this section (site header + page
+              // header + paddings, ~168px measured at desktop widths): the
+              // section's bottom edge lands just inside the first viewport,
+              // and the source section's first row starts just below it —
+              // "scroll down to see the text", literally.
+              "h-[calc(100svh-10.5rem)] min-h-[24rem] rounded-xl border border-border shadow-sm",
         )}
       >
         {/* The toolbar strip stays visible in immersive mode too — the exit
@@ -332,42 +326,30 @@ export function SequencePlayground(): React.JSX.Element {
         )}
       </section>
 
-      {/* ---- the source pane — BOTTOM, full width, collapsible ----
-          `hidden` (never unmounted) in BOTH the folded and the immersive
-          case: the textarea keeps its DOM — and with it the browser's undo
-          stack — so hiding the pane can never cost the user their editing
-          history. In immersive the fixed section already covers this
-          visually; `hidden` additionally removes it from the tab order. */}
+      {/* ---- the source pane — BELOW THE FOLD, reached by page scroll ----
+          The collapse toggle this section used to carry is GONE, on purpose:
+          it existed to hand the source's rows to the diagram, but the
+          diagram's height no longer depends on this section at all — it
+          already owns the first screenful, and the source starts below the
+          fold. Scrolling past something is the same gesture as folding it,
+          minus a state to manage and a control to explain. `hidden` in
+          immersive (never unmounted): the textarea keeps its DOM — and with
+          it the browser's undo stack — and leaves the tab order while the
+          fixed section covers the page. */}
       <section
         aria-label="Sequence source editor"
         className={cn("flex min-w-0 flex-col gap-2", isImmersive && "hidden")}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setSourceOpen((open) => !open)}
-              aria-expanded={sourceOpen}
-              aria-controls={sourceBodyId}
-              className={buttonClasses({ variant: "ghost", size: "sm" })}
-            >
-              {sourceOpen ? (
-                <ChevronUp aria-hidden="true" />
-              ) : (
-                <ChevronDown aria-hidden="true" />
-              )}
-              {sourceOpen ? "Hide source" : "Show source"}
-            </button>
-            <label
-              htmlFor={textareaId}
-              className="text-sm font-medium text-foreground"
-            >
-              Sequence text{" "}
-              <span className="font-mono text-xs text-muted-foreground">
-                (.alab or Mermaid)
-              </span>
-            </label>
-          </div>
+          <label
+            htmlFor={textareaId}
+            className="text-sm font-medium text-foreground"
+          >
+            Sequence text{" "}
+            <span className="font-mono text-xs text-muted-foreground">
+              (.alab or Mermaid)
+            </span>
+          </label>
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
@@ -388,33 +370,26 @@ export function SequencePlayground(): React.JSX.Element {
           </div>
         </div>
 
-        <div
-          id={sourceBodyId}
-          className={cn("flex flex-col gap-2", !sourceOpen && "hidden")}
-        >
-          <textarea
-            id={textareaId}
-            value={text}
-            onChange={(event) => handleChange(event.target.value)}
-            onKeyDown={handleKeyDown}
-            aria-describedby={hintId}
-            aria-invalid={error !== null}
-            spellCheck={false}
-            rows={12}
-            className={cn(
-              "min-h-[14rem] w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              error !== null ? "border-destructive/60" : "border-border",
-            )}
-          />
-          <p id={hintId} className="text-xs text-muted-foreground">
-            Tab inserts two spaces — press Escape, then Tab, to move focus out.
-            The diagram re-renders as you type; while the text fails to parse it
-            keeps showing the last good version.
-          </p>
-        </div>
+        <textarea
+          id={textareaId}
+          value={text}
+          onChange={(event) => handleChange(event.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-describedby={hintId}
+          aria-invalid={error !== null}
+          spellCheck={false}
+          rows={12}
+          className={cn(
+            "min-h-[14rem] w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            error !== null ? "border-destructive/60" : "border-border",
+          )}
+        />
+        <p id={hintId} className="text-xs text-muted-foreground">
+          Tab inserts two spaces — press Escape, then Tab, to move focus out.
+          The diagram re-renders as you type; while the text fails to parse it
+          keeps showing the last good version.
+        </p>
 
-        {/* OUTSIDE the fold on purpose: an active parse error stays visible
-            even while the source is collapsed. */}
         {error !== null ? <SequenceErrorBox error={error} /> : null}
       </section>
     </div>

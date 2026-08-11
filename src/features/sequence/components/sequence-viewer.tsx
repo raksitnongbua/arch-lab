@@ -62,7 +62,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { X } from "lucide-react";
+import { Scan, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { SequenceLabFile } from "@/types";
@@ -240,6 +240,53 @@ export function SequenceViewer({
     handleClearFocus();
     diagramRegionRef.current?.focus();
   }, [handleClearFocus]);
+
+  /* ---- zoom -----------------------------------------------------------------
+   * The hand-rolled equivalent of the C4 viewer's camera: `"fit"` (default —
+   * the WHOLE flow inside the pane, the sequence answer to fitView) or a
+   * numeric scale where 1 = one SVG user unit per CSS pixel. Fit is a MODE,
+   * not a stored number, so it keeps holding through resizes and re-parses
+   * for free; the number only exists once the user reaches for detail.
+   */
+  const [zoom, setZoom] = useState<number | "fit">("fit");
+
+  /** The scale fit mode is currently rendering at — measured, because it
+   * depends on the pane's live size. Used only as the base for the first
+   * +/− step out of fit, so stepping feels continuous rather than jumping
+   * to an unrelated absolute scale. */
+  const measureFitScale = useCallback((): number => {
+    const pane = diagramRegionRef.current;
+    if (pane === null) return 1;
+    // p-3 padding (12px per side) is outside the wrapper's content box.
+    const width = pane.clientWidth - 24;
+    const height = pane.clientHeight - 24;
+    if (width <= 0 || height <= 0) return 1;
+    return Math.min(width / layout.width, height / layout.height);
+  }, [layout]);
+
+  const applyZoom = useCallback(
+    (next: number) => {
+      const clamped = Math.min(4, Math.max(0.1, next));
+      setZoom(clamped);
+      onAnnounce(
+        `Zoom ${Math.round(clamped * 100)} percent. Scroll the diagram pane to pan.`,
+      );
+    },
+    [onAnnounce],
+  );
+
+  const stepZoom = useCallback(
+    (direction: 1 | -1) => {
+      const current = zoom === "fit" ? measureFitScale() : zoom;
+      applyZoom(current * (direction === 1 ? 1.25 : 1 / 1.25));
+    },
+    [zoom, measureFitScale, applyZoom],
+  );
+
+  const applyFit = useCallback(() => {
+    setZoom("fit");
+    onAnnounce("Diagram fitted to view — the whole flow is on screen.");
+  }, [onAnnounce]);
 
   /**
    * FOCUS FOLLOWS SCROLL: clicking a thing must never hide that thing. The
@@ -471,21 +518,26 @@ export function SequenceViewer({
           role="application"
           aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages, participants and fragment chips are buttons — Tab reaches them."
         >
-          {/* The dock SPACER. The SVG is width-FITTED (width: 100% of this
-              wrapper's content box), so with the dock overlaying the pane's
-              right edge there is no natural overflow to scroll — the covered
-              strip would be unreachable. This wrapper is `box-content`, so
-              adding right padding equal to the dock's width EXTENDS its
-              border-box past 100% without changing the content box the SVG
-              is sized by: the diagram's geometry stays byte-identical (no
-              rescale, no shift) while the pane gains real horizontal
-              overflow the user can scroll. Same trick vertically for the
-              bottom sheet below `md`. The padding pairs 1:1 with the dock's
-              dimensions — md:pr-72 ↔ md:w-72, max-md:pb-72 ↔
+          {/* The dock SPACER. In fit mode the SVG fills this wrapper's
+              content box on BOTH axes (100% × 100%, "meet"), so with the
+              dock overlaying the pane's right edge there is NO natural
+              overflow to scroll — the covered strip would be unreachable.
+              This wrapper is `box-content`, so adding right padding equal
+              to the dock's width EXTENDS its border-box past 100% without
+              changing the content box the SVG is sized by: the diagram's
+              geometry stays byte-identical (no rescale, no shift — "fit"
+              means fit the pane, never fit-minus-the-dock) while the pane
+              gains real horizontal overflow the user can scroll. Same trick
+              vertically for the bottom sheet below `md`. When ZOOMED to a
+              numeric scale the wrapper hugs the now-overflowing SVG
+              (`w-max`) and the padding appends after it, so the covered
+              strip stays reachable there too. The padding pairs 1:1 with
+              the dock's dimensions — md:pr-72 ↔ md:w-72, max-md:pb-72 ↔
               max-md:max-h-72 — change one and you must change the other. */}
           <div
             className={cn(
-              "box-content w-full",
+              "box-content",
+              zoom === "fit" ? "h-full w-full" : "w-max",
               dockOpen && "max-md:pb-72 md:pr-72",
             )}
           >
@@ -495,12 +547,66 @@ export function SequenceViewer({
               autonumber={file.autonumber === true}
               focus={focus}
               focusNonce={rawFocus?.nonce ?? 0}
+              zoom={zoom}
               onFocusMessage={handleFocusMessage}
               onFocusParticipant={handleFocusParticipant}
               onFocusFragment={handleFocusFragment}
               onClearFocus={handleClearFocus}
             />
           </div>
+        </div>
+
+        {/* ---- zoom controls (bottom-left, the C4 viewer's pill pattern) ----
+            The hand-rolled fitView/zoomTo: FIT is the default and the reset
+            (the whole flow visible at once); the percent button jumps to
+            actual size; +/− step by a fixed factor from whatever is on
+            screen. Panning past fit is the pane's own scrolling — wheel,
+            trackpad, scrollbars — not a drag layer, because dragging would
+            fight the click-to-focus surface this diagram IS. Zoom changes
+            are state, not motion (the SVG re-renders at the new size), so
+            reduced motion needs no branch here; announcements go through
+            the page's one live region. */}
+        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-lg border border-border/70 bg-card/80 p-1 shadow-sm backdrop-blur">
+          <button
+            type="button"
+            onClick={() => stepZoom(-1)}
+            aria-label="Zoom out"
+            title="Zoom out"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <ZoomOut aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => applyZoom(1)}
+            aria-label={
+              zoom === "fit"
+                ? "Fitted to view — set zoom to 100 percent"
+                : `Zoom ${Math.round(zoom * 100)} percent — reset to 100 percent`
+            }
+            title="Actual size (100%)"
+            className="min-w-11 rounded-md px-1.5 py-1 text-center text-xs font-medium text-muted-foreground tabular-nums transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            {zoom === "fit" ? "Fit" : `${Math.round(zoom * 100)}%`}
+          </button>
+          <button
+            type="button"
+            onClick={() => stepZoom(1)}
+            aria-label="Zoom in"
+            title="Zoom in"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <ZoomIn aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={applyFit}
+            aria-label="Fit the whole diagram in view"
+            title="Fit to view"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <Scan aria-hidden="true" className="size-4" />
+          </button>
         </div>
 
         {/* ---- the details dock ----
@@ -510,16 +616,17 @@ export function SequenceViewer({
 
             It OVERLAYS the diagram pane (absolute, in the relative wrapper
             above) instead of sitting beside it as a flex sibling, because
-            the SVG is width-fitted: a sibling would narrow the pane and
+            the SVG is pane-fitted: a sibling would narrow the pane and
             rescale/shift every lifeline the instant something is clicked —
             a reflow-jump that undoes the point of clicking. Overlaying
-            keeps the diagram's geometry byte-identical. What makes the
-            covered strip REACHABLE is not the overlay itself (a width-
-            fitted SVG has no natural overflow): it is the box-content
-            SPACER inside the pane, which reserves scroll room equal to the
-            dock's footprint, plus the focus-follows effect above that
-            nudges a freshly focused element out from under the dock. The
-            aside UNMOUNTS when nothing is focused — no dead space reserved.
+            keeps the diagram's geometry byte-identical ("fit" means fit the
+            pane, never re-fit around the dock). What makes the covered
+            strip REACHABLE is not the overlay itself (a pane-fitted SVG has
+            no natural overflow): it is the box-content SPACER inside the
+            pane, which reserves scroll room equal to the dock's footprint,
+            plus the focus-follows effect above that nudges a freshly
+            focused element out from under the dock. The aside UNMOUNTS when
+            nothing is focused — no dead space reserved.
 
             Below `md` a side dock would cover most of the diagram, so it
             becomes a bottom SHEET (same overlay + spacer reasoning, other
@@ -702,6 +809,10 @@ export function SequenceViewer({
     </div>
   );
 }
+
+/** Shared icon-button styling for the zoom pill (the C4 controls' look). */
+const ZOOM_BUTTON_CLASSES =
+  "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
 
 /* -------------------------------------------------------------------------- */
 /* Dock building blocks                                                         */

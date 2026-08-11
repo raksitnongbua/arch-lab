@@ -243,10 +243,12 @@ auto-detection depends on. Arrows are `->` synchronous, `~>` asynchronous,
 a dedent already says where a fragment stops. Conversion is lossless in both
 directions, proven by `pnpm check:sequence`.
 
-**The whole story, then the part you asked about.** The diagram sits on top
-at full width (participants spread horizontally — width is the axis a
-sequence diagram consumes) with the source pane a collapsible strip below,
-and an immersive mode that gives the diagram the whole viewport. The diagram
+**The whole story, then the part you asked about.** The diagram owns the
+first screenful and the whole flow FITS it — scaled to your viewport the way
+the C4 viewer's fit-view works, with a small zoom pill (fit / 100% / in /
+out; scrolling the pane pans once you zoom past fit) for reading fine
+detail. The source sits below the fold: scroll the page down to edit the
+text. An immersive mode gives the diagram the entire viewport. The diagram
 renders complete — a sequence diagram is a record of what happened, so the
 record is what you see first. Animation is spent on **focus**: click a
 message (its arrow or its label) and that arrow re-draws itself and holds
