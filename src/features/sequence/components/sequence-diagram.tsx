@@ -769,6 +769,29 @@ function Message({
         />
       )}
 
+      {/* The IDLE DRIFT — the resting marching dash, deliberately the same
+          construction as the C4 canvas's drift (viewer-edge.tsx): an OVERLAY
+          copy of the line, never the base stroke, because the base dash
+          pattern here carries meaning (reply = dashed) that motion must not
+          borrow. `pathLength={100}` makes the stylesheet's dash maths
+          percentages of THIS path, so short hops, long spans and the
+          self-message loop all show the same rhythm — and since the pattern
+          lives in path units it scales cleanly with fit/zoom.
+          Rendered only while the message is at rest: the focus draw takes
+          over on the animating set (two lights on one wire reads as a
+          glitch), a focused-and-held message keeps its steady emphasis, and
+          a dimmed message is explicitly not what the reader asked about —
+          motion would defeat the dimming. With nothing focused that means
+          every message drifts. */}
+      {animateRank === null && !dimmed && !focused ? (
+        <path
+          aria-hidden="true"
+          className="af-seq-idle pointer-events-none"
+          d={linePath}
+          pathLength={100}
+        />
+      ) : null}
+
       {kind === "sync" ? (
         <path className="af-seq-head af-seq-head-fill" d={filledHead} />
       ) : (

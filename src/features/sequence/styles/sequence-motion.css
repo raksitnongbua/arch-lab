@@ -124,6 +124,59 @@
   }
 }
 
+/* ---- idle drift (the diagram at rest) ------------------------------------------
+ * A quiet repeating dash travelling source → target on every message that is
+ * neither focused nor dimmed — the sequence twin of the C4 canvas's
+ * `.viewer-edge-drift` (viewer-canvas.tsx / viewer-edge.tsx), copied
+ * deliberately so both canvases speak ONE motion language:
+ *
+ *   - It rides an OVERLAY path (rendered in sequence-diagram.tsx), never the
+ *     base stroke: the base dash pattern carries MEANING here (replies are
+ *     dashed, sync/async solid), so marching it would animate only the
+ *     replies and make a moving solid line indistinguishable from a dashed
+ *     one.
+ *   - The overlay carries pathLength=100, so the dasharray below is in
+ *     PERCENT of a message: dash 5, gap 9, period 14 ≈ seven dashes per
+ *     arrow — the same rhythm on an 80px hop and an 800px span (and at any
+ *     zoom, since path units scale with the drawing).
+ *   - The keyframes advance the offset by exactly ONE period (14) per cycle,
+ *     which is what makes the infinite loop seamless: after one period the
+ *     pattern is indistinguishable from where it began. Dasharray and
+ *     keyframes must stay in step — change one, change the other.
+ *   - The ink is a LIFT of the message colour toward primary, not a new hue:
+ *     the palette still belongs to the participants. Thinner than the base
+ *     stroke and slow (`--seq-idle` is ms per PERIOD — see lib/motion.ts),
+ *     because this runs on every message all the time.
+ *
+ * The display gate (`--seq-idle-display`, fallback none) is the JS
+ * reduced-motion route AND the pre-mount state; the media query below is the
+ * CSS route. Both end with the overlay gone entirely — a parked dash would
+ * be a stray bright segment, not a resting state.
+ */
+
+.af-seq-idle {
+  display: var(--seq-idle-display, none);
+  fill: none;
+  stroke: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  opacity: 0.8;
+  stroke-dasharray: 5 9;
+  animation: af-seq-idle-drift var(--seq-idle, 0ms) linear infinite;
+}
+
+/* Offset runs 0 → −period, so the pattern advances ALONG the path — every
+ * message path is authored source → target (a self-loop runs out, down and
+ * back), so the motion always points the way the message went. */
+@keyframes af-seq-idle-drift {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
 /* ---- focus dim (click-to-focus) -----------------------------------------------
  * The viewer stamps .af-seq-dim on everything OUTSIDE the focus set; the set
  * itself keeps full strength. Opacity only, transitioned, so entering and
@@ -263,5 +316,12 @@
   .af-seq-msg[data-animate] .af-seq-head,
   .af-seq-msg[data-animate] .af-seq-fade-in {
     animation: none;
+  }
+  /* The idle dash is motion and nothing else — a parked dash would be a
+     stray bright segment on every line, so it goes away entirely rather
+     than freezing mid-path (same rule as .viewer-edge-drift). The JS route
+     (sequenceMotionVars) reaches the same end through --seq-idle-display. */
+  .af-seq-idle {
+    display: none;
   }
 }

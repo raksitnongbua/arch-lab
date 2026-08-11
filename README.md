@@ -250,7 +250,10 @@ out; scrolling the pane pans once you zoom past fit) for reading fine
 detail. The source sits below the fold: scroll the page down to edit the
 text. An immersive mode gives the diagram the entire viewport. The diagram
 renders complete — a sequence diagram is a record of what happened, so the
-record is what you see first. Animation is spent on **focus**: click a
+record is what you see first. At rest a calm dash drifts source → target
+along every message — the same resting motion the C4 connectors carry, and
+gone entirely under `prefers-reduced-motion`. The rest of the animation
+budget is spent on **focus**: click a
 message (its arrow or its label) and that arrow re-draws itself and holds
 emphasised while the rest recedes; a details dock on the right (a bottom
 sheet on small screens) names the sender and receiver with their
