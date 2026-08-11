@@ -124,95 +124,122 @@
   }
 }
 
-/* ---- idle motion: the marching dash (the diagram at rest) ---------------------
- * The message LINE ITSELF marches toward its target — React Flow's animated
- * edge, which is the reference this was asked to match:
+/* ---- idle motion: one mechanism per kind (the diagram at rest) ----------------
+ * Something moves along every resting message, but HOW depends on whether the
+ * line's dash pattern is already carrying meaning. Two mechanisms, and the
+ * split is the design:
  *
- *   .react-flow__edge.animated path {
- *     stroke-dasharray: 5; animation: dashdraw 0.5s linear infinite;
- *   }
- *   @keyframes dashdraw { from { stroke-dashoffset: 10; } }
+ *   - REPLIES march their dash. `..>` is dashed 6/5 at rest, so moving that
+ *     pattern adds motion without overwriting anything — this is React Flow's
+ *     animated edge exactly:
  *
- * — verbatim from @xyflow/react 12.11.2's dist/style.css, read out of the
- * installed package rather than the docs site (which documents only the
- * custom animateMotion/offsetPath recipes, not the built-in edge).
+ *       .react-flow__edge.animated path {
+ *         stroke-dasharray: 5; animation: dashdraw 0.5s linear infinite;
+ *       }
+ *       @keyframes dashdraw { from { stroke-dashoffset: 10; } }
  *
- * WHY THIS SUCCEEDS WHERE FOUR DESIGNS FAILED, because the history is the
- * whole lesson. Every earlier idle attempt put a SECOND path over the line: a
- * marching dash tinted toward --primary, a neutral one, one pitch-matched to
- * the reply dash, a travelling dot, then a glow-plus-head comet. Three of
- * them read as a doubled, fuzzy line, and each time the fix was sought in the
- * overlay's colour, pitch or duty cycle. The overlay WAS the bug. React Flow
- * has no overlay — one stroke, wearing its own moving dash. There is now
- * exactly one path per message line BY CONSTRUCTION rather than by keeping a
- * second one subtle. Do not reintroduce an overlay layer here.
+ *     (verbatim from @xyflow/react 12.11.2's dist/style.css, read out of the
+ *     installed package rather than the docs site, which documents only the
+ *     custom animateMotion/offsetPath recipes and not the built-in edge.)
  *
- * WHAT THE DASH IS ALLOWED TO MEAN. The retired note on this block said
- * "stroke-dasharray can only serve one master", and that is still true; the
- * resolution is that at rest it now HAS only one master. Per kind:
- *   - sync and async march a long dash with a small gap (10/4, ~71% duty), so
- *     the line still reads as continuous with movement in it rather than as a
- *     dashed line. These two are told apart by their ARROWHEAD — filled vs
- *     open — and never by the stroke, so marching them costs no meaning.
- *   - reply marches 6/5: the pattern it already wore at rest, unchanged, so
- *     toggling motion never changes what a reply IS. Its lower duty beside
- *     sync/async is what keeps "this is a return" legible while both move.
- * The focus draw wants the same property on the same element, so the march is
- * suppressed on the focused and animating set — the renderer withholds
- * `data-idle` — and `pathLength` is applied ONLY while animating, because
- * pathLength=1 renormalises dash maths to fractions of the line and would
- * stretch a long message's dashes out of all proportion.
+ *   - SYNC AND ASYNC keep one unbroken SOLID line, and a LIGHT travels along
+ *     it instead: each stop of the line's own gradient brightens in turn,
+ *     staggered so the bright band slides sender → target.
  *
- * ONE PERIOD PER CYCLE, at a shared speed: each kind's keyframes advance
- * exactly its own dash+gap, so the loop is seamless, and lib/motion.ts
- * derives both durations from a single `idleMarchSpeed` so a dash crosses the
- * same pixels per second whichever pattern it belongs to. The keyframe values
- * are CONSTANTS, not var()-driven: Chromium will not interpolate
- * stroke-dashoffset between var()/calc() keyframe values — the animation
- * parks on its end frame. MARCH_PERIOD in motion.ts, the dasharrays below and
- * those constants are one fact in three places; change them together.
+ * WHY NOT MARCH EVERYTHING. It was tried, and it was wrong. Marching a solid
+ * arrow means giving it a dasharray, and on a sequence diagram "dashed"
+ * already means something — async or reply. A 10/4 marching sync arrow reads
+ * as a dashed line, so the motion was quietly overwriting the kind. Dash is
+ * motion the reply can afford and the solid kinds cannot.
+ *
+ * WHY THE LIGHT IS NOT AN OVERLAY, which is the part not to undo. Four earlier
+ * idle designs put a SECOND path over the line — a marching dash tinted toward
+ * --primary, a neutral one, one pitch-matched to the reply dash, a travelling
+ * dot, then a glow-plus-head comet. Three read as a doubled, fuzzy line, and
+ * each time the fix was sought in the overlay's colour, pitch or duty cycle.
+ * The overlay WAS the bug. The glint has no overlay: it is the stroke's own
+ * paint changing, so there is still exactly one path per message line BY
+ * CONSTRUCTION rather than by keeping a second one subtle.
+ *
+ * WHAT ELSE OWNS THESE PROPERTIES. The focus draw animates stroke-dashoffset
+ * on the same element, so idle motion is suppressed on the focused and
+ * animating set — the renderer withholds `data-idle`. `pathLength` is applied
+ * ONLY while animating, because pathLength=1 renormalises dash maths to
+ * fractions of the line and would stretch a long reply's dashes out of all
+ * proportion.
+ *
+ * The reply's keyframes advance exactly one dash period so the loop is
+ * seamless, and its duration comes from `idleMarchSpeed` in lib/motion.ts. The
+ * keyframe values are CONSTANTS, not var()-driven: Chromium will not
+ * interpolate stroke-dashoffset between var()/calc() keyframe values — the
+ * animation parks on its end frame. MARCH_PERIOD in motion.ts, the dasharray
+ * below and those constants are one fact in three places; change them
+ * together, and `check:sequence-motion` will tell you if you don't.
  *
  * THE GATE is `data-seq-march` on the diagram root (motion.ts's
  * `sequenceMarchState`) rather than a custom property, because switching the
- * march off has to withdraw the DASHARRAY as well as the animation — a
- * stopped march still wearing its pattern would leave a sync arrow looking
- * dashed, which in a sequence diagram means something else. Off means each
- * kind simply wears its resting pattern: solid for sync and async, 6/5 for
- * replies, exactly as it was before any idle motion existed.
+ * march off has to withdraw the DASHARRAY as well as the animation — a stopped
+ * march still wearing its pattern would leave a reply's motion frozen mid-slide
+ * or, worse, a sync arrow dashed. Off means each kind simply wears its resting
+ * appearance: solid for sync and async, 6/5 for replies, the gradient at its
+ * base colours, exactly as it was before any idle motion existed.
  */
 
-[data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line {
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
+/* Replies march their dash — the one kind where the dash IS the resting
+ * identity, so moving it adds motion without overwriting meaning. Linear,
+ * because a dash that eases would read as slipping. */
 [data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
   stroke-dasharray: 6 5;
   animation-name: af-seq-march-dashed;
   animation-duration: var(--seq-march-dashed, 1100ms);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* The SOLID kinds get no dash at all — they stay one unbroken line and a
+ * LIGHT travels along them instead, by brightening each gradient stop in turn.
+ * This is the whole point: a marching dash made a sync arrow look dashed, and
+ * "dashed" already means async or reply here, so the motion was overwriting the
+ * meaning. The highlight lives inside the stroke’s own paint, so there is
+ * still exactly one line and no overlay path (see the retired-designs note
+ * above for why an overlay is never the answer).
+ *
+ * The stagger is what makes it travel: stop i peaks at i/6 of the cycle, so the
+ * bright band slides sender → receiver. The divisor is the STOP COUNT from
+ * sequence-diagram.tsx’s GLINT_STOPS — one fact in two files, asserted by
+ * check:sequence-motion. The lit window is short (12%) so it reads as a passing
+ * highlight rather than the whole line pulsing. */
+[data-seq-march="on"]
+  .af-seq-msg[data-idle]:not([data-kind="reply"])
+  .af-seq-line {
+  stroke-dasharray: none;
 }
 
 [data-seq-march="on"]
   .af-seq-msg[data-idle]:not([data-kind="reply"])
-  .af-seq-line {
-  stroke-dasharray: 10 4;
-  animation-name: af-seq-march-solid;
-  animation-duration: var(--seq-march-solid, 1400ms);
+  .af-seq-glint {
+  animation-name: af-seq-glint;
+  animation-duration: var(--seq-glint, 2600ms);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-delay: calc(var(--glint-i, 0) * var(--seq-glint, 2600ms) / 6);
+}
+
+@keyframes af-seq-glint {
+  0%,
+  12%,
+  100% {
+    stop-color: var(--glint-base);
+  }
+  6% {
+    stop-color: var(--glint-lit);
+  }
 }
 
 /* Offset counts DOWN to zero, which walks the pattern along the path's own
    direction — source → target for every kind, including a reply's
    right-to-left run and a self-loop's out-down-and-back. This is React
    Flow's direction too (its `from` is one period, its `to` the computed 0). */
-@keyframes af-seq-march-solid {
-  from {
-    stroke-dashoffset: 14;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
 @keyframes af-seq-march-dashed {
   from {
     stroke-dashoffset: 11;
@@ -406,15 +433,18 @@
   .af-seq-msg[data-animate] .af-seq-fade-in {
     animation: none;
   }
-  /* The march is motion and nothing else, so it goes away entirely rather
+  /* Idle motion is motion and nothing else, so it goes away entirely rather
      than freezing (same rule as .viewer-edge-drift). But it CANNOT park on
      "no dash": the dash pattern is per-kind meaning, so each kind is put
      back on its resting pattern explicitly — solid for sync/async, 6/5 for
      replies. Withdrawing the dasharray wholesale here would quietly turn
      every reply into a solid line, which reads as a call rather than a
-     return. `sequenceMarchState` is the JS route to the same end (it also
-     carries the user's toggle); this block holds before hydration. */
-  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line {
+     return. The glint needs no such care: stopped, its stops simply hold
+     their base colours, which is the resting gradient. `sequenceMarchState`
+     is the JS route to the same end (it also carries the user's toggle); this
+     block holds before hydration. */
+  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line,
+  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-glint {
     animation: none;
   }
   [data-seq-march="on"]

@@ -37,34 +37,42 @@ export const SEQUENCE_DURATIONS = {
    * viewer's edgeFocus escalation feel). */
   focusFade: 180,
   /**
-   * The idle march's SPEED, in user units per second — React Flow's animated
-   * edge (`stroke-dasharray: 5; animation: dashdraw .5s linear infinite`,
-   * i.e. one 10-unit period every 500ms = 20 u/s) at half rate, because
-   * theirs animates one hovered edge on demand and ours runs on every
-   * message at once, full diagram width.
+   * The reply dash's march SPEED, in user units per second — React Flow's
+   * animated edge (`stroke-dasharray: 5; animation: dashdraw .5s linear
+   * infinite`, i.e. one 10-unit period every 500ms = 20 u/s) at half rate,
+   * because theirs animates one hovered edge on demand and ours runs
+   * continuously, full diagram width.
    *
-   * A SPEED rather than a duration, because the two kinds march different
-   * dash PERIODS (see MARCH_PERIOD): a shared duration would make the
-   * shorter-period pattern crawl. Durations are derived below so a dash
-   * crosses the same pixels per second whatever pattern it belongs to.
+   * A SPEED rather than a duration so the derived cycle time always matches
+   * the pattern it moves: change the dash and the duration follows, instead of
+   * a hand-tuned pair silently drifting into a crawl.
    */
   idleMarchSpeed: 10,
+
+  /**
+   * One full traversal of the travelling highlight on a SOLID line, in ms.
+   * Unrelated to the march speed and deliberately slower than a dash cycle:
+   * this is a soft brightening rather than a moving edge, and eleven of them
+   * run at once, so it should register as ambient rather than as traffic.
+   */
+  idleGlint: 2600,
 } as const;
 
 /**
- * Dash period per message kind, in user units — `dash + gap`, which is
- * exactly how far the pattern must travel to look unchanged, and therefore
- * the offset one animation cycle advances.
+ * The reply dash's period in user units — `dash + gap`, which is exactly how
+ * far the pattern must travel to look unchanged, and therefore what one
+ * animation cycle advances.
  *
- * These MUST match the `stroke-dasharray` the stylesheet marches for each
- * kind, and the `from` value of that kind's keyframes. All three live
- * together in the `.af-seq-line` march block in sequence-motion.css; this
- * object exists only to derive the durations. Solid kinds (sync, async) get
- * a long dash and a small gap so the line still reads as continuous with
- * movement in it; replies keep the 6/5 pattern that IS their identity at
- * rest, so toggling motion never changes what a reply looks like.
+ * This MUST match the `stroke-dasharray` the stylesheet marches on replies and
+ * the `from` value of `af-seq-march-dashed`; all three live in the idle block
+ * of sequence-motion.css and this exists only to derive the duration.
+ *
+ * There is no `solid` entry any more, and that absence is the design: sync and
+ * async lines are never given a dasharray, because "dashed" already means
+ * async-or-reply on a sequence diagram and marching a solid arrow overwrote
+ * its kind. They carry the glint instead.
  */
-const MARCH_PERIOD = { solid: 10 + 4, dashed: 6 + 5 } as const;
+const MARCH_PERIOD = { dashed: 6 + 5 } as const;
 
 /**
  * The custom-property map the viewer stamps on the diagram root. Under
@@ -94,9 +102,11 @@ export function sequenceMotionVars(reduced: boolean): Record<string, string> {
     "--seq-head-delay": ms(SEQUENCE_DURATIONS.headDelay),
     "--seq-stagger": ms(SEQUENCE_DURATIONS.focusStagger),
     "--seq-focus": ms(SEQUENCE_DURATIONS.focusFade),
-    // One period per cycle, at a shared speed — see MARCH_PERIOD.
-    "--seq-march-solid": marchMs(MARCH_PERIOD.solid),
+    // One dash period per cycle — see MARCH_PERIOD.
     "--seq-march-dashed": marchMs(MARCH_PERIOD.dashed),
+    // Not routed through `ms()` either: the glint is withdrawn by the same
+    // gate, so it never needs a 0ms duration.
+    "--seq-glint": `${SEQUENCE_DURATIONS.idleGlint}ms`,
   };
 }
 

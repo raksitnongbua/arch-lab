@@ -56,6 +56,16 @@ import type {
 } from "../lib/layout";
 import { estimateTextWidth, SEQ } from "../lib/layout";
 
+/**
+ * Where the message gradients place their stops, 0 = sender … 1 = receiver.
+ * Six evenly spaced stops: enough that a brightening stop reads as a light
+ * sliding along the line rather than a lamp switching on in three places, few
+ * enough that eleven resting messages animate 66 gradient stops and not
+ * hundreds. The count is coupled to the stagger divisor in the stylesheet's
+ * `.af-seq-glint` rule — `check:sequence-motion` asserts they agree.
+ */
+const GLINT_STOPS = [0, 0.2, 0.4, 0.6, 0.8, 1] as const;
+
 /* -------------------------------------------------------------------------- */
 /* Focus model                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -287,52 +297,6 @@ export function SequenceDiagram({
       className="block"
     >
       <defs>
-        {/* MESSAGE LINE GRADIENTS — sender's lane hue running to the
-            receiver's, so a line carries the direction of traffic in its
-            colour: you can see which service a call left and which one it
-            reached without following the arrowhead.
-
-            `gradientUnits="userSpaceOnUse"` with the message's OWN endpoints
-            is what makes the direction real: a reply runs right-to-left and
-            its gradient must too, and objectBoundingBox units would flip
-            nothing and squash a self-loop's tall box. Self-loops travel
-            out-down-back, so their gradient runs diagonally across the loop.
-
-            Both stops are MUTED toward --edge. At full lane strength a
-            resting line competes with the --primary focus line, and the
-            three-state vocabulary (--edge at rest → --primary on focus) is
-            what makes focus read as escalation rather than as one more
-            coloured line. Muting is also what keeps the gradient legible in
-            both themes: the lane hues were validated against each other and
-            the card surface, never as 1.5px strokes. */}
-        {layout.messages.map((message) => {
-          const fromLane = laneById.get(message.from);
-          const toLane = laneById.get(message.to);
-          if (fromLane === undefined || toLane === undefined) return null;
-          const x1 = message.fromX;
-          const x2 = message.self
-            ? message.fromX + SEQ.selfLoopWidth
-            : message.toX;
-          const y1 = message.y;
-          const y2 = message.self ? message.y + SEQ.selfLoopHeight : message.y;
-          const mute = (lane: number) =>
-            `color-mix(in oklch, var(--seq-lane-${lane}) 55%, var(--edge))`;
-          return (
-            <linearGradient
-              key={message.step}
-              id={lineGradId(message.step)}
-              gradientUnits="userSpaceOnUse"
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-            >
-              <stop offset="0%" stopColor={mute(fromLane)} />
-              <stop offset="100%" stopColor={mute(toLane)} />
-            </linearGradient>
-          );
-        })}
-
         {/* CARD GRADIENTS — a vertical lift on each participant card, in that
             card's own lane hue. Both stops are built from `tagFillCss`, the
             audited card-lightness expression, so the gradient stays inside
@@ -594,14 +558,18 @@ export function SequenceDiagram({
           animateToken={animateToken}
           focused={focus?.kind === "message" && focus.step === message.step}
           dimmed={messageDimmed(message)}
-          // The line's gradient, minted in <defs> above — null when either
-          // endpoint has no lane, and the CSS fallback paints a flat --edge
-          // line rather than an invalid reference.
+          // The line's gradient id, and the two lanes it ramps between. The
+          // message MINTS its own gradient (see the Message component) rather
+          // than reading one from a shared <defs> — null when either endpoint
+          // has no lane, and the CSS fallback then paints a flat --edge line
+          // rather than leaving a dangling url() reference.
           paintId={
             laneById.has(message.from) && laneById.has(message.to)
               ? lineGradId(message.step)
               : null
           }
+          fromLane={laneById.get(message.from) ?? null}
+          toLane={laneById.get(message.to) ?? null}
           onFocus={() => onFocusMessage(message.step)}
           onKeyDown={keyActivate(() => onFocusMessage(message.step))}
         />
@@ -921,6 +889,8 @@ function Message({
   focused,
   dimmed,
   paintId,
+  fromLane,
+  toLane,
   onFocus,
   onKeyDown,
 }: {
@@ -933,6 +903,9 @@ function Message({
   dimmed: boolean;
   /** Gradient id for this line's sender→receiver paint, or null for --edge. */
   paintId: string | null;
+  /** Sender's and receiver's colour lanes — the ramp's two ends. */
+  fromLane: number | null;
+  toLane: number | null;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
@@ -1022,6 +995,76 @@ function Message({
         } as React.CSSProperties
       }
     >
+      {/* THIS MESSAGE'S GRADIENT, defined INSIDE its group — not in a shared
+          <defs> at the top of the SVG, and that placement is load-bearing
+          rather than tidiness. The stylesheet reaches the glinting stops with
+          `.af-seq-msg[data-idle]:not([data-kind="reply"]) .af-seq-glint`, a
+          DESCENDANT selector: stops parked in a top-level <defs> are not
+          descendants of any message group, so that rule silently matches
+          nothing and the light never runs. (It shipped that way for one build.
+          check:sequence-motion now asserts the nesting.) A gradient is legal
+          anywhere in the document — it paints nothing itself, it is only
+          referenced by id — so keeping it with the one line that uses it costs
+          nothing and keeps the selector honest.
+
+          Direction: `gradientUnits="userSpaceOnUse"` with the message's OWN
+          endpoints, so a reply's right-to-left run ramps right-to-left too and
+          a self-loop ramps diagonally across the loop. objectBoundingBox units
+          would flip nothing and squash the loop's tall box.
+
+          Every stop is MUTED toward --edge: at full lane strength a resting
+          line competes with the --primary focus line, and the three-state
+          vocabulary (--edge at rest → --primary on focus) is what makes focus
+          read as escalation rather than as one more coloured line. Muting also
+          keeps it legible in both themes, since the lane hues were validated
+          against each other and the card surface, never as 1.5px strokes.
+
+          SIX STOPS FOR A TWO-COLOUR RAMP: two would draw the identical
+          gradient. These exist so the light can travel by brightening each
+          stop in turn — the motion lives in the stroke's own paint, which is
+          how a sync arrow stays one unbroken solid line while something moves
+          along it. With the animation off the stops hold their base colours
+          and the ramp is exactly the two-stop one. */}
+      {paintId !== null && fromLane !== null && toLane !== null ? (
+        <defs>
+          <linearGradient
+            id={paintId}
+            gradientUnits="userSpaceOnUse"
+            x1={fromX}
+            y1={y}
+            x2={self ? fromX + SEQ.selfLoopWidth : toX}
+            y2={self ? y + SEQ.selfLoopHeight : y}
+          >
+            {GLINT_STOPS.map((t, index) => {
+              const base =
+                `color-mix(in oklch, ` +
+                `color-mix(in oklch, var(--seq-lane-${fromLane}) ${Math.round((1 - t) * 100)}%, var(--seq-lane-${toLane})) ` +
+                `55%, var(--edge))`;
+              return (
+                <stop
+                  key={index}
+                  className="af-seq-glint"
+                  offset={`${t * 100}%`}
+                  stopColor={base}
+                  style={
+                    {
+                      "--glint-base": base,
+                      // Brighter than its OWN base, in its own hue, through the
+                      // house relative-colour idiom (see tagFillCss). The shift
+                      // is a theme token because "brighter" means +L on a dark
+                      // canvas and −L on a light one; one fixed direction would
+                      // make the highlight vanish in one theme.
+                      "--glint-lit": `oklch(from ${base} calc(l + var(--seq-glint-l)) calc(c + 0.05) h)`,
+                      "--glint-i": index,
+                    } as React.CSSProperties
+                  }
+                />
+              );
+            })}
+          </linearGradient>
+        </defs>
+      ) : null}
+
       {kind === "reply" ? (
         /* Replies FADE (dashed from frame one) — see sequence-motion.css for
            why they cannot share the dashoffset draw. */

@@ -1,26 +1,32 @@
 #!/usr/bin/env node
 /**
- * Sequence idle-march coupling check.
+ * Sequence idle-motion check.
  *
- * The marching dash — React Flow's animated-edge technique on the message
- * line itself — spreads ONE fact across three files, and nothing but a
- * comment has been holding them together:
+ * Idle motion uses ONE MECHANISM PER KIND, and the split is the thing most at
+ * risk of being "simplified" back into a bug:
  *
- *   1. `MARCH_PERIOD` in src/features/sequence/lib/motion.ts, which derives
- *      each kind's animation DURATION from the shared march speed.
- *   2. The `stroke-dasharray` each kind marches, in sequence-motion.css.
- *   3. The `from` offset of that kind's keyframes, also in the stylesheet —
- *      one whole period, so the loop is seamless.
+ *   - Replies march their dash (React Flow's animated edge). Safe, because
+ *     `..>` is dashed at rest anyway, so moving the pattern overwrites nothing.
+ *   - Sync and async keep an unbroken SOLID line and a travelling highlight
+ *     inside the line's own gradient instead. Marching them was tried and was
+ *     wrong: giving a solid arrow a dasharray makes it read as async-or-reply,
+ *     so the motion silently overwrote the message kind.
  *
- * If those drift the failure is quiet and ugly rather than loud: a dasharray
- * whose keyframe advances the wrong distance still animates, it just jumps
- * every cycle, and nobody reads a stylesheet looking for arithmetic. A
- * mismatched duration is worse — the two kinds march at visibly different
- * speeds and it reads as a rendering bug.
+ * What this asserts, and why each one is here rather than left to review:
  *
- * Why a text check rather than an imported constant: CSS cannot import from
- * TypeScript, so the numbers genuinely are duplicated. This asserts the
- * duplication agrees.
+ *   1. Solid kinds are never given a dasharray while idle, and DO get the
+ *      glint. This is the regression guard for the whole design.
+ *   2. The reply's keyframes advance exactly its own dash period (a seamless
+ *      loop), and `MARCH_PERIOD` agrees with the dasharray the stylesheet
+ *      marches. CSS cannot import from TypeScript, so those numbers genuinely
+ *      are duplicated; this asserts the duplication agrees.
+ *   3. The glint's stagger divisor equals the STOP COUNT the renderer emits.
+ *      Disagree and the highlight either never reaches the end of the line or
+ *      jumps back before it does — an animation that still runs and still
+ *      looks plausible, which is exactly what review misses.
+ *   4. Reduced motion stops both mechanisms and parks each kind on the
+ *      appearance that carries its meaning.
+ *   5. No overlay path survives — the doubled-line bug four designs died on.
  */
 
 import { readFileSync } from "node:fs";
@@ -28,14 +34,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const css = readFileSync(
-  join(root, "src/features/sequence/styles/sequence-motion.css"),
-  "utf8",
-);
-const motion = readFileSync(
-  join(root, "src/features/sequence/lib/motion.ts"),
-  "utf8",
-);
+const read = (relative) => readFileSync(join(root, relative), "utf8");
+
+const css = read("src/features/sequence/styles/sequence-motion.css");
+const motion = read("src/features/sequence/lib/motion.ts");
+const diagram = read("src/features/sequence/components/sequence-diagram.tsx");
+const globals = read("src/app/globals.css");
 
 let assertions = 0;
 let failures = 0;
@@ -49,168 +53,233 @@ const check = (label, ok) => {
   }
 };
 
-/* ---- what the stylesheet marches ---------------------------------------- */
-
-/** The dasharray inside the rule that marches `kind`. */
-function marchedDash(kindSelector) {
-  const rule = css.match(
+/** The body of the first rule whose selector matches `selectorPattern`. */
+function ruleBody(selectorPattern) {
+  const match = css.match(
     new RegExp(
-      `\\[data-seq-march="on"\\][^{]*${kindSelector}[^{]*\\{([^}]*)\\}`,
+      `\\[data-seq-march="on"\\][^{}]*${selectorPattern}[^{}]*\\{([^}]*)\\}`,
       "s",
     ),
   );
-  if (rule === null) return null;
-  const dash = rule[1].match(/stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/);
-  return dash === null ? null : [Number(dash[1]), Number(dash[2])];
+  return match === null ? null : match[1];
 }
 
-/** The `from` offset of a named keyframes block. */
-function keyframeFrom(name) {
+/** A named keyframes block's `from`/`to` stroke-dashoffset values. */
+function dashoffsetRange(name) {
   const block = css.match(
     new RegExp(`@keyframes ${name}\\s*\\{(.*?)\\n\\}`, "s"),
   );
   if (block === null) return null;
   const from = block[1].match(/from\s*\{\s*stroke-dashoffset:\s*([\d.]+)/);
-  return from === null ? null : Number(from[1]);
-}
-
-const solidDash = marchedDash('\\:not\\(\\[data-kind="reply"\\]\\)');
-const replyDash = marchedDash('\\[data-kind="reply"\\]');
-
-check("the stylesheet marches a dash on the solid kinds", solidDash !== null);
-check("the stylesheet marches a dash on replies", replyDash !== null);
-
-/* ---- 1 & 3: keyframes advance exactly one period ------------------------ */
-
-const solidPeriod = solidDash === null ? null : solidDash[0] + solidDash[1];
-const replyPeriod = replyDash === null ? null : replyDash[0] + replyDash[1];
-
-check(
-  "the solid keyframes advance exactly one dash period (seamless loop)",
-  keyframeFrom("af-seq-march-solid") === solidPeriod,
-);
-check(
-  "the reply keyframes advance exactly one dash period (seamless loop)",
-  keyframeFrom("af-seq-march-dashed") === replyPeriod,
-);
-/** The `to` offset of a named keyframes block. */
-function keyframeTo(name) {
-  const block = css.match(
-    new RegExp(`@keyframes ${name}\\s*\\{(.*?)\\n\\}`, "s"),
-  );
-  if (block === null) return null;
   const to = block[1].match(/to\s*\{\s*stroke-dashoffset:\s*([\d.]+)/);
-  return to === null ? null : Number(to[1]);
+  return from === null || to === null
+    ? null
+    : { from: Number(from[1]), to: Number(to[1]) };
 }
 
+/* ---- 1. the solid kinds stay solid, and glint --------------------------- */
+
+const solidLine = ruleBody(
+  ':not\\(\\[data-kind="reply"\\]\\)\\s*\\.af-seq-line',
+);
+check("there is a rule for idle solid lines", solidLine !== null);
 check(
-  "both marches count the offset down to zero (pattern travels source → target)",
-  keyframeTo("af-seq-march-solid") === 0 &&
-    keyframeTo("af-seq-march-dashed") === 0,
+  "an idle SOLID line is given NO dash — a dashed sync arrow reads as async or reply",
+  solidLine !== null && /stroke-dasharray:\s*none/.test(solidLine),
+);
+check(
+  "an idle solid line has no dash ANIMATION either",
+  solidLine !== null && !/animation-name/.test(solidLine),
 );
 
-/* ---- 2: motion.ts's periods match the marched dashes -------------------- */
-
-const period = motion.match(
-  /MARCH_PERIOD\s*=\s*\{\s*solid:\s*([\d.]+)\s*\+\s*([\d.]+),\s*dashed:\s*([\d.]+)\s*\+\s*([\d.]+)/,
+const glint = ruleBody(':not\\(\\[data-kind="reply"\\]\\)\\s*\\.af-seq-glint');
+check("idle solid lines drive the glint", glint !== null);
+check(
+  "the glint runs forever, on the glint clock",
+  glint !== null &&
+    /animation-name:\s*af-seq-glint/.test(glint) &&
+    /animation-iteration-count:\s*infinite/.test(glint) &&
+    /var\(--seq-glint/.test(glint),
 );
-check("MARCH_PERIOD is declared as dash + gap per kind", period !== null);
-if (period !== null) {
-  check(
-    "MARCH_PERIOD.solid is the dash the stylesheet marches on solid kinds",
-    Number(period[1]) === solidDash?.[0] &&
-      Number(period[2]) === solidDash?.[1],
-  );
-  check(
-    "MARCH_PERIOD.dashed is the dash the stylesheet marches on replies",
-    Number(period[3]) === replyDash?.[0] &&
-      Number(period[4]) === replyDash?.[1],
-  );
-}
 
-/* ---- the stylesheet's fallback durations match the derived ones ---------- */
+/* ---- 2. the reply march's arithmetic ------------------------------------ */
 
-/*
- * The CSS carries a literal fallback for each duration var, for the frames
- * before the viewer stamps them. A fallback that disagrees with what
- * motion.ts derives means the pre-hydration march runs at a different speed
- * than the hydrated one — a visible hitch on load, and invisible in review.
- */
-const speed = motion.match(/idleMarchSpeed:\s*([\d.]+)/);
-check("idleMarchSpeed is declared", speed !== null);
-if (speed !== null && solidPeriod !== null && replyPeriod !== null) {
-  const derived = (p) => Math.round((p / Number(speed[1])) * 1000);
-  const fallback = (name) => {
-    const m = css.match(
-      new RegExp(`var\\(--seq-march-${name},\\s*(\\d+)ms\\)`),
-    );
-    return m === null ? null : Number(m[1]);
-  };
-  check(
-    "the solid fallback duration equals period ÷ speed",
-    fallback("solid") === derived(solidPeriod),
-  );
-  check(
-    "the reply fallback duration equals period ÷ speed",
-    fallback("dashed") === derived(replyPeriod),
-  );
-  check(
-    "both kinds march at the SAME speed — a shared duration would make the shorter pattern crawl",
-    derived(solidPeriod) / solidPeriod === derived(replyPeriod) / replyPeriod,
-  );
-}
+const replyLine = ruleBody('\\[data-kind="reply"\\]\\s*\\.af-seq-line');
+check("there is a rule for idle reply lines", replyLine !== null);
 
-/* ---- the reply's resting pattern is the one it marches ------------------ */
-
+const replyDash = replyLine?.match(/stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/);
 check(
   "a reply marches the SAME 6/5 it wears at rest, so the toggle never changes what a reply is",
-  replyDash !== null && replyDash[0] === 6 && replyDash[1] === 5,
+  replyDash != null && Number(replyDash[1]) === 6 && Number(replyDash[2]) === 5,
+);
+
+const replyPeriod =
+  replyDash == null ? null : Number(replyDash[1]) + Number(replyDash[2]);
+const replyRange = dashoffsetRange("af-seq-march-dashed");
+check(
+  "the reply keyframes advance exactly one dash period (seamless loop)",
+  replyRange !== null && replyRange.from === replyPeriod,
 );
 check(
-  "the solid kinds march a high-duty dash (reads as a moving line, not a dashed one)",
-  solidDash !== null && solidDash[0] / (solidDash[0] + solidDash[1]) >= 0.6,
+  "the reply march counts down to zero (pattern travels source → target)",
+  replyRange !== null && replyRange.to === 0,
 );
 
-/* ---- reduced motion parks on the SEMANTIC pattern ----------------------- */
+const period = motion.match(
+  /MARCH_PERIOD\s*=\s*\{\s*dashed:\s*([\d.]+)\s*\+\s*([\d.]+)\s*\}/,
+);
+check("MARCH_PERIOD declares the reply dash as dash + gap", period !== null);
+if (period !== null && replyDash != null) {
+  check(
+    "MARCH_PERIOD.dashed is the dash the stylesheet actually marches",
+    Number(period[1]) === Number(replyDash[1]) &&
+      Number(period[2]) === Number(replyDash[2]),
+  );
+}
+check(
+  "MARCH_PERIOD has no `solid` entry — solid kinds must never be given a dash",
+  period !== null && !/MARCH_PERIOD\s*=\s*\{[^}]*solid:/.test(motion),
+);
 
-const reducedBlock = css.match(
+const speed = motion.match(/idleMarchSpeed:\s*([\d.]+)/);
+check("idleMarchSpeed is declared", speed !== null);
+if (speed !== null && replyPeriod !== null) {
+  const derived = Math.round((replyPeriod / Number(speed[1])) * 1000);
+  const fallback = css.match(/var\(--seq-march-dashed,\s*(\d+)ms\)/);
+  check(
+    "the stylesheet's fallback duration equals period ÷ speed (no hitch before hydration)",
+    fallback !== null && Number(fallback[1]) === derived,
+  );
+}
+
+/* ---- 3. the glint's stagger matches the stop count ---------------------- */
+
+const stops = diagram.match(/GLINT_STOPS\s*=\s*\[([^\]]*)\]/);
+check("GLINT_STOPS is declared in the renderer", stops !== null);
+const stopCount = stops === null ? null : stops[1].split(",").length;
+check(
+  "the stops span the whole line, sender to receiver",
+  stops !== null && /^\s*0\s*,/.test(stops[1]) && /,\s*1\s*$/.test(stops[1]),
+);
+
+/*
+ * The divisor is the STOP COUNT, not the count minus one. With N stops the
+ * phases must be i/N so the last stop sits one step BEFORE the wrap; dividing
+ * by N−1 gives the final stop a full-cycle delay, which puts it in phase with
+ * stop 0 and lights both ends of the line simultaneously instead of travelling.
+ */
+const divisor = glint?.match(/var\(--glint-i[^)]*\)\s*\*[^/]*\/\s*(\d+)/);
+check(
+  "the glint stagger divides by the stop count — off by one and the light appears at both ends at once",
+  divisor != null && stopCount !== null && Number(divisor[1]) === stopCount,
+);
+
+/*
+ * THE SELECTOR MUST BE ABLE TO MATCH. The glint rule is a DESCENDANT selector
+ * rooted at `.af-seq-msg`, so the gradient carrying the stops has to live
+ * inside the message's own group. It shipped once in a shared top-level
+ * <defs>, where the stops are not descendants of any message group: the rule
+ * matched nothing, no error was raised anywhere, and the light simply never
+ * ran. Everything else about that build was correct — the stops existed, the
+ * vars were stamped, the keyframes were valid — which is exactly why this
+ * needs an assertion rather than a reading.
+ */
+check(
+  "the glint rule is scoped under .af-seq-msg (so it needs the gradient nested there)",
+  /\.af-seq-msg\[data-idle\][^{]*\.af-seq-glint/.test(css),
+);
+check(
+  "the renderer defines each message's gradient INSIDE the message group, where that selector can reach it",
+  (() => {
+    // Split on the Message component: everything before it is the diagram
+    // shell, which owns the top-level <defs>. The glinting stops must appear
+    // only after that boundary — i.e. inside the per-message subtree.
+    const boundary = diagram.indexOf("function Message(");
+    if (boundary < 0) return false;
+    const shell = diagram.slice(0, boundary);
+    const perMessage = diagram.slice(boundary);
+    // The class as APPLIED, not merely mentioned: the shell legitimately
+    // names it in a doc comment, and legitimately holds the participant CARD
+    // gradients (which never glint).
+    const applied = /className="af-seq-glint"/;
+    return (
+      !applied.test(shell) &&
+      /<linearGradient/.test(perMessage) &&
+      applied.test(perMessage)
+    );
+  })(),
+);
+
+const glintFrames = css.match(/@keyframes af-seq-glint\s*\{(.*?)\n\}/s);
+check("the glint keyframes exist", glintFrames !== null);
+check(
+  "the glint returns to its base colour, so a stop's resting paint is the gradient's own",
+  glintFrames !== null &&
+    /100%\s*\{[^}]*stop-color:\s*var\(--glint-base\)/s.test(glintFrames[1]),
+);
+check(
+  "the lit window is a short passing highlight, not the whole line pulsing",
+  glintFrames !== null &&
+    (() => {
+      const lit = glintFrames[1].match(
+        /(\d+)%\s*\{\s*stop-color:\s*var\(--glint-lit\)/,
+      );
+      return lit !== null && Number(lit[1]) <= 20;
+    })(),
+);
+
+/* ---- the highlight is derived from its own base, in both themes --------- */
+
+check(
+  "the lit colour is the stop's OWN base brightened, not a fourth colour system",
+  /--glint-lit":\s*`oklch\(from \$\{base\}/.test(diagram),
+);
+check(
+  "the brightness shift is a theme token, defined in BOTH themes with opposite signs — 'brighter' is +L on dark and −L on light",
+  (() => {
+    const all = [...globals.matchAll(/--seq-glint-l:\s*(-?[\d.]+)/g)].map((m) =>
+      Number(m[1]),
+    );
+    return all.length === 2 && all[0] * all[1] < 0;
+  })(),
+);
+
+/* ---- 4. reduced motion parks on the MEANINGFUL appearance --------------- */
+
+const reduced = css.match(
   /@media \(prefers-reduced-motion: reduce\)\s*\{(.*)\n\}/s,
 );
-check("the stylesheet has a reduced-motion block", reducedBlock !== null);
+check("the stylesheet has a reduced-motion block", reduced !== null);
 check(
-  "reduced motion stops the march",
-  reducedBlock !== null &&
-    /\[data-seq-march="on"\][^{]*\.af-seq-line\s*\{[^}]*animation:\s*none/s.test(
-      reducedBlock[1],
+  "reduced motion stops the march AND the glint",
+  reduced !== null &&
+    /\.af-seq-line,[\s\S]{0,200}?\.af-seq-glint\s*\{[^}]*animation:\s*none/.test(
+      reduced[1],
     ),
 );
 check(
   "reduced motion puts replies BACK on 6/5 rather than withdrawing the dash — a dashless reply reads as a call, not a return",
-  reducedBlock !== null &&
+  reduced !== null &&
     /\[data-kind="reply"\][^{]*\.af-seq-line\s*\{[^}]*stroke-dasharray:\s*6\s+5/s.test(
-      reducedBlock[1],
+      reduced[1],
     ),
 );
 check(
   "reduced motion leaves the solid kinds solid",
-  reducedBlock !== null &&
+  reduced !== null &&
     /:not\(\[data-kind="reply"\]\)[^{]*\.af-seq-line\s*\{[^}]*stroke-dasharray:\s*none/s.test(
-      reducedBlock[1],
+      reduced[1],
     ),
 );
 
-/* ---- one stroke per line, by construction ------------------------------- */
+/* ---- 5. one stroke per line, by construction ---------------------------- */
 
-const diagram = readFileSync(
-  join(root, "src/features/sequence/components/sequence-diagram.tsx"),
-  "utf8",
-);
 check(
   "no idle OVERLAY path survives — the doubled-line bug four designs died on",
   !/af-seq-idle/.test(diagram) && !/af-seq-idle/.test(css),
 );
 check(
-  "pathLength is applied only while drawing, so the march keeps real-unit dashes",
+  "pathLength is applied only while drawing, so the reply march keeps real-unit dashes",
   /animateRank !== null \? \{ pathLength: 1 \} : \{\}/.test(diagram),
 );
 
