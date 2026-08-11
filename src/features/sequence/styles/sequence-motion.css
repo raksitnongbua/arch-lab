@@ -124,120 +124,101 @@
   }
 }
 
-/* ---- idle motion (the diagram at rest) ------------------------------------------
- * Travelling BANDS OF LIGHT riding each message line source → target — the
- * C4 viewer's focus-flow construction (viewer-canvas.tsx: dashed layers
- * sliding over a constant base via stroke-dashoffset, glow under head)
- * ported to ambient scale and the sender's lane hue, on every message that
- * is neither focused nor dimmed.
+/* ---- idle motion: the marching dash (the diagram at rest) ---------------------
+ * The message LINE ITSELF marches toward its target — React Flow's animated
+ * edge, which is the reference this was asked to match:
  *
- * THE DASHARRAY RULE, AND ITS DELIBERATE BOUNDARY. Two earlier idle designs
- * died on this stroke: a marching dash overlay read as a doubled fuzzy line
- * (two lines’ worth of stroke on one path), and the rule that followed —
- * "no dasharray on the overlay at all" — was then relaxed to its real
- * intent: what is banned is a SECOND LINE’S WORTH of stroke. These bands
- * are ~9% duty per period (head 3 of 33 path-units at three bands), a short
- * segment of light passing over the line, not a parallel line. Three
- * conditions keep it on the right side of that boundary; hold all three:
- *   1. LOW DUTY CYCLE — the lit fraction stays small (C4’s head is 9%).
- *      A longer band is the old bug wearing new clothes.
- *   2. THE BASE STROKE IS NEVER TOUCHED — its dasharray remains the
- *      sync/async/reply semantics. No shared dash, no matched pitch.
- *   3. It must never read as a parallel line at eleven resting messages.
+ *   .react-flow__edge.animated path {
+ *     stroke-dasharray: 5; animation: dashdraw 0.5s linear infinite;
+ *   }
+ *   @keyframes dashdraw { from { stroke-dashoffset: 10; } }
  *
- * Construction, per message (sequence-diagram.tsx):
- *   - TWO overlay paths — a soft blurred glow under a sharp head — with
- *     `pathLength=100`, so all dash maths are percentages of the true path
- *     (straight, dashed-base or self-loop alike). The C4 flow’s third
- *     layer (the tail) is deliberately left at focus scale: at ambient
- *     scale it read as bulk, and two layers already carry the comet shape.
- *   - A TRAIN, density scaled to length: the message’s laid pixel span
- *     picks 1–3 bands, and the bands come free — one dasharray whose
- *     period is 100/n puts n bands on one path, so the animation count
- *     stays two paths per message however long the train.
- *   - The layers’ keyframes start at each band’s own dash length and
- *     advance by exactly 100 — one WHOLE path — per cycle, which aligns
- *     every layer’s LEADING edge on one clock (the C4 flow’s trick) and
- *     makes the infinite loop seamless: 100 is a whole number of periods
- *     for any train size. Because a cycle covers the whole path, ONE
- *     `--seq-idle` is one band’s traversal at any density — the clock needs
- *     no adjustment for the band count, and must not be given one.
- *   - THE BANDS WEAR THE SENDER’S LANE COLOUR (`--seq-idle-ink`, stamped
- *     per message from the validated `--seq-lane-N` tokens): each is that
- *     service’s traffic. This does not repaint the message STROKE — the
- *     base keeps --edge at rest and --primary on focus, and the bands are
- *     suppressed on the focused message, so a lane band and a primary line
- *     never share a path.
- *   - Each message carries a deterministic negative delay (derived from
- *     its step) so the trains scatter across the cycle instead of ticking
- *     in lockstep.
+ * — verbatim from @xyflow/react 12.11.2's dist/style.css, read out of the
+ * installed package rather than the docs site (which documents only the
+ * custom animateMotion/offsetPath recipes, not the built-in edge).
  *
- * The display gate (`--seq-idle-display`, fallback none) carries THREE
- * states through one var: reduced motion (JS route — the media query below
- * is the CSS route; both must end with the bands gone, since a parked band
- * is a stray highlight, not a resting state), the user’s idle-motion
- * toggle, and the pre-mount/SSR default (hidden until the viewer stamps
- * the vars).
+ * WHY THIS SUCCEEDS WHERE FOUR DESIGNS FAILED, because the history is the
+ * whole lesson. Every earlier idle attempt put a SECOND path over the line: a
+ * marching dash tinted toward --primary, a neutral one, one pitch-matched to
+ * the reply dash, a travelling dot, then a glow-plus-head comet. Three of
+ * them read as a doubled, fuzzy line, and each time the fix was sought in the
+ * overlay's colour, pitch or duty cycle. The overlay WAS the bug. React Flow
+ * has no overlay — one stroke, wearing its own moving dash. There is now
+ * exactly one path per message line BY CONSTRUCTION rather than by keeping a
+ * second one subtle. Do not reintroduce an overlay layer here.
+ *
+ * WHAT THE DASH IS ALLOWED TO MEAN. The retired note on this block said
+ * "stroke-dasharray can only serve one master", and that is still true; the
+ * resolution is that at rest it now HAS only one master. Per kind:
+ *   - sync and async march a long dash with a small gap (10/4, ~71% duty), so
+ *     the line still reads as continuous with movement in it rather than as a
+ *     dashed line. These two are told apart by their ARROWHEAD — filled vs
+ *     open — and never by the stroke, so marching them costs no meaning.
+ *   - reply marches 6/5: the pattern it already wore at rest, unchanged, so
+ *     toggling motion never changes what a reply IS. Its lower duty beside
+ *     sync/async is what keeps "this is a return" legible while both move.
+ * The focus draw wants the same property on the same element, so the march is
+ * suppressed on the focused and animating set — the renderer withholds
+ * `data-idle` — and `pathLength` is applied ONLY while animating, because
+ * pathLength=1 renormalises dash maths to fractions of the line and would
+ * stretch a long message's dashes out of all proportion.
+ *
+ * ONE PERIOD PER CYCLE, at a shared speed: each kind's keyframes advance
+ * exactly its own dash+gap, so the loop is seamless, and lib/motion.ts
+ * derives both durations from a single `idleMarchSpeed` so a dash crosses the
+ * same pixels per second whichever pattern it belongs to. The keyframe values
+ * are CONSTANTS, not var()-driven: Chromium will not interpolate
+ * stroke-dashoffset between var()/calc() keyframe values — the animation
+ * parks on its end frame. MARCH_PERIOD in motion.ts, the dasharrays below and
+ * those constants are one fact in three places; change them together.
+ *
+ * THE GATE is `data-seq-march` on the diagram root (motion.ts's
+ * `sequenceMarchState`) rather than a custom property, because switching the
+ * march off has to withdraw the DASHARRAY as well as the animation — a
+ * stopped march still wearing its pattern would leave a sync arrow looking
+ * dashed, which in a sequence diagram means something else. Off means each
+ * kind simply wears its resting pattern: solid for sync and async, 6/5 for
+ * replies, exactly as it was before any idle motion existed.
  */
 
-.af-seq-idle {
-  display: var(--seq-idle-display, none);
-}
-
-.af-seq-idle-glow,
-.af-seq-idle-head {
-  fill: none;
-  stroke: var(
-    --seq-idle-ink,
-    color-mix(in oklch, var(--edge) 45%, var(--foreground))
-  );
-  stroke-linecap: round;
-  animation-duration: var(--seq-idle, 0ms);
+[data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line {
   animation-timing-function: linear;
   animation-iteration-count: infinite;
-  animation-delay: var(--seq-idle-delay, 0ms);
 }
 
-/* Band lengths (6 glow / 3 head, pathLength units) MUST match the
- * strokeDasharray the renderer writes per layer — change together. The
- * keyframes are per-layer CONSTANTS rather than one var()-driven set on
- * purpose: Chromium fails to interpolate stroke-dashoffset between
- * var()/calc() keyframe values (the animation sat parked on its end
- * frame), and constants also let each layer start at its own dash length —
- * the C4 flow's leading-edge trick, so glow and head share one front. */
-.af-seq-idle-glow {
-  stroke-width: 5;
-  opacity: 0.3;
-  filter: blur(2px);
-  animation-name: af-seq-idle-flow-glow;
+[data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
+  stroke-dasharray: 6 5;
+  animation-name: af-seq-march-dashed;
+  animation-duration: var(--seq-march-dashed, 1100ms);
 }
 
-.af-seq-idle-head {
-  stroke-width: 2;
-  opacity: 0.85;
-  animation-name: af-seq-idle-flow-head;
+[data-seq-march="on"]
+  .af-seq-msg[data-idle]:not([data-kind="reply"])
+  .af-seq-line {
+  stroke-dasharray: 10 4;
+  animation-name: af-seq-march-solid;
+  animation-duration: var(--seq-march-solid, 1400ms);
 }
 
-/* Each cycle advances the offset by exactly 100 — the WHOLE path, which is
- * a whole number of band periods for any train size (period = 100/n), so
- * the infinite loop stays seamless and a band always crosses the diagram in
- * one `--seq-idle`, however many ride the train. Direction = path
- * direction = source → target. */
-@keyframes af-seq-idle-flow-glow {
+/* Offset counts DOWN to zero, which walks the pattern along the path's own
+   direction — source → target for every kind, including a reply's
+   right-to-left run and a self-loop's out-down-and-back. This is React
+   Flow's direction too (its `from` is one period, its `to` the computed 0). */
+@keyframes af-seq-march-solid {
   from {
-    stroke-dashoffset: 6;
+    stroke-dashoffset: 14;
   }
   to {
-    stroke-dashoffset: -94;
+    stroke-dashoffset: 0;
   }
 }
 
-@keyframes af-seq-idle-flow-head {
+@keyframes af-seq-march-dashed {
   from {
-    stroke-dashoffset: 3;
+    stroke-dashoffset: 11;
   }
   to {
-    stroke-dashoffset: -97;
+    stroke-dashoffset: 0;
   }
 }
 
@@ -263,8 +244,16 @@
  * semantic token; the sequence renderer never names a colour.
  */
 
+/* The resting line is painted through a VAR so the gradient can be a value
+ * rather than an override: the renderer stamps `--seq-line-paint:
+ * url(#<gradient>)` per message (sender's lane hue → receiver's, muted toward
+ * --edge), and this rule's fallback keeps a flat --edge line for anything that
+ * does not (SSR before ids resolve, a message whose participants have no
+ * lane). Crucially the paint stays in the CASCADE, not on the element: an
+ * inline `stroke` would outrank the focus rule below and a focused line would
+ * keep its gradient instead of escalating to --primary. */
 .af-seq-line {
-  stroke: var(--edge);
+  stroke: var(--seq-line-paint, var(--edge));
   stroke-width: 1.5;
 }
 
@@ -381,12 +370,23 @@
   .af-seq-msg[data-animate] .af-seq-fade-in {
     animation: none;
   }
-  /* The idle bands are motion and nothing else — parked, they would be
-     stray highlights sitting on every line, so they go away entirely rather
-     than freezing mid-path (same rule as .viewer-edge-drift). The JS route
-     (sequenceMotionVars) reaches the same end through --seq-idle-display,
-     which also carries the user's toggle. */
-  .af-seq-idle {
-    display: none;
+  /* The march is motion and nothing else, so it goes away entirely rather
+     than freezing (same rule as .viewer-edge-drift). But it CANNOT park on
+     "no dash": the dash pattern is per-kind meaning, so each kind is put
+     back on its resting pattern explicitly — solid for sync/async, 6/5 for
+     replies. Withdrawing the dasharray wholesale here would quietly turn
+     every reply into a solid line, which reads as a call rather than a
+     return. `sequenceMarchState` is the JS route to the same end (it also
+     carries the user's toggle); this block holds before hydration. */
+  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line {
+    animation: none;
+  }
+  [data-seq-march="on"]
+    .af-seq-msg[data-idle]:not([data-kind="reply"])
+    .af-seq-line {
+    stroke-dasharray: none;
+  }
+  [data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
+    stroke-dasharray: 6 5;
   }
 }

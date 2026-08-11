@@ -16,6 +16,7 @@
     "check:archtext": "node scripts/archtext-check.mjs",
     "check:sequence": "node scripts/sequence-check.mjs",
     "check:sequence-layout": "node scripts/sequence-layout-check.mjs",
+    "check:sequence-motion": "node scripts/sequence-motion-check.mjs",
     "check:syntax-docs": "node scripts/syntax-docs-check.mjs",
     "check:validate-samples": "node scripts/validate-samples-check.mjs",
     "check:advisories": "node scripts/advisories-check.mjs",

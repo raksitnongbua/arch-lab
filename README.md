@@ -250,13 +250,15 @@ out; scrolling the pane pans once you zoom past fit) for reading fine
 detail. The source sits below the fold: scroll the page down to edit the
 text. An immersive mode gives the diagram the entire viewport. The diagram
 renders complete — a sequence diagram is a record of what happened, so the
-record is what you see first. At rest a train of small light bands in each
-**sender's lane colour** flows source → target along every message — that
-service's traffic, in the same visual language as the C4 viewer's focus
-flow, riding an overlay so solid, dashed and self-loop lines keep their
-exact dash semantics; longer messages carry more bands. It can be switched off from
-the zoom strip (the choice persists), and `prefers-reduced-motion` removes
-it outright, toggle or no toggle. The
+record is what you see first. At rest every message line **marches toward its
+target** — React Flow's animated-edge technique, a dash travelling along the
+line's own stroke rather than a second stroke laid over it, so there is only
+ever one line. Each line is also painted **from its sender's lane colour to
+its receiver's**, so the direction of traffic is in the colour: you can see
+which service a call left and which one it reached. The march can be switched
+off from the zoom strip (the choice persists), and `prefers-reduced-motion`
+removes it outright, toggle or no toggle — each kind falls back to the
+pattern that carries its meaning, solid for calls and dashed for returns. The
 rest of the animation budget is spent on **focus**: click a
 message (its arrow or its label) and that arrow re-draws itself and holds
 emphasised while the rest recedes; a details dock on the right (a bottom
@@ -272,6 +274,12 @@ keys walk focus through the messages in order; Escape (or empty canvas, or
 the dock's close button) clears, then a second Escape exits immersive mode.
 Under `prefers-reduced-motion` nothing draws — focus dims and the details
 dock appears instantly, which is the same information without the motion.
+
+Each participant is named **twice**, once at the head of its lifeline and
+again at the foot, the way hand-drawn sequence diagrams do it: at the bottom
+of a long flow you can tell which column is which without scrolling back up.
+The footer card is a visual repeat only — it is not a second control and not a
+second thing a screen reader announces.
 
 **Mermaid import is lossy, and says so.** Eight arrowheads collapse onto three
 kinds, `autonumber` arguments are dropped, and an `activate`/`deactivate` that
@@ -380,7 +388,8 @@ Then open <http://localhost:3000>.
 | `pnpm check:mermaid`          | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                                                                                                                               |
 | `pnpm check:archtext`         | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                                                                                                                            |
 | `pnpm check:sequence`         | Proves the sequence document format: canonical `.alab` sequence text round-trips byte-identically (fragments nested three deep, unknown fields verbatim and in position), a hand-built model survives text and back structurally, a realistic Mermaid `sequenceDiagram` imports with every supported construct, malformed inputs fail with line/column, and C4 and sequence documents never cross-detect. |
-| `pnpm check:sequence-layout`  | Proves the pure sequence layout function: participants keep model order, self-messages get their loop, a note over two participants spans both, activation bars open and close on the right steps, and a three-deep fragment nest produces boxes that strictly contain one another.                                                                                                                       |
+| `pnpm check:sequence-layout`  | Proves the pure sequence layout function: participants keep model order, self-messages get their loop, a note over two participants spans both, activation bars open and close on the right steps, a three-deep fragment nest produces boxes that strictly contain one another, and the footer card row is reserved by the canvas height rather than clipped by it.                                       |
+| `pnpm check:sequence-motion`  | Proves the idle march's cross-file arithmetic, which no type can catch: each kind's keyframes advance exactly its own dash period, `MARCH_PERIOD` agrees with the marched dasharrays, both kinds march at one speed, reduced motion parks each kind on its meaningful pattern, no overlay path survives, and the gradient stays a custom property so focus overrides it.                                  |
 | `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                                                                                                                           |
 | `pnpm check:validate-samples` | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                                                                                                                                   |
 | `pnpm check:advisories`       | Proves the [C4 review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites a reason from the C4 model.                                                                                                                                                                               |

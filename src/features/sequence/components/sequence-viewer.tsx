@@ -69,7 +69,7 @@ import type { SequenceLabFile } from "@/types";
 
 import type { LaidMessage } from "../lib/layout";
 import { layoutSequence } from "../lib/layout";
-import { sequenceMotionVars } from "../lib/motion";
+import { sequenceMarchState, sequenceMotionVars } from "../lib/motion";
 import type { SequenceFocus } from "./sequence-diagram";
 import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
 
@@ -479,10 +479,15 @@ export function SequenceViewer({
 
   // Motion vars recompute whenever the reduced-motion store flips, so
   // toggling the OS setting takes effect without a reload.
-  const motionVars = useMemo(
-    () => sequenceMotionVars(reduced, idleMotion),
-    [reduced, idleMotion],
-  );
+  const motionVars = useMemo(() => sequenceMotionVars(reduced), [reduced]);
+
+  /**
+   * The march gate, as an ATTRIBUTE rather than one of the vars above:
+   * switching it off has to withdraw a dasharray as well as an animation, and
+   * a custom property can change a value but not retract a declaration. See
+   * `sequenceMarchState`.
+   */
+  const marchState = sequenceMarchState(reduced, idleMotion);
 
   const focusedMessage =
     focus?.kind === "message"
@@ -570,6 +575,7 @@ export function SequenceViewer({
       // the exception — see the ladder comment above handleKeyDown.)
       onKeyDown={handleKeyDown}
       style={motionVars}
+      data-seq-march={marchState}
     >
       {/* No live region here — the hosting page owns the single polite
           region and focus announcements travel through `onAnnounce`. */}

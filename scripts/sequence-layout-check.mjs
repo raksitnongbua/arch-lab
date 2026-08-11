@@ -146,6 +146,37 @@ check(
   layout.lifelineTop > 0 && layout.lifelineBottom < layout.height,
 );
 
+/* ---- the footer card row ----
+ * The participant names repeated at the foot of the flow. These assertions
+ * exist because the footer changed the canvas HEIGHT, and a height that does
+ * not reserve the row is the failure mode that matters: the cards would render
+ * clipped or outside the viewBox, which the fit view would then silently
+ * letterbox away. */
+check(
+  "the footer row sits below the foot of the flow, clear of it",
+  layout.footerTop > layout.lifelineBottom,
+);
+check(
+  "the footer gap is exactly the reserved one",
+  layout.footerTop - layout.lifelineBottom === SEQ.footerGap,
+);
+check(
+  "the canvas reserves the whole footer row plus the bottom margin",
+  layout.height >= layout.footerTop + layout.footerHeight + SEQ.marginBottom,
+);
+check(
+  "no footer card is clipped by the bottom of the canvas",
+  layout.footerTop + layout.footerHeight <= layout.height,
+);
+check(
+  "a footer card is the base header height — the actor glyph is not repeated",
+  layout.footerHeight === SEQ.headerHeight,
+);
+check(
+  "the actor's header is taller than a footer card (the glyph band is header-only)",
+  layout.headerHeight > layout.footerHeight,
+);
+
 const messageCount = (function count(items) {
   let n = 0;
   for (const item of items) {

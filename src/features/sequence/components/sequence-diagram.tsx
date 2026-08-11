@@ -40,6 +40,8 @@
  * the backdrop clears focus.
  */
 
+import { useId } from "react";
+
 // Cross-feature on purpose: the tag-fill rebuild is the ONE definition of
 // "a hue at our validated card lightness" (node-colors.ts carries the full
 // rationale), and re-typing the expression here would let the two drift.
@@ -236,8 +238,21 @@ export function SequenceDiagram({
   }
   const animateToken = focusNonce % 2 === 0 ? "a" : "b";
 
-  /** Sender lane lookup for the idle comets (layout owns the assignment). */
+  /** Sender/receiver lane lookup (the layout owns the assignment). */
   const laneById = new Map(layout.participants.map((p) => [p.id, p.lane]));
+
+  /**
+   * Prefix for every gradient id this diagram mints. `useId` rather than the
+   * step alone: two diagrams on one page (the chooser's previews, a docs page
+   * showing several flows) would otherwise both define `#seq-line-3`, and an
+   * SVG `url(#…)` reference resolves against the WHOLE document — the second
+   * diagram would silently repaint the first one's lines. Deterministic and
+   * SSR-stable, which a random id would not be.
+   */
+  const gradPrefix = useId();
+  const lineGradId = (step: number) => `${gradPrefix}line${step}`;
+  const cardGradId = (participantId: string) =>
+    `${gradPrefix}card${participantId}`;
 
   const keyActivate =
     (action: () => void) => (event: React.KeyboardEvent<SVGElement>) => {
@@ -271,6 +286,87 @@ export function SequenceDiagram({
       aria-label={`Sequence diagram: ${title}. ${layout.participants.length} participants, ${layout.stepCount} messages. A text listing of every step follows the diagram.`}
       className="block"
     >
+      <defs>
+        {/* MESSAGE LINE GRADIENTS — sender's lane hue running to the
+            receiver's, so a line carries the direction of traffic in its
+            colour: you can see which service a call left and which one it
+            reached without following the arrowhead.
+
+            `gradientUnits="userSpaceOnUse"` with the message's OWN endpoints
+            is what makes the direction real: a reply runs right-to-left and
+            its gradient must too, and objectBoundingBox units would flip
+            nothing and squash a self-loop's tall box. Self-loops travel
+            out-down-back, so their gradient runs diagonally across the loop.
+
+            Both stops are MUTED toward --edge. At full lane strength a
+            resting line competes with the --primary focus line, and the
+            three-state vocabulary (--edge at rest → --primary on focus) is
+            what makes focus read as escalation rather than as one more
+            coloured line. Muting is also what keeps the gradient legible in
+            both themes: the lane hues were validated against each other and
+            the card surface, never as 1.5px strokes. */}
+        {layout.messages.map((message) => {
+          const fromLane = laneById.get(message.from);
+          const toLane = laneById.get(message.to);
+          if (fromLane === undefined || toLane === undefined) return null;
+          const x1 = message.fromX;
+          const x2 = message.self
+            ? message.fromX + SEQ.selfLoopWidth
+            : message.toX;
+          const y1 = message.y;
+          const y2 = message.self ? message.y + SEQ.selfLoopHeight : message.y;
+          const mute = (lane: number) =>
+            `color-mix(in oklch, var(--seq-lane-${lane}) 55%, var(--edge))`;
+          return (
+            <linearGradient
+              key={message.step}
+              id={lineGradId(message.step)}
+              gradientUnits="userSpaceOnUse"
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+            >
+              <stop offset="0%" stopColor={mute(fromLane)} />
+              <stop offset="100%" stopColor={mute(toLane)} />
+            </linearGradient>
+          );
+        })}
+
+        {/* CARD GRADIENTS — a vertical lift on each participant card, in that
+            card's own lane hue. Both stops are built from `tagFillCss`, the
+            audited card-lightness expression, so the gradient stays inside
+            the measured lightness band the name's contrast was validated
+            against: the top stop is the audited fill lifted slightly toward
+            --background, the bottom is the same fill leaning slightly back
+            into its lane. A gradient between two unrelated colours would put
+            the midpoint outside that band. objectBoundingBox units (the
+            default) are right here — every card wants the same top-to-bottom
+            lift regardless of its width. */}
+        {layout.participants.map((participant) => {
+          const fill = tagFillCss(`var(--seq-lane-${participant.lane})`);
+          return (
+            <linearGradient
+              key={participant.id}
+              id={cardGradId(participant.id)}
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
+              <stop
+                offset="0%"
+                stopColor={`color-mix(in oklch, ${fill} 88%, var(--background))`}
+              />
+              <stop
+                offset="100%"
+                stopColor={`color-mix(in oklch, ${fill} 88%, var(--seq-lane-${participant.lane}))`}
+              />
+            </linearGradient>
+          );
+        })}
+      </defs>
+
       {/* Backdrop — clicking empty space clears focus. Not a button: it is
           the ABSENCE of a target, and tabbing onto "nothing" would be noise
           (Escape already covers keyboard users, in the viewer). */}
@@ -425,6 +521,7 @@ export function SequenceDiagram({
           participant={participant}
           layout={layout}
           dimmed={participantDimmed(participant.id)}
+          paintId={cardGradId(participant.id)}
           onFocus={() => onFocusParticipant(participant.id)}
           onKeyDown={keyActivate(() => onFocusParticipant(participant.id))}
         />
@@ -497,9 +594,14 @@ export function SequenceDiagram({
           animateToken={animateToken}
           focused={focus?.kind === "message" && focus.step === message.step}
           dimmed={messageDimmed(message)}
-          // The idle comet wears the SENDER's lane — read off the layout's
-          // participant record, never re-derived from an index here.
-          senderLane={laneById.get(message.from) ?? null}
+          // The line's gradient, minted in <defs> above — null when either
+          // endpoint has no lane, and the CSS fallback paints a flat --edge
+          // line rather than an invalid reference.
+          paintId={
+            laneById.has(message.from) && laneById.has(message.to)
+              ? lineGradId(message.step)
+              : null
+          }
           onFocus={() => onFocusMessage(message.step)}
           onKeyDown={keyActivate(() => onFocusMessage(message.step))}
         />
@@ -574,12 +676,15 @@ function ParticipantColumn({
   participant,
   layout,
   dimmed,
+  paintId,
   onFocus,
   onKeyDown,
 }: {
   participant: LaidParticipant;
   layout: SequenceLayout;
   dimmed: boolean;
+  /** Gradient id for this card's vertical lift, or null for the flat wash. */
+  paintId: string | null;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
@@ -612,8 +717,17 @@ function ParticipantColumn({
    * identity; the lane border does now, and the actor/participant
    * distinction rides the SHAPE instead: the stick-figure glyph and the
    * taller silhouette stay.
+   *
+   * The flat wash is now the GRADIENT's fallback rather than the paint: the
+   * <defs> gradient is built from this same expression at both stops (a small
+   * lift toward --background at the top, the same lean back into the lane at
+   * the bottom), so the card gains depth without leaving the measured
+   * lightness band the name's contrast was validated against. `paintId` is
+   * null only if the diagram could not mint the gradient, and then this flat
+   * fill is exactly what shipped before.
    */
   const fill = tagFillCss(lane);
+  const cardFill = paintId === null ? fill : `url(#${paintId})`;
 
   return (
     <g
@@ -629,22 +743,55 @@ function ParticipantColumn({
       <line
         x1={x}
         y1={layout.lifelineTop}
+        /* Down to the FOOTER, not to lifelineBottom: the line should visibly
+           join the card that repeats the name, rather than stopping in the
+           gap above it. lifelineBottom stays what activation bars close
+           against — the foot of the FLOW, which is a different fact. */
         x2={x}
-        y2={layout.lifelineBottom}
+        y2={layout.footerTop}
         stroke={lane}
         strokeOpacity={0.6}
         strokeWidth={1.25}
         strokeDasharray="4 4"
       />
       {isActor ? (
-        // A minimal stick figure over the box — the actor/participant
-        // distinction the model preserves must be visible, not just stored.
-        <g stroke={lane} strokeWidth={1.5} fill="none">
-          <circle cx={x} cy={SEQ.marginTop + 5} r={4.5} />
+        /* The actor glyph: head, shoulders, arms, legs — a person rather than
+           the old head-plus-crossbar, which read as a pin. This is the
+           actor/participant distinction the model preserves, and it has to be
+           VISIBLE, not merely stored. Round caps and joins are what stop a
+           1.5px figure at this size from looking like scaffolding. */
+        <g
+          stroke={lane}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        >
+          <circle cx={x} cy={SEQ.marginTop + 4.5} r={4} />
           <path
-            d={`M ${x} ${SEQ.marginTop + 9.5} v 7 M ${x - 6} ${SEQ.marginTop + 12} h 12`}
+            d={`M ${x} ${SEQ.marginTop + 8.5} v 5.5 M ${x - 5.5} ${SEQ.marginTop + 11} h 11 M ${x} ${SEQ.marginTop + 14} l -4 4 M ${x} ${SEQ.marginTop + 14} l 4 4`}
           />
         </g>
+      ) : null}
+      {/* An outer HALO on the actor only — a second rounded rect just outside
+          the card, in its own lane at low opacity. The actor is the flow's
+          entry point and the eye should land there first; a halo lifts it
+          without a filter (an SVG drop-shadow on every card is paint the fit
+          view cannot afford) and without touching the fill, so the validated
+          contrast is untouched. Decoration, hence no pointer events. */}
+      {isActor ? (
+        <rect
+          className="pointer-events-none"
+          x={x - headerWidth / 2 - 3}
+          y={boxTop - 3}
+          width={headerWidth + 6}
+          height={boxHeight + 6}
+          rx={11}
+          fill="none"
+          stroke={lane}
+          strokeOpacity={0.28}
+          strokeWidth={1.25}
+        />
       ) : null}
       <rect
         className="af-seq-header-box"
@@ -653,7 +800,7 @@ function ParticipantColumn({
         width={headerWidth}
         height={boxHeight}
         rx={8}
-        fill={fill}
+        fill={cardFill}
         stroke={lane}
         strokeWidth={1.5}
       />
@@ -702,6 +849,45 @@ function ParticipantColumn({
         }}
         onKeyDown={onKeyDown}
       />
+
+      {/* ---- the FOOTER card ----
+          The name repeated at the foot of the lifeline, so a long flow can be
+          read at the bottom of the page without scrolling back up to learn
+          which column is which — the convention every hand-drawn sequence
+          diagram uses.
+
+          Three deliberate differences from the header. It is `aria-hidden` and
+          carries NO hit target: it is the same participant, and a second
+          control per column would double the tab stops and announce every
+          service twice for no new information (the header is the one place a
+          participant is focusable — one control per entity). It omits the
+          actor glyph, because the silhouette is an identity CUE and repeating
+          it invites reading the footer as a second, separate actor. And it
+          omits the technology line, which is metadata the header already
+          states; down here the name alone is what orients the eye. */}
+      <g aria-hidden="true" className="pointer-events-none">
+        <rect
+          className="af-seq-header-box"
+          x={x - headerWidth / 2}
+          y={layout.footerTop}
+          width={headerWidth}
+          height={layout.footerHeight}
+          rx={8}
+          fill={cardFill}
+          stroke={lane}
+          strokeWidth={1.5}
+        />
+        <text
+          x={x}
+          y={layout.footerTop + layout.footerHeight / 2 + 4}
+          textAnchor="middle"
+          fontSize={SEQ.nameFontSize}
+          fontWeight={600}
+          fill="var(--node-foreground)"
+        >
+          {participant.name}
+        </text>
+      </g>
     </g>
   );
 }
@@ -717,7 +903,7 @@ function Message({
   animateToken,
   focused,
   dimmed,
-  senderLane,
+  paintId,
   onFocus,
   onKeyDown,
 }: {
@@ -728,8 +914,8 @@ function Message({
   animateToken: "a" | "b";
   focused: boolean;
   dimmed: boolean;
-  /** The sender's colour lane (LaidParticipant.lane), for the idle comet. */
-  senderLane: number | null;
+  /** Gradient id for this line's sender→receiver paint, or null for --edge. */
+  paintId: string | null;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
@@ -775,18 +961,44 @@ function Message({
 
   const ariaLabel = `Step ${message.step}: ${message.from} to ${message.to}, ${kind}${self ? ", self-message" : ""} — ${message.label}`;
 
+  /**
+   * At rest, and therefore marching. All three exclusions are deliberate: the
+   * focus draw owns stroke-dashoffset on the animating set (two motions on one
+   * wire reads as a glitch), a focused-and-held message keeps its steady
+   * emphasis rather than fidgeting, and a dimmed message is explicitly not
+   * what the reader asked about — motion there would defeat the dimming. With
+   * nothing focused, that means every message marches.
+   */
+  const idle = animateRank === null && !dimmed && !focused;
+
   return (
     <g
       className={cn("af-seq-msg af-seq-dimmable", dimmed && "af-seq-dim")}
       data-focused={focused || undefined}
       data-animate={animateRank !== null ? animateToken : undefined}
-      // The rank rides along as a custom property so the stylesheet can turn
-      // it into a delay (`rank × --seq-stagger`) without a per-element
-      // inline millisecond — durations stay owned by lib/motion.ts.
+      // The kind picks which dash pattern marches (the stylesheet's march
+      // block); replies keep the 6/5 they already wear, the solid kinds get a
+      // long dash and a small gap.
+      data-kind={kind}
+      // AT REST — neither focused, animating, nor dimmed — and therefore
+      // marching. The gate lives here rather than in a CSS :not() chain
+      // because "at rest" is a fact about the focus MODEL (three separate
+      // states collapse into it), and the renderer already knows all three.
+      data-idle={idle ? "" : undefined}
       style={
-        animateRank !== null
-          ? ({ "--seq-rank": animateRank } as React.CSSProperties)
-          : undefined
+        {
+          // The rank becomes a stagger delay (`rank × --seq-stagger`) in CSS,
+          // so no per-element millisecond appears here — durations stay owned
+          // by lib/motion.ts.
+          ...(animateRank !== null ? { "--seq-rank": animateRank } : {}),
+          // The sender→receiver gradient, as a VALUE the .af-seq-line rule
+          // consumes. Deliberately not `stroke`: an inline stroke would
+          // outrank the focus rule and a focused line would keep its gradient
+          // instead of escalating to --primary.
+          ...(paintId !== null
+            ? { "--seq-line-paint": `url(#${paintId})` }
+            : {}),
+        } as React.CSSProperties
       }
     >
       {kind === "reply" ? (
@@ -803,78 +1015,15 @@ function Message({
           className="af-seq-line af-seq-draw"
           d={linePath}
           fill="none"
-          pathLength={1}
+          /* pathLength=1 normalises the draw so every arrow draws in the same
+             time regardless of span — but it also renormalises ALL dash maths
+             on this path, which would turn the march's real-unit 10/4 into
+             fractions of the line and stretch a long message's dashes. The
+             two states are mutually exclusive, so the attribute is present
+             only while drawing. */
+          {...(animateRank !== null ? { pathLength: 1 } : {})}
         />
       )}
-
-      {/* The IDLE FLOW — a train of light bands riding this message's line,
-          the C4 focus-flow construction at ambient scale (sequence-motion
-          .css's .af-seq-idle block carries the full design notes and the
-          deliberately-relaxed dasharray boundary). Two overlay layers on
-          the exact linePath — blurred glow under a sharp head — with
-          `pathLength=100`, so the dash maths are percentages of the true
-          path on straight, dashed-base and self-loop geometry alike.
-
-          TRAIN DENSITY comes from the LAID geometry, not a constant: the
-          message's pixel span picks 1–3 bands (a cross-diagram call can
-          carry three; an adjacent-participant hop stays uncrowded), and
-          the bands cost nothing — one dasharray whose period is 100/n puts
-          n bands on a single path, so this is still just two animated
-          elements per message. The per-layer band lengths here (glow 6,
-          head 3) MUST match the `from` offsets of af-seq-idle-flow-glow /
-          -head in sequence-motion.css, which are those same lengths — a
-          layer whose keyframes disagree with its dasharray drifts out of
-          the shared leading edge. Change them together.
-
-          The negative delay is deterministic per message (step × a number
-          sharing no factor with the cycle) so trains scatter instead of
-          ticking in lockstep — stable across re-renders because the step
-          is model order, not a render index.
-          Rendered only while the message is at rest: the focus draw takes
-          over on the animating set (two lights on one wire reads as a
-          glitch), a focused-and-held message keeps its steady emphasis, and
-          a dimmed message is explicitly not what the reader asked about —
-          motion would defeat the dimming. With nothing focused that means
-          every message carries a train. */}
-      {animateRank === null && !dimmed && !focused
-        ? (() => {
-            // Laid span in pixels — the self-loop's three segments summed.
-            const span = self
-              ? SEQ.selfLoopWidth * 2 + SEQ.selfLoopHeight
-              : Math.abs(toX - fromX);
-            const bands = span >= 640 ? 3 : span >= 300 ? 2 : 1;
-            const period = 100 / bands;
-            return (
-              <g
-                aria-hidden="true"
-                className="af-seq-idle pointer-events-none"
-                style={
-                  {
-                    "--seq-idle-delay": `${-(message.step * 733)}ms`,
-                    // Var-to-var indirection: the lane token itself stays
-                    // the single source of the colour.
-                    ...(senderLane !== null
-                      ? { "--seq-idle-ink": `var(--seq-lane-${senderLane})` }
-                      : {}),
-                  } as React.CSSProperties
-                }
-              >
-                <path
-                  className="af-seq-idle-glow"
-                  d={linePath}
-                  pathLength={100}
-                  strokeDasharray={`${6} ${period - 6}`}
-                />
-                <path
-                  className="af-seq-idle-head"
-                  d={linePath}
-                  pathLength={100}
-                  strokeDasharray={`${3} ${period - 3}`}
-                />
-              </g>
-            );
-          })()
-        : null}
 
       {kind === "sync" ? (
         <path className="af-seq-head af-seq-head-fill" d={filledHead} />

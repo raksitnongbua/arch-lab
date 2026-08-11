@@ -37,16 +37,34 @@ export const SEQUENCE_DURATIONS = {
    * viewer's edgeFocus escalation feel). */
   focusFade: 180,
   /**
-   * The idle flow's clock: milliseconds for one band to TRAVERSE the path
-   * source → target. The keyframes advance one whole path (100 units) per
-   * cycle, so this holds for every message regardless of how many bands
-   * ride its train — density lives entirely in the dash PERIOD, not the
-   * clock. Slow on purpose — eleven trains run at once. (The construction
-   * is the C4 focus flow at ambient scale; see the .af-seq-idle block in
-   * sequence-motion.css for the design and the retired-designs history.)
+   * The idle march's SPEED, in user units per second — React Flow's animated
+   * edge (`stroke-dasharray: 5; animation: dashdraw .5s linear infinite`,
+   * i.e. one 10-unit period every 500ms = 20 u/s) at half rate, because
+   * theirs animates one hovered edge on demand and ours runs on every
+   * message at once, full diagram width.
+   *
+   * A SPEED rather than a duration, because the two kinds march different
+   * dash PERIODS (see MARCH_PERIOD): a shared duration would make the
+   * shorter-period pattern crawl. Durations are derived below so a dash
+   * crosses the same pixels per second whatever pattern it belongs to.
    */
-  idleTravel: 4200,
+  idleMarchSpeed: 10,
 } as const;
+
+/**
+ * Dash period per message kind, in user units — `dash + gap`, which is
+ * exactly how far the pattern must travel to look unchanged, and therefore
+ * the offset one animation cycle advances.
+ *
+ * These MUST match the `stroke-dasharray` the stylesheet marches for each
+ * kind, and the `from` value of that kind's keyframes. All three live
+ * together in the `.af-seq-line` march block in sequence-motion.css; this
+ * object exists only to derive the durations. Solid kinds (sync, async) get
+ * a long dash and a small gap so the line still reads as continuous with
+ * movement in it; replies keep the 6/5 pattern that IS their identity at
+ * rest, so toggling motion never changes what a reply looks like.
+ */
+const MARCH_PERIOD = { solid: 10 + 4, dashed: 6 + 5 } as const;
 
 /**
  * The custom-property map the viewer stamps on the diagram root. Under
@@ -60,28 +78,49 @@ export const SEQUENCE_DURATIONS = {
  * disagree with the one React rendered with — the same "one source of truth
  * per rule" discipline as everything else in this feature.
  */
-export function sequenceMotionVars(
-  reduced: boolean,
-  /** The user's idle-motion toggle (viewer state, persisted). */
-  idleMotion: boolean,
-): Record<string, string> {
+export function sequenceMotionVars(reduced: boolean): Record<string, string> {
   const ms = (value: number) => `${reduced ? 0 : value}ms`;
+  /**
+   * A dash period's cycle time at the shared march speed. NOT routed through
+   * `ms()`: the march is withdrawn wholesale by `sequenceMarchState` rather
+   * than parked, so it never needs a 0ms duration — and a 0ms one would be
+   * an infinitely fast animation rather than a still line.
+   */
+  const marchMs = (period: number) =>
+    `${Math.round((period / SEQUENCE_DURATIONS.idleMarchSpeed) * 1000)}ms`;
   return {
     "--seq-draw": ms(SEQUENCE_DURATIONS.messageDraw),
     "--seq-head": ms(SEQUENCE_DURATIONS.headFade),
     "--seq-head-delay": ms(SEQUENCE_DURATIONS.headDelay),
     "--seq-stagger": ms(SEQUENCE_DURATIONS.focusStagger),
     "--seq-focus": ms(SEQUENCE_DURATIONS.focusFade),
-    "--seq-idle": ms(SEQUENCE_DURATIONS.idleTravel),
-    // The idle marker is the one animation a 0ms duration cannot park
-    // meaningfully: it is motion and NOTHING else, so its zero state is a
-    // stray dot sitting on the line, not a natural frame. It is therefore
-    // GATED BY DISPLAY, and this one var carries both reasons to hide it:
-    // reduced motion (which must win outright — the stylesheet's own
-    // `prefers-reduced-motion` block reaches the same end for the pure-CSS
-    // route) and the user's idle-motion toggle. The stylesheet's fallback
-    // for this var is `none`, so SSR markup shows no marker until the
-    // viewer mounts — the same contract as the 0ms duration fallbacks.
-    "--seq-idle-display": reduced || !idleMotion ? "none" : "inline",
+    // One period per cycle, at a shared speed — see MARCH_PERIOD.
+    "--seq-march-solid": marchMs(MARCH_PERIOD.solid),
+    "--seq-march-dashed": marchMs(MARCH_PERIOD.dashed),
   };
+}
+
+/**
+ * Whether the idle march runs — stamped as `data-seq-march` on the diagram
+ * root, NOT as a custom property, and that distinction is load-bearing.
+ *
+ * The march applies two declarations together: the dash pattern AND the
+ * animation that moves it. Both must vanish when it is off, because the dash
+ * is not decoration — a stopped march that kept its pattern would leave a
+ * `sync` arrow looking dashed, which in a sequence diagram means something
+ * else entirely (see the march block in sequence-motion.css). A var can
+ * switch a VALUE but cannot withdraw a declaration, and the pattern is also
+ * per-kind, so the two conditions multiply: an attribute on the root lets one
+ * selector gate whichever per-kind rule matched.
+ *
+ * Reduced motion wins outright over the user's toggle here, and the
+ * stylesheet's own `prefers-reduced-motion` block is the pure-CSS route to
+ * the same end (belt and braces: this one is React state, that one holds
+ * before hydration).
+ */
+export function sequenceMarchState(
+  reduced: boolean,
+  idleMotion: boolean,
+): "on" | "off" {
+  return reduced || !idleMotion ? "off" : "on";
 }

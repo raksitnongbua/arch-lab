@@ -72,6 +72,15 @@ export const SEQ = {
 
   /** Vertical gap between the header row and the first item. */
   headerGap: 24,
+  /**
+   * Gap between the foot of the lifelines and the FOOTER card row — the
+   * participant names repeated at the bottom, so a long flow stays readable
+   * without scrolling back up to learn which column is which. The footer is
+   * a plain card (no actor glyph: the silhouette is an identity cue, and
+   * repeating it would claim the actor is a second participant), so its
+   * height is the base `headerHeight` and never the actor-taller one.
+   */
+  footerGap: 12,
 
   rowMessage: 44,
   rowSelf: 64,
@@ -266,6 +275,16 @@ export interface SequenceLayout {
   headerHeight: number;
   lifelineTop: number;
   lifelineBottom: number;
+  /**
+   * Top of the FOOTER card row (the repeated participant names). Lifelines
+   * run from `lifelineTop` down to here, so they visibly join the footer
+   * instead of stopping short of it. Kept SEPARATE from `lifelineBottom`,
+   * which stays the frontier open activation bars close against — a bar must
+   * end at the foot of the flow, not run down through the gap into the card.
+   */
+  footerTop: number;
+  /** Height of a footer card — the base header height, glyph excluded. */
+  footerHeight: number;
   participants: LaidParticipant[];
   messages: LaidMessage[];
   notes: LaidNote[];
@@ -713,13 +732,17 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
   }
 
   const viewMinX = Math.floor(Math.min(0, minX - 8));
+  const footerHeight = SEQ.headerHeight;
+  const footerTop = lifelineBottom + SEQ.footerGap;
   return {
     width: Math.ceil(maxX + SEQ.marginX - viewMinX),
-    height: Math.ceil(lifelineBottom + SEQ.marginBottom),
+    height: Math.ceil(footerTop + footerHeight + SEQ.marginBottom),
     minX: viewMinX,
     headerHeight,
     lifelineTop,
     lifelineBottom,
+    footerTop,
+    footerHeight,
     participants,
     messages,
     notes,
