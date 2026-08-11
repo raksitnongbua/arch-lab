@@ -142,9 +142,9 @@
  *     installed package rather than the docs site, which documents only the
  *     custom animateMotion/offsetPath recipes and not the built-in edge.)
  *
- *   - SYNC AND ASYNC keep one unbroken SOLID line, and a LIGHT travels along
- *     it instead: each stop of the line's own gradient brightens in turn,
- *     staggered so the bright band slides sender → target.
+ *   - SYNC AND ASYNC keep one unbroken SOLID line, and the C4 viewer's COMET
+ *     travels along it instead — glow, tail and head, C4's own dash geometry
+ *     at a smaller scale and a slower clock (see the comet block below).
  *
  * WHY NOT MARCH EVERYTHING. It was tried, and it was wrong. Marching a solid
  * arrow means giving it a dasharray, and on a sequence diagram "dashed"
@@ -194,7 +194,7 @@
 [data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
   stroke-dasharray: 6 5;
   animation-name: af-seq-march-dashed;
-  animation-duration: var(--seq-march-dashed, 1833ms);
+  animation-duration: var(--seq-march-dashed, 2750ms);
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
@@ -255,28 +255,39 @@
      drift from the colour of the line it rides. */
   stroke: var(--seq-line-paint, var(--edge));
   stroke-linecap: round;
-  animation-duration: var(--seq-flow, 2600ms);
+  animation-duration: var(--seq-flow, 4200ms);
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
 
+/* SCALED DOWN from C4's widths (7 / 2.5 / 3), which is the one dimension that
+ * did NOT transfer verbatim after all. C4 shows its comet on the single edge
+ * you selected, where a 7px halo over a 1.5px line is emphasis; here eight
+ * comets run at once on a diagram whose lines are 44px apart, and at that
+ * density the halo stopped being light and became weather. The GEOMETRY is
+ * still C4's — the dasharrays and offsets below are asserted against C4's own
+ * stylesheet — so this is the same comet at a smaller scale, not a different
+ * one. The glow shrinks hardest because a blurred band grows visually faster
+ * than its stroke-width suggests. */
 .af-seq-flow-glow {
-  stroke-width: 7;
-  opacity: 0.35;
-  filter: blur(2.5px);
+  stroke-width: 4;
+  opacity: 0.3;
+  filter: blur(1.5px);
   stroke-dasharray: 30 70;
   animation-name: af-seq-flow-glow;
 }
 
 .af-seq-flow-tail {
-  stroke-width: 2.5;
-  opacity: 0.5;
+  stroke-width: 1.75;
+  opacity: 0.45;
   stroke-dasharray: 22 78;
   animation-name: af-seq-flow-tail;
 }
 
+/* Still wider than the 1.5 line it rides, or the head would not read as a
+   head — this is the floor, not a value to keep trimming. */
 .af-seq-flow-head {
-  stroke-width: 3;
+  stroke-width: 2;
   stroke-dasharray: 9 91;
   animation-name: af-seq-flow-head;
 }

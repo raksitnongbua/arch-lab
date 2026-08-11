@@ -39,15 +39,16 @@ export const SEQUENCE_DURATIONS = {
   /**
    * The reply dash's march SPEED, in user units per second — React Flow's
    * animated edge (`stroke-dasharray: 5; animation: dashdraw .5s linear
-   * infinite`, i.e. one 10-unit period every 500ms = 20 u/s) at under a third
-   * of that rate, because theirs animates one hovered edge on demand and ours
-   * runs continuously on every reply, full diagram width.
+   * infinite`, i.e. one 10-unit period every 500ms = 20 u/s) at a fifth of
+   * that rate, because theirs animates one hovered edge on demand and ours
+   * runs continuously on every reply, full diagram width. Ambient motion has a
+   * much lower speed ceiling than motion you asked for by pointing at it.
    *
    * A SPEED rather than a duration so the derived cycle time always matches
    * the pattern it moves: change the dash and the duration follows, instead of
    * a hand-tuned pair silently drifting into a crawl.
    */
-  idleMarchSpeed: 6,
+  idleMarchSpeed: 4,
 
   /**
    * One full traversal of the COMET on a solid line, in ms.
@@ -64,7 +65,7 @@ export const SEQUENCE_DURATIONS = {
    * `check:sequence-motion` enforces exactly that: bands identical to C4's,
    * clock strictly slower, so neither half of the intent can quietly rot.
    */
-  idleFlow: 2600,
+  idleFlow: 4200,
 } as const;
 
 /**
