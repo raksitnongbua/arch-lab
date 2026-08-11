@@ -84,6 +84,19 @@ export const SEQ = {
 
   rowMessage: 44,
   rowSelf: 64,
+
+  /**
+   * The message CLICK TARGET's bands, as distances from the arrow's y. Here
+   * rather than in the renderer because they are coupled to `rowMessage`, not
+   * free: a row's line band and the NEXT row's label band must never meet, or
+   * the lower target steals clicks meant for the upper one's label — and only
+   * these three numbers plus the row height decide that. `check:sequence-
+   * layout` asserts the gutter, so widening one of these fails loudly instead
+   * of silently swallowing a neighbour's clicks.
+   */
+  hitLineBand: 13,
+  hitLabelTop: 26,
+  hitLabelBottom: 3,
   selfLoopWidth: 44,
   selfLoopHeight: 26,
 

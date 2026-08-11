@@ -64,7 +64,6 @@ import {
 } from "react";
 import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import type { SequenceLabFile } from "@/types";
 
 import type { LaidMessage } from "../lib/layout";
@@ -345,7 +344,7 @@ export function SequenceViewer({
     writeIdleMotion(next);
     onAnnounce(
       next
-        ? "Idle motion on — bands of light in each sender's colour flow along its messages."
+        ? "Idle motion on — every message line marches toward its target."
         : "Idle motion off — the diagram holds still until you focus something.",
     );
   }, [onAnnounce]);
@@ -354,8 +353,13 @@ export function SequenceViewer({
    * FOCUS FOLLOWS SCROLL: clicking a thing must never hide that thing. The
    * dock overlays the pane's right edge (its bottom edge below `md`), so
    * when a freshly focused message or participant sits in the covered
-   * strip, nudge the pane's scroll by exactly the overlap — the box-content
-   * spacer in the render reserves the room this nudge scrolls into.
+   * strip, nudge the pane's scroll by exactly the overlap. This bites when
+   * the pane genuinely scrolls — a numeric zoom, where the SVG is wider than
+   * the pane. In fit mode the SVG is exactly pane-sized, so there is nothing
+   * to scroll and this is a no-op by arithmetic rather than by a guard (the
+   * scrollBy simply has nowhere to go), which is the correct outcome: fit
+   * mode must not scroll, because scrolling implies content off-screen and
+   * fit's whole promise is that there is none.
    * Runs per focus GESTURE (`rawFocus` includes the nonce, so re-clicks
    * count) in an effect AFTER the commit that mounted the dock, measuring
    * the real dock rect rather than assuming a breakpoint. DOM scrolling
@@ -589,29 +593,35 @@ export function SequenceViewer({
           role="application"
           aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages, participants and fragment chips are buttons — Tab reaches them."
         >
-          {/* The dock SPACER. In fit mode the SVG fills this wrapper's
-              content box on BOTH axes (100% × 100%, "meet"), so with the
-              dock overlaying the pane's right edge there is NO natural
-              overflow to scroll — the covered strip would be unreachable.
-              This wrapper is `box-content`, so adding right padding equal
-              to the dock's width EXTENDS its border-box past 100% without
-              changing the content box the SVG is sized by: the diagram's
-              geometry stays byte-identical (no rescale, no shift — "fit"
-              means fit the pane, never fit-minus-the-dock) while the pane
-              gains real horizontal overflow the user can scroll. Same trick
-              vertically for the bottom sheet below `md`. When ZOOMED to a
-              numeric scale the wrapper hugs the now-overflowing SVG
-              (`w-max`) and the padding appends after it, so the covered
-              strip stays reachable there too. The padding pairs 1:1 with
-              the dock's dimensions — md:pr-72 ↔ md:w-72, max-md:pb-72 ↔
-              max-md:max-h-72 — change one and you must change the other. */}
-          <div
-            className={cn(
-              "box-content",
-              zoom === "fit" ? "h-full w-full" : "w-max",
-              dockOpen && "max-md:pb-72 md:pr-72",
-            )}
-          >
+          {/* Sized to the pane in fit mode, hugging the SVG when zoomed.
+              Nothing is reserved for the dock, and that is the fix for a
+              two-part bug rather than a simplification.
+
+              What used to be here: a `box-content` wrapper with right padding
+              equal to the dock's width, meant to give a pane-fitted SVG some
+              overflow to scroll so the strip under the dock stayed reachable.
+              It cost more than it bought. Extending the border box past 100%
+              gave the pane a permanent horizontal SCROLLBAR the moment
+              anything was focused, and that scrollbar consumed pane height,
+              which made "meet" re-fit the whole diagram a few percent SMALLER
+              — so clicking a message both grew a scrollbar and quietly
+              rescaled the drawing, which is precisely the reflow-jump the
+              overlay was chosen to avoid.
+
+              It was also usually reserving nothing: fit scales by
+              `min(paneW/vbW, paneH/vbH)`, and a tall flow is height-bound, so
+              the drawing sits centred with horizontal slack on both sides and
+              the dock overlays empty canvas. Reserving a dock's width of
+              scroll room for a strip that is not covered is pure cost.
+
+              The trade, stated plainly: when a diagram IS wide enough to run
+              under the dock, that strip is now covered until the dock is
+              closed (Escape, its close button, or clicking the canvas) or the
+              view is zoomed, where the pane scrolls naturally and the
+              focus-follows nudge above pulls the focused element clear. That
+              is ordinary inspector-over-canvas behaviour, and it beats
+              rescaling the diagram every time someone clicks. */}
+          <div className={zoom === "fit" ? "h-full w-full" : "w-max"}>
             <SequenceDiagram
               layout={layout}
               title={file.metadata.title}
@@ -721,20 +731,17 @@ export function SequenceViewer({
             rescale/shift every lifeline the instant something is clicked —
             a reflow-jump that undoes the point of clicking. Overlaying
             keeps the diagram's geometry byte-identical ("fit" means fit the
-            pane, never re-fit around the dock). What makes the covered
-            strip REACHABLE is not the overlay itself (a pane-fitted SVG has
-            no natural overflow): it is the box-content SPACER inside the
-            pane, which reserves scroll room equal to the dock's footprint,
-            plus the focus-follows effect above that nudges a freshly
-            focused element out from under the dock. The aside UNMOUNTS when
-            nothing is focused — no dead space reserved.
+            pane, never re-fit around the dock), and nothing in the pane
+            reserves room for it — see the wrapper above for why the spacer
+            that used to do so was worse than the problem it solved. The
+            aside UNMOUNTS when nothing is focused, so it costs nothing when
+            closed.
 
             Below `md` a side dock would cover most of the diagram, so it
-            becomes a bottom SHEET (same overlay + spacer reasoning, other
-            edge — hence the fixed max-h-72 that the spacer's pb-72 mirrors)
-            — and since it lives inside the diagram section it always sits
-            ABOVE the source pane. Appearing is a state change, not motion:
-            no animation, so nothing new to park under reduced motion. */}
+            becomes a bottom SHEET (same overlay reasoning, other edge) — and
+            since it lives inside the diagram section it always sits ABOVE the
+            source pane. Appearing is a state change, not motion: no
+            animation, so nothing new to park under reduced motion. */}
         {dockOpen ? (
           <aside
             ref={dockRef}

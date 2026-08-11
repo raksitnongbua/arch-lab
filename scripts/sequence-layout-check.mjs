@@ -146,6 +146,34 @@ check(
   layout.lifelineTop > 0 && layout.lifelineBottom < layout.height,
 );
 
+/* ---- message click targets never poach a neighbour's ----
+ * Each message's target is a line band (y ± hitLineBand) plus a label band
+ * (y − hitLabelTop … y − hitLabelBottom) sitting ABOVE the arrow. Two adjacent
+ * rows therefore approach each other twice, and if either pair meets, the
+ * lower message swallows clicks aimed at the upper one's label — a bug that
+ * looks like "clicking the label focuses the wrong message" and is invisible
+ * in review. These assert the gutter with the SAME constants the renderer
+ * draws with, so enlarging a target fails here first. */
+check(
+  "a row's line band clears the next row's label band",
+  SEQ.hitLineBand + SEQ.hitLabelTop < SEQ.rowMessage,
+);
+check(
+  "the label band sits entirely above its own arrow",
+  SEQ.hitLabelBottom > 0 && SEQ.hitLabelTop > SEQ.hitLabelBottom,
+);
+check(
+  "no two adjacent messages have overlapping click targets in the real layout",
+  layout.messages.every((m, i, all) => {
+    if (i === 0) return true;
+    const prev = all[i - 1];
+    if (prev.self || m.self) return true; // taller row, different geometry
+    const prevLineBottom = prev.y + SEQ.hitLineBand;
+    const thisLabelTop = m.y - SEQ.hitLabelTop;
+    return prevLineBottom < thisLabelTop;
+  }),
+);
+
 /* ---- the footer card row ----
  * The participant names repeated at the foot of the flow. These assertions
  * exist because the footer changed the canvas HEIGHT, and a height that does

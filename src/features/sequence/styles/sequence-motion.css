@@ -351,6 +351,42 @@
   text-decoration: underline;
 }
 
+/* Messages and participants get the same courtesy — and until now they did
+ * not, which was the real discoverability gap: fragment chips announced
+ * themselves on hover while the messages, the primary thing to click, gave no
+ * sign they were targets at all. A pointer cursor alone is a poor signal on a
+ * dense drawing, because it appears over hit regions that reach well past the
+ * ink and never says WHICH element it found.
+ *
+ * Hover is deliberately a WEAKER version of focus, so the two read as one
+ * escalation rather than two vocabularies: hover thickens the line and bolds
+ * the label but leaves the sender→receiver gradient alone; focus takes it to
+ * --primary at a heavier weight. Keyboard focus keeps its own --ring stroke
+ * above. Nothing here moves, so there is no reduced-motion branch to write.
+ *
+ * :has() on the group because the painted line is not the element being
+ * hovered — the invisible hit region is (the same indirection the fragment
+ * rules above rely on). */
+.af-seq-msg:has(.af-seq-hit:hover) .af-seq-line {
+  stroke-width: 2;
+}
+
+.af-seq-msg:has(.af-seq-hit:hover) .af-seq-label {
+  font-weight: 600;
+}
+
+/* The head is a filled or stroked triangle depending on kind, so hover has to
+ * reach both paint channels to keep an arrowhead in step with its line. */
+.af-seq-msg:has(.af-seq-hit:hover) .af-seq-head-line {
+  stroke-width: 2;
+}
+
+/* Participant cards — header and footer alike, since the footer is a real
+ * pointer target for the same action. */
+.af-seq-participant:has(.af-seq-hit:hover) .af-seq-header-box {
+  stroke-width: 2.25;
+}
+
 /* ---- reduced motion ---------------------------------------------------------
  * The `--seq-*` properties are already 0ms (lib/motion.ts zeroes them), and
  * the global backstop in globals.css collapses anything that slips through.

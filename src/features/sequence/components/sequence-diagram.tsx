@@ -856,18 +856,23 @@ function ParticipantColumn({
           which column is which — the convention every hand-drawn sequence
           diagram uses.
 
-          Three deliberate differences from the header. It is `aria-hidden` and
-          carries NO hit target: it is the same participant, and a second
-          control per column would double the tab stops and announce every
-          service twice for no new information (the header is the one place a
-          participant is focusable — one control per entity). It omits the
-          actor glyph, because the silhouette is an identity CUE and repeating
-          it invites reading the footer as a second, separate actor. And it
-          omits the technology line, which is metadata the header already
-          states; down here the name alone is what orients the eye. */}
-      <g aria-hidden="true" className="pointer-events-none">
+          It CLICKS like the header — focusing this participant — because at
+          the bottom of a long flow the footer is the card under the reader's
+          cursor, and a card that looks identical to a clickable one but is
+          inert is worse than no card. But it is `aria-hidden` and NOT a tab
+          stop: it is the same participant and the same action, so a second
+          announced control would double every column's tab stops and name
+          every service twice for no new information. A redundant POINTER
+          affordance for an action that already has an accessible control is
+          exactly the case where hiding it from the tree is correct.
+
+          It omits the actor glyph, because the silhouette is an identity CUE
+          and repeating it invites reading the footer as a second, separate
+          actor. And it omits the technology line, which is metadata the
+          header already states; down here the name alone orients the eye. */}
+      <g aria-hidden="true">
         <rect
-          className="af-seq-header-box"
+          className="af-seq-header-box pointer-events-none"
           x={x - headerWidth / 2}
           y={layout.footerTop}
           width={headerWidth}
@@ -884,9 +889,21 @@ function ParticipantColumn({
           fontSize={SEQ.nameFontSize}
           fontWeight={600}
           fill="var(--node-foreground)"
+          className="pointer-events-none"
         >
           {participant.name}
         </text>
+        <rect
+          className="af-seq-hit af-seq-hit-region"
+          x={x - headerWidth / 2}
+          y={layout.footerTop}
+          width={headerWidth}
+          height={layout.footerHeight}
+          onClick={(event) => {
+            event.stopPropagation();
+            onFocus();
+          }}
+        />
       </g>
     </g>
   );
@@ -945,19 +962,23 @@ function Message({
    * bounds are EXACT — the old 18px-stroke trick would halo 9px past every
    * edge and let a label box steal clicks from its neighbour.
    *
-   * Bounding: message rows are 44px tall with the arrow mid-row, so this
-   * row's territory is y±22. The line band is y±10; the label band
-   * (y−24 … y−4, width from the layout's own reserved `labelWidth`) hugs the
-   * text and stops 10px short of the arrow above (its line band ends at
-   * y−34) — close together, never overlapping. Self-messages get the loop's
-   * bounding box plus the label hanging to its right.
+   * Bounding: the band sizes live in SEQ (`hitLineBand`, `hitLabelTop`,
+   * `hitLabelBottom`) because they are coupled to `rowMessage` rather than
+   * free — two ADJACENT rows' targets must never meet, or the lower one steals
+   * the clicks meant for the upper one's label. `check:sequence-layout`
+   * asserts the gutter that separates them, so these cannot be widened by
+   * feel without a failing check.
+   *
+   * Self-messages sit in the taller `rowSelf` and get the loop's bounding box
+   * plus the label hanging to its right, so they can afford a little more.
    */
   const w = message.labelWidth;
+  const band = SEQ.hitLineBand;
   const hitPath = self
-    ? `M ${fromX - 4} ${y - 10} H ${fromX + SEQ.selfLoopWidth + 10} V ${y + SEQ.selfLoopHeight + 10} H ${fromX - 4} Z ` +
-      `M ${labelX - 2} ${y + SEQ.selfLoopHeight / 2 - 12} H ${labelX + w} V ${y + SEQ.selfLoopHeight / 2 + 10} H ${labelX - 2} Z`
-    : `M ${Math.min(fromX, toX) - 6} ${y - 10} H ${Math.max(fromX, toX) + 6} V ${y + 10} H ${Math.min(fromX, toX) - 6} Z ` +
-      `M ${labelX - w / 2} ${y - 24} H ${labelX + w / 2} V ${y - 4} H ${labelX - w / 2} Z`;
+    ? `M ${fromX - 6} ${y - band} H ${fromX + SEQ.selfLoopWidth + 12} V ${y + SEQ.selfLoopHeight + band} H ${fromX - 6} Z ` +
+      `M ${labelX - 4} ${y + SEQ.selfLoopHeight / 2 - 14} H ${labelX + w} V ${y + SEQ.selfLoopHeight / 2 + 12} H ${labelX - 4} Z`
+    : `M ${Math.min(fromX, toX) - 8} ${y - band} H ${Math.max(fromX, toX) + 8} V ${y + band} H ${Math.min(fromX, toX) - 8} Z ` +
+      `M ${labelX - w / 2} ${y - SEQ.hitLabelTop} H ${labelX + w / 2} V ${y - SEQ.hitLabelBottom} H ${labelX - w / 2} Z`;
 
   const ariaLabel = `Step ${message.step}: ${message.from} to ${message.to}, ${kind}${self ? ", self-message" : ""} — ${message.label}`;
 
