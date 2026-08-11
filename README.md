@@ -20,7 +20,7 @@ Be precise about what this repo is right now:
 | **`.alab` ⇄ JSON conversion**         | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                                                                                                              |
 | **Mermaid C4 import**                 | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
 | **C4 editor**                         | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; flip it to `false` and `/editor` degrades to a coming-soon page — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                    |
-| **MCP server** (`/api/mcp`)           | **Beta.** Eight read-only tools, a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                                                           |
+| **MCP server** (`/api/mcp`)           | **Beta.** Ten read-only tools (C4 and sequence documents both), a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                            |
 | **Sequence diagrams**                 | **View mode works today** (`/view/sequence`): `.alab` sequence text or a pasted Mermaid `sequenceDiagram`, rendered complete with focus-driven animation — click any message, participant, or fragment to spotlight its flow. No editor canvas and no share links for them yet — see [Sequence diagrams](#sequence-diagrams).                                                        |
 | **Data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                                                                                                                  |
 
@@ -315,10 +315,18 @@ protocol can work with `.alab` models:
 claude mcp add --transport http arch-lab https://arch-lab-dev.vercel.app/api/mcp
 ```
 
-Eight read-only tools: `validate_model`, `format_model`, `convert_model`,
-`describe_model`, `get_syntax_reference`, `list_example_models`,
-`get_example_model`, `create_share_link` — plus the grammar as the resource
-`archlab://syntax` and an `author_c4_model` prompt.
+Ten read-only tools: `validate_model`, `format_model`, `convert_model`,
+`describe_model`, `validate_sequence`, `format_sequence`,
+`get_syntax_reference`, `list_example_models`, `get_example_model`,
+`create_share_link` — plus the grammar as the resource `archlab://syntax` and
+an `author_c4_model` prompt.
+
+The two `_sequence` tools are separate from their `_model` cousins rather than
+a flag on them, because the two document kinds have nothing in common to
+report: a C4 model answers with diagrams, levels and node counts, a sequence
+diagram with participants, message kinds and fragment depth. Passing a C4
+document to `validate_sequence` says so and names the right tool instead of
+failing as a syntax error.
 
 The framing matters: an agent already has file tools, and `.alab` is a text
 format precisely so it can edit one directly. The server is there for the two
@@ -390,7 +398,7 @@ Then open <http://localhost:3000>.
 | `pnpm check:sequence`         | Proves the sequence document format: canonical `.alab` sequence text round-trips byte-identically (fragments nested three deep, unknown fields verbatim and in position), a hand-built model survives text and back structurally, a realistic Mermaid `sequenceDiagram` imports with every supported construct, malformed inputs fail with line/column, and C4 and sequence documents never cross-detect. |
 | `pnpm check:sequence-layout`  | Proves the pure sequence layout function: participants keep model order, self-messages get their loop, a note over two participants spans both, activation bars open and close on the right steps, a three-deep fragment nest produces boxes that strictly contain one another, and the footer card row is reserved by the canvas height rather than clipped by it.                                       |
 | `pnpm check:sequence-motion`  | Proves the idle march's cross-file arithmetic, which no type can catch: each kind's keyframes advance exactly its own dash period, `MARCH_PERIOD` agrees with the marched dasharrays, both kinds march at one speed, reduced motion parks each kind on its meaningful pattern, no overlay path survives, and the gradient stays a custom property so focus overrides it.                                  |
-| `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                                                                                                                           |
+| `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser — C4 snippets through the C4 parser and sequence snippets through the sequence one, each first confirmed to be DETECTED as that kind — and every deliberately-broken snippet fails with exactly the line, column and message the page shows.                                                           |
 | `pnpm check:validate-samples` | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                                                                                                                                   |
 | `pnpm check:advisories`       | Proves the [C4 review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites a reason from the C4 model.                                                                                                                                                                               |
 | `pnpm check:export-archive`   | Proves the multi-diagram export: the hand-rolled ZIP writer emits an archive that parses back byte-for-byte with valid CRC-32s (and that the system `unzip` accepts, when one is installed), drill order survives, and archive names stay unique.                                                                                                                                                         |

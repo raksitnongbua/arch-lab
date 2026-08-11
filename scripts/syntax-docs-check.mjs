@@ -54,10 +54,11 @@ registerHooks({
   },
 });
 
-const { parseArchText, ArchTextParseError } = await import(
-  pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
-);
-const { checkedSources, INVALID_SNIPPETS } = await import(
+const { parseArchText, parseSequenceText, detectAlabKind, ArchTextParseError } =
+  await import(
+    pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+  );
+const { checkedSources, INVALID_SNIPPETS, SEQUENCE_SNIPPETS } = await import(
   pathToFileURL(path.join(ROOT, "src/features/syntax-docs/content/snippets.ts"))
     .href
 );
@@ -92,6 +93,40 @@ for (const { id, source } of checkedSources()) {
   } catch (error) {
     fail(
       id,
+      `did not parse: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+}
+
+/* ---- 1b. every SEQUENCE snippet parses, with the right parser ------------ */
+
+/*
+ * A different document kind and therefore a different parser. Two things are
+ * asserted per snippet, and the second is the one that matters: that
+ * `detectAlabKind` actually calls it a sequence document. Without that, a
+ * snippet whose header was mistyped would still be parsed by
+ * `parseSequenceText` here (it is handed the source directly) and pass, while
+ * the real app — which routes on the detected kind — would send it to the C4
+ * parser and fail at line 1. The page would then be displaying an example that
+ * cannot work anywhere but in this check.
+ */
+console.log("sequence snippets (must parse as sequence documents)");
+
+for (const snippet of SEQUENCE_SNIPPETS) {
+  const kind = detectAlabKind(snippet.code);
+  if (kind !== "sequence") {
+    fail(
+      snippet.id,
+      `detected as ${kind ?? "nothing"}, not a sequence document`,
+    );
+    continue;
+  }
+  try {
+    parseSequenceText(snippet.code);
+    ok(snippet.id);
+  } catch (error) {
+    fail(
+      snippet.id,
       `did not parse: ${error instanceof Error ? error.message : error}`,
     );
   }
