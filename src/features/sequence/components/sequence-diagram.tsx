@@ -753,7 +753,9 @@ function Message({
     >
       {kind === "reply" ? (
         /* Replies FADE (dashed from frame one) — see sequence-motion.css for
-           why they cannot share the dashoffset draw. */
+           why they cannot share the dashoffset draw. The "6 5" geometry is
+           MIRRORED by .af-seq-idle--reply (the idle overlay rides these
+           exact dashes) — change one, change the other. */
         <path
           className="af-seq-line af-seq-fade-in"
           d={linePath}
@@ -773,10 +775,15 @@ function Message({
           construction as the C4 canvas's drift (viewer-edge.tsx): an OVERLAY
           copy of the line, never the base stroke, because the base dash
           pattern here carries meaning (reply = dashed) that motion must not
-          borrow. `pathLength={100}` makes the stylesheet's dash maths
-          percentages of THIS path, so short hops, long spans and the
-          self-message loop all show the same rhythm — and since the pattern
-          lives in path units it scales cleanly with fit/zoom.
+          borrow. On solid bases `pathLength={100}` makes the stylesheet's
+          dash maths percentages of THIS path, so short hops, long spans and
+          the self-message loop all show the same rhythm — and since the
+          pattern lives in path units it scales cleanly with fit/zoom.
+          A REPLY's overlay instead adopts the base's own "6 5" user-unit
+          dash geometry (no pathLength — the units must match the base's):
+          two patterns at different pitches on one line beat into a shimmer,
+          one pitch marching over itself reads as the dashes moving. See
+          .af-seq-idle--reply in sequence-motion.css.
           Rendered only while the message is at rest: the focus draw takes
           over on the animating set (two lights on one wire reads as a
           glitch), a focused-and-held message keeps its steady emphasis, and
@@ -784,12 +791,20 @@ function Message({
           motion would defeat the dimming. With nothing focused that means
           every message drifts. */}
       {animateRank === null && !dimmed && !focused ? (
-        <path
-          aria-hidden="true"
-          className="af-seq-idle pointer-events-none"
-          d={linePath}
-          pathLength={100}
-        />
+        kind === "reply" ? (
+          <path
+            aria-hidden="true"
+            className="af-seq-idle af-seq-idle--reply pointer-events-none"
+            d={linePath}
+          />
+        ) : (
+          <path
+            aria-hidden="true"
+            className="af-seq-idle pointer-events-none"
+            d={linePath}
+            pathLength={100}
+          />
+        )
       ) : null}
 
       {kind === "sync" ? (

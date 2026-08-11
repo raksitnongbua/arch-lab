@@ -135,18 +135,31 @@
  *     dashed, sync/async solid), so marching it would animate only the
  *     replies and make a moving solid line indistinguishable from a dashed
  *     one.
- *   - The overlay carries pathLength=100, so the dasharray below is in
- *     PERCENT of a message: dash 5, gap 9, period 14 ≈ seven dashes per
- *     arrow — the same rhythm on an 80px hop and an 800px span (and at any
- *     zoom, since path units scale with the drawing).
- *   - The keyframes advance the offset by exactly ONE period (14) per cycle,
+ *   - On SOLID bases (sync/async) the overlay carries pathLength=100, so
+ *     the dasharray below is in PERCENT of a message: dash 5, gap 9,
+ *     period 14 ≈ seven dashes per arrow — the same rhythm on an 80px hop
+ *     and an 800px span (and at any zoom, since path units scale with the
+ *     drawing).
+ *   - On a DASHED base (reply) the overlay instead traces the base's OWN
+ *     dash geometry — see .af-seq-idle--reply below. Two patterns at
+ *     different pitches on one path beat into a shimmer; one pitch cannot
+ *     beat against itself.
+ *   - The keyframes advance the offset by exactly ONE period per cycle,
  *     which is what makes the infinite loop seamless: after one period the
- *     pattern is indistinguishable from where it began. Dasharray and
- *     keyframes must stay in step — change one, change the other.
- *   - The ink is a LIFT of the message colour toward primary, not a new hue:
- *     the palette still belongs to the participants. Thinner than the base
- *     stroke and slow (`--seq-idle` is ms per PERIOD — see lib/motion.ts),
- *     because this runs on every message all the time.
+ *     pattern is indistinguishable from where it began. Each dasharray and
+ *     its keyframes must stay in step — change one, change the other.
+ *   - The ink is a lift of the message colour toward FOREGROUND — a
+ *     brighter neutral, never the primary family. This is a deliberate
+ *     divergence from .viewer-edge-drift's primary tint, not an oversight:
+ *     on the C4 canvas a selected edge escalates into a three-band gradient
+ *     comet, a jump big enough to survive a primary-tinted resting state.
+ *     Here the focus HOLD is nothing more than a primary line at 2.25
+ *     width, so a resting line already tinted toward primary would make
+ *     every message look faintly chosen and mute the escalation — the same
+ *     "--primary/--ring already carry selection" rule connect-verdict.ts
+ *     documents. Idle must read as "alive", never "chosen". Thinner than
+ *     the base stroke and slow (`--seq-idle` is ms per PERIOD — see
+ *     lib/motion.ts), because this runs on every message all the time.
  *
  * The display gate (`--seq-idle-display`, fallback none) is the JS
  * reduced-motion route AND the pre-mount state; the media query below is the
@@ -157,12 +170,31 @@
 .af-seq-idle {
   display: var(--seq-idle-display, none);
   fill: none;
-  stroke: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  stroke: color-mix(in oklch, var(--edge) 55%, var(--foreground));
   stroke-width: 1.1;
   stroke-linecap: round;
   opacity: 0.8;
   stroke-dasharray: 5 9;
   animation: af-seq-idle-drift var(--seq-idle, 0ms) linear infinite;
+}
+
+/*
+ * The REPLY variant: the base reply stroke is already dashed ("6 5" in user
+ * units, set in sequence-diagram.tsx — the two must change together), and a
+ * second pattern at another pitch sliding over it beats into a shimmering
+ * mess ("stroke-dasharray can only serve one master", one layer up). So on
+ * replies the overlay adopts the base's EXACT geometry — same "6 5", same
+ * user units, no pathLength — and marches it: the bright dashes slide in
+ * step over the static ones, which reads as THE dashes moving, not as two
+ * patterns fighting. Chosen over the single-travelling-band alternative
+ * because a lone band was already judged to read as a stray highlight
+ * rather than a running dash (the C4 resting-state review), and nothing
+ * about this case changes that. Its own keyframes advance by its own
+ * period (6 + 5 = 11 user units) for the same seamless-loop reason.
+ */
+.af-seq-idle--reply {
+  stroke-dasharray: 6 5;
+  animation-name: af-seq-idle-drift-reply;
 }
 
 /* Offset runs 0 → −period, so the pattern advances ALONG the path — every
@@ -174,6 +206,15 @@
   }
   to {
     stroke-dashoffset: -14;
+  }
+}
+
+@keyframes af-seq-idle-drift-reply {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -11;
   }
 }
 
