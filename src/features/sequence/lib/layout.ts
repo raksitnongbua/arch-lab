@@ -136,7 +136,24 @@ export interface LaidParticipant {
   /** Lifeline x — the centre of the header box. */
   x: number;
   headerWidth: number;
+  /**
+   * Colour lane, 1-based — the N of the `--seq-lane-N` token the renderer
+   * paints this participant's chrome with (globals.css owns the values and
+   * their validation notes; the two files change together). Assigned from
+   * the participant's index in `file.participants` — DOCUMENT order, which
+   * is also lifeline order — so colour follows the entity, not its rank:
+   * re-parsing the same document gives the same participant the same lane.
+   * Past five lanes the assignment CYCLES; two lanes sharing a hue is
+   * acceptable only because a participant's name always renders in its
+   * header (identity is never colour-alone), and the alternative — minting
+   * a sixth hue — would ship a colour pair nobody can tell apart, which is
+   * worse than an honest repeat.
+   */
+  lane: number;
 }
+
+/** How many `--seq-lane-N` tokens globals.css defines — change together. */
+const LANE_COUNT = 5;
 
 export interface LaidMessage {
   /** 1-based step number, in document order. */
@@ -379,7 +396,7 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
   const headerHeight = SEQ.headerHeight + (hasActor ? SEQ.actorGlyphHeight : 0);
   const lifelineTop = SEQ.marginTop + headerHeight;
 
-  const participants: LaidParticipant[] = file.participants.map((p) => ({
+  const participants: LaidParticipant[] = file.participants.map((p, index) => ({
     id: p.id,
     name: p.name,
     // Absent means "unstated"; the model keeps the omission (see
@@ -389,6 +406,9 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
     ...(p.description !== undefined ? { description: p.description } : {}),
     x: xById.get(p.id) ?? SEQ.marginX,
     headerWidth: headerWidths.get(p.id) ?? SEQ.headerMinWidth,
+    // Computed here, once, like every other per-participant fact — the
+    // renderer reads the lane rather than re-deriving an index.
+    lane: (index % LANE_COUNT) + 1,
   }));
 
   const messages: LaidMessage[] = [];

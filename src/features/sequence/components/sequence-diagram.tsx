@@ -40,6 +40,10 @@
  * the backdrop clears focus.
  */
 
+// Cross-feature on purpose: the tag-fill rebuild is the ONE definition of
+// "a hue at our validated card lightness" (node-colors.ts carries the full
+// rationale), and re-typing the expression here would let the two drift.
+import { tagFillCss } from "@/features/editor/lib/node-colors";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -578,12 +582,32 @@ function ParticipantColumn({
     SEQ.marginTop + (participant.kind === "actor" ? SEQ.actorGlyphHeight : 0);
   const boxHeight = layout.headerHeight - (boxTop - SEQ.marginTop);
   const isActor = participant.kind === "actor";
-  // Actors take the PERSON role tokens, participants the neutral node pair —
-  // the same role→token indirection node-colors.ts uses, at sequence scale.
-  const fill = isActor ? "var(--node-person)" : "var(--node)";
-  const strokeColor = isActor
-    ? "var(--node-person-border)"
-    : "var(--node-border)";
+  /**
+   * The participant's LANE colour — its header border, lifeline and actor
+   * glyph, assigned by the layout (LaidParticipant.lane; globals.css owns
+   * the validated values). This is participant CHROME only: the message
+   * lines stay on --edge / the idle neutral / --primary, because the line's
+   * three-state colour vocabulary was hard-won (idle-vs-focus collisions)
+   * and a fourth colour system on the same stroke would reintroduce exactly
+   * that class of bug. Text also never takes a lane — names stay on the
+   * node text tokens, which is what makes the below-3:1 light-mode lanes
+   * acceptable (identity is carried by the name, not the colour).
+   */
+  const lane = `var(--seq-lane-${participant.lane})`;
+  /**
+   * ONE colour per card: the fill is a low-chroma wash of the card's OWN
+   * lane hue, rebuilt through the exact relative-colour pins tag fills use
+   * (`tagFillCss` — lane hue at OUR `--tag-fill-l`/`--tag-fill-c` lightness
+   * and chroma), so every fill lands on the same measured lightness band as
+   * the audited node fills and the label contrast holds BY CONSTRUCTION in
+   * both themes. The role fill this replaces (--node-person for actors) was
+   * a second colour system on the most prominent card — a violet card in an
+   * aqua border — from the days when nothing else carried participant
+   * identity; the lane border does now, and the actor/participant
+   * distinction rides the SHAPE instead: the stick-figure glyph and the
+   * taller silhouette stay.
+   */
+  const fill = tagFillCss(lane);
 
   return (
     <g
@@ -592,19 +616,24 @@ function ParticipantColumn({
         dimmed && "af-seq-dim",
       )}
     >
+      {/* The lifeline wears the lane at reduced strength: it must mark the
+          column all the way down without out-shouting the --edge message
+          lines that cross it — the lane's full strength is reserved for the
+          header border, where "which service is this" is actually read. */}
       <line
         x1={x}
         y1={layout.lifelineTop}
         x2={x}
         y2={layout.lifelineBottom}
-        stroke="var(--border)"
+        stroke={lane}
+        strokeOpacity={0.6}
         strokeWidth={1.25}
         strokeDasharray="4 4"
       />
       {isActor ? (
         // A minimal stick figure over the box — the actor/participant
         // distinction the model preserves must be visible, not just stored.
-        <g stroke={strokeColor} strokeWidth={1.5} fill="none">
+        <g stroke={lane} strokeWidth={1.5} fill="none">
           <circle cx={x} cy={SEQ.marginTop + 5} r={4.5} />
           <path
             d={`M ${x} ${SEQ.marginTop + 9.5} v 7 M ${x - 6} ${SEQ.marginTop + 12} h 12`}
@@ -619,8 +648,8 @@ function ParticipantColumn({
         height={boxHeight}
         rx={8}
         fill={fill}
-        stroke={strokeColor}
-        strokeWidth={1.25}
+        stroke={lane}
+        strokeWidth={1.5}
       />
       <text
         x={x}

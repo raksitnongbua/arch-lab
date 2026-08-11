@@ -121,6 +121,33 @@
   --edge: oklch(0.6 0.02 265);
   --selection: oklch(0.58 0.2 280 / 0.18);
 
+  /* Sequence-diagram LANE tokens — one accent per participant column, keyed
+     by document order and cycled past five (layout.ts assigns the slot).
+     CVD/contrast-validated as a set, on the ADJACENT pairlist (lifelines sit
+     in fixed left-to-right order, so neighbours are what readers compare):
+     worst adjacent CVD ΔE 9.2 light / 9.4 dark (≥8), worst adjacent
+     normal-vision ΔE 27.5 light / 19.7 dark (≥15) — all checks pass.
+     THREE THINGS ABOUT THIS LIST ARE LOAD-BEARING; do not tidy them:
+       1. THE ORDER IS NOT ARBITRARY. Three pairs fail if ever adjacent —
+          magenta↔aqua (ΔE 1.6 deutan, dark), violet↔blue (9.8 normal, dark),
+          magenta↔orange (12.9 normal, light) — and this ordering is a path
+          that avoids all three. Reordering the slots breaks the validation.
+       2. YELLOW IS DELIBERATELY ABSENT. --warning amber already paints the
+          notes on this diagram and status colours are reserved; a yellow
+          lane beside amber notes would be ambiguous.
+       3. Light-mode aqua (slot 1) and magenta (slot 4) sit below 3:1 against
+          the light surface. Allowed ONLY under the relief rule — identity is
+          never colour-alone — which this diagram satisfies inherently: a
+          participant's NAME is always rendered inside its header. That is
+          why the contrast WARN is acceptable rather than ignored.
+     The values are the validator's exact hexes; converting them to oklch by
+     hand would drift from what was measured. */
+  --seq-lane-1: #1baf7a;
+  --seq-lane-2: #eb6834;
+  --seq-lane-3: #2a78d6;
+  --seq-lane-4: #e87ba4;
+  --seq-lane-5: #4a3aa7;
+
   /* The two properties node shapes actually paint with. Each node overrides
      them inline (node-colors.ts: role token, or the author's tagColors hex);
      these root defaults only cover node chrome rendered outside a canvas
@@ -201,6 +228,15 @@
 
   --edge: oklch(0.62 0.02 275);
   --selection: oklch(0.68 0.19 285 / 0.24);
+
+  /* Dark counterparts of the sequence lane tokens (the light block carries
+     the full validation notes — order, absent yellow, relief rule). Same
+     slots, same path through the CVD-safe adjacency graph. */
+  --seq-lane-1: #199e70;
+  --seq-lane-2: #d95926;
+  --seq-lane-3: #3987e5;
+  --seq-lane-4: #d55181;
+  --seq-lane-5: #9085e9;
 }
 
 /* --- EXTENSION POINT: adding a third theme ------------------------------------
