@@ -62,7 +62,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Scan, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { SequenceLabFile } from "@/types";
@@ -100,6 +100,57 @@ function useReducedMotion(): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Idle-motion preference, persisted + hydration-safe                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The idle-motion toggle's backing store: localStorage behind a
+ * useSyncExternalStore, the same D17 mounted-guard shape as
+ * `useReducedMotion` above (and diagram-inspector.tsx) — the server
+ * snapshot is the DEFAULT (on), and the client corrects after hydration if
+ * a stored "off" disagrees, instead of the render reading a browser API it
+ * does not have on the server. localStorage failures (private mode, storage
+ * quota) degrade to session-only state: reads fall back to the default and
+ * writes still notify this tab's listeners, so the toggle keeps working —
+ * it just forgets on reload.
+ *
+ * The `storage` event only fires in OTHER tabs, so writes also notify a
+ * local listener set — both paths funnel through the same subscribe.
+ */
+const IDLE_MOTION_KEY = "arch-lab:sequence-idle-motion";
+const idleMotionListeners = new Set<() => void>();
+
+function readIdleMotion(): boolean {
+  try {
+    return window.localStorage.getItem(IDLE_MOTION_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function writeIdleMotion(on: boolean): void {
+  try {
+    window.localStorage.setItem(IDLE_MOTION_KEY, on ? "on" : "off");
+  } catch {
+    /* Session-only degradation — see the store comment. */
+  }
+  for (const listener of idleMotionListeners) listener();
+}
+
+function subscribeIdleMotion(onChange: () => void): () => void {
+  idleMotionListeners.add(onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    idleMotionListeners.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+function useIdleMotion(): boolean {
+  return useSyncExternalStore(subscribeIdleMotion, readIdleMotion, () => true);
+}
+
+/* -------------------------------------------------------------------------- */
 /* The viewer                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -131,6 +182,7 @@ export function SequenceViewer({
   );
 
   const reduced = useReducedMotion();
+  const idleMotion = useIdleMotion();
 
   /**
    * Focus and its nonce live in ONE state cell because they only ever change
@@ -288,6 +340,16 @@ export function SequenceViewer({
     onAnnounce("Diagram fitted to view — the whole flow is on screen.");
   }, [onAnnounce]);
 
+  const handleToggleIdle = useCallback(() => {
+    const next = !readIdleMotion();
+    writeIdleMotion(next);
+    onAnnounce(
+      next
+        ? "Idle motion on — bands of light in each sender's colour flow along its messages."
+        : "Idle motion off — the diagram holds still until you focus something.",
+    );
+  }, [onAnnounce]);
+
   /**
    * FOCUS FOLLOWS SCROLL: clicking a thing must never hide that thing. The
    * dock overlays the pane's right edge (its bottom edge below `md`), so
@@ -417,7 +479,10 @@ export function SequenceViewer({
 
   // Motion vars recompute whenever the reduced-motion store flips, so
   // toggling the OS setting takes effect without a reload.
-  const motionVars = useMemo(() => sequenceMotionVars(reduced), [reduced]);
+  const motionVars = useMemo(
+    () => sequenceMotionVars(reduced, idleMotion),
+    [reduced, idleMotion],
+  );
 
   const focusedMessage =
     focus?.kind === "message"
@@ -606,6 +671,36 @@ export function SequenceViewer({
             className={ZOOM_BUTTON_CLASSES}
           >
             <Scan aria-hidden="true" className="size-4" />
+          </button>
+          {/* Idle-motion toggle — it lives in this pill because the strip
+              is where view-level controls already are. Under reduced motion
+              the button DISABLES rather than pretending: the OS preference
+              wins outright, and a toggle that claims to enable motion it
+              cannot run would be lying (aria-pressed reads false there for
+              the same honesty). The preference persists in localStorage —
+              see useIdleMotion. */}
+          <button
+            type="button"
+            onClick={handleToggleIdle}
+            disabled={reduced}
+            aria-pressed={!reduced && idleMotion}
+            aria-label={
+              reduced
+                ? "Idle motion unavailable — your system prefers reduced motion"
+                : idleMotion
+                  ? "Turn idle motion off"
+                  : "Turn idle motion on"
+            }
+            title={
+              reduced
+                ? "Reduced motion is on"
+                : idleMotion
+                  ? "Idle motion: on"
+                  : "Idle motion: off"
+            }
+            className={`${ZOOM_BUTTON_CLASSES} disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:text-foreground`}
+          >
+            <Waves aria-hidden="true" className="size-4" />
           </button>
         </div>
 

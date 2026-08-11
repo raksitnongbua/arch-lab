@@ -124,97 +124,120 @@
   }
 }
 
-/* ---- idle drift (the diagram at rest) ------------------------------------------
- * A quiet repeating dash travelling source → target on every message that is
- * neither focused nor dimmed — the sequence twin of the C4 canvas's
- * `.viewer-edge-drift` (viewer-canvas.tsx / viewer-edge.tsx), copied
- * deliberately so both canvases speak ONE motion language:
+/* ---- idle motion (the diagram at rest) ------------------------------------------
+ * Travelling BANDS OF LIGHT riding each message line source → target — the
+ * C4 viewer's focus-flow construction (viewer-canvas.tsx: dashed layers
+ * sliding over a constant base via stroke-dashoffset, glow under head)
+ * ported to ambient scale and the sender's lane hue, on every message that
+ * is neither focused nor dimmed.
  *
- *   - It rides an OVERLAY path (rendered in sequence-diagram.tsx), never the
- *     base stroke: the base dash pattern carries MEANING here (replies are
- *     dashed, sync/async solid), so marching it would animate only the
- *     replies and make a moving solid line indistinguishable from a dashed
- *     one.
- *   - On SOLID bases (sync/async) the overlay carries pathLength=100, so
- *     the dasharray below is in PERCENT of a message: dash 5, gap 9,
- *     period 14 ≈ seven dashes per arrow — the same rhythm on an 80px hop
- *     and an 800px span (and at any zoom, since path units scale with the
- *     drawing).
- *   - On a DASHED base (reply) the overlay instead traces the base's OWN
- *     dash geometry — see .af-seq-idle--reply below. Two patterns at
- *     different pitches on one path beat into a shimmer; one pitch cannot
- *     beat against itself.
- *   - The keyframes advance the offset by exactly ONE period per cycle,
- *     which is what makes the infinite loop seamless: after one period the
- *     pattern is indistinguishable from where it began. Each dasharray and
- *     its keyframes must stay in step — change one, change the other.
- *   - The ink is a lift of the message colour toward FOREGROUND — a
- *     brighter neutral, never the primary family. This is a deliberate
- *     divergence from .viewer-edge-drift's primary tint, not an oversight:
- *     on the C4 canvas a selected edge escalates into a three-band gradient
- *     comet, a jump big enough to survive a primary-tinted resting state.
- *     Here the focus HOLD is nothing more than a primary line at 2.25
- *     width, so a resting line already tinted toward primary would make
- *     every message look faintly chosen and mute the escalation — the same
- *     "--primary/--ring already carry selection" rule connect-verdict.ts
- *     documents. Idle must read as "alive", never "chosen". Thinner than
- *     the base stroke and slow (`--seq-idle` is ms per PERIOD — see
- *     lib/motion.ts), because this runs on every message all the time.
+ * THE DASHARRAY RULE, AND ITS DELIBERATE BOUNDARY. Two earlier idle designs
+ * died on this stroke: a marching dash overlay read as a doubled fuzzy line
+ * (two lines’ worth of stroke on one path), and the rule that followed —
+ * "no dasharray on the overlay at all" — was then relaxed to its real
+ * intent: what is banned is a SECOND LINE’S WORTH of stroke. These bands
+ * are ~9% duty per period (head 3 of 33 path-units at three bands), a short
+ * segment of light passing over the line, not a parallel line. Three
+ * conditions keep it on the right side of that boundary; hold all three:
+ *   1. LOW DUTY CYCLE — the lit fraction stays small (C4’s head is 9%).
+ *      A longer band is the old bug wearing new clothes.
+ *   2. THE BASE STROKE IS NEVER TOUCHED — its dasharray remains the
+ *      sync/async/reply semantics. No shared dash, no matched pitch.
+ *   3. It must never read as a parallel line at eleven resting messages.
  *
- * The display gate (`--seq-idle-display`, fallback none) is the JS
- * reduced-motion route AND the pre-mount state; the media query below is the
- * CSS route. Both end with the overlay gone entirely — a parked dash would
- * be a stray bright segment, not a resting state.
+ * Construction, per message (sequence-diagram.tsx):
+ *   - TWO overlay paths — a soft blurred glow under a sharp head — with
+ *     `pathLength=100`, so all dash maths are percentages of the true path
+ *     (straight, dashed-base or self-loop alike). The C4 flow’s third
+ *     layer (the tail) is deliberately left at focus scale: at ambient
+ *     scale it read as bulk, and two layers already carry the comet shape.
+ *   - A TRAIN, density scaled to length: the message’s laid pixel span
+ *     picks 1–3 bands, and the bands come free — one dasharray whose
+ *     period is 100/n puts n bands on one path, so the animation count
+ *     stays two paths per message however long the train.
+ *   - The layers’ keyframes start at each band’s own dash length and
+ *     advance by exactly 100 — one WHOLE path — per cycle, which aligns
+ *     every layer’s LEADING edge on one clock (the C4 flow’s trick) and
+ *     makes the infinite loop seamless: 100 is a whole number of periods
+ *     for any train size. Because a cycle covers the whole path, ONE
+ *     `--seq-idle` is one band’s traversal at any density — the clock needs
+ *     no adjustment for the band count, and must not be given one.
+ *   - THE BANDS WEAR THE SENDER’S LANE COLOUR (`--seq-idle-ink`, stamped
+ *     per message from the validated `--seq-lane-N` tokens): each is that
+ *     service’s traffic. This does not repaint the message STROKE — the
+ *     base keeps --edge at rest and --primary on focus, and the bands are
+ *     suppressed on the focused message, so a lane band and a primary line
+ *     never share a path.
+ *   - Each message carries a deterministic negative delay (derived from
+ *     its step) so the trains scatter across the cycle instead of ticking
+ *     in lockstep.
+ *
+ * The display gate (`--seq-idle-display`, fallback none) carries THREE
+ * states through one var: reduced motion (JS route — the media query below
+ * is the CSS route; both must end with the bands gone, since a parked band
+ * is a stray highlight, not a resting state), the user’s idle-motion
+ * toggle, and the pre-mount/SSR default (hidden until the viewer stamps
+ * the vars).
  */
 
 .af-seq-idle {
   display: var(--seq-idle-display, none);
+}
+
+.af-seq-idle-glow,
+.af-seq-idle-head {
   fill: none;
-  stroke: color-mix(in oklch, var(--edge) 55%, var(--foreground));
-  stroke-width: 1.1;
+  stroke: var(
+    --seq-idle-ink,
+    color-mix(in oklch, var(--edge) 45%, var(--foreground))
+  );
   stroke-linecap: round;
-  opacity: 0.8;
-  stroke-dasharray: 5 9;
-  animation: af-seq-idle-drift var(--seq-idle, 0ms) linear infinite;
+  animation-duration: var(--seq-idle, 0ms);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-delay: var(--seq-idle-delay, 0ms);
 }
 
-/*
- * The REPLY variant: the base reply stroke is already dashed ("6 5" in user
- * units, set in sequence-diagram.tsx — the two must change together), and a
- * second pattern at another pitch sliding over it beats into a shimmering
- * mess ("stroke-dasharray can only serve one master", one layer up). So on
- * replies the overlay adopts the base's EXACT geometry — same "6 5", same
- * user units, no pathLength — and marches it: the bright dashes slide in
- * step over the static ones, which reads as THE dashes moving, not as two
- * patterns fighting. Chosen over the single-travelling-band alternative
- * because a lone band was already judged to read as a stray highlight
- * rather than a running dash (the C4 resting-state review), and nothing
- * about this case changes that. Its own keyframes advance by its own
- * period (6 + 5 = 11 user units) for the same seamless-loop reason.
- */
-.af-seq-idle--reply {
-  stroke-dasharray: 6 5;
-  animation-name: af-seq-idle-drift-reply;
+/* Band lengths (6 glow / 3 head, pathLength units) MUST match the
+ * strokeDasharray the renderer writes per layer — change together. The
+ * keyframes are per-layer CONSTANTS rather than one var()-driven set on
+ * purpose: Chromium fails to interpolate stroke-dashoffset between
+ * var()/calc() keyframe values (the animation sat parked on its end
+ * frame), and constants also let each layer start at its own dash length —
+ * the C4 flow's leading-edge trick, so glow and head share one front. */
+.af-seq-idle-glow {
+  stroke-width: 5;
+  opacity: 0.3;
+  filter: blur(2px);
+  animation-name: af-seq-idle-flow-glow;
 }
 
-/* Offset runs 0 → −period, so the pattern advances ALONG the path — every
- * message path is authored source → target (a self-loop runs out, down and
- * back), so the motion always points the way the message went. */
-@keyframes af-seq-idle-drift {
+.af-seq-idle-head {
+  stroke-width: 2;
+  opacity: 0.85;
+  animation-name: af-seq-idle-flow-head;
+}
+
+/* Each cycle advances the offset by exactly 100 — the WHOLE path, which is
+ * a whole number of band periods for any train size (period = 100/n), so
+ * the infinite loop stays seamless and a band always crosses the diagram in
+ * one `--seq-idle`, however many ride the train. Direction = path
+ * direction = source → target. */
+@keyframes af-seq-idle-flow-glow {
   from {
-    stroke-dashoffset: 0;
+    stroke-dashoffset: 6;
   }
   to {
-    stroke-dashoffset: -14;
+    stroke-dashoffset: -94;
   }
 }
 
-@keyframes af-seq-idle-drift-reply {
+@keyframes af-seq-idle-flow-head {
   from {
-    stroke-dashoffset: 0;
+    stroke-dashoffset: 3;
   }
   to {
-    stroke-dashoffset: -11;
+    stroke-dashoffset: -97;
   }
 }
 
@@ -358,10 +381,11 @@
   .af-seq-msg[data-animate] .af-seq-fade-in {
     animation: none;
   }
-  /* The idle dash is motion and nothing else — a parked dash would be a
-     stray bright segment on every line, so it goes away entirely rather
+  /* The idle bands are motion and nothing else — parked, they would be
+     stray highlights sitting on every line, so they go away entirely rather
      than freezing mid-path (same rule as .viewer-edge-drift). The JS route
-     (sequenceMotionVars) reaches the same end through --seq-idle-display. */
+     (sequenceMotionVars) reaches the same end through --seq-idle-display,
+     which also carries the user's toggle. */
   .af-seq-idle {
     display: none;
   }

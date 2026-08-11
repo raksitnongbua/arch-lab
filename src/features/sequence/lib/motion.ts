@@ -37,17 +37,15 @@ export const SEQUENCE_DURATIONS = {
    * viewer's edgeFocus escalation feel). */
   focusFade: 180,
   /**
-   * The idle drift's clock: milliseconds per DASH PERIOD, not per traversal —
-   * the same reasoning as `viewer/lib/motion.ts` (`edgeDrift`): the loop
-   * advances the pattern by exactly one period per cycle, so per-period
-   * timing gives every message the same dash speed, where per-traversal
-   * timing would make short and long arrows march at different rates
-   * (pathLength fixes the pattern in path units, not pixels). A touch slower
-   * than the C4 canvas's 900ms: a sequence diagram stacks many parallel
-   * horizontal lines, and at equal speed the column of them reads busier
-   * than C4's sparse beziers.
+   * The idle flow's clock: milliseconds for one band to TRAVERSE the path
+   * source → target. The keyframes advance one whole path (100 units) per
+   * cycle, so this holds for every message regardless of how many bands
+   * ride its train — density lives entirely in the dash PERIOD, not the
+   * clock. Slow on purpose — eleven trains run at once. (The construction
+   * is the C4 focus flow at ambient scale; see the .af-seq-idle block in
+   * sequence-motion.css for the design and the retired-designs history.)
    */
-  idleDrift: 1100,
+  idleTravel: 4200,
 } as const;
 
 /**
@@ -62,7 +60,11 @@ export const SEQUENCE_DURATIONS = {
  * disagree with the one React rendered with — the same "one source of truth
  * per rule" discipline as everything else in this feature.
  */
-export function sequenceMotionVars(reduced: boolean): Record<string, string> {
+export function sequenceMotionVars(
+  reduced: boolean,
+  /** The user's idle-motion toggle (viewer state, persisted). */
+  idleMotion: boolean,
+): Record<string, string> {
   const ms = (value: number) => `${reduced ? 0 : value}ms`;
   return {
     "--seq-draw": ms(SEQUENCE_DURATIONS.messageDraw),
@@ -70,16 +72,16 @@ export function sequenceMotionVars(reduced: boolean): Record<string, string> {
     "--seq-head-delay": ms(SEQUENCE_DURATIONS.headDelay),
     "--seq-stagger": ms(SEQUENCE_DURATIONS.focusStagger),
     "--seq-focus": ms(SEQUENCE_DURATIONS.focusFade),
-    "--seq-idle": ms(SEQUENCE_DURATIONS.idleDrift),
-    // The idle dash is the one animation a 0ms duration cannot park
+    "--seq-idle": ms(SEQUENCE_DURATIONS.idleTravel),
+    // The idle marker is the one animation a 0ms duration cannot park
     // meaningfully: it is motion and NOTHING else, so its zero state is a
-    // stray static dash overlay, not a natural frame. Reduced motion
-    // therefore removes the element outright (this var), mirroring what the
-    // stylesheet's own `prefers-reduced-motion` block does — the JS route
-    // (this function) and the media-query route must end in the same place.
-    // The stylesheet's fallback for this var is `none`, so SSR markup shows
-    // no idle dash until the viewer mounts — the same contract as the 0ms
-    // duration fallbacks.
-    "--seq-idle-display": reduced ? "none" : "inline",
+    // stray dot sitting on the line, not a natural frame. It is therefore
+    // GATED BY DISPLAY, and this one var carries both reasons to hide it:
+    // reduced motion (which must win outright — the stylesheet's own
+    // `prefers-reduced-motion` block reaches the same end for the pure-CSS
+    // route) and the user's idle-motion toggle. The stylesheet's fallback
+    // for this var is `none`, so SSR markup shows no marker until the
+    // viewer mounts — the same contract as the 0ms duration fallbacks.
+    "--seq-idle-display": reduced || !idleMotion ? "none" : "inline",
   };
 }

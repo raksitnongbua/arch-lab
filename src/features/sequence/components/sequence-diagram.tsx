@@ -236,6 +236,9 @@ export function SequenceDiagram({
   }
   const animateToken = focusNonce % 2 === 0 ? "a" : "b";
 
+  /** Sender lane lookup for the idle comets (layout owns the assignment). */
+  const laneById = new Map(layout.participants.map((p) => [p.id, p.lane]));
+
   const keyActivate =
     (action: () => void) => (event: React.KeyboardEvent<SVGElement>) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -494,6 +497,9 @@ export function SequenceDiagram({
           animateToken={animateToken}
           focused={focus?.kind === "message" && focus.step === message.step}
           dimmed={messageDimmed(message)}
+          // The idle comet wears the SENDER's lane — read off the layout's
+          // participant record, never re-derived from an index here.
+          senderLane={laneById.get(message.from) ?? null}
           onFocus={() => onFocusMessage(message.step)}
           onKeyDown={keyActivate(() => onFocusMessage(message.step))}
         />
@@ -711,6 +717,7 @@ function Message({
   animateToken,
   focused,
   dimmed,
+  senderLane,
   onFocus,
   onKeyDown,
 }: {
@@ -721,6 +728,8 @@ function Message({
   animateToken: "a" | "b";
   focused: boolean;
   dimmed: boolean;
+  /** The sender's colour lane (LaidParticipant.lane), for the idle comet. */
+  senderLane: number | null;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
@@ -782,9 +791,7 @@ function Message({
     >
       {kind === "reply" ? (
         /* Replies FADE (dashed from frame one) — see sequence-motion.css for
-           why they cannot share the dashoffset draw. The "6 5" geometry is
-           MIRRORED by .af-seq-idle--reply (the idle overlay rides these
-           exact dashes) — change one, change the other. */
+           why they cannot share the dashoffset draw. */
         <path
           className="af-seq-line af-seq-fade-in"
           d={linePath}
@@ -800,41 +807,74 @@ function Message({
         />
       )}
 
-      {/* The IDLE DRIFT — the resting marching dash, deliberately the same
-          construction as the C4 canvas's drift (viewer-edge.tsx): an OVERLAY
-          copy of the line, never the base stroke, because the base dash
-          pattern here carries meaning (reply = dashed) that motion must not
-          borrow. On solid bases `pathLength={100}` makes the stylesheet's
-          dash maths percentages of THIS path, so short hops, long spans and
-          the self-message loop all show the same rhythm — and since the
-          pattern lives in path units it scales cleanly with fit/zoom.
-          A REPLY's overlay instead adopts the base's own "6 5" user-unit
-          dash geometry (no pathLength — the units must match the base's):
-          two patterns at different pitches on one line beat into a shimmer,
-          one pitch marching over itself reads as the dashes moving. See
-          .af-seq-idle--reply in sequence-motion.css.
+      {/* The IDLE FLOW — a train of light bands riding this message's line,
+          the C4 focus-flow construction at ambient scale (sequence-motion
+          .css's .af-seq-idle block carries the full design notes and the
+          deliberately-relaxed dasharray boundary). Two overlay layers on
+          the exact linePath — blurred glow under a sharp head — with
+          `pathLength=100`, so the dash maths are percentages of the true
+          path on straight, dashed-base and self-loop geometry alike.
+
+          TRAIN DENSITY comes from the LAID geometry, not a constant: the
+          message's pixel span picks 1–3 bands (a cross-diagram call can
+          carry three; an adjacent-participant hop stays uncrowded), and
+          the bands cost nothing — one dasharray whose period is 100/n puts
+          n bands on a single path, so this is still just two animated
+          elements per message. The per-layer band lengths here (glow 6,
+          head 3) MUST match the `from` offsets of af-seq-idle-flow-glow /
+          -head in sequence-motion.css, which are those same lengths — a
+          layer whose keyframes disagree with its dasharray drifts out of
+          the shared leading edge. Change them together.
+
+          The negative delay is deterministic per message (step × a number
+          sharing no factor with the cycle) so trains scatter instead of
+          ticking in lockstep — stable across re-renders because the step
+          is model order, not a render index.
           Rendered only while the message is at rest: the focus draw takes
           over on the animating set (two lights on one wire reads as a
           glitch), a focused-and-held message keeps its steady emphasis, and
           a dimmed message is explicitly not what the reader asked about —
           motion would defeat the dimming. With nothing focused that means
-          every message drifts. */}
-      {animateRank === null && !dimmed && !focused ? (
-        kind === "reply" ? (
-          <path
-            aria-hidden="true"
-            className="af-seq-idle af-seq-idle--reply pointer-events-none"
-            d={linePath}
-          />
-        ) : (
-          <path
-            aria-hidden="true"
-            className="af-seq-idle pointer-events-none"
-            d={linePath}
-            pathLength={100}
-          />
-        )
-      ) : null}
+          every message carries a train. */}
+      {animateRank === null && !dimmed && !focused
+        ? (() => {
+            // Laid span in pixels — the self-loop's three segments summed.
+            const span = self
+              ? SEQ.selfLoopWidth * 2 + SEQ.selfLoopHeight
+              : Math.abs(toX - fromX);
+            const bands = span >= 640 ? 3 : span >= 300 ? 2 : 1;
+            const period = 100 / bands;
+            return (
+              <g
+                aria-hidden="true"
+                className="af-seq-idle pointer-events-none"
+                style={
+                  {
+                    "--seq-idle-delay": `${-(message.step * 733)}ms`,
+                    // Var-to-var indirection: the lane token itself stays
+                    // the single source of the colour.
+                    ...(senderLane !== null
+                      ? { "--seq-idle-ink": `var(--seq-lane-${senderLane})` }
+                      : {}),
+                  } as React.CSSProperties
+                }
+              >
+                <path
+                  className="af-seq-idle-glow"
+                  d={linePath}
+                  pathLength={100}
+                  strokeDasharray={`${6} ${period - 6}`}
+                />
+                <path
+                  className="af-seq-idle-head"
+                  d={linePath}
+                  pathLength={100}
+                  strokeDasharray={`${3} ${period - 3}`}
+                />
+              </g>
+            );
+          })()
+        : null}
 
       {kind === "sync" ? (
         <path className="af-seq-head af-seq-head-fill" d={filledHead} />
