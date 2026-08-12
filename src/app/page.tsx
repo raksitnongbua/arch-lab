@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  Bot,
   Boxes,
   FileText,
   Layers,
@@ -54,12 +55,6 @@ interface PlannedDiagramType {
 
 /** The three documentation surfaces that come after C4. Planned — no dates. */
 const PLANNED_DIAGRAM_TYPES: readonly PlannedDiagramType[] = [
-  {
-    id: "sequence",
-    icon: Workflow,
-    title: "Sequence diagrams",
-    body: "Trace a request across the systems you have modelled — participants, messages, and lifelines alongside the structural view.",
-  },
   {
     id: "data-dictionary",
     icon: Table2,
@@ -127,8 +122,8 @@ export default function Home() {
             <Badge variant="accent" className="mb-6">
               <span className="size-1.5 rounded-full bg-accent" />
               {EDITOR_ENABLED
-                ? "Early preview · C4 editor and live demo working today"
-                : "Early preview · live C4 demo working today · editor coming soon"}
+                ? "Early preview · C4 + sequence diagrams and an MCP server working today · editor in preview"
+                : "Early preview · C4 + sequence diagrams and an MCP server working today · editor coming soon"}
             </Badge>
 
             <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
@@ -144,29 +139,41 @@ export default function Home() {
                 {APP_NAME}
               </span>{" "}
               {EDITOR_ENABLED
-                ? "is a local-first workspace for architecture documentation. It opens with a full C4-model editor — with sequence diagrams, a data dictionary, and network diagrams planned next — and saves everything as diff-readable .alab text you own — or JSON, if a tool downstream wants it."
-                : "is a local-first workspace for architecture documentation. Today it opens with an interactive, read-only C4 viewer — the editor that builds these models is coming soon, with sequence diagrams, a data dictionary, and network diagrams planned after it. Every model lives as diff-readable .alab text you own — or JSON, if a tool downstream wants it."}
+                ? "is a local-first workspace for architecture documentation. C4 models and sequence diagrams both read today, an MCP server lets an agent author and check them, and the canvas editor is in preview. Everything saves as diff-readable .alab text you own — or JSON, if a tool downstream wants it."
+                : "is a local-first workspace for architecture documentation. C4 models and sequence diagrams both read today, and an MCP server lets an agent author and check them — the canvas editor that builds models by hand is coming soon. Everything lives as diff-readable .alab text you own — or JSON, if a tool downstream wants it."}
             </p>
 
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               {EDITOR_ENABLED ? (
                 <>
+                  {/* The demo leads even with the editor enabled: it is the
+                      thing that works end to end and needs no explanation,
+                      while the editor is still a preview. */}
                   <Link
-                    href="/editor"
+                    href="/demo"
                     aria-describedby="cta-note"
                     className={buttonClasses({ size: "lg" })}
                   >
-                    Open Editor
+                    Explore the live demo
                     <ArrowRight aria-hidden="true" />
                   </Link>
                   <Link
-                    href="/demo"
+                    href="/view/sequence"
                     className={buttonClasses({
                       variant: "outline",
                       size: "lg",
                     })}
                   >
-                    Explore the live demo
+                    Try sequence diagrams
+                  </Link>
+                  <Link
+                    href="/editor"
+                    className={buttonClasses({
+                      variant: "ghost",
+                      size: "lg",
+                    })}
+                  >
+                    Open the editor preview
                   </Link>
                 </>
               ) : (
@@ -180,13 +187,13 @@ export default function Home() {
                     <ArrowRight aria-hidden="true" />
                   </Link>
                   <Link
-                    href="/view/c4"
+                    href="/view/sequence"
                     className={buttonClasses({
                       variant: "outline",
                       size: "lg",
                     })}
                   >
-                    Paste your own model
+                    Try sequence diagrams
                   </Link>
                   <Badge variant="outline">Editor — coming soon</Badge>
                 </>
@@ -231,10 +238,10 @@ export default function Home() {
             One workspace, four kinds of documentation
           </h2>
           <p className="max-w-2xl leading-relaxed text-muted-foreground">
-            The first phase ships C4 model diagrams. The other three surfaces
-            are planned and will share the same local-first, text-on-disk
-            foundation — they are listed here as direction, not as promises with
-            dates.
+            Two of them work today — C4 models and sequence diagrams, both
+            readable and both plain text. The other two are planned and will
+            share the same local-first, text-on-disk foundation; they are listed
+            here as direction, not as promises with dates.
           </p>
         </div>
 
@@ -310,6 +317,99 @@ export default function Home() {
                       <Badge variant="outline">Editor — coming soon</Badge>
                     </>
                   )}
+                </div>
+              </CardHeader>
+            </Card>
+          </li>
+
+          {/* Shipping now: sequence diagrams, view mode. A real card with real
+              destinations, and no longer in PLANNED_DIAGRAM_TYPES — it was
+              listed as "coming soon" for one release after it started working,
+              which is the kind of stale promise this section exists to avoid. */}
+          <li className="flex lg:col-span-2">
+            <Card className="group relative flex w-full flex-col overflow-hidden border-accent/25 transition-all duration-300 hover:border-accent/45 hover:shadow-lg hover:shadow-accent/5">
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/8 via-transparent to-primary/6"
+              />
+              <CardHeader className="relative gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-lg border border-accent/30 bg-accent/10 text-accent">
+                    <Workflow aria-hidden="true" className="size-5" />
+                  </span>
+                  <Badge variant="accent">
+                    <span
+                      aria-hidden="true"
+                      className="size-1.5 rounded-full bg-accent"
+                    />
+                    Available now
+                  </Badge>
+                  <Badge variant="outline">View mode</Badge>
+                </div>
+                <CardTitle className="text-xl leading-tight">
+                  Sequence diagrams
+                </CardTitle>
+                <CardDescription className="max-w-2xl text-base">
+                  Trace one request across the systems you have modelled. The
+                  whole flow renders at once — click any message, participant or{" "}
+                  <code className="font-mono text-[0.9em]">alt</code> branch to
+                  spotlight it and read the details, or fold a service&apos;s
+                  dependencies away to see the shape underneath. Write it as{" "}
+                  <code className="font-mono text-[0.9em]">.alab</code> text or
+                  paste a Mermaid{" "}
+                  <code className="font-mono text-[0.9em]">
+                    sequenceDiagram
+                  </code>{" "}
+                  straight in.
+                </CardDescription>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/view/sequence"
+                    className={buttonClasses({ size: "md" })}
+                  >
+                    Open the sequence viewer
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                  <Link
+                    href="/syntax#sequence"
+                    className={buttonClasses({
+                      variant: "outline",
+                      size: "md",
+                    })}
+                  >
+                    Read the syntax
+                  </Link>
+                </div>
+              </CardHeader>
+            </Card>
+          </li>
+
+          {/* Shipping now, beta: the MCP server. Its own card rather than a
+              footnote, because "an agent can author these" is the reason a
+              reader with an agent open would care about the format at all. */}
+          <li className="flex">
+            <Card className="group relative flex w-full flex-col overflow-hidden transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
+              <CardHeader className="relative gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary">
+                    <Bot aria-hidden="true" className="size-5" />
+                  </span>
+                  <Badge variant="outline">Beta</Badge>
+                </div>
+                <CardTitle className="text-xl leading-tight">
+                  Built for AI agents
+                </CardTitle>
+                <CardDescription className="text-base">
+                  Point an agent at the MCP server and it gets the grammar and
+                  the real parser&apos;s verdict — ten read-only tools over both
+                  document kinds, so what it writes is valid before anyone opens
+                  it. Read-only by design: no tool here mutates your files.
+                </CardDescription>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Link href="/mcp" className={buttonClasses({ size: "md" })}>
+                    Connect an agent
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
                 </div>
               </CardHeader>
             </Card>
