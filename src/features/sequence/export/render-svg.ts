@@ -59,11 +59,20 @@ const CARRIED = [
   "dominant-baseline",
 ] as const;
 
-/** Selectors whose subtrees never belong in an exported still. */
-const DROPPED = [".af-seq-hit", ".af-seq-fold", ".af-seq-flow"].join(",");
+/** Controls that mean nothing in a file, whatever the export is for. */
+const DROPPED_ALWAYS = [".af-seq-hit", ".af-seq-fold"].join(",");
+
+/**
+ * The idle comet bands. Dropped from a STILL — frozen, they are three bright
+ * stripes across every message, the same reason reduced motion removes them
+ * rather than parking them — but KEPT for the animated export, where they are
+ * the thing being animated.
+ */
+const MOTION = ".af-seq-flow";
 
 export function renderSequenceSvg(
   source: SVGSVGElement,
+  options: { keepMotion?: boolean } = {},
 ): RenderedSequenceSvg | null {
   const viewBox = source.viewBox.baseVal;
   const width = viewBox.width;
@@ -107,7 +116,18 @@ export function renderSequenceSvg(
     }
   }
 
-  for (const node of clone.querySelectorAll(DROPPED)) node.remove();
+  for (const node of clone.querySelectorAll(DROPPED_ALWAYS)) node.remove();
+  if (options.keepMotion === true) {
+    // The bands are display:none while the reader has idle motion switched off,
+    // and the inlined styles do not carry `display`. Force them on: the toggle
+    // governs the resting page, not what an animation someone asked for
+    // contains.
+    for (const node of clone.querySelectorAll(MOTION)) {
+      node.setAttribute("style", "display:inline");
+    }
+  } else {
+    for (const node of clone.querySelectorAll(MOTION)) node.remove();
+  }
 
   // A standalone file needs intrinsic dimensions; on screen these are set by
   // the pane (100%/100% in fit mode), which means nothing in a file.

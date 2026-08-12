@@ -1059,6 +1059,10 @@ function Message({
       // block); replies keep the 6/5 they already wear, the solid kinds get a
       // long dash and a small gap.
       data-kind={kind}
+      // The step number, for consumers outside React that need to address one
+      // message: the GIF export reveals messages in order and has only the DOM
+      // to work from (export/frames.ts).
+      data-step={message.step}
       // AT REST — neither focused, animating, nor dimmed — and therefore
       // marching. The gate lives here rather than in a CSS :not() chain
       // because "at rest" is a fact about the focus MODEL (three separate

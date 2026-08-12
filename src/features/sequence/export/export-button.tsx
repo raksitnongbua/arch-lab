@@ -24,7 +24,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { Download, ImageDown } from "lucide-react";
+import { Download, Film, ImageDown } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -34,6 +34,8 @@ import {
 } from "@/features/viewer/export/download";
 import { cn } from "@/lib/utils";
 
+import { buildSequenceFrames } from "./frames";
+import { encodeGif } from "./gif";
 import { renderSequenceSvg } from "./render-svg";
 
 export function SequenceExportButton({
@@ -51,7 +53,7 @@ export function SequenceExportButton({
   const [busy, setBusy] = useState(false);
 
   const run = useCallback(
-    async (format: "svg" | "png") => {
+    async (format: "svg" | "png" | "gif") => {
       const svgNode =
         paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
       if (svgNode === null) {
@@ -75,8 +77,31 @@ export function SequenceExportButton({
           onAnnounce("Downloaded the diagram as SVG.");
           return;
         }
-        downloadBlob(await renderPngBlob(rendered), `${stem}.png`);
-        onAnnounce("Downloaded the diagram as PNG.");
+        if (format === "png") {
+          downloadBlob(await renderPngBlob(rendered), `${stem}.png`);
+          onAnnounce("Downloaded the diagram as PNG.");
+          return;
+        }
+
+        // GIF: one loop of the diagram's own idle motion. Synthesised rather
+        // than screen-recorded, so the file is the same on any machine — see
+        // export/frames.ts.
+        onAnnounce("Building the animation — this takes a moment.");
+        const built = await buildSequenceFrames(svgNode);
+        if (built === null) {
+          onAnnounce(
+            "Nothing to animate — this diagram has no moving lines, so a GIF would be twenty copies of the PNG.",
+          );
+          return;
+        }
+        const gif = encodeGif(built.frames, built.width, built.height);
+        downloadBlob(
+          new Blob([gif as BlobPart], { type: "image/gif" }),
+          `${stem}.gif`,
+        );
+        onAnnounce(
+          `Downloaded a looping GIF — ${built.frames.length} frames of the diagram's running lines.`,
+        );
       } catch (error) {
         // Named, not swallowed: rasterising can fail on a browser that refuses
         // to decode the SVG, and a button that silently does nothing is worse
@@ -101,6 +126,15 @@ export function SequenceExportButton({
       >
         <ImageDown aria-hidden="true" />
         PNG
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void run("gif")}
+        className={buttonClasses({ variant: "ghost", size: "sm" })}
+      >
+        <Film aria-hidden="true" />
+        GIF
       </button>
       <button
         type="button"
