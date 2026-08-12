@@ -316,7 +316,7 @@ export function SequenceDiagram({
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`Sequence diagram: ${title}. ${layout.participants.length} participants, ${layout.stepCount} messages. A text listing of every step follows the diagram.`}
-      className="block"
+      className="af-seq-svg block"
     >
       <defs>
         {/* CARD GRADIENTS — a vertical lift on each participant card, in that

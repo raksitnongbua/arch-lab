@@ -69,6 +69,7 @@ import { cn } from "@/lib/utils";
 import { decodeShareFragment } from "@/features/viewer/share/codec";
 
 import { MERMAID_SEQUENCE_EXAMPLE, SEQUENCE_EXAMPLE } from "../input/example";
+import { SequenceExportButton } from "../export/export-button";
 import { SequenceShareButton } from "../share/share-button";
 import {
   MERMAID_SEQUENCE_CAVEAT,
@@ -92,6 +93,9 @@ export function SequencePlayground(): React.JSX.Element {
   const [error, setError] = useState<SequenceInputError | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [pending, setPending] = useState<string | null>(null);
+
+  /** Scopes the export button's lookup for the live <svg>. */
+  const diagramPaneRef = useRef<HTMLElement>(null);
 
   const textareaId = useId();
   const hintId = useId();
@@ -327,6 +331,7 @@ export function SequencePlayground(): React.JSX.Element {
           sits below the fold in normal page flow: scrolling the PAGE is how
           you reach the text. */}
       <section
+        ref={diagramPaneRef}
         aria-label="Rendered sequence diagram"
         className={cn(
           "flex min-w-0 flex-col overflow-hidden bg-background",
@@ -411,6 +416,11 @@ export function SequencePlayground(): React.JSX.Element {
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
             <SequenceShareButton text={text} onAnnounce={setAnnouncement} />
+            <SequenceExportButton
+              paneRef={diagramPaneRef}
+              title={parsed?.file.metadata.title ?? "sequence-diagram"}
+              onAnnounce={setAnnouncement}
+            />
             <button
               type="button"
               onClick={() => loadExample(SEQUENCE_EXAMPLE)}
