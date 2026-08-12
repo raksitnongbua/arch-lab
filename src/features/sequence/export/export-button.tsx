@@ -24,13 +24,7 @@
  */
 
 import { useCallback, useState } from "react";
-import {
-  Download,
-  Film,
-  ImageDown,
-  Settings2,
-  TriangleAlert,
-} from "lucide-react";
+import { ChevronDown, Download, TriangleAlert } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -56,6 +50,9 @@ import { renderSequenceSvg } from "./render-svg";
  * it is one object rather than a new one per render that every callback
  * depending on it would have to churn for.
  */
+/** What the one download button can produce. */
+type ExportFormat = "png" | "svg" | "gif";
+
 const PNG_SCALE: Record<GifSharpness, number> = {
   compact: 1,
   standard: 2,
@@ -106,154 +103,150 @@ export function SequenceExportButton({
     DEFAULT_GIF_QUALITY.smoothness,
   );
 
-  const run = useCallback(
-    async (format: "svg" | "png" | "gif") => {
-      const svgNode =
-        paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
-      if (svgNode === null) {
-        const message = "Nothing to export — the diagram is not on screen.";
+  /**
+   * ONE format choice rather than one button per format. PNG and SVG are the
+   * same act — "give me a picture of this" — differing only in what the picture
+   * is made of, and GIF differs only in having time in it. Three buttons made
+   * that look like three features and put the rarest one (SVG) at the same
+   * weight as the common one.
+   */
+  const [format, setFormat] = useState<ExportFormat>("png");
+
+  const run = useCallback(async () => {
+    const svgNode =
+      paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
+    if (svgNode === null) {
+      const message = "Nothing to export — the diagram is not on screen.";
+      setStatus({ kind: "error", message });
+      onAnnounce(message);
+      return;
+    }
+
+    setStatus({ kind: "busy", label: "Preparing…" });
+    try {
+      const rendered = renderSequenceSvg(svgNode);
+      if (rendered === null) {
+        const message = "Nothing to export — the diagram has no size yet.";
         setStatus({ kind: "error", message });
         onAnnounce(message);
         return;
       }
-
-      setStatus({ kind: "busy", label: "Preparing…" });
-      try {
-        const rendered = renderSequenceSvg(svgNode);
-        if (rendered === null) {
-          const message = "Nothing to export — the diagram has no size yet.";
-          setStatus({ kind: "error", message });
-          onAnnounce(message);
-          return;
-        }
-        const stem = fileStem(title);
-        if (format === "svg") {
-          downloadBlob(
-            new Blob([rendered.svg], { type: "image/svg+xml;charset=utf-8" }),
-            `${stem}.svg`,
-          );
-          onAnnounce("Downloaded the diagram as SVG.");
-          return;
-        }
-        if (format === "png") {
-          downloadBlob(
-            await renderPngBlob(rendered, PNG_SCALE[sharpness]),
-            `${stem}.png`,
-          );
-          onAnnounce(
-            `Downloaded the diagram as PNG at ${PNG_SCALE[sharpness]}× scale.`,
-          );
-          return;
-        }
-
-        // GIF: one loop of the diagram's own idle motion. Synthesised rather
-        // than screen-recorded, so the file is the same on any machine — see
-        // export/frames.ts.
-        onAnnounce("Building the animation — this takes a moment.");
-        const built = await buildSequenceFrames(
-          svgNode,
-          { sharpness, smoothness },
-          (done, total) => {
-            setStatus({ kind: "busy", label: `Frame ${done} of ${total}…` });
-          },
-        );
-        setStatus({ kind: "busy", label: "Encoding…" });
-        if (built === null) {
-          const message =
-            "Nothing to animate — this diagram has no moving lines, so a GIF would be copies of the PNG.";
-          setStatus({ kind: "error", message });
-          onAnnounce(message);
-          return;
-        }
-        const gif = encodeGif(built.frames, built.width, built.height);
+      const stem = fileStem(title);
+      if (format === "svg") {
         downloadBlob(
-          new Blob([gif as BlobPart], { type: "image/gif" }),
-          `${stem}.gif`,
+          new Blob([rendered.svg], { type: "image/svg+xml;charset=utf-8" }),
+          `${stem}.svg`,
+        );
+        onAnnounce("Downloaded the diagram as SVG.");
+        return;
+      }
+      if (format === "png") {
+        downloadBlob(
+          await renderPngBlob(rendered, PNG_SCALE[sharpness]),
+          `${stem}.png`,
         );
         onAnnounce(
-          `Downloaded a looping GIF — ${built.frames.length} frames of the diagram's running lines.`,
+          `Downloaded the diagram as PNG at ${PNG_SCALE[sharpness]}× scale.`,
         );
-      } catch (error) {
-        // Named and SHOWN, not swallowed: rasterising can fail on a browser that
-        // refuses to decode the SVG, and a button that silently does nothing is
-        // worse than one that says why.
-        const message =
-          error instanceof Error ? error.message : "unknown error";
-        setStatus({ kind: "error", message });
-        onAnnounce(`Export failed: ${message}.`);
         return;
-      } finally {
-        // Only clear a BUSY state; an error must survive to stay on screen.
-        setStatus((current) =>
-          current.kind === "busy" ? { kind: "idle" } : current,
-        );
       }
-    },
-    [paneRef, title, onAnnounce, sharpness, smoothness],
-  );
+
+      // GIF: one loop of the diagram's own idle motion. Synthesised rather
+      // than screen-recorded, so the file is the same on any machine — see
+      // export/frames.ts.
+      onAnnounce("Building the animation — this takes a moment.");
+      const built = await buildSequenceFrames(
+        svgNode,
+        { sharpness, smoothness },
+        (done, total) => {
+          setStatus({ kind: "busy", label: `Frame ${done} of ${total}…` });
+        },
+      );
+      setStatus({ kind: "busy", label: "Encoding…" });
+      if (built === null) {
+        const message =
+          "Nothing to animate — this diagram has no moving lines, so a GIF would be copies of the PNG.";
+        setStatus({ kind: "error", message });
+        onAnnounce(message);
+        return;
+      }
+      const gif = encodeGif(built.frames, built.width, built.height);
+      downloadBlob(
+        new Blob([gif as BlobPart], { type: "image/gif" }),
+        `${stem}.gif`,
+      );
+      onAnnounce(
+        `Downloaded a looping GIF — ${built.frames.length} frames of the diagram's running lines.`,
+      );
+    } catch (error) {
+      // Named and SHOWN, not swallowed: rasterising can fail on a browser that
+      // refuses to decode the SVG, and a button that silently does nothing is
+      // worse than one that says why.
+      const message = error instanceof Error ? error.message : "unknown error";
+      setStatus({ kind: "error", message });
+      onAnnounce(`Export failed: ${message}.`);
+      return;
+    } finally {
+      // Only clear a BUSY state; an error must survive to stay on screen.
+      setStatus((current) =>
+        current.kind === "busy" ? { kind: "idle" } : current,
+      );
+    }
+  }, [paneRef, title, onAnnounce, sharpness, smoothness, format]);
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void run("png")}
-        className={buttonClasses({ variant: "ghost", size: "sm" })}
-      >
-        <ImageDown aria-hidden="true" />
-        PNG
-      </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void run("gif")}
-        className={buttonClasses({ variant: "ghost", size: "sm" })}
-      >
-        <Film aria-hidden="true" />
-        GIF
-      </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void run("svg")}
-        className={buttonClasses({ variant: "ghost", size: "sm" })}
-      >
-        <Download aria-hidden="true" />
-        SVG
-      </button>
+    <div className={cn("relative", className)}>
+      {/* ONE button at rest. It used to be three verbs and a gear, which is four
+          controls for an action most readers take once — and it made SVG, the
+          rarest format, as loud as PNG. Everything now lives behind a single
+          disclosure: pick a format, adjust it if you care, download.
 
-      {/* THE OPTIONS, behind one small button. They were two labelled selects
-          sitting open in the toolbar, which put four words and two dropdowns
-          permanently in front of a reader who mostly just wants to click PNG.
-          Folded away, the row is three verbs and a gear.
-
-          A native <details> rather than a hand-built popover: it gives the
-          toggle, the keyboard behaviour and the expanded/collapsed state to
-          assistive technology for free, and a custom listbox would be re-earning
-          all of that in exchange for nothing. The marker is hidden because the
-          summary is styled as a button; it is still a real disclosure. */}
+          A native <details> rather than a hand-built menu: the toggle, the
+          keyboard behaviour and the expanded/collapsed state come free and
+          correct, where a custom popover would be re-earning all of it. The
+          marker is hidden because the summary is styled as a button; it is still
+          a real disclosure. */}
       <details className="relative">
         <summary
-          aria-label="Export options"
-          title="Export options"
           className={cn(
             buttonClasses({ variant: "ghost", size: "sm" }),
             "cursor-pointer list-none [&::-webkit-details-marker]:hidden",
           )}
         >
-          <Settings2 aria-hidden="true" />
+          <Download aria-hidden="true" />
+          Export
+          <ChevronDown aria-hidden="true" className="size-3.5 opacity-60" />
         </summary>
 
         <div className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-lg">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            Format
+            <select
+              value={format}
+              disabled={busy}
+              onChange={(event) =>
+                setFormat(event.target.value as ExportFormat)
+              }
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="png">PNG · a picture, for pasting anywhere</option>
+              <option value="svg">SVG · vector, sharp at any size</option>
+              <option value="gif">GIF · one loop of the running lines</option>
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             Sharpness
             <select
               value={sharpness}
-              disabled={busy}
+              /* SVG is vector: already sharp at every size, so the control has
+                 nothing to do and says so by being unavailable rather than by
+                 quietly doing nothing. */
+              disabled={busy || format === "svg"}
               onChange={(event) =>
                 setSharpness(event.target.value as GifSharpness)
               }
-              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground disabled:opacity-50"
             >
               <option value="compact">
                 Compact · PNG 1× · GIF {GIF_SHARPNESS.compact}px
@@ -271,11 +264,12 @@ export function SequenceExportButton({
             Smoothness
             <select
               value={smoothness}
-              disabled={busy}
+              /* Frames only exist in the animation. */
+              disabled={busy || format !== "gif"}
               onChange={(event) =>
                 setSmoothness(event.target.value as GifSmoothness)
               }
-              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground disabled:opacity-50"
             >
               <option value="simple">
                 Simple · {GIF_SMOOTHNESS.simple.frames} frames
@@ -289,30 +283,38 @@ export function SequenceExportButton({
             </select>
           </label>
 
-          {/* Which control reaches which format. Sharpness is not GIF-only even
-              though it sits beside the GIF button, and SVG answers to neither —
-              saying so here costs a line and saves a wrong expectation. */}
           <p className="text-[11px] leading-4 text-muted-foreground">
-            Sharpness applies to PNG and GIF. Smoothness is frames per animation
-            loop, so it reaches the GIF only — the loop stays the same length,
-            so more frames means finer motion rather than slower. SVG is vector
-            and ignores both.
+            {format === "gif"
+              ? "The loop stays the same length whatever the smoothness, so more frames means finer motion rather than slower."
+              : format === "svg"
+                ? "Vector, so it stays sharp at any size and carries no animation."
+                : "A still of the diagram exactly as it is on screen, folds included."}
           </p>
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void run()}
+            className={buttonClasses({ size: "sm" })}
+          >
+            <Download aria-hidden="true" />
+            {busy ? "Working…" : `Download ${format.toUpperCase()}`}
+          </button>
+
+          {status.kind === "busy" ? (
+            <p className="text-xs text-muted-foreground">{status.label}</p>
+          ) : null}
+          {status.kind === "error" ? (
+            <p className="flex items-start gap-1.5 text-xs text-warning">
+              <TriangleAlert
+                aria-hidden="true"
+                className="mt-0.5 size-3.5 shrink-0"
+              />
+              {status.message}
+            </p>
+          ) : null}
         </div>
       </details>
-
-      {status.kind === "busy" ? (
-        <p className="text-xs text-muted-foreground">{status.label}</p>
-      ) : null}
-      {status.kind === "error" ? (
-        <p className="flex items-start gap-1.5 text-xs text-warning">
-          <TriangleAlert
-            aria-hidden="true"
-            className="mt-0.5 size-3.5 shrink-0"
-          />
-          {status.message}
-        </p>
-      ) : null}
     </div>
   );
 }
