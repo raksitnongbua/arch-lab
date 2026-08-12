@@ -19,6 +19,13 @@
  * which types are offerable, and the creation of the node+edge pair, live in
  * exactly one place; this control only chooses *where*.
  *
+ * ONE exception, and it is the important one: released over an EXISTING
+ * element, this relates the two instead of creating anything. The gesture that
+ * started it does not decide the outcome — where it ends does. Before that,
+ * aiming the grip at a neighbour dropped a new node on top of it, which is the
+ * same silent wrong outcome the full-bleed body handle fixes on the connection
+ * dots' side.
+ *
  * The drag is hand-rolled rather than routed through React Flow: React Flow
  * drags EXISTING nodes, and the target here does not exist yet. `nodrag` is
  * what stops the parent node being dragged out from under the gesture —
@@ -42,10 +49,12 @@ import { createPortal } from "react-dom";
 import { useReactFlow } from "@xyflow/react";
 import { ArrowUpRight } from "lucide-react";
 
+import { toast } from "@/components/ui/toast";
 import type { C4Node, Point } from "@/types";
 
 import { GRID_SIZE, DEFAULT_NODE_SIZE } from "../../lib/canvas-constants";
 import { setPendingConnect } from "../canvas";
+import { useEditorStore } from "../../state";
 
 /**
  * Below this drag distance (flow units) the gesture counts as a CLICK, and the
@@ -122,6 +131,43 @@ export function RelateGrip({ node }: RelateGripProps): React.JSX.Element {
         Math.hypot(released.x - start.x, released.y - start.y) >=
         RELATE_DRAG_THRESHOLD;
 
+      // Released ON an existing element? Then the gesture meant "relate these
+      // two", whatever control started it. Without this the grip dropped a
+      // brand-new node on top of the one being aimed at — the same wrong
+      // outcome the full-bleed body handle fixes for the connection dots,
+      // reached by the other route. The two gestures converge here rather than
+      // each owning a copy of the rule.
+      const store = useEditorStore.getState();
+      const diagram = store.model.diagrams[store.activeDiagramId];
+      const hit = diagram?.nodes.find(
+        (candidate) =>
+          candidate.id !== node.id &&
+          released.x >= candidate.position.x &&
+          released.x <= candidate.position.x + candidate.size.width &&
+          released.y >= candidate.position.y &&
+          released.y <= candidate.position.y + candidate.size.height,
+      );
+      if (moved && hit !== undefined) {
+        try {
+          const edgeId = store.createEdge({
+            diagramId: store.activeDiagramId,
+            source: node.id,
+            target: hit.id,
+          });
+          store.setSelection({ nodeIds: [], edgeIds: [edgeId] });
+          store.beginLabelEdit({ kind: "edge", id: edgeId });
+        } catch (error) {
+          toast({
+            message:
+              error instanceof Error
+                ? error.message
+                : "Could not create the relationship.",
+            tone: "warning",
+          });
+        }
+        return;
+      }
+
       // A drag places the new element where the ghost was; a click puts it to
       // the right, reading order for a left-to-right relationship.
       const flowPosition: Point = moved
@@ -163,9 +209,21 @@ export function RelateGrip({ node }: RelateGripProps): React.JSX.Element {
       <button
         type="button"
         // `nodrag` keeps React Flow from dragging the parent node instead.
-        className="nodrag absolute -right-2 -bottom-2 z-[3] flex size-5 cursor-crosshair items-center justify-center rounded-full border border-node-border bg-node text-muted-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 hover:border-primary hover:text-primary focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none"
-        aria-label={`Add a related element from ${node.name} — drag to place it, or click to put it alongside`}
-        title="Drag to relate"
+        // `af-relate-grip` is the hook canvas-motion.css uses to hide this
+        // while a CONNECTION drag is in flight — otherwise a neighbour's grip
+        // sits above its own node under the pointer and eats the drop.
+        //
+        // Accents to `--accent`, not `--primary`. The four connection dots own
+        // primary and mean "attach to something that EXISTS"; this grip means
+        // "make something NEW". They live a few dozen pixels apart on the same
+        // node edge, so sharing an accent colour made two different outcomes
+        // look like one control.
+        className="af-relate-grip nodrag absolute -right-2 -bottom-2 z-[3] flex size-5 cursor-crosshair items-center justify-center rounded-full border border-node-border bg-node text-muted-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 hover:border-accent hover:text-accent focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none"
+        // Leads with the OUTCOME. The old title said "Drag to relate", which
+        // is what the connection dots do — the one label on the node described
+        // the neighbouring control's job.
+        aria-label={`Add a NEW element related to ${node.name} — drag to place it, or click to put it alongside`}
+        title="Drag out to add a new element"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={finish}
@@ -180,7 +238,10 @@ export function RelateGrip({ node }: RelateGripProps): React.JSX.Element {
         ? createPortal(
             <div
               aria-hidden="true"
-              className="pointer-events-none fixed z-50 rounded-lg border-2 border-dashed border-primary/70 bg-primary/5"
+              // Dashed + accent: the same language the connection preview uses for
+              // its `create` verdict (lib/connect-verdict.ts), so "dashed accent
+              // means something that does not exist yet" holds across both routes.
+              className="pointer-events-none fixed z-50 rounded-lg border-2 border-dashed border-accent/70 bg-accent/5"
               style={{
                 left: ghost.left,
                 top: ghost.top,

@@ -22,6 +22,17 @@ export const PASTE_OFFSET = 16;
 /** Fit-to-view padding around the node bounds, in screen pixels (AF-E1-S1). */
 export const FIT_VIEW_PADDING_PX = 48;
 
+/**
+ * How far off a connection handle a release still counts, in flow units.
+ *
+ * One decision expressed once: this is also the dots' hit box in
+ * `node-chrome.tsx` (`after:-inset-3` → 32px). Deliberately small — node
+ * INTERIORS are covered by the full-bleed body handle there, not by this
+ * radius, so widening it would only start reaching into neighbouring nodes and
+ * silently retargeting the drop.
+ */
+export const CONNECT_SNAP_RADIUS = 32;
+
 /** Arrow-key nudge distances (AF-E1-S3): plain vs `Shift`-held. */
 export const NUDGE_STEP = 8;
 export const NUDGE_STEP_FINE = 1;

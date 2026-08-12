@@ -121,19 +121,173 @@
     border-color var(--motion-hover, 0ms) ease-out;
 }
 
+/* The four connection dots. Size and colour live HERE rather than as Tailwind
+ * utilities on the element: layered `!important` utilities outrank unlayered
+ * ones regardless of specificity, so `!size-2` / `!bg-*` on the element would
+ * beat every state below and the dot could never change. The element keeps
+ * only its transparent 32px hit area and the reveal transition. */
+
+.react-flow__node .react-flow__handle.af-node-dot {
+  width: 8px;
+  height: 8px;
+  background-color: color-mix(
+    in oklab,
+    var(--node-foreground) 60%,
+    transparent
+  );
+  border-color: var(--node-border);
+  transition:
+    opacity var(--motion-hover, 0ms) ease-out,
+    width var(--motion-hover, 0ms) ease-out,
+    height var(--motion-hover, 0ms) ease-out,
+    background-color var(--motion-hover, 0ms) ease-out,
+    box-shadow var(--motion-hover, 0ms) ease-out;
+}
+
+.react-flow__node .react-flow__handle.af-node-dot:hover {
+  width: 12px;
+  height: 12px;
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
 .react-flow__handle.connectingfrom {
   opacity: 1 !important;
 }
 
 .react-flow__handle.valid {
   opacity: 1 !important;
-  background-color: var(--ring) !important;
-  border-color: var(--ring) !important;
+  background-color: var(--success) !important;
+  border-color: var(--success) !important;
 }
 
-/* The live connection preview line follows the selection accent instead of
- * React Flow's default grey, in both themes (AF-E6-S1 parity). */
-.react-flow__connection-path {
-  stroke: var(--ring);
-  stroke-width: 1.5;
+/* ---- drop target: the whole node lights up --------------------------------
+ *
+ * `.af-node-drop` is the full-bleed body handle (node-chrome.tsx). React Flow
+ * puts `connectingto` on whatever handle the pointer has acquired and adds
+ * `valid` when `isValidConnection` agrees, so these two selectors cover the
+ * entire "where am I about to drop" question with no React state and no
+ * re-render per pointer move.
+ *
+ * `--success`, not `--primary`: the latter is byte-identical to `--ring`,
+ * which already means selected AND hovered, so a primary halo is invisible on
+ * a node that happens to be selected. The connection line reads the same
+ * verdict from `lib/connect-verdict.ts`; this is the node half of it. */
+
+.react-flow__handle.af-node-drop {
+  opacity: 1 !important;
+  /* Above the node's own content while a connection is live.
+   *
+   * The content div is `relative z-[1]`, and a positioned element with an
+   * explicit z-index paints over one with `z-index: auto` whatever the DOM
+   * order — so `elementFromPoint` at a node's centre returned the LABEL, not
+   * this handle. React Flow resolves a click target through
+   * `elementFromPoint`, so clicking the middle of a node (the obvious place)
+   * did nothing while click-to-connect was armed.
+   *
+   * Scoped to the live gesture so that at rest this cannot shadow the label,
+   * the badges or the grip for any purpose — belt and braces on top of the
+   * `pointer-events: none` it already has when not a `.connectionindicator`. */
+  z-index: 0;
+  /* Owns its own background, rather than a Tailwind `!bg-transparent` on the
+   * element: layered `!important` utilities outrank unlayered ones regardless
+   * of specificity, so the tint below could never have won against one. */
+  background-color: transparent;
+  transition:
+    background-color var(--motion-hover, 0ms) ease-out,
+    box-shadow var(--motion-hover, 0ms) ease-out;
 }
+
+.react-flow__handle.af-node-drop.connectingto.valid {
+  background-color: color-mix(
+    in oklab,
+    var(--success) 16%,
+    transparent
+  ) !important;
+  box-shadow: 0 0 0 2px var(--success);
+}
+
+/* Back on the element the drag started from. `isValidConnection` refuses only
+ * this case, so `:not(.valid)` names it exactly. Neutral, never destructive —
+ * returning to where you started is how every gesture is cancelled, and
+ * painting that red teaches people the escape hatch is a mistake. */
+.react-flow__handle.af-node-drop.connectingto:not(.valid) {
+  box-shadow: 0 0 0 2px var(--muted-foreground);
+}
+
+/* The source keeps its ring for the whole gesture, so "where did this come
+ * from" never depends on remembering. Reuses the always-mounted selection ring
+ * element rather than adding DOM. `clickconnecting` is the same idea for the
+ * no-drag route — React Flow puts it on the dot that armed the mode. */
+.react-flow__node:has(.react-flow__handle.connectingfrom) .af-selection-ring,
+.react-flow__node:has(.react-flow__handle.clickconnecting) .af-selection-ring {
+  opacity: 1;
+}
+
+/* ---- click-to-connect: the armed dot ---------------------------------------
+ *
+ * Clicking a dot arms a mode that persists until you click an element, press
+ * Escape, or click the canvas. A mode with no visible state is the thing that
+ * made React Flow's own click-to-connect unusable, so the dot that armed it
+ * stays lit, enlarged and ringed for the whole time — it is the only part of
+ * the UI that knows where the connection will come from. */
+
+.react-flow__node .react-flow__handle.af-node-dot.clickconnecting {
+  /* Stays visible after the pointer leaves its node — the dots are otherwise
+   * revealed only on hover, and the one piece of UI that knows where the
+   * connection starts from must not vanish the moment you go looking for a
+   * target. */
+  opacity: 1 !important;
+  width: 12px;
+  height: 12px;
+  background-color: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 30%, transparent);
+}
+
+/* While ARMED (no pointer button down), the element under the cursor is the one
+ * the next click lands on — so plain :hover is the target affordance, where the
+ * drag route uses React Flow's own `connectingto`. Scoped to
+ * `[data-af-click-connecting]` so it can never fire during a drag, where
+ * hovering a node you are not dragging over would light up the wrong one. */
+[data-af-click-connecting] .react-flow__node:hover .af-node-drop {
+  background-color: color-mix(
+    in oklab,
+    var(--success) 16%,
+    transparent
+  ) !important;
+  box-shadow: 0 0 0 2px var(--success);
+}
+
+/* …except the element you started from, which would be a self-relationship.
+ * Same neutral treatment as releasing a drag back on the source: clicking here
+ * disarms, and disarming is not an error. */
+[data-af-click-connecting]
+  .react-flow__node:hover:has(.react-flow__handle.clickconnecting)
+  .af-node-drop {
+  background-color: transparent !important;
+  box-shadow: 0 0 0 2px var(--muted-foreground);
+}
+
+/* A neighbour's relate-grip would otherwise sit above its own node under the
+ * pointer: `elementFromPoint` returns the grip's <button>, no handle is
+ * acquired, and the drop silently becomes "create a new element" — the exact
+ * bug the body handle exists to kill, reached by another route. The attribute
+ * is stamped on <html> by connect-hint.tsx while a drag is in flight. */
+[data-af-connecting] .af-relate-grip {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* See the z-index note on `.af-node-drop`: only while a connection is live does
+ * the drop target need to sit above the node's own content, and it must clear
+ * the content div's `z-[1]` and the selection ring's `z-[2]`. */
+[data-af-connecting] .react-flow__handle.af-node-drop {
+  z-index: 4;
+}
+
+/* The preview line's stroke is owned by `edges/connection-line.tsx`, which
+ * paints it from the verdict table — there is deliberately no rule for
+ * `.react-flow__connection-path` here any more. A second definition of the
+ * line's colour is exactly how the preview came to disagree with the edge it
+ * was previewing. */
