@@ -600,6 +600,50 @@
   animation: af-hero-fade 260ms ease-out both;
 }
 
+/* ---- the hero's KIND SWAP ------------------------------------------------------
+ * The card shows both document kinds by alternating between them: a C4 container
+ * diagram, then a sequence flow, indefinitely. The `C4 / Sequence` labels in its
+ * header are not decoration — they say which one is on screen, and they light in
+ * step with it.
+ *
+ * ONE keyframe drives everything. The two panels and the two header labels all
+ * run it; the sequence side simply starts a half-cycle early via a negative
+ * delay, so the pair can never drift out of sync the way two hand-tuned
+ * animations would. `visibility` is in the keyframes alongside opacity because
+ * it animates discretely: the off panel becomes `hidden` at the midpoint, which
+ * takes it out of painting entirely rather than leaving an invisible diagram
+ * being composited forever.
+ *
+ * Fully out before the other comes in — the fade windows do not overlap — since
+ * two diagrams half-visible at once reads as a rendering fault rather than a
+ * transition. */
+@keyframes af-hero-swap {
+  0%,
+  44% {
+    opacity: 1;
+    visibility: visible;
+  }
+  49%,
+  95% {
+    opacity: 0;
+    visibility: hidden;
+  }
+  100% {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.af-hero-kind {
+  animation: af-hero-swap 17s ease-in-out infinite;
+}
+
+/* The half-cycle offset. Negative, so the sequence side is already mid-cycle on
+   the first frame instead of the card sitting on a blank panel for 8 seconds. */
+.af-hero-kind-alt {
+  animation-delay: -8.5s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* The global backstop already collapses the entrances onto their natural
      frame. The ambient loops need saying explicitly: parked, not sped up. */
@@ -612,6 +656,23 @@
   .af-hero-flow {
     animation: none;
     opacity: 0;
+  }
+
+  /* The swap PARKS on the C4 panel rather than cycling. Both halves need
+     stating: without the second rule the sequence panel keeps its from-frame
+     and the two diagrams stack on top of each other. Parking on a real,
+     complete diagram is the meaningful frame here — which is the whole
+     reduced-motion rule in this codebase, not merely "slower". */
+  .af-hero-kind {
+    animation: none;
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .af-hero-kind-alt {
+    animation: none;
+    opacity: 0;
+    visibility: hidden;
   }
 }
 
