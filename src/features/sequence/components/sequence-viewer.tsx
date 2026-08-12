@@ -458,8 +458,31 @@ export function SequenceViewer({
     return Math.min(width / layout.width, height / layout.height);
   }, [layout]);
 
+  /**
+   * WHAT THE VIEW WAS CENTRED ON when a zoom started, as a fraction of the
+   * scrollable content on each axis. Applied again after the re-render, so a
+   * zoom keeps looking at what it was looking at instead of snapping to the
+   * top-left corner.
+   *
+   * Fractions rather than diagram coordinates, because the two zoom states
+   * measure differently — in fit mode the drawing is letterboxed inside an
+   * SVG that fills the pane, while at a numeric scale the SVG *is* the
+   * drawing — and a fraction is the same quantity in both. It also gives the
+   * fit → zoom step the right answer for free: fit has no overflow, so its
+   * centre fraction is exactly 0.5, and staying at 0.5 after the zoom is what
+   * "keep it centred" means.
+   */
+  const zoomAnchor = useRef<{ cx: number; cy: number } | null>(null);
+
   const applyZoom = useCallback(
     (next: number) => {
+      const pane = diagramRegionRef.current;
+      if (pane !== null && pane.scrollWidth > 0 && pane.scrollHeight > 0) {
+        zoomAnchor.current = {
+          cx: (pane.scrollLeft + pane.clientWidth / 2) / pane.scrollWidth,
+          cy: (pane.scrollTop + pane.clientHeight / 2) / pane.scrollHeight,
+        };
+      }
       const clamped = Math.min(4, Math.max(0.1, next));
       setZoom(clamped);
       onAnnounce(
@@ -468,6 +491,30 @@ export function SequenceViewer({
     },
     [onAnnounce],
   );
+
+  /**
+   * Re-centre on the anchored point once the new scale has laid out. A DOM
+   * scroll write in an effect, not state — the same shape as the
+   * focus-follows-scroll effect above, and for the same reason: the value
+   * depends on geometry that only exists after the commit. Assigning past the
+   * scrollable range is safe; the browser clamps, which is exactly right when
+   * the new scale leaves an axis with nothing to scroll.
+   *
+   * Not `useLayoutEffect`, which is the usual reach for "position before paint":
+   * every zoom here originates in a click, and React flushes passive effects
+   * from a discrete event before yielding to the browser, so there is no frame
+   * painted at the stale offset to avoid — while a layout effect would warn on
+   * every server render of this client component for nothing.
+   */
+  useEffect(() => {
+    const anchor = zoomAnchor.current;
+    if (anchor === null) return;
+    zoomAnchor.current = null;
+    const pane = diagramRegionRef.current;
+    if (pane === null) return;
+    pane.scrollLeft = anchor.cx * pane.scrollWidth - pane.clientWidth / 2;
+    pane.scrollTop = anchor.cy * pane.scrollHeight - pane.clientHeight / 2;
+  }, [zoom]);
 
   const stepZoom = useCallback(
     (direction: 1 | -1) => {
@@ -733,6 +780,12 @@ export function SequenceViewer({
           ref={diagramRegionRef}
           className={cn(
             "h-full overflow-auto bg-canvas p-3",
+            // Flex ONLY at a numeric scale, so the wrapper's `m-auto` can
+            // centre the drawing on both axes when it is smaller than the
+            // pane. Fit mode is left as plain block layout: its child already
+            // fills the pane and the SVG's own `xMidYMid` does the centring, so
+            // there is nothing to gain and a working layout to risk.
+            zoom !== "fit" && "flex",
             // `grab` whenever the view is past fit, which is where panning is
             // possible. At a zoom small enough that the drawing still fits it
             // over-promises by a cursor — the pointer-down guard measures real
@@ -778,7 +831,16 @@ export function SequenceViewer({
               focus-follows nudge above pulls the focused element clear. That
               is ordinary inspector-over-canvas behaviour, and it beats
               rescaling the diagram every time someone clicks. */}
-          <div className={zoom === "fit" ? "h-full w-full" : "w-max"}>
+          {/* `m-auto` and not `justify-center`/`items-center`: auto margins
+              centre a flex item that is SMALLER than the container, and
+              collapse to zero when it is bigger, so the overflow stays in the
+              scrollable direction. Centring with justify/align instead
+              overflows in BOTH directions and makes the leading half
+              unreachable — a scroll container cannot scroll to negative
+              offsets. This is the documented workaround for exactly that, and
+              it is why zooming in past the pane still lets you reach the top
+              and left of the diagram. */}
+          <div className={zoom === "fit" ? "h-full w-full" : "m-auto w-max"}>
             <SequenceDiagram
               layout={layout}
               title={file.metadata.title}
