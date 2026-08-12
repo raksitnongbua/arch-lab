@@ -58,7 +58,7 @@ registerHooks({
   },
 });
 
-const { normalisePaintUrls, ensureSansFallback } = await import(
+const { normalisePaintUrl, withSansFallback } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/export/render-svg.ts"))
     .href
 );
@@ -110,75 +110,115 @@ check("the properties that make a diagram visible are all carried", () => {
 
 check("an absolutised paint reference is rewritten to a fragment", () => {
   assert.equal(
-    normalisePaintUrls('stroke:url("http://localhost:3000/view/sequence#g1")'),
-    "stroke:url(#g1)",
+    normalisePaintUrl('url("http://localhost:3000/view/sequence#g1")'),
+    "url(#g1)",
   );
 });
 
-check("it handles single quotes and no quotes alike", () => {
-  assert.equal(
-    normalisePaintUrls("fill:url('https://a.b/c#x')"),
-    "fill:url(#x)",
-  );
-  assert.equal(normalisePaintUrls("fill:url(https://a.b/c#x)"), "fill:url(#x)");
+check("the quotes go with it — no remnant is left inside the reference", () => {
+  // The earlier pattern kept the closing quote inside the captured id and
+  // produced `url(#g1")`, which names nothing: every gradient in the exported
+  // file stayed unpainted while the markup still looked plausible.
+  const out = normalisePaintUrl('url("http://h/p#g1")');
+  assert.equal(out, "url(#g1)");
+  assert.ok(!out.includes('"'), `a quote survived: ${out}`);
 });
 
-check("an already-local reference is left exactly as it is", () => {
-  assert.equal(normalisePaintUrls("fill:url(#x)"), "fill:url(#x)");
-  assert.equal(normalisePaintUrls('fill:url("#x")'), "fill:url(#x)");
+check("single quotes and bare urls behave the same", () => {
+  assert.equal(normalisePaintUrl("url('https://a.b/c#x')"), "url(#x)");
+  assert.equal(normalisePaintUrl("url(https://a.b/c#x)"), "url(#x)");
 });
 
-check("every reference in a document is rewritten, not just the first", () => {
-  const input =
-    'a url("http://h/p#one") b url("http://h/p#two") c url("http://h/p#three")';
-  assert.equal(
-    normalisePaintUrls(input),
-    "a url(#one) b url(#two) c url(#three)",
-  );
+check("an already-local reference is untouched", () => {
+  assert.equal(normalisePaintUrl("url(#x)"), "url(#x)");
 });
 
-check("ids containing dashes and underscores survive", () => {
-  // React's useId produces ids like `_R_2qanpfiutb_line1`, which is exactly
-  // what these references point at.
+check("ids from React's useId survive intact", () => {
   assert.equal(
-    normalisePaintUrls('url("http://h/p#_R_2qanpfiutb_line1")'),
+    normalisePaintUrl('url("http://h/p#_R_2qanpfiutb_line1")'),
     "url(#_R_2qanpfiutb_line1)",
   );
 });
 
-check("it does not eat text that merely contains a hash", () => {
-  const input = "<text>see #3 for details</text>";
-  assert.equal(normalisePaintUrls(input), input);
+check("a value with no url() is returned unchanged", () => {
+  assert.equal(normalisePaintUrl("oklch(0.6 0.02 265)"), "oklch(0.6 0.02 265)");
 });
 
 /* ---- 3. fonts fall back to a sans, never the UA serif -------------------- */
 
 check("a family with no generic gains a sans fallback", () => {
   assert.equal(
-    ensureSansFallback('style="font-family:__Geist_abc123"'),
-    'style="font-family:__Geist_abc123, ui-sans-serif, system-ui, sans-serif"',
+    withSansFallback("__Geist_abc123"),
+    "__Geist_abc123, ui-sans-serif, system-ui, sans-serif",
   );
 });
 
 check("a family that already ends in a generic is left alone", () => {
-  const already = 'style="font-family:Geist, sans-serif"';
-  assert.equal(ensureSansFallback(already), already);
-  const mono = 'style="font-family:Menlo, monospace"';
-  assert.equal(ensureSansFallback(mono), mono);
+  assert.equal(withSansFallback("Geist, sans-serif"), "Geist, sans-serif");
+  assert.equal(withSansFallback("Menlo, monospace"), "Menlo, monospace");
+  assert.equal(withSansFallback("ui-monospace"), "ui-monospace");
 });
 
-check("a monospace stack is not turned into a sans one", () => {
-  // The diagram's labels are mono on purpose; appending a sans fallback after
-  // `monospace` would be harmless, but replacing its generic would not be.
-  const input = 'style="font-family:ui-monospace"';
-  assert.equal(ensureSansFallback(input), input);
+/* ---- 3b. THE BUG THAT SHIPPED: entities must never be touched ------------ */
+
+/*
+ * These transforms once ran over the SERIALIZED document, where XMLSerializer
+ * has already turned the quotes inside an attribute into `&quot;`. The font
+ * pattern excluded `;` to stop at a declaration boundary — and `;` also ends
+ * `&quot;` — so it cut the entity in half and left a bare `&quot`, which is
+ * exactly the "EntityRef: expecting ';'" a browser refuses to open the file
+ * with.
+ *
+ * Working on VALUES makes the hazard structurally impossible: a computed value
+ * has real quotes and no entities. These assert that the functions never emit
+ * an ampersand that is not a complete entity, whatever they are handed.
+ */
+const bareAmpersand = /&(?!(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);)/;
+
+check("neither transform introduces a bare ampersand", () => {
+  // A raw `&` in a computed value is fine — the serializer escapes it when the
+  // attribute is set. What must never happen is the transform CREATING one, or
+  // splitting an entity that was handed in. So the test is relative: if the
+  // input is entity-safe, the output must be too.
+  const cases = [
+    ['"__Geist_e8ce0c", "__Geist_Fallback"', withSansFallback],
+    ["&quot;Geist&quot;, sans-serif", withSansFallback],
+    ["__Geist_x", withSansFallback],
+    ["", withSansFallback],
+    ['url("http://h/p#id")', normalisePaintUrl],
+    ['url("http://h/p?a=1&amp;b=2#id")', normalisePaintUrl],
+    ["oklch(0.6 0.02 265)", normalisePaintUrl],
+  ];
+  for (const [value, transform] of cases) {
+    if (bareAmpersand.test(value)) continue; // the input was already unsafe
+    const out = transform(value);
+    assert.ok(
+      !bareAmpersand.test(out),
+      `bare & produced from ${JSON.stringify(value)}: ${out}`,
+    );
+  }
 });
 
-check("several declarations in one document are each handled", () => {
-  const input = 'style="font-family:A"><text style="font-family:B, serif"';
-  assert.equal(
-    ensureSansFallback(input),
-    'style="font-family:A, ui-sans-serif, system-ui, sans-serif"><text style="font-family:B, serif"',
+check("an entity handed in survives whole — the exact shipped bug", () => {
+  // `&quot;` ends in `;`. The retired font pattern excluded `;` to stop at a
+  // declaration boundary, cut the entity in half, and left `&quot` — which is
+  // the "EntityRef: expecting ';'" a browser refuses to open the file with.
+  const out = withSansFallback("&quot;Geist&quot;");
+  assert.ok(out.startsWith("&quot;Geist&quot;"), out);
+  assert.ok(!bareAmpersand.test(out), out);
+});
+
+check("the exporter no longer post-processes serialized markup", () => {
+  // The rule the bug leaves behind: transform values, then let the serializer
+  // escape. A regex over the finished XML is what broke the file.
+  assert.doesNotMatch(
+    source,
+    /serializeToString\(clone\)\s*\)/,
+    "serialized output is being passed through a transform again",
+  );
+  assert.match(
+    source,
+    /svg: new XMLSerializer\(\)\.serializeToString\(clone\)/,
   );
 });
 

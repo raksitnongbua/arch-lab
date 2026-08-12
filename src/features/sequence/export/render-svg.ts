@@ -118,7 +118,14 @@ export function renderSequenceSvg(
           continue;
         }
       }
-      declarations.push(`${property}:${value}`);
+      // Applied to the RAW computed value, never to serialized markup — the
+      // helpers at the bottom of this file explain why that distinction is the
+      // whole bug.
+      const fixed =
+        property === "font-family"
+          ? withSansFallback(value)
+          : normalisePaintUrl(value);
+      declarations.push(`${property}:${fixed}`);
     }
     if (declarations.length > 0) {
       to.setAttribute("style", declarations.join(";"));
@@ -163,41 +170,49 @@ export function renderSequenceSvg(
   clone.insertBefore(backdrop, clone.firstChild);
 
   return {
-    svg: ensureSansFallback(
-      normalisePaintUrls(new XMLSerializer().serializeToString(clone)),
-    ),
+    svg: new XMLSerializer().serializeToString(clone),
     width,
     height,
   };
 }
 
 /*
- * `getComputedStyle` returns paint references ABSOLUTISED —
- * `url("http://host/view/sequence#gradient-id")` rather than `url(#id)`. That
- * is correct for the live document and useless in a file: the URL names a
- * page, not this SVG, so the paint silently fails and the shape renders with
- * nothing. Rewriting them back to fragment-only references is what makes the
- * gradients resolve once the file is opened somewhere else.
+ * WHY THESE TAKE A CSS VALUE AND NOT THE SERIALIZED DOCUMENT. They used to run
+ * over the finished XML string, and that shipped a file browsers refused to
+ * open: "EntityRef: expecting ';'".
  *
- * Exported and tested in Node (`check:sequence-export`) rather than inlined:
- * a paint-reference regex that over-matches breaks every gradient at once and
- * one that under-matches breaks them silently, and neither is visible in a
- * diff.
+ * XMLSerializer escapes the quotes inside an attribute, so a style attribute
+ * arrives as `font-family:&quot;Geist&quot;`. The font pattern excluded `;` to
+ * stop at the end of a declaration — and `;` is also the last character of
+ * `&quot;`. It cut the entity in half, left a bare `&quot`, and produced
+ * invalid XML. The paint pattern had a quieter version of the same fault: it
+ * left the trailing `&quot;` inside the reference, so `url(#id&quot;)` named
+ * nothing and every gradient in the file stayed unpainted — which is why the
+ * export still looked wrong after the stop-color fix.
+ *
+ * A raw computed value holds real quote characters and no entities, so neither
+ * hazard exists. The rule this leaves behind: transform values, then let the
+ * serializer escape. Never the other way round.
  */
-export function normalisePaintUrls(svg: string): string {
-  return svg.replace(/url\((["']?)[^"')]*#([^"')]+)\1\)/g, "url(#$2)");
+
+/**
+ * `getComputedStyle` returns paint references ABSOLUTISED, as
+ * `url("http://host/page#id")` — correct in the live document and useless in a
+ * file, where the URL names a page rather than this SVG, so the paint silently
+ * fails and the shape renders with nothing.
+ */
+export function normalisePaintUrl(value: string): string {
+  return value.replace(/url\((["']?)([^"')]*)#([^"')]+)\1\)/g, "url(#$3)");
 }
 
-/*
+/**
  * A font the file cannot load falls back to the UA default, which for SVG is
- * SERIF — the export came out in Times while the app is in Geist. The webfont
- * itself cannot travel without embedding the binary, so the next best thing is
- * to make the fallback a sane sans instead of a serif.
+ * SERIF — exports came out in Times while the app is in Geist. The webfont
+ * cannot travel without embedding the binary, so this at least makes the
+ * fallback a sans stack rather than whatever the UA reaches for.
  */
-export function ensureSansFallback(svg: string): string {
-  return svg.replace(/font-family:([^;"]+)/g, (whole, families) =>
-    /(^|,)\s*(ui-)?(sans-serif|serif|monospace|system-ui)\s*$/.test(families)
-      ? whole
-      : `font-family:${families}, ui-sans-serif, system-ui, sans-serif`,
-  );
+export function withSansFallback(value: string): string {
+  return /(^|,)\s*(ui-)?(sans-serif|serif|monospace|system-ui)\s*$/.test(value)
+    ? value
+    : `${value}, ui-sans-serif, system-ui, sans-serif`;
 }
