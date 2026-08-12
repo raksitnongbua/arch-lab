@@ -510,15 +510,17 @@
   stroke-width: 1.5;
 }
 
-.af-seq-fold:has(.af-seq-hit:hover) rect:first-of-type,
-.af-seq-fold:has(.af-seq-hit:focus-visible) rect:first-of-type {
-  stroke-opacity: 1;
-  stroke-width: 1.5;
+/* The control carries no border of its own — the card is already a box — so
+ * hover and keyboard focus are shown on the GLYPH: it takes full-strength ink
+ * and the ring colour respectively. That is the whole affordance, which is what
+ * "minimal" costs: it relies on the pointer cursor and this state change rather
+ * than on a permanent frame. */
+.af-seq-fold:has(.af-seq-hit:hover) text {
+  fill: var(--foreground);
 }
 
-.af-seq-fold:has(.af-seq-hit:hover) text,
 .af-seq-fold:has(.af-seq-hit:focus-visible) text {
-  fill: var(--foreground);
+  fill: var(--ring);
 }
 
 /* ---- reduced motion ---------------------------------------------------------

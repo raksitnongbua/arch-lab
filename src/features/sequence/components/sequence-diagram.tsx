@@ -843,46 +843,43 @@ function ParticipantColumn({
           the actor and the front end own nothing privately, so their cards stay
           clean. A control that hides nothing is worse than no control.
 
-          It reads `−2` when expanded and `+2` when collapsed: the same pill in
-          both states, so it never moves or resizes under the cursor, and the
-          COUNT is present either way. That matters more than an icon here,
-          because the two states look alike on a diagram that has just changed
-          shape — "+2" is the only thing that distinguishes a collapsed service
-          from one that never had dependencies.
+          MINIMAL BY DEFAULT: no pill, no border — just a small `−` glyph while
+          expanded, and `+2` once collapsed. The chrome was a bordered capsule
+          and it competed with the card it sits on; a card is already a bordered
+          box, so a second one inside it reads as a defect. What survives is the
+          part that carries information.
+
+          The count appears only when COLLAPSED, and asymmetry is the right
+          answer rather than a slip. Expanded, the number is noise: the
+          dependencies are on screen to be counted. Collapsed, it is the only
+          thing distinguishing a folded service from one that never had
+          dependencies, so it has to be visible then. Hovering either state
+          reveals the full label through the button's accessible name.
 
           Top-right of the card, clear of the vertically-centred name and its
           technology line. A real button: role, aria-pressed and a label naming
           the action, and it stops propagation so folding a card never also
-          focuses it — those are different intents on the same card. */}
+          focuses it — those are different intents on the same card. The hit
+          target stays 24×18 regardless of how small the glyph is, because a
+          minimal control must be quiet, not hard to hit. */}
       {dependencies > 0 ? (
         <g className="af-seq-fold">
-          <rect
-            x={x + headerWidth / 2 - 28}
-            y={boxTop + 5}
-            width={24}
-            height={15}
-            rx={7.5}
-            fill={fill}
-            stroke={lane}
-            strokeWidth={1}
-            strokeOpacity={0.65}
-          />
           <text
-            x={x + headerWidth / 2 - 16}
+            x={x + headerWidth / 2 - 9}
             y={boxTop + 16}
             textAnchor="middle"
             fontSize={10}
             fontWeight={600}
             fill="var(--node-meta)"
           >
-            {collapsed ? `+${dependencies}` : `−${dependencies}`}
+            {collapsed ? `+${dependencies}` : "−"}
           </text>
           <rect
             className="af-seq-hit af-seq-hit-region"
-            x={x + headerWidth / 2 - 30}
+            x={x + headerWidth / 2 - 24}
             y={boxTop + 3}
-            width={28}
-            height={19}
+            width={24}
+            height={18}
             role="button"
             tabIndex={0}
             aria-pressed={collapsed}

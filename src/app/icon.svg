@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="arch-lab">
+  <title>arch-lab</title>
+  <!--
+    The mark: a container holding a component — C4's nesting, which is the one
+    idea the whole product is built on (a node at one level is a diagram at the
+    next). It reads at 16px, which ruled out the alternatives: a two-node-and-
+    arrow miniature turns to mush, and a wordmark is unreadable.
+
+    Fixed brand hex rather than theme tokens, and a transparent ground: a tab
+    icon is composited onto browser chrome we do not control, so it cannot use
+    `currentColor` or `oklch()` and must stay legible on both light and dark
+    strips. These two are the dark theme's --primary and --accent as sRGB, the
+    same pair opengraph-image.tsx hand-converts, so the tab and the social card
+    are the same two colours.
+  -->
+  <rect
+    x="4.25"
+    y="4.25"
+    width="23.5"
+    height="23.5"
+    rx="6.75"
+    fill="none"
+    stroke="#9d8cff"
+    stroke-width="2.5"
+  />
+  <rect x="11" y="11" width="10" height="10" rx="3" fill="#4fd6e4" />
+</svg>
