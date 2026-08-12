@@ -61,8 +61,15 @@ export const SEQ = {
   headerHeight: 52,
   headerMinWidth: 112,
   headerPadX: 16,
-  /** Extra header height when an actor glyph sits above the name. */
-  actorGlyphHeight: 18,
+  /**
+   * Extra header height above the name when any participant is an actor — the
+   * band the AVATAR DISC occupies (renderer: ParticipantColumn). Sized to the
+   * disc's diameter plus a hair of clearance so the disc never touches the card
+   * below it; a floating stick figure needed less, but read as a pin rather
+   * than a person. Applied to EVERY column's header so all the cards keep one
+   * baseline — only the actor draws in the band.
+   */
+  actorGlyphHeight: 26,
 
   nameFontSize: 13,
   metaFontSize: 11,

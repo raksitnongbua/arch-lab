@@ -720,43 +720,42 @@ function ParticipantColumn({
         strokeDasharray="4 4"
       />
       {isActor ? (
-        /* The actor glyph: head, shoulders, arms, legs — a person rather than
-           the old head-plus-crossbar, which read as a pin. This is the
-           actor/participant distinction the model preserves, and it has to be
-           VISIBLE, not merely stored. Round caps and joins are what stop a
-           1.5px figure at this size from looking like scaffolding. */
-        <g
-          stroke={lane}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        >
-          <circle cx={x} cy={SEQ.marginTop + 4.5} r={4} />
+        /* THE ACTOR'S AVATAR — a disc above the card carrying a head-and-
+           shoulders bust, which is what a person looks like at 24px. Two
+           earlier attempts are worth not repeating: a head with a crossbar read
+           as a map pin, and a full stick figure with arms and legs turned to
+           scaffolding at this size, because a 1.5px limb has no silhouette to
+           recognise. A FILLED bust does — it is the same mark every avatar
+           slot in every interface uses, so it needs no learning.
+
+           It also replaces the halo ring that used to sit around this card.
+           Two emphasis devices on one card competed; the disc is the stronger
+           and the more meaningful of the two, since it says WHAT this
+           participant is rather than merely "look here". The actor/participant
+           distinction the model preserves stays carried by shape, never by
+           colour alone — the name is always rendered too, which is the relief
+           rule the lane palette depends on.
+
+           The disc wears the card's own fill and border, so it reads as part
+           of the card rather than a sticker on top of it, and the bust is
+           filled in the lane: a decorative mark, not text, so the lane hues
+           that fall below 3:1 in light mode are as acceptable here as they are
+           on the lifeline. */
+        <g className="pointer-events-none">
+          <circle
+            cx={x}
+            cy={SEQ.marginTop + 13}
+            r={12}
+            fill={cardFill}
+            stroke={lane}
+            strokeWidth={1.5}
+          />
+          <circle cx={x} cy={SEQ.marginTop + 10} r={3.4} fill={lane} />
           <path
-            d={`M ${x} ${SEQ.marginTop + 8.5} v 5.5 M ${x - 5.5} ${SEQ.marginTop + 11} h 11 M ${x} ${SEQ.marginTop + 14} l -4 4 M ${x} ${SEQ.marginTop + 14} l 4 4`}
+            d={`M ${x - 5.6} ${SEQ.marginTop + 19} a 5.6 5.6 0 0 1 11.2 0 Z`}
+            fill={lane}
           />
         </g>
-      ) : null}
-      {/* An outer HALO on the actor only — a second rounded rect just outside
-          the card, in its own lane at low opacity. The actor is the flow's
-          entry point and the eye should land there first; a halo lifts it
-          without a filter (an SVG drop-shadow on every card is paint the fit
-          view cannot afford) and without touching the fill, so the validated
-          contrast is untouched. Decoration, hence no pointer events. */}
-      {isActor ? (
-        <rect
-          className="pointer-events-none"
-          x={x - headerWidth / 2 - 3}
-          y={boxTop - 3}
-          width={headerWidth + 6}
-          height={boxHeight + 6}
-          rx={11}
-          fill="none"
-          stroke={lane}
-          strokeOpacity={0.28}
-          strokeWidth={1.25}
-        />
       ) : null}
       <rect
         className="af-seq-header-box"

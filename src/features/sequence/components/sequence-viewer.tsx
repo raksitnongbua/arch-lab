@@ -65,6 +65,7 @@ import {
 import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { SequenceLabFile } from "@/types";
+import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
 import { layoutSequence } from "../lib/layout";
@@ -318,8 +319,30 @@ export function SequenceViewer({
    * deselect. `clientWidth`/`clientHeight` exclude the scrollbars while the
    * bounding rect includes them, and the difference is exactly the gutter.
    */
+  /**
+   * Drag-to-pan's state, declared before the handlers that read it: the click
+   * handler consults `panSuppressesClick`, the pointer handlers write it, and
+   * declaring the refs after their first reader trips the compiler's
+   * immutability rule. See the drag-to-pan block below for the design.
+   */
+  const panState = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+    moved: boolean;
+  } | null>(null);
+  const panSuppressesClick = useRef(false);
+  const [panning, setPanning] = useState(false);
+
   const handleBackdropClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      // A drag that panned the view ends in a click; that click means "I
+      // finished panning", not "clear focus". See handlePointerUp.
+      if (panSuppressesClick.current) {
+        panSuppressesClick.current = false;
+        return;
+      }
       const pane = event.currentTarget;
       const rect = pane.getBoundingClientRect();
       if (
@@ -331,6 +354,85 @@ export function SequenceViewer({
       handleClearFocus();
     },
     [handleClearFocus],
+  );
+
+  /* ---- drag to pan ----------------------------------------------------------
+   * Past fit, the pane is a window onto a bigger drawing, and reaching for a
+   * scrollbar to move a canvas is the wrong gesture — every map and every node
+   * editor lets you grab the thing and move it. The pane is a real scroll
+   * container, so this drives `scrollLeft`/`scrollTop` rather than inventing a
+   * transform layer: wheel, trackpad, scrollbars, keyboard and this all stay
+   * one coordinate system, and the focus-follows-scroll nudge keeps working
+   * without knowing panning exists.
+   *
+   * Four deliberate limits:
+   *   - MOUSE ONLY. Touch already pans natively and far better; capturing
+   *     pointers there would fight the platform and break pinch-zoom.
+   *   - PRIMARY BUTTON on EMPTY CANVAS. A drag starting on a message or a
+   *     participant is left alone so those clicks stay exactly as precise as
+   *     they were — the interactive elements own their own gestures.
+   *   - ONLY WHEN THERE IS SOMEWHERE TO GO, tested against real overflow at
+   *     pointer-down. In fit mode, and at a zoom small enough that the drawing
+   *     fits anyway, a drag must do nothing rather than fake resistance.
+   *   - A MOVED drag swallows its trailing click, so panning away from a
+   *     focused message does not also clear the focus. The 4px threshold is
+   *     what separates a sloppy click from a deliberate drag.
+   */
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== "mouse" || event.button !== 0) return;
+      // Interactive targets keep their own behaviour — see the limits above.
+      if ((event.target as Element).closest?.(".af-seq-hit") != null) return;
+      const pane = event.currentTarget;
+      const scrollable =
+        pane.scrollWidth > pane.clientWidth ||
+        pane.scrollHeight > pane.clientHeight;
+      if (!scrollable) return;
+      panState.current = {
+        x: event.clientX,
+        y: event.clientY,
+        left: pane.scrollLeft,
+        top: pane.scrollTop,
+        moved: false,
+      };
+      setPanning(true);
+      // Capture so a fast drag that leaves the pane keeps panning, and so the
+      // gesture always ends with a pointerup we hear.
+      pane.setPointerCapture(event.pointerId);
+      // Stops the browser starting its own drag of the SVG.
+      event.preventDefault();
+    },
+    [],
+  );
+
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const state = panState.current;
+      if (state === null) return;
+      const dx = event.clientX - state.x;
+      const dy = event.clientY - state.y;
+      if (!state.moved && Math.abs(dx) + Math.abs(dy) > 4) state.moved = true;
+      const pane = event.currentTarget;
+      // Inverted: the content follows the hand, so dragging left reveals what
+      // is to the right — grabbing the canvas, not dragging a scrollbar.
+      pane.scrollLeft = state.left - dx;
+      pane.scrollTop = state.top - dy;
+    },
+    [],
+  );
+
+  const handlePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const state = panState.current;
+      if (state === null) return;
+      panState.current = null;
+      setPanning(false);
+      if (state.moved) panSuppressesClick.current = true;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    },
+    [],
   );
 
   /* ---- zoom -----------------------------------------------------------------
@@ -629,8 +731,21 @@ export function SequenceViewer({
       <div className="relative min-h-0 flex-1">
         <div
           ref={diagramRegionRef}
-          className="h-full overflow-auto bg-canvas p-3"
+          className={cn(
+            "h-full overflow-auto bg-canvas p-3",
+            // `grab` whenever the view is past fit, which is where panning is
+            // possible. At a zoom small enough that the drawing still fits it
+            // over-promises by a cursor — the pointer-down guard measures real
+            // overflow, so the gesture itself never lies, and the alternative
+            // (a resize observer to keep a cursor honest) is not worth it.
+            zoom !== "fit" && "cursor-grab",
+            panning && "cursor-grabbing",
+          )}
           onClick={handleBackdropClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           tabIndex={0}
           role="application"
           aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages, participants and fragment chips are buttons — Tab reaches them."

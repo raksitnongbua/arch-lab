@@ -246,7 +246,8 @@ directions, proven by `pnpm check:sequence`.
 **The whole story, then the part you asked about.** The diagram owns the
 first screenful and the whole flow FITS it — scaled to your viewport the way
 the C4 viewer's fit-view works, with a small zoom pill (fit / 100% / in /
-out; scrolling the pane pans once you zoom past fit) for reading fine
+out; past fit, drag the canvas to pan — or scroll, or use the scrollbars, all
+three moving the same pane) for reading fine
 detail. The source sits below the fold: scroll the page down to edit the
 text. An immersive mode gives the diagram the entire viewport. The diagram
 renders complete — a sequence diagram is a record of what happened, so the
