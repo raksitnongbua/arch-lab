@@ -3,14 +3,18 @@ import {
   Bot,
   Boxes,
   FileText,
+  GitBranch,
   Layers,
+  MoveRight,
   Network,
   Puzzle,
   Code2,
   Globe2,
   Keyboard,
   MousePointer2,
+  StickyNote,
   Table2,
+  Users,
   Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -27,6 +31,7 @@ import {
 } from "@/components/ui/card";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
 import { McpFlow } from "@/features/marketing/mcp-flow";
+import { SequenceStrip } from "@/features/marketing/sequence-strip";
 import { publicOrigin } from "@/features/mcp/lib/origin";
 import {
   APP_DESCRIPTION,
@@ -67,6 +72,52 @@ const PLANNED_DIAGRAM_TYPES: readonly PlannedDiagramType[] = [
     icon: Network,
     title: "Network diagrams",
     body: "The physical layer under the logical one — zones, subnets, gateways, and the paths between them, kept in the same repository.",
+  },
+];
+
+interface SequencePart {
+  id: string;
+  icon: LucideIcon;
+  title: string;
+  body: string;
+  /** Real syntax from the grammar — see /syntax#sequence. */
+  syntax: readonly string[];
+}
+
+/**
+ * The four constructs a sequence document is built from, in the order they
+ * appear in a file. The `syntax` entries are the actual tokens the parser
+ * accepts, not illustrations of them: this section is the shortest path from
+ * reading the page to writing a document, and a paraphrase would break that.
+ */
+const SEQUENCE_PARTS: readonly SequencePart[] = [
+  {
+    id: "participants",
+    icon: Users,
+    title: "Participants",
+    body: "The columns: a person or a service, each with an optional technology. Every one gets a lifeline running down the page, and the order you declare them is the order they appear.",
+    syntax: ["cust:actor", "api:participant", "[Go]"],
+  },
+  {
+    id: "messages",
+    icon: MoveRight,
+    title: "Messages",
+    body: "The arrows, in document order. Three kinds, and the kind is the arrow: a synchronous call, a fire-and-forget, and a reply coming back. A message to itself draws a self-loop.",
+    syntax: ["a -> b", "a ~> b", "a ..> b"],
+  },
+  {
+    id: "fragments",
+    icon: GitBranch,
+    title: "Fragments",
+    body: "Branching and repetition, nested by indentation with no end keyword — what belongs to a fragment is what is indented under it. Click one in the viewer to spotlight that whole case.",
+    syntax: ["alt / else", "par / and", "opt", "loop"],
+  },
+  {
+    id: "annotation",
+    icon: StickyNote,
+    title: "Notes & activation",
+    body: "The commentary and the bookkeeping: notes beside or spanning lifelines, and activation bars showing how long a participant is busy — opened and closed by the arrows themselves.",
+    syntax: ["note over a b", "a ->+ b", "b ..>- a"],
   },
 ];
 
@@ -267,9 +318,15 @@ export default function Home() {
           </p>
         </div>
 
-        <ul className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* SIX columns, not three, and that is the fix for a visible hole:
+            with three, the two planned cards filled columns 1 and 2 of the
+            second row and left column 3 empty under the MCP card. Two cards
+            cannot halve three columns. Six divides both ways — 4 + 2 on the
+            first row, 3 + 3 on the second — so every row is full without
+            inventing a card nobody asked for. */}
+        <ul className="grid grid-cols-1 gap-4 lg:grid-cols-6">
           {/* Shipping now: C4 — the featured card with real destinations. */}
-          <li className="flex lg:col-span-3">
+          <li className="flex lg:col-span-6">
             <Card className="group relative flex w-full flex-col overflow-hidden border-primary/25 transition-all duration-300 hover:border-primary/45 hover:shadow-lg hover:shadow-primary/5">
               <span
                 aria-hidden="true"
@@ -348,7 +405,7 @@ export default function Home() {
               destinations, and no longer in PLANNED_DIAGRAM_TYPES — it was
               listed as "coming soon" for one release after it started working,
               which is the kind of stale promise this section exists to avoid. */}
-          <li className="flex lg:col-span-2">
+          <li className="flex lg:col-span-4">
             <Card className="group relative flex w-full flex-col overflow-hidden border-accent/25 transition-all duration-300 hover:border-accent/45 hover:shadow-lg hover:shadow-accent/5">
               <span
                 aria-hidden="true"
@@ -394,6 +451,12 @@ export default function Home() {
                   </code>{" "}
                   straight in.
                 </CardDescription>
+                {/* Fills the band this card used to leave empty between its
+                    copy and its buttons — the MCP card beside it sets the row
+                    height, and short copy left a visible hole. It also shows
+                    the viewer's real idle motion, so the illustration is the
+                    feature rather than a picture of it. */}
+                <SequenceStrip className="mt-1" />
                 <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
                   <Link
                     href="/view/sequence"
@@ -419,7 +482,7 @@ export default function Home() {
           {/* Shipping now, beta: the MCP server. Its own card rather than a
               footnote, because "an agent can author these" is the reason a
               reader with an agent open would care about the format at all. */}
-          <li className="flex">
+          <li className="flex lg:col-span-2">
             <Card className="group relative flex w-full flex-col overflow-hidden transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
               <CardHeader className="relative flex flex-1 flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-3">
@@ -461,7 +524,7 @@ export default function Home() {
           {PLANNED_DIAGRAM_TYPES.map((diagramType) => {
             const Icon = diagramType.icon;
             return (
-              <li key={diagramType.id} className="flex">
+              <li key={diagramType.id} className="flex lg:col-span-3">
                 <Card className="flex w-full flex-col border-dashed bg-card/50">
                   <CardHeader className="gap-3">
                     <div className="flex items-center justify-between">
@@ -544,6 +607,88 @@ export default function Home() {
             );
           })}
         </ol>
+      </section>
+
+      {/* --------------------------------------------- inside a sequence diagram
+          The C4 section above explains one document kind in detail and used to be
+          the only one that got that treatment — the page taught C4 and merely
+          mentioned sequence diagrams. These are the four things a reader has to
+          know to write one, in the order they appear in a document. */}
+      <section
+        aria-labelledby="sequence-parts-heading"
+        className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-24"
+      >
+        <div className="mb-8 flex flex-col gap-2">
+          <h2
+            id="sequence-parts-heading"
+            className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+          >
+            Inside a sequence diagram: four moving parts
+          </h2>
+          <p className="max-w-2xl leading-relaxed text-muted-foreground">
+            Where a C4 model answers &ldquo;what is this system made of&rdquo;,
+            a sequence diagram answers &ldquo;what happens when someone presses
+            the button&rdquo;. Four constructs cover it, and the grammar for all
+            four fits on one page.
+          </p>
+        </div>
+
+        <ol className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {SEQUENCE_PARTS.map((part, index) => (
+            <li key={part.id} className="flex">
+              <Card className="group relative flex w-full flex-col overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/5">
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-b from-accent/8 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                />
+                <CardHeader className="relative flex flex-1 flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-accent transition-colors group-hover:border-accent/40">
+                      <part.icon aria-hidden="true" className="size-5" />
+                    </span>
+                    <span className="font-mono text-xs text-muted-foreground/60 tabular-nums">
+                      {index + 1}
+                    </span>
+                  </div>
+                  <CardTitle className="text-lg">{part.title}</CardTitle>
+                  <CardDescription className="flex-1">
+                    {part.body}
+                  </CardDescription>
+                  {/* The real syntax, not a paraphrase of it — someone should be
+                      able to write a document from these four cards alone. */}
+                  <ul className="mt-1 flex flex-wrap gap-1.5">
+                    {part.syntax.map((token) => (
+                      <li key={token}>
+                        <Badge variant="outline">
+                          <span className="font-mono">{token}</span>
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </CardHeader>
+              </Card>
+            </li>
+          ))}
+        </ol>
+
+        <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
+          The whole grammar, with worked examples that are parsed on every
+          build, is on the{" "}
+          <Link
+            href="/syntax#sequence"
+            className="font-medium text-primary hover:underline"
+          >
+            syntax page
+          </Link>
+          . Two complete flows are on the{" "}
+          <Link
+            href="/demo"
+            className="font-medium text-primary hover:underline"
+          >
+            demo index
+          </Link>
+          .
+        </p>
       </section>
 
       {/* ------------------------------------------------------------ features */}

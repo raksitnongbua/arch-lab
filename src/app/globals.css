@@ -600,6 +600,59 @@
   animation: af-hero-fade 260ms ease-out both;
 }
 
+/* ---- the sequence strip's running lines ----------------------------------------
+ * The landing illustration borrows the sequence viewer's own idle motion, and
+ * the SPLIT is the part worth keeping: a reply marches its dash, a call carries a
+ * short travelling band over an unbroken stroke. Never the other way round — a
+ * dash on a solid arrow makes it read as async or a reply, so only the kind that
+ * is already dashed may march. The viewer's stylesheet documents the same rule at
+ * length; this is the marketing-sized copy of it.
+ *
+ * `pathLength: 100` on the flow line means the dash maths are percentages, so one
+ * keyframe serves every message whatever its span. */
+@keyframes af-strip-march {
+  from {
+    stroke-dashoffset: 11;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes af-strip-flow {
+  from {
+    stroke-dashoffset: 9;
+  }
+  to {
+    stroke-dashoffset: -91;
+  }
+}
+
+.af-strip-march {
+  animation: af-strip-march 1800ms linear infinite both;
+}
+
+.af-strip-flow {
+  /* 9 lit of 100 — the same low duty the viewer's comet head uses, which is what
+     keeps a travelling highlight from reading as a second line. */
+  stroke-dasharray: 9 91;
+  animation: af-strip-flow 2600ms linear infinite both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Parked COMPLETE: the march stops on its resting dash, and the travelling
+     band goes away entirely rather than freezing as a bright stub on every
+     line — a stopped highlight is not a resting state. */
+  .af-strip-march {
+    animation: none;
+  }
+
+  .af-strip-flow {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* ---- the MCP card's transcript -------------------------------------------------
  * Rows arrive one at a time, the set holds long enough to read, then the loop
  * restarts. One keyframe, staggered by `animationDelay` per row (set inline in
