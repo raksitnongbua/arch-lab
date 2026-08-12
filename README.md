@@ -19,26 +19,27 @@ Be precise about what this repo is right now:
 | **View-mode playground** (`/view`)    | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                                                                                                      |
 | **`.alab` ⇄ JSON conversion**         | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                                                                                                              |
 | **Mermaid C4 import**                 | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
-| **C4 editor**                         | **Coming soon.** `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `false`, so `/editor` is a coming-soon page and the editor UI is not in the deployed bundle. The code is complete — nodes, relationships, drill-down, [grouping boundaries](#grouping-boundaries) — and two edits turn it on; see [Enabling the editor](#enabling-the-editor).                |
+| **C4 editor**                         | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; two edits gate it back off — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                                                         |
 | **MCP server** (`/api/mcp`)           | **Beta.** Ten read-only tools (C4 and sequence documents both), a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                            |
 | **Sequence diagrams**                 | **View mode works today** (`/view/sequence`): `.alab` sequence text or a pasted Mermaid `sequenceDiagram`, rendered complete with focus-driven animation — click any message, participant, or fragment to spotlight its flow. No editor canvas and no share links for them yet — see [Sequence diagrams](#sequence-diagrams).                                                        |
 | **Data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Routes
 
-| Route             | What it is                                                                                                                                                                          |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
-| `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                                     |
-| `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
-| `/view`           | Chooser: C4 model or sequence diagram. Also where legacy `/view#m=…` share links land — they forward to `/view/c4` with the fragment intact.                                        |
-| `/view/c4`        | The paste-your-own C4 playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                           |
-| `/view/sequence`  | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message, participant, or fragment to animate and inspect it.      |
-| `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
-| `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
-| `/mcp`            | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
-| `/api/mcp`        | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
-| `/editor`         | A coming-soon page while `EDITOR_ENABLED` is off, pointing at the demo, the sequence viewer and the MCP server. With the flag on: the canvas editor.                                |
+| Route                        | What it is                                                                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                          | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
+| `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                          |
+| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
+| `/view`                      | Chooser: C4 model or sequence diagram. Also where legacy `/view#m=…` share links land — they forward to `/view/c4` with the fragment intact.                                        |
+| `/view/c4`                   | The paste-your-own C4 playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                           |
+| `/view/sequence`             | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message, participant, or fragment to animate and inspect it.      |
+| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                     |
+| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
+| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
+| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
+| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
+| `/editor`                    | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Gated off by `EDITOR_ENABLED` into a coming-soon page.                          |
 
 ## The two model formats
 
@@ -486,23 +487,21 @@ click away in the header.
 
 ## Enabling the editor
 
-The editor is **off** — `EDITOR_ENABLED` in
-[`src/lib/constants.ts`](src/lib/constants.ts) is `false`, and
-`src/app/editor/page.tsx` renders a coming-soon page that imports nothing from
-`@/features/editor`. The editor code is complete and still in the repo; it is
-simply not shipped.
+The editor is **on** — `EDITOR_ENABLED` in
+[`src/lib/constants.ts`](src/lib/constants.ts) is `true`, and
+`src/app/editor/page.tsx` renders `<EditorShell />`.
 
-Turning it on is two steps, in this order:
+Turning it off is two steps, in this order:
 
 1. Flip the flag:
 
    ```ts
-   export const EDITOR_ENABLED: boolean = true;
+   export const EDITOR_ENABLED: boolean = false;
    ```
 
-2. Restore the `EditorShell` import and render in `src/app/editor/page.tsx`,
-   along with the editor's metadata. The import is the actual gate, which is why
-   it is a separate step: while off, that route must import **nothing** from
+2. Replace the `EditorShell` import and render in `src/app/editor/page.tsx` with
+   a coming-soon page and its metadata. The import is the actual gate, which is
+   why it is a separate step: while off, that route must import **nothing** from
    `@/features/editor`, because that import is what pulls the canvas, React Flow
    and the editor store into the deployed bundle. A conditional render would
    leave the code shipping while the flag claimed otherwise. The file's own

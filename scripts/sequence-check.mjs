@@ -856,6 +856,75 @@ expectParseError(
   MermaidParseError,
 );
 
+/* ---- 7. every REGISTERED EXAMPLE is a real, round-tripping document ------ */
+
+/*
+ * The demo index lists example sequence documents and counts their
+ * participants, messages and fragment kinds from the parsed file. A registered
+ * example that does not parse would surface there as a "Failed to parse" card —
+ * honest, but only to whoever happens to load the page. These assertions make it
+ * a build failure instead, and add the round trip the page cannot check: an
+ * example is the thing a reader will copy, so it has to be canonical text, not
+ * merely valid text.
+ */
+const { listSequenceExamples, loadSequenceExample, listSequenceExampleIds } =
+  await import(
+    pathToFileURL(
+      path.join(ROOT, "src/features/sequence/service/example-service.ts"),
+    ).href
+  );
+
+const exampleIds = listSequenceExampleIds();
+check("at least two sequence examples are registered", exampleIds.length >= 2);
+
+for (const listing of listSequenceExamples()) {
+  check(
+    `example "${listing.status === "ok" ? listing.summary.id : listing.id}" parses`,
+    listing.status === "ok",
+    listing.status === "ok" ? undefined : listing.message,
+  );
+  if (listing.status !== "ok") continue;
+  const { summary } = listing;
+  check(
+    `example "${summary.id}" has a title, participants and messages`,
+    summary.title.length > 0 &&
+      summary.participantCount > 0 &&
+      summary.messageCount > 0,
+  );
+}
+
+for (const id of exampleIds) {
+  const example = loadSequenceExample(id);
+  if (example.status !== "ok") continue;
+  const once = serializeSequenceText(example.file);
+  check(
+    `example "${id}" is CANONICAL text — what a reader copies is what we would write`,
+    serializeSequenceText(parseSequenceText(once)) === once,
+  );
+}
+
+check(
+  "an unregistered id reports not-found rather than throwing",
+  loadSequenceExample("no-such-example").status === "not-found",
+);
+
+/*
+ * Between them the examples must demonstrate every fragment kind, or the demo
+ * page is teaching an incomplete grammar: someone reading the examples to learn
+ * the format would never meet `loop` if only the checkout flow existed.
+ */
+const shownKinds = new Set(
+  listSequenceExamples().flatMap((listing) =>
+    listing.status === "ok" ? [...listing.summary.fragmentKinds] : [],
+  ),
+);
+for (const kind of ["alt", "par", "opt", "loop"]) {
+  check(
+    `the examples between them demonstrate \`${kind}\``,
+    shownKinds.has(kind),
+  );
+}
+
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {

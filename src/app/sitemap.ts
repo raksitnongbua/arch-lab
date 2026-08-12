@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { publicOrigin } from "@/features/mcp/lib/origin";
+import { listSequenceExampleIds } from "@/features/sequence/service/example-service";
 import { listViewerModelIds } from "@/features/viewer";
 
 /**
@@ -29,9 +30,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/mcp",
   ];
 
+  // Both example registries, so a new example is in the sitemap the moment it
+  // is registered — the same reason the model routes are derived rather than
+  // typed out above.
   const modelRoutes = listViewerModelIds().map((id) => `/view/${id}`);
+  const sequenceRoutes = listSequenceExampleIds().map(
+    (id) => `/view/sequence/${id}`,
+  );
 
-  return [...staticRoutes, ...modelRoutes].map((path) => ({
+  return [...staticRoutes, ...modelRoutes, ...sequenceRoutes].map((path) => ({
     url: `${origin}${path === "" ? "/" : path}`,
     // The homepage is the page search should surface first; everything else
     // shares one rung below it rather than pretending finer-grained priorities
