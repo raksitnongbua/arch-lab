@@ -344,7 +344,7 @@ function SequencePanel() {
                   style={delay(
                     SEQ_BEAT.steps + index * SEQ_BEAT.stepGap + BEAT.drawMs,
                   )}
-                  className="af-strip-flow"
+                  className="af-hero-seq-flow"
                   d={`M ${from} ${step.y} L ${tip} ${step.y}`}
                   pathLength={100}
                   stroke={`var(--seq-lane-${step.from + 1})`}

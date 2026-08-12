@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/card";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
 import { McpFlow } from "@/features/marketing/mcp-flow";
-import { SequenceStrip } from "@/features/marketing/sequence-strip";
 import { publicOrigin } from "@/features/mcp/lib/origin";
 import {
   APP_DESCRIPTION,
@@ -405,7 +404,7 @@ export default function Home() {
               destinations, and no longer in PLANNED_DIAGRAM_TYPES — it was
               listed as "coming soon" for one release after it started working,
               which is the kind of stale promise this section exists to avoid. */}
-          <li className="flex lg:col-span-4">
+          <li className="flex lg:col-span-3">
             <Card className="group relative flex w-full flex-col overflow-hidden border-accent/25 transition-all duration-300 hover:border-accent/45 hover:shadow-lg hover:shadow-accent/5">
               <span
                 aria-hidden="true"
@@ -451,12 +450,6 @@ export default function Home() {
                   </code>{" "}
                   straight in.
                 </CardDescription>
-                {/* Fills the band this card used to leave empty between its
-                    copy and its buttons — the MCP card beside it sets the row
-                    height, and short copy left a visible hole. It also shows
-                    the viewer's real idle motion, so the illustration is the
-                    feature rather than a picture of it. */}
-                <SequenceStrip className="mt-1" />
                 <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
                   <Link
                     href="/view/sequence"
@@ -482,7 +475,7 @@ export default function Home() {
           {/* Shipping now, beta: the MCP server. Its own card rather than a
               footnote, because "an agent can author these" is the reason a
               reader with an agent open would care about the format at all. */}
-          <li className="flex lg:col-span-2">
+          <li className="flex lg:col-span-3">
             <Card className="group relative flex w-full flex-col overflow-hidden transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
               <CardHeader className="relative flex flex-1 flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-3">
