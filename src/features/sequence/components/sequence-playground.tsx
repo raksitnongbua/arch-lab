@@ -66,7 +66,10 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { decodeShareFragment } from "@/features/viewer/share/codec";
+
 import { MERMAID_SEQUENCE_EXAMPLE, SEQUENCE_EXAMPLE } from "../input/example";
+import { SequenceShareButton } from "../share/share-button";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   parseSequenceInput,
@@ -185,6 +188,62 @@ export function SequencePlayground(): React.JSX.Element {
     },
     [applyParse],
   );
+
+  /* ---- opening a share link (`#m=…`) --------------------------------------
+   * The fragment never reaches the server, so only the client can read it —
+   * which is also why nothing here was ever uploaded. Read on mount AND on
+   * `hashchange`, because a second link opened in the same tab does not
+   * remount this component.
+   *
+   * The payload is the C4 codec's, deliberately (see share/share-button.tsx):
+   * one compression path and one alphabet for both document kinds. What makes
+   * it a SEQUENCE link is landing here, and `parseSequenceInput` already tells
+   * a C4 document where it belongs — so a link opened on the wrong route
+   * explains itself rather than failing.
+   *
+   * A decoded document replaces the pane exactly as pasting would. Failures
+   * are reported through the same live region and the same error surface as a
+   * bad paste, rather than a share-specific takeover: this playground always
+   * has a working document on screen, so there is nothing for a takeover to
+   * protect the reader from. */
+  useEffect(() => {
+    let cancelled = false;
+
+    const openFromHash = async () => {
+      const decoded = await decodeShareFragment(window.location.hash);
+      if (cancelled || decoded.status === "none") return;
+
+      if (decoded.status === "error") {
+        setAnnouncement(
+          `This share link could not be opened: ${decoded.message}`,
+        );
+        return;
+      }
+      if (decoded.status === "expired") {
+        setAnnouncement(
+          "This share link has expired. The flow it carried is not shown.",
+        );
+        return;
+      }
+
+      setText(decoded.aftText);
+      setPending(null);
+      applyParse(decoded.aftText);
+      setAnnouncement(
+        "Opened a sequence diagram from a share link — nothing was uploaded; the pane holds its source.",
+      );
+    };
+
+    void openFromHash();
+    const onHashChange = () => {
+      void openFromHash();
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("hashchange", onHashChange);
+    };
+  }, [applyParse]);
 
   // Tab indents (two spaces) with the same documented Escape hatch the C4
   // playground's panes have. (This textarea-local Escape sits OUTSIDE the
@@ -350,7 +409,8 @@ export function SequencePlayground(): React.JSX.Element {
               (.alab or Mermaid)
             </span>
           </label>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <SequenceShareButton text={text} onAnnounce={setAnnouncement} />
             <button
               type="button"
               onClick={() => loadExample(SEQUENCE_EXAMPLE)}

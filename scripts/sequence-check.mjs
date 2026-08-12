@@ -925,6 +925,52 @@ for (const kind of ["alt", "par", "opt", "loop"]) {
   );
 }
 
+/* ---- 8. a sequence document survives the SHARE codec --------------------- */
+
+/*
+ * Sequence share links reuse the C4 codec — one compression path and one
+ * alphabet for both document kinds (see sequence/share/share-button.tsx). That
+ * reuse is only safe while a sequence document actually survives the trip, and
+ * the failure mode if it stops is the worst kind: a link that copies fine and
+ * breaks for the RECIPIENT, who has no way to tell what went wrong.
+ *
+ * Also asserts the payload is materially smaller than the source. Compression
+ * is the whole reason a flow fits in a URL at all, and a codec that silently
+ * stopped compressing would push documents past the length tiers with no
+ * visible cause.
+ */
+const { encodeShareFragment, decodeShareFragment } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/viewer/share/codec.ts")).href
+);
+
+for (const id of exampleIds) {
+  const example = loadSequenceExample(id);
+  if (example.status !== "ok") continue;
+  const source = serializeSequenceText(example.file);
+  const fragment = await encodeShareFragment(source, null);
+  const decoded = await decodeShareFragment(`#${fragment}`);
+  check(
+    `example "${id}" survives encode → decode byte-for-byte`,
+    decoded.status === "ok" && decoded.aftText === source,
+    decoded.status === "ok" ? undefined : JSON.stringify(decoded),
+  );
+  check(
+    `example "${id}" re-parses from the decoded text`,
+    decoded.status === "ok" &&
+      serializeSequenceText(parseSequenceText(decoded.aftText)) === source,
+  );
+  check(
+    `example "${id}" compresses — the link is smaller than the document`,
+    fragment.length < source.length,
+    `fragment ${fragment.length} vs source ${source.length}`,
+  );
+}
+
+check(
+  "a fragment with no payload decodes as `none`, not as an error",
+  (await decodeShareFragment("#nothing-here")).status === "none",
+);
+
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
