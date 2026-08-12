@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../features/editor/styles/canvas-motion.css";
+@import "../features/sequence/styles/sequence-motion.css";
 
 /* ---------------------------------------------------------------------------
  * arch-lab theming
@@ -118,7 +119,39 @@
   --tag-fill-c: 0.055;
 
   --edge: oklch(0.6 0.02 265);
+  /* The resting drift that rides ON TOP of a connector. A real token, not an
+     inline color-mix, because the animated GIF export has to resolve the exact
+     same colour from the same place — two spellings of "edge lifted toward
+     primary" would drift apart the first time either is tuned. */
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.58 0.2 280 / 0.18);
+
+  /* Sequence-diagram LANE tokens — one accent per participant column, keyed
+     by document order and cycled past five (layout.ts assigns the slot).
+     CVD/contrast-validated as a set, on the ADJACENT pairlist (lifelines sit
+     in fixed left-to-right order, so neighbours are what readers compare):
+     worst adjacent CVD ΔE 9.2 light / 9.4 dark (≥8), worst adjacent
+     normal-vision ΔE 27.5 light / 19.7 dark (≥15) — all checks pass.
+     THREE THINGS ABOUT THIS LIST ARE LOAD-BEARING; do not tidy them:
+       1. THE ORDER IS NOT ARBITRARY. Three pairs fail if ever adjacent —
+          magenta↔aqua (ΔE 1.6 deutan, dark), violet↔blue (9.8 normal, dark),
+          magenta↔orange (12.9 normal, light) — and this ordering is a path
+          that avoids all three. Reordering the slots breaks the validation.
+       2. YELLOW IS DELIBERATELY ABSENT. --warning amber already paints the
+          notes on this diagram and status colours are reserved; a yellow
+          lane beside amber notes would be ambiguous.
+       3. Light-mode aqua (slot 1) and magenta (slot 4) sit below 3:1 against
+          the light surface. Allowed ONLY under the relief rule — identity is
+          never colour-alone — which this diagram satisfies inherently: a
+          participant's NAME is always rendered inside its header. That is
+          why the contrast WARN is acceptable rather than ignored.
+     The values are the validator's exact hexes; converting them to oklch by
+     hand would drift from what was measured. */
+  --seq-lane-1: #1baf7a;
+  --seq-lane-2: #eb6834;
+  --seq-lane-3: #2a78d6;
+  --seq-lane-4: #e87ba4;
+  --seq-lane-5: #4a3aa7;
 
   /* The two properties node shapes actually paint with. Each node overrides
      them inline (node-colors.ts: role token, or the author's tagColors hex);
@@ -199,7 +232,17 @@
   --tag-fill-c: 0.06;
 
   --edge: oklch(0.62 0.02 275);
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.68 0.19 285 / 0.24);
+
+  /* Dark counterparts of the sequence lane tokens (the light block carries
+     the full validation notes — order, absent yellow, relief rule). Same
+     slots, same path through the CVD-safe adjacency graph. */
+  --seq-lane-1: #199e70;
+  --seq-lane-2: #d95926;
+  --seq-lane-3: #3987e5;
+  --seq-lane-4: #d55181;
+  --seq-lane-5: #9085e9;
 }
 
 /* --- EXTENSION POINT: adding a third theme ------------------------------------
@@ -563,6 +606,155 @@
   animation: af-hero-fade 260ms ease-out both;
 }
 
+/* ---- the hero sequence panel's running lines -----------------------------------
+ * The hero's sequence half borrows the viewer's own idle motion, and the SPLIT is
+ * the part worth keeping: a reply marches its dash, a call carries a short
+ * travelling band over an unbroken stroke. Never the other way round — a dash on
+ * a solid arrow makes it read as async or a reply, so only the kind that is
+ * already dashed may march. The viewer's stylesheet documents the same rule at
+ * length; this is the hero-sized copy of it.
+ *
+ * These were briefly shared with a second illustration on the landing page, which
+ * is why the names once said "strip". That one was removed as a duplicate of what
+ * the hero already shows, so this is now the hero's alone and named for it.
+ *
+ * `pathLength: 100` on the flow line means the dash maths are percentages, so one
+ * keyframe serves every message whatever its span. */
+@keyframes af-hero-seq-march {
+  from {
+    stroke-dashoffset: 11;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes af-hero-seq-flow {
+  from {
+    stroke-dashoffset: 9;
+  }
+  to {
+    stroke-dashoffset: -91;
+  }
+}
+
+/* A reply needs BOTH: it arrives with the rest of the card (a one-shot fade,
+ * because a reply's dashes are its resting style and a dashoffset draw would
+ * march them instead of drawing them — the same conflict the viewer resolves the
+ * same way), and then keeps marching for as long as the panel is on screen. Two
+ * animations on one element, which is why this cannot be two classes side by
+ * side: each sets `animation` wholesale and the later one would win. */
+.af-hero-seq-reply {
+  animation:
+    af-hero-fade 520ms ease-out both,
+    af-hero-seq-march 1800ms linear infinite both;
+}
+
+.af-hero-seq-flow {
+  /* 9 lit of 100 — the same low duty the viewer's comet head uses, which is what
+     keeps a travelling highlight from reading as a second line. */
+  stroke-dasharray: 9 91;
+  animation: af-hero-seq-flow 2600ms linear infinite both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Parked COMPLETE: the travelling band goes away entirely rather than freezing
+     as a bright stub on every call — a stopped highlight is not a resting
+     state. */
+  .af-hero-seq-flow {
+    animation: none;
+    opacity: 0;
+  }
+
+  /* The reply keeps its fade's end state — a complete dashed line — and stops
+     marching. `animation: none` on the pair is enough because the fade's
+     natural frame IS the finished line. */
+  .af-hero-seq-reply {
+    animation: none;
+  }
+}
+
+/* ---- the MCP card's transcript -------------------------------------------------
+ * Rows arrive one at a time, the set holds long enough to read, then the loop
+ * restarts. One keyframe, staggered by `animationDelay` per row (set inline in
+ * mcp-flow.tsx, so the running order reads top to bottom there like the hero's).
+ *
+ * The hold is most of the cycle on purpose: this is a transcript, not a
+ * progress bar, and a reader who arrives mid-loop should find something
+ * readable rather than a line mid-flight. */
+@keyframes af-mcp-line {
+  0%,
+  6% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  14%,
+  88% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+.af-mcp-line {
+  animation: af-mcp-line 8s ease-out infinite both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Parked with the whole transcript visible — a complete, readable frame,
+     which is what parking means here rather than a slower loop. */
+  .af-mcp-line {
+    animation: none;
+  }
+}
+
+/* ---- the hero's KIND SWAP ------------------------------------------------------
+ * The card shows both document kinds by alternating between them: a C4 container
+ * diagram, then a sequence flow, indefinitely. The `C4 / Sequence` labels in its
+ * header are not decoration — they say which one is on screen, and they light in
+ * step with it.
+ *
+ * ONE keyframe drives everything. The two panels and the two header labels all
+ * run it; the sequence side simply starts a half-cycle early via a negative
+ * delay, so the pair can never drift out of sync the way two hand-tuned
+ * animations would. `visibility` is in the keyframes alongside opacity because
+ * it animates discretely: the off panel becomes `hidden` at the midpoint, which
+ * takes it out of painting entirely rather than leaving an invisible diagram
+ * being composited forever.
+ *
+ * Fully out before the other comes in — the fade windows do not overlap — since
+ * two diagrams half-visible at once reads as a rendering fault rather than a
+ * transition. */
+@keyframes af-hero-swap {
+  0%,
+  44% {
+    opacity: 1;
+    visibility: visible;
+  }
+  49%,
+  95% {
+    opacity: 0;
+    visibility: hidden;
+  }
+  100% {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.af-hero-kind {
+  animation: af-hero-swap 17s ease-in-out infinite;
+}
+
+/* The half-cycle offset. Negative, so the sequence side is already mid-cycle on
+   the first frame instead of the card sitting on a blank panel for 8 seconds. */
+.af-hero-kind-alt {
+  animation-delay: -8.5s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* The global backstop already collapses the entrances onto their natural
      frame. The ambient loops need saying explicitly: parked, not sped up. */
@@ -575,6 +767,23 @@
   .af-hero-flow {
     animation: none;
     opacity: 0;
+  }
+
+  /* The swap PARKS on the C4 panel rather than cycling. Both halves need
+     stating: without the second rule the sequence panel keeps its from-frame
+     and the two diagrams stack on top of each other. Parking on a real,
+     complete diagram is the meaningful frame here — which is the whole
+     reduced-motion rule in this codebase, not merely "slower". */
+  .af-hero-kind {
+    animation: none;
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .af-hero-kind-alt {
+    animation: none;
+    opacity: 0;
+    visibility: hidden;
   }
 }
 
@@ -664,4 +873,22 @@
 
 .react-flow__nodes {
   z-index: 2;
+}
+
+/* ---- /view share-link forwarding -----------------------------------------
+ * A share link minted before `/view/c4` existed lands on `/view` with the
+ * model in the URL fragment. The fragment never reaches the server, so the
+ * chooser's markup is rendered regardless (it has to be: `/view` is in the
+ * sitemap, and a body-less route is not indexable) and an inline script in
+ * `app/view/page.tsx` stamps this attribute during HTML parse — before the
+ * first paint — when it spots a payload. Hiding here rather than in React is
+ * the whole point: by the time React can read the fragment, the chooser has
+ * already been painted.
+ *
+ * `display: none`, not `visibility: hidden`: the chooser is two large cards,
+ * and reserving their space would leave the forwarding user staring at a
+ * page-sized gap instead of nothing at all. */
+
+[data-share-forward] .af-view-chooser {
+  display: none;
 }

@@ -74,7 +74,12 @@ import {
   getDiagram,
   type ViewerModel,
 } from "../lib/model";
-import { FIT_PADDING, MAX_ZOOM, MIN_ZOOM } from "../lib/canvas-constants";
+import {
+  EDGE_BASE_DASH_PERIOD,
+  FIT_PADDING,
+  MAX_ZOOM,
+  MIN_ZOOM,
+} from "../lib/canvas-constants";
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
@@ -107,9 +112,6 @@ const DIM_NODE_OPACITY = 0.3;
  * the direction to be unmistakable, few enough that a short edge still gets
  * two or three and does not read as a dotted line.
  */
-const EDGE_DASH_ON = 5;
-const EDGE_DASH_OFF = 9;
-const EDGE_DASH_PERIOD = EDGE_DASH_ON + EDGE_DASH_OFF;
 
 /**
  * Connector interaction styling, in one scoped stylesheet: hover affordance,
@@ -158,45 +160,114 @@ const EDGE_INTERACTION_CSS = `
   opacity: 0.35;
 }
 /*
- * The resting marching dash — a repeating pattern travelling source → target
- * on every connector (geometry in viewer-edge.tsx).
+ * What keeps resting motion from becoming noise on a twenty-edge diagram, and
+ * the constraints any future tuning has to respect:
  *
- * The pattern advances by exactly ONE PERIOD (${EDGE_DASH_PERIOD} path units,
- * dash + gap) per cycle, which is what makes the loop seamless: after one
- * period the pattern is in a state identical to where it began, so an
- * infinite repeat never shows a jump. The keyframes and the dasharray
- * therefore have to stay in step — both are derived from the constants above
- * them, never typed out twice.
- *
- * Three things keep it from becoming noise on a twenty-edge diagram:
- *
- *   - it is SLOW (roughly four seconds for a dash to cross a connector) and
- *     thinner than the base stroke;
- *   - it is a lift of the edge ink TOWARD primary, not a new hue, so the
- *     palette still belongs to the nodes and nothing competes with them;
- *   - it rides on top of the base stroke rather than replacing it, so a
- *     connector still reads as a continuous line first and a moving one
- *     second.
- *
- * It hands over to the selection comet rather than layering with it, and
- * disappears entirely on a dimmed edge — see the render guard.
+ *   - it is SLOW — one traversal takes over five seconds — and the bands are
+ *     no wider than the stroke they ride, apart from a blurred halo;
+ *   - it is the edge ink lifted TOWARD primary, not a new hue, so the palette
+ *     still belongs to the nodes and nothing competes with them;
+ *   - each connector is staggered by a hash of its id, so the diagram never
+ *     pulses in lockstep;
+ *   - it hands over to the selection comet rather than layering with it, and
+ *     disappears entirely on a dimmed edge — see the render guard.
  */
-.viewer-canvas .viewer-edge-drift {
-  fill: none;
-  stroke: color-mix(in oklch, var(--edge) 40%, var(--primary));
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  opacity: 0.85;
-  stroke-dasharray: ${EDGE_DASH_ON} ${EDGE_DASH_OFF};
-  animation: viewer-edge-drift ${VIEWER_DURATIONS.edgeDrift}ms linear infinite;
+/* ---- the resting march on a DASHED connector ---------------------------- */
+/* An async connector marches its OWN dash instead of wearing a second one.
+   Unlike an overlay this is safe to animate: the pattern is already the edge's,
+   so moving it cannot make the line say something it does not mean — and there
+   is nothing to withdraw when motion stops, because a still dashed line is
+   simply a dashed line. The step is exactly one period, so the infinite repeat
+   never shows a seam. */
+.viewer-canvas .viewer-edge-base-marching {
+  animation: none;
 }
-/* Pointing at a connector brightens its dashes and speeds them up — "which
-   way does this go?" is a question asked by hovering. */
-.viewer-canvas .react-flow__edge:hover .viewer-edge-drift {
+[data-af-idle="on"] .viewer-canvas .viewer-edge-base-marching {
+  animation: viewer-edge-dash-march ${VIEWER_DURATIONS.edgeDrift}ms linear
+    infinite;
+}
+.viewer-canvas .react-flow__edge:hover .viewer-edge-base-marching {
+  animation: viewer-edge-dash-march
+    ${Math.round(VIEWER_DURATIONS.edgeDrift / 2.5)}ms linear infinite;
+}
+/* ---- the resting comet on a SOLID connector ----------------------------- */
+/*
+ * One band of light travelling source → target, the same shape the sequence
+ * viewer gives a solid message. It replaced a repeating dash overlay, and the
+ * reason is worth keeping: a pattern that covers the whole line must be drawn
+ * over the whole line, and an overlay wide enough to see is wide enough to
+ * blot out the stroke beneath it — which is how a solid connector came to look
+ * broken. A single travelling band leaves every part of the line alone almost
+ * all of the time.
+ *
+ * HIDDEN unless idle motion is on, and REMOVED rather than parked: these bands
+ * are dash patterns, so a frozen one is not a resting connector but a stray
+ * bright stripe sitting across it. Motion that cannot stop honestly has to
+ * leave. Same rule as the sequence comet and the same gate — the data-af-idle
+ * attribute on the shell (lib/idle-motion.ts), which carries both the reader's
+ * toggle and their reduced-motion preference.
+ * No backticks in here: this block lives inside a template literal.
+ */
+.viewer-canvas .viewer-edge-rest {
+  display: none;
+}
+[data-af-idle="on"] .viewer-canvas .viewer-edge-rest {
+  display: inline;
+}
+/* Hover survives the gate: the toggle turns off motion NOBODY ASKED FOR, and
+   a reader holding the pointer on one connector has asked. */
+.viewer-canvas .react-flow__edge:hover .viewer-edge-rest {
+  display: inline;
+}
+.viewer-canvas .viewer-edge-rest-band {
+  fill: none;
+  stroke-linecap: round;
+  /* The three bands share one clock and one delay (set per edge inline), which
+     is what fuses them into a single comet instead of three lights chasing
+     each other. They differ only in dash length, so they share a leading edge
+     and trail behind it by different amounts. */
+  animation-duration: ${VIEWER_DURATIONS.edgeRest}ms;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+/* Each band starts its cycle at its OWN dash length and travels one whole path
+   (100 units, from pathLength), which is what keeps the three aligned on one
+   leading edge — the same arithmetic as the selected comet and the sequence
+   viewer's. */
+.viewer-canvas .viewer-edge-rest-glow {
   stroke: var(--primary);
-  opacity: 1;
-  stroke-width: 2;
-  animation-duration: ${Math.round(VIEWER_DURATIONS.edgeDrift / 2.5)}ms;
+  stroke-width: 5;
+  opacity: 0.18;
+  filter: blur(2px);
+  stroke-dasharray: 26 74;
+  animation-name: viewer-edge-rest-glow;
+}
+.viewer-canvas .viewer-edge-rest-tail {
+  stroke: var(--edge-drift);
+  stroke-width: 1.5;
+  opacity: 0.5;
+  stroke-dasharray: 18 82;
+  animation-name: viewer-edge-rest-tail;
+}
+.viewer-canvas .viewer-edge-rest-head {
+  stroke: var(--primary);
+  stroke-width: 1.5;
+  opacity: 0.95;
+  stroke-dasharray: 7 93;
+  animation-name: viewer-edge-rest-head;
+}
+/* Pointing at a connector brightens its comet and speeds it up — "which way
+   does this go?" is a question asked by hovering. The per-edge stagger delay
+   stays as it is, so the band does not jump when the pointer arrives. */
+.viewer-canvas .react-flow__edge:hover .viewer-edge-rest-band {
+  animation-duration: ${Math.round(VIEWER_DURATIONS.edgeRest / 3)}ms;
+}
+.viewer-canvas .react-flow__edge:hover .viewer-edge-rest-tail {
+  stroke: var(--primary);
+  opacity: 0.7;
+}
+.viewer-canvas .react-flow__edge:hover .viewer-edge-rest-glow {
+  opacity: 0.3;
 }
 .viewer-canvas .viewer-edge-flow {
   fill: none;
@@ -302,9 +373,21 @@ const EDGE_INTERACTION_CSS = `
 @keyframes viewer-edge-enter {
   from { opacity: 0; }
 }
-@keyframes viewer-edge-drift {
+@keyframes viewer-edge-rest-glow {
+  from { stroke-dashoffset: 26; }
+  to { stroke-dashoffset: -74; }
+}
+@keyframes viewer-edge-rest-tail {
+  from { stroke-dashoffset: 18; }
+  to { stroke-dashoffset: -82; }
+}
+@keyframes viewer-edge-rest-head {
+  from { stroke-dashoffset: 7; }
+  to { stroke-dashoffset: -93; }
+}
+@keyframes viewer-edge-dash-march {
   from { stroke-dashoffset: 0; }
-  to { stroke-dashoffset: -${EDGE_DASH_PERIOD}; }
+  to { stroke-dashoffset: -${EDGE_BASE_DASH_PERIOD}; }
 }
 @keyframes viewer-edge-flow-glow {
   from { stroke-dashoffset: 30; }
@@ -338,7 +421,18 @@ const EDGE_INTERACTION_CSS = `
   /* The resting dash is motion and nothing else — a parked band would just be
      a stray bright segment sitting on one connector, so it goes away entirely
      rather than freezing mid-path. */
-  .viewer-canvas .viewer-edge-drift { display: none; }
+  .viewer-canvas .viewer-edge-rest,
+  .viewer-canvas .react-flow__edge:hover .viewer-edge-rest {
+    display: none;
+  }
+  /* The async march PARKS rather than disappearing — unlike the overlay, its
+     resting frame is the meaningful one: a dashed line that is simply not
+     moving. Nothing is lost by stopping it. */
+  .viewer-canvas .viewer-edge-base-marching,
+  .viewer-canvas .react-flow__edge:hover .viewer-edge-base-marching {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
   .viewer-canvas .viewer-edge-flow-tail { visibility: hidden; }
   .viewer-canvas .viewer-edge-flow-head {
     stroke-dasharray: none;

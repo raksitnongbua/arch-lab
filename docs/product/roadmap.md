@@ -139,7 +139,8 @@ Nothing here is committed. Each needs a trigger before it earns a slot.
 - **Live infrastructure discovery** — humans author intent; scanners produce noise.
 - **Auto-layout as the default mode** — layout assist yes, layout takeover never.
 - **Mobile authoring.**
-- **General-purpose diagramming** (sticky notes, sequence diagrams, ERDs) — the fastest way to become a worse draw.io.
+- **General-purpose diagramming** (sticky notes, freeform shapes, ERDs) — the fastest way to become a worse draw.io.
+  - Sequence diagrams were on this list and have been REMOVED from it (v0.4, shipped in view mode). The test this list applies is "does it have a model behind it?" — sequence diagrams do, and the rest of this bullet still does not. See `vision.md` for the full reasoning.
 
 ---
 

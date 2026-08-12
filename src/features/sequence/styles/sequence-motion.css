@@ -1,0 +1,570 @@
+/* ---------------------------------------------------------------------------
+ * Sequence viewer motion + focus states.
+ *
+ * THE MODEL: the diagram renders complete and settled — nothing here reveals
+ * or hides content. All motion serves FOCUS: clicking a message re-draws
+ * that arrow and holds it emphasised; clicking a participant re-draws its
+ * message set in step order, staggered; everything outside the focus set
+ * recedes via .af-seq-dim. The viewer marks each animating message with
+ * `data-animate="a"` or `"b"` (see below for why two) plus a `--seq-rank`
+ * custom property that becomes its stagger delay.
+ *
+ * Every duration reads a `--seq-*` custom property that the viewer writes
+ * from `lib/motion.ts` (`sequenceMotionVars()`), so reduced-motion collapses
+ * every animation to 0ms in exactly one place — the same contract
+ * `canvas-motion.css` has with the editor's motion runtime. The `0ms`
+ * fallbacks mean nothing animates before the viewer mounts (SSR markup is
+ * static and complete). Zero colour literals: every colour is a semantic
+ * token via var().
+ *
+ * Only `opacity` and `stroke-dashoffset` animate — never a layout property —
+ * so a long diagram stays compositor/paint-bound during a focus draw.
+ * ------------------------------------------------------------------------- */
+
+/* ---- the focus draw ----------------------------------------------------------
+ * Solid arrows (sync, async) carry pathLength="1", so one dash unit is the
+ * whole line and every arrow draws in the same time regardless of span —
+ * the `.af-edge-draw` technique from canvas-motion.css.
+ *
+ * WHY TWO IDENTICAL ANIMATIONS ("a"/"b"): a CSS animation does not restart
+ * when its selector already matches — re-clicking the focused message would
+ * change nothing the style system can see. Remounting the SVG node would
+ * restart it, but that drops keyboard focus from the hit target. Instead
+ * the viewer flips data-animate between "a" and "b" on every focus gesture
+ * (nonce parity), and since a CHANGED animation-name always restarts the
+ * animation, a repeat click replays without touching the DOM tree. The -a/-b
+ * keyframe pairs are byte-identical on purpose.
+ *
+ * REPLY arrows deliberately do NOT use the dashoffset draw: their resting
+ * style is a dash pattern, and stroke-dasharray can only serve one master —
+ * a pathLength-normalised draw would either destroy the dashes or march
+ * them. Replies fade in instead (.af-seq-fade-in), which keeps them dashed
+ * from their first frame; the message still arrives as an event because the
+ * head fade is shared with the drawn kinds.
+ *
+ * The stagger: each animating message's delay is `--seq-rank` (its position
+ * in the focus set, in step order) × `--seq-stagger`. `both` fill matters —
+ * a delayed message holds its from-frame (undrawn, label invisible) until
+ * its turn, so a participant's message set reveals as one ordered gesture.
+ */
+
+.af-seq-msg[data-animate] {
+  --seq-delay: calc(var(--seq-rank, 0) * var(--seq-stagger, 0ms));
+}
+
+.af-seq-msg[data-animate] .af-seq-draw {
+  stroke-dasharray: 1;
+  animation-duration: var(--seq-draw, 0ms);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: var(--seq-delay);
+}
+
+.af-seq-msg[data-animate="a"] .af-seq-draw {
+  animation-name: af-seq-draw-a;
+}
+
+.af-seq-msg[data-animate="b"] .af-seq-draw {
+  animation-name: af-seq-draw-b;
+}
+
+@keyframes af-seq-draw-a {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes af-seq-draw-b {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Labels and reply lines fade in alongside the draw. */
+.af-seq-msg[data-animate] .af-seq-fade-in {
+  animation-duration: var(--seq-draw, 0ms);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: var(--seq-delay);
+}
+
+/* Heads (and self-loop labels) arrive just after the line reaches them. */
+.af-seq-msg[data-animate] .af-seq-head {
+  animation-duration: var(--seq-head, 0ms);
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  animation-delay: calc(var(--seq-delay) + var(--seq-head-delay, 0ms));
+}
+
+.af-seq-msg[data-animate="a"] .af-seq-fade-in,
+.af-seq-msg[data-animate="a"] .af-seq-head {
+  animation-name: af-seq-fade-a;
+}
+
+.af-seq-msg[data-animate="b"] .af-seq-fade-in,
+.af-seq-msg[data-animate="b"] .af-seq-head {
+  animation-name: af-seq-fade-b;
+}
+
+@keyframes af-seq-fade-a {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes af-seq-fade-b {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- idle motion: one mechanism per kind (the diagram at rest) ----------------
+ * Something moves along every resting message, but HOW depends on whether the
+ * line's dash pattern is already carrying meaning. Two mechanisms, and the
+ * split is the design:
+ *
+ *   - REPLIES march their dash. `..>` is dashed 6/5 at rest, so moving that
+ *     pattern adds motion without overwriting anything — this is React Flow's
+ *     animated edge exactly:
+ *
+ *       .react-flow__edge.animated path {
+ *         stroke-dasharray: 5; animation: dashdraw 0.5s linear infinite;
+ *       }
+ *       @keyframes dashdraw { from { stroke-dashoffset: 10; } }
+ *
+ *     (verbatim from @xyflow/react 12.11.2's dist/style.css, read out of the
+ *     installed package rather than the docs site, which documents only the
+ *     custom animateMotion/offsetPath recipes and not the built-in edge.)
+ *
+ *   - SYNC AND ASYNC keep one unbroken SOLID line, and the C4 viewer's COMET
+ *     travels along it instead — glow, tail and head, C4's own dash geometry
+ *     at a smaller scale and a slower clock (see the comet block below).
+ *
+ * WHY NOT MARCH EVERYTHING. It was tried, and it was wrong. Marching a solid
+ * arrow means giving it a dasharray, and on a sequence diagram "dashed"
+ * already means something — async or reply. A 10/4 marching sync arrow reads
+ * as a dashed line, so the motion was quietly overwriting the kind. Dash is
+ * motion the reply can afford and the solid kinds cannot.
+ *
+ * WHY THE LIGHT IS NOT AN OVERLAY, which is the part not to undo. Four earlier
+ * idle designs put a SECOND path over the line — a marching dash tinted toward
+ * --primary, a neutral one, one pitch-matched to the reply dash, a travelling
+ * dot, then a glow-plus-head comet. Three read as a doubled, fuzzy line, and
+ * each time the fix was sought in the overlay's colour, pitch or duty cycle.
+ * The overlay was not itself the bug — the LENGTH of what they overlaid was.
+ * The rule is "never a second LINE'S WORTH of stroke": their dashes ran long or
+ * continuous, so they read as a doubled, fuzzy line. C4's comet is three SHORT
+ * bands (the head is 9 of 100 path units) sliding over the line, which reads as
+ * light passing along it. Keep the duty low and the bands are safe; lengthen
+ * them and the old bug returns wearing new clothes.
+ *
+ * WHAT ELSE OWNS THESE PROPERTIES. The focus draw animates stroke-dashoffset
+ * on the same element, so idle motion is suppressed on the focused and
+ * animating set — the renderer withholds `data-idle`. `pathLength` is applied
+ * ONLY while animating, because pathLength=1 renormalises dash maths to
+ * fractions of the line and would stretch a long reply's dashes out of all
+ * proportion.
+ *
+ * The reply's keyframes advance exactly one dash period so the loop is
+ * seamless, and its duration comes from `idleMarchSpeed` in lib/motion.ts. The
+ * keyframe values are CONSTANTS, not var()-driven: Chromium will not
+ * interpolate stroke-dashoffset between var()/calc() keyframe values — the
+ * animation parks on its end frame. MARCH_PERIOD in motion.ts, the dasharray
+ * below and those constants are one fact in three places; change them
+ * together, and `check:sequence-motion` will tell you if you don't.
+ *
+ * THE GATE is `data-seq-march` on the diagram root (motion.ts's
+ * `sequenceMarchState`) rather than a custom property, because switching the
+ * march off has to withdraw the DASHARRAY as well as the animation — a stopped
+ * march still wearing its pattern would leave a reply's motion frozen mid-slide
+ * or, worse, a sync arrow dashed. Off means each kind simply wears its resting
+ * appearance: solid for sync and async, 6/5 for replies, the gradient at its
+ * base colours, exactly as it was before any idle motion existed.
+ */
+
+/* Replies march their dash — the one kind where the dash IS the resting
+ * identity, so moving it adds motion without overwriting meaning. Linear,
+ * because a dash that eases would read as slipping. */
+[data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
+  stroke-dasharray: 6 5;
+  animation-name: af-seq-march-dashed;
+  animation-duration: var(--seq-march-dashed, 2750ms);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* The SOLID kinds get no dash — they stay one unbroken line and a COMET of
+ * light travels over them instead. A dash on a solid arrow makes it read as
+ * async-or-reply, so marching them overwrote the kind; short bands of light do
+ * not touch it. */
+[data-seq-march="on"]
+  .af-seq-msg[data-idle]:not([data-kind="reply"])
+  .af-seq-line {
+  stroke-dasharray: none;
+}
+
+/* ---- the comet: the C4 viewer's edge flow, verbatim -------------------------
+ * Same construction, same dasharrays, same keyframes as `.viewer-edge-flow-*`
+ * in viewer/components/viewer-canvas.tsx — blurred glow, soft tail, sharp head,
+ * all sliding by stroke-dashoffset over an untouched line. Only the CLOCK
+ * differs, deliberately slower: C4 runs one comet on the edge you just
+ * selected, this runs on every resting message at once (see `idleFlow` in
+ * lib/motion.ts). The WIDTHS transfer verbatim rather than scaled because C4's
+ * `.viewer-edge-drift` line is stroke-width 1.5 and so is `.af-seq-line`: the
+ * same comet over the same weight of line is the same comet.
+ * check:sequence-motion reads the C4 file and asserts they still agree, so
+ * "same as the C4" cannot rot when one side is tuned.
+ *
+ * TWO DELIBERATE DEPARTURES, both forced by this view rather than preference:
+ *   1. COLOUR is the line's own sender→receiver ramp (--seq-line-paint), not
+ *      C4's --primary → --accent. Primary is this view's FOCUS colour; a
+ *      resting comet wearing it would say "selected" on every message at once.
+ *   2. C4 shows its comet on the SELECTED edge, one at a time. Here it runs on
+ *      every resting message, so the head keeps C4's 9%-of-path duty and
+ *      nothing is brightened beyond it — eleven at once has to stay ambient.
+ *
+ * The bands are separate paths, which is the one thing four earlier idle
+ * designs got wrong. The rule they broke was not "never overlay" but "never a
+ * second LINE'S WORTH of stroke": their dashes were long or continuous, so they
+ * read as a doubled, fuzzy line. A 9-of-100 head is a highlight passing over
+ * the line. Keep the duty low and this stays on the right side of that line;
+ * lengthen the bands and the old bug is back.
+ *
+ * DISPLAY-GATED, not merely animation-gated: a comet frozen by the toggle or by
+ * reduced motion would be three bright stripes parked on every message, which
+ * is not a resting state. Hidden by default so SSR paints none until the viewer
+ * mounts; the renderer also omits the bands entirely on the focused set, where
+ * the draw owns the line. */
+.af-seq-flow {
+  display: none;
+}
+
+[data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-flow {
+  display: inline;
+}
+
+.af-seq-flow-band {
+  fill: none;
+  /* The line's own ramp — same var the stroke reads, so the comet can never
+     drift from the colour of the line it rides. */
+  stroke: var(--seq-line-paint, var(--edge));
+  stroke-linecap: round;
+  animation-duration: var(--seq-flow, 4200ms);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* SCALED DOWN from C4's widths (7 / 2.5 / 3), which is the one dimension that
+ * did NOT transfer verbatim after all. C4 shows its comet on the single edge
+ * you selected, where a 7px halo over a 1.5px line is emphasis; here eight
+ * comets run at once on a diagram whose lines are 44px apart, and at that
+ * density the halo stopped being light and became weather. The GEOMETRY is
+ * still C4's — the dasharrays and offsets below are asserted against C4's own
+ * stylesheet — so this is the same comet at a smaller scale, not a different
+ * one. The glow shrinks hardest because a blurred band grows visually faster
+ * than its stroke-width suggests. */
+.af-seq-flow-glow {
+  stroke-width: 4;
+  opacity: 0.3;
+  filter: blur(1.5px);
+  stroke-dasharray: 30 70;
+  animation-name: af-seq-flow-glow;
+}
+
+.af-seq-flow-tail {
+  stroke-width: 1.75;
+  opacity: 0.45;
+  stroke-dasharray: 22 78;
+  animation-name: af-seq-flow-tail;
+}
+
+/* Still wider than the 1.5 line it rides, or the head would not read as a
+   head — this is the floor, not a value to keep trimming. */
+.af-seq-flow-head {
+  stroke-width: 2;
+  stroke-dasharray: 9 91;
+  animation-name: af-seq-flow-head;
+}
+
+/* Each band starts at its own dash length and travels one whole path, which is
+   what aligns all three leading edges on one clock — C4's trick, and the reason
+   the three layers read as one comet rather than three chasing bands. */
+@keyframes af-seq-flow-glow {
+  from {
+    stroke-dashoffset: 30;
+  }
+  to {
+    stroke-dashoffset: -70;
+  }
+}
+
+@keyframes af-seq-flow-tail {
+  from {
+    stroke-dashoffset: 22;
+  }
+  to {
+    stroke-dashoffset: -78;
+  }
+}
+
+@keyframes af-seq-flow-head {
+  from {
+    stroke-dashoffset: 9;
+  }
+  to {
+    stroke-dashoffset: -91;
+  }
+}
+
+/* Offset counts DOWN to zero, which walks the pattern along the path's own
+   direction — source → target for every kind, including a reply's
+   right-to-left run and a self-loop's out-down-and-back. This is React
+   Flow's direction too (its `from` is one period, its `to` the computed 0). */
+@keyframes af-seq-march-dashed {
+  from {
+    stroke-dashoffset: 11;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---- focus dim (click-to-focus) -----------------------------------------------
+ * The viewer stamps .af-seq-dim on everything OUTSIDE the focus set; the set
+ * itself keeps full strength. Opacity only, transitioned, so entering and
+ * leaving focus is a cross-fade — and under reduced motion (--seq-focus: 0ms)
+ * it is an instant, still perfectly meaningful state change.
+ */
+
+.af-seq-dimmable {
+  transition: opacity var(--seq-focus, 0ms) ease-out;
+}
+
+.af-seq-dim {
+  opacity: 0.22;
+}
+
+/* ---- colour roles ------------------------------------------------------------
+ * One definition per role, as CLASSES rather than SVG presentation attributes,
+ * because the emphasis state below must override them and a CSS rule cannot
+ * outrank a presentation attribute set inline in the markup. Every value is a
+ * semantic token; the sequence renderer never names a colour.
+ */
+
+/* The resting line is painted through a VAR so the gradient can be a value
+ * rather than an override: the renderer stamps `--seq-line-paint:
+ * url(#<gradient>)` per message (sender's lane hue → receiver's, muted toward
+ * --edge), and this rule's fallback keeps a flat --edge line for anything that
+ * does not (SSR before ids resolve, a message whose participants have no
+ * lane). Crucially the paint stays in the CASCADE, not on the element: an
+ * inline `stroke` would outrank the focus rule below and a focused line would
+ * keep its gradient instead of escalating to --primary. */
+.af-seq-line {
+  stroke: var(--seq-line-paint, var(--edge));
+  stroke-width: 1.5;
+}
+
+.af-seq-head-fill {
+  fill: var(--edge);
+}
+
+.af-seq-head-line {
+  stroke: var(--edge);
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.af-seq-label {
+  fill: var(--foreground);
+}
+
+.af-seq-label-meta {
+  fill: var(--muted-foreground);
+}
+
+/* The FOCUSED message is emphasised — primary-coloured and a shade heavier,
+ * the same escalation the viewer gives a selected connector — and it HOLDS
+ * that emphasis after its draw finishes: the animation announces the focus,
+ * the colour keeps announcing it. The distinction from its dimmed peers is
+ * colour+weight, not opacity, so it reads in both themes. */
+.af-seq-msg[data-focused="true"] .af-seq-line {
+  stroke: var(--primary);
+  stroke-width: 2.25;
+}
+
+.af-seq-msg[data-focused="true"] .af-seq-head-fill {
+  fill: var(--primary);
+}
+
+.af-seq-msg[data-focused="true"] .af-seq-head-line {
+  stroke: var(--primary);
+}
+
+.af-seq-msg[data-focused="true"] .af-seq-label {
+  font-weight: 600;
+}
+
+/* Clickable hit areas — generous, invisible, and honest about being buttons. */
+.af-seq-hit {
+  stroke: transparent;
+  fill: none;
+  stroke-width: 18;
+  cursor: pointer;
+}
+
+/* Region-shaped hits (message arrow+label outline, participant header,
+ * fragment chips and guards): closed shapes whose EXACT bounds are the
+ * target. `pointer-events: all` hit-tests the interior regardless of paint;
+ * `stroke: none` matters just as much — the 18px stroke above would halo
+ * 9px past every edge, which is exactly how a label box would steal clicks
+ * from the message one row up. Declared after .af-seq-hit so it wins.
+ * stroke-width must be ZEROED too, not just the paint: pointer-events: all
+ * hit-tests the stroke REGION whether or not it is painted, so an inherited
+ * 18px width would quietly resurrect the halo. */
+.af-seq-hit-region {
+  stroke: none;
+  stroke-width: 0;
+  fill: transparent;
+  pointer-events: all;
+}
+
+.af-seq-hit:focus-visible {
+  outline: none;
+}
+
+/* Keyboard focus ring for in-SVG buttons: a stroke on the element itself,
+ * since CSS outline does not follow an SVG path's shape. */
+.af-seq-msg:has(.af-seq-hit:focus-visible) .af-seq-line,
+.af-seq-participant:has(.af-seq-hit:focus-visible) .af-seq-header-box {
+  stroke: var(--ring);
+}
+
+/* Fragment chips and branch guard labels must LOOK clickable, not merely be
+ * clickable: hover and keyboard focus paint the same affordance (ring-
+ * coloured chip border / primary-coloured underlined guard) onto the visible
+ * element, via :has() on the control group because the visuals are
+ * pointer-events-none and the invisible hit rect is what actually hovers.
+ * These are state changes, not motion — nothing here needs a reduced-motion
+ * branch. */
+.af-seq-frag-ctl:has(.af-seq-hit:hover) .af-seq-chip,
+.af-seq-frag-ctl:has(.af-seq-hit:focus-visible) .af-seq-chip {
+  stroke: var(--ring);
+  stroke-width: 1.5;
+}
+
+.af-seq-frag-ctl:has(.af-seq-hit:hover) .af-seq-guard,
+.af-seq-frag-ctl:has(.af-seq-hit:focus-visible) .af-seq-guard {
+  fill: var(--primary);
+  text-decoration: underline;
+}
+
+/* Messages and participants get the same courtesy — and until now they did
+ * not, which was the real discoverability gap: fragment chips announced
+ * themselves on hover while the messages, the primary thing to click, gave no
+ * sign they were targets at all. A pointer cursor alone is a poor signal on a
+ * dense drawing, because it appears over hit regions that reach well past the
+ * ink and never says WHICH element it found.
+ *
+ * Hover is deliberately a WEAKER version of focus, so the two read as one
+ * escalation rather than two vocabularies: hover thickens the line and bolds
+ * the label but leaves the sender→receiver gradient alone; focus takes it to
+ * --primary at a heavier weight. Keyboard focus keeps its own --ring stroke
+ * above. Nothing here moves, so there is no reduced-motion branch to write.
+ *
+ * :has() on the group because the painted line is not the element being
+ * hovered — the invisible hit region is (the same indirection the fragment
+ * rules above rely on). */
+.af-seq-msg:has(.af-seq-hit:hover) .af-seq-line {
+  stroke-width: 2;
+}
+
+.af-seq-msg:has(.af-seq-hit:hover) .af-seq-label {
+  font-weight: 600;
+}
+
+/* The head is a filled or stroked triangle depending on kind, so hover has to
+ * reach both paint channels to keep an arrowhead in step with its line. */
+.af-seq-msg:has(.af-seq-hit:hover) .af-seq-head-line {
+  stroke-width: 2;
+}
+
+/* Participant cards — header and footer alike, since the footer is a real
+ * pointer target for the same action. */
+.af-seq-participant:has(.af-seq-hit:hover) .af-seq-header-box {
+  stroke-width: 2.25;
+}
+
+/* The dependency FOLD pill. It lives inside the participant group, so the card
+ * rule above would fire on it too and hovering the pill would light the whole
+ * card — implying a click there focuses the participant, which it does not.
+ * This overrides that: hovering the pill lifts the PILL, and the card stays put.
+ * Same treatment for keyboard focus, which is a separate tab stop from the card
+ * precisely because it is a separate action. */
+.af-seq-participant:has(.af-seq-fold .af-seq-hit:hover) .af-seq-header-box {
+  stroke-width: 1.5;
+}
+
+/* The control carries no border of its own — the card is already a box — so
+ * hover and keyboard focus are shown on the GLYPH: it takes full-strength ink
+ * and the ring colour respectively. That is the whole affordance, which is what
+ * "minimal" costs: it relies on the pointer cursor and this state change rather
+ * than on a permanent frame. */
+.af-seq-fold:has(.af-seq-hit:hover) text {
+  fill: var(--foreground);
+}
+
+.af-seq-fold:has(.af-seq-hit:focus-visible) text {
+  fill: var(--ring);
+}
+
+/* ---- reduced motion ---------------------------------------------------------
+ * The `--seq-*` properties are already 0ms (lib/motion.ts zeroes them), and
+ * the global backstop in globals.css collapses anything that slips through.
+ * This block exists for the one case a zero DURATION is not enough: the
+ * focus draw replaces the solid line's resting state with
+ * stroke-dasharray: 1, and a 0ms animation still leaves that dasharray
+ * applied. Parking means the complete, natural line — so the dasharray goes
+ * too, not just the timing. Focus dim and the detail panel are untouched:
+ * they are state, not motion.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .af-seq-msg[data-animate] .af-seq-draw {
+    animation: none;
+    stroke-dasharray: none;
+  }
+  .af-seq-msg[data-animate] .af-seq-head,
+  .af-seq-msg[data-animate] .af-seq-fade-in {
+    animation: none;
+  }
+  /* Idle motion is motion and nothing else, so it goes away entirely rather
+     than freezing (same rule as .viewer-edge-drift). But it CANNOT park on
+     "no dash": the dash pattern is per-kind meaning, so each kind is put
+     back on its resting pattern explicitly — solid for sync/async, 6/5 for
+     replies. Withdrawing the dasharray wholesale here would quietly turn
+     every reply into a solid line, which reads as a call rather than a
+     return. The COMET cannot park at all — three stopped bands are bright
+     stripes sitting on every line, not a resting state — so it goes by
+     DISPLAY, the same treatment the C4 viewer gives .viewer-edge-drift.
+     `sequenceMarchState` is the JS route to the same end (it also carries the
+     user's toggle); this block holds before hydration. */
+  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-line {
+    animation: none;
+  }
+  [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-flow {
+    display: none;
+  }
+  [data-seq-march="on"]
+    .af-seq-msg[data-idle]:not([data-kind="reply"])
+    .af-seq-line {
+    stroke-dasharray: none;
+  }
+  [data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
+    stroke-dasharray: 6 5;
+  }
+}

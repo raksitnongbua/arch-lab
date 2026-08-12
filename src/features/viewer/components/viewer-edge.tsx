@@ -42,6 +42,8 @@ import {
 } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
+import { EDGE_BASE_DASH } from "../lib/canvas-constants";
+import { VIEWER_DURATIONS } from "../lib/motion";
 import type { C4Edge } from "@/types";
 
 import {
@@ -78,6 +80,26 @@ export type ViewerFlowEdge = Edge<ViewerEdgeData, "c4">;
 
 /** Generous invisible hit stroke — a 1.5px line is not a click target. */
 const EDGE_INTERACTION_WIDTH = 24;
+
+/** Painted in order: the soft halo, the trail, then the bright head on top. */
+const REST_BANDS = ["glow", "tail", "head"] as const;
+
+/**
+ * A stable phase offset for this edge's resting comet, in milliseconds.
+ *
+ * An FNV-1a hash of the edge id rather than its position in the array: an
+ * index changes the moment an edge is added or the sort changes, which would
+ * re-stagger every other connector on the canvas for no reason the reader
+ * could see.
+ */
+function restPhaseMs(edgeId: string, cycleMs: number): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < edgeId.length; i += 1) {
+    hash ^= edgeId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash % cycleMs;
+}
 
 function internalNodeRect(node: InternalNode | undefined): NodeRect | null {
   if (!node) return null;
@@ -137,9 +159,20 @@ function ViewerEdgeInner({
   // The comet flows on the selected edge alone — a selected NODE runs its
   // own outline comet (viewer-node.tsx) while its touching edges hold still.
   const showFlow = isSelected;
-  // The resting dash runs on every connector that is neither escalated to the
-  // comet nor pushed into the background.
-  const showRestingDash = !isSelected && !isDimmed;
+  // An ASYNC relationship is already drawn dashed, and that dash carries
+  // meaning. Laying the drift overlay on top of it put TWO dash rhythms on one
+  // curve — the base's `6 4` in pixels against the overlay's normalised `5 9`,
+  // which never line up and cannot be made to, so the moving dashes landed
+  // half in the static gaps and half on the static dashes. A dashed edge
+  // marches its own pattern instead (below): one rhythm, still moving, and
+  // marching a line that is already dashed cannot change what it means.
+  const isDashed = data?.edge.style === "dashed";
+  // The resting drift runs on every SOLID connector that is neither escalated
+  // to the comet nor pushed into the background.
+  const restingMotion = !isSelected && !isDimmed;
+  const showRestingDash = restingMotion && !isDashed;
+  const showDashMarch = restingMotion && isDashed;
+  const restDelayMs = restPhaseMs(id, VIEWER_DURATIONS.edgeRest);
 
   const joiner = data?.edge.direction === "bidirectional" ? "and" : "to";
   const chipText = label || technology || "Unlabelled relationship";
@@ -172,44 +205,55 @@ function ViewerEdgeInner({
           "viewer-edge-base",
           showFlow && "viewer-edge-base-selected",
           isDimmed && "viewer-edge-base-dimmed",
+          showDashMarch && "viewer-edge-base-marching",
         )}
         style={{
-          strokeDasharray: data?.edge.style === "dashed" ? "6 4" : undefined,
+          strokeDasharray: isDashed ? EDGE_BASE_DASH : undefined,
         }}
       />
       {showRestingDash ? (
         /*
-         * The resting dash: a repeating dash pattern marching source → target
-         * along the real bezier, on every connector, all the time. This is the
-         * diagram's answer to "which way does this go?" without having to
-         * find the arrowhead.
+         * The resting COMET on a solid connector — the same three-band shape
+         * the sequence viewer gives a solid message, which is where this look
+         * comes from and why the two now read as one product.
          *
-         * Why an OVERLAY rather than animating the base stroke's own dash
-         * pattern: `C4Edge.style` uses solid-vs-dashed to mean
-         * synchronous-vs-asynchronous, so the base stroke's pattern carries
-         * MEANING and cannot be borrowed for motion. Marching the base dash
-         * would also have animated only the async edges, leaving a diagram
-         * with two dashed relationships looking untouched — and it would have
-         * made a solid edge indistinguishable from a dashed one the moment it
-         * started moving.
+         * WHY NOT THE REPEATING DASH IT REPLACES. A pattern that covers the
+         * whole line has to be drawn over the whole line, and an overlay wide
+         * enough to see is wide enough to blot out the stroke beneath it —
+         * that is exactly how a solid connector came to look broken. One
+         * travelling band touches any given millimetre for a moment and leaves
+         * it alone the rest of the time, so the line underneath is never in
+         * question. Direction still reads, from the direction of travel.
          *
-         * `pathLength={100}` normalises the dash arithmetic the same way the
-         * selection comet does, so the pattern is a fixed number of dashes per
-         * connector regardless of pixel length. An 80px edge and an 800px one
-         * therefore show the same rhythm instead of one looking finely
-         * stippled and the other sparse.
+         * SUBORDINATE TO SELECTION, deliberately. The selected comet is a
+         * primary→accent gradient at stroke-width 7/2.5/3 with a pulsing
+         * arrowhead; this one is edge-toned, thin, and slow. If resting motion
+         * competed with selection, selecting an edge would stop meaning
+         * anything.
          *
-         * Suppressed while this edge is selected (the comet takes over — two
-         * lights on one wire reads as a glitch) and while it is dimmed (a
-         * dimmed edge is explicitly not part of what the reader asked about,
-         * and motion defeats dimming).
+         * `pathLength={100}` normalises the dash maths so a short connector
+         * and a long one show the same band, not one stubby dot and one streak.
          */
-        <path
-          aria-hidden="true"
-          className="viewer-edge-drift pointer-events-none"
-          d={path}
-          pathLength={100}
-        />
+        <g aria-hidden="true" className="viewer-edge-rest pointer-events-none">
+          {REST_BANDS.map((band) => (
+            <path
+              key={band}
+              d={path}
+              pathLength={100}
+              className={`viewer-edge-rest-band viewer-edge-rest-${band}`}
+              /*
+               * Stagger, so twenty connectors do not pulse in lockstep — which
+               * reads as one mechanism ticking rather than a system with
+               * traffic on it. The offset is derived from the edge id, so it
+               * is stable across re-renders and re-layouts (a random or
+               * index-based delay would reshuffle the whole diagram whenever
+               * an edge was added). NEGATIVE, so every band starts already
+               * mid-flight instead of the diagram sitting dark for a beat.
+               */
+              style={{ animationDelay: `-${restDelayMs}ms` }}
+            />
+          ))}
+        </g>
       ) : null}
       {showFlow ? (
         // The flow overlay: one fixed gradient along this edge's anchors,

@@ -5,6 +5,7 @@ import { Providers } from "@/app/providers";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { publicOrigin } from "@/features/mcp/lib/origin";
+import { SHARE_PARAM_MODEL } from "@/features/viewer/share/codec";
 import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 
 import "./globals.css";
@@ -22,8 +23,8 @@ const geistMono = Geist_Mono({
 });
 
 const DEFAULT_TITLE = EDITOR_ENABLED
-  ? `${APP_NAME} — C4 architecture editor`
-  : `${APP_NAME} — C4 architecture diagrams`;
+  ? `${APP_NAME} — C4 and sequence diagram editor`
+  : `${APP_NAME} — C4 and sequence diagrams as text`;
 
 export const metadata: Metadata = {
   // The same resolution order share links use (env override → Vercel
@@ -81,6 +82,16 @@ export const viewport: Viewport = {
   themeColor: "#1b1b23",
 };
 
+/**
+ * Built from the codec's own constant so the param name stays defined once, and
+ * wrapped in try/catch because a thrown pre-paint script would abort the rest of
+ * the parse — a flag is never worth a blank page.
+ */
+const SHARE_FLAG_SCRIPT =
+  `try{var h=location.hash.slice(1);` +
+  `if(h&&new URLSearchParams(h).has(${JSON.stringify(SHARE_PARAM_MODEL)}))` +
+  `document.documentElement.setAttribute("data-share-forward","")}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -96,6 +107,31 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
     >
       <body className="flex min-h-full flex-col">
+        {/* PRE-PAINT SHARE FLAG. Stamps `data-share-forward` on <html> when the
+            URL carries a share payload, so a page that is about to forward can
+            hide the copy it is forwarding away from — `/view` uses it, via a
+            CSS rule in globals.css, to keep a legacy `/view#m=…` link from
+            flashing the chooser.
+
+            IT LIVES HERE, in the root layout, and that is the whole point. It
+            used to sit inside `/view/page.tsx`, where React 19 logged
+            "Encountered a script tag while rendering React component" on every
+            client navigation to the route: a client render inserts the tag
+            without executing it, so the warning was correct and the script was
+            dead weight on that path. The root layout is rendered once, on the
+            server, and never re-rendered by client navigation — so the tag only
+            ever appears in parsed HTML, where an inline script does run.
+
+            That is also the only path that needs it. The pre-paint window
+            exists on a FRESH DOCUMENT LOAD, which is exactly how a pasted share
+            link arrives; a client navigation has already painted, and the
+            chooser's own hash subscription handles it there.
+
+            Site-wide rather than route-scoped is deliberate: the flag states a
+            fact about the URL, not about a route, and nothing reads it unless it
+            opts in. Same technique and same reason as the next-themes script
+            above it. */}
+        <script dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }} />
         <Providers>
           <a
             href="#main"

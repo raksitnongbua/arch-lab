@@ -177,6 +177,90 @@ title "Layout rules"
 `,
 };
 
+/* -------------------------------------------------------------------------- */
+/* Sequence documents (a DIFFERENT grammar, checked by a different parser)     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `.alab` has two document kinds and they do not mix: a C4 model
+ * (`archlab 1.0`) and a sequence diagram (`archlab 1.0 sequence`). The header
+ * decides which parser reads the file, and `detectAlabKind` is what picks.
+ *
+ * These snippets are kept separate from `FULL_SNIPPETS` because the check
+ * script must push them through `parseSequenceText`, not `parseArchText` —
+ * feeding a sequence document to the C4 parser fails at line 1, and a check
+ * that "proved" that would prove nothing. Same contract otherwise: every
+ * snippet here is parsed on every build, so the page cannot show a sequence
+ * example that does not work.
+ */
+
+/** A complete sequence document, exercising the constructs worth seeing first. */
+export const SEQUENCE_MINIMAL_EXAMPLE: DocSnippet = {
+  id: "sequence-minimal",
+  code: `archlab 1.0 sequence
+title "Checkout"
+
+@sequence
+  autonumber
+  cust:actor "Customer"
+  web "Storefront" [Next.js]
+  api:participant "Order API" [Go]
+
+  cust -> web : "Clicks Place order"
+  web ->+ api : "POST /orders" [HTTPS]
+  api ..>- web : "201 Created"
+`,
+};
+
+/** Arrow kinds, a self-message, and notes. */
+export const SEQUENCE_MESSAGE_EXAMPLE: DocSnippet = {
+  id: "sequence-messages",
+  code: `archlab 1.0 sequence
+title "Message kinds"
+
+@sequence
+  api:participant "Order API"
+  queue:participant "Events" [Kafka]
+
+  api -> api : "Validates the cart"
+  api ~> queue : "order.created" [Avro]
+  queue ..> api : "ack"
+  note right api : "Retries are idempotent"
+  note over api queue : "Both sides are at-least-once"
+`,
+};
+
+/** Fragments nest by INDENTATION — there is no \`end\` keyword. */
+export const SEQUENCE_FRAGMENT_EXAMPLE: DocSnippet = {
+  id: "sequence-fragments",
+  code: `archlab 1.0 sequence
+title "Branching"
+
+@sequence
+  web "Storefront"
+  api:participant "Order API"
+  pay:participant "Payments"
+
+  alt "card accepted"
+    api ->+ pay : "Create charge" [REST]
+    pay ..>- api : "charge.succeeded"
+    par "receipt"
+      api ~> web : "Emails the receipt"
+    and "audit"
+      api -> api : "Writes audit row"
+  else "card declined"
+    api ..> web : "402 Payment Required"
+  opt "first purchase"
+    web -> web : "Shows onboarding tips"
+`,
+};
+
+export const SEQUENCE_SNIPPETS: readonly DocSnippet[] = [
+  SEQUENCE_MINIMAL_EXAMPLE,
+  SEQUENCE_MESSAGE_EXAMPLE,
+  SEQUENCE_FRAGMENT_EXAMPLE,
+];
+
 export const FULL_SNIPPETS: readonly DocSnippet[] = [
   MINIMAL_EXAMPLE,
   HEADER_EXAMPLE,

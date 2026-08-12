@@ -13,29 +13,33 @@ them before making product decisions.
 
 Be precise about what this repo is right now:
 
-| Area                                                     | State                                                                                                                                                                                                                                                                                                                                                                                |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Read-only C4 viewer**                                  | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Connectors carry a marching dash so flow direction reads without hunting for the arrowhead. Export as SVG or PNG (rasterised at 2×), either the view you are on or [every diagram as one `.zip`](#exporting-images). |
-| **View-mode playground** (`/view`)                       | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                                                                                                      |
-| **`.alab` ⇄ JSON conversion**                            | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                                                                                                              |
-| **Mermaid C4 import**                                    | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
-| **C4 editor**                                            | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; flip it to `false` and `/editor` degrades to a coming-soon page — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                    |
-| **MCP server** (`/api/mcp`)                              | **Beta.** Eight read-only tools, a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                                                           |
-| **Sequence diagrams, data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                                                                                                                  |
+| Area                                  | State                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Read-only C4 viewer**               | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Connectors carry a marching dash so flow direction reads without hunting for the arrowhead. Export as SVG or PNG (rasterised at 2×), either the view you are on or [every diagram as one `.zip`](#exporting-images). |
+| **View-mode playground** (`/view`)    | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                                                                                                      |
+| **`.alab` ⇄ JSON conversion**         | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                                                                                                              |
+| **Mermaid C4 import**                 | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
+| **C4 editor**                         | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; two edits gate it back off — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                                                         |
+| **MCP server** (`/api/mcp`)           | **Beta.** Ten read-only tools (C4 and sequence documents both), a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                            |
+| **Sequence diagrams**                 | **View mode works today** (`/view/sequence`): `.alab` sequence text or a pasted Mermaid `sequenceDiagram`, rendered complete with focus-driven animation — click any message, participant, or fragment to spotlight its flow. No editor canvas and no share links for them yet — see [Sequence diagrams](#sequence-diagrams).                                                        |
+| **Data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Routes
 
-| Route             | What it is                                                                                                                                                                          |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`               | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
-| `/demo`           | Demo index: one card per bundled example model, each linking into view mode. Card numbers are counted from the parsed models, not hand-written.                                     |
-| `/view/[modelId]` | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
-| `/view`           | The paste-your-own playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                              |
-| `/syntax`         | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
-| `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
-| `/mcp`            | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
-| `/api/mcp`        | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
-| `/editor`         | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Degrades to a coming-soon page when `EDITOR_ENABLED` is off.                    |
+| Route                        | What it is                                                                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                          | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
+| `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                          |
+| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
+| `/view`                      | Chooser: C4 model or sequence diagram. Also where legacy `/view#m=…` share links land — they forward to `/view/c4` with the fragment intact.                                        |
+| `/view/c4`                   | The paste-your-own C4 playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                           |
+| `/view/sequence`             | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message, participant, or fragment to animate and inspect it.      |
+| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                     |
+| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
+| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
+| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
+| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
+| `/editor`                    | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Gated off by `EDITOR_ENABLED` into a coming-soon page.                          |
 
 ## The two model formats
 
@@ -204,6 +208,112 @@ proven by `pnpm check:advisories`.
   `C4Deployment` Mermaid sources import at container level; call ordering and
   deployment topology are not part of the model.
 
+## Sequence diagrams
+
+A second document type, answering the question C4 does not: **what happens when
+…?** Participants down the top, ordered messages down the page.
+
+Live at [`/view/sequence`](#routes) — write `.alab` sequence text or paste a
+Mermaid `sequenceDiagram` and it is auto-detected. View mode only for now:
+there is no editor canvas and no share codec for sequence documents yet.
+
+```
+archlab 1.0 sequence
+title "Checkout — Place Order"
+
+@sequence
+  autonumber
+  cust:actor "Customer"
+  api:participant "Order API" [Go]
+  db:participant "Orders DB" [PostgreSQL]
+
+  cust -> api : "POST /orders" [HTTPS]
+  alt "card accepted"
+    api ->+ db : "INSERT order" [SQL]
+    api ..>- cust : "201 Created"
+  else "card declined"
+    api ..> cust : "402 Payment Required"
+  note over cust api : "Order flow complete"
+```
+
+`archlab 1.0 sequence` — the extra header word is what makes the two document
+types distinguishable from the first meaningful line, which is what
+auto-detection depends on. Arrows are `->` synchronous, `~>` asynchronous,
+`..>` reply; `+`/`-` suffixes open and close an activation bar; `loop`, `opt`,
+`alt`/`else` and `par`/`and` nest by indentation with no `end` keyword, because
+a dedent already says where a fragment stops. Conversion is lossless in both
+directions, proven by `pnpm check:sequence`.
+
+**The whole story, then the part you asked about.** The diagram owns the
+first screenful and the whole flow FITS it — scaled to your viewport the way
+the C4 viewer's fit-view works, with a small zoom pill (fit / 100% / in /
+out; past fit, drag the canvas to pan — or scroll, or use the scrollbars, all
+three moving the same pane) for reading fine
+detail. The source sits below the fold: scroll the page down to edit the
+text. An immersive mode gives the diagram the entire viewport. The diagram
+renders complete — a sequence diagram is a record of what happened, so the
+record is what you see first. At rest something travels along every message,
+and **which mechanism depends on whether the line's dash already means
+something**. Replies are dashed at rest, so their dash marches — React Flow's
+animated-edge technique, moving the line's own stroke rather than a second
+stroke laid over it. Calls are solid, and stay solid: **the C4 viewer's comet
+runs along them** instead — the same blurred glow, soft tail and sharp head,
+the same dash maths, just slower, because C4 lights the one edge you selected
+while this lights every resting message at once. `pnpm check:sequence-motion`
+reads the C4 stylesheet and asserts the bands still match it band for band, and
+that the clock stays on the slower side. Giving calls a marching dash was tried
+and dropped,
+because a dashed sync arrow reads as an async one — the motion was overwriting
+the message kind. Each line is also
+painted **from its sender's lane colour to its receiver's**, so the direction
+of traffic is in the colour: you can see which service a call left and which
+one it reached. Idle motion switches off from the zoom strip (the choice
+persists), and `prefers-reduced-motion` removes it outright, toggle or no
+toggle — each kind parks on the appearance that carries its meaning, solid for
+calls and dashed for returns. The
+rest of the animation budget is spent on **focus**: click a
+message (its arrow or its label) and that arrow re-draws itself and holds
+emphasised while the rest recedes; a details dock on the right (a bottom
+sheet on small screens) names the sender and receiver with their
+technologies, the message's kind, step number and the fragment guard path it
+sits inside (`alt [card accepted] › par [receipt]`). Click a participant and
+its whole message set re-draws in step order — one calm staggered sweep —
+with the dock listing each of its messages as a click-to-refocus button.
+Click a fragment's kind chip (`alt`, `loop`, `opt`, `par`) to focus every
+message in it, or a branch guard like `[card accepted]` to focus just that
+case's flow. Click the same thing again and the animation replays. Arrow
+keys walk focus through the messages in order; Escape clears, and so does a
+click anywhere in the pane that is not on a diagram element — the whole pane is
+the backdrop, including the margins a fitted diagram leaves beside itself, so
+"click away to get out" works where the empty space actually is. Scrollbar
+gutters are excluded, since dragging to pan is not deselecting. The dock's close
+button clears too, and a second Escape exits immersive mode.
+Under `prefers-reduced-motion` nothing draws — focus dims and the details
+dock appears instantly, which is the same information without the motion.
+
+**Collapse a participant's dependencies.** A card whose downstream services
+exist only to serve it carries a `−2` pill; click it and those columns fold
+away, taking their messages with them, and the diagram compacts. Click the `+2`
+to bring them back. In the bundled Checkout flow, folding Order API hides
+Payments and Orders DB — and deliberately not the Customer, even though Order
+API emails one, because the Customer also clicks in Storefront and a participant
+the flow arrives through is never a dependency. The rule and that exact outcome
+are pinned by `pnpm check:sequence-collapse`. Folding filters the model rather
+than hiding with CSS, so columns, rows, fragment boxes, activation bars and the
+text listing all recompute together; one consequence worth knowing is that step
+numbers count what is shown, so a collapsed view numbers 1..n with no holes.
+
+Each participant is named **twice**, once at the head of its lifeline and
+again at the foot, the way hand-drawn sequence diagrams do it: at the bottom
+of a long flow you can tell which column is which without scrolling back up.
+The footer card is a visual repeat only — it is not a second control and not a
+second thing a screen reader announces.
+
+**Mermaid import is lossy, and says so.** Eight arrowheads collapse onto three
+kinds, `autonumber` arguments are dropped, and an `activate`/`deactivate` that
+does not bracket its adjacent message is dropped. `critical`, `break`, `rect`,
+`box`, `create` and `destroy` are refused by name rather than silently ignored.
+
 ## Mermaid C4 import
 
 `/view` imports Mermaid C4 source (`C4Context`, `C4Container`,
@@ -233,10 +343,18 @@ protocol can work with `.alab` models:
 claude mcp add --transport http arch-lab https://arch-lab-dev.vercel.app/api/mcp
 ```
 
-Eight read-only tools: `validate_model`, `format_model`, `convert_model`,
-`describe_model`, `get_syntax_reference`, `list_example_models`,
-`get_example_model`, `create_share_link` — plus the grammar as the resource
-`archlab://syntax` and an `author_c4_model` prompt.
+Ten read-only tools: `validate_model`, `format_model`, `convert_model`,
+`describe_model`, `validate_sequence`, `format_sequence`,
+`get_syntax_reference`, `list_example_models`, `get_example_model`,
+`create_share_link` — plus the grammar as the resource `archlab://syntax` and
+an `author_c4_model` prompt.
+
+The two `_sequence` tools are separate from their `_model` cousins rather than
+a flag on them, because the two document kinds have nothing in common to
+report: a C4 model answers with diagrams, levels and node counts, a sequence
+diagram with participants, message kinds and fragment depth. Passing a C4
+document to `validate_sequence` says so and names the right tool instead of
+failing as a syntax error.
 
 The framing matters: an agent already has file tools, and `.alab` is a text
 format precisely so it can edit one directly. The server is there for the two
@@ -300,25 +418,29 @@ Then open <http://localhost:3000>.
 
 ## Scripts
 
-| Script                        | What it does                                                                                                                                                                                                                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pnpm dev`                    | Start the dev server on :3000                                                                                                                                                                                                                                                                    |
-| `pnpm build`                  | Production build                                                                                                                                                                                                                                                                                 |
-| `pnpm start`                  | Serve the production build (run `build` first)                                                                                                                                                                                                                                                   |
-| `pnpm lint`                   | ESLint (Next core-web-vitals + TypeScript rules)                                                                                                                                                                                                                                                 |
-| `pnpm typecheck`              | `tsc --noEmit` against the strict config                                                                                                                                                                                                                                                         |
-| `pnpm format`                 | Prettier, writing changes in place                                                                                                                                                                                                                                                               |
-| `pnpm format:check`           | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                              |
-| `pnpm check:roundtrip`        | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named.  |
-| `pnpm check:mermaid`          | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                      |
-| `pnpm check:archtext`         | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                   |
-| `pnpm check:syntax-docs`      | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser, and every deliberately-broken snippet in its errors section fails with exactly the line, column and message the page shows.                                                                  |
-| `pnpm check:validate-samples` | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                          |
-| `pnpm check:advisories`       | Proves the [C4 review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites a reason from the C4 model.                                                                      |
-| `pnpm check:export-archive`   | Proves the multi-diagram export: the hand-rolled ZIP writer emits an archive that parses back byte-for-byte with valid CRC-32s (and that the system `unzip` accepts, when one is installed), drill order survives, and archive names stay unique.                                                |
-| `pnpm check:frames`           | Proves boundary editing: creating one around a selection is a single undo entry, refused input leaves the model untouched, nesting cycles are impossible, deleting a boundary re-homes rather than cascades, and the file the editor would save passes the real validator.                       |
-| `pnpm check:mcp`              | Proves the MCP server without booting a protocol: the tools it registers and the tools `/mcp` documents match exactly both ways, every tool works over real input, failures carry the parser's line and column, and a generated share link decodes back to the model that went into it.          |
-| `pnpm check:vscode-grammar`   | Proves the VS Code grammar in `editors/vscode` has not drifted from the parser: every node type, arrow and header keyword is present, then a sample — parsed by the real parser first — is tokenized with `vscode-textmate`, the engine VS Code itself runs, asserting the scope at each offset. |
+| Script                         | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                     | Start the dev server on :3000                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `pnpm build`                   | Production build                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `pnpm start`                   | Serve the production build (run `build` first)                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `pnpm lint`                    | ESLint (Next core-web-vitals + TypeScript rules)                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `pnpm typecheck`               | `tsc --noEmit` against the strict config                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `pnpm format`                  | Prettier, writing changes in place                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `pnpm format:check`            | Prettier in check-only mode, for CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `pnpm check:roundtrip`         | Proves the persistence guarantee: open a file, change nothing, save — bytes identical. Deserialize → serialize is byte-identical and idempotent on a fixture that carries unknown fields at every level, and each of the schema's 8 load-time hard errors is detected with its JSON path named.                                                                                                                                                                                                       |
+| `pnpm check:mermaid`           | Proves the Mermaid C4 converter: the reference sample maps with correct types/tags/technology, boundaries survive as tags plus the extension tree, emitted models pass the real validator, parse → serialize → parse is stable, and malformed inputs fail with line/column.                                                                                                                                                                                                                           |
+| `pnpm check:archtext`          | Proves `.alab` ⇄ JSON losslessness: text → model → text byte-identical, JSON → text → JSON byte-identical for both bundled example models (unknown fields surviving verbatim and in position), every emitted model validator-clean, malformed inputs failing with line/column.                                                                                                                                                                                                                        |
+| `pnpm check:sequence`          | Proves the sequence document format: canonical `.alab` sequence text round-trips byte-identically (fragments nested three deep, unknown fields verbatim and in position), a hand-built model survives text and back structurally, a realistic Mermaid `sequenceDiagram` imports with every supported construct, malformed inputs fail with line/column, and C4 and sequence documents never cross-detect.                                                                                             |
+| `pnpm check:sequence-layout`   | Proves the pure sequence layout function: participants keep model order, self-messages get their loop, a note over two participants spans both, activation bars open and close on the right steps, a three-deep fragment nest produces boxes that strictly contain one another, and the footer card row is reserved by the canvas height rather than clipped by it.                                                                                                                                   |
+| `pnpm check:sequence-collapse` | Proves folding a participant's dependencies: on the real example, collapsing Order API hides exactly Payments and Orders DB — not Storefront, which calls it, and not the Customer, which it emails but which also acts elsewhere. Also that folding is transitive, that a shared service stops the cascade, that the filtered file leaves no message pointing at a hidden participant and no empty fragment, and that it still lays out.                                                             |
+| `pnpm check:sequence-motion`   | Proves idle motion's cross-file facts, which no type can catch: the comet's bands still match the C4 viewer's own dasharrays and offsets (read from its stylesheet, so "same as C4" cannot rot) while its clock stays deliberately slower, solid kinds are never given a dasharray (a dashed sync arrow reads as async), the reply's keyframes advance exactly its dash period, the head stays low-duty, and reduced motion removes the comet rather than parking three bright stripes on every line. |
+| `pnpm check:syntax-docs`       | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser — C4 snippets through the C4 parser and sequence snippets through the sequence one, each first confirmed to be DETECTED as that kind — and every deliberately-broken snippet fails with exactly the line, column and message the page shows.                                                                                                                                                       |
+| `pnpm check:validate-samples`  | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                                                                                                                                                                                                                               |
+| `pnpm check:advisories`        | Proves the [C4 review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites a reason from the C4 model.                                                                                                                                                                                                                                                                           |
+| `pnpm check:export-archive`    | Proves the multi-diagram export: the hand-rolled ZIP writer emits an archive that parses back byte-for-byte with valid CRC-32s (and that the system `unzip` accepts, when one is installed), drill order survives, and archive names stay unique.                                                                                                                                                                                                                                                     |
+| `pnpm check:frames`            | Proves boundary editing: creating one around a selection is a single undo entry, refused input leaves the model untouched, nesting cycles are impossible, deleting a boundary re-homes rather than cascades, and the file the editor would save passes the real validator.                                                                                                                                                                                                                            |
+| `pnpm check:mcp`               | Proves the MCP server without booting a protocol: the tools it registers and the tools `/mcp` documents match exactly both ways, every tool works over real input, failures carry the parser's line and column, and a generated share link decodes back to the model that went into it.                                                                                                                                                                                                               |
+| `pnpm check:vscode-grammar`    | Proves the VS Code grammar in `editors/vscode` has not drifted from the parser: every node type, arrow and header keyword is present, then a sample — parsed by the real parser first — is tokenized with `vscode-textmate`, the engine VS Code itself runs, asserting the scope at each offset.                                                                                                                                                                                                      |
 
 The `check:*` scripts load the **real** library code from `src/` (via
 Node's TypeScript type stripping and a resolve hook for the `@/*` alias), so
@@ -376,7 +498,7 @@ The editor is **on** — `EDITOR_ENABLED` in
 [`src/lib/constants.ts`](src/lib/constants.ts) is `true`, and
 `src/app/editor/page.tsx` renders `<EditorShell />`.
 
-Turning it back off is two steps, in this order:
+Turning it off is two steps, in this order:
 
 1. Flip the flag:
 
@@ -384,12 +506,13 @@ Turning it back off is two steps, in this order:
    export const EDITOR_ENABLED: boolean = false;
    ```
 
-2. Drop the `EditorShell` import and render from `src/app/editor/page.tsx`,
-   replacing them with the coming-soon page and its metadata. This step is not
-   optional: while gated, that route must import **nothing** from
-   `@/features/editor`, because that import is what pulls the editor UI into the
-   deployed bundle. A conditional render would leave the code shipping while the
-   flag claimed otherwise. The file's own comment says the same.
+2. Replace the `EditorShell` import and render in `src/app/editor/page.tsx` with
+   a coming-soon page and its metadata. The import is the actual gate, which is
+   why it is a separate step: while off, that route must import **nothing** from
+   `@/features/editor`, because that import is what pulls the canvas, React Flow
+   and the editor store into the deployed bundle. A conditional render would
+   leave the code shipping while the flag claimed otherwise. The file's own
+   comment says the same.
 
 Everything else — the header's Editor nav entry, the landing-page CTAs, the
 capability copy on the demo index and in view mode — reads the flag and switches

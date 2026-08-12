@@ -27,7 +27,13 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, Download, FileImage, FileCode2 } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  FileImage,
+  FileCode2,
+  Film,
+} from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -42,6 +48,14 @@ import {
   renderPngBlob,
   PNG_SCALE,
 } from "./download";
+import {
+  C4_SHARPNESS,
+  C4_SMOOTHNESS,
+  DEFAULT_C4_GIF_QUALITY,
+  renderDiagramGif,
+  type C4Sharpness,
+  type C4Smoothness,
+} from "./frames";
 import { renderDiagramSvg } from "./render-svg";
 import { resolveExportTheme, resolveTagPaint } from "./theme";
 import { createZip, type ZipEntry } from "./zip";
@@ -120,6 +134,18 @@ export function ViewerExportButton({
 }: ViewerExportButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<ExportScope>("current");
+  /*
+   * The same two axes the sequence exporter offers, and the same reasoning:
+   * sharpness is pixels (whether small labels survive), smoothness is frames
+   * per loop (how finely the drift is sampled). Kept separate because a big
+   * jerky GIF and a small fluid one are both reasonable things to want.
+   */
+  const [sharpness, setSharpness] = useState<C4Sharpness>(
+    DEFAULT_C4_GIF_QUALITY.sharpness,
+  );
+  const [smoothness, setSmoothness] = useState<C4Smoothness>(
+    DEFAULT_C4_GIF_QUALITY.smoothness,
+  );
   const [busy, setBusy] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
@@ -156,7 +182,7 @@ export function ViewerExportButton({
   }, [open]);
 
   const runExport = useCallback(
-    async (kind: "svg" | "png") => {
+    async (kind: "svg" | "png" | "gif") => {
       setOpen(false);
       setBusy(true);
       const stem = fileStem(modelTitle);
@@ -173,8 +199,39 @@ export function ViewerExportButton({
         if (scope === "current") {
           const filename = `${stem}-${diagram.level}.${kind}`;
           const rendered = render(diagram);
-          if (kind === "svg") downloadSvg(rendered, filename);
-          else await downloadPng(rendered, filename);
+          if (kind === "svg") {
+            downloadSvg(rendered, filename);
+          } else if (kind === "png") {
+            await downloadPng(rendered, filename, C4_SHARPNESS[sharpness] * 2);
+          } else {
+            /*
+             * GIF: one loop of the connectors drifting, which is the thing a
+             * still of a C4 diagram cannot say. Single diagram only — an
+             * archive of animations would multiply an already slow encode by
+             * the whole drill-down tree, so the option is offered where it is
+             * cheap and withheld where it is not.
+             */
+            setAnnouncement("Building the animation — this takes a moment.");
+            const gif = await renderDiagramGif(
+              rendered,
+              { sharpness, smoothness },
+              undefined,
+              // The canvas's own drift colour, from the same theme read that
+              // painted the frame — so the loop cannot drift away from the page.
+              theme.edgeDrift,
+              theme.primary,
+            );
+            if (gif === null) {
+              setAnnouncement(
+                "Nothing to animate — this diagram has no connectors, so every frame would be identical.",
+              );
+              return;
+            }
+            downloadBlob(
+              new Blob([gif as BlobPart], { type: "image/gif" }),
+              filename,
+            );
+          }
           setAnnouncement(`Exported ${filename}.`);
           return;
         }
@@ -205,7 +262,7 @@ export function ViewerExportButton({
         setBusy(false);
       }
     },
-    [allDiagrams, diagram, modelTitle, scope, tagColors],
+    [allDiagrams, diagram, modelTitle, scope, tagColors, sharpness, smoothness],
   );
 
   const itemClasses =
@@ -318,10 +375,83 @@ export function ViewerExportButton({
             <span>
               {scope === "all" ? "Download PNG archive" : "Download PNG"}
               <span className="block text-xs text-muted-foreground">
-                Raster at {PNG_SCALE}× resolution
+                Raster at {PNG_SCALE * C4_SHARPNESS[sharpness]}× resolution
               </span>
             </span>
           </button>
+          {/* GIF is offered for ONE diagram only. An archive of animations
+              would multiply an already slow encode by the whole drill-down
+              tree, so the item is withheld rather than shown and refused —
+              a menu entry that exists to say no is worse than one that is not
+              there. */}
+          {scope === "current" ? (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={busy}
+              onClick={() => void runExport("gif")}
+              className={itemClasses}
+            >
+              <Film aria-hidden="true" className="size-4 text-primary" />
+              <span>
+                Download GIF
+                <span className="block text-xs text-muted-foreground">
+                  One loop of the connectors drifting
+                </span>
+              </span>
+            </button>
+          ) : null}
+
+          {/* The two axes, under the formats they modify. Inline rather than
+              behind a second disclosure: this menu is already a disclosure, and
+              nesting one inside another buys tidiness at the cost of a reader
+              finding the setting at all. */}
+          <div className="mt-1 flex flex-col gap-2 border-t border-border pt-2">
+            <label className="flex flex-col gap-1 px-2.5 text-xs text-muted-foreground">
+              Sharpness
+              <select
+                value={sharpness}
+                disabled={busy}
+                onChange={(event) =>
+                  setSharpness(event.target.value as C4Sharpness)
+                }
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              >
+                <option value="compact">
+                  Compact · PNG 2× · smallest file
+                </option>
+                <option value="standard">Standard · PNG 3×</option>
+                <option value="sharp">Sharp · PNG 4× · slowest</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 px-2.5 text-xs text-muted-foreground">
+              Smoothness
+              <select
+                value={smoothness}
+                disabled={busy || scope !== "current"}
+                onChange={(event) =>
+                  setSmoothness(event.target.value as C4Smoothness)
+                }
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground disabled:opacity-50"
+              >
+                <option value="simple">
+                  Simple · {C4_SMOOTHNESS.simple.frames} frames
+                </option>
+                <option value="standard">
+                  Standard · {C4_SMOOTHNESS.standard.frames} frames
+                </option>
+                <option value="smooth">
+                  Smooth · {C4_SMOOTHNESS.smooth.frames} frames
+                </option>
+              </select>
+            </label>
+            <p className="px-2.5 text-[11px] leading-4 text-muted-foreground">
+              Sharpness applies to PNG and GIF; SVG is vector and ignores it.
+              Smoothness is frames per loop, so it reaches the GIF only — the
+              loop stays the same length, so more frames means finer motion
+              rather than slower.
+            </p>
+          </div>
         </div>
       ) : null}
     </div>

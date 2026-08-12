@@ -27,6 +27,9 @@ import {
   NODE_ATTR_ROWS,
   NODE_EXAMPLE,
   NODE_TYPE_ROWS,
+  SEQUENCE_FRAGMENT_EXAMPLE,
+  SEQUENCE_MESSAGE_EXAMPLE,
+  SEQUENCE_MINIMAL_EXAMPLE,
   UNKNOWN_FIELDS_EXAMPLE,
 } from "../content/snippets";
 import { CodeBlock } from "./code-block";
@@ -39,6 +42,7 @@ const SECTIONS: readonly { id: string; label: string }[] = [
   { id: "nodes", label: "Nodes" },
   { id: "edges", label: "Edges" },
   { id: "unknown-fields", label: "Unknown fields (! lines)" },
+  { id: "sequence", label: "Sequence diagrams" },
   { id: "errors", label: "Errors" },
   { id: "editor-support", label: "Editor support" },
   { id: "try-it", label: "Where to use it" },
@@ -369,7 +373,63 @@ export function SyntaxReference(): React.JSX.Element {
         />
       </Section>
 
-      {/* ---- 8. errors ---------------------------------------------------------------- */}
+      {/* ---- 8. sequence diagrams ----------------------------------------------------- */}
+      <Section id="sequence" title="Sequence diagrams">
+        <P>
+          Everything above describes a <strong>C4 model</strong>, opened by{" "}
+          <Code>archlab 1.0</Code>. <Code>.alab</Code> reads a second, separate
+          document kind: a <strong>sequence diagram</strong> — participants and
+          messages over time — opened by <Code>archlab 1.0 sequence</Code> and
+          parsed by its own grammar. The two never mix. A sequence document has
+          no <Code>@context</Code> levels, a C4 model has no messages, and
+          handing one to the other&apos;s parser fails on line 1. The body sits
+          under a single <Code>@sequence</Code> block: participants first, then
+          the flow in order.
+        </P>
+        <CodeBlock
+          code={SEQUENCE_MINIMAL_EXAMPLE.code}
+          label="sequence diagram"
+        />
+        <P>
+          The label is introduced by <Code>:</Code> —{" "}
+          <Code>a -&gt; b : &quot;Label&quot;</Code> — and a message without one
+          does not parse. Three arrows carry the kind: <Code>-&gt;</Code> a
+          synchronous call, <Code>~&gt;</Code> asynchronous, <Code>..&gt;</Code>{" "}
+          a reply. <strong>Activation rides the arrow</strong> rather than
+          sitting on its own line: <Code>-&gt;+</Code> opens the receiver&apos;s
+          bar and <Code>..&gt;-</Code> closes the sender&apos;s, so a call and
+          its return read <Code>web -&gt;+ api</Code> …{" "}
+          <Code>api ..&gt;- web</Code>. A participant&apos;s kind is optional
+          and only two exist — a bare <Code>web &quot;Storefront&quot;</Code> is
+          a participant, <Code>cust:actor</Code> draws the stick figure. A
+          message from a participant to itself draws a self-loop, and{" "}
+          <Code>autonumber</Code> numbers every step.
+        </P>
+        <CodeBlock code={SEQUENCE_MESSAGE_EXAMPLE.code} label="message kinds" />
+        <P>
+          Fragments — <Code>alt</Code>/<Code>else</Code>, <Code>par</Code>/
+          <Code>and</Code>, <Code>opt</Code>, <Code>loop</Code> —{" "}
+          <strong>
+            nest by indentation, with no <Code>end</Code> keyword
+          </strong>
+          . This is the one place the format departs sharply from Mermaid: what
+          belongs to a fragment is whatever is indented under it.
+        </P>
+        <CodeBlock code={SEQUENCE_FRAGMENT_EXAMPLE.code} label="fragments" />
+        <P>
+          Render any of these in the{" "}
+          <Link href="/view/sequence" className="underline">
+            sequence playground
+          </Link>
+          , which also imports pasted Mermaid <Code>sequenceDiagram</Code> code
+          one-way. These snippets carry no <em>Open in view mode</em> button on
+          purpose: that button encodes a snippet into a share link, and share
+          links exist only for C4 models so far — a sequence one would hand the
+          text to the C4 playground, which would reject it.
+        </P>
+      </Section>
+
+      {/* ---- 9. errors ---------------------------------------------------------------- */}
       <Section id="errors" title="Errors">
         <P>
           Parsing is all-or-nothing: a broken file throws one error and applies
@@ -450,7 +510,7 @@ export function SyntaxReference(): React.JSX.Element {
         <P>
           The fastest way to learn the format is to write it live:{" "}
           <Link
-            href="/view"
+            href="/view/c4"
             className="font-medium text-primary hover:underline"
           >
             view mode

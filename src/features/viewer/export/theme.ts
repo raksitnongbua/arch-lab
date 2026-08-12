@@ -22,6 +22,14 @@ export interface ExportTheme {
   nodeForeground: string;
   nodeBorder: string;
   edge: string;
+  /**
+   * The resting drift that rides on a connector (`--edge-drift`). Resolved
+   * here so the animated GIF paints the canvas's own colour rather than a
+   * second guess at it.
+   */
+  edgeDrift: string;
+  /** `--primary`, for the resting comet's head and halo in an animated export. */
+  primary: string;
   mutedForeground: string;
   /** Secondary text ON node fills — `--node-meta`, not the panel muted. */
   nodeMeta: string;
@@ -40,6 +48,8 @@ const TOKEN_VARS = {
   nodeForeground: "--node-foreground",
   nodeBorder: "--node-border",
   edge: "--edge",
+  edgeDrift: "--edge-drift",
+  primary: "--primary",
   mutedForeground: "--muted-foreground",
   nodeMeta: "--node-meta",
   foreground: "--foreground",
@@ -96,6 +106,27 @@ export function resolveExportTheme(): ExportTheme {
   canvas.height = 1;
   const context = canvas.getContext("2d", { willReadFrequently: true });
 
+  /*
+   * A token whose value is an EXPRESSION — `color-mix(…, var(--edge) …)` — is
+   * not reliably usable straight out of `getPropertyValue`: what comes back
+   * depends on how far the engine has substituted, and the canvas parser
+   * rejects anything still holding a `var()`. Painting it onto a probe element
+   * and reading `color` back always yields a plain resolved `rgb(…)`, because
+   * that is a real used value rather than a custom property's token stream.
+   */
+  const resolveExpression = (variable: string, fallback: string): string => {
+    const probe = document.createElement("span");
+    probe.style.cssText = `position:absolute;visibility:hidden;color:var(${variable})`;
+    document.body.append(probe);
+    try {
+      const used = getComputedStyle(probe).color;
+      if (used === "") return fallback;
+      return context === null ? used : (normalizeColor(context, used) ?? used);
+    } finally {
+      probe.remove();
+    }
+  };
+
   const resolve = (variable: string, fallback: string): string => {
     const raw = styles.getPropertyValue(variable);
     if (context === null) return raw.trim() || fallback;
@@ -118,6 +149,13 @@ export function resolveExportTheme(): ExportTheme {
     nodeForeground: resolve(TOKEN_VARS.nodeForeground, "#1f2430"),
     nodeBorder,
     edge: resolve(TOKEN_VARS.edge, "#7d828f"),
+    // Falls back to the plain edge ink: an export that cannot resolve the mix
+    // shows the drift in the connector's own colour, never a stray literal.
+    primary: resolve(TOKEN_VARS.primary, "#4f46e5"),
+    edgeDrift: resolveExpression(
+      TOKEN_VARS.edgeDrift,
+      resolve(TOKEN_VARS.edge, "#7d828f"),
+    ),
     mutedForeground: resolve(TOKEN_VARS.mutedForeground, "#6a7080"),
     // Falls back to the muted tone rather than a literal: same "degrade to
     // the pre-colour look" rule as the role fills below.

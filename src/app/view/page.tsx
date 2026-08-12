@@ -1,25 +1,36 @@
 import type { Metadata } from "next";
 
-import { ViewerPlayground } from "@/features/viewer";
+import { ViewChooser } from "./view-chooser";
 
 export const metadata: Metadata = {
-  title: "Write your own model — live two-pane editor",
+  title: "View a model — C4 or sequence diagram",
   description:
-    "Edit arch-lab text (.alab) and arch-lab JSON side by side — each pane regenerates the other as you type and the diagram re-renders live. Import Mermaid C4 one-way, copy or download either format, and export the diagram as an image. Everything stays in your browser.",
+    "Choose your playground: the two-pane C4 model editor (.alab text and JSON in lossless sync) or the sequence diagram viewer (click-to-focus animation, Mermaid import). Everything runs in your browser.",
   alternates: { canonical: "/view" },
 };
 
 /**
- * `/view` — view mode's entry point, and where share links land.
+ * `/view` — the chooser between the C4 playground (`/view/c4`) and the
+ * sequence playground (`/view/sequence`).
  *
- * The INDEX of the `/view` segment, so it cannot collide with its `[modelId]`
- * sibling: `/view` is this page, `/view/shopflow` is that one. This was
- * `/view/new` until the `new` segment was dropped — that path is gone rather
- * than redirected, so links minted before the change no longer resolve.
+ * This page USED to be the C4 playground itself, and share links minted then
+ * still point here (`/view#m=…`). The fragment is invisible to the server, so
+ * the client component below detects a payload and forwards to `/view/c4` with
+ * the fragment intact — see `view-chooser.tsx` for the mechanics.
  *
- * With no `#` fragment it opens on a seeded example, which doubles as the thing
- * to edit: an empty canvas teaches nobody the format.
+ * The chooser's copy is deliberately SERVER-rendered (this route is in
+ * `sitemap.ts`, and a route that ships an empty body to a crawler does not
+ * exist as far as search is concerned), so hiding it from a forwarding visitor
+ * has to happen before the first paint. That is the root layout's
+ * `data-share-forward` flag, which is where the inline script for it lives —
+ * see the comment there for why it cannot live in this file.
+ *
+ * ROUTE PRECEDENCE, asserted where it matters: `c4` and `sequence` are
+ * static sibling segments of `[modelId]`, and Next.js resolves static
+ * segments FIRST — so those two words are now reserved model ids.
+ * `[modelId]/page.tsx`'s generateStaticParams throws at build time if the
+ * registry ever claims one.
  */
 export default function ViewPage(): React.JSX.Element {
-  return <ViewerPlayground />;
+  return <ViewChooser />;
 }

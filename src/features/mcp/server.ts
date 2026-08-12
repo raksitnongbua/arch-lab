@@ -28,6 +28,7 @@ import { syntaxReferenceMarkdown } from "./content/syntax-sections";
 import { convertModel, formatModel } from "./tools/convert";
 import { describeModel } from "./tools/describe";
 import { getExampleModel, listExampleModels } from "./tools/examples";
+import { formatSequence, validateSequence } from "./tools/sequence";
 import { createShareLink } from "./tools/share";
 import { getSyntaxReference, SYNTAX_SECTION_IDS } from "./tools/syntax";
 import { validateModel } from "./tools/validate";
@@ -47,6 +48,12 @@ const FORMAT_SCHEMA = z
 const SOURCE_SCHEMA = z
   .string()
   .describe("Model text: .alab, arch-lab JSON, or Mermaid C4.");
+
+const SEQUENCE_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Sequence diagram text: .alab sequence, or Mermaid sequenceDiagram.",
+  );
 
 /**
  * Looks a tool's prose up by name so `registerTool` never carries a
@@ -111,6 +118,31 @@ export function registerArchLabMcp(server: McpServer): void {
       inputSchema: { source: SOURCE_SCHEMA, format: FORMAT_SCHEMA },
     },
     ({ source, format }) => formatModel(source, format as CheckChoice),
+  );
+
+  /* ---- sequence diagrams -------------------------------------------------- */
+
+  /* A separate pair rather than a `kind` argument on the two tools above: the
+     summaries they return have no fields in common (levels and node counts
+     versus participants and message kinds), and a tool whose response shape
+     depends on a sniffed document kind is harder for a model to use than two
+     tools with honest names. See tools/sequence.ts. */
+  server.registerTool(
+    "validate_sequence",
+    {
+      ...config("validate_sequence"),
+      inputSchema: { source: SEQUENCE_SOURCE_SCHEMA },
+    },
+    ({ source }) => validateSequence(source),
+  );
+
+  server.registerTool(
+    "format_sequence",
+    {
+      ...config("format_sequence"),
+      inputSchema: { source: SEQUENCE_SOURCE_SCHEMA },
+    },
+    ({ source }) => formatSequence(source),
   );
 
   /* ---- convert ----------------------------------------------------------- */

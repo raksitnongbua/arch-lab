@@ -59,6 +59,16 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       },
       {
         keys: ["drag ●"],
+        what: "Relate two elements",
+        when: "from a node's handle onto another element",
+      },
+      {
+        keys: ["click ●"],
+        what: "Relate two elements, without dragging",
+        when: "click a handle, then click the other element",
+      },
+      {
+        keys: ["drag ●"],
         what: "Connect to a new element",
         when: "from a node's handle to empty canvas",
       },
@@ -121,13 +131,21 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
 
 /**
  * The handful shown on the canvas itself. Chosen as the ones you cannot guess:
- * that double-clicking empty space creates something, and that the corner grip
- * relates, are both invisible until told. Undo is here because it is the first
- * thing anyone reaches for after an accident.
+ * that double-clicking empty space creates something, and that a handle can be
+ * CLICKED rather than dragged, are both invisible until told.
+ *
+ * The grip's entry used to read "relate", which was the wrong word for it —
+ * the grip adds a NEW element, and the handles are what relate two existing
+ * ones. Two controls a few pixels apart claiming the same verb is most of why
+ * the gesture was confusing.
+ *
+ * Undo is here because it is the first thing anyone reaches for after an
+ * accident.
  */
 export const CANVAS_HINTS: readonly ShortcutEntry[] = [
   { keys: ["double-click"], what: "add" },
-  { keys: ["drag ↗"], what: "relate" },
+  { keys: ["drag ↗"], what: "add related" },
+  { keys: ["click ●"], what: "connect" },
   { keys: ["mod", "Z"], what: "undo" },
 ];
 

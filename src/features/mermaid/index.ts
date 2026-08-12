@@ -8,6 +8,9 @@
  *     with line/column on malformed input.
  *   - `serializeMermaidC4(file, options?)` — `ArchLabFile` → Mermaid C4
  *     code for one diagram (default: the diagram the source described).
+ *   - `parseMermaidSequence(source, options?)` — Mermaid `sequenceDiagram`
+ *     code → `SequenceLabFile`. One-way; what it drops is named by
+ *     `MERMAID_SEQUENCE_CAVEAT`.
  *
  * Both the viewer and the editor consume this feature only through this
  * barrel.
@@ -24,6 +27,8 @@ export {
   DIAGRAM_TYPE_BY_LEVEL,
 } from "./lib/mapping";
 export type { MermaidDiagramType, BoundaryKind } from "./lib/mapping";
+export { parseMermaidSequence, MERMAID_SEQUENCE_CAVEAT } from "./lib/sequence";
+export type { ParseMermaidSequenceOptions } from "./lib/sequence";
 export { MERMAID_EXTENSION_KEY, readMermaidExtension } from "./lib/toModel";
 export type {
   MermaidBoundary,

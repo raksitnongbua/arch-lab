@@ -98,6 +98,9 @@ const { convertModel, formatModel } = await load(
   "src/features/mcp/tools/convert.ts",
 );
 const { describeModel } = await load("src/features/mcp/tools/describe.ts");
+const { formatSequence, validateSequence } = await load(
+  "src/features/mcp/tools/sequence.ts",
+);
 const { getExampleModel, listExampleModels } = await load(
   "src/features/mcp/tools/examples.ts",
 );
@@ -399,6 +402,138 @@ check("validate_model reads arch-lab JSON and Mermaid C4 too", () => {
   assert.match(expectOk(validateModel(MERMAID, "auto")), /VALID as Mermaid C4/);
 });
 
+/* ----------------------------------------------------------------------- */
+/* 2b. validate_sequence / format_sequence                                  */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The sequence tools exist because a sequence document has no diagrams, no
+ * levels and no node/edge counts — nothing `CheckOk` describes. What these
+ * assert, beyond "it parses", is the pair of MISDIRECTIONS that would
+ * otherwise waste an agent's turns: a C4 document handed to the sequence tool
+ * must be told which tool to use rather than reported as a syntax error on
+ * line 1, and the reverse must hold too.
+ */
+const VALID_SEQUENCE = `archlab 1.0 sequence
+title "Checkout"
+
+@sequence
+  cust:actor "Customer"
+  api:participant "Order API" [Go]
+
+  cust -> api : "POST /orders" [HTTPS]
+  api -> api : "Validates the cart"
+  api ..> cust : "201 Created"
+`;
+
+check(
+  "validate_sequence accepts .alab sequence and summarises the flow",
+  () => {
+    const text = expectOk(validateSequence(VALID_SEQUENCE));
+    assert.match(text, /^VALID as \.alab sequence\./m);
+    assert.match(text, /Participants: 2/);
+    // The counts must be per-KIND, not just a total: an agent checking whether
+    // its reply arrows landed cannot see that from "3 messages".
+    assert.match(text, /2 sync/);
+    assert.match(text, /1 reply/);
+    assert.match(text, /1 self-message/);
+    assert.match(text, /`cust`.*Customer.*actor/);
+  },
+);
+
+check("validate_sequence locates a broken sequence document", () => {
+  const broken = VALID_SEQUENCE.replace(
+    'cust -> api : "POST /orders" [HTTPS]',
+    "cust -> api",
+  );
+  const text = expectError(validateSequence(broken));
+  assert.match(text, /^INVALID as \.alab sequence\./m);
+  assert.match(text, /line \d+, column \d+:/);
+  assert.match(text, /\^/);
+});
+
+check("validate_sequence sends a C4 document to the right tool", () => {
+  const text = expectError(validateSequence(VALID_ALAB));
+  assert.match(text, /not a sequence diagram/i);
+  assert.match(text, /validate_model/);
+  // Specifically NOT a parse error: that would read as "your syntax is wrong"
+  // when the syntax is fine and only the tool choice was.
+  assert.doesNotMatch(text, /^INVALID as/m);
+});
+
+check("validate_model does not silently accept a sequence document", () => {
+  const text = expectError(validateModel(VALID_SEQUENCE, "auto"));
+  assert.ok(
+    /sequence/i.test(text) || /INVALID/.test(text),
+    "a sequence document must not read as a valid C4 model",
+  );
+});
+
+check(
+  "validate_sequence imports Mermaid sequenceDiagram and states the loss",
+  () => {
+    const text = expectOk(
+      validateSequence(
+        "sequenceDiagram\n  participant A\n  A->>B: Hello\n  B-->>A: Hi\n",
+      ),
+    );
+    assert.match(text, /VALID as Mermaid sequenceDiagram/);
+    assert.match(text, /one-way|lossy|dropped/i);
+  },
+);
+
+check("format_sequence canonicalises, and converts Mermaid to .alab", () => {
+  const fromAlab = expectOk(formatSequence(VALID_SEQUENCE));
+  assert.match(fromAlab, /archlab 1\.0 sequence/);
+  assert.match(fromAlab, /@sequence/);
+
+  const fromMermaid = expectOk(
+    formatSequence("sequenceDiagram\n  A->>B: Hello\n"),
+  );
+  assert.match(fromMermaid, /archlab 1\.0 sequence/);
+  assert.match(fromMermaid, /one-way|lossy|dropped/i);
+});
+
+check("format_sequence output is itself valid, and stable", () => {
+  const once = expectOk(formatSequence(VALID_SEQUENCE));
+  const body = once.split("```\n")[1].split("\n```")[0] + "\n";
+  assert.match(
+    expectOk(validateSequence(body)),
+    /^VALID as \.alab sequence\./m,
+  );
+  const twice = expectOk(formatSequence(body));
+  assert.equal(
+    twice.split("```\n")[1],
+    once.split("```\n")[1],
+    "formatting is not idempotent",
+  );
+});
+
+check("the documented section list names every real section", () => {
+  const tool = MCP_TOOLS.find((t) => t.name === "get_syntax_reference");
+  const arg = tool.args.find((a) => a.name === "section");
+  for (const id of SYNTAX_SECTION_IDS) {
+    assert.match(
+      arg.description,
+      new RegExp(`\\b${id}\\b`),
+      `section "${id}" exists but is not offered in the tool's own argument docs`,
+    );
+  }
+});
+
+check("the syntax reference documents the sequence grammar", () => {
+  const all = expectOk(getSyntaxReference(undefined));
+  assert.match(all, /archlab 1\.0 sequence/);
+  // The three things an agent gets wrong without being told.
+  assert.match(all, /no `end` keyword/i);
+  assert.match(all, /Activation rides the arrow/i);
+  assert.match(all, /` : `|-> b : /);
+
+  const section = expectOk(getSyntaxReference("sequence"));
+  assert.match(section, /Sequence diagrams/);
+  assert.match(section, /validate_sequence/);
+});
+
 check("validate_model refuses oversized input without parsing it", () => {
   const huge = "x".repeat(MAX_SOURCE_CHARS + 1);
   const text = expectError(validateModel(huge, "auto"));
@@ -667,9 +802,10 @@ check(
     );
     const url = text.split("\n").find((line) => line.startsWith("http"));
     assert.ok(url !== undefined, `no URL in:\n${text}`);
-    // `/view`, not `/view/new`: the `new` segment was dropped, and the old path
-    // is gone rather than redirected.
-    assert.match(url, /\/view#m=AF1\./);
+    // `/view/c4` — the C4 playground's address since `/view` became the
+    // chooser. Legacy `/view#m=…` links are forwarded by the chooser, but new
+    // links must mint against the real page and skip that hop.
+    assert.match(url, /\/view\/c4#m=AF1\./);
 
     const decoded = await decodeShareFragment(new URL(url).hash);
     assert.equal(decoded.status, "ok");

@@ -16,6 +16,10 @@
  * generated from the sections that actually exist.
  */
 
+// The only import here, and deliberately a leaf: `content/syntax-sections`
+// pulls in nothing but the pure-data snippets module, so the "no React, no
+// zod, no SDK" promise above still holds and the `/mcp` page's bundle is
+// unaffected.
 import { SYNTAX_SECTION_IDS } from "./content/syntax-sections";
 
 /** Where the server lives, relative to the site root. */
@@ -96,6 +100,23 @@ const SOURCE_ARG: McpArgDoc = {
     "The model text: .alab, arch-lab JSON, or Mermaid C4 (max 256,000 characters).",
 };
 
+/**
+ * The sequence tools' source argument. Separate from SOURCE_ARG because the
+ * accepted languages genuinely differ — a sequence document is `.alab`
+ * sequence or Mermaid `sequenceDiagram`, never arch-lab JSON (there is no JSON
+ * form for sequence documents yet) and never Mermaid C4. Reusing SOURCE_ARG
+ * would advertise inputs these tools reject.
+ */
+const SEQUENCE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The sequence diagram text: `.alab` sequence (first line " +
+    "`archlab 1.0 sequence`) or Mermaid `sequenceDiagram` code " +
+    "(max 256,000 characters). The format is detected from the first " +
+    "meaningful line.",
+};
+
 const FORMAT_ARG: McpArgDoc = {
   name: "format",
   required: false,
@@ -129,6 +150,31 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "Reports when the input was already canonical, so a no-op write can " +
       "be skipped. Refuses Mermaid, which has no canonical form here.",
     args: [SOURCE_ARG, FORMAT_ARG],
+  },
+  {
+    name: "validate_sequence",
+    title: "Validate a sequence diagram",
+    description:
+      "Check whether SEQUENCE diagram text is valid, and if not, exactly " +
+      "where it breaks. Reads `.alab` sequence documents (first line " +
+      "`archlab 1.0 sequence`) and pasted Mermaid `sequenceDiagram` code, " +
+      "reporting the line, column and offending source line on failure. On " +
+      "success it summarises what the flow contains — participants, messages " +
+      "split by kind, self-messages, fragments and their nesting depth, " +
+      "notes — rather than echoing the document back. Use this for message " +
+      "flows over time; use `validate_model` for C4 structure diagrams. " +
+      "Passing a C4 document here says so and points you at the right tool.",
+    args: [SEQUENCE_SOURCE_ARG],
+  },
+  {
+    name: "format_sequence",
+    title: "Format a sequence diagram canonically",
+    description:
+      "Rewrite sequence text as canonical `.alab` sequence — the exact bytes " +
+      "arch-lab would write, so diffs stay minimal. Also the way to turn a " +
+      "pasted Mermaid `sequenceDiagram` into an `.alab` sequence document, " +
+      "which is a one-way lossy import: the response names what was dropped.",
+    args: [SEQUENCE_SOURCE_ARG],
   },
   {
     name: "convert_model",
@@ -189,10 +235,13 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       {
         name: "section",
         required: false,
-        // Derived, never typed out: this list drifting from the real section
-        // table is how a caller ends up being told a section exists that the
-        // tool then rejects. Adding a section to `syntax-sections.ts` updates
-        // this sentence, the /mcp page and the tool's own schema at once.
+        // DERIVED from the section ids, never typed out. This list was
+        // hand-written once and had already gone stale — it did not mention
+        // `sequence` — which is the exact failure the catalogue exists to
+        // prevent for tool names, and it is how a caller ends up being told a
+        // section exists that the tool then rejects. Adding a section to
+        // `syntax-sections.ts` now updates this sentence, the /mcp page and
+        // the tool's own schema at once; `check:mcp` asserts the two agree.
         description:
           `One of: ${SYNTAX_SECTION_IDS.join(", ")}. ` +
           "Omit for the whole reference.",

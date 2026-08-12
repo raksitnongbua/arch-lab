@@ -65,7 +65,11 @@ import {
 /* Shape helpers                                                              */
 /* -------------------------------------------------------------------------- */
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/* `isRecord`, `bangLine`, `techBody` and `tagsLine` are exported for the
+   sequence serializer (`./sequence/serialize.ts`): the `!` escape line, the
+   `[technology]` quoting rule and the `#tag` line are one grammar shared by
+   both `.alab` document types, so the emitters must be shared too. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -92,7 +96,7 @@ function json(value: unknown, what: string): string {
 }
 
 /** `! <path> [after <anchor>] : <json>` */
-function bangLine(
+export function bangLine(
   path: readonly (string | number)[],
   after: string | null,
   value: unknown,
@@ -113,7 +117,7 @@ function bangLine(
 }
 
 /** Technology body: raw between brackets when safe, JSON-quoted otherwise. */
-function techBody(value: string): string {
+export function techBody(value: string): string {
   const safe =
     !value.includes("]") &&
     !value.includes("\n") &&
@@ -131,7 +135,7 @@ function tagKeyToken(tag: string): string {
 }
 
 /** Sugar-able tag list: non-empty array of strings. */
-function tagsLine(value: unknown): string | undefined {
+export function tagsLine(value: unknown): string | undefined {
   if (isStringArray(value) && value.length > 0) {
     return [...value]
       .sort(compareStrings)
