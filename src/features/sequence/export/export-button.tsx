@@ -24,7 +24,13 @@
  */
 
 import { useCallback, useState } from "react";
-import { Download, Film, ImageDown, TriangleAlert } from "lucide-react";
+import {
+  Download,
+  Film,
+  ImageDown,
+  Settings2,
+  TriangleAlert,
+} from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -216,57 +222,84 @@ export function SequenceExportButton({
         SVG
       </button>
 
-      {/* The two axes. Native <select>s on purpose: they are two settings on a
-          toolbar, not a feature, and a custom listbox would cost keyboard and
-          screen-reader behaviour that these get for free. Each option states
-          its own cost, because "sharp" and "smooth" are only meaningful next to
-          what they charge — a 3× 30-frame GIF is several times the bytes and
-          the wait of the default. */}
-      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        Sharpness
-        <select
-          value={sharpness}
-          disabled={busy}
-          onChange={(event) => setSharpness(event.target.value as GifSharpness)}
-          className="rounded border border-border bg-card px-1.5 py-0.5 text-xs text-foreground"
-        >
-          <option value="compact">
-            Compact · PNG 1× · GIF {GIF_SHARPNESS.compact}px
-          </option>
-          <option value="standard">
-            Standard · PNG 2× · GIF {GIF_SHARPNESS.standard}px
-          </option>
-          <option value="sharp">
-            Sharp · PNG 3× · GIF {GIF_SHARPNESS.sharp}px
-          </option>
-        </select>
-      </label>
+      {/* THE OPTIONS, behind one small button. They were two labelled selects
+          sitting open in the toolbar, which put four words and two dropdowns
+          permanently in front of a reader who mostly just wants to click PNG.
+          Folded away, the row is three verbs and a gear.
 
-      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        Smoothness
-        <select
-          value={smoothness}
-          disabled={busy}
-          onChange={(event) =>
-            setSmoothness(event.target.value as GifSmoothness)
-          }
-          className="rounded border border-border bg-card px-1.5 py-0.5 text-xs text-foreground"
+          A native <details> rather than a hand-built popover: it gives the
+          toggle, the keyboard behaviour and the expanded/collapsed state to
+          assistive technology for free, and a custom listbox would be re-earning
+          all of that in exchange for nothing. The marker is hidden because the
+          summary is styled as a button; it is still a real disclosure. */}
+      <details className="relative">
+        <summary
+          aria-label="Export options"
+          title="Export options"
+          className={cn(
+            buttonClasses({ variant: "ghost", size: "sm" }),
+            "cursor-pointer list-none [&::-webkit-details-marker]:hidden",
+          )}
         >
-          <option value="simple">
-            Simple · {GIF_SMOOTHNESS.simple.frames} frames
-          </option>
-          <option value="standard">
-            Standard · {GIF_SMOOTHNESS.standard.frames} frames
-          </option>
-          <option value="smooth">
-            Smooth · {GIF_SMOOTHNESS.smooth.frames} frames
-          </option>
-        </select>
-        <span className="sr-only">
-          Frames per animation loop. Affects the GIF only; the loop stays the
-          same length, so more frames means finer motion rather than slower.
-        </span>
-      </label>
+          <Settings2 aria-hidden="true" />
+        </summary>
+
+        <div className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-lg">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            Sharpness
+            <select
+              value={sharpness}
+              disabled={busy}
+              onChange={(event) =>
+                setSharpness(event.target.value as GifSharpness)
+              }
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="compact">
+                Compact · PNG 1× · GIF {GIF_SHARPNESS.compact}px
+              </option>
+              <option value="standard">
+                Standard · PNG 2× · GIF {GIF_SHARPNESS.standard}px
+              </option>
+              <option value="sharp">
+                Sharp · PNG 3× · GIF {GIF_SHARPNESS.sharp}px
+              </option>
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            Smoothness
+            <select
+              value={smoothness}
+              disabled={busy}
+              onChange={(event) =>
+                setSmoothness(event.target.value as GifSmoothness)
+              }
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              <option value="simple">
+                Simple · {GIF_SMOOTHNESS.simple.frames} frames
+              </option>
+              <option value="standard">
+                Standard · {GIF_SMOOTHNESS.standard.frames} frames
+              </option>
+              <option value="smooth">
+                Smooth · {GIF_SMOOTHNESS.smooth.frames} frames
+              </option>
+            </select>
+          </label>
+
+          {/* Which control reaches which format. Sharpness is not GIF-only even
+              though it sits beside the GIF button, and SVG answers to neither —
+              saying so here costs a line and saves a wrong expectation. */}
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            Sharpness applies to PNG and GIF. Smoothness is frames per animation
+            loop, so it reaches the GIF only — the loop stays the same length,
+            so more frames means finer motion rather than slower. SVG is vector
+            and ignores both.
+          </p>
+        </div>
+      </details>
 
       {status.kind === "busy" ? (
         <p className="text-xs text-muted-foreground">{status.label}</p>
