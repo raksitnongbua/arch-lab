@@ -500,6 +500,27 @@
   stroke-width: 2.25;
 }
 
+/* The dependency FOLD pill. It lives inside the participant group, so the card
+ * rule above would fire on it too and hovering the pill would light the whole
+ * card — implying a click there focuses the participant, which it does not.
+ * This overrides that: hovering the pill lifts the PILL, and the card stays put.
+ * Same treatment for keyboard focus, which is a separate tab stop from the card
+ * precisely because it is a separate action. */
+.af-seq-participant:has(.af-seq-fold .af-seq-hit:hover) .af-seq-header-box {
+  stroke-width: 1.5;
+}
+
+.af-seq-fold:has(.af-seq-hit:hover) rect:first-of-type,
+.af-seq-fold:has(.af-seq-hit:focus-visible) rect:first-of-type {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+
+.af-seq-fold:has(.af-seq-hit:hover) text,
+.af-seq-fold:has(.af-seq-hit:focus-visible) text {
+  fill: var(--foreground);
+}
+
 /* ---- reduced motion ---------------------------------------------------------
  * The `--seq-*` properties are already 0ms (lib/motion.ts zeroes them), and
  * the global backstop in globals.css collapses anything that slips through.

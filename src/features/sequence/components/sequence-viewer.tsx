@@ -68,6 +68,11 @@ import type { SequenceLabFile } from "@/types";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
+import {
+  collapseSequence,
+  dependenciesOf,
+  hiddenParticipants,
+} from "../lib/collapse";
 import { layoutSequence } from "../lib/layout";
 import { sequenceMarchState, sequenceMotionVars } from "../lib/motion";
 import type { SequenceFocus } from "./sequence-diagram";
@@ -170,12 +175,39 @@ export function SequenceViewer({
    */
   onAnnounce: (message: string) => void;
 }): React.JSX.Element {
+  /**
+   * COLLAPSED PARTICIPANTS — the ones whose private dependencies are folded
+   * away. State is the set of collapse HANDLES, not the set of hidden
+   * participants, because the hidden set is derived (lib/collapse.ts) and
+   * storing a derived set is how it goes stale: re-parse the document with one
+   * dependency removed and a stored hidden set would keep hiding a participant
+   * nothing points at any more.
+   */
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const hidden = useMemo(
+    () => hiddenParticipants(file, collapsed),
+    [file, collapsed],
+  );
+
+  /**
+   * The file as rendered. Everything downstream — layout, the dock, the text
+   * listing, focus resolution — reads THIS rather than the parsed file, so a
+   * collapsed view is internally consistent by construction instead of by each
+   * consumer remembering to skip hidden ids. `collapseSequence` returns the
+   * original object when nothing is hidden, so the uncollapsed case allocates
+   * nothing and every memo below keeps its identity.
+   */
+  const shown = useMemo(() => collapseSequence(file, hidden), [file, hidden]);
+
   // ONE layout call per model — the single source of geometric truth.
-  const layout = useMemo(() => layoutSequence(file), [file]);
+  const layout = useMemo(() => layoutSequence(shown), [shown]);
   const nameById = useMemo(
     () => new Map(file.participants.map((p) => [p.id, p.name])),
     [file],
   );
+
   const fragmentById = useMemo(
     () => new Map(layout.fragments.map((f) => [f.id, f])),
     [layout],
@@ -206,7 +238,10 @@ export function SequenceViewer({
       case "message":
         return raw.step >= 1 && raw.step <= layout.stepCount ? raw : null;
       case "participant":
-        return nameById.has(raw.id) ? raw : null;
+        // Against the RENDERED participants, not the parsed ones: collapsing
+        // can take a focused participant off the canvas, and a focus on
+        // something not drawn dims the whole diagram around nothing.
+        return layout.participants.some((p) => p.id === raw.id) ? raw : null;
       case "fragment": {
         const fragment = fragmentById.get(raw.id);
         if (fragment === undefined) return null;
@@ -218,6 +253,51 @@ export function SequenceViewer({
   })();
 
   /* ---- focus ------------------------------------------------------------- */
+
+  /**
+   * Toggling one handle. Collapsing announces WHAT went away by name: the
+   * diagram visibly shrinks, and a change that large with no explanation reads
+   * as a bug rather than a fold.
+   */
+  const handleToggleCollapse = useCallback(
+    (id: string) => {
+      // Folding renumbers the steps — the layout numbers what it draws — so a
+      // held message focus would silently come to mean a DIFFERENT message.
+      // Dropping it is the honest outcome; the alternative is a selection that
+      // quietly moved.
+      setRawFocus(null);
+      const next = new Set(collapsed);
+      if (next.has(id)) {
+        next.delete(id);
+        const names = [...dependenciesOf(file, id)]
+          .map((dep) => nameById.get(dep) ?? dep)
+          .join(", ");
+        onAnnounce(`${nameById.get(id) ?? id} expanded — showing ${names}.`);
+      } else {
+        next.add(id);
+        const deps = [...hiddenParticipants(file, new Set([...collapsed, id]))]
+          .map((dep) => nameById.get(dep) ?? dep)
+          .join(", ");
+        onAnnounce(`${nameById.get(id) ?? id} collapsed — hiding ${deps}.`);
+      }
+      setCollapsed(next);
+    },
+    [collapsed, file, nameById, onAnnounce],
+  );
+
+  /**
+   * Which participants are worth offering a control on, and how many each
+   * would fold. Computed from the FULL file so the number on a collapsed card
+   * still says how many are behind it.
+   */
+  const dependencyCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const participant of file.participants) {
+      const size = dependenciesOf(file, participant.id).size;
+      if (size > 0) counts.set(participant.id, size);
+    }
+    return counts;
+  }, [file]);
 
   const handleFocusMessage = useCallback(
     (focusedStep: number) => {
@@ -689,7 +769,7 @@ export function SequenceViewer({
       : null;
   const focusedParticipant =
     focus?.kind === "participant"
-      ? (file.participants.find((p) => p.id === focus.id) ?? null)
+      ? (shown.participants.find((p) => p.id === focus.id) ?? null)
       : null;
   const focusedParticipantMessages =
     focusedParticipant === null
@@ -730,7 +810,7 @@ export function SequenceViewer({
   /** A participant's name with its technology, for the dock's From/To. */
   const withTechnology = (id: string): string => {
     const name = nameById.get(id) ?? id;
-    const technology = file.participants.find((p) => p.id === id)?.technology;
+    const technology = shown.participants.find((p) => p.id === id)?.technology;
     return technology === undefined ? name : `${name} [${technology}]`;
   };
 
@@ -843,14 +923,17 @@ export function SequenceViewer({
           <div className={zoom === "fit" ? "h-full w-full" : "m-auto w-max"}>
             <SequenceDiagram
               layout={layout}
-              title={file.metadata.title}
-              autonumber={file.autonumber === true}
+              title={shown.metadata.title}
+              autonumber={shown.autonumber === true}
               focus={focus}
               focusNonce={rawFocus?.nonce ?? 0}
               zoom={zoom}
               onFocusMessage={handleFocusMessage}
               onFocusParticipant={handleFocusParticipant}
               onFocusFragment={handleFocusFragment}
+              collapsed={collapsed}
+              dependencyCount={dependencyCount}
+              onToggleCollapse={handleToggleCollapse}
             />
           </div>
         </div>

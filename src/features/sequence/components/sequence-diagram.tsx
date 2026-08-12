@@ -144,6 +144,16 @@ export interface SequenceDiagramProps {
   onFocusParticipant: (id: string) => void;
   /** `branch: null` focuses the whole fragment, a number that branch only. */
   onFocusFragment: (id: string, branch: number | null) => void;
+  /**
+   * Participants whose dependencies are currently folded away, and how many
+   * each one would fold. The counts come from the FULL document (see
+   * lib/collapse.ts), so a collapsed card can still say how many are behind
+   * it — a card that hid its own count would leave no way to tell a collapsed
+   * participant from a leaf.
+   */
+  collapsed: ReadonlySet<string>;
+  dependencyCount: ReadonlyMap<string, number>;
+  onToggleCollapse: (id: string) => void;
   /*
    * There is NO onClearFocus here, deliberately. Clearing is what happens when
    * a click lands on nothing, and "nothing" is bigger than this component: in
@@ -170,6 +180,9 @@ export function SequenceDiagram({
   onFocusMessage,
   onFocusParticipant,
   onFocusFragment,
+  collapsed,
+  dependencyCount,
+  onToggleCollapse,
 }: SequenceDiagramProps): React.JSX.Element {
   /**
    * Every dim decision below derives from THIS set (see resolveFocusSteps):
@@ -483,6 +496,9 @@ export function SequenceDiagram({
           layout={layout}
           dimmed={participantDimmed(participant.id)}
           paintId={cardGradId(participant.id)}
+          dependencies={dependencyCount.get(participant.id) ?? 0}
+          collapsed={collapsed.has(participant.id)}
+          onToggleCollapse={() => onToggleCollapse(participant.id)}
           onFocus={() => onFocusParticipant(participant.id)}
           onKeyDown={keyActivate(() => onFocusParticipant(participant.id))}
         />
@@ -642,6 +658,9 @@ function ParticipantColumn({
   layout,
   dimmed,
   paintId,
+  dependencies,
+  collapsed,
+  onToggleCollapse,
   onFocus,
   onKeyDown,
 }: {
@@ -650,6 +669,10 @@ function ParticipantColumn({
   dimmed: boolean;
   /** Gradient id for this card's vertical lift, or null for the flat wash. */
   paintId: string | null;
+  /** How many participants this one would fold away; 0 means no control. */
+  dependencies: number;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
@@ -813,6 +836,75 @@ function ParticipantColumn({
         }}
         onKeyDown={onKeyDown}
       />
+
+      {/* ---- the dependency FOLD control ----
+          Offered only on participants that actually have private dependencies
+          (see lib/collapse.ts), which in a typical flow is the middle tier —
+          the actor and the front end own nothing privately, so their cards stay
+          clean. A control that hides nothing is worse than no control.
+
+          It reads `−2` when expanded and `+2` when collapsed: the same pill in
+          both states, so it never moves or resizes under the cursor, and the
+          COUNT is present either way. That matters more than an icon here,
+          because the two states look alike on a diagram that has just changed
+          shape — "+2" is the only thing that distinguishes a collapsed service
+          from one that never had dependencies.
+
+          Top-right of the card, clear of the vertically-centred name and its
+          technology line. A real button: role, aria-pressed and a label naming
+          the action, and it stops propagation so folding a card never also
+          focuses it — those are different intents on the same card. */}
+      {dependencies > 0 ? (
+        <g className="af-seq-fold">
+          <rect
+            x={x + headerWidth / 2 - 28}
+            y={boxTop + 5}
+            width={24}
+            height={15}
+            rx={7.5}
+            fill={fill}
+            stroke={lane}
+            strokeWidth={1}
+            strokeOpacity={0.65}
+          />
+          <text
+            x={x + headerWidth / 2 - 16}
+            y={boxTop + 16}
+            textAnchor="middle"
+            fontSize={10}
+            fontWeight={600}
+            fill="var(--node-meta)"
+          >
+            {collapsed ? `+${dependencies}` : `−${dependencies}`}
+          </text>
+          <rect
+            className="af-seq-hit af-seq-hit-region"
+            x={x + headerWidth / 2 - 30}
+            y={boxTop + 3}
+            width={28}
+            height={19}
+            role="button"
+            tabIndex={0}
+            aria-pressed={collapsed}
+            aria-label={
+              collapsed
+                ? `Show ${dependencies} dependencies of ${participant.name}`
+                : `Hide ${dependencies} dependencies of ${participant.name}`
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleCollapse();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggleCollapse();
+              }
+            }}
+          />
+        </g>
+      ) : null}
 
       {/* ---- the FOOTER card ----
           The name repeated at the foot of the lifeline, so a long flow can be
