@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
+import { McpFlow } from "@/features/marketing/mcp-flow";
 import { publicOrigin } from "@/features/mcp/lib/origin";
 import {
   APP_DESCRIPTION,
@@ -353,7 +354,7 @@ export default function Home() {
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/8 via-transparent to-primary/6"
               />
-              <CardHeader className="relative gap-4">
+              <CardHeader className="relative flex flex-1 flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="grid size-10 place-items-center rounded-lg border border-accent/30 bg-accent/10 text-accent">
                     <Workflow aria-hidden="true" className="size-5" />
@@ -373,7 +374,17 @@ export default function Home() {
                 <CardDescription className="max-w-2xl text-base">
                   Trace one request across the systems you have modelled. The
                   whole flow renders at once — click any message, participant or{" "}
-                  <code className="font-mono text-[0.9em]">alt</code> branch to
+                  {/* Each <code> here is followed by PUNCTUATION, never by a
+                      space and then a word. Not a style choice: `<code>alt</code>
+                      branch` rendered as "altbranch" — the literal space was
+                      dropped on the way to HTML, and an explicit {" "} did not
+                      survive Prettier collapsing it back to a literal one.
+                      Bracketing the kinds removes the fragile boundary, and
+                      naming all three reads better than naming one anyway. */}
+                  fragment branch (
+                  <code className="font-mono text-[0.9em]">alt</code>,{" "}
+                  <code className="font-mono text-[0.9em]">par</code>,{" "}
+                  <code className="font-mono text-[0.9em]">opt</code>) to
                   spotlight it and read the details, or fold a service&apos;s
                   dependencies away to see the shape underneath. Write it as{" "}
                   <code className="font-mono text-[0.9em]">.alab</code> text or
@@ -383,7 +394,7 @@ export default function Home() {
                   </code>{" "}
                   straight in.
                 </CardDescription>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
+                <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
                   <Link
                     href="/view/sequence"
                     className={buttonClasses({ size: "md" })}
@@ -410,7 +421,7 @@ export default function Home() {
               reader with an agent open would care about the format at all. */}
           <li className="flex">
             <Card className="group relative flex w-full flex-col overflow-hidden transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5">
-              <CardHeader className="relative gap-4">
+              <CardHeader className="relative flex flex-1 flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary">
                     <Bot aria-hidden="true" className="size-5" />
@@ -426,7 +437,17 @@ export default function Home() {
                   document kinds, so what it writes is valid before anyone opens
                   it. Read-only by design: no tool here mutates your files.
                 </CardDescription>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
+                {/* The transcript, and the reason this card no longer runs
+                    short: it was the only one in its row with nothing but
+                    prose, so it read as a footnote beside the sequence card and
+                    left the row unbalanced. It also has the abstract claim to
+                    make, and a verdict is easier to show than to describe. */}
+                <McpFlow className="mt-1" />
+                {/* mt-auto on both cards' CTA rows, so the buttons sit on one
+                    line across the row however the copy above them wraps.
+                    Grid already equalises the card HEIGHTS; this is what stops
+                    the taller card's button floating mid-card. */}
+                <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
                   <Link href="/mcp" className={buttonClasses({ size: "md" })}>
                     Connect an agent
                     <ArrowRight aria-hidden="true" />

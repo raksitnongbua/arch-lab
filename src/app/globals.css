@@ -600,6 +600,43 @@
   animation: af-hero-fade 260ms ease-out both;
 }
 
+/* ---- the MCP card's transcript -------------------------------------------------
+ * Rows arrive one at a time, the set holds long enough to read, then the loop
+ * restarts. One keyframe, staggered by `animationDelay` per row (set inline in
+ * mcp-flow.tsx, so the running order reads top to bottom there like the hero's).
+ *
+ * The hold is most of the cycle on purpose: this is a transcript, not a
+ * progress bar, and a reader who arrives mid-loop should find something
+ * readable rather than a line mid-flight. */
+@keyframes af-mcp-line {
+  0%,
+  6% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  14%,
+  88% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+.af-mcp-line {
+  animation: af-mcp-line 8s ease-out infinite both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Parked with the whole transcript visible — a complete, readable frame,
+     which is what parking means here rather than a slower loop. */
+  .af-mcp-line {
+    animation: none;
+  }
+}
+
 /* ---- the hero's KIND SWAP ------------------------------------------------------
  * The card shows both document kinds by alternating between them: a C4 container
  * diagram, then a sequence flow, indefinitely. The `C4 / Sequence` labels in its
