@@ -19,7 +19,7 @@ Be precise about what this repo is right now:
 | **View-mode playground** (`/view`)    | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                                                                                                      |
 | **`.alab` ⇄ JSON conversion**         | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                                                                                                              |
 | **Mermaid C4 import**                 | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
-| **C4 editor**                         | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; flip it to `false` and `/editor` degrades to a coming-soon page — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                    |
+| **C4 editor**                         | **Coming soon.** `EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `false`, so `/editor` is a coming-soon page and the editor UI is not in the deployed bundle. The code is complete — nodes, relationships, drill-down, [grouping boundaries](#grouping-boundaries) — and two edits turn it on; see [Enabling the editor](#enabling-the-editor).                |
 | **MCP server** (`/api/mcp`)           | **Beta.** Ten read-only tools (C4 and sequence documents both), a syntax resource and an authoring prompt, verified end-to-end by `pnpm check:mcp`. Tool names and response wording may still change — see [Use it from an AI agent](#use-it-from-an-ai-agent-mcp--beta).                                                                                                            |
 | **Sequence diagrams**                 | **View mode works today** (`/view/sequence`): `.alab` sequence text or a pasted Mermaid `sequenceDiagram`, rendered complete with focus-driven animation — click any message, participant, or fragment to spotlight its flow. No editor canvas and no share links for them yet — see [Sequence diagrams](#sequence-diagrams).                                                        |
 | **Data dictionary, network diagrams** | Planned. Not built.                                                                                                                                                                                                                                                                                                                                                                  |
@@ -38,7 +38,7 @@ Be precise about what this repo is right now:
 | `/validate`       | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
 | `/mcp`            | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
 | `/api/mcp`        | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
-| `/editor`         | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Degrades to a coming-soon page when `EDITOR_ENABLED` is off.                    |
+| `/editor`         | A coming-soon page while `EDITOR_ENABLED` is off, pointing at the demo, the sequence viewer and the MCP server. With the flag on: the canvas editor.                                |
 
 ## The two model formats
 
@@ -486,24 +486,27 @@ click away in the header.
 
 ## Enabling the editor
 
-The editor is **on** — `EDITOR_ENABLED` in
-[`src/lib/constants.ts`](src/lib/constants.ts) is `true`, and
-`src/app/editor/page.tsx` renders `<EditorShell />`.
+The editor is **off** — `EDITOR_ENABLED` in
+[`src/lib/constants.ts`](src/lib/constants.ts) is `false`, and
+`src/app/editor/page.tsx` renders a coming-soon page that imports nothing from
+`@/features/editor`. The editor code is complete and still in the repo; it is
+simply not shipped.
 
-Turning it back off is two steps, in this order:
+Turning it on is two steps, in this order:
 
 1. Flip the flag:
 
    ```ts
-   export const EDITOR_ENABLED: boolean = false;
+   export const EDITOR_ENABLED: boolean = true;
    ```
 
-2. Drop the `EditorShell` import and render from `src/app/editor/page.tsx`,
-   replacing them with the coming-soon page and its metadata. This step is not
-   optional: while gated, that route must import **nothing** from
-   `@/features/editor`, because that import is what pulls the editor UI into the
-   deployed bundle. A conditional render would leave the code shipping while the
-   flag claimed otherwise. The file's own comment says the same.
+2. Restore the `EditorShell` import and render in `src/app/editor/page.tsx`,
+   along with the editor's metadata. The import is the actual gate, which is why
+   it is a separate step: while off, that route must import **nothing** from
+   `@/features/editor`, because that import is what pulls the canvas, React Flow
+   and the editor store into the deployed bundle. A conditional render would
+   leave the code shipping while the flag claimed otherwise. The file's own
+   comment says the same.
 
 Everything else — the header's Editor nav entry, the landing-page CTAs, the
 capability copy on the demo index and in view mode — reads the flag and switches

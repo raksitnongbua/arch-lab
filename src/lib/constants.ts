@@ -20,7 +20,7 @@ export const APP_NAME = "arch-lab";
  * Typed `boolean`, not the literal, so both branches of every consumer stay
  * type-checked whichever way the flag points.
  */
-export const EDITOR_ENABLED: boolean = true;
+export const EDITOR_ENABLED: boolean = false;
 
 export const APP_DESCRIPTION =
   "A local-first workspace for architecture documentation — C4 model diagrams today, with sequence diagrams, a data dictionary, and network diagrams planned. Everything saves as plain, reviewable text you own.";
