@@ -463,7 +463,7 @@ export function SequenceViewer({
       const clamped = Math.min(4, Math.max(0.1, next));
       setZoom(clamped);
       onAnnounce(
-        `Zoom ${Math.round(clamped * 100)} percent. Scroll the diagram pane to pan.`,
+        `Zoom ${Math.round(clamped * 100)} percent. Drag or scroll the diagram pane to pan.`,
       );
     },
     [onAnnounce],
