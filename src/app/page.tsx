@@ -126,13 +126,31 @@ export default function Home() {
                 : "Early preview · C4 + sequence diagrams and an MCP server working today · editor coming soon"}
             </Badge>
 
+            {/* "C4" is deliberately NOT in the promise. The claim — diagrams
+                that survive review — is true of every document kind here, and
+                the headline used to name only one, which quietly made the
+                sequence viewer and the MCP server look like footnotes to a C4
+                product. The KINDS are named a line below, where they can be
+                listed honestly and grow without rewriting the promise. */}
             <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl">
-              C4 architecture diagrams that{" "}
+              Architecture diagrams that{" "}
               <span className="af-running-gradient bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
                 survive code review
               </span>
               .
             </h1>
+
+            <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-sm text-muted-foreground">
+              <span className="text-foreground">C4 models</span>
+              <span aria-hidden="true" className="text-muted-foreground/40">
+                ·
+              </span>
+              <span className="text-foreground">sequence diagrams</span>
+              <span aria-hidden="true" className="text-muted-foreground/40">
+                ·
+              </span>
+              <span className="text-foreground">MCP for agents</span>
+            </p>
 
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
               <span className="font-mono text-base text-foreground sm:text-lg">
@@ -211,15 +229,18 @@ export default function Home() {
         </div>
 
         <ul className="mt-14 grid grid-cols-2 gap-x-8 gap-y-6 border-t border-border/60 pt-8 sm:grid-cols-4">
+          {/* Two of these changed with the second document kind: "4 C4 levels"
+              described one surface as if it were the product, and the tool
+              count is what makes the agent story concrete. */}
           <Stat
-            value="4"
+            value="2"
             label={
               EDITOR_ENABLED
-                ? "C4 levels, editable today"
-                : "C4 levels, explorable today"
+                ? "Diagram kinds, editable today"
+                : "Diagram kinds, readable today"
             }
           />
-          <Stat value="1" label="Text file per model" />
+          <Stat value="10" label="MCP tools, all read-only" />
           <Stat value="0" label="Accounts or servers" />
           <Stat value="Git" label="Is the collaboration layer" />
         </ul>

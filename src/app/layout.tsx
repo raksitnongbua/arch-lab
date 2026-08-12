@@ -23,8 +23,8 @@ const geistMono = Geist_Mono({
 });
 
 const DEFAULT_TITLE = EDITOR_ENABLED
-  ? `${APP_NAME} — C4 architecture editor`
-  : `${APP_NAME} — C4 architecture diagrams`;
+  ? `${APP_NAME} — C4 and sequence diagram editor`
+  : `${APP_NAME} — C4 and sequence diagrams as text`;
 
 export const metadata: Metadata = {
   // The same resolution order share links use (env override → Vercel

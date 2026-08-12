@@ -115,11 +115,21 @@ export function HeroDiagram({ className }: { className?: string }) {
               L2 Container
             </span>
           </p>
+          {/* The document KINDS, with the one on screen lit. The card used to
+              end in `web-shop.c4.json` — an extension this project has never
+              had (models are `.alab` or `.archlab.json`), and a filename says
+              nothing a reader needs anyway. Naming both kinds instead is what
+              stops the banner reading as a C4-only product now that sequence
+              diagrams ship. Decorative, like the rest of this card: the whole
+              thing is aria-hidden, and the copy beside it carries the claim. */}
           <p
             style={delay(BEAT.header + 180)}
-            className="af-hero-fade truncate font-mono text-[10px] text-muted-foreground/70"
+            className="af-hero-fade flex shrink-0 items-center gap-1.5 font-mono text-[10px]"
           >
-            web-shop.c4.json
+            <span className="rounded bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
+              C4
+            </span>
+            <span className="text-muted-foreground/60">Sequence</span>
           </p>
         </div>
 
