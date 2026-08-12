@@ -43,6 +43,15 @@ export interface RenderedSequenceSvg {
 const CARRIED = [
   "fill",
   "fill-opacity",
+  // GRADIENT STOPS. Without these the export ships black. A <stop> keeps its
+  // authored attribute — `color-mix(in oklch, var(--seq-lane-1) …)` — and in a
+  // standalone file none of those custom properties exist, so every stop falls
+  // back to black: the message lines (painted with the sender→receiver ramp)
+  // disappear and the participant cards become black boxes inside coloured
+  // outlines. The computed value is a concrete colour, which is the whole point
+  // of reading it from the live element.
+  "stop-color",
+  "stop-opacity",
   "stroke",
   "stroke-width",
   "stroke-opacity",
@@ -154,8 +163,41 @@ export function renderSequenceSvg(
   clone.insertBefore(backdrop, clone.firstChild);
 
   return {
-    svg: new XMLSerializer().serializeToString(clone),
+    svg: ensureSansFallback(
+      normalisePaintUrls(new XMLSerializer().serializeToString(clone)),
+    ),
     width,
     height,
   };
+}
+
+/*
+ * `getComputedStyle` returns paint references ABSOLUTISED —
+ * `url("http://host/view/sequence#gradient-id")` rather than `url(#id)`. That
+ * is correct for the live document and useless in a file: the URL names a
+ * page, not this SVG, so the paint silently fails and the shape renders with
+ * nothing. Rewriting them back to fragment-only references is what makes the
+ * gradients resolve once the file is opened somewhere else.
+ *
+ * Exported and tested in Node (`check:sequence-export`) rather than inlined:
+ * a paint-reference regex that over-matches breaks every gradient at once and
+ * one that under-matches breaks them silently, and neither is visible in a
+ * diff.
+ */
+export function normalisePaintUrls(svg: string): string {
+  return svg.replace(/url\((["']?)[^"')]*#([^"')]+)\1\)/g, "url(#$2)");
+}
+
+/*
+ * A font the file cannot load falls back to the UA default, which for SVG is
+ * SERIF — the export came out in Times while the app is in Geist. The webfont
+ * itself cannot travel without embedding the binary, so the next best thing is
+ * to make the fallback a sane sans instead of a serif.
+ */
+export function ensureSansFallback(svg: string): string {
+  return svg.replace(/font-family:([^;"]+)/g, (whole, families) =>
+    /(^|,)\s*(ui-)?(sans-serif|serif|monospace|system-ui)\s*$/.test(families)
+      ? whole
+      : `font-family:${families}, ui-sans-serif, system-ui, sans-serif`,
+  );
 }
