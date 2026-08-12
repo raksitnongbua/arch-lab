@@ -33,6 +33,20 @@ export const VIEWER_DURATIONS = {
    * escalation.
    */
   edgeDrift: 900,
+  /**
+   * One source → target traversal of a SOLID connector's resting comet.
+   *
+   * Deliberately far slower than the selected comet's `edgeFlow` (1600ms) —
+   * this runs on every solid connector at once, all the time, so it has to
+   * sit at the edge of notice. The two clocks are what keep resting motion
+   * and selection from reading as the same event: selecting a connector
+   * makes its light more than three times faster and much brighter.
+   *
+   * Per TRAVERSAL, not per period, because there is one band on the wire
+   * rather than a repeating pattern; the loop is seamless because the band
+   * has left the path entirely by the time the cycle restarts.
+   */
+  edgeRest: 5200,
   /** Cross-fade when the rest of the diagram dims behind a selection. */
   edgeFocus: DURATIONS.nodeIn,
   /** Hover emphasis on a connector — mirrors the editor's hover band. */

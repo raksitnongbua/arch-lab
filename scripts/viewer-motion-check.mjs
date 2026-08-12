@@ -68,30 +68,113 @@ function widthIn(source, sel) {
   return width === null ? null : Number(width[1]);
 }
 
-/* ---- 1. the overlay must stay UNDER the line it rides -------------------- */
+/* ---- 1. the resting overlay must not blot out the line it rides --------- */
 
-check("the resting drift is strictly thinner than the base stroke", () => {
+check("every resting band is a SINGLE travelling one, not a repeat", () => {
+  // This is the fix for the reported bug, stated structurally. A repeating
+  // pattern (dash + gap summing to less than the path) touches the whole line
+  // at once; a band whose gap fills the remaining path is on the wire in one
+  // place at a time, so the stroke underneath is never in question.
+  const bands = [
+    ...canvas.matchAll(
+      /^\.viewer-canvas \.viewer-edge-rest-(glow|tail|head) \{([^}]*)\}/gm,
+    ),
+  ];
+  assert.equal(bands.length, 3, `found ${bands.length} rest bands, want 3`);
+  for (const [, name, body] of bands) {
+    const dash = body.match(/stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/);
+    assert.ok(dash, `${name} has no dasharray`);
+    const lit = Number(dash[1]);
+    const gap = Number(dash[2]);
+    assert.equal(
+      lit + gap,
+      100,
+      `${name} must span the whole normalised path (pathLength=100), or the ` +
+        `pattern repeats along the connector and covers it`,
+    );
+  }
+});
+
+check("the visible bands are no wider than the stroke they ride", () => {
   const base = widthIn(canvas, ".viewer-canvas .viewer-edge-base");
-  const drift = widthIn(canvas, ".viewer-canvas .viewer-edge-drift");
-  assert.ok(base !== null && drift !== null, "a stroke-width is missing");
+  assert.ok(base !== null, "the base stroke-width is missing");
+  for (const name of ["tail", "head"]) {
+    const width = widthIn(canvas, `.viewer-canvas .viewer-edge-rest-${name}`);
+    assert.ok(width !== null, `${name} has no stroke-width`);
+    assert.ok(
+      width <= base,
+      `${name} at ${width} is wider than the base ${base} — a band wider ` +
+        `than its line reads as a break in the line`,
+    );
+  }
+  // The halo is the one exception: it is wide ON PURPOSE and blurred, so it
+  // never presents an edge that could be mistaken for the connector's own.
+  const glow = canvas.match(/\.viewer-edge-rest-glow \{([^}]*)\}/);
+  assert.ok(glow, "the glow band is missing");
+  assert.match(glow[1], /filter: blur\(/, "a wide band must be blurred");
+  const opacity = Number(glow[1].match(/opacity:\s*([\d.]+)/)?.[1] ?? 1);
+  assert.ok(opacity < 0.25, `glow opacity ${opacity} is too solid for a halo`);
+});
+
+check(
+  "the bands share one leading edge — each starts at its own lit length",
+  () => {
+    // Three bands whose keyframes did not agree would read as three lights
+    // chasing each other rather than one comet with a trail.
+    for (const name of ["glow", "tail", "head"]) {
+      const rule = canvas.match(
+        new RegExp(`\\.viewer-edge-rest-${name} \\{([^}]*)\\}`),
+      );
+      const lit = Number(rule[1].match(/stroke-dasharray:\s*([\d.]+)/)[1]);
+      const frames_ = canvas.match(
+        new RegExp(`@keyframes viewer-edge-rest-${name} \\{([\\s\\S]*?)\\n\\}`),
+      );
+      assert.ok(frames_, `${name} has no keyframes`);
+      const from = Number(
+        frames_[1].match(/from \{ stroke-dashoffset: (-?[\d.]+)/)[1],
+      );
+      const to = Number(
+        frames_[1].match(/to \{ stroke-dashoffset: (-?[\d.]+)/)[1],
+      );
+      assert.equal(from, lit, `${name} must start at its lit length ${lit}`);
+      assert.equal(
+        to,
+        lit - 100,
+        `${name} must travel exactly one whole path, ending at ${lit - 100}`,
+      );
+    }
+  },
+);
+
+check("resting motion stays subordinate to selection", () => {
+  // If the resting comet matched the selected one, selecting an edge would
+  // stop meaning anything.
+  const motion = read("src/features/viewer/lib/motion.ts");
+  const rest = Number(motion.match(/edgeRest: (\d+)/)[1]);
+  const flow = Number(motion.match(/edgeFlow: (\d+)/)[1]);
   assert.ok(
-    drift < base,
-    `drift ${drift} must be < base ${base}, or each dash replaces the ` +
-      `connector instead of highlighting it and the line reads as broken`,
+    rest > flow * 2,
+    `rest ${rest}ms must be far slower than ${flow}ms`,
+  );
+  const restHead = widthIn(canvas, ".viewer-canvas .viewer-edge-rest-head");
+  const flowHead = widthIn(canvas, ".viewer-canvas .viewer-edge-flow-head");
+  assert.ok(
+    restHead < flowHead,
+    `rest head ${restHead} must be thinner than the selected head ${flowHead}`,
   );
 });
 
-check("the same holds while hovering, where both strokes thicken", () => {
-  const base = widthIn(canvas, ".react-flow__edge:hover .viewer-edge-base");
-  const drift = widthIn(canvas, ".react-flow__edge:hover .viewer-edge-drift");
-  assert.ok(base !== null && drift !== null, "a hover stroke-width is missing");
-  assert.ok(drift < base, `hover drift ${drift} must be < base ${base}`);
+check("the stagger is derived from the edge id, never its index", () => {
+  // An index-based delay re-staggers every connector whenever one is added.
+  assert.match(edge, /function restPhaseMs\(edgeId: string/);
+  assert.match(edge, /animationDelay: `-\$\{restDelayMs\}ms`/);
+  assert.match(edge, /restPhaseMs\(id, VIEWER_DURATIONS\.edgeRest\)/);
 });
 
 check("the drift paints with the shared token, not a second spelling", () => {
   assert.match(
     canvas,
-    /\.viewer-canvas \.viewer-edge-drift \{[^}]*stroke: var\(--edge-drift\)/s,
+    /\.viewer-canvas \.viewer-edge-rest-tail \{[^}]*stroke: var\(--edge-drift\)/s,
   );
   assert.match(globals, /--edge-drift:/);
 });
@@ -103,7 +186,7 @@ check("--edge-drift is defined in BOTH themes, or dark mode loses it", () => {
 
 /* ---- 2. one dash rhythm per connector ------------------------------------ */
 
-check("a dashed edge gets the march, never the overlay", () => {
+check("a dashed edge gets the march, never the comet", () => {
   assert.match(edge, /const isDashed = data\?\.edge\.style === "dashed"/);
   assert.match(edge, /const showRestingDash = restingMotion && !isDashed/);
   assert.match(edge, /const showDashMarch = restingMotion && isDashed/);
@@ -158,7 +241,7 @@ check("reduced motion PARKS the march but REMOVES the overlay", () => {
     reduced,
     /\.viewer-edge-base-marching[^}]*\{[^}]*animation: none;[^}]*stroke-dashoffset: 0;/s,
   );
-  assert.match(reduced, /\.viewer-edge-drift[^{]*\{\s*display: none;/s);
+  assert.match(reduced, /\.viewer-edge-rest[^{]*\{\s*display: none;/s);
 });
 
 /* ---- 4. the GIF must not turn a solid relationship dashed ---------------- */
@@ -168,11 +251,8 @@ check(
   () => {
     // Stamping the drift pattern onto the connector made every synchronous call
     // render as an asynchronous one — a GIF that misreports the architecture.
-    assert.match(
-      frames,
-      /const drift = document_\.createElementNS\(SVG_NS, "path"\)/,
-    );
-    assert.match(frames, /edge\.after\(drift\)/);
+    assert.match(frames, /document_\.createElementNS\(SVG_NS, "path"\)/);
+    assert.match(frames, /anchor\.after\(path_\)/);
     assert.doesNotMatch(
       frames,
       /edge\.setAttribute\("stroke-dasharray"/,
@@ -182,8 +262,16 @@ check(
 );
 
 check("the overlay is inserted AFTER the edge — SVG has no z-index", () => {
-  assert.doesNotMatch(frames, /edge\.before\(drift\)/);
-  assert.match(frames, /edge\.after\(drift\)/);
+  assert.doesNotMatch(frames, /\.before\(path_\)/);
+  assert.match(frames, /anchor\.after\(path_\)/);
+  // …and the bands go on halo-first, head-last, for the same reason.
+  const bands = frames.match(/const REST_BANDS = \[([\s\S]*?)\] as const;/);
+  assert.ok(bands, "REST_BANDS is not declared");
+  const widths = [...bands[1].matchAll(/width: ([\d.]+)/g)].map((m) =>
+    Number(m[1]),
+  );
+  assert.equal(widths.length, 3, "want three bands");
+  assert.ok(widths[0] > widths[2] || widths[0] >= widths[1], "halo goes first");
 });
 
 check("a dashed edge marches its own dash in the export too", () => {
@@ -195,26 +283,34 @@ check("a dashed edge marches its own dash in the export too", () => {
   );
 });
 
-check("the export drift is thinner than the 1.5 stroke it rides", () => {
-  const width = frames.match(/const DRIFT_WIDTH = ([\d.]+)/);
-  assert.ok(width, "DRIFT_WIDTH is not declared");
-  const emitted = exportSvg.match(
-    /class="af-export-edge"[^`]*?stroke-width="([\d.]+)"/,
-  );
-  assert.ok(emitted, "the exported edge has no stroke-width");
-  assert.ok(
-    Number(width[1]) < Number(emitted[1]),
-    `export drift ${width[1]} must be < edge ${emitted[1]}`,
-  );
+check("the exported bands mirror the canvas's, value for value", () => {
+  // The GIF and the page are two renderers of one look; the moment their band
+  // tables disagree the loop stops being a record of what the reader saw.
+  const bands = frames.match(/const REST_BANDS = \[([\s\S]*?)\] as const;/);
+  assert.ok(bands, "REST_BANDS is not declared");
+  const exported = [
+    ...bands[1].matchAll(/lit: ([\d.]+), width: ([\d.]+)/g),
+  ].map((m) => `${m[1]}/${m[2]}`);
+  const onScreen = ["glow", "tail", "head"].map((name) => {
+    const rule = canvas.match(
+      new RegExp(`\\.viewer-edge-rest-${name} \\{([^}]*)\\}`),
+    );
+    const lit = rule[1].match(/stroke-dasharray:\s*([\d.]+)/)[1];
+    const width = rule[1].match(/stroke-width:\s*([\d.]+)/)[1];
+    return `${lit}/${width}`;
+  });
+  assert.deepEqual(exported, onScreen);
 });
 
 check("the export paints the drift with the canvas's resolved token", () => {
   assert.match(frames, /driftColor/);
-  assert.match(read("src/features/viewer/export/theme.ts"), /edgeDrift/);
-  assert.match(
-    read("src/features/viewer/export/export-button.tsx"),
-    /theme\.edgeDrift/,
-  );
+  assert.match(frames, /primaryColor/);
+  const theme = read("src/features/viewer/export/theme.ts");
+  assert.match(theme, /edgeDrift/);
+  assert.match(theme, /primary: "--primary"/);
+  const button = read("src/features/viewer/export/export-button.tsx");
+  assert.match(button, /theme\.edgeDrift/);
+  assert.match(button, /theme\.primary/);
 });
 
 /* ----------------------------------------------------------------------- */

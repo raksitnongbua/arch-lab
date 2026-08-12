@@ -396,26 +396,48 @@ check(
  * the gate adds it back, which is the one shape a custom property cannot
  * express: a var changes a value, only a selector retracts a rule.
  */
+/*
+ * The C4 resting overlay is a COMET now, the same three-band shape this
+ * stylesheet gives a solid message — which is the point of asserting it from
+ * here. What must stay true is the gate, not the class name: withdrawn by
+ * default, added back by the shared attribute, and alive on hover regardless.
+ */
 check(
-  "the C4 drift is off by default and switched on by the attribute",
-  /\.viewer-canvas \.viewer-edge-drift \{[^}]*display: none;/s.test(c4) &&
-    /\[data-af-idle="on"\] \.viewer-canvas \.viewer-edge-drift \{\s*display: inline;/s.test(
+  "the C4 resting comet is off by default and switched on by the attribute",
+  /\.viewer-canvas \.viewer-edge-rest \{\s*display: none;/s.test(c4) &&
+    /\[data-af-idle="on"\] \.viewer-canvas \.viewer-edge-rest \{\s*display: inline;/s.test(
       c4,
     ),
 );
 
 check(
   "hover survives the gate — motion the reader asked for is not idle motion",
-  /\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-drift \{\s*display: inline;/s.test(
+  /\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-rest \{\s*display: inline;/s.test(
     c4,
   ),
 );
 
 check(
-  "reduced motion removes the hover drift too, or hover outranks the media query",
-  /\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-drift,?\s*\}?\s*display: none|\.viewer-canvas \.viewer-edge-drift,\s*\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-drift \{\s*display: none;/s.test(
+  "reduced motion removes the C4 comet, hover included",
+  /\.viewer-canvas \.viewer-edge-rest,\s*\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-rest \{\s*display: none;/s.test(
     c4,
   ),
+);
+
+/*
+ * Both viewers now answer "a solid line at rest" with the same three bands, so
+ * the BAND COUNT and their ordering are asserted across the two stylesheets.
+ * The exact widths differ on purpose — C4's resting comet has to stay
+ * subordinate to its own selection comet, which the sequence viewer has no
+ * equivalent of — so only the shape is pinned, not the values.
+ */
+check(
+  "the C4 resting comet has the same three bands, in the same order",
+  ["glow", "tail", "head"].every((band) =>
+    new RegExp(`\\.viewer-canvas \\.viewer-edge-rest-${band} \\{`).test(c4),
+  ) &&
+    c4.indexOf("viewer-edge-rest-glow") < c4.indexOf("viewer-edge-rest-tail") &&
+    c4.indexOf("viewer-edge-rest-tail") < c4.indexOf("viewer-edge-rest-head"),
 );
 
 /* ----------------------------------------------------------------------- */

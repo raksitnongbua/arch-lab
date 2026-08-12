@@ -219,6 +219,7 @@ export function ViewerExportButton({
               // The canvas's own drift colour, from the same theme read that
               // painted the frame — so the loop cannot drift away from the page.
               theme.edgeDrift,
+              theme.primary,
             );
             if (gif === null) {
               setAnnouncement(

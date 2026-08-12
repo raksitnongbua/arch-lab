@@ -38,31 +38,28 @@ function dashPeriodOf(edge: Element): number | null {
 }
 import type { RenderedSvg } from "./render-svg";
 
-/** The resting drift, matching EDGE_DASH_ON / EDGE_DASH_OFF on the canvas. */
-const DASH_ON = 5;
-const DASH_OFF = 9;
-const DASH_PERIOD = DASH_ON + DASH_OFF;
-
 /**
- * The drift is an OVERLAY, exactly as it is on screen, and the distinction is
- * not cosmetic. Stamping the drift pattern onto the connector itself — which
- * is what this did first — draws every SOLID relationship as a dashed line,
- * and dashed means ASYNCHRONOUS in C4. The GIF was therefore reporting
- * synchronous calls as asynchronous ones: a diagram that says something untrue
- * about the system, which is worse than a diagram that does not move.
+ * The resting comet's three bands, mirroring viewer-canvas.tsx exactly: each
+ * starts its cycle at its own dash length and travels one whole path (100
+ * units, from pathLength), which is what keeps the three sharing a single
+ * leading edge instead of chasing each other.
  *
- * So solid edges keep their stroke and gain a thin bright path on top, and
- * dashed edges march the dash they already have instead of wearing a second
- * one. Same two rules as the canvas, for the same two reasons.
+ * The comet is an OVERLAY, exactly as it is on screen, and the distinction is
+ * not cosmetic. Stamping a dash pattern onto the connector itself — which is
+ * what this did first — draws every SOLID relationship as a dashed line, and
+ * dashed means ASYNCHRONOUS in C4. The GIF was reporting synchronous calls as
+ * asynchronous ones: a diagram that says something untrue about the system,
+ * which is worse than a diagram that does not move.
  */
-const DRIFT_WIDTH = 1;
+const REST_BANDS = [
+  { lit: 26, width: 5, opacity: 0.18, tone: "primary" },
+  { lit: 18, width: 1.5, opacity: 0.5, tone: "drift" },
+  { lit: 7, width: 1.5, opacity: 0.95, tone: "primary" },
+] as const;
 
-/**
- * Sharpness is a multiplier on the diagram's own pixel size, not a fixed edge:
- * a C4 diagram's size varies hugely with the model, and pinning the longest side
- * would blow a small Context diagram up into a blurry poster while shrinking a
- * dense Component one into mush.
- */
+/** The async dash's fallback period, when a path declares none. */
+const DASH_PERIOD = 10;
+
 export const C4_SHARPNESS = { compact: 1, standard: 1.5, sharp: 2 } as const;
 
 /** Frames per loop, and the delay that keeps every preset ~1.4s long. */
@@ -131,6 +128,8 @@ export async function renderDiagramGif(
   onProgress?: (done: number, total: number) => void,
   /** The canvas's own `--edge-drift`, already resolved (see theme.ts). */
   driftColor: string = "currentColor",
+  /** The canvas's own `--primary`, already resolved (see theme.ts). */
+  primaryColor: string = driftColor,
 ): Promise<Uint8Array | null> {
   const { frames: frameCount, delayMs } = C4_SMOOTHNESS[quality.smoothness];
 
@@ -167,20 +166,38 @@ export async function renderDiagramGif(
         edge.setAttribute("stroke-dashoffset", String(period * (1 - t)));
         continue;
       }
-      // Solid: leave the connector alone and lay a highlight over it. Inserted
-      // AFTER the edge — SVG has no z-index, so a sibling inserted before it
-      // would be painted underneath and never seen.
-      const drift = document_.createElementNS(SVG_NS, "path");
-      drift.setAttribute("d", edge.getAttribute("d") ?? "");
-      drift.setAttribute("fill", "none");
-      drift.setAttribute("stroke", driftColor);
-      drift.setAttribute("stroke-width", String(DRIFT_WIDTH));
-      drift.setAttribute("stroke-linecap", "round");
-      drift.setAttribute("stroke-dasharray", `${DASH_ON} ${DASH_OFF}`);
-      // Counting DOWN walks the pattern along the path's own direction, which
-      // is what makes the dash read as travel toward the target.
-      drift.setAttribute("stroke-dashoffset", String(DASH_PERIOD * (1 - t)));
-      edge.after(drift);
+      /*
+       * Solid: leave the connector alone and lay the comet over it. Each band
+       * is inserted AFTER the edge — SVG has no z-index, so a sibling inserted
+       * before it would be painted underneath and never seen — and the bands
+       * go on in order, halo first and head last, for the same reason.
+       *
+       * No per-edge stagger here, unlike the canvas. A GIF is a short loop
+       * seen end to end, so staggered bands would simply mean most connectors
+       * are dark in most frames; on screen the stagger is what stops twenty
+       * edges pulsing as one mechanism, but a loop has no "meanwhile".
+       */
+      const d = edge.getAttribute("d") ?? "";
+      let anchor: Element = edge;
+      for (const band of REST_BANDS) {
+        const path_ = document_.createElementNS(SVG_NS, "path");
+        path_.setAttribute("d", d);
+        path_.setAttribute("pathLength", "100");
+        path_.setAttribute("fill", "none");
+        path_.setAttribute(
+          "stroke",
+          band.tone === "primary" ? primaryColor : driftColor,
+        );
+        path_.setAttribute("stroke-width", String(band.width));
+        path_.setAttribute("stroke-linecap", "round");
+        path_.setAttribute("stroke-opacity", String(band.opacity));
+        path_.setAttribute("stroke-dasharray", `${band.lit} ${100 - band.lit}`);
+        // Counting DOWN from the band's own lit length walks it along the
+        // path's own direction — source to target.
+        path_.setAttribute("stroke-dashoffset", String(band.lit - 100 * t));
+        anchor.after(path_);
+        anchor = path_;
+      }
     }
 
     frames.push({

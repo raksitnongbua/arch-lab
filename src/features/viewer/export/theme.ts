@@ -28,6 +28,8 @@ export interface ExportTheme {
    * second guess at it.
    */
   edgeDrift: string;
+  /** `--primary`, for the resting comet's head and halo in an animated export. */
+  primary: string;
   mutedForeground: string;
   /** Secondary text ON node fills — `--node-meta`, not the panel muted. */
   nodeMeta: string;
@@ -47,6 +49,7 @@ const TOKEN_VARS = {
   nodeBorder: "--node-border",
   edge: "--edge",
   edgeDrift: "--edge-drift",
+  primary: "--primary",
   mutedForeground: "--muted-foreground",
   nodeMeta: "--node-meta",
   foreground: "--foreground",
@@ -148,6 +151,7 @@ export function resolveExportTheme(): ExportTheme {
     edge: resolve(TOKEN_VARS.edge, "#7d828f"),
     // Falls back to the plain edge ink: an export that cannot resolve the mix
     // shows the drift in the connector's own colour, never a stray literal.
+    primary: resolve(TOKEN_VARS.primary, "#4f46e5"),
     edgeDrift: resolveExpression(
       TOKEN_VARS.edgeDrift,
       resolve(TOKEN_VARS.edge, "#7d828f"),
