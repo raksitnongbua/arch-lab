@@ -570,7 +570,13 @@ function edgeMarkup(
         ? ` marker-start="url(#${markerId})"`
         : "";
     parts.push(
-      `<path d="${path}" fill="none" stroke="${theme.edge}" stroke-width="1.5"${dash}${markerEnd}${markerStart}/>`,
+      // The class is the ANIMATED EXPORT's handle on this path. A GIF of a C4
+      // diagram is the connectors drifting, exactly as the canvas shows them at
+      // rest, and the frame builder needs to find the connectors in a finished
+      // SVG string to give each frame its dash offset. Marking them here is the
+      // only way it can — an exported path is otherwise indistinguishable from
+      // a node's border. It costs a class on a still that ignores it.
+      `<path class="af-export-edge" d="${path}" fill="none" stroke="${theme.edge}" stroke-width="1.5"${dash}${markerEnd}${markerStart}/>`,
     );
 
     // Label chip — only when there is something to say (the on-screen

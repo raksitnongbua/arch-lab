@@ -37,12 +37,20 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Expand, Maximize2, Minimize2, Shrink } from "lucide-react";
+import { Expand, Maximize2, Minimize2, Shrink, Waves } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+
+import {
+  idleMotionState,
+  readIdleMotion,
+  useIdleMotion,
+  useReducedMotion,
+  writeIdleMotion,
+} from "@/lib/idle-motion";
 
 import { ViewerExportButton } from "../export/export-button";
 import { EditModeLink } from "./edit-mode-link";
@@ -219,6 +227,15 @@ export function ViewerShell({
     className: "shrink-0",
   });
 
+  /*
+   * Idle motion: the reader's toggle, their OS preference, and the attribute
+   * the canvas CSS gates on. Shared with the sequence viewer — one preference
+   * for "should diagrams keep moving", not one per route.
+   */
+  const reducedMotion = useReducedMotion();
+  const idleMotion = useIdleMotion();
+  const idleState = idleMotionState(reducedMotion, idleMotion);
+
   return (
     <div
       ref={rootRef}
@@ -227,6 +244,11 @@ export function ViewerShell({
         // Immersive: cover the viewport (site chrome is behind, untouched).
         isImmersive && "fixed inset-0 z-50",
       )}
+      /* Carries the reader's idle-motion choice AND their reduced-motion
+         preference down to the canvas CSS. An attribute, not a custom property:
+         switching this off has to withdraw the drift overlay entirely, and only
+         a selector can retract a rule. See lib/idle-motion.ts. */
+      data-af-idle={idleState}
     >
       <p aria-live="polite" className="sr-only">
         {announcement}
@@ -284,6 +306,48 @@ export function ViewerShell({
               allDiagrams={allDiagrams}
               tagColors={frozenModel.file.metadata.tagColors}
             />
+            {/* Idle motion, matching the sequence viewer's control down to the
+                behaviour: a real button with aria-pressed, announced through
+                the shell's existing live region, persisted, and DISABLED under
+                reduced motion rather than pretending — the OS preference wins
+                outright, and a toggle claiming to enable motion it will not run
+                would be lying. The preference is shared with the sequence
+                viewer, because "stop the diagrams moving" is a statement about
+                diagrams, not about a route. */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !readIdleMotion();
+                writeIdleMotion(next);
+                setAnnouncement(
+                  next
+                    ? "Idle motion on — connectors drift to show their direction."
+                    : "Idle motion off — the diagram holds still until you touch it.",
+                );
+              }}
+              disabled={reducedMotion}
+              aria-pressed={!reducedMotion && idleMotion}
+              aria-label={
+                reducedMotion
+                  ? "Idle motion unavailable — your system prefers reduced motion"
+                  : idleMotion
+                    ? "Turn idle motion off"
+                    : "Turn idle motion on"
+              }
+              title={
+                reducedMotion
+                  ? "Reduced motion is on"
+                  : idleMotion
+                    ? "Idle motion: on"
+                    : "Idle motion: off"
+              }
+              className={cn(
+                controlClasses,
+                "disabled:cursor-not-allowed disabled:opacity-40",
+              )}
+            >
+              <Waves aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={() => setImmersive(!isImmersive)}

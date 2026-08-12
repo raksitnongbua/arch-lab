@@ -52,7 +52,7 @@ registerHooks({
 });
 
 const { encodeGif, lzwEncode, quantise } = await import(
-  pathToFileURL(path.join(ROOT, "src/features/sequence/export/gif.ts")).href
+  pathToFileURL(path.join(ROOT, "src/features/viewer/export/gif.ts")).href
 );
 
 let assertions = 0;

@@ -54,17 +54,16 @@
  * happen in event handlers.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { SequenceLabFile } from "@/types";
+import {
+  readIdleMotion,
+  useIdleMotion,
+  useReducedMotion,
+  writeIdleMotion,
+} from "@/lib/idle-motion";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
@@ -77,83 +76,6 @@ import { layoutSequence } from "../lib/layout";
 import { sequenceMarchState, sequenceMotionVars } from "../lib/motion";
 import type { SequenceFocus } from "./sequence-diagram";
 import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
-
-/* -------------------------------------------------------------------------- */
-/* Reduced motion, hydration-safe                                               */
-/* -------------------------------------------------------------------------- */
-
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-
-function subscribeReducedMotion(onChange: () => void): () => void {
-  const media = window.matchMedia(REDUCED_MOTION_QUERY);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-}
-
-/**
- * `matchMedia` is a browser API, so the server snapshot is `false` and the
- * client corrects after hydration — the D17 mounted-guard pattern
- * (`diagram-inspector.tsx`), which is what keeps the reduced-motion default
- * from aborting hydration for the whole playground.
- */
-function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    subscribeReducedMotion,
-    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
-    () => false,
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Idle-motion preference, persisted + hydration-safe                           */
-/* -------------------------------------------------------------------------- */
-
-/**
- * The idle-motion toggle's backing store: localStorage behind a
- * useSyncExternalStore, the same D17 mounted-guard shape as
- * `useReducedMotion` above (and diagram-inspector.tsx) — the server
- * snapshot is the DEFAULT (on), and the client corrects after hydration if
- * a stored "off" disagrees, instead of the render reading a browser API it
- * does not have on the server. localStorage failures (private mode, storage
- * quota) degrade to session-only state: reads fall back to the default and
- * writes still notify this tab's listeners, so the toggle keeps working —
- * it just forgets on reload.
- *
- * The `storage` event only fires in OTHER tabs, so writes also notify a
- * local listener set — both paths funnel through the same subscribe.
- */
-const IDLE_MOTION_KEY = "arch-lab:sequence-idle-motion";
-const idleMotionListeners = new Set<() => void>();
-
-function readIdleMotion(): boolean {
-  try {
-    return window.localStorage.getItem(IDLE_MOTION_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
-
-function writeIdleMotion(on: boolean): void {
-  try {
-    window.localStorage.setItem(IDLE_MOTION_KEY, on ? "on" : "off");
-  } catch {
-    /* Session-only degradation — see the store comment. */
-  }
-  for (const listener of idleMotionListeners) listener();
-}
-
-function subscribeIdleMotion(onChange: () => void): () => void {
-  idleMotionListeners.add(onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    idleMotionListeners.delete(onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-function useIdleMotion(): boolean {
-  return useSyncExternalStore(subscribeIdleMotion, readIdleMotion, () => true);
-}
 
 /* -------------------------------------------------------------------------- */
 /* The viewer                                                                   */

@@ -32,6 +32,7 @@ import {
   fileStem,
   renderPngBlob,
 } from "@/features/viewer/export/download";
+import { encodeGif } from "@/features/viewer/export/gif";
 import { cn } from "@/lib/utils";
 
 import {
@@ -42,7 +43,7 @@ import {
   type GifSharpness,
   type GifSmoothness,
 } from "./frames";
-import { encodeGif } from "./gif";
+
 import { renderSequenceSvg } from "./render-svg";
 
 /**

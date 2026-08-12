@@ -1,7 +1,7 @@
 /**
  * A GIF89a encoder, hand-rolled.
  *
- * WHY NOT A DEPENDENCY. The same reason `viewer/export/zip.ts` writes ZIP
+ * WHY NOT A DEPENDENCY. The same reason `./zip.ts` writes ZIP
  * archives by hand and `download.ts` rasterises PNG through a canvas: this app
  * ships no runtime dependency it can write itself in a few hundred lines, and a
  * GIF encoder is one of those. The format is frozen, it is small, and the whole

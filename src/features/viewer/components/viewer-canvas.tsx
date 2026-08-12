@@ -181,7 +181,17 @@ const EDGE_INTERACTION_CSS = `
  * It hands over to the selection comet rather than layering with it, and
  * disappears entirely on a dimmed edge — see the render guard.
  */
+/* HIDDEN unless idle motion is on. Removed rather than parked, and the
+   distinction matters: this is an overlay carrying a dash pattern, so a frozen
+   one is not a resting connector but a connector that appears DASHED — which in
+   C4 means a different kind of relationship. Motion that cannot stop honestly
+   has to leave. Same rule, same reasoning as the sequence comet.
+
+   The gate is the data-af-idle attribute on the shell (lib/idle-motion.ts),
+   carrying both the reader's toggle and their reduced-motion preference.
+   No backticks in here: this block lives inside a template literal. */
 .viewer-canvas .viewer-edge-drift {
+  display: none;
   fill: none;
   stroke: color-mix(in oklch, var(--edge) 40%, var(--primary));
   stroke-width: 1.5;
@@ -190,9 +200,16 @@ const EDGE_INTERACTION_CSS = `
   stroke-dasharray: ${EDGE_DASH_ON} ${EDGE_DASH_OFF};
   animation: viewer-edge-drift ${VIEWER_DURATIONS.edgeDrift}ms linear infinite;
 }
+[data-af-idle="on"] .viewer-canvas .viewer-edge-drift {
+  display: inline;
+}
 /* Pointing at a connector brightens its dashes and speeds them up — "which
-   way does this go?" is a question asked by hovering. */
+   way does this go?" is a question asked by hovering. Hover survives the idle
+   gate on purpose: the toggle turns off motion NOBODY ASKED FOR, and a reader
+   holding the pointer on one connector has asked. The sequence viewer draws the
+   same line, where a focused message keeps its comet with the march off. */
 .viewer-canvas .react-flow__edge:hover .viewer-edge-drift {
+  display: inline;
   stroke: var(--primary);
   opacity: 1;
   stroke-width: 2;
@@ -338,7 +355,10 @@ const EDGE_INTERACTION_CSS = `
   /* The resting dash is motion and nothing else — a parked band would just be
      a stray bright segment sitting on one connector, so it goes away entirely
      rather than freezing mid-path. */
-  .viewer-canvas .viewer-edge-drift { display: none; }
+  .viewer-canvas .viewer-edge-drift,
+  .viewer-canvas .react-flow__edge:hover .viewer-edge-drift {
+    display: none;
+  }
   .viewer-canvas .viewer-edge-flow-tail { visibility: hidden; }
   .viewer-canvas .viewer-edge-flow-head {
     stroke-dasharray: none;

@@ -339,6 +339,85 @@ check(
   ),
 );
 
+/* ---- 4. one idle-motion switch, honoured by BOTH viewers ----------------- */
+
+/*
+ * The reader's toggle is one preference for the whole app, not one per route:
+ * "stop the diagrams moving" is a statement about diagrams. That only holds if
+ * both viewers read the same module and gate on the same attribute, so it is
+ * asserted across all three files rather than left to convention.
+ */
+const idleModule = read("src/lib/idle-motion.ts");
+const shell = read("src/features/viewer/components/viewer-shell.tsx");
+const seqViewer = read("src/features/sequence/components/sequence-viewer.tsx");
+
+check(
+  "the preference and the OS query both live in the shared module",
+  /export function useIdleMotion/.test(idleModule) &&
+    /export function useReducedMotion/.test(idleModule) &&
+    /export function idleMotionState/.test(idleModule),
+);
+
+check(
+  "neither viewer keeps a private copy of the reduced-motion hook",
+  !/function useReducedMotion/.test(shell) &&
+    !/function useReducedMotion/.test(seqViewer),
+);
+
+for (const [label, source] of [
+  ["the C4 viewer", shell],
+  ["the sequence viewer", seqViewer],
+]) {
+  check(
+    `${label} reads the shared idle-motion module`,
+    /from "@\/lib\/idle-motion"/.test(source),
+  );
+}
+
+check(
+  "the C4 shell stamps the gate attribute the canvas selects on",
+  /data-af-idle=\{idleState\}/.test(shell) &&
+    /const idleState = idleMotionState\(reducedMotion, idleMotion\)/.test(
+      shell,
+    ),
+);
+
+check(
+  "reduced motion wins outright — it is the first argument, not an override",
+  /idleMotionState\(\s*reduced: boolean,\s*idleMotion: boolean,\s*\): "on" \| "off" \{\s*return reduced \|\| !idleMotion \? "off" : "on";/s.test(
+    idleModule,
+  ),
+);
+
+/*
+ * THE DRIFT MUST BE WITHDRAWN, NOT SLOWED. A parked marching dash is not a
+ * resting connector — it is a connector wearing a dash pattern that means
+ * "different kind of relationship" in C4. So the default is display:none and
+ * the gate adds it back, which is the one shape a custom property cannot
+ * express: a var changes a value, only a selector retracts a rule.
+ */
+check(
+  "the C4 drift is off by default and switched on by the attribute",
+  /\.viewer-canvas \.viewer-edge-drift \{[^}]*display: none;/s.test(c4) &&
+    /\[data-af-idle="on"\] \.viewer-canvas \.viewer-edge-drift \{\s*display: inline;/s.test(
+      c4,
+    ),
+);
+
+check(
+  "hover survives the gate — motion the reader asked for is not idle motion",
+  /\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-drift \{\s*display: inline;/s.test(
+    c4,
+  ),
+);
+
+check(
+  "reduced motion removes the hover drift too, or hover outranks the media query",
+  /\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-drift,?\s*\}?\s*display: none|\.viewer-canvas \.viewer-edge-drift,\s*\.viewer-canvas \.react-flow__edge:hover \.viewer-edge-drift \{\s*display: none;/s.test(
+    c4,
+  ),
+);
+
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
