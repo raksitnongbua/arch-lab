@@ -119,6 +119,11 @@
   --tag-fill-c: 0.055;
 
   --edge: oklch(0.6 0.02 265);
+  /* The resting drift that rides ON TOP of a connector. A real token, not an
+     inline color-mix, because the animated GIF export has to resolve the exact
+     same colour from the same place — two spellings of "edge lifted toward
+     primary" would drift apart the first time either is tuned. */
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.58 0.2 280 / 0.18);
 
   /* Sequence-diagram LANE tokens — one accent per participant column, keyed
@@ -227,6 +232,7 @@
   --tag-fill-c: 0.06;
 
   --edge: oklch(0.62 0.02 275);
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.68 0.19 285 / 0.24);
 
   /* Dark counterparts of the sequence lane tokens (the light block carries

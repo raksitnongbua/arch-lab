@@ -19,12 +19,43 @@
  */
 
 import { encodeGif, type GifFrame } from "./gif";
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** A path's own dash period, so the march steps by exactly one of them. */
+function dashPeriodOf(edge: Element): number | null {
+  const raw = edge.getAttribute("stroke-dasharray");
+  if (raw === null) return null;
+  const parts = raw
+    .split(/[\s,]+/)
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (parts.length === 0) return null;
+  const sum = parts.reduce((a, b) => a + b, 0);
+  // An odd-length list repeats to become even ("6" is "6 6"), so its true
+  // period is twice the written sum.
+  return parts.length % 2 === 0 ? sum : sum * 2;
+}
 import type { RenderedSvg } from "./render-svg";
 
 /** The resting drift, matching EDGE_DASH_ON / EDGE_DASH_OFF on the canvas. */
 const DASH_ON = 5;
 const DASH_OFF = 9;
 const DASH_PERIOD = DASH_ON + DASH_OFF;
+
+/**
+ * The drift is an OVERLAY, exactly as it is on screen, and the distinction is
+ * not cosmetic. Stamping the drift pattern onto the connector itself — which
+ * is what this did first — draws every SOLID relationship as a dashed line,
+ * and dashed means ASYNCHRONOUS in C4. The GIF was therefore reporting
+ * synchronous calls as asynchronous ones: a diagram that says something untrue
+ * about the system, which is worse than a diagram that does not move.
+ *
+ * So solid edges keep their stroke and gain a thin bright path on top, and
+ * dashed edges march the dash they already have instead of wearing a second
+ * one. Same two rules as the canvas, for the same two reasons.
+ */
+const DRIFT_WIDTH = 1;
 
 /**
  * Sharpness is a multiplier on the diagram's own pixel size, not a fixed edge:
@@ -98,6 +129,8 @@ export async function renderDiagramGif(
   rendered: RenderedSvg,
   quality: C4GifQuality = DEFAULT_C4_GIF_QUALITY,
   onProgress?: (done: number, total: number) => void,
+  /** The canvas's own `--edge-drift`, already resolved (see theme.ts). */
+  driftColor: string = "currentColor",
 ): Promise<Uint8Array | null> {
   const { frames: frameCount, delayMs } = C4_SMOOTHNESS[quality.smoothness];
 
@@ -126,13 +159,28 @@ export async function renderDiagramGif(
     const root = document_.documentElement;
 
     for (const edge of root.querySelectorAll(".af-export-edge")) {
-      // Every connector marches, including the ones the still draws dashed for
-      // a different reason (`edge.style === "dashed"`): on the canvas the drift
-      // overlays them all, so the loop should too.
-      edge.setAttribute("stroke-dasharray", `${DASH_ON} ${DASH_OFF}`);
+      if (edge.getAttribute("data-style") === "dashed") {
+        // Already dashed, and that dash means "asynchronous". March it where
+        // it stands: one rhythm on the line, and moving a pattern the edge
+        // already owns cannot change what it says.
+        const period = dashPeriodOf(edge) ?? DASH_PERIOD;
+        edge.setAttribute("stroke-dashoffset", String(period * (1 - t)));
+        continue;
+      }
+      // Solid: leave the connector alone and lay a highlight over it. Inserted
+      // AFTER the edge — SVG has no z-index, so a sibling inserted before it
+      // would be painted underneath and never seen.
+      const drift = document_.createElementNS(SVG_NS, "path");
+      drift.setAttribute("d", edge.getAttribute("d") ?? "");
+      drift.setAttribute("fill", "none");
+      drift.setAttribute("stroke", driftColor);
+      drift.setAttribute("stroke-width", String(DRIFT_WIDTH));
+      drift.setAttribute("stroke-linecap", "round");
+      drift.setAttribute("stroke-dasharray", `${DASH_ON} ${DASH_OFF}`);
       // Counting DOWN walks the pattern along the path's own direction, which
       // is what makes the dash read as travel toward the target.
-      edge.setAttribute("stroke-dashoffset", String(DASH_PERIOD * (1 - t)));
+      drift.setAttribute("stroke-dashoffset", String(DASH_PERIOD * (1 - t)));
+      edge.after(drift);
     }
 
     frames.push({

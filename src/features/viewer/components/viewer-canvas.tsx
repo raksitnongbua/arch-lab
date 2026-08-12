@@ -74,7 +74,12 @@ import {
   getDiagram,
   type ViewerModel,
 } from "../lib/model";
-import { FIT_PADDING, MAX_ZOOM, MIN_ZOOM } from "../lib/canvas-constants";
+import {
+  EDGE_BASE_DASH_PERIOD,
+  FIT_PADDING,
+  MAX_ZOOM,
+  MIN_ZOOM,
+} from "../lib/canvas-constants";
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
@@ -193,8 +198,14 @@ const EDGE_INTERACTION_CSS = `
 .viewer-canvas .viewer-edge-drift {
   display: none;
   fill: none;
-  stroke: color-mix(in oklch, var(--edge) 40%, var(--primary));
-  stroke-width: 1.5;
+  stroke: var(--edge-drift);
+  /* THINNER THAN THE BASE (1.5), which is the whole reason this reads as a
+     highlight riding a line rather than a line of its own. At equal width each
+     dash REPLACED the base stroke over its own length, so the connector came
+     out as alternating patches of two colours — a solid relationship rendered
+     as a broken one, with the round caps bulging past the base at every dash
+     end. The overlay only works while the line underneath stays visible. */
+  stroke-width: 1;
   stroke-linecap: round;
   opacity: 0.85;
   stroke-dasharray: ${EDGE_DASH_ON} ${EDGE_DASH_OFF};
@@ -202,6 +213,23 @@ const EDGE_INTERACTION_CSS = `
 }
 [data-af-idle="on"] .viewer-canvas .viewer-edge-drift {
   display: inline;
+}
+/* An async connector marches its OWN dash instead of wearing a second one.
+   Unlike the overlay this is safe to animate: the pattern is already the
+   edge's, so moving it cannot make the line say something it does not mean —
+   and there is nothing to withdraw when motion stops, because a still dashed
+   line is simply a dashed line. The step is exactly one period, so the
+   infinite repeat never shows a seam. */
+.viewer-canvas .viewer-edge-base-marching {
+  animation: none;
+}
+[data-af-idle="on"] .viewer-canvas .viewer-edge-base-marching {
+  animation: viewer-edge-dash-march ${VIEWER_DURATIONS.edgeDrift}ms linear
+    infinite;
+}
+.viewer-canvas .react-flow__edge:hover .viewer-edge-base-marching {
+  animation: viewer-edge-dash-march
+    ${Math.round(VIEWER_DURATIONS.edgeDrift / 2.5)}ms linear infinite;
 }
 /* Pointing at a connector brightens its dashes and speeds them up — "which
    way does this go?" is a question asked by hovering. Hover survives the idle
@@ -212,7 +240,8 @@ const EDGE_INTERACTION_CSS = `
   display: inline;
   stroke: var(--primary);
   opacity: 1;
-  stroke-width: 2;
+  /* Still under the hovered base's 2 — same reason as above. */
+  stroke-width: 1.5;
   animation-duration: ${Math.round(VIEWER_DURATIONS.edgeDrift / 2.5)}ms;
 }
 .viewer-canvas .viewer-edge-flow {
@@ -319,6 +348,10 @@ const EDGE_INTERACTION_CSS = `
 @keyframes viewer-edge-enter {
   from { opacity: 0; }
 }
+@keyframes viewer-edge-dash-march {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -${EDGE_BASE_DASH_PERIOD}; }
+}
 @keyframes viewer-edge-drift {
   from { stroke-dashoffset: 0; }
   to { stroke-dashoffset: -${EDGE_DASH_PERIOD}; }
@@ -358,6 +391,14 @@ const EDGE_INTERACTION_CSS = `
   .viewer-canvas .viewer-edge-drift,
   .viewer-canvas .react-flow__edge:hover .viewer-edge-drift {
     display: none;
+  }
+  /* The async march PARKS rather than disappearing — unlike the overlay, its
+     resting frame is the meaningful one: a dashed line that is simply not
+     moving. Nothing is lost by stopping it. */
+  .viewer-canvas .viewer-edge-base-marching,
+  .viewer-canvas .react-flow__edge:hover .viewer-edge-base-marching {
+    animation: none;
+    stroke-dashoffset: 0;
   }
   .viewer-canvas .viewer-edge-flow-tail { visibility: hidden; }
   .viewer-canvas .viewer-edge-flow-head {

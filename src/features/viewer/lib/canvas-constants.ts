@@ -29,3 +29,20 @@ export const FIT_PADDING = {
   bottom: "80px",
   x: "7%",
 } as const;
+
+/**
+ * The dash an ASYNCHRONOUS relationship is drawn with, in user units.
+ *
+ * Shared because three places have to agree on it: the edge draws it, the
+ * canvas stylesheet marches it (the keyframe steps by exactly one period, or
+ * the loop visibly jumps), and the SVG/GIF export re-emits it. It was written
+ * out by hand in all three, which is how the marching period and the pattern
+ * could have parted company without anything failing.
+ *
+ * This dash carries MEANING — solid is synchronous, dashed is not — so nothing
+ * may borrow it for decoration.
+ */
+export const EDGE_BASE_DASH_ON = 6;
+export const EDGE_BASE_DASH_OFF = 4;
+export const EDGE_BASE_DASH = `${EDGE_BASE_DASH_ON} ${EDGE_BASE_DASH_OFF}`;
+export const EDGE_BASE_DASH_PERIOD = EDGE_BASE_DASH_ON + EDGE_BASE_DASH_OFF;

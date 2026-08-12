@@ -29,7 +29,8 @@
     "check:share-expiry": "node scripts/share-expiry-check.mjs",
     "check:shortcuts": "node scripts/shortcut-catalog-check.mjs",
     "gen:share-keys": "node scripts/gen-share-keys.mjs",
-    "check:vscode-grammar": "node scripts/vscode-grammar-check.mjs"
+    "check:vscode-grammar": "node scripts/vscode-grammar-check.mjs",
+    "check:viewer-motion": "node scripts/viewer-motion-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

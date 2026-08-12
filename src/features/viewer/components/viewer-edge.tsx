@@ -42,6 +42,7 @@ import {
 } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
+import { EDGE_BASE_DASH } from "../lib/canvas-constants";
 import type { C4Edge } from "@/types";
 
 import {
@@ -137,9 +138,19 @@ function ViewerEdgeInner({
   // The comet flows on the selected edge alone — a selected NODE runs its
   // own outline comet (viewer-node.tsx) while its touching edges hold still.
   const showFlow = isSelected;
-  // The resting dash runs on every connector that is neither escalated to the
-  // comet nor pushed into the background.
-  const showRestingDash = !isSelected && !isDimmed;
+  // An ASYNC relationship is already drawn dashed, and that dash carries
+  // meaning. Laying the drift overlay on top of it put TWO dash rhythms on one
+  // curve — the base's `6 4` in pixels against the overlay's normalised `5 9`,
+  // which never line up and cannot be made to, so the moving dashes landed
+  // half in the static gaps and half on the static dashes. A dashed edge
+  // marches its own pattern instead (below): one rhythm, still moving, and
+  // marching a line that is already dashed cannot change what it means.
+  const isDashed = data?.edge.style === "dashed";
+  // The resting drift runs on every SOLID connector that is neither escalated
+  // to the comet nor pushed into the background.
+  const restingMotion = !isSelected && !isDimmed;
+  const showRestingDash = restingMotion && !isDashed;
+  const showDashMarch = restingMotion && isDashed;
 
   const joiner = data?.edge.direction === "bidirectional" ? "and" : "to";
   const chipText = label || technology || "Unlabelled relationship";
@@ -172,9 +183,10 @@ function ViewerEdgeInner({
           "viewer-edge-base",
           showFlow && "viewer-edge-base-selected",
           isDimmed && "viewer-edge-base-dimmed",
+          showDashMarch && "viewer-edge-base-marching",
         )}
         style={{
-          strokeDasharray: data?.edge.style === "dashed" ? "6 4" : undefined,
+          strokeDasharray: isDashed ? EDGE_BASE_DASH : undefined,
         }}
       />
       {showRestingDash ? (

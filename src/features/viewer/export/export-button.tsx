@@ -212,10 +212,14 @@ export function ViewerExportButton({
              * cheap and withheld where it is not.
              */
             setAnnouncement("Building the animation — this takes a moment.");
-            const gif = await renderDiagramGif(rendered, {
-              sharpness,
-              smoothness,
-            });
+            const gif = await renderDiagramGif(
+              rendered,
+              { sharpness, smoothness },
+              undefined,
+              // The canvas's own drift colour, from the same theme read that
+              // painted the frame — so the loop cannot drift away from the page.
+              theme.edgeDrift,
+            );
             if (gif === null) {
               setAnnouncement(
                 "Nothing to animate — this diagram has no connectors, so every frame would be identical.",
