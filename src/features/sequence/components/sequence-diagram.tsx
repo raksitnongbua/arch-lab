@@ -1119,6 +1119,30 @@ function Message({
         </defs>
       ) : null}
 
+      {kind === "reply" ? (
+        /* Replies FADE (dashed from frame one) — see sequence-motion.css for
+           why they cannot share the dashoffset draw. */
+        <path
+          className="af-seq-line af-seq-fade-in"
+          d={linePath}
+          fill="none"
+          strokeDasharray="6 5"
+        />
+      ) : (
+        <path
+          className="af-seq-line af-seq-draw"
+          d={linePath}
+          fill="none"
+          /* pathLength=1 normalises the draw so every arrow draws in the same
+             time regardless of span — but it also renormalises ALL dash maths
+             on this path, which would turn the march's real-unit 10/4 into
+             fractions of the line and stretch a long message's dashes. The
+             two states are mutually exclusive, so the attribute is present
+             only while drawing. */
+          {...(animateRank !== null ? { pathLength: 1 } : {})}
+        />
+      )}
+
       {/* THE COMET — the C4 viewer's edge flow, same construction and same
           numbers: a blurred glow under a soft tail under a sharp head, three
           paths over the untouched line, each `pathLength=100` so the dash
@@ -1143,7 +1167,15 @@ function Message({
 
           Rendered only at rest, so the focused set has no comet to fight the
           draw, and gated in CSS by `data-seq-march` — a comet frozen by the
-          toggle would be three bright stripes parked on every line. */}
+          toggle would be three bright stripes parked on every line.
+
+          PAINTED AFTER THE LINE, and that is load-bearing. SVG has no
+          z-index — later siblings paint on top — so while this group sat
+          BEFORE the line, the 1.5px stroke covered its own comet: only the
+          wider blurred glow bled past the edges, and the motion read as a
+          faint smudge rather than a band riding the line. It looked like the
+          animation was broken, and it was. C4 paints its flow layers over the
+          base for the same reason. */}
       {idle && kind !== "reply" && paintId !== null ? (
         <g className="af-seq-flow" aria-hidden="true">
           <path
@@ -1163,30 +1195,6 @@ function Message({
           />
         </g>
       ) : null}
-
-      {kind === "reply" ? (
-        /* Replies FADE (dashed from frame one) — see sequence-motion.css for
-           why they cannot share the dashoffset draw. */
-        <path
-          className="af-seq-line af-seq-fade-in"
-          d={linePath}
-          fill="none"
-          strokeDasharray="6 5"
-        />
-      ) : (
-        <path
-          className="af-seq-line af-seq-draw"
-          d={linePath}
-          fill="none"
-          /* pathLength=1 normalises the draw so every arrow draws in the same
-             time regardless of span — but it also renormalises ALL dash maths
-             on this path, which would turn the march's real-unit 10/4 into
-             fractions of the line and stretch a long message's dashes. The
-             two states are mutually exclusive, so the attribute is present
-             only while drawing. */
-          {...(animateRank !== null ? { pathLength: 1 } : {})}
-        />
-      )}
 
       {kind === "sync" ? (
         <path className="af-seq-head af-seq-head-fill" d={filledHead} />

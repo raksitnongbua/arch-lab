@@ -258,6 +258,21 @@ check(
 );
 
 check(
+  "the comet is painted AFTER the line it rides — SVG has no z-index",
+  (() => {
+    // The bug this catches shipped: with the flow group before the line, the
+    // 1.5px stroke covered its own comet and only the blurred glow bled past
+    // the edges, so the motion read as a faint smudge. Everything else about
+    // it was correct — the bands existed, the CSS matched C4, the animation
+    // ran — which is exactly why source order needs an assertion rather than
+    // a reading.
+    const line = diagram.indexOf('className="af-seq-line af-seq-draw"');
+    const flow = diagram.indexOf('className="af-seq-flow"');
+    return line > 0 && flow > 0 && flow > line;
+  })(),
+);
+
+check(
   "the renderer omits the comet on replies and on the focused set",
   /idle && kind !== "reply" && paintId !== null/.test(diagram),
 );
