@@ -362,6 +362,13 @@ things it cannot do alone — **know the grammar exactly** and **get the real
 parser's verdict**. There is deliberately no mutation API; that would duplicate
 the grammar in a second place and drift from it.
 
+Everything the editor and the viewer understand is reachable through it:
+`get_syntax_reference` has a **frames** section covering
+[grouping boundaries](#grouping-boundaries), `describe_model` reports each
+diagram's boundaries and which elements sit in them, and `validate_model`
+returns the [C4 review notes](#c4-conformance) alongside its verdict. The
+`author_c4_model` prompt tells an agent to act on all three.
+
 Nothing is stored. Every tool is a pure function of the text it is sent, and
 `create_share_link` encodes the model into a URL _fragment_, which browsers
 never transmit — so even a shared link uploads nothing.

@@ -667,6 +667,30 @@ check("describe_model lists contents on request", () => {
   assert.match(text, /customer -> shop : "Places orders with"/);
 });
 
+check("describe_model shows boundaries and which nodes sit in them", () => {
+  // A boundary is invisible in the hierarchy line (it is not a diagram and
+  // not a node), so an agent that only ever calls describe_model would have
+  // rewritten a model without one and silently dropped it.
+  const source = `archlab 1.0
+title "Bounded"
+
+@context ctx-root "Bounded"
+  shop:system "Shop" >cnt-shop
+
+@container cnt-shop "Shop — Containers" owner=shop
+  frame internal "Internal"
+  frame storage "Data Layer" in=internal
+  web:container "Web App" [Next.js] in=internal
+  db:database "Orders DB" [PostgreSQL 16] in=storage
+`;
+  const text = expectOk(describeModel(source, "auto", true));
+  assert.match(text, /frame internal "Internal"/);
+  // Nesting reads as the .alab attribute the caller would have to write.
+  assert.match(text, /frame storage "Data Layer" in=internal/);
+  assert.match(text, /web:container "Web App" \[Next\.js\] in=internal/);
+  assert.match(text, /db:database "Orders DB" \[PostgreSQL 16\] in=storage/);
+});
+
 /* ----------------------------------------------------------------------- */
 /* 6. Syntax reference                                                      */
 /* ----------------------------------------------------------------------- */
@@ -679,6 +703,16 @@ check("get_syntax_reference returns every section by default", () => {
   assert.match(text, /# The `\.alab` syntax/);
   assert.match(text, /significant indentation/);
   assert.match(text, /archlab 1\.0/);
+});
+
+check("the reference teaches frames, not just the frame attribute", () => {
+  // An agent authoring .alab can only use a construct the reference names.
+  const text = expectOk(getSyntaxReference("frames"));
+  assert.match(text, /frame internal "Internal"/);
+  assert.match(text, /in=internal/);
+  // The two rules that stop an agent modelling a boundary as an element.
+  assert.match(text, /no behaviour and no relationships/i);
+  assert.match(text, /innermost/i);
 });
 
 check("every syntax section renders non-empty on its own", () => {

@@ -11,7 +11,7 @@
  * this prints is the navigation the viewer would actually offer.
  */
 
-import type { ArchLabFile, C4Diagram, C4Edge, C4Node } from "@/types";
+import type { ArchLabFile, C4Diagram, C4Edge, C4Frame, C4Node } from "@/types";
 import type { CheckChoice } from "@/features/validate/lib/check";
 
 import { readSource } from "../lib/read";
@@ -40,7 +40,19 @@ function describeNode(node: C4Node): string {
   if (node.childRef !== undefined)
     parts.push(`→ ${node.childRef} (other file)`);
   if (node.externalRef !== undefined) parts.push("(external placeholder)");
+  // Membership reads as the `.alab` attribute the caller would have to write,
+  // for the same reason the arrows below do: the listing should look like the
+  // source, so an agent can copy what it sees.
+  if (node.frameId !== undefined) parts.push(`in=${node.frameId}`);
   return parts.join(" ");
+}
+
+/** `frame internal "Internal" in=outer` — the `.alab` form, again. */
+function describeFrame(frame: C4Frame): string {
+  const parent = frame.parentFrameId;
+  const nesting =
+    typeof parent === "string" && parent !== "" ? ` in=${parent}` : "";
+  return `frame ${frame.id} ${JSON.stringify(frame.label)}${nesting}`;
 }
 
 /** The `.alab` arrow for an edge, so the listing reads like the source would. */
@@ -55,6 +67,11 @@ function describeDiagramBody(diagram: C4Diagram): string {
   const lines: string[] = [];
   if (diagram.description !== undefined) {
     lines.push(`    ${diagram.description}`);
+  }
+  // Frames first, matching both the serializer's order and the fact that a
+  // node's `in=` is meaningless until the reader has seen the frame it names.
+  for (const frame of diagram.frames ?? []) {
+    lines.push(`    ${describeFrame(frame)}`);
   }
   for (const node of diagram.nodes) lines.push(`    ${describeNode(node)}`);
   for (const edge of diagram.edges) {

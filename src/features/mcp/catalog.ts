@@ -11,7 +11,9 @@
  * `scripts/mcp-check.mjs` asserts the two can never disagree — a documented
  * tool that isn't registered (or vice versa) fails the check.
  *
- * No React, no zod, no SDK — importable from anywhere.
+ * No React, no zod, no SDK — importable from anywhere. The one import is the
+ * syntax section ids, so the `get_syntax_reference` argument documentation is
+ * generated from the sections that actually exist.
  */
 
 // The only import here, and deliberately a leaf: `content/syntax-sections`
@@ -215,8 +217,8 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
         name: "include_contents",
         required: false,
         description:
-          "Also list every node and edge of every diagram. Defaults to " +
-          "false, which returns the hierarchy only.",
+          "Also list every boundary, node and edge of every diagram, in " +
+          ".alab form. Defaults to false, which returns the hierarchy only.",
       },
     ],
   },
@@ -233,10 +235,13 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       {
         name: "section",
         required: false,
-        // DERIVED from the section ids rather than typed out: this list was
-        // hand-written and had already gone stale once (it did not mention
-        // `sequence`), which is the exact failure the catalogue exists to
-        // prevent for tool names. `check:mcp` asserts the two agree.
+        // DERIVED from the section ids, never typed out. This list was
+        // hand-written once and had already gone stale — it did not mention
+        // `sequence` — which is the exact failure the catalogue exists to
+        // prevent for tool names, and it is how a caller ends up being told a
+        // section exists that the tool then rejects. Adding a section to
+        // `syntax-sections.ts` now updates this sentence, the /mcp page and
+        // the tool's own schema at once; `check:mcp` asserts the two agree.
         description:
           `One of: ${SYNTAX_SECTION_IDS.join(", ")}. ` +
           "Omit for the whole reference.",

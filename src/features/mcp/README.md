@@ -111,7 +111,11 @@ precedent as `syntax-docs/components/code-block.tsx` importing
   Mermaid C4, the bundled models);
 - failures carry the parser's own line and column;
 - a share link decodes back to the model that went into it;
-- every generated syntax section renders, and its complete examples parse.
+- every generated syntax section renders, and its complete examples parse;
+- the reference actually teaches frames (C4 boundaries), and `describe_model`
+  reports them along with the nodes that sit inside them — a boundary is
+  neither a diagram nor a node, so nothing else in the output would reveal it,
+  and an agent rewriting a model it could not see would silently drop it.
 
 ## Adding a tool
 
