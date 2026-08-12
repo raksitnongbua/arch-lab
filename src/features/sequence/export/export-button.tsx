@@ -34,9 +34,27 @@ import {
 } from "@/features/viewer/export/download";
 import { cn } from "@/lib/utils";
 
-import { buildSequenceFrames } from "./frames";
+import {
+  buildSequenceFrames,
+  DEFAULT_GIF_QUALITY,
+  GIF_SHARPNESS,
+  GIF_SMOOTHNESS,
+  type GifSharpness,
+  type GifSmoothness,
+} from "./frames";
 import { encodeGif } from "./gif";
 import { renderSequenceSvg } from "./render-svg";
+
+/**
+ * PNG scale per sharpness — 1× is the diagram's own pixel size. Module scope, so
+ * it is one object rather than a new one per render that every callback
+ * depending on it would have to churn for.
+ */
+const PNG_SCALE: Record<GifSharpness, number> = {
+  compact: 1,
+  standard: 2,
+  sharp: 3,
+};
 
 export function SequenceExportButton({
   /** Scopes the lookup: the element containing the diagram to export. */
@@ -63,6 +81,24 @@ export function SequenceExportButton({
     | { kind: "error"; message: string }
   >({ kind: "idle" });
   const busy = status.kind === "busy";
+
+  /*
+   * TWO AXES, not one "quality" slider. Sharpness is pixels — whether small
+   * labels survive. Smoothness is frames per loop — how finely the motion is
+   * sampled. A big jerky GIF and a small fluid one are both reasonable things to
+   * want, so collapsing them would force a choice nobody asked for.
+   *
+   * Sharpness also drives the PNG's scale factor, because "sharper" means the
+   * same thing there. SVG ignores both: it is vector, so it is already sharp at
+   * every size and has no frames — the UI says so rather than showing controls
+   * that do nothing to it.
+   */
+  const [sharpness, setSharpness] = useState<GifSharpness>(
+    DEFAULT_GIF_QUALITY.sharpness,
+  );
+  const [smoothness, setSmoothness] = useState<GifSmoothness>(
+    DEFAULT_GIF_QUALITY.smoothness,
+  );
 
   const run = useCallback(
     async (format: "svg" | "png" | "gif") => {
@@ -94,8 +130,13 @@ export function SequenceExportButton({
           return;
         }
         if (format === "png") {
-          downloadBlob(await renderPngBlob(rendered), `${stem}.png`);
-          onAnnounce("Downloaded the diagram as PNG.");
+          downloadBlob(
+            await renderPngBlob(rendered, PNG_SCALE[sharpness]),
+            `${stem}.png`,
+          );
+          onAnnounce(
+            `Downloaded the diagram as PNG at ${PNG_SCALE[sharpness]}× scale.`,
+          );
           return;
         }
 
@@ -103,9 +144,13 @@ export function SequenceExportButton({
         // than screen-recorded, so the file is the same on any machine — see
         // export/frames.ts.
         onAnnounce("Building the animation — this takes a moment.");
-        const built = await buildSequenceFrames(svgNode, (done, total) => {
-          setStatus({ kind: "busy", label: `Frame ${done} of ${total}…` });
-        });
+        const built = await buildSequenceFrames(
+          svgNode,
+          { sharpness, smoothness },
+          (done, total) => {
+            setStatus({ kind: "busy", label: `Frame ${done} of ${total}…` });
+          },
+        );
         setStatus({ kind: "busy", label: "Encoding…" });
         if (built === null) {
           const message =
@@ -138,7 +183,7 @@ export function SequenceExportButton({
         );
       }
     },
-    [paneRef, title, onAnnounce],
+    [paneRef, title, onAnnounce, sharpness, smoothness],
   );
 
   return (
@@ -170,6 +215,58 @@ export function SequenceExportButton({
         <Download aria-hidden="true" />
         SVG
       </button>
+
+      {/* The two axes. Native <select>s on purpose: they are two settings on a
+          toolbar, not a feature, and a custom listbox would cost keyboard and
+          screen-reader behaviour that these get for free. Each option states
+          its own cost, because "sharp" and "smooth" are only meaningful next to
+          what they charge — a 3× 30-frame GIF is several times the bytes and
+          the wait of the default. */}
+      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        Sharpness
+        <select
+          value={sharpness}
+          disabled={busy}
+          onChange={(event) => setSharpness(event.target.value as GifSharpness)}
+          className="rounded border border-border bg-card px-1.5 py-0.5 text-xs text-foreground"
+        >
+          <option value="compact">
+            Compact · PNG 1× · GIF {GIF_SHARPNESS.compact}px
+          </option>
+          <option value="standard">
+            Standard · PNG 2× · GIF {GIF_SHARPNESS.standard}px
+          </option>
+          <option value="sharp">
+            Sharp · PNG 3× · GIF {GIF_SHARPNESS.sharp}px
+          </option>
+        </select>
+      </label>
+
+      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        Smoothness
+        <select
+          value={smoothness}
+          disabled={busy}
+          onChange={(event) =>
+            setSmoothness(event.target.value as GifSmoothness)
+          }
+          className="rounded border border-border bg-card px-1.5 py-0.5 text-xs text-foreground"
+        >
+          <option value="simple">
+            Simple · {GIF_SMOOTHNESS.simple.frames} frames
+          </option>
+          <option value="standard">
+            Standard · {GIF_SMOOTHNESS.standard.frames} frames
+          </option>
+          <option value="smooth">
+            Smooth · {GIF_SMOOTHNESS.smooth.frames} frames
+          </option>
+        </select>
+        <span className="sr-only">
+          Frames per animation loop. Affects the GIF only; the loop stays the
+          same length, so more frames means finer motion rather than slower.
+        </span>
+      </label>
 
       {status.kind === "busy" ? (
         <p className="text-xs text-muted-foreground">{status.label}</p>

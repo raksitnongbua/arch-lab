@@ -458,19 +458,64 @@ check("the comet travels exactly one whole path per loop", () => {
 });
 
 check("frame phases never reach 1, so no phase is held twice", () => {
-  // t = index / FRAME_COUNT over 0..FRAME_COUNT-1. Dividing by COUNT - 1 would
+  // t = index / frameCount over 0..frameCount-1. Dividing by count - 1 would
   // make the last frame identical to the first and stall the loop for a beat.
-  assert.match(framesSource, /const t = index \/ FRAME_COUNT;/);
+  assert.match(framesSource, /const t = index \/ frameCount;/);
 });
 
-check("frame delays are whole hundredths — GIF cannot store finer", () => {
-  const match = framesSource.match(/FRAME_DELAY_MS\s*=\s*(\d+)/);
-  assert.ok(match, "FRAME_DELAY_MS is not declared");
-  assert.equal(
-    Number(match[1]) % 10,
-    0,
-    "a delay that is not a multiple of 10ms is silently rounded by the format",
+/* ----------------------------------------------------------------------- */
+/* 7. The quality presets                                                   */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * Sharpness and smoothness are offered as presets, and each one has to stay
+ * legal on its own: GIF stores delays in HUNDREDTHS of a second, so a delay that
+ * is not a multiple of 10ms is silently rounded and the loop runs at a speed
+ * nobody chose. Raising smoothness must also add FRAMES rather than slow the
+ * animation down — the loop stays about the same length — or "smooth" would
+ * quietly mean "slower", which is a different setting.
+ */
+const framesModule = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/export/frames.ts")).href
+);
+
+check("every smoothness preset uses a delay GIF can actually store", () => {
+  for (const [name, preset] of Object.entries(framesModule.GIF_SMOOTHNESS)) {
+    assert.equal(
+      preset.delayMs % 10,
+      0,
+      `${name}: ${preset.delayMs}ms is not a whole hundredth`,
+    );
+  }
+});
+
+check("smoothness adds frames without changing the loop's length", () => {
+  const durations = Object.values(framesModule.GIF_SMOOTHNESS).map(
+    (preset) => preset.frames * preset.delayMs,
   );
+  const min = Math.min(...durations);
+  const max = Math.max(...durations);
+  assert.ok(
+    max - min <= 200,
+    `loop lengths span ${min}–${max}ms; smoothness must not become speed`,
+  );
+});
+
+check("the presets are ordered — smoother means strictly more frames", () => {
+  const { simple, standard, smooth } = framesModule.GIF_SMOOTHNESS;
+  assert.ok(simple.frames < standard.frames, "simple is not the fewest");
+  assert.ok(standard.frames < smooth.frames, "smooth is not the most");
+});
+
+check("sharper means strictly more pixels", () => {
+  const { compact, standard, sharp } = framesModule.GIF_SHARPNESS;
+  assert.ok(compact < standard && standard < sharp, "sharpness is not ordered");
+});
+
+check("the default is a real preset, not a stray value", () => {
+  const { DEFAULT_GIF_QUALITY, GIF_SHARPNESS, GIF_SMOOTHNESS } = framesModule;
+  assert.ok(DEFAULT_GIF_QUALITY.sharpness in GIF_SHARPNESS);
+  assert.ok(DEFAULT_GIF_QUALITY.smoothness in GIF_SMOOTHNESS);
 });
 
 /* ----------------------------------------------------------------------- */

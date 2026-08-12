@@ -28,14 +28,44 @@
 
 import { renderSequenceSvg } from "./render-svg";
 
-/** Longest side of the exported GIF, in pixels. */
-const MAX_EDGE = 720;
+/**
+ * The two axes a reader can trade off, and why they are separate.
+ *
+ * SHARPNESS is pixels: how big the image is, and therefore whether small labels
+ * survive. SMOOTHNESS is frames per loop: how finely the motion is sampled.
+ * They are independent — a big jerky GIF and a small fluid one are both
+ * reasonable things to want — so folding them into one "quality" slider would
+ * force a choice nobody asked for.
+ *
+ * Every preset holds the LOOP DURATION at roughly 1.4 seconds, so raising
+ * smoothness adds frames without slowing the animation down. Delays are whole
+ * multiples of 10ms because GIF stores hundredths of a second and rounds
+ * anything else silently.
+ */
+export const GIF_SHARPNESS = {
+  standard: 720,
+  sharp: 1080,
+  compact: 540,
+} as const;
 
-/** Frames in one loop. Twenty at 70ms reads as motion without a huge file. */
-const FRAME_COUNT = 20;
+export const GIF_SMOOTHNESS = {
+  standard: { frames: 20, delayMs: 70 },
+  smooth: { frames: 30, delayMs: 50 },
+  simple: { frames: 12, delayMs: 120 },
+} as const;
 
-/** Held per frame, in ms. A multiple of 10 — GIF stores hundredths. */
-const FRAME_DELAY_MS = 70;
+export type GifSharpness = keyof typeof GIF_SHARPNESS;
+export type GifSmoothness = keyof typeof GIF_SMOOTHNESS;
+
+export interface GifQuality {
+  sharpness: GifSharpness;
+  smoothness: GifSmoothness;
+}
+
+export const DEFAULT_GIF_QUALITY: GifQuality = {
+  sharpness: "standard",
+  smoothness: "standard",
+};
 
 /**
  * Dash periods a reply completes per loop. An INTEGER, which is the whole point:
@@ -111,13 +141,16 @@ async function rasterise(
  */
 export async function buildSequenceFrames(
   source: SVGSVGElement,
-  /** Called before each frame, so a caller can show progress. */
+  quality: GifQuality = DEFAULT_GIF_QUALITY,
+  /** Called after each frame, so a caller can show progress. */
   onProgress?: (done: number, total: number) => void,
 ): Promise<SequenceFrames | null> {
+  const maxEdge = GIF_SHARPNESS[quality.sharpness];
+  const { frames: frameCount, delayMs } = GIF_SMOOTHNESS[quality.smoothness];
   const base = renderSequenceSvg(source, { keepMotion: true });
   if (base === null) return null;
 
-  const scale = Math.min(1, MAX_EDGE / Math.max(base.width, base.height));
+  const scale = Math.min(1, maxEdge / Math.max(base.width, base.height));
   const width = Math.max(1, Math.round(base.width * scale));
   const height = Math.max(1, Math.round(base.height * scale));
 
@@ -149,10 +182,10 @@ export async function buildSequenceFrames(
 
   const frames: { rgba: Uint8ClampedArray; delayMs: number }[] = [];
 
-  for (let index = 0; index < FRAME_COUNT; index += 1) {
-    // `t` never reaches 1: frame 0 and frame FRAME_COUNT would be identical,
+  for (let index = 0; index < frameCount; index += 1) {
+    // `t` never reaches 1: frame 0 and frame `frameCount` would be identical,
     // so the loop would hold one phase twice and read as a hitch.
-    const t = index / FRAME_COUNT;
+    const t = index / frameCount;
     const document_ = parser.parseFromString(base.svg, "image/svg+xml");
     const root = document_.documentElement;
 
@@ -178,9 +211,9 @@ export async function buildSequenceFrames(
         width,
         height,
       ),
-      delayMs: FRAME_DELAY_MS,
+      delayMs,
     });
-    onProgress?.(index + 1, FRAME_COUNT);
+    onProgress?.(index + 1, frameCount);
     /*
      * Yield to the browser between frames. Rasterising is synchronous work per
      * frame, and twenty of them back to back never lets a paint through — the
