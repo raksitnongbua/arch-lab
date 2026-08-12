@@ -24,7 +24,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { Download, Film, ImageDown } from "lucide-react";
+import { Download, Film, ImageDown, TriangleAlert } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -50,22 +50,38 @@ export function SequenceExportButton({
   onAnnounce: (message: string) => void;
   className?: string;
 }): React.JSX.Element {
-  const [busy, setBusy] = useState(false);
+  /*
+   * VISIBLE state, not only announced. Every outcome here used to travel through
+   * `onAnnounce` alone, which reaches the page's sr-only live region — so for a
+   * sighted user a slow export, a refusal and a crash were all indistinguishable
+   * from the button doing nothing at all. That is what "I click download GIF and
+   * nothing happens" was: no feedback, for any outcome.
+   */
+  const [status, setStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "busy"; label: string }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
+  const busy = status.kind === "busy";
 
   const run = useCallback(
     async (format: "svg" | "png" | "gif") => {
       const svgNode =
         paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
       if (svgNode === null) {
-        onAnnounce("Nothing to export — the diagram is not on screen.");
+        const message = "Nothing to export — the diagram is not on screen.";
+        setStatus({ kind: "error", message });
+        onAnnounce(message);
         return;
       }
 
-      setBusy(true);
+      setStatus({ kind: "busy", label: "Preparing…" });
       try {
         const rendered = renderSequenceSvg(svgNode);
         if (rendered === null) {
-          onAnnounce("Nothing to export — the diagram has no size yet.");
+          const message = "Nothing to export — the diagram has no size yet.";
+          setStatus({ kind: "error", message });
+          onAnnounce(message);
           return;
         }
         const stem = fileStem(title);
@@ -87,11 +103,15 @@ export function SequenceExportButton({
         // than screen-recorded, so the file is the same on any machine — see
         // export/frames.ts.
         onAnnounce("Building the animation — this takes a moment.");
-        const built = await buildSequenceFrames(svgNode);
+        const built = await buildSequenceFrames(svgNode, (done, total) => {
+          setStatus({ kind: "busy", label: `Frame ${done} of ${total}…` });
+        });
+        setStatus({ kind: "busy", label: "Encoding…" });
         if (built === null) {
-          onAnnounce(
-            "Nothing to animate — this diagram has no moving lines, so a GIF would be twenty copies of the PNG.",
-          );
+          const message =
+            "Nothing to animate — this diagram has no moving lines, so a GIF would be copies of the PNG.";
+          setStatus({ kind: "error", message });
+          onAnnounce(message);
           return;
         }
         const gif = encodeGif(built.frames, built.width, built.height);
@@ -103,14 +123,19 @@ export function SequenceExportButton({
           `Downloaded a looping GIF — ${built.frames.length} frames of the diagram's running lines.`,
         );
       } catch (error) {
-        // Named, not swallowed: rasterising can fail on a browser that refuses
-        // to decode the SVG, and a button that silently does nothing is worse
-        // than one that says why.
-        onAnnounce(
-          `Export failed: ${error instanceof Error ? error.message : "unknown error"}.`,
-        );
+        // Named and SHOWN, not swallowed: rasterising can fail on a browser that
+        // refuses to decode the SVG, and a button that silently does nothing is
+        // worse than one that says why.
+        const message =
+          error instanceof Error ? error.message : "unknown error";
+        setStatus({ kind: "error", message });
+        onAnnounce(`Export failed: ${message}.`);
+        return;
       } finally {
-        setBusy(false);
+        // Only clear a BUSY state; an error must survive to stay on screen.
+        setStatus((current) =>
+          current.kind === "busy" ? { kind: "idle" } : current,
+        );
       }
     },
     [paneRef, title, onAnnounce],
@@ -145,6 +170,19 @@ export function SequenceExportButton({
         <Download aria-hidden="true" />
         SVG
       </button>
+
+      {status.kind === "busy" ? (
+        <p className="text-xs text-muted-foreground">{status.label}</p>
+      ) : null}
+      {status.kind === "error" ? (
+        <p className="flex items-start gap-1.5 text-xs text-warning">
+          <TriangleAlert
+            aria-hidden="true"
+            className="mt-0.5 size-3.5 shrink-0"
+          />
+          {status.message}
+        </p>
+      ) : null}
     </div>
   );
 }

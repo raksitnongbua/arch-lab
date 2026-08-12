@@ -163,30 +163,40 @@ export function quantise(
   frames: readonly Uint8ClampedArray[],
   limit = 256,
 ): { palette: number[][]; frames: Uint8Array[] } {
-  // 5 bits per channel: enough to keep the lane hues apart, small enough that
-  // the histogram of a full-page diagram stays in the low thousands.
-  const histogram = new Map<number, number[]>();
+  /*
+   * 5 bits per channel — enough to keep the lane hues apart, and a key space of
+   * exactly 32768, which is why these are typed arrays rather than Maps. A
+   * full-page GIF is ten million pixels across its frames, and a Map lookup per
+   * pixel here and again in `nearest` below was thirty million hash operations
+   * on the main thread: the tab froze for the better part of a minute and the
+   * export looked like it had done nothing at all. An array index over the same
+   * key is the same algorithm at a fraction of the cost.
+   */
+  const seen = new Uint8Array(32768);
+  const unique: number[][] = [];
   for (const rgba of frames) {
     for (let index = 0; index < rgba.length; index += 4) {
       const r = rgba[index] as number;
       const g = rgba[index + 1] as number;
       const b = rgba[index + 2] as number;
       const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-      if (!histogram.has(key)) histogram.set(key, [r, g, b]);
+      if (seen[key] === 0) {
+        seen[key] = 1;
+        unique.push([r, g, b]);
+      }
     }
   }
 
-  const palette = medianCut([...histogram.values()], limit);
+  const palette = medianCut(unique, limit);
   if (palette.length === 0) palette.push([0, 0, 0]);
 
-  // Nearest-colour cache keyed by the same 15-bit bucket: a full-page frame is
-  // ~500k pixels over a few thousand distinct colours, so without this the
-  // nearest search dominates the export.
-  const cache = new Map<number, number>();
+  // Nearest-colour cache over the same 15-bit bucket. -1 means "not computed";
+  // an Int16Array holds every palette index (max 255) and is indexed directly.
+  const cache = new Int16Array(32768).fill(-1);
   const nearest = (r: number, g: number, b: number): number => {
     const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-    const hit = cache.get(key);
-    if (hit !== undefined) return hit;
+    const hit = cache[key] as number;
+    if (hit >= 0) return hit;
     let best = 0;
     let bestDistance = Infinity;
     for (let index = 0; index < palette.length; index += 1) {
@@ -200,7 +210,7 @@ export function quantise(
         best = index;
       }
     }
-    cache.set(key, best);
+    cache[key] = best;
     return best;
   };
 
@@ -238,7 +248,14 @@ export function lzwEncode(
 
   let codeSize = minCodeSize + 1;
   let nextCode = eoiCode + 1;
-  let dictionary = new Map<number, number>();
+  /*
+   * The dictionary as a flat table rather than a Map, for the same reason as
+   * the quantiser above: this runs once per PIXEL. The key packs a prefix code
+   * (< 4096) with a symbol byte, so the space is 2^20 — one allocation, and 0
+   * safely means "empty" because dictionary values always start above the
+   * end-of-information code and can never be 0.
+   */
+  const dictionary = new Int32Array(1 << 20);
 
   const out: number[] = [];
   let bitBuffer = 0;
@@ -262,8 +279,8 @@ export function lzwEncode(
       const next = indices[index] as number;
       // Key packs (prefix, symbol); symbols are bytes, prefixes < 4096.
       const key = (current << 8) | next;
-      const found = dictionary.get(key);
-      if (found !== undefined) {
+      const found = dictionary[key] as number;
+      if (found !== 0) {
         current = found;
         continue;
       }
@@ -273,11 +290,11 @@ export function lzwEncode(
         // emitted at the OLD code size — the decoder is still reading at that
         // width when it arrives.
         emit(clearCode);
-        dictionary = new Map();
+        dictionary.fill(0);
         codeSize = minCodeSize + 1;
         nextCode = eoiCode + 1;
       } else {
-        dictionary.set(key, nextCode);
+        dictionary[key] = nextCode;
         nextCode += 1;
         if (nextCode > 1 << codeSize && codeSize < 12) codeSize += 1;
       }

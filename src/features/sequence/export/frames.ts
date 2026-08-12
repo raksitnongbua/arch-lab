@@ -111,6 +111,8 @@ async function rasterise(
  */
 export async function buildSequenceFrames(
   source: SVGSVGElement,
+  /** Called before each frame, so a caller can show progress. */
+  onProgress?: (done: number, total: number) => void,
 ): Promise<SequenceFrames | null> {
   const base = renderSequenceSvg(source, { keepMotion: true });
   if (base === null) return null;
@@ -127,6 +129,18 @@ export async function buildSequenceFrames(
    */
   const parser = new DOMParser();
   const probe = parser.parseFromString(base.svg, "image/svg+xml");
+  /*
+   * A malformed serialisation yields a <parsererror> document rather than
+   * throwing, and every `querySelectorAll` on it then returns nothing. Left
+   * unchecked that arrives as "no moving parts" — reported to the user as
+   * "nothing to animate", which is a lie about a real failure. Say what
+   * happened instead.
+   */
+  if (probe.querySelector("parsererror") !== null) {
+    throw new Error(
+      "the diagram could not be re-parsed for export (malformed SVG)",
+    );
+  }
   const movingParts =
     probe.documentElement.querySelectorAll(".af-seq-flow-head").length +
     probe.documentElement.querySelectorAll('[data-kind="reply"] .af-seq-line')
@@ -166,6 +180,14 @@ export async function buildSequenceFrames(
       ),
       delayMs: FRAME_DELAY_MS,
     });
+    onProgress?.(index + 1, FRAME_COUNT);
+    /*
+     * Yield to the browser between frames. Rasterising is synchronous work per
+     * frame, and twenty of them back to back never lets a paint through — the
+     * tab looks frozen and any progress the caller reports is invisible until
+     * the whole export is done, which is worse than no progress at all.
+     */
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
 
   return { frames, width, height };
