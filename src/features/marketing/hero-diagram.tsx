@@ -317,16 +317,41 @@ function SequencePanel() {
                   `af-hero-edge` sets `stroke-dasharray: 1` to draw with, and a
                   reply's dashes ARE its dasharray, so one property cannot serve
                   both. A reply that drew would arrive solid, which reads as a
-                  call. */}
+                  call.
+
+                  Once arrived, the panel KEEPS MOVING — it used to assemble and
+                  then sit perfectly still while the C4 panel beside it ran its
+                  comets, which made the sequence half look like a screenshot.
+                  Replies march their own dash from here; calls get the
+                  travelling highlight below. */}
               <path
                 style={delay(SEQ_BEAT.steps + index * SEQ_BEAT.stepGap)}
-                className={step.reply ? "af-hero-fade" : "af-hero-edge"}
+                className={step.reply ? "af-hero-seq-reply" : "af-hero-edge"}
                 d={`M ${from} ${step.y} L ${tip} ${step.y}`}
-                pathLength={1}
+                pathLength={step.reply ? undefined : 1}
                 stroke="var(--edge)"
                 strokeWidth={1.5}
-                strokeDasharray={step.reply ? "5 4" : undefined}
+                strokeDasharray={step.reply ? "6 5" : undefined}
               />
+
+              {/* The call's travelling highlight: a short bright band over the
+                  unbroken stroke, so a sync arrow moves without ever looking
+                  dashed. Delayed past the draw, or it would race a line that is
+                  not there yet. `pathLength=100` makes the 9/91 dash a
+                  percentage, so one keyframe fits every span. */}
+              {step.reply === undefined ? (
+                <path
+                  style={delay(
+                    SEQ_BEAT.steps + index * SEQ_BEAT.stepGap + BEAT.drawMs,
+                  )}
+                  className="af-strip-flow"
+                  d={`M ${from} ${step.y} L ${tip} ${step.y}`}
+                  pathLength={100}
+                  stroke={`var(--seq-lane-${step.from + 1})`}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                />
+              ) : null}
               <path
                 style={delay(
                   SEQ_BEAT.steps + index * SEQ_BEAT.stepGap + BEAT.drawMs,

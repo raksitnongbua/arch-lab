@@ -632,6 +632,19 @@
   animation: af-strip-march 1800ms linear infinite both;
 }
 
+/* The hero's sequence panel needs BOTH: it arrives with the rest of the card
+ * (a one-shot fade, because a reply's dashes are its resting style and a
+ * dashoffset draw would march them instead of drawing them — the same conflict
+ * the viewer resolves the same way), and then keeps marching for as long as the
+ * panel is on screen. Two animations on one element, which is why this cannot
+ * just be the two classes side by side: each sets `animation` wholesale and the
+ * later one would win. */
+.af-hero-seq-reply {
+  animation:
+    af-hero-fade 520ms ease-out both,
+    af-strip-march 1800ms linear infinite both;
+}
+
 .af-strip-flow {
   /* 9 lit of 100 — the same low duty the viewer's comet head uses, which is what
      keeps a travelling highlight from reading as a second line. */
@@ -650,6 +663,13 @@
   .af-strip-flow {
     animation: none;
     opacity: 0;
+  }
+
+  /* The hero reply keeps its fade's end state — a complete dashed line — and
+     stops marching. `animation: none` on the pair is enough because the fade's
+     natural frame IS the finished line. */
+  .af-hero-seq-reply {
+    animation: none;
   }
 }
 
