@@ -144,7 +144,16 @@ export interface SequenceDiagramProps {
   onFocusParticipant: (id: string) => void;
   /** `branch: null` focuses the whole fragment, a number that branch only. */
   onFocusFragment: (id: string, branch: number | null) => void;
-  onClearFocus: () => void;
+  /*
+   * There is NO onClearFocus here, deliberately. Clearing is what happens when
+   * a click lands on nothing, and "nothing" is bigger than this component: in
+   * fit mode `preserveAspectRatio="meet"` letterboxes the drawing inside the
+   * pane, and at a small zoom the SVG is a fraction of it. A backdrop rect
+   * sized to the viewBox — which is what used to be here — covered neither,
+   * so clicking obviously-empty canvas did nothing. The VIEWER owns it at the
+   * pane level instead; every interactive element in here stops propagation,
+   * which is what makes that safe.
+   */
 }
 
 /* -------------------------------------------------------------------------- */
@@ -161,7 +170,6 @@ export function SequenceDiagram({
   onFocusMessage,
   onFocusParticipant,
   onFocusFragment,
-  onClearFocus,
 }: SequenceDiagramProps): React.JSX.Element {
   /**
    * Every dim decision below derives from THIS set (see resolveFocusSteps):
@@ -331,18 +339,6 @@ export function SequenceDiagram({
           );
         })}
       </defs>
-
-      {/* Backdrop — clicking empty space clears focus. Not a button: it is
-          the ABSENCE of a target, and tabbing onto "nothing" would be noise
-          (Escape already covers keyboard users, in the viewer). */}
-      <rect
-        x={layout.minX}
-        y={0}
-        width={layout.width}
-        height={layout.height}
-        fill="transparent"
-        onClick={onClearFocus}
-      />
 
       {/* ---- fragments, outermost first (paint order = nesting order) ----
           The BOX stays decoration (pointer-events-none — a fragment can

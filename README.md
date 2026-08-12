@@ -280,8 +280,12 @@ with the dock listing each of its messages as a click-to-refocus button.
 Click a fragment's kind chip (`alt`, `loop`, `opt`, `par`) to focus every
 message in it, or a branch guard like `[card accepted]` to focus just that
 case's flow. Click the same thing again and the animation replays. Arrow
-keys walk focus through the messages in order; Escape (or empty canvas, or
-the dock's close button) clears, then a second Escape exits immersive mode.
+keys walk focus through the messages in order; Escape clears, and so does a
+click anywhere in the pane that is not on a diagram element — the whole pane is
+the backdrop, including the margins a fitted diagram leaves beside itself, so
+"click away to get out" works where the empty space actually is. Scrollbar
+gutters are excluded, since dragging to pan is not deselecting. The dock's close
+button clears too, and a second Escape exits immersive mode.
 Under `prefers-reduced-motion` nothing draws — focus dims and the details
 dock appears instantly, which is the same information without the motion.
 

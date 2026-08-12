@@ -292,6 +292,47 @@ export function SequenceViewer({
     diagramRegionRef.current?.focus();
   }, [handleClearFocus]);
 
+  /**
+   * THE BACKDROP: the whole diagram pane, not a rect inside the SVG.
+   *
+   * Clicking empty canvas is the mouse equivalent of Escape, and it used to
+   * miss most of the empty canvas. The old backdrop was a `<rect>` sized to
+   * the viewBox, which is not the same region as "the part of the pane with no
+   * diagram in it": in fit mode `preserveAspectRatio="meet"` letterboxes the
+   * drawing, leaving a wide margin either side of a tall flow (on the bundled
+   * example, ~170px per side) that belonged to the SVG element but to no rect;
+   * and at a small zoom — the scale clamps down to 0.1 — the drawing is a
+   * postage stamp in a pane that is almost entirely gutter. Clicks anywhere in
+   * that space hit the pane and did nothing, so the diagram looked stuck in a
+   * focused state until the user found Escape or the dock's close button.
+   *
+   * Moving it to the pane covers all of it, including the pane's own padding,
+   * and needs no hit geometry to be maintained. What makes it safe is that
+   * every interactive element inside the SVG stops propagation on click —
+   * messages, participant headers, footer cards, fragment chips and guards —
+   * so a click that reaches here is one that landed on nothing.
+   *
+   * The guard is for SCROLLBARS. A click on a scroll gutter targets the
+   * scrolling element itself, so without this, dragging the scrollbar of a
+   * zoomed diagram would clear focus on release — the user asked to pan, not to
+   * deselect. `clientWidth`/`clientHeight` exclude the scrollbars while the
+   * bounding rect includes them, and the difference is exactly the gutter.
+   */
+  const handleBackdropClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const pane = event.currentTarget;
+      const rect = pane.getBoundingClientRect();
+      if (
+        event.clientX - rect.left > pane.clientWidth ||
+        event.clientY - rect.top > pane.clientHeight
+      ) {
+        return;
+      }
+      handleClearFocus();
+    },
+    [handleClearFocus],
+  );
+
   /* ---- zoom -----------------------------------------------------------------
    * The hand-rolled equivalent of the C4 viewer's camera: `"fit"` (default —
    * the WHOLE flow inside the pane, the sequence answer to fitView) or a
@@ -589,6 +630,7 @@ export function SequenceViewer({
         <div
           ref={diagramRegionRef}
           className="h-full overflow-auto bg-canvas p-3"
+          onClick={handleBackdropClick}
           tabIndex={0}
           role="application"
           aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages, participants and fragment chips are buttons — Tab reaches them."
@@ -632,7 +674,6 @@ export function SequenceViewer({
               onFocusMessage={handleFocusMessage}
               onFocusParticipant={handleFocusParticipant}
               onFocusFragment={handleFocusFragment}
-              onClearFocus={handleClearFocus}
             />
           </div>
         </div>
