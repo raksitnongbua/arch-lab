@@ -34,7 +34,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:sequence-layout
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -621,6 +621,133 @@ check(
     "nesting containment: inner ⊆ middle ⊆ outer as STEP SETS too",
     inner.steps.every((s) => middle.steps.includes(s)) &&
       middle.steps.every((s) => outer.steps.includes(s)),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The heading: the document's title and description, inside the drawing     */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The heading is drawn INSIDE the SVG so it travels into every export, which
+ * means it is now part of the geometry: it pushes the participant row down, and
+ * it is the one block that can widen the canvas. Both are asserted, along with
+ * the thing a heading must never do — cross the right edge, which is the defect
+ * notes had before they wrapped and which the wrap FLOOR reintroduced one level
+ * up until the canvas learned to widen for it.
+ */
+{
+  check(
+    "the heading carries the document's title",
+    layout.heading.titleLines.join(" ") === file.metadata.title,
+    `got ${JSON.stringify(layout.heading.titleLines)}`,
+  );
+
+  check(
+    "the participant row starts below the heading, not at the top margin",
+    layout.headerTop === SEQ.marginTop + layout.heading.height &&
+      layout.headerTop > SEQ.marginTop,
+    `headerTop ${layout.headerTop}, marginTop ${SEQ.marginTop}, heading ${layout.heading.height}`,
+  );
+
+  check(
+    "the lifelines still start directly under the card row",
+    layout.lifelineTop === layout.headerTop + layout.headerHeight,
+    `lifelineTop ${layout.lifelineTop} vs ${layout.headerTop + layout.headerHeight}`,
+  );
+
+  check(
+    "the heading fits inside the canvas",
+    SEQ.marginX + layout.heading.width <= layout.width + layout.minX,
+    `text right edge ${SEQ.marginX + layout.heading.width} > canvas right ${layout.width + layout.minX}`,
+  );
+
+  /* A NORMAL flow must not pay for the heading in width: it wraps to the column
+     span, so the canvas is whatever the flow needed. */
+  check(
+    "a normal flow is not widened by its heading",
+    SEQ.marginX + layout.heading.width <= layout.width - SEQ.marginX,
+    `heading ${layout.heading.width} forced the ${layout.width}px canvas`,
+  );
+
+  const narrow = layoutSequence(
+    parseSequenceText(
+      `archlab 1.0 sequence\ntitle "${"Long checkout flow title ".repeat(4).trim()}"\n\n@sequence\n  a "A"\n  b "B"\n  a -> b : "x"\n`,
+    ),
+  );
+  check(
+    "a long title WRAPS rather than running out as one line",
+    narrow.heading.titleLines.length > 1,
+    `got ${narrow.heading.titleLines.length} line(s)`,
+  );
+  check(
+    "a narrow flow with a long title widens the canvas to fit the text",
+    SEQ.marginX + narrow.heading.width <= narrow.width + narrow.minX,
+    `text right ${SEQ.marginX + narrow.heading.width} > canvas right ${narrow.width + narrow.minX}`,
+  );
+
+  const clamped = layoutSequence(
+    parseSequenceText(
+      `archlab 1.0 sequence\ntitle "T"\ndescription "${"This description runs on and on so the clamp can be observed. ".repeat(6).trim()}"\n\n@sequence\n  a "A"\n  b "B"\n  a -> b : "x"\n`,
+    ),
+  );
+  check(
+    `a long description is clamped to ${SEQ.descriptionMaxLines} lines`,
+    clamped.heading.descriptionLines.length === SEQ.descriptionMaxLines,
+    `got ${clamped.heading.descriptionLines.length}`,
+  );
+  check(
+    "a clamped description ends in an ellipsis, so the clipping is visible",
+    clamped.heading.descriptionLines.at(-1)?.endsWith("\u2026") === true,
+    `last line: ${JSON.stringify(clamped.heading.descriptionLines.at(-1))}`,
+  );
+
+  /*
+   * THE RENDERER MUST NOT ANCHOR THE HEADER ROW TO `SEQ.marginTop`.
+   *
+   * This is a source assertion rather than a geometric one because the bug it
+   * guards lives in the renderer, where the layout cannot see it: the card row
+   * moved down behind the heading, but the ACTOR GLYPH and the participant HIT
+   * REGION were still positioned from the page margin — so the avatar disc drew
+   * straight through the title, and a participant's click target sat detached
+   * from the card it belonged to. Both were written from `SEQ.marginTop` before
+   * a heading existed, when the two were the same number.
+   */
+  const renderer = readFileSync(
+    path.join(ROOT, "src/features/sequence/components/sequence-diagram.tsx"),
+    "utf8",
+  );
+  const columnStart = renderer.indexOf("function ParticipantColumn(");
+  const columnBody = renderer
+    .slice(columnStart, renderer.indexOf("\nfunction ", columnStart + 1))
+    // Comments stripped first: the one above `boxTop` explains that it does NOT
+    // use `SEQ.marginTop`, and matching that prose would fail this check for
+    // saying the right thing.
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  check(
+    "the participant column takes every y from the layout's headerTop, never the page margin",
+    columnStart !== -1 && !columnBody.includes("SEQ.marginTop"),
+    columnStart === -1
+      ? "could not find ParticipantColumn"
+      : "SEQ.marginTop still anchors something in the card row",
+  );
+  check(
+    "the actor glyph hangs off the header row it belongs to",
+    /cy=\{layout\.headerTop \+ \d+\}/.test(columnBody),
+    "the avatar disc is not positioned from layout.headerTop",
+  );
+
+  const bare = layoutSequence(
+    parseSequenceText(
+      'archlab 1.0 sequence\ntitle "Short"\n\n@sequence\n  a "A"\n  b "B"\n  a -> b : "x"\n',
+    ),
+  );
+  check(
+    "a document with no description reserves no room for one",
+    bare.heading.descriptionLines.length === 0 &&
+      bare.heading.height < clamped.heading.height,
+    `bare ${bare.heading.height} vs clamped ${clamped.heading.height}`,
   );
 }
 

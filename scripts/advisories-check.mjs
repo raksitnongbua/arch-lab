@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * C4 advisories check: the review notes `/validate` and `validate_model` show
- * must fire on the things c4model.com's checklist actually names, and — just
- * as important — must stay silent on a well-authored model.
+ * Advisories check: the review notes `/validate`, `validate_model` and
+ * `validate_sequence` show must fire on the things they claim to, and — just
+ * as important — must stay silent on a well-authored document.
  *
  * Loads the REAL `advise` from `src/features/validate/lib/advisories.ts` and
  * the REAL `checkSource` through the same `registerHooks` resolver pattern as
@@ -19,8 +19,14 @@
  *      back `status: "ok"` — these are notes, not errors, and a rule that
  *      quietly failed a valid document would break every caller.
  *   4. Every rule in `ADVISORY_RULES` is covered by case (1), and every rule
- *      cites a reason mentioning C4 — the notes argue from the model, not
- *      from taste.
+ *      cites its SOURCE — c4model.com for the C4 conformance family, the
+ *      constant that defines the limit for the `.alab` format family. The notes
+ *      argue from something written down, not from taste. The format family is
+ *      listed explicitly in that check, so a new rule cannot slip past it by
+ *      simply not mentioning C4.
+ *   5. The title cap, which is the format family's first rule, holds on BOTH
+ *      document kinds (`advise` and `adviseSequence`), is inclusive at the
+ *      boundary, and counts code points rather than UTF-16 units.
  *
  * Exits non-zero on any failure. Run with: pnpm check:advisories
  */
@@ -66,8 +72,13 @@ registerHooks({
 const { checkSource } = await import(
   pathToFileURL(path.join(ROOT, "src/features/validate/lib/check.ts")).href
 );
-const { ADVISORY_RULES, advise, groupAdvisories } = await import(
-  pathToFileURL(path.join(ROOT, "src/features/validate/lib/advisories.ts")).href
+const { ADVISORY_RULES, advise, adviseSequence, groupAdvisories } =
+  await import(
+    pathToFileURL(path.join(ROOT, "src/features/validate/lib/advisories.ts"))
+      .href
+  );
+const { MAX_TITLE_LENGTH } = await import(
+  pathToFileURL(path.join(ROOT, "src/lib/constants.ts")).href
 );
 
 /* ----------------------------------------------------------------------- */
@@ -349,6 +360,88 @@ for (const name of ["shopflow", "order-shop"]) {
     );
   }
 
+  /* `long-title` belongs to the FORMAT family, so it is proven on both document
+     kinds — a sequence document has no C4 notation but does have a `title`, and
+     the whole point of the rule living in one place is that both are told off in
+     the same words. */
+  const longTitle = "T".repeat(MAX_TITLE_LENGTH + 1);
+
+  const modelLongTitle = advise({
+    ...titleCase,
+    metadata: { ...titleCase.metadata, title: longTitle },
+  }).filter((a) => a.rule === "long-title");
+  if (modelLongTitle.length === 1) {
+    covered.add("long-title");
+    ok(`long-title fires on a model title over ${MAX_TITLE_LENGTH} characters`);
+  } else {
+    fail(
+      "long-title fires on a model title over the cap",
+      `expected 1 advisory, got ${modelLongTitle.length}`,
+    );
+  }
+
+  const atCap = advise({
+    ...titleCase,
+    metadata: { ...titleCase.metadata, title: "T".repeat(MAX_TITLE_LENGTH) },
+  }).filter((a) => a.rule === "long-title");
+  if (atCap.length === 0) {
+    ok(
+      `a title of exactly ${MAX_TITLE_LENGTH} characters is fine (the cap is inclusive)`,
+    );
+  } else {
+    fail(
+      "a title of exactly the cap is fine",
+      `fired on a title of exactly ${MAX_TITLE_LENGTH}`,
+    );
+  }
+
+  const sequenceLongTitle = adviseSequence({
+    metadata: { title: longTitle },
+    participants: [],
+    items: [],
+  }).filter((a) => a.rule === "long-title");
+  if (sequenceLongTitle.length === 1) {
+    ok("long-title fires on a SEQUENCE document's title too");
+  } else {
+    fail(
+      "long-title fires on a sequence document's title",
+      `expected 1 advisory, got ${sequenceLongTitle.length}`,
+    );
+  }
+
+  const sequenceShortTitle = adviseSequence({
+    metadata: { title: "Checkout — Place Order" },
+    participants: [],
+    items: [],
+  });
+  if (sequenceShortTitle.length === 0) {
+    ok(
+      "a normal sequence document raises nothing — no C4 rule is applied to it",
+    );
+  } else {
+    fail(
+      "a normal sequence document raises nothing",
+      `got ${sequenceShortTitle.map((a) => a.rule).join(", ")}`,
+    );
+  }
+
+  /* Counted in CODE POINTS, not UTF-16 units: an emoji costs 2 of
+     `String.length` and 1 of what a reader counts, so a title that looks the
+     same length must not pass or fail depending on its alphabet. */
+  const emojiTitle = "🙂".repeat(MAX_TITLE_LENGTH);
+  const emojiAdvisories = advise({
+    ...titleCase,
+    metadata: { ...titleCase.metadata, title: emojiTitle },
+  }).filter((a) => a.rule === "long-title");
+  if (emojiAdvisories.length === 0) {
+    ok("the cap counts code points — an emoji title at the cap is not over it");
+  } else {
+    fail(
+      "the cap counts code points",
+      `${MAX_TITLE_LENGTH} emoji (String.length ${emojiTitle.length}) read as over the cap`,
+    );
+  }
+
   const uncovered = declared.filter((rule) => !covered.has(rule));
   if (uncovered.length === 0) {
     ok(`every declared rule has a case (${declared.length} rules)`);
@@ -359,16 +452,25 @@ for (const name of ["shopflow", "order-shop"]) {
     );
   }
 
-  const uncited = declared.filter(
-    (rule) => !/\bC4\b/.test(ADVISORY_RULES[rule].because),
-  );
+  /* EVERY RULE CITES ITS SOURCE, but there are now two families and they cite
+     different things — see the header of `advisories.ts`. The format family is
+     listed EXPLICITLY rather than inferred, so a new rule cannot slip past this
+     check simply by not containing the word "C4": it either states a C4 reason
+     or it is declared here as a format rule and states the limit it enforces. */
+  const FORMAT_RULES = new Set(["long-title"]);
+
+  const uncited = declared.filter((rule) => {
+    const because = ADVISORY_RULES[rule].because;
+    return FORMAT_RULES.has(rule)
+      ? !/MAX_TITLE_LENGTH|\.alab/.test(because)
+      : !/\bC4\b/.test(because);
+  });
   if (uncited.length === 0) {
-    ok("every rule states a C4 reason");
-  } else {
-    fail(
-      "every rule states a C4 reason",
-      `no C4 citation: ${uncited.join(", ")}`,
+    ok(
+      `every rule cites its source (${declared.length - FORMAT_RULES.size} C4, ${FORMAT_RULES.size} format)`,
     );
+  } else {
+    fail("every rule cites its source", `uncited: ${uncited.join(", ")}`);
   }
 }
 

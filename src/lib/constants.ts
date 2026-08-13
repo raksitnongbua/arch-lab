@@ -137,6 +137,43 @@ export const LEVEL_LABEL: Record<C4Level, string> = Object.fromEntries(
 export const SUPPORTED_MAJOR_VERSION = 1;
 
 /**
+ * Longest `title` the format asks for, in characters.
+ *
+ * ADVISORY, NOT ENFORCED — deliberately. A title is prose a human wrote, and
+ * refusing to open a document over a punctuation mark would make a share link
+ * that worked yesterday fail today. The parser therefore accepts any title and
+ * the checkers say so instead, which is the same treatment the C4 review notes
+ * get: valid, and worth a word.
+ *
+ * 120 is roughly four times the longest title anywhere in this repo (32). It is
+ * the point past which a title has stopped being a title: it becomes an export
+ * filename, a card in the demo gallery, and the accessible name a screen reader
+ * reads before every diagram.
+ *
+ * It now has a LAYOUT consequence too, which it did not when it was written: a
+ * sequence diagram draws its title inside the drawing (`sequence/lib/layout.ts`,
+ * `layoutHeading`), so an over-long one wraps to more lines and pushes the flow
+ * further down the canvas. Nothing breaks — it wraps rather than overflowing, and
+ * the canvas widens if it must — but the advisory now has a visible reason
+ * anyone can see, not just a filename argument.
+ */
+export const MAX_TITLE_LENGTH = 120;
+
+/**
+ * The title's length if it is over {@link MAX_TITLE_LENGTH}, else `null`.
+ *
+ * Counts CODE POINTS rather than `String.length`, which counts UTF-16 units: an
+ * emoji or a surrogate pair would otherwise cost two toward a limit a reader
+ * counts as one, so the same visible title would pass or fail depending on
+ * which alphabet it was written in. Trimmed first, because surrounding
+ * whitespace is not part of the title the format stores.
+ */
+export function titleLengthOverCap(title: string): number | null {
+  const length = [...title.trim()].length;
+  return length > MAX_TITLE_LENGTH ? length : null;
+}
+
+/**
  * Refusal text for a file whose major version is newer than we support.
  *
  * Shared so the two text parsers and the JSON validator refuse in the same

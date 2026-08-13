@@ -38,6 +38,7 @@ import {
    geometry the browser will draw rather than a character-count guess. An agent
    cannot see its own diagram; this is the substitute for looking. */
 import { layoutSequence } from "@/features/sequence/lib/layout";
+import { adviseSequence } from "@/features/validate/lib/advisories";
 
 import { guardSourceSize } from "../lib/limits";
 import {
@@ -45,6 +46,7 @@ import {
   fence,
   joinSections,
   quoteSourceLine,
+  renderAdvisories,
   textResult,
   type McpTextResult,
 } from "../lib/render";
@@ -287,6 +289,12 @@ export function validateSequence(source: string): McpTextResult {
       `VALID as ${SEQUENCE_FORMAT_LABEL[read.format]}.`,
       renderSummary(read.file, counts),
       renderParticipants(read.file),
+      /* Review notes, the same renderer the C4 tool uses. A sequence document
+         raises only the `.alab` FORMAT family — it has no C4 notation to conform
+         to — so today that is the title length. Reported for BOTH input formats,
+         because a long title survives a Mermaid import unchanged and an agent
+         that pasted Mermaid is exactly the one about to save it as `.alab`. */
+      renderAdvisories(adviseSequence(read.file), "sequence diagram"),
       // Stated on success, not just on the import path, because a caller that
       // validated Mermaid and then saved the .alab has silently accepted the
       // loss; naming it here is the only place it can still act on it.

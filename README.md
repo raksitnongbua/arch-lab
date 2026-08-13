@@ -195,6 +195,17 @@ the verdict: a valid model stays valid. Rules and their citations live in
 [`validate/lib/advisories.ts`](src/features/validate/lib/advisories.ts) and are
 proven by `pnpm check:advisories`.
 
+Two families live there. The rules above are **C4 conformance** and cite
+c4model.com. The other family is **`.alab` format hygiene**, which holds for any
+document kind: today that is a `title` over 120 characters
+(`MAX_TITLE_LENGTH`) — still perfectly valid, but the title becomes the export
+filename, the demo-gallery card and the name a screen reader reads before the
+diagram, so past that length it is a description and there is a `description`
+line for that. It is the reason `validate_sequence` reports review notes too: a
+sequence diagram has no C4 notation to conform to, but it has a title like
+anything else, and the cap applies equally to a title that arrived through the
+Mermaid import.
+
 **Deliberate divergences.**
 
 - **`bidirectional` stays in the model** even though C4 asks for unidirectional
@@ -463,7 +474,7 @@ Then open <http://localhost:3000>.
 | `pnpm check:sequence-motion`   | Proves idle motion's cross-file facts, which no type can catch: the comet's bands still match the C4 viewer's own dasharrays and offsets (read from its stylesheet, so "same as C4" cannot rot) while its clock stays deliberately slower, solid kinds are never given a dasharray (a dashed sync arrow reads as async), the reply's keyframes advance exactly its dash period, the head stays low-duty, and reduced motion removes the comet rather than parking three bright stripes on every line. |
 | `pnpm check:syntax-docs`       | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser — C4 snippets through the C4 parser and sequence snippets through the sequence one, each first confirmed to be DETECTED as that kind — and every deliberately-broken snippet fails with exactly the line, column and message the page shows.                                                                                                                                                       |
 | `pnpm check:validate-samples`  | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                                                                                                                                                                                                                               |
-| `pnpm check:advisories`        | Proves the [C4 review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites a reason from the C4 model.                                                                                                                                                                                                                                                                           |
+| `pnpm check:advisories`        | Proves the [review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites its source — c4model.com for the C4 family, the constant that defines the limit for the format family. The title cap is proven on both document kinds, at the boundary, and in code points rather than UTF-16 units.                                                                                     |
 | `pnpm check:export-archive`    | Proves the multi-diagram export: the hand-rolled ZIP writer emits an archive that parses back byte-for-byte with valid CRC-32s (and that the system `unzip` accepts, when one is installed), drill order survives, and archive names stay unique.                                                                                                                                                                                                                                                     |
 | `pnpm check:frames`            | Proves boundary editing: creating one around a selection is a single undo entry, refused input leaves the model untouched, nesting cycles are impossible, deleting a boundary re-homes rather than cascades, and the file the editor would save passes the real validator.                                                                                                                                                                                                                            |
 | `pnpm check:mcp`               | Proves the MCP server without booting a protocol: the tools it registers and the tools `/mcp` documents match exactly both ways, every tool works over real input, failures carry the parser's line and column, and a generated share link decodes back to the model that went into it.                                                                                                                                                                                                               |
