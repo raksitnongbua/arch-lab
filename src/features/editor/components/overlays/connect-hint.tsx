@@ -80,7 +80,13 @@ function useClickConnectDismiss(armed: boolean, disarm: () => void): void {
  * approach `canvas-motion-runtime.ts` already takes, and it reaches nodes this
  * component does not render.
  */
-function useConnectingFlag(active: boolean, armedByClick: boolean): void {
+function useConnectingFlag({
+  active,
+  armedByClick,
+}: {
+  active: boolean;
+  armedByClick: boolean;
+}): void {
   useEffect(() => {
     if (!active) return;
     const root = document.documentElement;
@@ -126,7 +132,10 @@ export function ConnectHint(): React.JSX.Element | null {
     flowStore.setState({ connectionClickStartHandle: null });
   }, [flowStore]);
 
-  useConnectingFlag(fromId !== null && fromId !== "", isArmedByClick);
+  useConnectingFlag({
+    active: fromId !== null && fromId !== "",
+    armedByClick: isArmedByClick,
+  });
   useClickConnectDismiss(isArmedByClick, disarm);
 
   if (fromId === null || fromId === "" || diagram === undefined) return null;

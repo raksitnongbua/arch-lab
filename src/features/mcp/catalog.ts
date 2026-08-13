@@ -16,11 +16,23 @@
  * generated from the sections that actually exist.
  */
 
-// The only import here, and deliberately a leaf: `content/syntax-sections`
-// pulls in nothing but the pure-data snippets module, so the "no React, no
-// zod, no SDK" promise above still holds and the `/mcp` page's bundle is
-// unaffected.
+// Both imports here are deliberately leaves, so the "no React, no zod, no SDK"
+// promise above still holds and the `/mcp` page's bundle is unaffected:
+// `content/syntax-sections` pulls in nothing but the pure-data snippets module,
+// and `lib/limits` imports nothing at all.
 import { SYNTAX_SECTION_IDS } from "./content/syntax-sections";
+import { MAX_SOURCE_CHARS } from "./lib/limits";
+
+/**
+ * The size ceiling as the tool descriptions state it.
+ *
+ * Interpolated rather than typed out: these descriptions ARE the contract every
+ * agent reads, so a raised limit with a stale number here would have the server
+ * advertising a rule it no longer enforces. Same formatting as the refusal in
+ * `guardSourceSize`, so the number an agent is told matches the number it is
+ * told off with.
+ */
+const MAX_SOURCE_CHARS_TEXT = `max ${MAX_SOURCE_CHARS.toLocaleString("en-US")} characters`;
 
 /** Where the server lives, relative to the site root. */
 export const MCP_ENDPOINT_PATH = "/api/mcp";
@@ -96,8 +108,7 @@ export interface McpToolDoc {
 const SOURCE_ARG: McpArgDoc = {
   name: "source",
   required: true,
-  description:
-    "The model text: .alab, arch-lab JSON, or Mermaid C4 (max 256,000 characters).",
+  description: `The model text: .alab, arch-lab JSON, or Mermaid C4 (${MAX_SOURCE_CHARS_TEXT}).`,
 };
 
 /**
@@ -113,7 +124,7 @@ const SEQUENCE_SOURCE_ARG: McpArgDoc = {
   description:
     "The sequence diagram text: `.alab` sequence (first line " +
     "`archlab 1.0 sequence`) or Mermaid `sequenceDiagram` code " +
-    "(max 256,000 characters). The format is detected from the first " +
+    `(${MAX_SOURCE_CHARS_TEXT}). The format is detected from the first ` +
     "meaningful line.",
 };
 
@@ -127,7 +138,7 @@ const SHARE_SOURCE_ARG: McpArgDoc = {
   name: "source",
   required: true,
   description:
-    "The document text (max 256,000 characters). C4 models: .alab, arch-lab " +
+    `The document text (${MAX_SOURCE_CHARS_TEXT}). C4 models: .alab, arch-lab ` +
     "JSON, or Mermaid C4. Sequence diagrams: `.alab` sequence (first line " +
     "`archlab 1.0 sequence`) or Mermaid `sequenceDiagram`. The kind is " +
     "detected from the first meaningful line.",

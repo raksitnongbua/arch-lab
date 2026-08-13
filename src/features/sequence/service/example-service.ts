@@ -20,6 +20,7 @@ import type { SequenceLabFile } from "@/types";
 
 import { ArchTextParseError, parseSequenceText } from "@/features/archtext";
 
+import { SEQUENCE_EXAMPLE } from "../input/example";
 import { eachMessage } from "../lib/collapse";
 
 /* -------------------------------------------------------------------------- */
@@ -34,59 +35,6 @@ export interface SequenceExampleSource {
   /** The `.alab` sequence document, verbatim. */
   text: string;
 }
-
-/**
- * The charge call as a runnable request. Interpolated below through
- * `JSON.stringify` rather than typed out escaped: a `desc` value is a JSON
- * string, so curl's line-continuation backslash needs `\\\\` and every quote
- * in the body needs `\\"` — inside a template literal that is four levels of
- * escaping and unreadable, and a reviewer cannot tell a correct one from a
- * broken one by eye. The readable array is the source of truth; the escaping
- * is derived. (Same treatment in `input/example.ts` and the syntax-docs
- * snippets, for the same reason.)
- */
-const CHARGE_CURL = [
-  "curl https://api.payments.example/v1/charges \\",
-  "  --request POST \\",
-  "  --header 'Idempotency-Key: <order id>' \\",
-  '  --data \'{ "amount": 4250, "currency": "THB" }\'',
-  "",
-  "The key is the order id, so a retry cannot double-charge.",
-].join("\n");
-
-const CHECKOUT = `archlab 1.0 sequence
-title "Checkout — Place Order"
-description "One order placed: card charged, order stored, receipt sent."
-
-@sequence
-  autonumber
-  cust:actor "Customer"
-  web "Storefront" [Next.js]
-  api:participant "Order API" [Go]
-  pay:participant "Payments" [Stripe]
-  db:participant "Orders DB" [PostgreSQL]
-
-  cust -> web : "Clicks Place order"
-  web ->+ api : "Place the order" [HTTPS]
-    desc "POST /api/v1/orders\\nbody { cartId, addressId }\\n201 → { orderId }\\n409 → the cart changed under us"
-  api -> api : "Validates the cart"
-  note right api : "Price and stock re-checked server-side"
-  alt "card accepted"
-    api ->+ pay : "Create charge" [REST]
-      desc ${JSON.stringify(CHARGE_CURL)}
-    pay ..>- api : "charge.succeeded"
-    api -> db : "INSERT order" [SQL]
-    par "receipt"
-      api ~> cust : "Emails the receipt"
-    and "audit"
-      api ~> db : "Writes audit row"
-    api ..>- web : "201 Created"
-  else "card declined"
-    api ..> web : "402 Payment Required"
-  opt "first purchase"
-    web -> cust : "Shows onboarding tips"
-  note over cust db : "Order flow complete"
-`;
 
 const PASSWORD_RESET = `archlab 1.0 sequence
 title "Password reset — one-time link"
@@ -125,9 +73,14 @@ description "A reset that survives a lost inbox: the link is single-use and the 
 const SOURCES: readonly SequenceExampleSource[] = [
   {
     id: "checkout",
+    // The playground's seed IS this example — one definition, in
+    // `../input/example`. They were separate copies of the same 42 lines and had
+    // already drifted: the same `desc` said "the cart moved on" in one and "the
+    // cart changed under us" in the other, so the demo page and the playground
+    // disagreed about one flow.
     blurb:
       "An order placed end to end — activation bars, a card-declined branch, parallel receipt and audit writes, and a note spanning the whole flow.",
-    text: CHECKOUT,
+    text: SEQUENCE_EXAMPLE,
   },
   {
     id: "password-reset",
@@ -161,13 +114,27 @@ export type SequenceExampleResult =
   | { status: "invalid"; id: string; message: string }
   | { status: "not-found"; id: string };
 
-const cache = new Map<string, SequenceExampleResult>();
+/**
+ * What parsing a REGISTERED source can produce.
+ *
+ * `not-found` is excluded in the type rather than handled at each call site:
+ * the source is in hand by the time this runs, so only the parse can fail.
+ * Stated here, the compiler makes the impossible branch unwritable — this used
+ * to be typed as the full `SequenceExampleResult`, and the one caller duly
+ * invented a user-facing `"Not found."` for a case it could never reach.
+ */
+type ParsedSequenceExample = Exclude<
+  SequenceExampleResult,
+  { status: "not-found" }
+>;
 
-function parseSource(source: SequenceExampleSource): SequenceExampleResult {
+const cache = new Map<string, ParsedSequenceExample>();
+
+function parseSource(source: SequenceExampleSource): ParsedSequenceExample {
   const cached = cache.get(source.id);
   if (cached !== undefined) return cached;
 
-  let result: SequenceExampleResult;
+  let result: ParsedSequenceExample;
   try {
     result = {
       status: "ok",
@@ -221,11 +188,7 @@ export function listSequenceExamples(): SequenceExampleListing[] {
   return SOURCES.map((source) => {
     const result = parseSource(source);
     if (result.status !== "ok") {
-      return {
-        status: "invalid",
-        id: source.id,
-        message: result.status === "invalid" ? result.message : "Not found.",
-      };
+      return { status: "invalid", id: source.id, message: result.message };
     }
     return {
       status: "ok",

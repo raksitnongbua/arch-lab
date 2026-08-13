@@ -25,6 +25,8 @@ import type {
   IconSource,
 } from "@/types";
 
+import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+
 import { LineCursor } from "./cursor";
 import { compareStrings, defaultEdgeId, DEFAULT_TIMESTAMP } from "./defaults";
 import { defaultPositions, defaultSizeFor } from "./defaults";
@@ -39,9 +41,6 @@ import {
   NODE_KEYS,
   NODE_RAW,
 } from "./schema";
-
-/** Mirrors `SUPPORTED_MAJOR_VERSION` in src/features/editor/io/validate.ts. */
-const SUPPORTED_MAJOR_VERSION = 1;
 
 /* -------------------------------------------------------------------------- */
 /* Pending structures collected during the line pass                          */
@@ -386,9 +385,7 @@ export function parseArchText(source: string): ArchLabFile {
         failAt(
           versionLoc.line,
           versionLoc.column,
-          `"${version}" was written by a newer arch-lab than this one, which supports up to ` +
-            `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-lab to open this file — opening it here ` +
-            "would silently drop data it cannot understand.",
+          newerVersionMessage(version),
           version,
         );
       }
@@ -512,12 +509,7 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
     case "created":
     case "updated":
     case "reviewed": {
-      const key =
-        keyword === "created"
-          ? "created"
-          : keyword === "updated"
-            ? "updated"
-            : "reviewed";
+      const key = keyword;
       onceString(cursor, header[key], keyword);
       header[key] =
         cursor.peek() === '"'

@@ -18,6 +18,8 @@
  * exported loop marches exactly like the page.
  */
 
+import { GIF_SMOOTHNESS, rasterise, type GifSmoothness } from "@/lib/gif";
+
 import { encodeGif, type GifFrame } from "./gif";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -60,17 +62,22 @@ const REST_BANDS = [
 /** The async dash's fallback period, when a path declares none. */
 const DASH_PERIOD = 10;
 
+/**
+ * A MULTIPLIER on the diagram's own size — unlike the sequence exporter's
+ * `GIF_SHARPNESS`, which is a target width in pixels. Same three names, and the
+ * reason each is declared where it is used rather than shared.
+ */
 export const C4_SHARPNESS = { compact: 1, standard: 1.5, sharp: 2 } as const;
 
-/** Frames per loop, and the delay that keeps every preset ~1.4s long. */
-export const C4_SMOOTHNESS = {
-  simple: { frames: 12, delayMs: 120 },
-  standard: { frames: 20, delayMs: 70 },
-  smooth: { frames: 30, delayMs: 50 },
-} as const;
+/**
+ * Frames per loop, and the delay that keeps every preset ~1.4s long — shared
+ * with the sequence exporter (`@/lib/gif`), and aliased under the C4 name the
+ * export button already reads.
+ */
+export const C4_SMOOTHNESS = GIF_SMOOTHNESS;
 
 export type C4Sharpness = keyof typeof C4_SHARPNESS;
-export type C4Smoothness = keyof typeof C4_SMOOTHNESS;
+export type C4Smoothness = GifSmoothness;
 
 export interface C4GifQuality {
   sharpness: C4Sharpness;
@@ -84,37 +91,6 @@ export const DEFAULT_C4_GIF_QUALITY: C4GifQuality = {
 
 /** A guard on total work, so a huge model cannot ask for a gigapixel encode. */
 const MAX_FRAME_PIXELS = 1_600_000;
-
-async function rasterise(
-  svg: string,
-  width: number,
-  height: number,
-): Promise<Uint8ClampedArray> {
-  const url = URL.createObjectURL(
-    new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
-  );
-  try {
-    const image = new Image();
-    image.decoding = "sync";
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () =>
-        reject(new Error("A frame's SVG could not be decoded as an image."));
-      image.src = url;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (context === null) {
-      throw new Error("Could not create a 2D canvas context for the GIF.");
-    }
-    context.drawImage(image, 0, 0, width, height);
-    return context.getImageData(0, 0, width, height).data;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
 /**
  * Encodes one loop of the diagram's drifting connectors.

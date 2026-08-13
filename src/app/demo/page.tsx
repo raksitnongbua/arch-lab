@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { listSequenceExamples } from "@/features/sequence/service/example-service";
 import { listViewerModels } from "@/features/viewer";
-import { C4_LEVEL_META, EDITOR_ENABLED } from "@/lib/constants";
+import { EDITOR_ENABLED, LEVEL_META_BY_LEVEL } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Live demo — example C4 models and sequence diagrams",
@@ -132,16 +132,12 @@ export default function DemoPage(): React.JSX.Element {
                     </dl>
                     <ul className="flex flex-wrap gap-1.5">
                       {summary.levels.map((level) => {
-                        const meta = C4_LEVEL_META.find(
-                          (candidate) => candidate.level === level,
-                        );
+                        const meta = LEVEL_META_BY_LEVEL[level];
                         return (
                           <li key={level}>
                             <Badge variant="outline">
-                              <span className="font-mono">
-                                L{meta?.order ?? "?"}
-                              </span>
-                              {meta?.label ?? level}
+                              <span className="font-mono">L{meta.order}</span>
+                              {meta.label}
                             </Badge>
                           </li>
                         );

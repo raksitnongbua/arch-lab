@@ -63,6 +63,7 @@ import { ArrowDownToLine, Expand, Info, Shrink } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { CaretQuote } from "@/components/ui/caret-quote";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -70,7 +71,15 @@ import {
   ShareLinkFailurePage,
   type ShareOpenFailure,
 } from "@/components/share/share-link-failure";
-import { decodeShareFragment } from "@/features/viewer/share/codec";
+import {
+  SHARE_PENDING_CLASS,
+  ShareOpening,
+} from "@/components/share/share-opening";
+import {
+  decodeShareFragment,
+  dropUrlFragment,
+  SHARE_FORWARD_ATTRIBUTE,
+} from "@/features/viewer/share/codec";
 
 import { MERMAID_SEQUENCE_EXAMPLE, SEQUENCE_EXAMPLE } from "../input/example";
 import { SequenceExportButton } from "../export/export-button";
@@ -227,6 +236,20 @@ export function SequencePlayground(): React.JSX.Element {
       const decoded = await decodeShareFragment(window.location.hash);
       if (cancelled) return;
 
+      /* HAND BACK THE PRE-PAINT FLAG. `data-share-forward` is stamped on <html>
+         by the root layout's script when the URL carries a payload, and
+         `globals.css` uses it to show the holding state instead of the seeded
+         example — the reason a share link no longer flashes the Checkout flow
+         at whoever opened it. The script runs once per document load and cannot
+         clear itself, so the page that resolved the payload has to; every
+         outcome below is a resolution, "no payload after all" included. Left
+         standing it would outlive the URL that set it and blank this route for
+         the rest of the session (the bug documented on the chooser).
+
+         Before the state writes, and in the same tick as them, so the next
+         paint carries both the real document and the un-hidden page. */
+      document.documentElement.removeAttribute(SHARE_FORWARD_ATTRIBUTE);
+
       // Clear any previous outcome first: `hashchange` fires for a second
       // link opened in the same tab, and a takeover left standing would hide
       // a GOOD link's flow behind a stale error page.
@@ -340,11 +363,9 @@ export function SequencePlayground(): React.JSX.Element {
   // A link that did not open takes over the page, returned BEFORE the
   // playground so the seed example is never on screen next to the message —
   // the whole point is that there is nothing here to mistake for what was
-  // shared. Start-fresh drops the dead fragment without a reload, so the
-  // playground appears on the clean URL and the broken link is not left in
-  // the address bar.
+  // shared.
   const startFresh = () => {
-    window.history.replaceState(null, "", window.location.pathname);
+    dropUrlFragment();
     setShareFailure(null);
   };
 
@@ -360,56 +381,68 @@ export function SequencePlayground(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8">
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-          Explore a sequence diagram
-        </h1>
-        <Badge variant="accent">
-          <span className="size-1.5 rounded-full bg-accent" />
-          click to focus
-        </Badge>
-        <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-          Write <span className="font-mono text-foreground">.alab</span>{" "}
-          sequence text or paste a Mermaid{" "}
-          <span className="font-mono text-foreground">sequenceDiagram</span> —
-          auto-detected, rendered live and complete; click any message or
-          participant to spotlight it. Nothing leaves your browser. Building a
-          C4 model instead?{" "}
-          <Link
-            href="/view/c4"
-            className="font-medium text-primary hover:underline"
-          >
-            C4 playground
-          </Link>
-        </p>
-      </header>
+    <>
+      {/* Swapped in for the block below, pre-paint, while a share link is being
+          opened — so the seeded example is never mistaken for the shared flow.
+          Costs a normal visit nothing: it is `display: none` unless the flag is
+          set. */}
+      <ShareOpening subject="sequence diagram" />
 
-      {/* THE one polite live region on this page: parse state, immersive
+      <div
+        className={cn(
+          SHARE_PENDING_CLASS,
+          "mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8",
+        )}
+      >
+        <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            Explore a sequence diagram
+          </h1>
+          <Badge variant="accent">
+            <span className="size-1.5 rounded-full bg-accent" />
+            click to focus
+          </Badge>
+          <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
+            Write <span className="font-mono text-foreground">.alab</span>{" "}
+            sequence text or paste a Mermaid{" "}
+            <span className="font-mono text-foreground">sequenceDiagram</span> —
+            auto-detected, rendered live and complete; click any message or
+            participant to spotlight it. Nothing leaves your browser. Building a
+            C4 model instead?{" "}
+            <Link
+              href="/view/c4"
+              className="font-medium text-primary hover:underline"
+            >
+              C4 playground
+            </Link>
+          </p>
+        </header>
+
+        {/* THE one polite live region on this page: parse state, immersive
           toggles AND the viewer's focus announcements (plumbed up through
           its onAnnounce prop). One region, deliberately — two polite regions
           updated near each other race, and the loser's announcement is
           swallowed; this page owns it because it renders unconditionally
           while the viewer can be replaced by the seed-failure fallback. */}
-      <p aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
+        <p aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
 
-      {/* The Mermaid import is honest about loss the moment it happens. */}
-      {parsed?.format === "mermaid" && error === null ? (
-        <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
-          <Info
-            aria-hidden="true"
-            className="mt-0.5 size-4 shrink-0 text-accent"
-          />
-          <p className="text-sm leading-relaxed text-foreground">
-            <span className="font-semibold">Imported from Mermaid.</span>{" "}
-            {MERMAID_SEQUENCE_CAVEAT}
-          </p>
-        </div>
-      ) : null}
+        {/* The Mermaid import is honest about loss the moment it happens. */}
+        {parsed?.format === "mermaid" && error === null ? (
+          <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
+            <Info
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-accent"
+            />
+            <p className="text-sm leading-relaxed text-foreground">
+              <span className="font-semibold">Imported from Mermaid.</span>{" "}
+              {MERMAID_SEQUENCE_CAVEAT}
+            </p>
+          </div>
+        ) : null}
 
-      {/* ---- the diagram pane — it OWNS the screen ----
+        {/* ---- the diagram pane — it OWNS the screen ----
           Height is the viewport minus the chrome above (site header + page
           header + this page's padding ≈ 12rem), so the diagram section fills
           the first screenful and the whole flow FITS inside it (the viewer
@@ -417,67 +450,67 @@ export function SequencePlayground(): React.JSX.Element {
           which is why this is a clamp and not flex-grown). The source pane
           sits below the fold in normal page flow: scrolling the PAGE is how
           you reach the text. */}
-      <section
-        ref={diagramPaneRef}
-        aria-label="Rendered sequence diagram"
-        className={cn(
-          "flex min-w-0 flex-col overflow-hidden bg-background",
-          isImmersive
-            ? // Immersive: cover the viewport. Site chrome and the source
-              // pane are BEHIND the fixed section, untouched — the same
-              // "cover, never edit" rule as viewer-shell.tsx.
-              "fixed inset-0 z-50"
-            : // 10.5rem = the chrome above this section (site header + page
-              // header + paddings, ~168px measured at desktop widths): the
-              // section's bottom edge lands just inside the first viewport,
-              // and the source section's first row starts just below it —
-              // "scroll down to see the text", literally.
-              "h-[calc(100svh-10.5rem)] min-h-[24rem] rounded-xl border border-border shadow-sm",
-        )}
-      >
-        {/* The toolbar strip stays visible in immersive mode too — the exit
+        <section
+          ref={diagramPaneRef}
+          aria-label="Rendered sequence diagram"
+          className={cn(
+            "flex min-w-0 flex-col overflow-hidden bg-background",
+            isImmersive
+              ? // Immersive: cover the viewport. Site chrome and the source
+                // pane are BEHIND the fixed section, untouched — the same
+                // "cover, never edit" rule as viewer-shell.tsx.
+                "fixed inset-0 z-50"
+              : // 10.5rem = the chrome above this section (site header + page
+                // header + paddings, ~168px measured at desktop widths): the
+                // section's bottom edge lands just inside the first viewport,
+                // and the source section's first row starts just below it —
+                // "scroll down to see the text", literally.
+                "h-[calc(100svh-10.5rem)] min-h-[24rem] rounded-xl border border-border shadow-sm",
+          )}
+        >
+          {/* The toolbar strip stays visible in immersive mode too — the exit
             must always be one click away, not only one keystroke. */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
-          <span className="truncate text-xs text-muted-foreground">
-            {isImmersive
-              ? "Immersive — Escape exits (a focused message clears first)"
-              : "Diagram"}
-          </span>
-          <button
-            type="button"
-            onClick={() => setImmersive(!isImmersive)}
-            aria-pressed={isImmersive}
-            aria-label={
-              isImmersive
-                ? "Exit immersive mode (Escape at the top level)"
-                : "Enter immersive mode — hide the site chrome and the source pane"
-            }
-            title={isImmersive ? "Exit immersive mode" : "Immersive mode"}
-            className={buttonClasses({ variant: "ghost", size: "sm" })}
-          >
-            {isImmersive ? (
-              <Shrink aria-hidden="true" />
-            ) : (
-              <Expand aria-hidden="true" />
-            )}
-            <span className="hidden sm:inline">
-              {isImmersive ? "Exit immersive" : "Immersive"}
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
+            <span className="truncate text-xs text-muted-foreground">
+              {isImmersive
+                ? "Immersive — Escape exits (a focused message clears first)"
+                : "Diagram"}
             </span>
-          </button>
-        </div>
-        {parsed !== null ? (
-          <SequenceViewer file={parsed.file} onAnnounce={setAnnouncement} />
-        ) : (
-          // Only reachable when the SEED itself failed to parse — a build
-          // break, not a user state (the seed is parser-verified at module
-          // load). Still: never a silently blank canvas.
-          <p className="p-6 text-sm text-muted-foreground">
-            Nothing to render yet — fix the error shown under the text pane.
-          </p>
-        )}
-      </section>
+            <button
+              type="button"
+              onClick={() => setImmersive(!isImmersive)}
+              aria-pressed={isImmersive}
+              aria-label={
+                isImmersive
+                  ? "Exit immersive mode (Escape at the top level)"
+                  : "Enter immersive mode — hide the site chrome and the source pane"
+              }
+              title={isImmersive ? "Exit immersive mode" : "Immersive mode"}
+              className={buttonClasses({ variant: "ghost", size: "sm" })}
+            >
+              {isImmersive ? (
+                <Shrink aria-hidden="true" />
+              ) : (
+                <Expand aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">
+                {isImmersive ? "Exit immersive" : "Immersive"}
+              </span>
+            </button>
+          </div>
+          {parsed !== null ? (
+            <SequenceViewer file={parsed.file} onAnnounce={setAnnouncement} />
+          ) : (
+            // Only reachable when the SEED itself failed to parse — a build
+            // break, not a user state (the seed is parser-verified at module
+            // load). Still: never a silently blank canvas.
+            <p className="p-6 text-sm text-muted-foreground">
+              Nothing to render yet — fix the error shown under the text pane.
+            </p>
+          )}
+        </section>
 
-      {/* ---- the source pane — BELOW THE FOLD, reached by page scroll ----
+        {/* ---- the source pane — BELOW THE FOLD, reached by page scroll ----
           The collapse toggle this section used to carry is GONE, on purpose:
           it existed to hand the source's rows to the diagram, but the
           diagram's height no longer depends on this section at all — it
@@ -487,78 +520,79 @@ export function SequencePlayground(): React.JSX.Element {
           immersive (never unmounted): the textarea keeps its DOM — and with
           it the browser's undo stack — and leaves the tab order while the
           fixed section covers the page. */}
-      <section
-        aria-label="Sequence source editor"
-        className={cn("flex min-w-0 flex-col gap-2", isImmersive && "hidden")}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <label
-            htmlFor={textareaId}
-            className="text-sm font-medium text-foreground"
-          >
-            Sequence text{" "}
-            <span className="font-mono text-xs text-muted-foreground">
-              (.alab or Mermaid)
-            </span>
-          </label>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <SequenceShareButton
-              text={text}
-              title={parsed?.file.metadata.title ?? "sequence-diagram"}
-              format={parsed?.format ?? null}
-              onAnnounce={setAnnouncement}
-            />
-            <SequenceExportButton
-              paneRef={diagramPaneRef}
-              title={parsed?.file.metadata.title ?? "sequence-diagram"}
-              onAnnounce={setAnnouncement}
-            />
-            <button
-              type="button"
-              onClick={() => loadExample(SEQUENCE_EXAMPLE)}
-              className={buttonClasses({ variant: "ghost", size: "sm" })}
+        <section
+          aria-label="Sequence source editor"
+          className={cn("flex min-w-0 flex-col gap-2", isImmersive && "hidden")}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label
+              htmlFor={textareaId}
+              className="text-sm font-medium text-foreground"
             >
-              <ArrowDownToLine aria-hidden="true" />
-              .alab example
-            </button>
-            <button
-              type="button"
-              onClick={() => loadExample(MERMAID_SEQUENCE_EXAMPLE)}
-              className={buttonClasses({ variant: "ghost", size: "sm" })}
-            >
-              <ArrowDownToLine aria-hidden="true" />
-              Mermaid example
-            </button>
+              Sequence text{" "}
+              <span className="font-mono text-xs text-muted-foreground">
+                (.alab or Mermaid)
+              </span>
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <SequenceShareButton
+                text={text}
+                title={parsed?.file.metadata.title ?? "sequence-diagram"}
+                format={parsed?.format ?? null}
+                onAnnounce={setAnnouncement}
+              />
+              <SequenceExportButton
+                paneRef={diagramPaneRef}
+                title={parsed?.file.metadata.title ?? "sequence-diagram"}
+                onAnnounce={setAnnouncement}
+              />
+              <button
+                type="button"
+                onClick={() => loadExample(SEQUENCE_EXAMPLE)}
+                className={buttonClasses({ variant: "ghost", size: "sm" })}
+              >
+                <ArrowDownToLine aria-hidden="true" />
+                .alab example
+              </button>
+              <button
+                type="button"
+                onClick={() => loadExample(MERMAID_SEQUENCE_EXAMPLE)}
+                className={buttonClasses({ variant: "ghost", size: "sm" })}
+              >
+                <ArrowDownToLine aria-hidden="true" />
+                Mermaid example
+              </button>
+            </div>
           </div>
-        </div>
 
-        <textarea
-          id={textareaId}
-          value={text}
-          onChange={(event) => handleChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-          aria-describedby={hintId}
-          aria-invalid={error !== null}
-          spellCheck={false}
-          rows={12}
-          className={cn(
-            "min-h-[14rem] w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-            error !== null ? "border-destructive/60" : "border-border",
-          )}
-        />
-        <p id={hintId} className="text-xs text-muted-foreground">
-          Tab inserts two spaces — press Escape, then Tab, to move focus out.
-          The diagram re-renders as you type; while the text fails to parse it
-          keeps showing the last good version. Keep message labels short and
-          indent a <code className="font-mono">desc &quot;…&quot;</code> under
-          one to hold the endpoint or payload — it shows as a code block when
-          the message is clicked, never on the arrow. Use{" "}
-          <code className="font-mono">\n</code> inside it for several lines.
-        </p>
+          <textarea
+            id={textareaId}
+            value={text}
+            onChange={(event) => handleChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+            aria-describedby={hintId}
+            aria-invalid={error !== null}
+            spellCheck={false}
+            rows={12}
+            className={cn(
+              "min-h-[14rem] w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              error !== null ? "border-destructive/60" : "border-border",
+            )}
+          />
+          <p id={hintId} className="text-xs text-muted-foreground">
+            Tab inserts two spaces — press Escape, then Tab, to move focus out.
+            The diagram re-renders as you type; while the text fails to parse it
+            keeps showing the last good version. Keep message labels short and
+            indent a <code className="font-mono">desc &quot;…&quot;</code> under
+            one to hold the endpoint or payload — it shows as a code block when
+            the message is clicked, never on the arrow. Use{" "}
+            <code className="font-mono">\n</code> inside it for several lines.
+          </p>
 
-        {error !== null ? <SequenceErrorBox error={error} /> : null}
-      </section>
-    </div>
+          {error !== null ? <SequenceErrorBox error={error} /> : null}
+        </section>
+      </div>
+    </>
   );
 }
 
@@ -595,17 +629,12 @@ function SequenceErrorBox({
         The text doesn&apos;t parse —{" "}
         <span className="font-mono">{error.message}</span>
       </p>
-      {/* The offending line, quoted verbatim, caret at the column — the same
-          presentation the C4 playground's CaretQuote gives (that component is
-          private to viewer-playground.tsx; the format is the shared thing). */}
-      {error.kind === "parse" && error.lineText !== null ? (
-        <pre className="mt-2 overflow-x-auto rounded-md bg-card px-3 py-2 font-mono text-xs leading-relaxed text-foreground">
-          {`${String(error.line).padStart(4)} | ${error.lineText}\n`}
-          <span aria-hidden="true">
-            {`${" ".repeat(4)} | ${" ".repeat(Math.max(0, error.column - 1))}`}
-            <span className="font-bold text-destructive">^</span>
-          </span>
-        </pre>
+      {error.kind === "parse" ? (
+        <CaretQuote
+          line={error.line}
+          column={error.column}
+          lineText={error.lineText}
+        />
       ) : null}
       <p className="mt-2.5 text-xs text-muted-foreground">
         Your work is safe — the diagram still shows the last good version and

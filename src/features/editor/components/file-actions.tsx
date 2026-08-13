@@ -30,6 +30,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 
 import { ArchTextParseError } from "@/features/archtext";
+import { describeError } from "@/lib/errors";
 
 import {
   deriveFileName,
@@ -77,11 +78,6 @@ interface SaveFailure {
   /** The exact bytes that failed to write — offered as "Download a copy". */
   text: string;
   fileName: string;
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof Error && error.message !== "") return error.message;
-  return String(error);
 }
 
 /* -------------------------------------------------------------------------- */

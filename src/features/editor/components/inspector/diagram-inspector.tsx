@@ -10,6 +10,7 @@
 
 import { useSyncExternalStore } from "react";
 
+import { LEVEL_LABEL } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { C4Diagram } from "@/types";
@@ -18,13 +19,6 @@ import { useEditorStore } from "../../state";
 import { Field, InspectorSection } from "./field";
 import { FrameList } from "./frame-list";
 import { useInspectorField } from "./use-inspector-field";
-
-const LEVEL_LABELS: Record<C4Diagram["level"], string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
 
 const emptySubscribe = () => () => {};
 
@@ -83,7 +77,7 @@ export function DiagramInspector({
   });
 
   return (
-    <InspectorSection title={`${LEVEL_LABELS[diagram.level]} diagram`}>
+    <InspectorSection title={`${LEVEL_LABEL[diagram.level]} diagram`}>
       <Field id="inspector-diagram-title" label="Title">
         <Input
           id="inspector-diagram-title"

@@ -31,6 +31,7 @@ import {
   MermaidParseError,
   parseMermaidSequence,
 } from "@/features/mermaid";
+import { sourceLineAt } from "@/lib/source-text";
 
 export { MERMAID_SEQUENCE_CAVEAT };
 
@@ -75,10 +76,6 @@ export type SequenceInputError =
 export type SequenceParseResult =
   | { status: "ok"; value: ParsedSequence }
   | { status: "error"; error: SequenceInputError };
-
-function sourceLineAt(text: string, line: number): string | null {
-  return text.split(/\r?\n/)[line - 1] ?? null;
-}
 
 function detect(text: string): SequenceSourceFormat | "c4" | null {
   const alab = detectAlabKind(text);

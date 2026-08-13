@@ -11,11 +11,16 @@
  * parameter properties) and keep type-only imports as `import type`.
  */
 
+import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
 import { C4_LEVELS, childLevelOf, VALID_NODE_TYPES_BY_LEVEL } from "@/types";
 import type { ArchLabFile, C4Level, C4NodeType } from "@/types";
 
-/** The newest schema MAJOR this build can read and write ("1.x"). */
-export const SUPPORTED_MAJOR_VERSION = 1;
+/**
+ * Re-exported so `io`'s barrel keeps its existing surface; the declaration now
+ * lives in `@/lib/constants` alongside the refusal text, shared with the two
+ * text parsers.
+ */
+export { SUPPORTED_MAJOR_VERSION };
 
 export interface ValidationIssue {
   /** JSON path of the offending value, e.g. `diagrams[1].nodes[3].type`. */
@@ -115,13 +120,7 @@ export function validateArchLabFile(input: unknown): ArchLabFile {
   const major = Number.parseInt(version, 10);
   if (major > SUPPORTED_MAJOR_VERSION) {
     throw new FileValidationError([
-      {
-        path: "version",
-        message:
-          `"${version}" was written by a newer arch-lab than this one, which supports up to ` +
-          `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-lab to open this file — opening it here ` +
-          "would silently drop data it cannot understand.",
-      },
+      { path: "version", message: newerVersionMessage(version) },
     ]);
   }
 

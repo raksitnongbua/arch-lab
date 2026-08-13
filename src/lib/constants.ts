@@ -99,3 +99,54 @@ export const C4_LEVEL_META: readonly C4LevelMeta[] = [
     examples: ["Code Element"],
   },
 ];
+
+/**
+ * `C4_LEVEL_META` indexed by level.
+ *
+ * Total by construction — every `C4Level` has exactly one entry — so callers
+ * get the meta without a `?? fallback` for a case that cannot happen. Reach for
+ * this rather than `C4_LEVEL_META.find((m) => m.level === level)`, which is
+ * both O(n) and needlessly nullable. The array stays the export to iterate when
+ * display ORDER matters; this is the export to look one up by level.
+ */
+export const LEVEL_META_BY_LEVEL: Record<C4Level, C4LevelMeta> =
+  Object.fromEntries(C4_LEVEL_META.map((meta) => [meta.level, meta])) as Record<
+    C4Level,
+    C4LevelMeta
+  >;
+
+/**
+ * Level → display label. Derived, so the word a breadcrumb shows and the word
+ * the landing page shows cannot drift apart.
+ */
+export const LEVEL_LABEL: Record<C4Level, string> = Object.fromEntries(
+  C4_LEVEL_META.map((meta) => [meta.level, meta.label]),
+) as Record<C4Level, string>;
+
+/* -------------------------------------------------------------------------- */
+/* File format                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Major version of the `.alab` / arch-lab JSON format this build understands.
+ *
+ * One declaration for the whole app: the JSON validator, the C4 text parser,
+ * and the sequence text parser all gate on it, and a release that bumps the
+ * format must not have to remember three places.
+ */
+export const SUPPORTED_MAJOR_VERSION = 1;
+
+/**
+ * Refusal text for a file whose major version is newer than we support.
+ *
+ * Shared so the two text parsers and the JSON validator refuse in the same
+ * words. Opening such a file would silently drop what we cannot represent,
+ * which is why this is an error rather than a warning.
+ */
+export function newerVersionMessage(version: string): string {
+  return (
+    `"${version}" was written by a newer arch-lab than this one, which supports up to ` +
+    `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-lab to open this file — opening it here ` +
+    "would silently drop data it cannot understand."
+  );
+}

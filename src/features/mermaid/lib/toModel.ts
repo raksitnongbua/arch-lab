@@ -31,6 +31,7 @@
 
 import type { ArchLabFile, C4Diagram, C4Edge, C4Node } from "@/types";
 
+import { MERMAID_IMPORT_TIMESTAMP } from "./defaults";
 import { failAt } from "./errors";
 import { layoutNodes, LONE_NODE_POSITION, sizeForNodeType } from "./layout";
 import type { LayoutEdge } from "./layout";
@@ -95,7 +96,6 @@ export interface ParseMermaidOptions {
   timestamp?: string;
 }
 
-const DEFAULT_TIMESTAMP = "2026-01-01T00:00:00.000Z";
 const DEFAULT_TITLE = "Untitled C4 diagram";
 
 /* -------------------------------------------------------------------------- */
@@ -122,7 +122,7 @@ export function mermaidDocumentToArchLab(
   options?: ParseMermaidOptions,
 ): ArchLabFile {
   const level = LEVEL_BY_DIAGRAM_TYPE[doc.diagramType];
-  const timestamp = options?.timestamp ?? DEFAULT_TIMESTAMP;
+  const timestamp = options?.timestamp ?? MERMAID_IMPORT_TIMESTAMP;
 
   /* ------------------------- collect the statements ---------------------- */
 

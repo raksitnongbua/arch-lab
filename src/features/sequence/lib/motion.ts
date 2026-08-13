@@ -14,6 +14,20 @@ export { prefersReducedMotion };
 
 export const SEQUENCE_DURATIONS = {
   /**
+   * The diagram ARRIVING, once, when the viewer first mounts.
+   *
+   * Shorter than a focus draw (420ms) on purpose, and the difference is the
+   * point: a focus draw is the ANSWER to a click and has to be watchable, while
+   * this is only the drawing landing — nobody asked for it, so it must be over
+   * before it becomes something to wait through. Long enough to read as arrival
+   * rather than a flicker, short enough that a reader who opened a link to go
+   * straight to message 7 is not held up.
+   *
+   * It is not a reveal. Every message is present in the first frame; what moves
+   * is the whole drawing as one object. See `styles/sequence-motion.css`.
+   */
+  enter: 260,
+  /**
    * One arrow drawing source → target when it is focused. Longer than the
    * editor's 200ms edgeDraw on purpose: there the draw is feedback for an
    * action the user just performed; here it IS the answer to the click —
@@ -107,6 +121,15 @@ export function sequenceMotionVars(reduced: boolean): Record<string, string> {
   const marchMs = (period: number) =>
     `${Math.round((period / SEQUENCE_DURATIONS.idleMarchSpeed) * 1000)}ms`;
   return {
+    /*
+     * Written for consistency, but unlike every other property here it is not
+     * what actually runs: the opening settle plays at FIRST PAINT, before this
+     * object reaches the DOM, so the stylesheet's fallback is the live value
+     * and reduced motion is honoured there by media query. `check:sequence-
+     * motion` pins the fallback to this number so there is still one source of
+     * truth for the duration.
+     */
+    "--seq-enter": ms(SEQUENCE_DURATIONS.enter),
     "--seq-draw": ms(SEQUENCE_DURATIONS.messageDraw),
     "--seq-head": ms(SEQUENCE_DURATIONS.headFade),
     "--seq-head-delay": ms(SEQUENCE_DURATIONS.headDelay),

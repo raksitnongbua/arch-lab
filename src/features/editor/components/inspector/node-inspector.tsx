@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { C4_LEVEL_META } from "@/lib/constants";
+import { LEVEL_LABEL } from "@/lib/constants";
 import {
   childLevelOf,
   hasChildDiagram,
@@ -294,9 +294,7 @@ function DrillAction({
   if (childLevel === null || !canDrillInto(node, true)) return null;
 
   const existing = hasChildDiagram(node);
-  const childLabel = C4_LEVEL_META.find(
-    (meta) => meta.level === childLevel,
-  )?.label.toLowerCase();
+  const childLabel = LEVEL_LABEL[childLevel].toLowerCase();
 
   return (
     <div className="mt-1 border-t border-border/60 pt-3">

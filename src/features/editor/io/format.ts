@@ -21,6 +21,7 @@
  * whatever the app would have written itself.
  */
 
+import { slugify } from "@/lib/slug";
 import type { ArchLabFile } from "@/types";
 
 import {
@@ -141,12 +142,7 @@ export function deserializeModelFrom(
 
 /** `"ShopFlow Platform"` → `"shopflow-platform"`. */
 export function slugForTitle(title: string): string {
-  const slug = title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug === "" ? "untitled-model" : slug;
+  return slugify(title, "untitled-model");
 }
 
 /** `"ShopFlow Platform"` → `"shopflow-platform.alab"` (AF-E5-S1). */

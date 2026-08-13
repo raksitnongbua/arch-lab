@@ -36,8 +36,10 @@ import {
 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { LEVEL_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { C4Diagram } from "@/types";
+import { describeError } from "@/lib/errors";
 
 import {
   archiveEntryName,
@@ -59,13 +61,6 @@ import {
 import { renderDiagramSvg } from "./render-svg";
 import { resolveExportTheme, resolveTagPaint } from "./theme";
 import { createZip, type ZipEntry } from "./zip";
-
-const LEVEL_LABEL: Record<C4Diagram["level"], string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
 
 /** Which diagrams an export covers. */
 type ExportScope = "current" | "all";
@@ -256,7 +251,7 @@ export function ViewerExportButton({
           `Exported ${filename} — ${entries.length} diagram${entries.length === 1 ? "" : "s"}.`,
         );
       } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
+        const detail = describeError(error);
         setAnnouncement(`Export failed: ${detail}`);
       } finally {
         setBusy(false);

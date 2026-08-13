@@ -10,11 +10,12 @@
  * Long lines scroll INSIDE the block (`overflow-x-auto`), never the page.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, Check, Copy } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 import { buttonClasses } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   canEncodeShare,
   encodeShareFragment,
@@ -49,7 +50,7 @@ export function CodeBlock({
           </figcaption>
           <div className="flex flex-wrap items-center gap-1.5">
             {tryIt ? <TryItLink code={code} label={label} /> : null}
-            <CopyButton code={code} label={label} />
+            <CopyButton text={code} label={`Copy the ${label} example`} />
           </div>
         </div>
         <pre
@@ -66,47 +67,6 @@ export function CodeBlock({
 /* -------------------------------------------------------------------------- */
 /* Copy                                                                        */
 /* -------------------------------------------------------------------------- */
-
-function CopyButton({
-  code,
-  label,
-}: {
-  code: string;
-  label: string;
-}): React.JSX.Element {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    void navigator.clipboard
-      .writeText(code)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2_000);
-      })
-      .catch(() => {
-        /* Clipboard blocked — the text stays selectable in the block. */
-      });
-  }, [code]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      aria-label={copied ? "Copied to clipboard" : `Copy the ${label} example`}
-      className={buttonClasses({ variant: "ghost", size: "sm" })}
-    >
-      {copied ? (
-        <Check aria-hidden="true" className="text-primary" />
-      ) : (
-        <Copy aria-hidden="true" />
-      )}
-      {copied ? "Copied" : "Copy"}
-      <span aria-live="polite" className="sr-only">
-        {copied ? "Copied to clipboard." : ""}
-      </span>
-    </button>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /* Try it in view mode                                                         */

@@ -38,6 +38,8 @@ import {
   serializeArchText,
   type ArchTextIssue,
 } from "@/features/archtext";
+import { sourceLineAt } from "@/lib/source-text";
+import { describeError } from "@/lib/errors";
 
 import { deserializeModel } from "../io/deserialize";
 import { serializeModel } from "../io/serialize";
@@ -140,7 +142,7 @@ export function renderModel(model: EditorModel): ModelRenderResult {
   } catch (error) {
     return {
       status: "error",
-      message: error instanceof Error ? error.message : String(error),
+      message: describeError(error),
     };
   }
 }
@@ -157,10 +159,6 @@ export function modelJsonText(model: EditorModel): string | null {
 /* -------------------------------------------------------------------------- */
 /* Text → model                                                                */
 /* -------------------------------------------------------------------------- */
-
-function sourceLineAt(text: string, line: number): string | null {
-  return text.split(/\r?\n/)[line - 1] ?? null;
-}
 
 /**
  * Parses the pane's text. Never throws; every failure comes back as a typed,

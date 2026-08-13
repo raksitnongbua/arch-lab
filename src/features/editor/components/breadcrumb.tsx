@@ -22,8 +22,9 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
+import { LEVEL_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { hasChildDiagram, isBoundaryPlaceholder, type C4Level } from "@/types";
+import { hasChildDiagram, isBoundaryPlaceholder } from "@/types";
 
 import {
   navigateToDiagram,
@@ -42,13 +43,6 @@ import {
   BreadcrumbSiblingsMenu,
   type BreadcrumbMenuItem,
 } from "./breadcrumb-overflow-menu";
-
-const LEVEL_LABELS: Record<C4Level, string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
 
 /** Extra free space required before an expand attempt (hysteresis). */
 const EXPAND_SLACK_PX = 32;
@@ -87,7 +81,7 @@ function SegmentContent({
     <>
       <span className="max-w-44 truncate">{segment.label}</span>
       <span className="shrink-0 rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
-        {LEVEL_LABELS[segment.level]}
+        {LEVEL_LABEL[segment.level]}
       </span>
     </>
   );
@@ -356,7 +350,7 @@ export function Breadcrumb(): React.JSX.Element {
             segmentLabel={segment.label}
             items={siblings.map((item) => ({
               ...item,
-              hint: LEVEL_LABELS[segment.level],
+              hint: LEVEL_LABEL[segment.level],
             }))}
             onNavigate={navigateToDiagram}
           />
@@ -392,7 +386,7 @@ export function Breadcrumb(): React.JSX.Element {
                       items={middle.map((item) => ({
                         id: item.diagramId,
                         label: item.label,
-                        hint: LEVEL_LABELS[item.level],
+                        hint: LEVEL_LABEL[item.level],
                       }))}
                       onNavigate={navigateToDiagram}
                     />

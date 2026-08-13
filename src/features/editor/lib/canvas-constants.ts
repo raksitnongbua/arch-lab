@@ -6,6 +6,21 @@
 /** Node positions quantise to this grid while dragging (AF-E1-S3). */
 export const GRID_SIZE = 8;
 
+/**
+ * Quantise a coordinate to {@link GRID_SIZE}.
+ *
+ * Here rather than at each call site for the reason in this file's header: the
+ * rounding is part of the grid decision, and three components had each written
+ * their own one-line `snap` over the same constant.
+ *
+ * `state/model.ts` deliberately keeps its own copy — the store enforces the
+ * ×8 invariant with no UI present and must not import from `lib/`. Those two
+ * are kept in step by hand; see the geometry-constants note there.
+ */
+export function snapToGrid(value: number): number {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
 /** Distance (flow units) at which alignment guides appear and snap. */
 export const ALIGNMENT_THRESHOLD = 6;
 
