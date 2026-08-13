@@ -19,10 +19,16 @@
  *      concerned.
  *
  *      The flash a share-link user would otherwise see is suppressed BEFORE
- *      first paint by the inline script in `page.tsx`, which stamps
+ *      first paint by the inline script in the root layout, which stamps
  *      `data-share-forward` on <html>; `globals.css` hides the chooser while
  *      that is set. A React guard cannot do this job — the fragment is not
  *      available until the client, by which point the paint has happened.
+ *
+ *   3. …and this component CLEARS that attribute whenever there is no payload.
+ *      The script cannot: it runs once per document load, and a client-side
+ *      navigation never reloads the document, so the flag outlived the URL that
+ *      set it and turned `/view` into a blank page for the rest of the session.
+ *      A pre-paint hide needs a post-hydration owner; that owner is here.
  *
  * Every `/view#m=…` payload is a C4 model BY CONSTRUCTION: sequence sharing
  * did not exist while `/view` was the playground, and sequence links have
@@ -36,7 +42,10 @@ import { ArrowRight, GitBranch, MousePointerClick } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { SHARE_PARAM_MODEL } from "@/features/viewer/share/codec";
+import {
+  SHARE_FORWARD_ATTRIBUTE,
+  SHARE_PARAM_MODEL,
+} from "@/features/viewer/share/codec";
 
 /**
  * Subscribes to the fragment rather than sampling it once.
@@ -75,7 +84,20 @@ export function ViewChooser(): React.JSX.Element {
   const forwarding = hasSharePayload(hash);
 
   useEffect(() => {
-    if (!forwarding) return;
+    if (!forwarding) {
+      /* CLEAR THE PRE-PAINT FLAG. It is stamped by an inline script in the root
+         layout, which runs ONCE per document load and cannot run again — while
+         a client-side navigation never reloads the document. So a visitor who
+         opened ANY url carrying `#m=…` (a share link, on any route) kept the
+         attribute for the rest of the session, and the moment they navigated to
+         `/view` the stylesheet hid the chooser: a blank page with nothing to
+         click, and no forward either, because React can see there is no payload
+         to forward. Only a reload escaped it.
+         The attribute means "this document is forwarding a payload right now",
+         so the component that knows that is false has to say so. */
+      document.documentElement.removeAttribute(SHARE_FORWARD_ATTRIBUTE);
+      return;
+    }
     // The fragment rides along verbatim — `router.replace` preserves it as
     // part of the href, and the playground reads it off `location.hash` on
     // its own mount.

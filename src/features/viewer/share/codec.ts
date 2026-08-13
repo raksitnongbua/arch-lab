@@ -42,6 +42,17 @@ export const SHARE_VERSION_PREFIX = "AF1.";
 /** Fragment parameter carrying the compressed model. */
 export const SHARE_PARAM_MODEL = "m";
 
+/**
+ * The `<html>` attribute a page about to forward a share payload wears, so CSS
+ * can hide the copy it is forwarding away from before the first paint. Stamped
+ * by the root layout's pre-paint script and CLEARED by whoever decides there is
+ * nothing to forward — see `app/view/view-chooser.tsx` for why clearing is not
+ * optional. Named here, beside the parameter that triggers it, so the script,
+ * the clearing effect and the stylesheet cannot drift to two spellings.
+ * (`globals.css` repeats the literal; CSS cannot import.)
+ */
+export const SHARE_FORWARD_ATTRIBUTE = "data-share-forward";
+
 /** Fragment parameter carrying the diagram the sharer was viewing. */
 export const SHARE_PARAM_DIAGRAM = "d";
 
