@@ -16,11 +16,11 @@
  *     `sequenceDiagram` (a lossy import — the caveat shows whenever the
  *     pane's content parsed as Mermaid). A C4 document is redirected to
  *     `/view/c4` by message, not mis-parsed.
- *   - NO Share button, and no second JSON pane: the share codec is
- *     C4-specific (`viewer/share/codec.ts` carries `.alab` C4 text), so
- *     offering — or faking — a Share here would mint links that cannot
- *     open. When the codec learns sequence payloads, the button belongs
- *     here too.
+ *   - The SAME Share control as the C4 viewer (`viewer/share/share-button`,
+ *     wrapped by `../share/share-button.tsx`): one codec, one panel, one
+ *     expiry system — only the route, the noun and the panel's opening
+ *     direction differ. No second JSON pane, though: a sequence document
+ *     has one canonical text form and nothing to sync it against.
  *
  * WHY diagram-over-source rather than the C4 playground's side-by-side: a
  * sequence diagram's participants spread HORIZONTALLY, so width is the axis
@@ -415,7 +415,12 @@ export function SequencePlayground(): React.JSX.Element {
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
-            <SequenceShareButton text={text} onAnnounce={setAnnouncement} />
+            <SequenceShareButton
+              text={text}
+              title={parsed?.file.metadata.title ?? "sequence-diagram"}
+              format={parsed?.format ?? null}
+              onAnnounce={setAnnouncement}
+            />
             <SequenceExportButton
               paneRef={diagramPaneRef}
               title={parsed?.file.metadata.title ?? "sequence-diagram"}

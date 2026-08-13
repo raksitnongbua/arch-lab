@@ -117,6 +117,22 @@ const SEQUENCE_SOURCE_ARG: McpArgDoc = {
     "meaningful line.",
 };
 
+/**
+ * `create_share_link` reads BOTH document kinds — the codec packs arbitrary
+ * text, and the route (`/view/c4` vs `/view/sequence`) is what makes a link a
+ * C4 or a sequence one — so its source argument must advertise both input
+ * languages where SOURCE_ARG and SEQUENCE_SOURCE_ARG each name only their own.
+ */
+const SHARE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The document text (max 256,000 characters). C4 models: .alab, arch-lab " +
+    "JSON, or Mermaid C4. Sequence diagrams: `.alab` sequence (first line " +
+    "`archlab 1.0 sequence`) or Mermaid `sequenceDiagram`. The kind is " +
+    "detected from the first meaningful line.",
+};
+
 const FORMAT_ARG: McpArgDoc = {
   name: "format",
   required: false,
@@ -180,11 +196,14 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     name: "convert_model",
     title: "Convert between formats",
     description:
-      "Convert a model to .alab, arch-lab JSON, or Mermaid C4. .alab and " +
+      "Convert a C4 model to .alab, arch-lab JSON, or Mermaid C4. .alab and " +
       "JSON are lossless in both directions. Mermaid is a one-way, lossy " +
       "export of a SINGLE diagram (geometry, tags, icons, drill-down links " +
       "and traceability are dropped) — good for embedding a picture in a " +
-      "README, never as a source of truth.",
+      "README, never as a source of truth. C4 models only: a sequence " +
+      "document has no Mermaid export here (Mermaid sequenceDiagram is " +
+      "import-only, via format_sequence) — sequence documents travel as " +
+      ".alab text.",
     args: [
       SOURCE_ARG,
       FORMAT_ARG,
@@ -280,20 +299,25 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     name: "create_share_link",
     title: "Create a share link",
     description:
-      "Turn a model into a URL that opens it in the arch-lab viewer, so a " +
-      "human can see the diagram. The model is encoded into the URL " +
-      "fragment, which browsers never send to a server — nothing is " +
-      "uploaded or stored. Refuses models too large to fit a link that " +
-      "would survive being pasted into chat or mail. Can optionally expire " +
-      "after a number of days.",
+      "Turn a C4 model OR a sequence diagram into a URL that opens it in " +
+      "the arch-lab viewer, so a human can see the diagram — C4 models open " +
+      "the two-pane viewer, sequence documents the sequence playground. The " +
+      "document is encoded into the URL fragment, which browsers never send " +
+      "to a server — nothing is uploaded or stored. Refuses documents too " +
+      "large to fit a link that would survive being pasted into chat or " +
+      "mail. Can optionally expire after a number of days. The format " +
+      "argument applies to the C4 readings; a sequence document is detected " +
+      "from its first line.",
     args: [
-      SOURCE_ARG,
+      SHARE_SOURCE_ARG,
       FORMAT_ARG,
       {
         name: "diagram_id",
         required: false,
         description:
-          "Open the link at this diagram. Defaults to the root diagram.",
+          "Open the link at this diagram (C4 models only — a sequence " +
+          "document is a single flow with no diagrams). Defaults to the " +
+          "root diagram.",
       },
       {
         name: "ttl_days",
@@ -385,8 +409,8 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
     id: "share",
     title: "Show a human",
     blurb:
-      "Turn a finished model into a link that opens the diagram in the " +
-      "viewer.",
+      "Turn a finished C4 model or sequence flow into a link that opens " +
+      "the diagram in the viewer.",
     tools: toolsNamed("create_share_link"),
   },
 ];

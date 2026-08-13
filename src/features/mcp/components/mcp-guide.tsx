@@ -83,7 +83,16 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
   const endpoint = mcpEndpointUrl(origin);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-14 sm:px-8 sm:py-20">
+    /*
+     * ONE column width, set here and nowhere else. This used to be max-w-5xl
+     * with every prose block capped at max-w-3xl individually — which left
+     * anything that forgot its own cap (the tool cards, the resource and
+     * prompt lists, the workflow list) spanning the full 5xl, so the page read
+     * as a narrow left-hugging column that suddenly went wide at "What it can
+     * do". Constraining the container instead makes every section share the
+     * same centred measure and makes that class of drift impossible.
+     */
+    <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8 sm:py-20">
       {/* ---- intro ---------------------------------------------------------- */}
       <div className="af-mcp-fade mb-6 flex flex-wrap items-center gap-2">
         <Badge variant="accent">
@@ -95,10 +104,10 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
       </div>
 
-      <h1 className="af-mcp-rise af-mcp-d1 max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+      <h1 className="af-mcp-rise af-mcp-d1 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
         Use arch-lab from your AI agent
       </h1>
-      <p className="af-mcp-rise af-mcp-d2 mt-4 max-w-3xl text-lg leading-relaxed text-pretty text-muted-foreground">
+      <p className="af-mcp-rise af-mcp-d2 mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
         arch-lab runs an{" "}
         <a
           href="https://modelcontextprotocol.io"
@@ -117,7 +126,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       {/* Above the endpoint, not buried at the bottom: someone about to paste
           a URL into their client deserves to know what it does not promise
           before they depend on it. */}
-      <div className="af-mcp-rise af-mcp-d3 mt-6 max-w-3xl rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
+      <div className="af-mcp-rise af-mcp-d3 mt-6 rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
           <FlaskConical aria-hidden="true" className="size-4 text-accent" />
           {MCP_STATUS_LABEL}
@@ -127,7 +136,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         </p>
       </div>
 
-      <div className="af-mcp-rise af-mcp-d4 mt-6 max-w-3xl">
+      <div className="af-mcp-rise af-mcp-d4 mt-6">
         <CopySnippet
           snippet={endpoint}
           caption="endpoint"
@@ -141,10 +150,10 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           call the server does not have. */}
       <McpRoundTrip
         toolName={MCP_TOOLS[0]?.name ?? "validate_model"}
-        className="af-mcp-rise af-mcp-d5 mt-6 max-w-3xl"
+        className="af-mcp-rise af-mcp-d5 mt-6"
       />
 
-      <div className="af-mcp-card af-mcp-rise af-mcp-d6 mt-8 max-w-3xl rounded-lg border border-border bg-card px-5 py-4">
+      <div className="af-mcp-card af-mcp-rise af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4">
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
           What this is for
         </h2>
@@ -164,7 +173,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       {/* ---- on this page ---------------------------------------------------- */}
       <nav
         aria-label="On this page"
-        className="af-mcp-fade af-mcp-d7 mt-8 max-w-3xl rounded-lg border border-border bg-card px-5 py-4"
+        className="af-mcp-fade af-mcp-d7 mt-8 rounded-lg border border-border bg-card px-5 py-4"
       >
         <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           On this page
@@ -208,7 +217,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
          * keeps a copyable snippet on the page for anyone skimming past the
          * summaries.
          */}
-        <div className="mt-6 max-w-3xl overflow-hidden rounded-lg border border-border bg-card">
+        <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card">
           {CONNECT_RECIPES.map((recipe, index) => (
             <details
               key={recipe.client}
@@ -253,7 +262,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           exact detail — and knowledge travels fine as a file. If you would
           rather not add a connector, drop the skill into your project instead:
         </P>
-        <div className="mt-5 max-w-3xl">
+        <div className="mt-5">
           <CopySnippet
             snippet={SKILL_INSTALL}
             caption="bash"
@@ -270,7 +279,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         {/* The honest boundary. Someone who thinks a skill replaces the server
             will trust an invalid file because "the skill said so" — which is a
             worse outcome than not offering the skill at all. */}
-        <div className="af-mcp-card mt-6 max-w-3xl rounded-lg border border-border bg-card px-5 py-4">
+        <div className="af-mcp-card mt-6 rounded-lg border border-border bg-card px-5 py-4">
           <h3 className="text-sm font-semibold tracking-tight text-foreground">
             What you give up
           </h3>
@@ -308,7 +317,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
               <h3 className="text-base font-semibold tracking-tight text-foreground">
                 {group.title}
               </h3>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                 {group.blurb}
               </p>
               <div className="mt-4 space-y-4">
@@ -449,7 +458,9 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           <Bullet>
             <strong className="text-foreground">Mermaid is one-way.</strong>{" "}
             Importing Mermaid C4 works; exporting to it drops geometry, tags,
-            icons, drill-down links and traceability. Keep <Code>.alab</Code> or{" "}
+            icons, drill-down links and traceability. Sequence documents import
+            from Mermaid <Code>sequenceDiagram</Code> the same one-way — there
+            is no Mermaid export for them at all. Keep <Code>.alab</Code> or{" "}
             <Code>.archlab.json</Code> as the source of truth.
           </Bullet>
         </ul>
@@ -573,7 +584,7 @@ function P({
 }): React.JSX.Element {
   return (
     <p
-      className={`max-w-3xl leading-relaxed text-muted-foreground ${className ?? "mt-4"}`}
+      className={`leading-relaxed text-muted-foreground ${className ?? "mt-4"}`}
     >
       {children}
     </p>
@@ -586,7 +597,7 @@ function Bullet({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <li className="flex max-w-3xl gap-3 leading-relaxed">
+    <li className="flex gap-3 leading-relaxed">
       <span
         aria-hidden="true"
         className="mt-2 size-1.5 shrink-0 rounded-full bg-accent"

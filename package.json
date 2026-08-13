@@ -28,6 +28,7 @@
     "check:connect-verdict": "node scripts/connect-verdict-check.mjs",
     "check:mcp": "node scripts/mcp-check.mjs",
     "check:share-expiry": "node scripts/share-expiry-check.mjs",
+    "check:share-parity": "node scripts/share-parity-check.mjs",
     "check:shortcuts": "node scripts/shortcut-catalog-check.mjs",
     "gen:share-keys": "node scripts/gen-share-keys.mjs",
     "check:vscode-grammar": "node scripts/vscode-grammar-check.mjs",

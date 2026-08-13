@@ -78,17 +78,33 @@ function renderReadError(error: SequenceInputError): string {
   return error.message;
 }
 
-type ReadSequenceResult =
+export type ReadSequenceResult =
   | { status: "ok"; file: SequenceLabFile; format: "alab" | "mermaid" }
-  | { status: "error"; message: string };
+  /*
+   * The error keeps its KIND, not just its rendered message, because
+   * `create_share_link` shares this reader to detect sequence documents:
+   * a "parse" error means the text IS a sequence document (and the message
+   * is the caller's answer), while "c4-detected" / "unknown-format" / "size"
+   * mean the C4 reader owns the verdict. Collapsing the kinds into one string
+   * would force the share tool to sniff the message text.
+   */
+  | {
+      status: "error";
+      kind: SequenceInputError["kind"] | "size";
+      message: string;
+    };
 
-function readSequence(source: string): ReadSequenceResult {
+export function readSequence(source: string): ReadSequenceResult {
   const size = guardSourceSize(source);
-  if (!size.ok) return { status: "error", message: size.message };
+  if (!size.ok) return { status: "error", kind: "size", message: size.message };
 
   const result = parseSequenceInput(source);
   if (result.status === "error") {
-    return { status: "error", message: renderReadError(result.error) };
+    return {
+      status: "error",
+      kind: result.error.kind,
+      message: renderReadError(result.error),
+    };
   }
   return {
     status: "ok",

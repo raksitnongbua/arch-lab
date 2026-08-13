@@ -917,6 +917,135 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
   );
 });
 
+/* ----------------------------------------------------------------------- */
+/* 8b. Share links for SEQUENCE documents                                   */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The end-to-end path an agent actually walks for a sequence flow: author →
+ * validate_sequence → format_sequence (canonical .alab) → create_share_link.
+ * The link must land on /view/sequence (the C4 route would parse-error) and
+ * decode back to the SAME canonical text format_sequence hands out, so the
+ * shared flow and the committed file cannot disagree.
+ */
+check("create_share_link mints a sequence link that decodes back", async () => {
+  const canonical = expectOk(formatSequence(VALID_SEQUENCE))
+    .split("```\n")[1]
+    .split("\n```")[0];
+
+  const text = expectOk(
+    await createShareLink(VALID_SEQUENCE, "auto", undefined, undefined),
+  );
+  const url = text.split("\n").find((line) => line.startsWith("http"));
+  assert.ok(url !== undefined, `no URL in:\n${text}`);
+  assert.match(url, /\/view\/sequence#m=AF1\./);
+
+  const decoded = await decodeShareFragment(new URL(url).hash);
+  assert.equal(decoded.status, "ok");
+  assert.equal(
+    decoded.aftText.replace(/\n$/, ""),
+    canonical.replace(/\n$/, ""),
+    "the flow recovered from the link must be the canonical sequence text",
+  );
+});
+
+check(
+  "a Mermaid sequenceDiagram shares as .alab, naming the loss",
+  async () => {
+    // What travels is the .alab conversion, so the one-way caveat must be said
+    // HERE — after this call, only the converted form exists in the link.
+    const text = expectOk(
+      await createShareLink(
+        "sequenceDiagram\n  A->>B: Hello\n  B-->>A: Hi\n",
+        "auto",
+        undefined,
+        undefined,
+      ),
+    );
+    assert.match(text, /\/view\/sequence#m=AF1\./);
+    assert.match(text, /one-way|lossy|dropped/i);
+  },
+);
+
+check(
+  "create_share_link rejects diagram_id on a sequence document",
+  async () => {
+    const text = expectError(
+      await createShareLink(VALID_SEQUENCE, "auto", "ctx-root", undefined),
+    );
+    assert.match(text, /no diagrams/i);
+  },
+);
+
+check("a broken sequence document gets a located sequence error", async () => {
+  // NOT the C4 reader's "unexpected text after the version" on line 1 — the
+  // text is a sequence document, so the verdict must be the sequence parser's.
+  const broken = VALID_SEQUENCE.replace(
+    'cust -> api : "POST /orders" [HTTPS]',
+    "cust -> api",
+  );
+  const text = expectError(
+    await createShareLink(broken, "auto", undefined, undefined),
+  );
+  assert.match(text, /^INVALID as \.alab sequence\./m);
+  assert.match(text, /line \d+, column \d+:/);
+});
+
+/** A valid sequence document whose share URL length scales with `count`. */
+function sizedSequence(count) {
+  const messages = Array.from(
+    { length: count },
+    (_, index) =>
+      `  a -> b : "Request number ${index} with a deliberately verbose and ` +
+      `incompressible-ish label ${index}" [HTTPS]`,
+  ).join("\n");
+  return `archlab 1.0 sequence
+title "Too big to link"
+
+@sequence
+  a:participant "Service A"
+  b:participant "Service B"
+
+${messages}
+`;
+}
+
+check("an oversized sequence is refused with the text inline", async () => {
+  // No diagram-scoped fallback exists for a sequence document (it is one
+  // flow), so the refusal must still leave the caller holding the canonical
+  // text rather than sending them on another round trip.
+  // 1,500 verbose messages encode to ~11.5k URL characters — comfortably
+  // past the 8,000 ceiling (900 lands under it; sequence text compresses
+  // harder than the C4 fixture's node lines).
+  const text = expectError(
+    await createShareLink(sizedSequence(1500), "auto", undefined, undefined),
+  );
+  assert.match(text, /does not fit in a share link/);
+  assert.match(text, /```\narchlab 1\.0 sequence/);
+});
+
+check("the C4 tools tell a sequence document where to go", () => {
+  // The misdirection guard in both directions: tools/sequence.ts already
+  // redirects C4 input, and lib/read.ts must redirect sequence input — a
+  // "line 1, column 13" parse error reads as "your syntax is wrong" when only
+  // the tool choice was.
+  const attempts = [
+    ["validate_model", () => validateModel(VALID_SEQUENCE, "auto")],
+    ["format_model", () => formatModel(VALID_SEQUENCE, "auto")],
+    [
+      "convert_model",
+      () => convertModel(VALID_SEQUENCE, "auto", "mermaid", undefined),
+    ],
+    ["describe_model", () => describeModel(VALID_SEQUENCE, "auto", false)],
+  ];
+  for (const [name, run] of attempts) {
+    const text = expectError(run());
+    assert.match(text, /sequence diagram/i, name);
+    assert.match(text, /validate_sequence/, name);
+    assert.doesNotMatch(text, /^INVALID as \.alab text/m, name);
+  }
+});
+
 /* ---- the setup recipes on /mcp ------------------------------------------- */
 
 /*

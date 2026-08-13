@@ -491,7 +491,7 @@ export function ViewerPlayground(): React.JSX.Element {
             key={shellEpoch}
             model={synced.model}
             initialDiagramId={sharedInitialDiagram ?? undefined}
-            share={{ kind: "payload", file: synced.file }}
+            share={{ kind: "payload", text: synced.aftText }}
             onDiagramChange={handleDiagramChange}
           />
         </section>

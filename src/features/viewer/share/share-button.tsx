@@ -1,40 +1,51 @@
 "use client";
 
 /**
- * The view-mode Share control — a button beside Export opening a small
- * non-modal dialog. What it offers depends on where the model came from:
+ * THE Share control — one component, mounted by BOTH viewers (the C4 shell and
+ * the sequence playground). It used to be C4-only, with the sequence pane
+ * carrying a hand-rolled copy-a-link button; the two drifted immediately (no
+ * expiry, no download fallback, a different button face), which is exactly how
+ * duplicated UI always ends. What varies between the viewers is now three
+ * PROPS — the route the link opens on, the noun the copy uses ("model"/"flow")
+ * and which way the panel opens — and `scripts/share-parity-check.mjs` pins
+ * that both viewers mount this file rather than a fork of it.
+ *
+ * A button beside Export opening a small non-modal dialog. What it offers
+ * depends on where the document came from:
  *
  *   - BUNDLED models (`/view/atlas-shop` …) already live at a URL, so the
  *     plain page address is the share link — short and clean, no payload —
  *     and the panel says so instead of needlessly embedding one.
- *   - PASTED / edited models are encoded into the link itself: canonical
- *     `.alab` text, deflate-raw-compressed, base64url, in the `#` fragment
- *     (see `codec.ts`). Nothing is uploaded; fragments never reach servers.
+ *   - PASTED / edited documents are encoded into the link itself: canonical
+ *     text, deflate-raw-compressed, base64url, in the `#` fragment (see
+ *     `codec.ts`). Nothing is uploaded; fragments never reach servers.
  *
- * Either way, the link carries the diagram being viewed (`d=…`) when it is
+ * For C4 the link also carries the diagram being viewed (`d=…`) when it is
  * not the root, so the recipient opens on what the sharer was looking at.
+ * A sequence document has no sub-diagrams, so its viewer simply omits the
+ * `diagram` props and the whole affordance disappears — nothing is faked.
  *
  * Honesty about limits, in the codec's tiers (see the reasoning on the
  * constants in `codec.ts`): under `SHARE_URL_SAFE_LENGTH` the link is handed
  * out clean; up to `MAX_SHARE_URL_LENGTH` it is handed out WITH a caveat
  * that plain-text email may break it; past the ceiling the panel refuses,
- * says exactly why, and offers the `.alab` file download instead. Browsers
+ * says exactly why, and offers the text-file download instead. Browsers
  * without `CompressionStream` get the same honest fallback.
  *
  * Keyboard/a11y: normal trigger button (`aria-expanded`/`aria-haspopup`),
  * panel is a labelled non-modal dialog that receives focus on open, Escape
  * closes it (capture phase — it never reaches the canvas's Escape ladder)
  * and returns focus to the trigger. Copy/share/download outcomes are
- * announced through the SHELL's existing live region via `onAnnounce`.
+ * announced through the HOST PAGE's existing live region via `onAnnounce`.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Check, Copy, Download, Share2 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
-import { ARCHTEXT_EXTENSION, serializeArchText } from "@/features/archtext";
+import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { cn } from "@/lib/utils";
-import type { ArchLabFile, C4Diagram } from "@/types";
+import type { C4Diagram } from "@/types";
 
 import { fileStem } from "../export/download";
 import {
@@ -50,9 +61,15 @@ import { mintExpiry } from "./mint-expiry";
 import { parseDurationList } from "./duration";
 import { canVerifyExpiry } from "./signature";
 
-/** Where the model being viewed came from — decides what a share link is. */
+/**
+ * Where the document being viewed came from — decides what a share link is.
+ * The payload is the document's canonical TEXT, not a parsed structure: text
+ * is what the codec compresses, and taking it here (rather than an
+ * `ArchLabFile`) is what lets the sequence viewer — whose pane holds raw
+ * `.alab`-or-Mermaid text — use the same control.
+ */
 export type ShareSource =
-  { kind: "bundled"; modelId: string } | { kind: "payload"; file: ArchLabFile };
+  { kind: "bundled"; modelId: string } | { kind: "payload"; text: string };
 
 type LinkState =
   | { status: "building" }
@@ -126,23 +143,58 @@ function formatExpiry(expiresAt: number): string {
       });
 }
 
-export interface ViewerShareButtonProps {
+export interface ShareButtonProps {
   share: ShareSource;
-  modelTitle: string;
-  /** The diagram currently on screen — encoded into the link when not root. */
-  diagram: C4Diagram;
-  rootDiagramId: string;
-  /** Announce through the shell's existing polite live region. */
+  /** Used for the Web Share sheet's title and the download's file name. */
+  documentTitle: string;
+  /**
+   * The route a payload link opens on — `/view/c4` or `/view/sequence`. The
+   * payload format is shared (one codec); the ROUTE is what decides which
+   * parser receives the decoded text, so each viewer names its own.
+   */
+  route: string;
+  /**
+   * What the copy calls the document — "model" for C4, "flow" for a sequence.
+   * A sequence sharer who reads "anyone with the link can view the model"
+   * rightly wonders whether they pressed the wrong button.
+   */
+  noun: string;
+  /**
+   * The diagram currently on screen — encoded into the link when not the
+   * root, so the recipient opens on it. C4-only: a sequence document has no
+   * sub-diagrams, so its viewer omits both props and the panel never mentions
+   * diagrams at all.
+   */
+  diagram?: C4Diagram;
+  rootDiagramId?: string;
+  /**
+   * Which way the panel opens. The C4 shell's toolbar sits at the BOTTOM of
+   * the screen (panel opens up, or it would fall below the fold); the
+   * sequence playground's toolbar sits mid-page above its source pane (panel
+   * opens down, or it would cover the diagram the sharer is looking at).
+   */
+  panelSide?: "up" | "down";
+  /**
+   * Extension for the download fallback. Defaults to `.alab`; the sequence
+   * viewer passes `.mmd` when its pane holds a Mermaid document, so the file
+   * handed out is named for what it actually contains.
+   */
+  downloadExtension?: string;
+  /** Announce through the host page's existing polite live region. */
   onAnnounce: (message: string) => void;
 }
 
-export function ViewerShareButton({
+export function ShareButton({
   share,
-  modelTitle,
+  documentTitle,
+  route,
+  noun,
   diagram,
   rootDiagramId,
+  panelSide = "up",
+  downloadExtension = ARCHTEXT_EXTENSION,
   onAnnounce,
-}: ViewerShareButtonProps): React.JSX.Element {
+}: ShareButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [link, setLink] = useState<LinkState>({ status: "building" });
@@ -161,7 +213,11 @@ export function ViewerShareButton({
   const panelId = useId();
   const headingId = useId();
 
-  const includeDiagram = diagram.id !== rootDiagramId;
+  const includeDiagram =
+    diagram !== undefined &&
+    rootDiagramId !== undefined &&
+    diagram.id !== rootDiagramId;
+  const diagramId = diagram?.id ?? null;
 
   /* ---- building the link (kicked off by the trigger click) ---------------- */
 
@@ -190,9 +246,10 @@ export function ViewerShareButton({
       const token = buildTokenRef.current;
 
       if (share.kind === "bundled") {
-        const suffix = includeDiagram
-          ? `#${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagram.id)}`
-          : "";
+        const suffix =
+          includeDiagram && diagramId !== null
+            ? `#${SHARE_PARAM_DIAGRAM}=${encodeURIComponent(diagramId)}`
+            : "";
         // A bundled link points at a model that ships with the app; there is no
         // payload to expire, so the TTL control is not offered for these.
         setLink({
@@ -220,14 +277,17 @@ export function ViewerShareButton({
         setLink({ status: "building" });
       }
       void (async () => {
-        const alabText = serializeArchText(share.file);
+        const payloadText = share.text;
 
         // Mint the expiry FIRST: it is the only step that can fail, and failing
         // after building a link would mean discarding a good one.
         let expiry: ShareExpiry | undefined;
         let expiryNote: string | undefined;
         if (ttl !== null) {
-          const minted = await mintExpiry(await shareDigestFor(alabText), ttl);
+          const minted = await mintExpiry(
+            await shareDigestFor(payloadText),
+            ttl,
+          );
           if (token !== buildTokenRef.current) return;
           if (minted.status === "ok") {
             expiry = {
@@ -240,15 +300,15 @@ export function ViewerShareButton({
         }
 
         const fragment = await encodeShareFragment(
-          alabText,
-          includeDiagram ? diagram.id : null,
+          payloadText,
+          includeDiagram ? diagramId : null,
           expiry,
         );
         if (token !== buildTokenRef.current) return;
-        // Minted against /view/c4 — the playground's real address since /view
-        // became the chooser. Legacy /view#m= links still open (the chooser
-        // forwards them), but new links skip that hop.
-        const url = `${window.location.origin}/view/c4#${fragment}`;
+        // Minted against the viewer's own route (`/view/c4`, `/view/sequence`)
+        // rather than the legacy `/view#m=` — the chooser still forwards old
+        // links, but new links skip that hop and land on their parser directly.
+        const url = `${window.location.origin}${route}#${fragment}`;
         const tooLong = url.length > MAX_SHARE_URL_LENGTH;
         hasLinkRef.current = !tooLong;
         setLink(
@@ -267,7 +327,7 @@ export function ViewerShareButton({
     },
     // `ttlSeconds` is deliberately NOT a dependency: the value arrives as an
     // argument, so this callback is stable across dropdown changes.
-    [share, diagram.id, includeDiagram],
+    [share, route, diagramId, includeDiagram],
   );
 
   const handleToggle = useCallback(() => {
@@ -345,17 +405,17 @@ export function ViewerShareButton({
 
   const handleWebShare = useCallback(
     (url: string) => {
-      navigator.share({ title: modelTitle, url }).catch(() => {
+      navigator.share({ title: documentTitle, url }).catch(() => {
         // Cancelled or blocked — the copy button remains the fallback.
       });
     },
-    [modelTitle],
+    [documentTitle],
   );
 
   const handleDownload = useCallback(() => {
     if (share.kind !== "payload") return;
-    const filename = `${fileStem(modelTitle)}${ARCHTEXT_EXTENSION}`;
-    const blob = new Blob([serializeArchText(share.file)], {
+    const filename = `${fileStem(documentTitle)}${downloadExtension}`;
+    const blob = new Blob([share.text], {
       type: "text/plain;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -367,7 +427,7 @@ export function ViewerShareButton({
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
     onAnnounce(`Downloaded ${filename}.`);
-  }, [share, modelTitle, onAnnounce]);
+  }, [share, documentTitle, downloadExtension, onAnnounce]);
 
   /* ---- render ------------------------------------------------------------------ */
 
@@ -379,7 +439,7 @@ export function ViewerShareButton({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        aria-label="Share this model"
+        aria-label={`Share this ${noun}`}
         title="Share"
         onClick={handleToggle}
         className={buttonClasses({ variant: "outline", size: "sm" })}
@@ -395,22 +455,23 @@ export function ViewerShareButton({
           role="dialog"
           aria-labelledby={headingId}
           tabIndex={-1}
-          /* Opens UPWARD — see the note on the Export menu: this strip is at
-             the bottom of the shell, and in immersive mode there is nothing
-             below the fold to scroll to. */
-          className="absolute bottom-full left-0 z-50 mb-1.5 w-[min(22rem,calc(100vw-4rem))] rounded-lg border border-border bg-card p-4 shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:right-0 sm:left-auto"
+          className={cn(
+            "absolute left-0 z-50 w-[min(22rem,calc(100vw-4rem))] rounded-lg border border-border bg-card p-4 shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:right-0 sm:left-auto",
+            /* Which way it opens is the host's call — see `panelSide`. */
+            panelSide === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
+          )}
         >
           <h2 id={headingId} className="text-sm font-semibold text-foreground">
-            Share this model
+            Share this {noun}
           </h2>
 
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
             {share.kind === "bundled"
-              ? "This model ships with arch-lab, so the plain page address is the whole link — short and clean, with nothing to embed and nothing about you in it."
-              : "Nothing is uploaded: the model travels inside the link itself, compressed into the part after # — which browsers never send to any server."}
+              ? `This ${noun} ships with arch-lab, so the plain page address is the whole link — short and clean, with nothing to embed and nothing about you in it.`
+              : `Nothing is uploaded: the ${noun} travels inside the link itself, compressed into the part after # — which browsers never send to any server.`}
           </p>
 
-          {includeDiagram ? (
+          {includeDiagram && diagram !== undefined ? (
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
               The link opens on the diagram you are viewing:{" "}
               <span className="font-medium text-foreground">
@@ -449,12 +510,12 @@ export function ViewerShareButton({
                      not a refusal — browsers and chat apps carry links this
                      long without trouble; plain-text email is the one carrier
                      that reliably cannot (RFC 5322 wraps lines at 998 octets,
-                     so no model-carrying link is truly email-proof). */
+                     so no document-carrying link is truly email-proof). */
                   <p className="mt-1.5 text-xs leading-relaxed text-warning">
                     {link.url.length.toLocaleString("en-US")} characters — fine
                     in browsers and chat apps, but plain-text email can wrap and
                     break a link this long. For email, download the{" "}
-                    {ARCHTEXT_EXTENSION} file below and send that instead.
+                    {downloadExtension} file below and send that instead.
                   </p>
                 ) : (
                   <p className="mt-1.5 text-xs text-muted-foreground">
@@ -502,8 +563,8 @@ export function ViewerShareButton({
                       <span className="font-medium text-foreground">
                         {formatExpiry(link.expiresAt)}
                       </span>
-                      . It is not a secret — anyone with the link can read the
-                      model until then.
+                      . It is not a secret — anyone with the link can read the{" "}
+                      {noun} until then.
                     </p>
                   ) : null}
                   {link.expiryNote !== undefined ? (
@@ -551,7 +612,7 @@ export function ViewerShareButton({
                     className={buttonClasses({ variant: "ghost", size: "sm" })}
                   >
                     <Download aria-hidden="true" />
-                    Download {ARCHTEXT_EXTENSION}
+                    Download {downloadExtension}
                   </button>
                 ) : null}
               </div>
@@ -565,11 +626,11 @@ export function ViewerShareButton({
                   <span className="font-semibold">
                     Too large to share as a link.
                   </span>{" "}
-                  This model encodes to {link.length.toLocaleString("en-US")}{" "}
+                  This {noun} encodes to {link.length.toLocaleString("en-US")}{" "}
                   characters, past the{" "}
                   {MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character
                   ceiling where enough apps truncate links that the recipient
-                  would open a broken diagram. Download the {ARCHTEXT_EXTENSION}{" "}
+                  would open a broken diagram. Download the {downloadExtension}{" "}
                   file and send that instead.
                 </p>
               </div>
@@ -580,7 +641,7 @@ export function ViewerShareButton({
                   className={buttonClasses({ size: "sm" })}
                 >
                   <Download aria-hidden="true" />
-                  Download {ARCHTEXT_EXTENSION}
+                  Download {downloadExtension}
                 </button>
               </div>
             </>
@@ -591,7 +652,7 @@ export function ViewerShareButton({
               <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5">
                 <p className="text-xs leading-relaxed text-foreground">
                   This browser cannot build compressed share links (it lacks
-                  CompressionStream). Download the {ARCHTEXT_EXTENSION} file and
+                  CompressionStream). Download the {downloadExtension} file and
                   send that instead.
                 </p>
               </div>
@@ -602,16 +663,16 @@ export function ViewerShareButton({
                   className={buttonClasses({ size: "sm" })}
                 >
                   <Download aria-hidden="true" />
-                  Download {ARCHTEXT_EXTENSION}
+                  Download {downloadExtension}
                 </button>
               </div>
             </>
           ) : null}
 
           <p className="mt-3 border-t border-border/60 pt-2.5 text-xs leading-relaxed text-muted-foreground">
-            Anyone with the link can view the model — a link is not a secret,
-            and sending it through a chat or email service shares the model with
-            that service too.
+            Anyone with the link can view the {noun} — a link is not a secret,
+            and sending it through a chat or email service shares the {noun}{" "}
+            with that service too.
           </p>
         </div>
       ) : null}
