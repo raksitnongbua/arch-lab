@@ -54,10 +54,11 @@
  * short enough that the last item is in under a second — the hero has eight
  * of these and a reader should never be waiting on the chrome.
  *
- * As utility classes rather than inline styles because the same ladder is
- * reused by the tool cards and the recipes, and because a `style` attribute per
- * card is a lot of duplicated markup in the HTML for something purely
- * presentational.
+ * As utility classes rather than inline styles because a `style` attribute
+ * per element is duplicated markup in the HTML for something purely
+ * presentational. Only the hero's elements carry these — the sections further
+ * down are simply present, since their entrances would be over before anyone
+ * scrolled to them anyway.
  */
 .af-mcp-d1 {
   animation-delay: 70ms;
