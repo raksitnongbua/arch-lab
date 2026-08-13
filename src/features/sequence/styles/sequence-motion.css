@@ -433,6 +433,25 @@
   fill: var(--muted-foreground);
 }
 
+/* THE HEADING — the document's title and description, drawn above the
+ * participant row. Tokens like everything else here, which is also what carries
+ * them into an export: `export/render-svg.ts` clones this node and copies the
+ * COMPUTED styles, so a fill declared here arrives in the `.svg` resolved to the
+ * theme the reader exported from. A `fill` attribute in the JSX would have
+ * hard-coded one theme's colour into every file.
+ *
+ * The heading is never dimmed by focus. Clicking a message recedes everything
+ * outside the focus set, but the title is not part of the flow — it says what
+ * the whole drawing IS, and a diagram whose name fades when you inspect it reads
+ * as though you have navigated away from it. */
+.af-seq-heading-title {
+  fill: var(--foreground);
+}
+
+.af-seq-heading-description {
+  fill: var(--muted-foreground);
+}
+
 /* THE "THERE IS MORE" MARK — a small raised dot after the label of a message
  * that carries a `desc`. Without it the detail is invisible until someone
  * happens to click the right arrow, and a diagram cannot hide facts behind a

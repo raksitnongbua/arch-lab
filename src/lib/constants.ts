@@ -146,10 +146,16 @@ export const SUPPORTED_MAJOR_VERSION = 1;
  * get: valid, and worth a word.
  *
  * 120 is roughly four times the longest title anywhere in this repo (32). It is
- * not a design measurement — the title is never drawn in a diagram and never
- * measured by a layout — it is the point past which a title has stopped being a
- * title: it becomes an export filename, a card in the demo gallery, and the
- * accessible name a screen reader reads before every diagram.
+ * the point past which a title has stopped being a title: it becomes an export
+ * filename, a card in the demo gallery, and the accessible name a screen reader
+ * reads before every diagram.
+ *
+ * It now has a LAYOUT consequence too, which it did not when it was written: a
+ * sequence diagram draws its title inside the drawing (`sequence/lib/layout.ts`,
+ * `layoutHeading`), so an over-long one wraps to more lines and pushes the flow
+ * further down the canvas. Nothing breaks — it wraps rather than overflowing, and
+ * the canvas widens if it must — but the advisory now has a visible reason
+ * anyone can see, not just a filename argument.
  */
 export const MAX_TITLE_LENGTH = 120;
 

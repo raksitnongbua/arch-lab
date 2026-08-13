@@ -82,6 +82,44 @@ export const SEQ = {
   noteFontSize: 12,
   fragmentFontSize: 11,
 
+  /* ---- the heading block: the document's title and description ------------
+   * Drawn INSIDE the drawing rather than in the page around it, which is the
+   * whole point: the export clones this SVG, so a title that lived in HTML
+   * chrome would be missing from every `.svg`, `.png` and `.gif` anyone sends
+   * on — and a sequence diagram with no title on it is a picture of a flow
+   * nobody can name. The C4 exporter has stamped its heading into the file
+   * since it shipped; this is the sequence half of that. */
+  titleFontSize: 15,
+  titleLineHeight: 20,
+  descriptionFontSize: 12,
+  descriptionLineHeight: 17,
+  /** Gap between the last title line and the first description line. */
+  titleDescriptionGap: 6,
+  /** Gap from the bottom of the block down to the participant cards. */
+  headingGap: 16,
+  /**
+   * Narrowest width the heading wraps to.
+   *
+   * The block wraps to the COLUMN SPAN first, so on any normal flow it costs the
+   * canvas no width at all — the same choice notes make, and for the same
+   * reason: a long title that widened the drawing would leave a
+   * two-participant flow floating in whitespace. But the span of two narrow
+   * columns is ~200px, which would turn a normal title into six lines, so the
+   * wrap never goes below this — and where this floor is wider than the flow,
+   * the canvas widens to match rather than letting the text cross the edge.
+   */
+  titleMinWrapWidth: 320,
+  /**
+   * Description lines kept before the text is ellipsised.
+   *
+   * A title is capped by advisory (`MAX_TITLE_LENGTH`) and wraps in full; a
+   * description is prose with no limit at all, and an unbounded one would push
+   * the flow off the first screen — the diagram is the content, not the blurb.
+   * The full text is never lost: it stays in the source pane, the `.alab` file
+   * and the MCP summary.
+   */
+  descriptionMaxLines: 3,
+
   /** Vertical gap between the header row and the first item. */
   headerGap: 24,
   /**
@@ -316,6 +354,25 @@ export interface SequenceLayout {
    * which is exactly the cross-talk a one-pass layout is meant to avoid.
    */
   minX: number;
+  /**
+   * The document's title and description, wrapped and measured, drawn above the
+   * participant row. `height` includes the gap down to the cards, so
+   * `headerTop = SEQ.marginTop + heading.height` and nothing else has to know
+   * how the block is composed.
+   */
+  heading: {
+    titleLines: readonly string[];
+    descriptionLines: readonly string[];
+    height: number;
+    /** Widest wrapped line, so the canvas can never be narrower than the text. */
+    width: number;
+  };
+  /**
+   * Y of the participant card row. Was `SEQ.marginTop` everywhere until the
+   * heading block went in above it; the renderer reads this instead so the two
+   * cannot disagree about where the cards start.
+   */
+  headerTop: number;
   headerHeight: number;
   lifelineTop: number;
   lifelineBottom: number;
@@ -446,6 +503,82 @@ function noteWidth(note: SequenceNote): number {
 }
 
 /**
+ * The title/description block above the participant row.
+ *
+ * Wraps to the COLUMN SPAN (floored at `titleMinWrapWidth`) instead of letting
+ * the text set the width. Wrapping is what keeps a long title inside the drawing
+ * rather than running off the edge — the defect notes had before they wrapped —
+ * while wrapping to the FLOW's own width is what stops a three-word diagram with
+ * a long title from becoming a mostly-empty wide canvas. The measured `width` it
+ * returns is the backstop for the one case wrapping cannot solve: a flow
+ * narrower than the wrap floor, where the caller widens the canvas instead.
+ *
+ * Runs off the column plan, before rows are laid out, so the block's height is
+ * known in time to push everything below it down. It therefore cannot depend on
+ * anything the row pass discovers, which is also why it does not try to centre
+ * itself on the final drawing width.
+ */
+function layoutHeading(
+  file: SequenceLabFile,
+  order: readonly string[],
+  xById: ReadonlyMap<string, number>,
+  headerWidths: ReadonlyMap<string, number>,
+): SequenceLayout["heading"] {
+  const first = order[0];
+  const last = order[order.length - 1];
+  const left = first === undefined ? SEQ.marginX : (xById.get(first) ?? 0);
+  const right =
+    last === undefined
+      ? SEQ.marginX
+      : (xById.get(last) ?? 0) + (headerWidths.get(last) ?? 0) / 2;
+  const wrapWidth = Math.max(SEQ.titleMinWrapWidth, right - left);
+
+  const titleLines = wrapText(
+    file.metadata.title,
+    wrapWidth,
+    SEQ.titleFontSize,
+  );
+
+  const description = file.metadata.description;
+  let descriptionLines: string[] = [];
+  if (description !== undefined && description.trim() !== "") {
+    const all = wrapText(description, wrapWidth, SEQ.descriptionFontSize);
+    descriptionLines = all.slice(0, SEQ.descriptionMaxLines);
+    if (all.length > descriptionLines.length) {
+      // Ellipsis on the last kept line, so a clipped description LOOKS clipped
+      // rather than reading as a sentence that simply ends oddly.
+      const lastIndex = descriptionLines.length - 1;
+      descriptionLines[lastIndex] = `${descriptionLines[lastIndex]}…`;
+    }
+  }
+
+  const height =
+    titleLines.length * SEQ.titleLineHeight +
+    (descriptionLines.length === 0
+      ? 0
+      : SEQ.titleDescriptionGap +
+        descriptionLines.length * SEQ.descriptionLineHeight) +
+    SEQ.headingGap;
+
+  /*
+   * The widest line, MEASURED, so the caller can widen the canvas if the block
+   * still does not fit. Wrapping alone is not enough: the wrap floor is 320px
+   * and a two-participant flow is ~318px wide, so a long title wrapped to the
+   * floor would have run straight off the right edge — the exact defect notes
+   * had before they wrapped, reintroduced one level up.
+   */
+  const width = Math.max(
+    0,
+    ...titleLines.map((line) => estimateWidth(line, SEQ.titleFontSize)),
+    ...descriptionLines.map((line) =>
+      estimateWidth(line, SEQ.descriptionFontSize),
+    ),
+  );
+
+  return { titleLines, descriptionLines, height, width };
+}
+
+/**
  * Lifeline x positions. Gaps are derived from content, not fixed: a gap
  * between neighbours must clear (a) both header halves, (b) the widest label
  * of any message travelling directly between them, (c) a self-message loop
@@ -535,7 +668,10 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
 
   const hasActor = file.participants.some((p) => p.kind === "actor");
   const headerHeight = SEQ.headerHeight + (hasActor ? SEQ.actorGlyphHeight : 0);
-  const lifelineTop = SEQ.marginTop + headerHeight;
+
+  const heading = layoutHeading(file, order, xById, headerWidths);
+  const headerTop = SEQ.marginTop + heading.height;
+  const lifelineTop = headerTop + headerHeight;
 
   const participants: LaidParticipant[] = file.participants.map((p, index) => ({
     id: p.id,
@@ -874,10 +1010,20 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
   const viewMinX = Math.floor(Math.min(0, minX - 8));
   const footerHeight = SEQ.headerHeight;
   const footerTop = lifelineBottom + SEQ.footerGap;
+  /*
+   * The heading is the LAST thing allowed to widen the drawing, and only when it
+   * genuinely does not fit: it wraps to the column span first, so on any normal
+   * flow this changes nothing. It matters on the narrow ones — two participants
+   * and a long title — where the wrap floor is wider than the flow itself and
+   * the text would otherwise cross the right edge.
+   */
+  const contentMaxX = Math.max(maxX, SEQ.marginX + heading.width);
   return {
-    width: Math.ceil(maxX + SEQ.marginX - viewMinX),
+    width: Math.ceil(contentMaxX + SEQ.marginX - viewMinX),
     height: Math.ceil(footerTop + footerHeight + SEQ.marginBottom),
     minX: viewMinX,
+    heading,
+    headerTop,
     headerHeight,
     lifelineTop,
     lifelineBottom,

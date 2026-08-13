@@ -488,6 +488,60 @@ export function SequenceDiagram({
         </g>
       ))}
 
+      {/* ---- the heading: the document's title and description ----
+          INSIDE the drawing, so it travels with every export — the export
+          clones this node, and a title in the page's HTML would be absent from
+          every file anyone sends on. Left-aligned to the first lifeline's
+          column rather than centred on the canvas: centring would move the
+          title every time a note widened the drawing on one side.
+
+          `aria-hidden`: the <svg> carries role="img" with an aria-label that
+          already opens with this title, so these tspans would be either
+          ignored (children of role="img" are) or, worse, read twice. */}
+      <g aria-hidden="true" className="af-seq-heading">
+        <text
+          x={SEQ.marginX}
+          y={SEQ.marginTop + SEQ.titleFontSize}
+          className="af-seq-heading-title"
+          fontSize={SEQ.titleFontSize}
+          fontWeight={600}
+        >
+          {layout.heading.titleLines.map((line, index) => (
+            <tspan
+              key={index}
+              x={SEQ.marginX}
+              {...(index === 0 ? {} : { dy: SEQ.titleLineHeight })}
+            >
+              {line}
+            </tspan>
+          ))}
+        </text>
+
+        {layout.heading.descriptionLines.length > 0 ? (
+          <text
+            x={SEQ.marginX}
+            y={
+              SEQ.marginTop +
+              layout.heading.titleLines.length * SEQ.titleLineHeight +
+              SEQ.titleDescriptionGap +
+              SEQ.descriptionFontSize
+            }
+            className="af-seq-heading-description"
+            fontSize={SEQ.descriptionFontSize}
+          >
+            {layout.heading.descriptionLines.map((line, index) => (
+              <tspan
+                key={index}
+                x={SEQ.marginX}
+                {...(index === 0 ? {} : { dy: SEQ.descriptionLineHeight })}
+              >
+                {line}
+              </tspan>
+            ))}
+          </text>
+        ) : null}
+      </g>
+
       {/* ---- lifelines + participant headers ---- */}
       {layout.participants.map((participant) => (
         <ParticipantColumn
@@ -697,9 +751,12 @@ function ParticipantColumn({
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
   const { x, headerWidth } = participant;
+  // From the LAYOUT's header top, not `SEQ.marginTop`: the heading block above
+  // pushes this row down, and only the layout knows how tall it came out.
   const boxTop =
-    SEQ.marginTop + (participant.kind === "actor" ? SEQ.actorGlyphHeight : 0);
-  const boxHeight = layout.headerHeight - (boxTop - SEQ.marginTop);
+    layout.headerTop +
+    (participant.kind === "actor" ? SEQ.actorGlyphHeight : 0);
+  const boxHeight = layout.headerHeight - (boxTop - layout.headerTop);
   const isActor = participant.kind === "actor";
   /**
    * The participant's LANE colour — its header border, lifeline and actor
@@ -787,15 +844,15 @@ function ParticipantColumn({
         <g className="pointer-events-none">
           <circle
             cx={x}
-            cy={SEQ.marginTop + 13}
+            cy={layout.headerTop + 13}
             r={12}
             fill={cardFill}
             stroke={lane}
             strokeWidth={1.5}
           />
-          <circle cx={x} cy={SEQ.marginTop + 10} r={3.4} fill={lane} />
+          <circle cx={x} cy={layout.headerTop + 10} r={3.4} fill={lane} />
           <path
-            d={`M ${x - 5.6} ${SEQ.marginTop + 19} a 5.6 5.6 0 0 1 11.2 0 Z`}
+            d={`M ${x - 5.6} ${layout.headerTop + 19} a 5.6 5.6 0 0 1 11.2 0 Z`}
             fill={lane}
           />
         </g>
@@ -843,7 +900,7 @@ function ParticipantColumn({
       <rect
         className="af-seq-hit af-seq-hit-region"
         x={x - headerWidth / 2}
-        y={SEQ.marginTop}
+        y={layout.headerTop}
         width={headerWidth}
         height={layout.headerHeight}
         fill="transparent"
