@@ -23,7 +23,7 @@
  * it cannot pick up a second diagram elsewhere on the page.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, Download, TriangleAlert } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import {
 } from "@/features/viewer/export/download";
 import { encodeGif } from "@/features/viewer/export/gif";
 import { cn } from "@/lib/utils";
+import { describeError } from "@/lib/errors";
 
 import {
   buildSequenceFrames,
@@ -46,15 +47,18 @@ import {
 
 import { renderSequenceSvg } from "./render-svg";
 
+/** What the one download button can produce. */
+type ExportFormat = "png" | "svg" | "gif";
+
 /**
  * PNG scale per sharpness — 1× is the diagram's own pixel size. Module scope, so
  * it is one object rather than a new one per render that every callback
  * depending on it would have to churn for.
+ *
+ * A MULTIPLIER, unlike `GIF_SHARPNESS` in `./frames`, which is a pixel width
+ * for the same three keys — hence the name.
  */
-/** What the one download button can produce. */
-type ExportFormat = "png" | "svg" | "gif";
-
-const PNG_SCALE: Record<GifSharpness, number> = {
+const PNG_SCALE_BY_SHARPNESS: Record<GifSharpness, number> = {
   compact: 1,
   standard: 2,
   sharp: 3,
@@ -113,6 +117,60 @@ export function SequenceExportButton({
    */
   const [format, setFormat] = useState<ExportFormat>("png");
 
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const summaryRef = useRef<HTMLElement>(null);
+
+  /**
+   * Dismiss the panel on a click outside it, and on Escape.
+   *
+   * The one thing a native `<details>` does NOT give: it stays open until its
+   * own summary is clicked again, so the panel sat over the diagram while the
+   * reader carried on clicking messages. Every other menu in the app — the C4
+   * export menu, the share panel — implements exactly this contract, and it is
+   * the behaviour a dropdown is expected to have.
+   *
+   * The open state stays the ELEMENT's (`node.open`), read at event time, rather
+   * than being mirrored into React: duplicating it here would mean fighting the
+   * native toggle for ownership of the same boolean.
+   *
+   * NOT while an export is running. The progress label and any failure render
+   * inside this panel, so closing it mid-export would restore the exact
+   * complaint the visible status was added to fix — "I click download GIF and
+   * nothing happens".
+   */
+  useEffect(() => {
+    const closeIfOpen = (): boolean => {
+      const node = detailsRef.current;
+      if (node === null || !node.open || busy) return false;
+      node.open = false;
+      return true;
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const node = detailsRef.current;
+      if (node === null || !node.open) return;
+      if (event.target instanceof Node && !node.contains(event.target)) {
+        closeIfOpen();
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (!closeIfOpen()) return;
+      // Only once this menu has actually consumed the key: the sequence viewer
+      // runs its own Escape ladder (clear focus, leave immersive), and an
+      // Escape that closed this panel must not also climb that.
+      event.preventDefault();
+      event.stopPropagation();
+      summaryRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    // Capture phase, for the same reason the ladder is guarded above.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [busy]);
+
   const run = useCallback(async () => {
     const svgNode =
       paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
@@ -143,11 +201,11 @@ export function SequenceExportButton({
       }
       if (format === "png") {
         downloadBlob(
-          await renderPngBlob(rendered, PNG_SCALE[sharpness]),
+          await renderPngBlob(rendered, PNG_SCALE_BY_SHARPNESS[sharpness]),
           `${stem}.png`,
         );
         onAnnounce(
-          `Downloaded the diagram as PNG at ${PNG_SCALE[sharpness]}× scale.`,
+          `Downloaded the diagram as PNG at ${PNG_SCALE_BY_SHARPNESS[sharpness]}× scale.`,
         );
         return;
       }
@@ -183,7 +241,7 @@ export function SequenceExportButton({
       // Named and SHOWN, not swallowed: rasterising can fail on a browser that
       // refuses to decode the SVG, and a button that silently does nothing is
       // worse than one that says why.
-      const message = error instanceof Error ? error.message : "unknown error";
+      const message = describeError(error);
       setStatus({ kind: "error", message });
       onAnnounce(`Export failed: ${message}.`);
       return;
@@ -207,8 +265,9 @@ export function SequenceExportButton({
           correct, where a custom popover would be re-earning all of it. The
           marker is hidden because the summary is styled as a button; it is still
           a real disclosure. */}
-      <details className="relative">
+      <details ref={detailsRef} className="relative">
         <summary
+          ref={summaryRef}
           className={cn(
             buttonClasses({ variant: "ghost", size: "sm" }),
             "cursor-pointer list-none [&::-webkit-details-marker]:hidden",

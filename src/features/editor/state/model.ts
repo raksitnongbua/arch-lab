@@ -17,6 +17,8 @@ import {
   type Size,
 } from "@/types";
 
+import { slugify as baseSlugify } from "@/lib/slug";
+
 import type { EditorModel } from "./store";
 
 /* -------------------------------------------------------------------------- */
@@ -188,15 +190,15 @@ export const DEFAULT_NODE_NAME_BY_TYPE: Record<C4NodeType, string> = {
   codeElement: "Code Element",
 };
 
-/** Lowercase, dash-separated slug. Falls back to `fallback` for empty input. */
+/**
+ * Lowercase, dash-separated slug. Falls back to `fallback` for empty input.
+ *
+ * Thin wrapper over the app-wide {@link baseSlugify}: this is the ID-minting
+ * path, where the default matters \u2014 an element with no usable name still needs
+ * an id, and `"node"` is the stem the de-collider then numbers.
+ */
 export function slugify(text: string, fallback = "node"): string {
-  const slug = text
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug === "" ? fallback : slug;
+  return baseSlugify(text, fallback);
 }
 
 /**

@@ -1283,7 +1283,9 @@ function ViewerCanvasInner({
       if (edge.source === selectedNodeId) keep.add(edge.target);
       if (edge.target === selectedNodeId) keep.add(edge.source);
     }
-    const notChain = [...keep].map((id) => `:not([data-id="${id}"])`).join("");
+    const excludeKeptSelector = [...keep]
+      .map((id) => `:not([data-id="${id}"])`)
+      .join("");
     const selected = `.viewer-canvas .react-flow__node[data-id="${selectedNodeId}"]`;
     // Selection affordance splits on motion preference. Motion: the node's
     // outline overlay lights up AND starts marching — the animation property
@@ -1298,7 +1300,7 @@ function ViewerCanvasInner({
     const flowAnimation = (name: string): string =>
       `animation: ${name} ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;`;
     return (
-      `.viewer-canvas .react-flow__node${notChain} { opacity: ${DIM_NODE_OPACITY}; }\n` +
+      `.viewer-canvas .react-flow__node${excludeKeptSelector} { opacity: ${DIM_NODE_OPACITY}; }\n` +
       `@media (prefers-reduced-motion: no-preference) {\n` +
       `  ${selected} .viewer-node-outline { opacity: 1; visibility: visible; transition-delay: 0s; }\n` +
       `  ${selected} .viewer-node-flow-glow { ${flowAnimation("viewer-edge-flow-glow")} }\n` +

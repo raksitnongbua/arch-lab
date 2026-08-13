@@ -80,6 +80,8 @@ const PICKER_TYPES: FilePickerAcceptType[] = [
     accept: { "application/json": [".json"] },
   },
 ];
+import { slugify } from "@/lib/slug";
+
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 
 /* -------------------------------------------------------------------------- */
@@ -234,9 +236,27 @@ export async function writeTextToHandle(
   }
 }
 
-/** Fallback save path: download the text as a file via a transient anchor. */
+/**
+ * MIME type for a saved model, from its file name.
+ *
+ * `.alab` is plain UTF-8 text; anything else on this path is the JSON format.
+ */
+function mimeForFileName(fileName: string): string {
+  return fileName.endsWith(ARCHTEXT_EXTENSION)
+    ? "text/plain;charset=utf-8"
+    : "application/json";
+}
+
+/**
+ * Fallback save path: download the text as a file via a transient anchor.
+ *
+ * The MIME type follows the NAME, because this path saves both formats — a
+ * `.alab` document is plain text, and labelling it `application/json` (as this
+ * did unconditionally) tells the OS to hand it to a JSON viewer that will
+ * report it as malformed.
+ */
 export function downloadTextFile(fileName: string, text: string): void {
-  const blob = new Blob([text], { type: "application/json" });
+  const blob = new Blob([text], { type: mimeForFileName(fileName) });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -261,9 +281,5 @@ export function downloadTextFile(fileName: string, text: string): void {
  * `./format`, which honours the model's own format.
  */
 export function deriveFileName(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `${slug === "" ? "untitled-model" : slug}.archlab.json`;
+  return `${slugify(title, "untitled-model")}.archlab.json`;
 }

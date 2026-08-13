@@ -39,6 +39,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { AlignLeft, CircleAlert, CircleCheck, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { CaretQuote } from "@/components/ui/caret-quote";
 import { buttonClasses } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
@@ -349,15 +350,11 @@ function ErrorBox({ error }: { error: ModelTextError }): React.JSX.Element {
 
       {error.kind === "syntax" ? (
         <>
-          {error.lineText !== null ? (
-            <pre className="mt-2 overflow-x-auto rounded-md bg-card px-3 py-2 font-mono text-xs leading-relaxed text-foreground">
-              {`${String(error.line).padStart(4)} | ${error.lineText}\n`}
-              <span aria-hidden="true">
-                {`${" ".repeat(4)} | ${" ".repeat(Math.max(0, error.column - 1))}`}
-                <span className="font-bold text-destructive">^</span>
-              </span>
-            </pre>
-          ) : null}
+          <CaretQuote
+            line={error.line}
+            column={error.column}
+            lineText={error.lineText}
+          />
           {error.issues.length > 1 ? (
             <ul className="mt-2 space-y-1">
               {error.issues.slice(1).map((issue) => (

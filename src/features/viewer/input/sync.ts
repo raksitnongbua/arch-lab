@@ -35,6 +35,7 @@ import {
   type ValidationIssue,
 } from "@/features/editor/io/validate";
 import type { MermaidIssue } from "@/features/mermaid";
+import { sourceLineAt } from "@/lib/source-text";
 
 import type { ViewerModel } from "../lib/model";
 import { detectFormat } from "./detect";
@@ -119,10 +120,6 @@ export type MermaidImportResult =
 /* -------------------------------------------------------------------------- */
 /* Parsing one pane                                                            */
 /* -------------------------------------------------------------------------- */
-
-function sourceLineAt(text: string, line: number): string | null {
-  return text.split(/\r?\n/)[line - 1] ?? null;
-}
 
 function syncedFromFile(file: ArchLabFile): SyncedModel {
   return {
@@ -284,12 +281,3 @@ tags #demo
 export const SEED_MODEL: SyncedModel = syncedFromFile(
   parseArchText(SEED_SOURCE),
 );
-
-/** `"Coffee Shop"` → `"coffee-shop"` — the stem both downloads share. */
-export function downloadStem(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug === "" ? "model" : slug;
-}

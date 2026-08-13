@@ -21,6 +21,51 @@
  * so a long diagram stays compositor/paint-bound during a focus draw.
  * ------------------------------------------------------------------------- */
 
+/* ---- the opening settle ------------------------------------------------------
+ * The diagram ARRIVES: a short fade and a small rise, once, as the viewer first
+ * paints. Then nothing — it hands straight over to the idle comet.
+ *
+ * THIS IS NOT A REVEAL, and the distinction is the whole reason it is allowed
+ * to exist next to the model stated at the top of this file. Every participant,
+ * message, note and fragment is present in the first frame at the same opacity;
+ * none arrives before another and nothing is staged. What moves is the drawing
+ * as ONE object, landing. A reader still sees the complete record immediately —
+ * which is the promise — they just see it arrive rather than blink into place.
+ *
+ * ON THE SVG, not the pane: the toolbar, the zoom pill and the scrollbars are
+ * chrome that was already there, and sliding them would say the PAGE arrived
+ * rather than the diagram.
+ *
+ * GATED ON A MEDIA QUERY rather than a 0ms `--seq-*` value, which is the one
+ * place this file departs from the contract above, for a mechanical reason:
+ * this is the only animation that runs BEFORE hydration, and the custom
+ * properties are written by the viewer on mount — too late to suppress a
+ * first-paint animation for a reader who asked for no motion. Same reason the
+ * reduced-motion block at the end of this file holds before hydration. The var
+ * is still read, so `lib/motion.ts` stays the single source of truth for the
+ * number; its FALLBACK is what actually runs, and `check:sequence-motion` pins
+ * the two together so they cannot drift.
+ *
+ * `both` fill, so the from-frame holds until the animation starts — otherwise
+ * the settled diagram flashes for a frame before it plays. Only `opacity` and
+ * `transform` animate: both compositor-only, so this obeys the never-a-layout-
+ * property rule above just as the focus draw does.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .af-seq-svg {
+    animation: af-seq-enter var(--seq-enter, 260ms) ease-out both;
+  }
+}
+
+@keyframes af-seq-enter {
+  from {
+    opacity: 0;
+    /* Small on purpose: far enough to read as "landing", near enough that a
+       long diagram does not appear to slide under its own toolbar. */
+    transform: translateY(6px);
+  }
+}
+
 /* ---- the focus draw ----------------------------------------------------------
  * Solid arrows (sync, async) carry pathLength="1", so one dash unit is the
  * whole line and every arrow draws in the same time regardless of span —

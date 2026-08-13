@@ -14,6 +14,9 @@
 
 import { ArrowDown, ArrowUpDown, Minus, X } from "lucide-react";
 
+import { LEVEL_LABEL } from "@/lib/constants";
+
+import { MetaRow } from "./viewer-meta-row";
 import { cn } from "@/lib/utils";
 import type { C4Edge, C4Level, C4Node, EdgeDirection } from "@/types";
 
@@ -33,36 +36,10 @@ const DIRECTION_LABEL: Record<EdgeDirection, string> = {
   none: "Undirected association",
 };
 
-const LEVEL_TITLE: Record<C4Level, string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
-
 function nodeMeta(node: C4Node): string {
   return node.technology !== undefined && node.technology !== ""
     ? `${C4_ABSTRACTION[node.type]} · ${node.technology}`
     : C4_ABSTRACTION[node.type];
-}
-
-function MetaRow({
-  term,
-  children,
-}: {
-  term: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="shrink-0 text-[10px] tracking-wide text-muted-foreground uppercase">
-        {term}
-      </dt>
-      <dd className="min-w-0 text-right text-[11px] text-foreground">
-        {children}
-      </dd>
-    </div>
-  );
 }
 
 function EndpointCard({
@@ -184,7 +161,7 @@ export function ViewerEdgeDetail({
           <span className="font-medium text-foreground">
             “{realizes.label}”
           </span>{" "}
-          from the {LEVEL_TITLE[realizes.level]} view one level up.
+          from the {LEVEL_LABEL[realizes.level]} view one level up.
         </p>
       ) : null}
 

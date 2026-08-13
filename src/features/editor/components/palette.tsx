@@ -15,21 +15,16 @@
 import { useCallback } from "react";
 
 import { toast } from "@/components/ui/toast";
-import {
-  childLevelOf,
-  type C4Level,
-  type C4NodeType,
-  type Point,
-} from "@/types";
+import { childLevelOf, type C4NodeType, type Point } from "@/types";
 
-import { DEFAULT_NODE_SIZE, GRID_SIZE } from "../lib/canvas-constants";
+import { DEFAULT_NODE_SIZE, snapToGrid } from "../lib/canvas-constants";
 import { findFreePosition } from "../lib/placement";
 import {
   selectActiveLevel,
   selectValidNodeTypes,
   useEditorStore,
 } from "../state";
-import { C4_LEVEL_META } from "@/lib/constants";
+import { LEVEL_LABEL } from "@/lib/constants";
 import { PaletteItem } from "./palette-item";
 import { RefPickerDialog } from "./ref-picker-dialog";
 
@@ -46,16 +41,6 @@ const PALETTE_GROUPS: ReadonlyArray<{
   { label: "Data & messaging", types: ["database", "queue"] },
   { label: "External", types: ["externalSystem"] },
 ];
-
-const LEVEL_LABEL: Record<C4Level, string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
-
-const snap = (value: number): number =>
-  Math.round(value / GRID_SIZE) * GRID_SIZE;
 
 /**
  * The flow coordinate at the centre of the canvas viewport. Derived from the
@@ -87,8 +72,8 @@ function createAtViewportCentre(type: C4NodeType): void {
 
   const centre = viewportCentreFlowPosition(diagramId);
   const position = findFreePosition(diagram, DEFAULT_NODE_SIZE, {
-    x: snap(centre.x - DEFAULT_NODE_SIZE.width / 2),
-    y: snap(centre.y - DEFAULT_NODE_SIZE.height / 2),
+    x: snapToGrid(centre.x - DEFAULT_NODE_SIZE.width / 2),
+    y: snapToGrid(centre.y - DEFAULT_NODE_SIZE.height / 2),
   });
 
   try {
@@ -122,8 +107,8 @@ function placeRefAtViewportCentre(
 
   const centre = viewportCentreFlowPosition(diagramId);
   const position = findFreePosition(diagram, DEFAULT_NODE_SIZE, {
-    x: snap(centre.x - DEFAULT_NODE_SIZE.width / 2),
-    y: snap(centre.y - DEFAULT_NODE_SIZE.height / 2),
+    x: snapToGrid(centre.x - DEFAULT_NODE_SIZE.width / 2),
+    y: snapToGrid(centre.y - DEFAULT_NODE_SIZE.height / 2),
   });
 
   try {
@@ -149,11 +134,7 @@ export function Palette(): React.JSX.Element {
 
   // `null` at code level, where there is nothing below to point at.
   const childLevel = childLevelOf(activeLevel);
-  const nextLevelLabel =
-    childLevel === null
-      ? null
-      : (C4_LEVEL_META.find((meta) => meta.level === childLevel)?.label ??
-        null);
+  const nextLevelLabel = childLevel === null ? null : LEVEL_LABEL[childLevel];
   const validTypes = useEditorStore(selectValidNodeTypes);
 
   const handleCreate = useCallback((type: C4NodeType) => {

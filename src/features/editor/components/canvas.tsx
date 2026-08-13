@@ -76,6 +76,7 @@ import {
   MIN_ZOOM,
   NUDGE_STEP,
   NUDGE_STEP_FINE,
+  snapToGrid,
 } from "../lib/canvas-constants";
 import { duration } from "../lib/motion";
 import { useEditorStore } from "../state";
@@ -192,9 +193,6 @@ function readPaletteDrag(dt: DataTransfer): PaletteDragPayload | null {
 /* -------------------------------------------------------------------------- */
 /* Geometry helpers                                                            */
 /* -------------------------------------------------------------------------- */
-
-const snap = (value: number): number =>
-  Math.round(value / GRID_SIZE) * GRID_SIZE;
 
 interface AxisSnap {
   delta: number;
@@ -460,8 +458,8 @@ function CanvasInner(): React.JSX.Element {
         return change;
       }
       const quantised: Point = {
-        x: snap(change.position.x),
-        y: snap(change.position.y),
+        x: snapToGrid(change.position.x),
+        y: snapToGrid(change.position.y),
       };
       // Alignment guides only for single-node drags; multi-drags keep their
       // relative layout via per-node grid quantisation.
@@ -676,7 +674,7 @@ function CanvasInner(): React.JSX.Element {
         const nodeId = store.createNode({
           diagramId: store.activeDiagramId,
           type: payload.nodeType,
-          position: { x: snap(raw.x), y: snap(raw.y) },
+          position: { x: snapToGrid(raw.x), y: snapToGrid(raw.y) },
         });
         store.setSelection({ nodeIds: [nodeId], edgeIds: [] });
         store.beginLabelEdit({ kind: "node", id: nodeId });

@@ -336,6 +336,21 @@ export function normalizeShareFragment(hash: string): string {
 }
 
 /**
+ * Takes a dead share fragment out of the address bar, in place.
+ *
+ * `replaceState` rather than assigning `location.hash`: the point is to land on
+ * the clean URL WITHOUT a reload — a reload would remount the playground and
+ * throw away whatever the reader has since typed — and without pushing a history
+ * entry that Back would walk straight into the broken link again.
+ *
+ * Both playgrounds call this when the reader dismisses a link that would not
+ * open; each had the one-liner inline under a comment saying this.
+ */
+export function dropUrlFragment(): void {
+  window.history.replaceState(null, "", window.location.pathname);
+}
+
+/**
  * Decodes a location hash (with or without the leading `#`). Never throws;
  * corrupt or truncated payloads come back as `{ status: "error" }` with a
  * plain-language reason.

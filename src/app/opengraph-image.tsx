@@ -6,6 +6,7 @@ import {
   OG_CONTENT_TYPE,
   OG_SIZE,
   OgCard,
+  OgConnector,
   OgMessage,
   OgNode,
 } from "@/features/marketing/og/card";
@@ -46,15 +47,7 @@ export default function OpenGraphImage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <OgNode name="Web App" tech="Next.js · SSR" />
-            <div
-              style={{
-                display: "flex",
-                width: 2,
-                height: 24,
-                marginLeft: 60,
-                background: OG.border,
-              }}
-            />
+            <OgConnector height={24} />
             <OgNode name="Orders DB" tech="PostgreSQL" />
           </div>
 

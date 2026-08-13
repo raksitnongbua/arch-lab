@@ -129,20 +129,45 @@ export function dependenciesOf(
 }
 
 /**
- * Everything hidden by a SET of collapsed participants — the union of each
- * one's dependencies, minus the collapsed participants themselves, which stay
- * visible (they are the handle you collapsed by, and hiding it would leave no
- * way to expand again).
+ * Everything hidden by a SET of collapsed participants — the union of each one's
+ * dependencies, minus the collapsed participants that are still their own
+ * handle.
+ *
+ * A collapsed participant normally STAYS VISIBLE: it is the control you folded
+ * by, and hiding it would leave no way to expand again. But that exemption only
+ * applies while nothing else folds it. Collapse a service and then collapse
+ * something upstream of it, and the inner one IS one of the outer one's
+ * dependencies — exempting it there made the outer collapse fold nothing new, so
+ * clicking it appeared to do nothing at all (`check:sequence-collapse` now pins
+ * that case). Nesting reads the way a reader expects instead: folding the caller
+ * folds the whole branch, and expanding it brings the inner one back still
+ * folded.
+ *
+ * At least one handle always survives, so a collapsed set can never strand
+ * itself: `X ∈ dependenciesOf(Y)` requires Y to reach X while X cannot reach Y
+ * (step 2 of `dependenciesOf`), which makes "folds" a strict partial order — and
+ * the outermost collapsed participant is in nobody else's dependencies.
  */
 export function hiddenParticipants(
   file: SequenceLabFile,
   collapsed: ReadonlySet<string>,
 ): Set<string> {
+  // Once per collapsed id: `dependenciesOf` walks the whole message list per
+  // call, and the exemption test below needs to consult every set.
+  const foldedBy = new Map<string, Set<string>>();
+  for (const id of collapsed) foldedBy.set(id, dependenciesOf(file, id));
+
   const hidden = new Set<string>();
-  for (const id of collapsed) {
-    for (const dependency of dependenciesOf(file, id)) hidden.add(dependency);
+  for (const dependencies of foldedBy.values()) {
+    for (const dependency of dependencies) hidden.add(dependency);
   }
-  for (const id of collapsed) hidden.delete(id);
+
+  for (const id of collapsed) {
+    const foldedByAnother = [...foldedBy].some(
+      ([other, dependencies]) => other !== id && dependencies.has(id),
+    );
+    if (!foldedByAnother) hidden.delete(id);
+  }
   return hidden;
 }
 

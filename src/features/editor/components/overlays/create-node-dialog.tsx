@@ -31,7 +31,7 @@ import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { C4NodeType, Point } from "@/types";
 
-import { DEFAULT_NODE_SIZE, GRID_SIZE } from "../../lib/canvas-constants";
+import { DEFAULT_NODE_SIZE, snapToGrid } from "../../lib/canvas-constants";
 import { selectValidNodeTypes, useEditorStore } from "../../state";
 import { NODE_TYPE_META } from "../palette-item";
 import {
@@ -39,9 +39,6 @@ import {
   useCanvasInteraction,
   type PendingCreate,
 } from "../canvas";
-
-const snap = (value: number): number =>
-  Math.round(value / GRID_SIZE) * GRID_SIZE;
 
 /** Same display order as `palette.tsx`, filtered to the active level. */
 const TYPE_ORDER: readonly C4NodeType[] = [
@@ -85,8 +82,8 @@ function CreateNodeDialogBody({
       // The click marks the node's CENTRE — dropping its top-left there would
       // make the node appear down-and-right of the cursor.
       const position: Point = {
-        x: snap(pending.flowPosition.x - DEFAULT_NODE_SIZE.width / 2),
-        y: snap(pending.flowPosition.y - DEFAULT_NODE_SIZE.height / 2),
+        x: snapToGrid(pending.flowPosition.x - DEFAULT_NODE_SIZE.width / 2),
+        y: snapToGrid(pending.flowPosition.y - DEFAULT_NODE_SIZE.height / 2),
       };
       try {
         const nodeId = store.createNode({

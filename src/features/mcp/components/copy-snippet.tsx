@@ -11,10 +11,7 @@
  * Long lines scroll INSIDE the block, never the page.
  */
 
-import { useCallback, useState } from "react";
-import { Check, Copy } from "lucide-react";
-
-import { buttonClasses } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 
 export function CopySnippet({
   snippet,
@@ -35,7 +32,7 @@ export function CopySnippet({
           <figcaption className="font-mono text-xs text-muted-foreground">
             {caption}
           </figcaption>
-          <CopyButton snippet={snippet} label={label} />
+          <CopyButton text={snippet} label={`Copy the ${label}`} />
         </div>
         <pre
           tabIndex={0}
@@ -45,46 +42,5 @@ export function CopySnippet({
         </pre>
       </div>
     </figure>
-  );
-}
-
-function CopyButton({
-  snippet,
-  label,
-}: {
-  snippet: string;
-  label: string;
-}): React.JSX.Element {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    void navigator.clipboard
-      .writeText(snippet)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2_000);
-      })
-      .catch(() => {
-        /* Clipboard blocked — the text stays selectable in the block. */
-      });
-  }, [snippet]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      aria-label={copied ? "Copied to clipboard" : `Copy the ${label}`}
-      className={buttonClasses({ variant: "ghost", size: "sm" })}
-    >
-      {copied ? (
-        <Check aria-hidden="true" className="text-primary" />
-      ) : (
-        <Copy aria-hidden="true" />
-      )}
-      {copied ? "Copied" : "Copy"}
-      <span aria-live="polite" className="sr-only">
-        {copied ? "Copied to clipboard." : ""}
-      </span>
-    </button>
   );
 }

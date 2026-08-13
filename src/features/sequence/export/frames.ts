@@ -26,21 +26,15 @@
  * stutter at the loop point.
  */
 
+import { GIF_SMOOTHNESS, rasterise, type GifSmoothness } from "@/lib/gif";
+
 import { renderSequenceSvg } from "./render-svg";
 
 /**
- * The two axes a reader can trade off, and why they are separate.
- *
- * SHARPNESS is pixels: how big the image is, and therefore whether small labels
- * survive. SMOOTHNESS is frames per loop: how finely the motion is sampled.
- * They are independent — a big jerky GIF and a small fluid one are both
- * reasonable things to want — so folding them into one "quality" slider would
- * force a choice nobody asked for.
- *
- * Every preset holds the LOOP DURATION at roughly 1.4 seconds, so raising
- * smoothness adds frames without slowing the animation down. Delays are whole
- * multiples of 10ms because GIF stores hundredths of a second and rounds
- * anything else silently.
+ * Target WIDTH IN PIXELS per sharpness. A sequence diagram's own width varies
+ * with participant count, so the export renders to a fixed width and lets the
+ * height follow — unlike the C4 exporter's `C4_SHARPNESS`, which multiplies the
+ * diagram's natural size. Same three names, different unit.
  */
 export const GIF_SHARPNESS = {
   standard: 720,
@@ -48,14 +42,15 @@ export const GIF_SHARPNESS = {
   compact: 540,
 } as const;
 
-export const GIF_SMOOTHNESS = {
-  standard: { frames: 20, delayMs: 70 },
-  smooth: { frames: 30, delayMs: 50 },
-  simple: { frames: 12, delayMs: 120 },
-} as const;
-
 export type GifSharpness = keyof typeof GIF_SHARPNESS;
-export type GifSmoothness = keyof typeof GIF_SMOOTHNESS;
+
+/**
+ * Re-exported so this module stays the one place the sequence exporter and
+ * `scripts/sequence-gif-check.mjs` read its GIF settings from; the presets
+ * themselves are shared with the C4 exporter in `@/lib/gif`.
+ */
+export { GIF_SMOOTHNESS };
+export type { GifSmoothness };
 
 export interface GifQuality {
   sharpness: GifSharpness;
@@ -92,44 +87,6 @@ export interface SequenceFrames {
   frames: { rgba: Uint8ClampedArray; delayMs: number }[];
   width: number;
   height: number;
-}
-
-/**
- * Rasterises one SVG string at a fixed pixel size and returns its pixels.
- *
- * Each frame gets its own `Image`: decoding is asynchronous, and reusing one
- * element across frames races its own `onload`.
- */
-async function rasterise(
-  svg: string,
-  width: number,
-  height: number,
-): Promise<Uint8ClampedArray> {
-  const url = URL.createObjectURL(
-    new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
-  );
-  try {
-    const image = new Image();
-    image.decoding = "sync";
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () =>
-        reject(new Error("A frame's SVG could not be decoded as an image."));
-      image.src = url;
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (context === null) {
-      throw new Error("Could not create a 2D canvas context for the GIF.");
-    }
-    context.drawImage(image, 0, 0, width, height);
-    return context.getImageData(0, 0, width, height).data;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }
 
 /**

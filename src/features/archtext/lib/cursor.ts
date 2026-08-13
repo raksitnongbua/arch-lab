@@ -10,6 +10,7 @@
 
 import { failAt } from "./errors";
 import { NUMBER_RE } from "./text";
+import { describeError } from "@/lib/errors";
 
 export class LineCursor {
   readonly text: string;
@@ -151,7 +152,7 @@ export class LineCursor {
       this.pos = this.text.length;
       return value;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = describeError(error);
       return failAt(
         this.line,
         column,

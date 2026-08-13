@@ -11,15 +11,21 @@ import { cn } from "@/lib/utils";
 /**
  * Primary navigation.
  *
- * Three permanent entries — Syntax (the `.alab` text-format reference),
- * Validate (the model checker) and MCP (connecting an AI agent) — so all are
- * reachable from every route, not only from the footer and the playground.
- * They are adjacent on purpose: reading the grammar, testing something
- * against it, and pointing an agent at both are the same errand. MCP goes
- * last because it is the one you reach for after the format makes sense.
- * The Demo entry was removed on request (do not re-add it), and the Editor
- * entry is gated behind EDITOR_ENABLED; flipping that flag restores it
- * alongside the others with no other change.
+ * The order runs from DOING to READING to BUILDING, left to right:
+ *
+ *   View — the one entry that puts a model on screen, so it leads.
+ *   Syntax, Validate, MCP — the reference trio, adjacent on purpose: reading
+ *     the grammar, testing something against it, and pointing an agent at both
+ *     are the same errand. MCP sits last of the three, being the one you reach
+ *     for after the format makes sense.
+ *   Editor — last, at the far right. It is the heaviest destination on the bar
+ *     (a full authoring surface, not a page you read), and it is the only entry
+ *     that can disappear, so keeping it at the end means EDITOR_ENABLED toggles
+ *     a trailing item rather than resequencing the whole nav.
+ *
+ * The Demo entry was removed on request (do not re-add it). The Editor entry
+ * is gated behind EDITOR_ENABLED; flipping that flag restores it with no other
+ * change.
  *
  * MCP carries a `status` pill read from the mcp feature's catalogue, so the
  * beta marker here can never disagree with the one on `/mcp` or the one the
@@ -35,16 +41,15 @@ const NAV_LINKS: ReadonlyArray<{
   /** Release status, shown as a small pill after the label. */
   status?: string;
 }> = [
-  ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
-  // View comes first of the permanent entries: it is the one place you can
-  // actually put a model on screen, and until now it was only reachable from
-  // the landing page or a share link — the header offered three ways to read
-  // ABOUT the format and none to use it. This is not the removed Demo entry:
-  // that pointed at the bundled examples index, this is the playground itself.
+  // View leads: it is the one place you can actually put a model on screen,
+  // where the header otherwise offered three ways to read ABOUT the format and
+  // none to use it. This is not the removed Demo entry — that pointed at the
+  // bundled examples index, this is the playground itself.
   { href: "/view", label: "View" },
   { href: "/syntax", label: "Syntax" },
   { href: "/validate", label: "Validate" },
   { href: "/mcp", label: "MCP", status: MCP_STATUS_LABEL },
+  ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
 ];
 
 export function Header() {

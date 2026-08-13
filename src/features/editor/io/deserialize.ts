@@ -18,6 +18,7 @@
  */
 
 import type { C4Diagram } from "@/types";
+import { describeError } from "@/lib/errors";
 import type { EditorModel } from "../state";
 
 import { FileValidationError, validateArchLabFile } from "./validate";
@@ -39,7 +40,7 @@ export function deserializeModel(text: string): EditorModel {
   try {
     parsed = JSON.parse(text);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = describeError(error);
     throw new FileValidationError([
       { path: "(file)", message: `the file is not valid JSON — ${detail}` },
     ]);

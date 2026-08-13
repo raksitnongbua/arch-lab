@@ -154,6 +154,62 @@ if (speed !== null && replyPeriod !== null) {
   );
 }
 
+/* ---- 2b. the opening settle ---------------------------------------------- */
+
+/*
+ * The settle is the one animation that plays BEFORE hydration, which makes its
+ * two guarantees worth pinning rather than trusting:
+ *
+ *   - The duration has one source of truth. The stylesheet's fallback is what
+ *     actually runs at first paint (the `--seq-*` properties arrive on mount),
+ *     so a change to `enter:` in lib/motion.ts that forgot the fallback would
+ *     silently keep the old timing forever.
+ *   - Reduced motion is honoured WITHOUT JS. A 0ms custom property cannot
+ *     suppress an animation that already played, so the rule has to sit inside
+ *     `prefers-reduced-motion: no-preference` — a reader who asked for no
+ *     motion must get none on the very first frame.
+ */
+const enter = motion.match(/enter:\s*(\d+)/);
+check("SEQUENCE_DURATIONS declares the opening settle", enter !== null);
+
+const enterFallback = css.match(
+  /animation:\s*af-seq-enter\s+var\(--seq-enter,\s*(\d+)ms\)/,
+);
+check(
+  "the stylesheet's settle fallback equals SEQUENCE_DURATIONS.enter (it is what runs before hydration)",
+  enter !== null &&
+    enterFallback !== null &&
+    Number(enterFallback[1]) === Number(enter[1]),
+);
+
+check(
+  "the settle is gated on `prefers-reduced-motion: no-preference`, so it cannot play for a reader who declined motion",
+  /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{[^}]*\.af-seq-svg\s*\{[^}]*af-seq-enter/s.test(
+    css,
+  ),
+);
+
+check(
+  "the settle animates opacity and transform only — never a layout property",
+  (() => {
+    const frames = css.match(/@keyframes af-seq-enter\s*\{(.*?)\n\}/s);
+    if (frames === null) return false;
+    const properties = [...frames[1].matchAll(/^\s{4}([a-z-]+):/gm)].map(
+      (m) => m[1],
+    );
+    return (
+      properties.length > 0 &&
+      properties.every((p) => p === "opacity" || p === "transform")
+    );
+  })(),
+);
+
+check(
+  "the settle does not stage content — one rule, on the drawing root, not per message",
+  !/af-seq-enter[^}]*--seq-rank/s.test(css) &&
+    !/\.af-seq-msg[^{]*\{[^}]*af-seq-enter/s.test(css),
+);
+
 /* ---- 3. the comet IS the C4 viewer's comet ------------------------------- */
 
 /*

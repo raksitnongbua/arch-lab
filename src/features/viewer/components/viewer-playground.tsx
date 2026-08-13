@@ -33,8 +33,6 @@ import {
   AlignLeft,
   ArrowDownToLine,
   Braces,
-  Check,
-  Copy,
   Download,
   Import,
   X,
@@ -43,13 +41,15 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
+import { CaretQuote } from "@/components/ui/caret-quote";
+import { CopyButton } from "@/components/ui/copy-button";
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { cn } from "@/lib/utils";
 
+import { downloadBlob, sourceFileStem } from "../export/download";
 import { MERMAID_EXAMPLE } from "../input/examples";
 import {
   canonicalizePane,
-  downloadStem,
   importMermaid,
   MERMAID_LOSSY_NOTICE,
   PANE_LABEL,
@@ -64,12 +64,18 @@ import {
   ShareLinkFailurePage,
   type ShareOpenFailure,
 } from "@/components/share/share-link-failure";
+import {
+  SHARE_PENDING_CLASS,
+  ShareOpening,
+} from "@/components/share/share-opening";
 
 import {
   canEncodeShare,
   decodeShareFragment,
+  dropUrlFragment,
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
+  SHARE_FORWARD_ATTRIBUTE,
 } from "../share/codec";
 import { ViewerShell } from "./viewer-shell";
 
@@ -218,6 +224,14 @@ export function ViewerPlayground(): React.JSX.Element {
     const openFromHash = async () => {
       const decoded = await decodeShareFragment(window.location.hash);
       if (cancelled) return;
+
+      /* HAND BACK THE PRE-PAINT FLAG — see the identical note in the sequence
+         playground and `components/share/share-opening.tsx`. `data-share-forward`
+         is stamped on <html> before first paint so the holding state stands in
+         for the seeded model; the script cannot clear itself, so the page that
+         resolved the payload does it, for every outcome including "no payload".
+         Left standing it would blank this route for the rest of the session. */
+      document.documentElement.removeAttribute(SHARE_FORWARD_ATTRIBUTE);
 
       // Clear every previous outcome before recording this one. `hashchange`
       // fires for a second link opened in the same tab, and a takeover left
@@ -445,16 +459,14 @@ export function ViewerPlayground(): React.JSX.Element {
 
   /* ---- render ------------------------------------------------------------ */
 
-  const stem = downloadStem(synced.model.title);
+  const stem = sourceFileStem(synced.model.title);
 
   // A link that did not open takes over the page. Returned BEFORE the editor so
   // the seed model is never on screen next to the message — the whole point is
   // that there is nothing here to mistake for what was shared.
   //
-  // Drop the fragment without a reload, so the editor appears on the clean
-  // `/view` URL and the dead link is not left in the address bar.
   const startFresh = () => {
-    window.history.replaceState(null, "", window.location.pathname);
+    dropUrlFragment();
     setShareFailure(null);
   };
 
@@ -470,8 +482,20 @@ export function ViewerPlayground(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8">
-      {/* ---- the rendered model ----------------------------------------------
+    <>
+      {/* Swapped in for the block below, pre-paint, while a share link is being
+          opened — so the seeded model is never mistaken for the shared one.
+          `display: none` unless the flag is set, so a normal visit pays
+          nothing. */}
+      <ShareOpening subject="model" />
+
+      <div
+        className={cn(
+          SHARE_PENDING_CLASS,
+          "mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8",
+        )}
+      >
+        {/* ---- the rendered model ----------------------------------------------
 
            FIRST — above the heading, the notices and the panes alike. This
            page is a diagram tool: the diagram is the answer and everything
@@ -485,7 +509,7 @@ export function ViewerPlayground(): React.JSX.Element {
            monitor it grew past what the diagram needs. The lower bound keeps
            it usable, the upper stops it from becoming the whole page. On a
            phone svh tracks the retracting browser chrome, where vh does not. */}
-      {/* Fills the screen rather than 70% of it. The diagram is the reason the
+        {/* Fills the screen rather than 70% of it. The diagram is the reason the
           page exists; leaving a slice of the .alab pane peeking below the fold
           bought nothing and cost the canvas a third of its height on a laptop.
 
@@ -494,7 +518,7 @@ export function ViewerPlayground(): React.JSX.Element {
           chrome is tracked, which `vh` does not do. The `min-h` keeps it usable
           on a short window, where filling the viewport would leave a canvas too
           small to read. */}
-      {/* The viewport-height budget lives on this WRAPPER, not on the canvas,
+        {/* The viewport-height budget lives on this WRAPPER, not on the canvas,
           and the two children split it: canvas `flex-1 min-h-0`, hint
           `shrink-0`. That is what keeps the hint on screen.
 
@@ -503,219 +527,220 @@ export function ViewerPlayground(): React.JSX.Element {
           element whose job was to say "there is more below" was itself below the
           fold. Subtracting the hint's height instead would have worked until
           someone changed its padding. */}
-      <div className="flex h-[calc(100svh-6.5rem)] min-h-[24rem] flex-col gap-2">
-        <section
-          aria-label="Rendered diagram"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border shadow-sm"
-        >
-          <ViewerShell
-            key={shellEpoch}
-            model={synced.model}
-            initialDiagramId={sharedInitialDiagram ?? undefined}
-            share={{ kind: "payload", text: synced.aftText }}
-            onDiagramChange={handleDiagramChange}
-          />
-        </section>
+        <div className="flex h-[calc(100svh-6.5rem)] min-h-[24rem] flex-col gap-2">
+          <section
+            aria-label="Rendered diagram"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border shadow-sm"
+          >
+            <ViewerShell
+              key={shellEpoch}
+              model={synced.model}
+              initialDiagramId={sharedInitialDiagram ?? undefined}
+              share={{ kind: "payload", text: synced.aftText }}
+              onDiagramChange={handleDiagramChange}
+            />
+          </section>
 
-        {/* A button, not a decorative chevron: it performs the scroll, and it is
+          {/* A button, not a decorative chevron: it performs the scroll, and it is
             reachable by keyboard — "scroll down" as prose is not. */}
-        <button
-          type="button"
-          onClick={() => {
-            document
-              .getElementById(sourceSectionId)
-              ?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-          className="mx-auto flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          <ArrowDownToLine aria-hidden="true" className="size-3.5" />
-          Scroll for the <span className="font-mono">.alab</span> source
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => {
+              document
+                .getElementById(sourceSectionId)
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="mx-auto flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-ring/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <ArrowDownToLine aria-hidden="true" className="size-3.5" />
+            Scroll for the <span className="font-mono">.alab</span> source
+          </button>
+        </div>
 
-      {/* Deliberately compact: it is reference material people need once, not
+        {/* Deliberately compact: it is reference material people need once, not
           on every visit, so the detail collapses instead of occupying space. */}
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-          Write your own model
-        </h1>
-        <Badge variant="accent">
-          <span className="size-1.5 rounded-full bg-accent" />
-          live .alab editor
-        </Badge>
-        <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-          Write it in <span className="font-mono text-foreground">.alab</span> —
-          readable, diffable, and lossless. Nothing leaves your browser.{" "}
-          <Link
-            href="/syntax"
-            className="font-medium text-primary hover:underline"
-          >
-            Syntax reference
-          </Link>
-        </p>
-      </header>
-
-      <details className="group -mt-3 text-sm text-muted-foreground">
-        <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
-          How .alab and JSON relate
-        </summary>
-        <p className="mt-2 max-w-3xl leading-relaxed">
-          <span className="font-mono text-foreground">.alab</span> is the format
-          to write: it is what the syntax reference documents, what share links
-          carry, and what reads cleanly in a code review.{" "}
-          <span className="font-mono text-foreground">.archlab.json</span> is
-          the same model on disk — the interchange form any other tool can read
-          without implementing a grammar. The two are lossless twins in both
-          directions (proved on every build), so you never have to write the
-          JSON by hand; show it when you want to see or paste it. Mermaid C4 can
-          be imported, one-way. Nothing you type is uploaded or stored.
-        </p>
-      </details>
-
-      {/* One shared live region for sync state and errors. */}
-      <p aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
-
-      {/* ---- share-link outcome --------------------------------------------- */}
-      {/* Success only. Failure never reaches here — it took over the page. */}
-      {openedFromShare ? (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
-          <p className="text-sm leading-relaxed text-foreground">
-            <span className="font-semibold">Opened from a share link.</span> The
-            model below travelled inside the link itself — nothing was uploaded,
-            and nothing is stored. Both panes hold its source; any edits stay in
-            your browser.
+        <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            Write your own model
+          </h1>
+          <Badge variant="accent">
+            <span className="size-1.5 rounded-full bg-accent" />
+            live .alab editor
+          </Badge>
+          <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
+            Write it in <span className="font-mono text-foreground">.alab</span>{" "}
+            — readable, diffable, and lossless. Nothing leaves your browser.{" "}
+            <Link
+              href="/syntax"
+              className="font-medium text-primary hover:underline"
+            >
+              Syntax reference
+            </Link>
           </p>
+        </header>
+
+        <details className="group -mt-3 text-sm text-muted-foreground">
+          <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
+            How .alab and JSON relate
+          </summary>
+          <p className="mt-2 max-w-3xl leading-relaxed">
+            <span className="font-mono text-foreground">.alab</span> is the
+            format to write: it is what the syntax reference documents, what
+            share links carry, and what reads cleanly in a code review.{" "}
+            <span className="font-mono text-foreground">.archlab.json</span> is
+            the same model on disk — the interchange form any other tool can
+            read without implementing a grammar. The two are lossless twins in
+            both directions (proved on every build), so you never have to write
+            the JSON by hand; show it when you want to see or paste it. Mermaid
+            C4 can be imported, one-way. Nothing you type is uploaded or stored.
+          </p>
+        </details>
+
+        {/* One shared live region for sync state and errors. */}
+        <p aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
+
+        {/* ---- share-link outcome --------------------------------------------- */}
+        {/* Success only. Failure never reaches here — it took over the page. */}
+        {openedFromShare ? (
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
+            <p className="text-sm leading-relaxed text-foreground">
+              <span className="font-semibold">Opened from a share link.</span>{" "}
+              The model below travelled inside the link itself — nothing was
+              uploaded, and nothing is stored. Both panes hold its source; any
+              edits stay in your browser.
+            </p>
+            <button
+              type="button"
+              onClick={() => setOpenedFromShare(false)}
+              aria-label="Dismiss the share link notice"
+              className={buttonClasses({
+                variant: "ghost",
+                size: "sm",
+                className: "shrink-0",
+              })}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+
+        {/* ---- Mermaid import ------------------------------------------------ */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setOpenedFromShare(false)}
-            aria-label="Dismiss the share link notice"
-            className={buttonClasses({
-              variant: "ghost",
-              size: "sm",
-              className: "shrink-0",
-            })}
+            onClick={() => setImportOpen((open) => !open)}
+            aria-expanded={importOpen}
+            className={buttonClasses({ variant: "outline", size: "sm" })}
           >
-            <X aria-hidden="true" />
+            <Import aria-hidden="true" />
+            Import from Mermaid
           </button>
+          <p className="text-xs text-muted-foreground">
+            One-way and lossy — converts Mermaid C4 into both panes.
+          </p>
         </div>
-      ) : null}
 
-      {/* ---- Mermaid import ------------------------------------------------ */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setImportOpen((open) => !open)}
-          aria-expanded={importOpen}
-          className={buttonClasses({ variant: "outline", size: "sm" })}
+        {importOpen ? (
+          <MermaidImportPanel
+            textareaId={importTextareaId}
+            value={importText}
+            onChange={setImportText}
+            onImport={() => handleImport(importText)}
+            error={importError}
+          />
+        ) : null}
+
+        {lossyNoticeVisible ? (
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
+            <p className="text-sm leading-relaxed text-foreground">
+              <span className="font-semibold">Imported from Mermaid.</span>{" "}
+              {MERMAID_LOSSY_NOTICE}
+            </p>
+            <button
+              type="button"
+              onClick={() => setLossyNoticeVisible(false)}
+              aria-label="Dismiss the Mermaid import notice"
+              className={buttonClasses({
+                variant: "ghost",
+                size: "sm",
+                className: "shrink-0",
+              })}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+
+        {/* ---- the editor ------------------------------------------------------ */}
+        <div
+          // The scroll-hint button's target. `scroll-mt` clears the sticky header,
+          // which would otherwise sit over the top of the pane we just scrolled to.
+          id={sourceSectionId}
+          className={cn(
+            "grid min-w-0 scroll-mt-20 gap-4",
+            showJson ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1",
+          )}
         >
-          <Import aria-hidden="true" />
-          Import from Mermaid
-        </button>
-        <p className="text-xs text-muted-foreground">
-          One-way and lossy — converts Mermaid C4 into both panes.
-        </p>
-      </div>
-
-      {importOpen ? (
-        <MermaidImportPanel
-          textareaId={importTextareaId}
-          value={importText}
-          onChange={setImportText}
-          onImport={() => handleImport(importText)}
-          error={importError}
-        />
-      ) : null}
-
-      {lossyNoticeVisible ? (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
-          <p className="text-sm leading-relaxed text-foreground">
-            <span className="font-semibold">Imported from Mermaid.</span>{" "}
-            {MERMAID_LOSSY_NOTICE}
-          </p>
-          <button
-            type="button"
-            onClick={() => setLossyNoticeVisible(false)}
-            aria-label="Dismiss the Mermaid import notice"
-            className={buttonClasses({
-              variant: "ghost",
-              size: "sm",
-              className: "shrink-0",
-            })}
-          >
-            <X aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
-
-      {/* ---- the editor ------------------------------------------------------ */}
-      <div
-        // The scroll-hint button's target. `scroll-mt` clears the sticky header,
-        // which would otherwise sit over the top of the pane we just scrolled to.
-        id={sourceSectionId}
-        className={cn(
-          "grid min-w-0 scroll-mt-20 gap-4",
-          showJson ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1",
-        )}
-      >
-        <EditorPane
-          pane="aft"
-          textareaId={aftPaneId}
-          hintId={editingHintId}
-          heading="arch-lab text"
-          extension={ARCHTEXT_EXTENSION}
-          filename={`${stem}${ARCHTEXT_EXTENSION}`}
-          mime="text/plain"
-          value={aftText}
-          error={paneError?.pane === "aft" ? paneError.error : null}
-          onChange={handlePaneChange}
-          onKeyDown={handleEditorKeyDown}
-          onFormat={handleFormat}
-          onImportMermaid={handleImport}
-        />
-        {showJson ? (
           <EditorPane
-            pane="json"
-            textareaId={jsonPaneId}
+            pane="aft"
+            textareaId={aftPaneId}
             hintId={editingHintId}
-            heading="arch-lab JSON"
-            extension={JSON_EXTENSION}
-            filename={`${stem}${JSON_EXTENSION}`}
-            mime="application/json"
-            value={jsonText}
-            error={paneError?.pane === "json" ? paneError.error : null}
+            heading="arch-lab text"
+            extension={ARCHTEXT_EXTENSION}
+            filename={`${stem}${ARCHTEXT_EXTENSION}`}
+            mime="text/plain"
+            value={aftText}
+            error={paneError?.pane === "aft" ? paneError.error : null}
             onChange={handlePaneChange}
             onKeyDown={handleEditorKeyDown}
             onFormat={handleFormat}
             onImportMermaid={handleImport}
           />
-        ) : null}
-      </div>
+          {showJson ? (
+            <EditorPane
+              pane="json"
+              textareaId={jsonPaneId}
+              hintId={editingHintId}
+              heading="arch-lab JSON"
+              extension={JSON_EXTENSION}
+              filename={`${stem}${JSON_EXTENSION}`}
+              mime="application/json"
+              value={jsonText}
+              error={paneError?.pane === "json" ? paneError.error : null}
+              onChange={handlePaneChange}
+              onKeyDown={handleEditorKeyDown}
+              onFormat={handleFormat}
+              onImportMermaid={handleImport}
+            />
+          ) : null}
+        </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button
-          variant="outline"
-          size="sm"
-          aria-expanded={showJson}
-          onClick={() => setJsonVisible((open) => !open)}
-        >
-          <Braces aria-hidden="true" />
-          {showJson ? "Hide JSON" : "Show JSON"}
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          {showJson
-            ? "Both panes stay in sync — edit either one."
-            : "The same model as .archlab.json, the format it saves to. You never have to write it by hand."}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Button
+            variant="outline"
+            size="sm"
+            aria-expanded={showJson}
+            onClick={() => setJsonVisible((open) => !open)}
+          >
+            <Braces aria-hidden="true" />
+            {showJson ? "Hide JSON" : "Show JSON"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            {showJson
+              ? "Both panes stay in sync — edit either one."
+              : "The same model as .archlab.json, the format it saves to. You never have to write it by hand."}
+          </p>
+        </div>
+
+        <p id={editingHintId} className="text-xs text-muted-foreground">
+          Tab inserts two spaces inside the editor — press Escape, then Tab, to
+          move focus out. Format rewrites a pane to its canonical form; nothing
+          is reformatted while you type.
         </p>
       </div>
-
-      <p id={editingHintId} className="text-xs text-muted-foreground">
-        Tab inserts two spaces inside the editor — press Escape, then Tab, to
-        move focus out. Format rewrites a pane to its canonical form; nothing is
-        reformatted while you type.
-      </p>
-    </div>
+    </>
   );
 }
 
@@ -783,7 +808,9 @@ function EditorPane({
           <CopyButton text={value} label={`Copy the ${heading}`} />
           <button
             type="button"
-            onClick={() => downloadTextFile(filename, value, mime)}
+            onClick={() =>
+              downloadBlob(new Blob([value], { type: mime }), filename)
+            }
             aria-label={`Download the ${heading} as ${filename}`}
             className={buttonClasses({ variant: "outline", size: "sm" })}
           >
@@ -866,7 +893,7 @@ function PaneErrorBox({
       </p>
 
       {error.kind === "aft" ? (
-        <CaretQuote
+        <CaretQuoteWithIssues
           line={error.line}
           column={error.column}
           lineText={error.lineText}
@@ -897,8 +924,8 @@ function PaneErrorBox({
   );
 }
 
-/** The offending line, quoted verbatim, caret at the column. */
-function CaretQuote({
+/** The offending line with its caret, plus any issues after the first. */
+function CaretQuoteWithIssues({
   line,
   column,
   lineText,
@@ -911,15 +938,7 @@ function CaretQuote({
 }): React.JSX.Element {
   return (
     <>
-      {lineText !== null ? (
-        <pre className="mt-2 overflow-x-auto rounded-md bg-card px-3 py-2 font-mono text-xs leading-relaxed text-foreground">
-          {`${String(line).padStart(4)} | ${lineText}\n`}
-          <span aria-hidden="true">
-            {`${" ".repeat(4)} | ${" ".repeat(Math.max(0, column - 1))}`}
-            <span className="font-bold text-destructive">^</span>
-          </span>
-        </pre>
-      ) : null}
+      <CaretQuote line={line} column={column} lineText={lineText} />
       {extraIssues.length > 0 ? (
         <ul className="mt-2 space-y-1">
           {extraIssues.map((issue) => (
@@ -991,7 +1010,7 @@ function MermaidImportPanel({
             This is not valid Mermaid C4 code —{" "}
             <span className="font-mono">{error.message}</span>
           </p>
-          <CaretQuote
+          <CaretQuoteWithIssues
             line={error.line}
             column={error.column}
             lineText={error.lineText}
@@ -1019,54 +1038,3 @@ function MermaidImportPanel({
 /* -------------------------------------------------------------------------- */
 /* Copy & download                                                             */
 /* -------------------------------------------------------------------------- */
-
-function downloadTextFile(filename: string, text: string, mime: string): void {
-  const blob = new Blob([text], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function CopyButton({
-  text,
-  label,
-}: {
-  text: string;
-  label: string;
-}): React.JSX.Element {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    void navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2_000);
-      })
-      .catch(() => {
-        /* Clipboard blocked — the text stays selectable in the pane. */
-      });
-  }, [text]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      aria-label={copied ? "Copied to clipboard" : label}
-      className={buttonClasses({ variant: "outline", size: "sm" })}
-    >
-      {copied ? (
-        <Check aria-hidden="true" className="text-primary" />
-      ) : (
-        <Copy aria-hidden="true" />
-      )}
-      {copied ? "Copied" : "Copy"}
-      <span aria-live="polite" className="sr-only">
-        {copied ? "Copied to clipboard." : ""}
-      </span>
-    </button>
-  );
-}

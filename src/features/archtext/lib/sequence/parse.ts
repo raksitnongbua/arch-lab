@@ -44,6 +44,8 @@ import type {
   SequenceParticipantKind,
 } from "@/types";
 
+import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+
 import { LineCursor } from "../cursor";
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { failAt } from "../errors";
@@ -80,10 +82,6 @@ import {
   SEQ_META_RAW,
   SEQ_PARTICIPANT_RAW,
 } from "./schema";
-
-/** Mirrors `SUPPORTED_MAJOR_VERSION` in `../parse.ts` — one arch-lab, one
- * major version, whichever grammar the file speaks. */
-const SUPPORTED_MAJOR_VERSION = 1;
 
 /* -------------------------------------------------------------------------- */
 /* Pending structures collected during the line pass                          */
@@ -280,9 +278,7 @@ export function parseSequenceText(source: string): SequenceLabFile {
         failAt(
           versionLoc.line,
           versionLoc.column,
-          `"${version}" was written by a newer arch-lab than this one, which supports up to ` +
-            `${SUPPORTED_MAJOR_VERSION}.x. Upgrade arch-lab to open this file — opening it here ` +
-            "would silently drop data it cannot understand.",
+          newerVersionMessage(version),
           version,
         );
       }

@@ -31,13 +31,9 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { LEVEL_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import {
-  childLevelOf,
-  hasChildDiagram,
-  isBoundaryPlaceholder,
-  type C4Level,
-} from "@/types";
+import { childLevelOf, hasChildDiagram, isBoundaryPlaceholder } from "@/types";
 
 import { canDrillInto, drillIntoNode } from "../../hooks/use-level-navigation";
 import { duplicateNodes } from "../../lib/duplicate";
@@ -45,13 +41,6 @@ import { useEditorStore } from "../../state";
 import { setContextMenu, useCanvasInteraction } from "../canvas";
 
 const VIEWPORT_MARGIN_PX = 8;
-
-const LEVEL_LABELS: Record<C4Level, string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
 
 interface MenuItem {
   id: string;
@@ -152,14 +141,14 @@ export function NodeContextMenu(): React.JSX.Element | null {
       id: "drill",
       label: "Drill into",
       // A child diagram is always exactly one level deeper (AF-E2-S1).
-      hint: childLevel !== null ? LEVEL_LABELS[childLevel] : undefined,
+      hint: childLevel !== null ? LEVEL_LABEL[childLevel] : undefined,
       run: () => drillIntoNode(node.id),
     });
   } else if (childLevel !== null && canDrillInto(node, true)) {
     items.push({
       id: "drill-create",
       label: "Drill into",
-      hint: `New ${LEVEL_LABELS[childLevel]}`,
+      hint: `New ${LEVEL_LABEL[childLevel]}`,
       run: () => drillIntoNode(node.id),
     });
   }

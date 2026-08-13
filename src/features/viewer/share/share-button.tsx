@@ -47,7 +47,7 @@ import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { cn } from "@/lib/utils";
 import type { C4Diagram } from "@/types";
 
-import { fileStem } from "../export/download";
+import { downloadBlob, sourceFileStem } from "../export/download";
 import {
   canEncodeShare,
   encodeShareFragment,
@@ -97,6 +97,15 @@ type LinkState =
   | { status: "unsupported" };
 
 const DAY = 24 * 60 * 60;
+
+/**
+ * How long the document rests before an OPEN panel rebuilds its link.
+ *
+ * Longer than the playground's own 300ms parse debounce, so a burst of edits
+ * settles into one rebuild rather than one per successful parse — each costs a
+ * compress and, with an expiry chosen, a request to mint the signature.
+ */
+const REBUILD_DEBOUNCE_MS = 600;
 
 /** Used when the env var is unset — a sane spread, no sub-day options. */
 const DEFAULT_TTL_OPTIONS = "1d,7d,30d";
@@ -219,11 +228,27 @@ export function ShareButton({
     diagram.id !== rootDiagramId;
   const diagramId = diagram?.id ?? null;
 
-  /* ---- building the link (kicked off by the trigger click) ---------------- */
+  /* ---- building the link -------------------------------------------------- */
 
   // Guards a slow encode against a close-and-reopen: only the newest build
   // may land its result.
   const buildTokenRef = useRef(0);
+  /**
+   * The payload the newest build started from.
+   *
+   * A STRING, compared by value, and that is the whole point: the host
+   * playground passes `share={{ kind: "payload", text }}` as a fresh object
+   * literal every render, so `share` — and therefore `buildLink` — has a new
+   * identity on every render. An effect keyed on either would rebuild forever,
+   * each round paying for a compress and possibly an expiry mint.
+   */
+  const builtPayloadRef = useRef<string | null>(null);
+  /**
+   * The chosen expiry, readable from the rebuild effect below without being one
+   * of its dependencies — the effect must fire for a CHANGED DOCUMENT only, and
+   * `handleTtlChange` already rebuilds on its own.
+   */
+  const ttlRef = useRef<number | null>(null);
   /**
    * Whether a link is already on screen. A ref, not the `link` state, so
    * `buildLink` can branch on it without taking `link` as a dependency — that
@@ -278,6 +303,9 @@ export function ShareButton({
       }
       void (async () => {
         const payloadText = share.text;
+        // Claimed BEFORE the first await, so the rebuild effect below sees this
+        // payload as handled and does not queue a second build for it.
+        builtPayloadRef.current = payloadText;
 
         // Mint the expiry FIRST: it is the only step that can fail, and failing
         // after building a link would mean discarding a good one.
@@ -344,10 +372,42 @@ export function ShareButton({
   const handleTtlChange = useCallback(
     (next: number | null) => {
       setTtlSeconds(next);
+      ttlRef.current = next;
       buildLink(next);
     },
     [buildLink],
   );
+
+  /**
+   * Rebuild while the panel is OPEN and the document changes underneath it.
+   *
+   * The same bug the `ttl` parameter above fixed, reached by the other input:
+   * `buildLink` ran on open and on expiry change only, so editing the text with
+   * the panel open left the URL on screen — and the one Copy handed over —
+   * encoding the PREVIOUS document. Silently wrong, and it forced a
+   * close-and-reopen to get a link matching what was on screen.
+   *
+   * Keyed on the payload TEXT, never on `share`/`buildLink` (see
+   * `builtPayloadRef`). The ref check is what makes including `buildLink` in the
+   * dependencies safe: this effect runs on every render, and all but the ones
+   * carrying a genuinely new document return immediately.
+   *
+   * Debounced, and the state writes happen inside the timer rather than in the
+   * effect body — a rebuild costs a compress plus a round trip to mint an
+   * expiry, which is not something to spend per parse, and `react-hooks/
+   * set-state-in-effect` rightly refuses the synchronous version.
+   */
+  useEffect(() => {
+    if (!open) return;
+    // Bundled links point at a model that ships with the app; nothing to track.
+    if (share.kind !== "payload") return;
+    const payloadText = share.text;
+    if (payloadText === builtPayloadRef.current) return;
+    const timer = window.setTimeout(() => {
+      buildLink(ttlRef.current);
+    }, REBUILD_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, share, buildLink]);
 
   /* ---- open/close mechanics (same contract as the export menu) ------------ */
 
@@ -414,18 +474,11 @@ export function ShareButton({
 
   const handleDownload = useCallback(() => {
     if (share.kind !== "payload") return;
-    const filename = `${fileStem(documentTitle)}${downloadExtension}`;
-    const blob = new Blob([share.text], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
+    const filename = `${sourceFileStem(documentTitle)}${downloadExtension}`;
+    downloadBlob(
+      new Blob([share.text], { type: "text/plain;charset=utf-8" }),
+      filename,
+    );
     onAnnounce(`Downloaded ${filename}.`);
   }, [share, documentTitle, downloadExtension, onAnnounce]);
 

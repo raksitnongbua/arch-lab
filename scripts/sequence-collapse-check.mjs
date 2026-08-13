@@ -269,6 +269,90 @@ check(
   },
 );
 
+/* ---- 7. NESTED collapse: an outer fold subsumes an inner one ------------- */
+
+/*
+ * The Checkout example offers exactly one control, so it cannot express this.
+ * A minimal chain can: `web` privately owns `auth`, and `auth` privately owns
+ * `store`, so both carry a control and one contains the other.
+ *
+ * The bug this pins: collapsing the inner participant and THEN the outer one
+ * folded nothing new, because the rule exempted every collapsed participant
+ * from being hidden — including one that another collapsed participant owns.
+ * On screen, clicking the outer control did nothing at all.
+ */
+const NESTED = `archlab 1.0 sequence
+title "Nested dependencies"
+
+@sequence
+  user:actor "User"
+  web "Web App"
+  auth "Auth Service"
+  store "Token Store"
+
+  user -> web : "Asks for something"
+  web -> auth : "Checks the session"
+  auth -> store : "Reads the token"
+  web -> user : "Answers"
+`;
+
+const nested = parseSequenceText(NESTED);
+
+check("the nested fixture really does offer two nested controls", () => {
+  assert.deepEqual(sorted(dependenciesOf(nested, "web")), ["auth", "store"]);
+  assert.deepEqual(sorted(dependenciesOf(nested, "auth")), ["store"]);
+});
+
+check("collapsing the OUTER participant after the inner one folds more", () => {
+  const innerOnly = hiddenParticipants(nested, new Set(["auth"]));
+  const both = hiddenParticipants(nested, new Set(["auth", "web"]));
+  assert.deepEqual(sorted(innerOnly), ["store"]);
+  assert.ok(
+    both.size > innerOnly.size,
+    `collapsing "web" on top of "auth" must fold something new, ` +
+      `got the same set [${sorted(both)}]`,
+  );
+  assert.deepEqual(sorted(both), ["auth", "store"]);
+});
+
+check("the result does not depend on the order the two were collapsed", () => {
+  assert.deepEqual(
+    sorted(hiddenParticipants(nested, new Set(["auth", "web"]))),
+    sorted(hiddenParticipants(nested, new Set(["web", "auth"]))),
+  );
+  // …and reaching the same state by collapsing only the outer one agrees too.
+  assert.deepEqual(
+    sorted(hiddenParticipants(nested, new Set(["auth", "web"]))),
+    sorted(hiddenParticipants(nested, new Set(["web"]))),
+  );
+});
+
+check("a collapsed set never hides every handle it could expand by", () => {
+  // The outermost fold is in nobody else's dependencies, so it always survives
+  // — otherwise a reader could reach a state with no way back.
+  const both = hiddenParticipants(nested, new Set(["auth", "web"]));
+  assert.ok(!both.has("web"), "the outer handle must stay on screen");
+  const visibleHandles = ["auth", "web"].filter((id) => !both.has(id));
+  assert.ok(visibleHandles.length > 0, "no handle left to expand by");
+});
+
+check("the nested collapse still lays out, with the inner branch gone", () => {
+  const view = collapseSequence(
+    nested,
+    hiddenParticipants(nested, new Set(["auth", "web"])),
+  );
+  assert.deepEqual(
+    view.participants.map((p) => p.id),
+    ["user", "web"],
+  );
+  const laid = layoutSequence(view);
+  assert.ok(laid.messages.length > 0, "collapsed the whole flow away");
+  assert.deepEqual(
+    laid.messages.map((m) => m.step),
+    laid.messages.map((_, index) => index + 1),
+  );
+});
+
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {

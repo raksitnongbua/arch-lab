@@ -32,6 +32,7 @@ import {
   serializeMermaidC4,
   type MermaidIssue,
 } from "@/features/mermaid";
+import { sourceLineAt } from "@/lib/source-text";
 
 import type { ViewerModel } from "../lib/model";
 import { detectFormat, type FormatChoice, type PastedFormat } from "./detect";
@@ -148,10 +149,6 @@ function viewerModelFromEditorModel(editorModel: EditorModel): ViewerModel {
 /* -------------------------------------------------------------------------- */
 /* Parsing                                                                     */
 /* -------------------------------------------------------------------------- */
-
-function sourceLineAt(text: string, line: number): string | null {
-  return text.split(/\r?\n/)[line - 1] ?? null;
-}
 
 /**
  * Parses pasted text under the user's format choice (`auto` runs

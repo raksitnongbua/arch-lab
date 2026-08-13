@@ -7,6 +7,7 @@
  * canvas is never tainted and `toBlob` always succeeds.
  */
 
+import { slugify } from "@/lib/slug";
 import type { C4Diagram } from "@/types";
 
 import type { RenderedSvg } from "./render-svg";
@@ -57,13 +58,27 @@ export function archiveEntryName(
   return name;
 }
 
-/** Safe cross-platform file stem from a model title. */
+/**
+ * Safe cross-platform file stem for a RENDERED DIAGRAM — an `.svg`, `.png`, or
+ * `.gif`, or an entry inside the multi-diagram archive.
+ *
+ * Untitled work falls back to "diagram" because that is what the file contains.
+ * For the document's own source text use {@link sourceFileStem}.
+ */
 export function fileStem(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug === "" ? "diagram" : slug;
+  return slugify(title, "diagram");
+}
+
+/**
+ * The same stem for the DOCUMENT SOURCE — the `.alab` or `.archlab.json` text.
+ *
+ * A separate fallback from {@link fileStem} on purpose: an untitled model saves
+ * as `model.alab`, not `diagram.alab`, because the file is the model and not a
+ * picture of it. Both stems existed already and the share dialog was using the
+ * picture one for a source download.
+ */
+export function sourceFileStem(title: string): string {
+  return slugify(title, "model");
 }
 
 export function downloadSvg(rendered: RenderedSvg, filename: string): void {

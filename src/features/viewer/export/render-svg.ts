@@ -23,6 +23,8 @@
  * viewer clamps.
  */
 
+import { LEVEL_LABEL } from "@/lib/constants";
+import { CHAR_WIDTH_RATIO, MONO_CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import type { C4Diagram, C4Edge, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
 
@@ -64,19 +66,8 @@ const FONT_SANS =
   "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
 const FONT_MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
-/** Conservative average glyph width per font-size unit (sans). */
-const CHAR_WIDTH_RATIO = 0.58;
-const MONO_CHAR_WIDTH_RATIO = 0.62;
-
 const ICON_SIZE = 16;
 const ICON_GAP = 6;
-
-const LEVEL_LABEL: Record<C4Diagram["level"], string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
 
 /* -------------------------------------------------------------------------- */
 /* Small helpers                                                               */
@@ -99,8 +90,16 @@ function estimateWidth(text: string, fontSize: number, mono = false): number {
   );
 }
 
-/** Greedy word wrap to `maxWidth` estimated pixels, at most `maxLines`. */
-function wrapText(
+/**
+ * Greedy word wrap to `maxWidth` estimated pixels, at most `maxLines`, with the
+ * overflow ellipsised.
+ *
+ * NOT the same function as the sequence feature's exported `wrapText`
+ * (`features/sequence/lib/layout.ts`), which takes `(text, maxWidth, fontSize)`
+ * — note the transposed numbers — honours paragraph breaks, and has no line
+ * limit. Named apart so the two signatures cannot be mistaken for each other.
+ */
+function wrapTextClamped(
   text: string,
   fontSize: number,
   maxWidth: number,
@@ -435,7 +434,7 @@ function nodeContent(
   const nameLineHeight = 16;
   const smallLineHeight = 12;
 
-  const nameLines = wrapText(
+  const nameLines = wrapTextClamped(
     node.name,
     nameSize,
     innerWidth - ICON_SIZE - ICON_GAP,

@@ -44,6 +44,7 @@ import type {
   SequenceNotePlacement,
   SequenceParticipantKind,
 } from "@/types";
+import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import { isSelfMessage } from "@/types/sequence";
 
 /* -------------------------------------------------------------------------- */
@@ -51,8 +52,12 @@ import { isSelfMessage } from "@/types/sequence";
 /* -------------------------------------------------------------------------- */
 
 export const SEQ = {
-  /** Same ratio as render-svg.ts — one estimate for the whole codebase. */
-  charWidthRatio: 0.58,
+  /**
+   * Kept as a `SEQ` field because `scripts/sequence-layout-check.mjs` asserts
+   * against it, but the VALUE now comes from `@/lib/text-metrics` — the same
+   * estimate the C4 exporter uses, which this comment used to only claim.
+   */
+  charWidthRatio: CHAR_WIDTH_RATIO,
 
   marginX: 28,
   marginTop: 20,

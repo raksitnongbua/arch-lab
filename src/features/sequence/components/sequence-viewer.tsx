@@ -55,7 +55,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { SequenceLabFile } from "@/types";
 import {
@@ -64,6 +64,7 @@ import {
   useReducedMotion,
   writeIdleMotion,
 } from "@/lib/idle-motion";
+import { CopyButton } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
@@ -1344,62 +1345,14 @@ function DockCodeRow({
         <pre className="overflow-x-auto rounded-md border border-border bg-secondary/40 py-2 pr-9 pl-2.5 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
           {value}
         </pre>
-        <DockCopyButton value={value} term={term} />
+        <CopyButton
+          text={value}
+          label={`Copy the ${term.toLowerCase()}`}
+          iconOnly
+          className="absolute top-1 right-1 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        />
       </dd>
     </div>
-  );
-}
-
-/**
- * Copy-to-clipboard for a dock code block. Same behaviour as the copy buttons
- * on `/syntax` and `/mcp` (icon swap, 2-second reset, feedback announced in a
- * live region rather than signalled by colour alone) — icon-only here because
- * the dock has no room for a labelled button, so the accessible name carries
- * what the icon means.
- *
- * A failed write is deliberately silent: the text is still selectable in the
- * block, and an error toast for "your browser blocked the clipboard" helps
- * nobody. Same choice both other copy buttons make.
- */
-function DockCopyButton({
-  value,
-  term,
-}: {
-  value: string;
-  term: string;
-}): React.JSX.Element {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    void navigator.clipboard
-      .writeText(value)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2_000);
-      })
-      .catch(() => {
-        /* Clipboard blocked — the text stays selectable in the block. */
-      });
-  }, [value]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      aria-label={
-        copied ? "Copied to clipboard" : `Copy the ${term.toLowerCase()}`
-      }
-      className="absolute top-1 right-1 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-    >
-      {copied ? (
-        <Check aria-hidden="true" className="size-3.5 text-primary" />
-      ) : (
-        <Copy aria-hidden="true" className="size-3.5" />
-      )}
-      <span aria-live="polite" className="sr-only">
-        {copied ? "Copied to clipboard." : ""}
-      </span>
-    </button>
   );
 }
 

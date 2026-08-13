@@ -27,6 +27,9 @@ import {
 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { LEVEL_LABEL } from "@/lib/constants";
+
+import { MetaRow } from "./viewer-meta-row";
 import { cn } from "@/lib/utils";
 import type { C4Edge, C4Level, C4Node } from "@/types";
 
@@ -55,32 +58,6 @@ export interface NodeDetail {
   incoming: NodeConnection[];
   /** Present ⇔ the element has a loaded child diagram to zoom into. */
   drill: { childCount: number; childLevel: C4Level } | null;
-}
-
-const LEVEL_TITLE: Record<C4Level, string> = {
-  context: "Context",
-  container: "Container",
-  component: "Component",
-  code: "Code",
-};
-
-function MetaRow({
-  term,
-  children,
-}: {
-  term: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="shrink-0 text-[10px] tracking-wide text-muted-foreground uppercase">
-        {term}
-      </dt>
-      <dd className="min-w-0 text-right text-[11px] text-foreground">
-        {children}
-      </dd>
-    </div>
-  );
 }
 
 /** Directional glyph for a connection row, seen from the selected element. */
@@ -223,7 +200,7 @@ export function ViewerNodeDetail({
             <span className="font-mono">{node.technology}</span>
           </MetaRow>
         ) : null}
-        <MetaRow term="Level">{LEVEL_TITLE[level]} view</MetaRow>
+        <MetaRow term="Level">{LEVEL_LABEL[level]} view</MetaRow>
         {node.tags !== undefined && node.tags.length > 0 ? (
           <MetaRow term="Tags">
             <span className="flex flex-wrap justify-end gap-1">
@@ -282,7 +259,7 @@ export function ViewerNodeDetail({
           <p className="text-[10px] leading-snug text-muted-foreground">
             Contains {drill.childCount}{" "}
             {drill.childCount === 1 ? "element" : "elements"} in its{" "}
-            {LEVEL_TITLE[drill.childLevel]} view.
+            {LEVEL_LABEL[drill.childLevel]} view.
           </p>
           <button
             type="button"

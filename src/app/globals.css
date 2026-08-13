@@ -900,3 +900,30 @@
 [data-share-forward] .af-view-chooser {
   display: none;
 }
+
+/* The same pre-paint swap for the two PLAYGROUNDS, which have the same problem
+ * in a different shape: they seed themselves with an example so the page is
+ * never empty, and a share link's document cannot arrive until the client has
+ * decoded the fragment. Left alone, someone opening a link watches the example
+ * first and takes it for the document they were sent — the misreading these
+ * routes already guard against for links that FAIL to open.
+ *
+ * Two rules rather than one, because unlike the chooser there is something to
+ * put in its place: the seeded content goes, the holding state arrives. Both are
+ * in the prerendered HTML and the swap is pure CSS, so it happens before first
+ * paint and costs no hydration mismatch.
+ *
+ * Cleared by each playground once its decode resolves — see the note above and
+ * `components/share/share-opening.tsx`. Class names are spelled literally here
+ * only because CSS cannot import; `SHARE_PENDING_CLASS` is the TS spelling. */
+[data-share-forward] .af-share-pending {
+  display: none;
+}
+
+.af-share-opening {
+  display: none;
+}
+
+[data-share-forward] .af-share-opening {
+  display: flex;
+}

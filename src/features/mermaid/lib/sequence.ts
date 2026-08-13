@@ -35,6 +35,7 @@ import type {
   SequenceParticipant,
 } from "@/types";
 
+import { MERMAID_IMPORT_TIMESTAMP } from "./defaults";
 import { failAt } from "./errors";
 import { decodeInlineBreaks } from "./text";
 
@@ -66,7 +67,6 @@ export interface ParseMermaidSequenceOptions {
   timestamp?: string;
 }
 
-const DEFAULT_TIMESTAMP = "2026-01-01T00:00:00.000Z";
 const DEFAULT_TITLE = "Untitled sequence diagram";
 
 /* -------------------------------------------------------------------------- */
@@ -131,7 +131,7 @@ export function parseMermaidSequence(
   source: string,
   options?: ParseMermaidSequenceOptions,
 ): SequenceLabFile {
-  const timestamp = options?.timestamp ?? DEFAULT_TIMESTAMP;
+  const timestamp = options?.timestamp ?? MERMAID_IMPORT_TIMESTAMP;
 
   let title: string | null = null;
   let autonumber = false;
