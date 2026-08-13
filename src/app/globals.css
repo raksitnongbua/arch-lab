@@ -890,6 +890,13 @@
  * and reserving their space would leave the forwarding user staring at a
  * page-sized gap instead of nothing at all. */
 
+/* The attribute is stamped pre-paint by the root layout's script and CLEARED by
+ * `view-chooser.tsx` whenever there is no payload to forward. That clearing is
+ * load-bearing, not tidiness: the script runs once per document load and a
+ * client-side navigation never reloads, so without it the flag outlived the URL
+ * that set it and this rule blanked `/view` for the rest of the session. The
+ * attribute name is `SHARE_FORWARD_ATTRIBUTE` in the share codec; it is spelled
+ * literally here only because CSS cannot import. */
 [data-share-forward] .af-view-chooser {
   display: none;
 }
