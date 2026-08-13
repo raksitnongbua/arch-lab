@@ -1,0 +1,284 @@
+/* ---------------------------------------------------------------------------
+   /mcp — the page's motion.
+
+   The page is SERVER-RENDERED and stays that way, so everything here is CSS on
+   markup that is already complete in the HTML. No IntersectionObserver, no
+   client component, nothing that turns a documentation page into an app.
+
+   Which forces one rule and makes it easy to follow: an entrance that begins at
+   `opacity: 0` MUST be certain to finish. All of these run on load with `both`
+   fill, so they do — including the ones below the fold, which are simply over
+   by the time the reader arrives. A scroll-driven variant would look better and
+   would risk leaving text permanently invisible wherever the timeline did not
+   run, and unreadable documentation is a far worse outcome than documentation
+   that did its reveal early.
+
+   The vocabulary is the home hero's on purpose — same rise, same fade, same
+   `cubic-bezier(0.22, 1, 0.36, 1)` — so arriving here from the landing page
+   feels like the same site rather than a second designer's take on it.
+
+   REDUCED MOTION. The global backstop in globals.css collapses every animation
+   to 0.01ms at one iteration, and with `both` fill that lands each entrance on
+   its FINAL frame: the page is simply present. So the entrances need nothing
+   said about them here. The ambient loops do — parked, not merely fast — and
+   the round-trip comet is motion-only, so it is removed rather than frozen: a
+   stopped comet is a bright stripe sitting on a wire, which reads as a fault
+   rather than as a resting connector. Same rule as the diagram canvases.
+   --------------------------------------------------------------------------- */
+
+/* ---- entrances ------------------------------------------------------------ */
+
+@keyframes af-mcp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes af-mcp-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.af-mcp-rise {
+  animation: af-mcp-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.af-mcp-fade {
+  animation: af-mcp-fade 620ms ease-out both;
+}
+
+/*
+ * The stagger. Steps of 70ms, which is long enough to read as a sequence and
+ * short enough that the last item is in under a second — the hero has eight
+ * of these and a reader should never be waiting on the chrome.
+ *
+ * As utility classes rather than inline styles because the same ladder is
+ * reused by the tool cards and the recipes, and because a `style` attribute per
+ * card is a lot of duplicated markup in the HTML for something purely
+ * presentational.
+ */
+.af-mcp-d1 {
+  animation-delay: 70ms;
+}
+.af-mcp-d2 {
+  animation-delay: 140ms;
+}
+.af-mcp-d3 {
+  animation-delay: 210ms;
+}
+.af-mcp-d4 {
+  animation-delay: 280ms;
+}
+.af-mcp-d5 {
+  animation-delay: 350ms;
+}
+.af-mcp-d6 {
+  animation-delay: 420ms;
+}
+.af-mcp-d7 {
+  animation-delay: 490ms;
+}
+
+/* ---- section headings ----------------------------------------------------- */
+
+/*
+ * The rule under a section title draws itself out from the left. `scaleX` on a
+ * transform rather than an animated `width`, so it composites instead of
+ * relaying out the heading on every frame.
+ */
+@keyframes af-mcp-rule {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.af-mcp-rule {
+  transform-origin: left center;
+  animation: af-mcp-rule 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ---- cards ---------------------------------------------------------------- */
+
+/*
+ * Hover on a card is a TRANSITION, never an animation: it has to be
+ * interruptible half-way, because a reader moving a pointer down a list of ten
+ * tools crosses several of them and each has to be able to give up its
+ * highlight immediately. An animation would insist on finishing.
+ *
+ * The lift is 2px. Enough to register as "this is a thing", small enough that a
+ * list of them does not ripple.
+ */
+.af-mcp-card {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.af-mcp-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklch, var(--border) 40%, var(--primary));
+  box-shadow: 0 6px 20px -12px var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The lift goes; the border and shadow stay. Hover still answers "am I
+     pointing at this?" — it just answers without moving anything, which is the
+     part the preference is about. */
+  .af-mcp-card:hover {
+    transform: none;
+  }
+}
+
+/* ---- the round trip ------------------------------------------------------- */
+
+/*
+ * The hero figure: a request leaving the agent, the server answering, and a
+ * verdict landing back. One loop, slow, and readable at any point in it.
+ *
+ * ONE CLOCK for the whole figure — every part below runs the same duration and
+ * differs only in the phase it holds, which is the only way three elements stay
+ * describing one round trip instead of drifting into three unrelated pulses.
+ */
+
+@keyframes af-mcp-trip {
+  /* Out along the wire, then gone: the band leaves the path entirely before the
+     cycle restarts, so the loop has no seam to hide. */
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.af-mcp-wire-flow {
+  fill: none;
+  stroke-linecap: round;
+  animation: af-mcp-trip var(--af-mcp-clock) linear infinite;
+}
+
+.af-mcp-wire-flow-glow {
+  stroke: var(--primary);
+  stroke-width: 5;
+  opacity: 0.16;
+  filter: blur(2px);
+  stroke-dasharray: 24 76;
+}
+
+.af-mcp-wire-flow-head {
+  stroke: var(--primary);
+  stroke-width: 1.5;
+  opacity: 0.9;
+  stroke-dasharray: 8 92;
+  /* Starts where its own lit length puts it, so head and halo share one leading
+     edge rather than chasing each other. */
+  animation-name: af-mcp-trip-head;
+}
+
+@keyframes af-mcp-trip-head {
+  from {
+    stroke-dashoffset: 8;
+  }
+  to {
+    stroke-dashoffset: -92;
+  }
+}
+
+/*
+ * The verdict chip lights as the band arrives and holds most of the cycle.
+ * Weighted towards HELD rather than pulsing: someone glancing at the page
+ * should find a finished round trip, not catch it mid-flight — the same reason
+ * the home page's transcript holds.
+ */
+@keyframes af-mcp-verdict {
+  0%,
+  38% {
+    opacity: 0;
+    transform: translateY(3px) scale(0.97);
+  }
+  48%,
+  92% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.99);
+  }
+}
+
+.af-mcp-verdict {
+  animation: af-mcp-verdict var(--af-mcp-clock) ease-out infinite both;
+}
+
+/* The call chip is the same beat, half a cycle earlier: the request goes out,
+   then the verdict comes back. A negative delay so it is already up on the
+   first frame instead of the figure sitting empty. */
+@keyframes af-mcp-call {
+  0%,
+  4% {
+    opacity: 0;
+    transform: translateY(3px) scale(0.97);
+  }
+  12%,
+  56% {
+    opacity: 1;
+    transform: none;
+  }
+  66%,
+  100% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.99);
+  }
+}
+
+.af-mcp-call {
+  animation: af-mcp-call var(--af-mcp-clock) ease-out infinite both;
+}
+
+/* A slow breath on the endpoint dot — the one "it is live" cue on the page. */
+@keyframes af-mcp-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+.af-mcp-pulse {
+  animation: af-mcp-pulse 2600ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * The chips park VISIBLE — a completed round trip, call and verdict both
+   * present, which is the frame that says what the figure is for. Parking them
+   * hidden would leave an empty diagram claiming to explain something.
+   */
+  .af-mcp-call,
+  .af-mcp-verdict {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  /* The travelling band has no honest resting frame — a stopped comet is a
+     bright stripe across a wire, not a wire at rest. It goes. */
+  .af-mcp-wire-flow {
+    animation: none;
+    display: none;
+  }
+
+  .af-mcp-pulse {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

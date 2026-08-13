@@ -35,6 +35,7 @@ import {
 } from "../catalog";
 import { MAX_SOURCE_CHARS } from "../lib/limits";
 import { CopySnippet } from "./copy-snippet";
+import { McpRoundTrip } from "./mcp-round-trip";
 
 const SECTIONS: readonly { id: string; label: string }[] = [
   { id: "connect", label: "Connect" },
@@ -50,9 +51,9 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-14 sm:px-8 sm:py-20">
       {/* ---- intro ---------------------------------------------------------- */}
-      <div className="mb-6 flex flex-wrap items-center gap-2">
+      <div className="af-mcp-fade mb-6 flex flex-wrap items-center gap-2">
         <Badge variant="accent">
-          <span className="size-1.5 rounded-full bg-accent" />
+          <span className="af-mcp-pulse size-1.5 rounded-full bg-accent" />
           Integration · Model Context Protocol
         </Badge>
         {/* Outline rather than accent: the status qualifies the badge next to
@@ -60,10 +61,10 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
       </div>
 
-      <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+      <h1 className="af-mcp-rise af-mcp-d1 max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
         Use arch-lab from your AI agent
       </h1>
-      <p className="mt-4 max-w-3xl text-lg leading-relaxed text-pretty text-muted-foreground">
+      <p className="af-mcp-rise af-mcp-d2 mt-4 max-w-3xl text-lg leading-relaxed text-pretty text-muted-foreground">
         arch-lab runs an{" "}
         <a
           href="https://modelcontextprotocol.io"
@@ -82,7 +83,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       {/* Above the endpoint, not buried at the bottom: someone about to paste
           a URL into their client deserves to know what it does not promise
           before they depend on it. */}
-      <div className="mt-6 max-w-3xl rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
+      <div className="af-mcp-rise af-mcp-d3 mt-6 max-w-3xl rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
           <FlaskConical aria-hidden="true" className="size-4 text-accent" />
           {MCP_STATUS_LABEL}
@@ -92,7 +93,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         </p>
       </div>
 
-      <div className="mt-6 max-w-3xl">
+      <div className="af-mcp-rise af-mcp-d4 mt-6 max-w-3xl">
         <CopySnippet
           snippet={endpoint}
           caption="endpoint"
@@ -100,7 +101,16 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         />
       </div>
 
-      <div className="mt-8 max-w-3xl rounded-lg border border-border bg-card px-5 py-4">
+      {/* The figure sits UNDER the endpoint, not above it: someone who came
+          here to copy a URL should reach it before anything decorative. The
+          tool name comes from the catalogue, so the picture cannot advertise a
+          call the server does not have. */}
+      <McpRoundTrip
+        toolName={MCP_TOOLS[0]?.name ?? "validate_model"}
+        className="af-mcp-rise af-mcp-d5 mt-6 max-w-3xl"
+      />
+
+      <div className="af-mcp-card af-mcp-rise af-mcp-d6 mt-8 max-w-3xl rounded-lg border border-border bg-card px-5 py-4">
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
           What this is for
         </h2>
@@ -118,7 +128,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       </div>
 
       {/* ---- on this page ---------------------------------------------------- */}
-      <nav aria-label="On this page" className="mt-8">
+      <nav aria-label="On this page" className="af-mcp-fade af-mcp-d7 mt-8">
         <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
           {SECTIONS.map((section) => (
             <li key={section.id}>
@@ -141,7 +151,11 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         <div className="mt-6 space-y-6">
           {CONNECT_RECIPES.map((recipe) => (
             <div key={recipe.client} className="min-w-0">
-              <h3 className="text-sm font-semibold tracking-tight text-foreground">
+              <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 shrink-0 rounded-full bg-primary/70"
+                />
                 {recipe.client}
               </h3>
               <p className="mt-1 mb-3 text-sm leading-relaxed text-muted-foreground">
@@ -167,7 +181,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           {MCP_TOOLS.map((tool) => (
             <div
               key={tool.name}
-              className="rounded-lg border border-border bg-card px-5 py-4"
+              className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
             >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h3 className="font-mono text-sm font-semibold text-foreground">
@@ -225,7 +239,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           {MCP_RESOURCES.map((resource) => (
             <li
               key={resource.uri}
-              className="rounded-lg border border-border bg-card px-5 py-4"
+              className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
             >
               <p className="font-mono text-sm font-semibold text-foreground">
                 {resource.uri}
@@ -244,7 +258,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           {MCP_PROMPTS.map((prompt) => (
             <li
               key={prompt.name}
-              className="rounded-lg border border-border bg-card px-5 py-4"
+              className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
             >
               <p className="font-mono text-sm font-semibold text-foreground">
                 {prompt.name}
@@ -395,6 +409,13 @@ function Section({
       >
         {title}
       </h2>
+      {/* Draws out from the left under the title. Decorative — the heading
+          above it already says where you are — so it is hidden from the
+          accessibility tree rather than announced as a separator. */}
+      <span
+        aria-hidden="true"
+        className="af-mcp-rule mt-3 block h-px w-16 rounded-full bg-primary/60"
+      />
       {children}
     </section>
   );
