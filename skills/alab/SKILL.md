@@ -118,7 +118,7 @@ Header lines sit at indent 0 before the first diagram. `archlab
 | --- | --- | --- |
 | `archlab <version>` | `version` | Required; must be the first content line of the file. |
 | `schema "<url>"` | `$schema` | Optional JSON-schema URL. |
-| `title "<text>"` | `metadata.title` | Required — a file without a title is refused. |
+| `title "<text>"` | `metadata.title` | Required — a file without a title is refused. Keep it to 120 characters: longer still parses, but the checkers raise a review note, since the title becomes the export filename too. |
 | `description "<text>"` | `metadata.description` | Optional. |
 | `owner "<text>"` | `metadata.owner` | Optional. |
 | `tags #a #b` | `metadata.tags` | At least one tag; quote odd names: #"needs review". |

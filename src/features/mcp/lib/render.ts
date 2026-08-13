@@ -16,6 +16,11 @@
  * Pure string formatting — no SDK types, no I/O, trivially testable.
  */
 
+import {
+  ADVISORY_RULES,
+  groupAdvisories,
+  type Advisory,
+} from "@/features/validate/lib/advisories";
 import type { CheckFormat, CheckIssue } from "@/features/validate/lib/check";
 import { CHECK_FORMAT_LABEL } from "@/features/validate/lib/check";
 
@@ -165,4 +170,56 @@ export function renderDiagramTable(
         `${diagram.edgeCount} edge${diagram.edgeCount === 1 ? "" : "s"}`,
     )
     .join("\n");
+}
+
+/**
+ * The review notes as plain text, grouped by rule. Capped per group: an agent
+ * needs to learn the RULE and see enough instances to recognise the shape,
+ * not receive a line for each of ninety nodes — and the tail is identical
+ * work once the first few are fixed. The count always states the true total,
+ * so a cap can never read as "that was all of them".
+ */
+const MAX_ITEMS_PER_RULE = 8;
+
+/**
+ * Advisories for either document kind — here rather than in `tools/validate.ts`
+ * so a C4 model and a sequence diagram report the same way. Both call it; the
+ * `subject` is the only thing that differs.
+ *
+ * The preamble deliberately says "review note", not "C4 review note". Advisories
+ * now come from two families (see `validate/lib/advisories.ts`) and a sequence
+ * document raises only the format ones, so naming C4 in the header would have
+ * announced a C4 review of a document with no C4 in it. Each rule states its own
+ * source on its `Why:` line, which is where the citation belongs anyway.
+ */
+export function renderAdvisories(
+  advisories: readonly Advisory[],
+  /** What was checked, for the preamble: "model", "sequence diagram". */
+  subject: string,
+): string | null {
+  const groups = groupAdvisories(advisories);
+  if (groups.length === 0) return null;
+
+  const total = advisories.length;
+  const body = groups
+    .map(({ rule, items }) => {
+      const shown = items.slice(0, MAX_ITEMS_PER_RULE);
+      const hidden = items.length - shown.length;
+      return [
+        `${ADVISORY_RULES[rule].title} (${items.length})`,
+        `  Why: ${ADVISORY_RULES[rule].because}`,
+        ...shown.map((item) => `  - ${item.where}: ${item.message}`),
+        hidden > 0 ? `  - …and ${hidden} more of the same.` : null,
+      ]
+        .filter((line): line is string => line !== null)
+        .join("\n");
+    })
+    .join("\n\n");
+
+  return joinSections(
+    `${total} review note(s) — the ${subject} is VALID; these are the things a ` +
+      `parser cannot check, each with the rule it comes from. Worth fixing ` +
+      `before the diagram is shared; none of them block anything.`,
+    body,
+  );
 }

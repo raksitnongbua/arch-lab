@@ -12,8 +12,16 @@
  * reference — this module is what makes that impossible to ship.
  *
  * Imported by `scripts/syntax-docs-check.mjs` through Node's type stripping:
- * keep the syntax erasable and imports type-only (this module has none).
+ * keep the syntax erasable, and keep the imports to pure-data LEAVES. There is
+ * exactly one — `@/lib/constants`, for the title cap the notes below quote — and
+ * it must stay that way: this module is reached from `mcp/catalog.ts`, whose
+ * "no React, no zod, no SDK" promise keeps a protocol server out of the `/mcp`
+ * page's bundle. The cap is imported rather than typed out because these notes
+ * are what an agent reads through `get_syntax_reference`, and a number that
+ * disagreed with the checkers would be worse than no number at all.
  */
+
+import { MAX_TITLE_LENGTH } from "@/lib/constants";
 
 /* -------------------------------------------------------------------------- */
 /* Complete examples (shown as code blocks, checked verbatim)                 */
@@ -456,7 +464,14 @@ export const HEADER_ROWS: readonly HeaderRow[] = [
     syntax: 'title "<text>"',
     example: 'title "ShopFlow Platform"',
     mapsTo: "metadata.title",
-    notes: "Required — a file without a title is refused.",
+    // The cap is interpolated, not typed out: the checkers quote the same
+    // constant, and a number that disagreed with them would be worse than no
+    // number. Stated as a GUIDE because that is what it is — the parser accepts
+    // a longer title and the checkers raise a review note instead.
+    notes:
+      `Required — a file without a title is refused. Keep it to ` +
+      `${MAX_TITLE_LENGTH} characters: longer still parses, but the checkers ` +
+      `raise a review note, since the title becomes the export filename too.`,
   },
   {
     syntax: 'description "<text>"',

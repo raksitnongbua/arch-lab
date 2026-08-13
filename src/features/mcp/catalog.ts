@@ -16,10 +16,10 @@
  * generated from the sections that actually exist.
  */
 
-// Both imports here are deliberately leaves, so the "no React, no zod, no SDK"
-// promise above still holds and the `/mcp` page's bundle is unaffected:
-// `content/syntax-sections` pulls in nothing but the pure-data snippets module,
-// and `lib/limits` imports nothing at all.
+// Both imports here stay on the pure-data side, so the "no React, no zod, no
+// SDK" promise above still holds and the `/mcp` page's bundle is unaffected:
+// `content/syntax-sections` reaches only the snippets module and, through it,
+// `@/lib/constants` (plain values), while `lib/limits` imports nothing at all.
 import { SYNTAX_SECTION_IDS } from "./content/syntax-sections";
 import { MAX_SOURCE_CHARS } from "./lib/limits";
 

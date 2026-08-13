@@ -1,12 +1,20 @@
 /**
- * C4 conformance advisories — the review-checklist items at
- * c4model.com/diagrams/notation that a PARSER cannot care about.
+ * Advisories — what a document is valid but still worth a word about.
  *
  * A document can be perfectly well-formed `.alab` and still be a bad C4
  * diagram: every container unlabelled with a technology, every relationship
  * labelled "Uses", every element a bare noun with no description. Those are
  * the first things a reviewer of a real diagram objects to, and until now the
  * checker's green tick said nothing about any of them.
+ *
+ * TWO FAMILIES live here, and the distinction is worth keeping straight:
+ *
+ *   - C4 CONFORMANCE — the review-checklist items at
+ *     c4model.com/diagrams/notation. These apply to C4 models only.
+ *   - `.alab` FORMAT HYGIENE — limits the format itself asks for, which hold
+ *     whatever kind of document carries them. `long-title` is the first, and it
+ *     is why `adviseSequence` exists: a sequence document has no C4 notation to
+ *     conform to, but it has a `title` line like any other.
  *
  * Three rules govern everything here:
  *
@@ -15,16 +23,19 @@
  *      a work-in-progress model — which is exactly when someone pastes into
  *      `/validate`.
  *   2. **Structural facts only.** Nothing here judges prose quality. A rule
- *      fires on an absent field or a label drawn from a closed list of
- *      contentless verbs, never on a heuristic about how good a sentence is.
- *   3. **Cited.** Every rule traces to a sentence on c4model.com, recorded in
- *      `ADVISORY_RULES` below, so a disagreement is with the C4 model rather
- *      than with our taste.
+ *      fires on an absent field, a measurable length, or a label drawn from a
+ *      closed list of contentless verbs — never on a heuristic about how good a
+ *      sentence is.
+ *   3. **Cited.** Every rule names its source in `ADVISORY_RULES` below — for
+ *      the C4 family a sentence on c4model.com, for the format family the
+ *      constant that defines the limit. Either way a disagreement is with
+ *      something written down rather than with our taste.
  *
  * Pure and synchronous, like `check.ts` — no DOM, no I/O.
  */
 
-import type { ArchLabFile, C4Diagram, C4Level } from "@/types";
+import { MAX_TITLE_LENGTH, titleLengthOverCap } from "@/lib/constants";
+import type { ArchLabFile, C4Diagram, C4Level, SequenceLabFile } from "@/types";
 import { C4_ABSTRACTION, isBoundaryPlaceholder } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -38,7 +49,8 @@ export type AdvisoryRule =
   | "vague-relationship"
   | "bidirectional-relationship"
   | "missing-protocol"
-  | "missing-diagram-title";
+  | "missing-diagram-title"
+  | "long-title";
 
 /** Why each rule exists, in C4's own terms. Rendered as the group heading. */
 export const ADVISORY_RULES: Record<
@@ -85,6 +97,15 @@ export const ADVISORY_RULES: Record<
     title: "Diagram has no title",
     because:
       "C4 asks every diagram to carry a title describing its type and scope.",
+  },
+  "long-title": {
+    title: "Title is very long",
+    because:
+      `The .alab format asks for titles of at most ${MAX_TITLE_LENGTH} ` +
+      "characters (MAX_TITLE_LENGTH). A title is not only a heading: it " +
+      "becomes the export filename, the card in the demo gallery, and the name " +
+      "a screen reader reads before the diagram. Past that length it is a " +
+      "description — and there is a `description` line for that.",
   },
 };
 
@@ -137,6 +158,31 @@ function isBlank(value: string | undefined): boolean {
   return value === undefined || value.trim() === "";
 }
 
+/**
+ * The `long-title` rule, in ONE place because it is a format rule rather than a
+ * C4 one: it holds for a model's own title, for each C4 diagram's title, and for
+ * a sequence document's title, and all three should be told off in the same
+ * words. `what` names the thing so the message reads naturally in each case.
+ */
+function adviseTitleLength(
+  title: string | undefined,
+  what: string,
+  where: string,
+  out: Advisory[],
+): void {
+  if (title === undefined) return;
+  const length = titleLengthOverCap(title);
+  if (length === null) return;
+  out.push({
+    rule: "long-title",
+    where,
+    message:
+      `${what} is ${length} characters — ${length - MAX_TITLE_LENGTH} over the ` +
+      `${MAX_TITLE_LENGTH}-character guide. Move the detail into ` +
+      "`description` and keep the title short enough to be a filename.",
+  });
+}
+
 function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
   if (isBlank(diagram.title)) {
     out.push({
@@ -145,6 +191,13 @@ function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
       message: `The ${diagram.level} diagram \`${diagram.id}\` has no title.`,
     });
   }
+
+  adviseTitleLength(
+    diagram.title,
+    `The ${diagram.level} diagram \`${diagram.id}\`'s title`,
+    diagram.id,
+    out,
+  );
 
   for (const node of diagram.nodes) {
     // A placeholder is the same element defined one level up; its technology
@@ -217,7 +270,29 @@ function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
  */
 export function advise(file: ArchLabFile): Advisory[] {
   const out: Advisory[] = [];
+  // The MODEL's own title first, before the per-diagram walk: it is the one the
+  // export filename and the gallery card are built from.
+  adviseTitleLength(file.metadata.title, "The model's title", "title", out);
   for (const diagram of file.diagrams) adviseDiagram(diagram, out);
+  return out;
+}
+
+/**
+ * Advisories for a SEQUENCE document.
+ *
+ * Short by construction, and that is not an oversight: the C4 rules above are
+ * about C4 notation, which a sequence diagram does not use. Only the `.alab`
+ * format family applies, so today that is the title.
+ *
+ * A separate entry point rather than a widened `advise`, for the reason
+ * `mcp/tools/sequence.ts` gives at length: the two document kinds are genuinely
+ * different shapes, and `CheckOk` is not going to grow a discriminant to pretend
+ * otherwise. Same `Advisory` type and the same `groupAdvisories`, so whatever
+ * renders one renders the other.
+ */
+export function adviseSequence(file: SequenceLabFile): Advisory[] {
+  const out: Advisory[] = [];
+  adviseTitleLength(file.metadata.title, "The diagram's title", "title", out);
   return out;
 }
 
