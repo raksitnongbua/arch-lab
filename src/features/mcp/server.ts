@@ -55,6 +55,14 @@ const SEQUENCE_SOURCE_SCHEMA = z
     "Sequence diagram text: .alab sequence, or Mermaid sequenceDiagram.",
   );
 
+/* `create_share_link` accepts both document kinds — see tools/share.ts. */
+const SHARE_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Document text: .alab, arch-lab JSON or Mermaid C4 for C4 models; " +
+      ".alab sequence or Mermaid sequenceDiagram for sequence diagrams.",
+  );
+
 /**
  * Looks a tool's prose up by name so `registerTool` never carries a
  * hand-typed description. Throws at module load if the name is absent, which
@@ -234,12 +242,15 @@ export function registerArchLabMcp(server: McpServer): void {
     {
       ...config("create_share_link"),
       inputSchema: {
-        source: SOURCE_SCHEMA,
+        source: SHARE_SOURCE_SCHEMA,
         format: FORMAT_SCHEMA,
         diagram_id: z
           .string()
           .optional()
-          .describe("Open the link at this diagram. Defaults to the root."),
+          .describe(
+            "Open the link at this diagram (C4 models only). Defaults to " +
+              "the root.",
+          ),
         ttl_days: z
           .number()
           .int()

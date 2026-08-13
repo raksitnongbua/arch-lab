@@ -19,7 +19,7 @@
  * confused until told otherwise.
  */
 
-import { FlaskConical } from "lucide-react";
+import { ChevronRight, FlaskConical } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,29 +30,73 @@ import {
   MCP_PROMPTS,
   MCP_RESOURCES,
   MCP_STATUS_LABEL,
+  MCP_TOOL_GROUPS,
   MCP_TOOLS,
+  SKILL_DESTINATION,
+  SKILL_INSTALL,
   mcpEndpointUrl,
 } from "../catalog";
+import type { McpToolDoc } from "../catalog";
 import { MAX_SOURCE_CHARS } from "../lib/limits";
 import { CopySnippet } from "./copy-snippet";
+import { McpRoundTrip } from "./mcp-round-trip";
 
-const SECTIONS: readonly { id: string; label: string }[] = [
-  { id: "connect", label: "Connect" },
-  { id: "tools", label: "What it can do" },
-  { id: "context", label: "Resources & prompts" },
-  { id: "workflow", label: "A good workflow" },
-  { id: "limits", label: "Privacy & limits" },
+/*
+ * Each entry carries a one-line hint, because five bare labels tell a new
+ * reader nothing about which one holds the thing they came for — most arrive
+ * wanting exactly one of "the paste-in snippet" or "the tool list".
+ */
+const SECTIONS: readonly { id: string; label: string; hint: string }[] = [
+  {
+    id: "connect",
+    label: "Connect",
+    hint: "pick your client, copy one snippet",
+  },
+  {
+    id: "skill",
+    label: "No server? Use the skill",
+    hint: "one command, the grammar as a file",
+  },
+  {
+    id: "tools",
+    label: "What it can do",
+    hint: `${MCP_TOOLS.length} read-only tools`,
+  },
+  {
+    id: "context",
+    label: "Resources & prompts",
+    hint: "pin the grammar instead of calling for it",
+  },
+  {
+    id: "workflow",
+    label: "A good workflow",
+    hint: "the order that avoids rework",
+  },
+  {
+    id: "limits",
+    label: "Privacy & limits",
+    hint: "what is kept (nothing) and what is refused",
+  },
 ];
 
 export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
   const endpoint = mcpEndpointUrl(origin);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-14 sm:px-8 sm:py-20">
+    /*
+     * ONE column width, set here and nowhere else. This used to be max-w-5xl
+     * with every prose block capped at max-w-3xl individually — which left
+     * anything that forgot its own cap (the tool cards, the resource and
+     * prompt lists, the workflow list) spanning the full 5xl, so the page read
+     * as a narrow left-hugging column that suddenly went wide at "What it can
+     * do". Constraining the container instead makes every section share the
+     * same centred measure and makes that class of drift impossible.
+     */
+    <div className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8 sm:py-20">
       {/* ---- intro ---------------------------------------------------------- */}
-      <div className="mb-6 flex flex-wrap items-center gap-2">
+      <div className="af-mcp-fade mb-6 flex flex-wrap items-center gap-2">
         <Badge variant="accent">
-          <span className="size-1.5 rounded-full bg-accent" />
+          <span className="af-mcp-pulse size-1.5 rounded-full bg-accent" />
           Integration · Model Context Protocol
         </Badge>
         {/* Outline rather than accent: the status qualifies the badge next to
@@ -60,10 +104,10 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
       </div>
 
-      <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+      <h1 className="af-mcp-rise af-mcp-d1 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
         Use arch-lab from your AI agent
       </h1>
-      <p className="mt-4 max-w-3xl text-lg leading-relaxed text-pretty text-muted-foreground">
+      <p className="af-mcp-rise af-mcp-d2 mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
         arch-lab runs an{" "}
         <a
           href="https://modelcontextprotocol.io"
@@ -82,7 +126,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       {/* Above the endpoint, not buried at the bottom: someone about to paste
           a URL into their client deserves to know what it does not promise
           before they depend on it. */}
-      <div className="mt-6 max-w-3xl rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
+      <div className="af-mcp-rise af-mcp-d3 mt-6 rounded-lg border border-accent/25 bg-accent/8 px-5 py-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
           <FlaskConical aria-hidden="true" className="size-4 text-accent" />
           {MCP_STATUS_LABEL}
@@ -92,7 +136,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         </p>
       </div>
 
-      <div className="mt-6 max-w-3xl">
+      <div className="af-mcp-rise af-mcp-d4 mt-6">
         <CopySnippet
           snippet={endpoint}
           caption="endpoint"
@@ -100,7 +144,16 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         />
       </div>
 
-      <div className="mt-8 max-w-3xl rounded-lg border border-border bg-card px-5 py-4">
+      {/* The figure sits UNDER the endpoint, not above it: someone who came
+          here to copy a URL should reach it before anything decorative. The
+          tool name comes from the catalogue, so the picture cannot advertise a
+          call the server does not have. */}
+      <McpRoundTrip
+        toolName={MCP_TOOLS[0]?.name ?? "validate_model"}
+        className="af-mcp-rise af-mcp-d5 mt-6"
+      />
+
+      <div className="af-mcp-card af-mcp-rise af-mcp-d6 mt-8 rounded-lg border border-border bg-card px-5 py-4">
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
           What this is for
         </h2>
@@ -118,16 +171,28 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       </div>
 
       {/* ---- on this page ---------------------------------------------------- */}
-      <nav aria-label="On this page" className="mt-8">
-        <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+      <nav
+        aria-label="On this page"
+        className="af-mcp-fade af-mcp-d7 mt-8 rounded-lg border border-border bg-card px-5 py-4"
+      >
+        <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          On this page
+        </p>
+        <ul className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
           {SECTIONS.map((section) => (
-            <li key={section.id}>
+            <li
+              key={section.id}
+              className="flex flex-wrap items-baseline gap-x-2"
+            >
               <a
                 href={`#${section.id}`}
                 className="font-medium text-primary hover:underline"
               >
                 {section.label}
               </a>
+              <span className="text-xs text-muted-foreground">
+                {section.hint}
+              </span>
             </li>
           ))}
         </ul>
@@ -136,24 +201,101 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       {/* ---- connect --------------------------------------------------------- */}
       <Section id="connect" title="Connect">
         <P>
-          One transport, Streamable HTTP, at the URL above. Pick your client:
+          One transport, Streamable HTTP, at the URL above. Open your client —
+          each entry is the complete setup:
         </P>
-        <div className="mt-6 space-y-6">
-          {CONNECT_RECIPES.map((recipe) => (
-            <div key={recipe.client} className="min-w-0">
-              <h3 className="text-sm font-semibold tracking-tight text-foreground">
-                {recipe.client}
-              </h3>
-              <p className="mt-1 mb-3 text-sm leading-relaxed text-muted-foreground">
-                {recipe.note}
-              </p>
-              <CopySnippet
-                snippet={recipe.snippet(endpoint)}
-                caption={recipe.language}
-                label={`${recipe.client} setup`}
-              />
-            </div>
+        {/*
+         * One <details> per client, because seven recipes stacked open meant
+         * scrolling past six irrelevant configs to reach yours — the client
+         * names are the index, and they were buried under their own snippets.
+         * details/summary is the disclosure widget that costs no client
+         * component, which this page is not allowed to have (the route reads
+         * headers(); see the file comment).
+         *
+         * The first recipe ships open: it shows what a row expands into, so a
+         * closed list does not read as a menu with nothing behind it — and it
+         * keeps a copyable snippet on the page for anyone skimming past the
+         * summaries.
+         */}
+        <div className="mt-6 overflow-hidden rounded-lg border border-border bg-card">
+          {CONNECT_RECIPES.map((recipe, index) => (
+            <details
+              key={recipe.client}
+              open={index === 0}
+              className="group border-b border-border/60 last:border-b-0"
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3.5 hover:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                <ChevronRight
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none"
+                />
+                <h3 className="min-w-0 flex-1 text-sm font-semibold tracking-tight text-foreground">
+                  {recipe.client}
+                </h3>
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 font-mono text-xs text-muted-foreground"
+                >
+                  {recipe.language}
+                </span>
+              </summary>
+              <div className="min-w-0 px-5 pt-0.5 pb-5">
+                <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+                  {recipe.note}
+                </p>
+                <CopySnippet
+                  snippet={recipe.snippet(endpoint)}
+                  caption={recipe.language}
+                  label={`${recipe.client} setup`}
+                />
+              </div>
+            </details>
           ))}
+        </div>
+      </Section>
+
+      {/* ---- the skill ------------------------------------------------------- */}
+      <Section id="skill" title="No server? Use the skill">
+        <P>
+          Connecting a server is not the only way to get this. Most of what the
+          MCP server offers an agent is <em>knowledge</em> — the grammar, in
+          exact detail — and knowledge travels fine as a file. If you would
+          rather not add a connector, drop the skill into your project instead:
+        </P>
+        <div className="mt-5">
+          <CopySnippet
+            snippet={SKILL_INSTALL}
+            caption="bash"
+            label="Install the .alab skill"
+          />
+        </div>
+        <P className="mt-4">
+          That writes <Code>{SKILL_DESTINATION}</Code> — one markdown file,
+          generated from the same syntax reference this server hands out and
+          verified against the real parser on every build. Nothing runs, nothing
+          connects, and it is a normal file you can read and diff.
+        </P>
+
+        {/* The honest boundary. Someone who thinks a skill replaces the server
+            will trust an invalid file because "the skill said so" — which is a
+            worse outcome than not offering the skill at all. */}
+        <div className="af-mcp-card mt-6 rounded-lg border border-border bg-card px-5 py-4">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">
+            What you give up
+          </h3>
+          <p className="mt-2 leading-relaxed text-muted-foreground">
+            The grammar, but not the verdict. A file in your project cannot tell
+            you whether the model you just wrote actually parses — for that you
+            need <Code>validate_model</Code>, which means the server, or the{" "}
+            <Link
+              href="/validate"
+              className="font-medium text-primary hover:underline"
+            >
+              validator on this site
+            </Link>
+            . The two are not exclusive: plenty of people want the skill for
+            everyday writing and the server for the check at the end.
+          </p>
         </div>
       </Section>
 
@@ -161,55 +303,28 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
       <Section id="tools" title="What it can do">
         <P>
           {MCP_TOOLS.length} tools, all read-only — nothing here mutates
-          anything, on your machine or ours.
+          anything, on your machine or ours. Grouped by job:
         </P>
-        <div className="mt-6 space-y-6">
-          {MCP_TOOLS.map((tool) => (
-            <div
-              key={tool.name}
-              className="rounded-lg border border-border bg-card px-5 py-4"
-            >
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h3 className="font-mono text-sm font-semibold text-foreground">
-                  {tool.name}
-                </h3>
-                <span className="text-sm text-muted-foreground">
-                  {tool.title}
-                </span>
-              </div>
-              <p className="mt-2 leading-relaxed text-muted-foreground">
-                {tool.description}
+        {/*
+         * Grouped, not a flat list: ten identical cards gave a reader no way
+         * to skim for "the sharing one" without reading all ten. The grouping
+         * comes from the catalogue like everything else — the component still
+         * knows no tool names.
+         */}
+        <div className="mt-6 space-y-10">
+          {MCP_TOOL_GROUPS.map((group) => (
+            <div key={group.id}>
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
+                {group.title}
+              </h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                {group.blurb}
               </p>
-              {tool.args.length > 0 ? (
-                <dl className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
-                  {tool.args.map((arg) => (
-                    <div
-                      key={arg.name}
-                      className="flex flex-col gap-x-2 gap-y-0.5 sm:flex-row"
-                    >
-                      <dt className="shrink-0 font-mono text-xs text-foreground sm:w-40">
-                        {arg.name}
-                        {arg.required ? (
-                          <span
-                            aria-label="required"
-                            title="required"
-                            className="ml-1 text-primary"
-                          >
-                            *
-                          </span>
-                        ) : null}
-                      </dt>
-                      <dd className="min-w-0 text-sm text-muted-foreground">
-                        {arg.description}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="mt-3 border-t border-border/60 pt-3 text-sm text-muted-foreground">
-                  No arguments.
-                </p>
-              )}
+              <div className="mt-4 space-y-4">
+                {group.tools.map((tool) => (
+                  <ToolCard key={tool.name} tool={tool} />
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -225,7 +340,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           {MCP_RESOURCES.map((resource) => (
             <li
               key={resource.uri}
-              className="rounded-lg border border-border bg-card px-5 py-4"
+              className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
             >
               <p className="font-mono text-sm font-semibold text-foreground">
                 {resource.uri}
@@ -244,7 +359,7 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           {MCP_PROMPTS.map((prompt) => (
             <li
               key={prompt.name}
-              className="rounded-lg border border-border bg-card px-5 py-4"
+              className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4"
             >
               <p className="font-mono text-sm font-semibold text-foreground">
                 {prompt.name}
@@ -343,7 +458,9 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           <Bullet>
             <strong className="text-foreground">Mermaid is one-way.</strong>{" "}
             Importing Mermaid C4 works; exporting to it drops geometry, tags,
-            icons, drill-down links and traceability. Keep <Code>.alab</Code> or{" "}
+            icons, drill-down links and traceability. Sequence documents import
+            from Mermaid <Code>sequenceDiagram</Code> the same one-way — there
+            is no Mermaid export for them at all. Keep <Code>.alab</Code> or{" "}
             <Code>.archlab.json</Code> as the source of truth.
           </Bullet>
         </ul>
@@ -374,6 +491,57 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
 /* Layout primitives (kept local — the page is the only consumer)             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * One tool's reference card. h4, because it sits under a group's h3 — the
+ * groups are what a skimmer reads, the cards are what they read after picking
+ * one.
+ */
+function ToolCard({ tool }: { tool: McpToolDoc }): React.JSX.Element {
+  return (
+    <div className="af-mcp-card rounded-lg border border-border bg-card px-5 py-4">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h4 className="font-mono text-sm font-semibold text-foreground">
+          {tool.name}
+        </h4>
+        <span className="text-sm text-muted-foreground">{tool.title}</span>
+      </div>
+      <p className="mt-2 leading-relaxed text-muted-foreground">
+        {tool.description}
+      </p>
+      {tool.args.length > 0 ? (
+        <dl className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
+          {tool.args.map((arg) => (
+            <div
+              key={arg.name}
+              className="flex flex-col gap-x-2 gap-y-0.5 sm:flex-row"
+            >
+              <dt className="shrink-0 font-mono text-xs text-foreground sm:w-40">
+                {arg.name}
+                {arg.required ? (
+                  <span
+                    aria-label="required"
+                    title="required"
+                    className="ml-1 text-primary"
+                  >
+                    *
+                  </span>
+                ) : null}
+              </dt>
+              <dd className="min-w-0 text-sm text-muted-foreground">
+                {arg.description}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="mt-3 border-t border-border/60 pt-3 text-sm text-muted-foreground">
+          No arguments.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Section({
   id,
   title,
@@ -395,6 +563,13 @@ function Section({
       >
         {title}
       </h2>
+      {/* Draws out from the left under the title. Decorative — the heading
+          above it already says where you are — so it is hidden from the
+          accessibility tree rather than announced as a separator. */}
+      <span
+        aria-hidden="true"
+        className="af-mcp-rule mt-3 block h-px w-16 rounded-full bg-primary/60"
+      />
       {children}
     </section>
   );
@@ -409,7 +584,7 @@ function P({
 }): React.JSX.Element {
   return (
     <p
-      className={`max-w-3xl leading-relaxed text-muted-foreground ${className ?? "mt-4"}`}
+      className={`leading-relaxed text-muted-foreground ${className ?? "mt-4"}`}
     >
       {children}
     </p>
@@ -422,7 +597,7 @@ function Bullet({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <li className="flex max-w-3xl gap-3 leading-relaxed">
+    <li className="flex gap-3 leading-relaxed">
       <span
         aria-hidden="true"
         className="mt-2 size-1.5 shrink-0 rounded-full bg-accent"

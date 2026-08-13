@@ -54,7 +54,7 @@ import {
 
 import { ViewerExportButton } from "../export/export-button";
 import { EditModeLink } from "./edit-mode-link";
-import { ViewerShareButton, type ShareSource } from "../share/share-button";
+import { ShareButton, type ShareSource } from "../share/share-button";
 import {
   deepFreeze,
   diagramsInDrillOrder,
@@ -292,9 +292,11 @@ export function ViewerShell({
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {share !== undefined ? (
-              <ViewerShareButton
+              <ShareButton
                 share={share}
-                modelTitle={frozenModel.title}
+                documentTitle={frozenModel.title}
+                route="/view/c4"
+                noun="model"
                 diagram={currentDiagram}
                 rootDiagramId={frozenModel.rootDiagramId}
                 onAnnounce={setAnnouncement}

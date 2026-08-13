@@ -11,6 +11,14 @@
  * so it is never sent to any server — not even this one, on open — and the
  * link is therefore identical to one a human would have produced by hand.
  *
+ * BOTH DOCUMENT KINDS. The codec compresses arbitrary text, so what makes a
+ * link a C4 link or a sequence link is the ROUTE it lands on, not the payload
+ * (see `sequence/share/share-button.tsx`, which shares the same reasoning): a
+ * C4 model mints against `/view/c4`, a sequence document against
+ * `/view/sequence`. Detection is by the document's first meaningful line —
+ * the same sniff the playgrounds use — so an agent that authored a sequence
+ * flow gets a working link from the same tool, not a C4 parse error.
+ *
  * Length is reported in the codec's honest tiers (see the reasoning on the
  * constants in `codec.ts`): under `SHARE_URL_SAFE_LENGTH` the link goes out
  * clean; up to `MAX_SHARE_URL_LENGTH` it goes out WITH a caveat that
@@ -20,7 +28,12 @@
  * round trip.
  */
 
-import { parseArchText, serializeArchText } from "@/features/archtext";
+import {
+  parseArchText,
+  serializeArchText,
+  serializeSequenceText,
+} from "@/features/archtext";
+import { MERMAID_SEQUENCE_CAVEAT } from "@/features/sequence/input/parse";
 import type { CheckChoice } from "@/features/validate/lib/check";
 import {
   canEncodeShare,
@@ -32,6 +45,7 @@ import {
 } from "@/features/viewer/share/codec";
 import { signExpiry } from "@/features/viewer/share/sign-server";
 import type { ArchLabFile, C4Node } from "@/types";
+import type { SequenceLabFile } from "@/types/sequence";
 
 import { publicOrigin } from "../lib/origin";
 import { readSource } from "../lib/read";
@@ -42,6 +56,7 @@ import {
   textResult,
   type McpTextResult,
 } from "../lib/render";
+import { readSequence } from "./sequence";
 
 /**
  * The caveat handed out with links in the middle tier, and with scoped links
@@ -168,12 +183,172 @@ async function scopedOffers(
   return offers;
 }
 
+/**
+ * A signed expiry for the given payload text, or the reason there is none.
+ * One function for both document kinds: the signature covers a digest of the
+ * TEXT, so the codec — and this — never needs to know which grammar wrote it.
+ */
+type MintedExpiry =
+  | { status: "ok"; expiry: ShareExpiry | undefined; line: string | undefined }
+  | { status: "error"; message: string };
+
+async function mintExpiry(
+  payloadText: string,
+  ttlDays: number | undefined,
+): Promise<MintedExpiry> {
+  if (ttlDays === undefined) {
+    return { status: "ok", expiry: undefined, line: undefined };
+  }
+  if (!Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 400) {
+    return {
+      status: "error",
+      message: "`ttl_days` must be a whole number of days between 1 and 400.",
+    };
+  }
+  // Signed HERE rather than by POSTing to `/api/share/sign`: this tool
+  // already runs on the server, so it can use the private key directly — a
+  // self-fetch would need an absolute origin and add a hop that can fail for
+  // reasons unrelated to signing.
+  const expiresAt = Math.floor(Date.now() / 1000) + ttlDays * 86_400;
+  const signed = await signExpiry(await shareDigestFor(payloadText), expiresAt);
+  if (signed.status !== "ok") {
+    // Refuse rather than silently hand back a permanent link: the caller
+    // asked for an expiry, and a link that quietly lacks one is worse than
+    // an error that says why.
+    return {
+      status: "error",
+      message:
+        `Could not create an expiring link — ${signed.message}. ` +
+        "Omit `ttl_days` for a link that never expires.",
+    };
+  }
+  return {
+    status: "ok",
+    expiry: { expiresAt, signature: signed.signature },
+    line:
+      `Expires ${new Date(expiresAt * 1000).toISOString()} ` +
+      `(${ttlDays.toString()} day${ttlDays === 1 ? "" : "s"}). The expiry is signed, so editing it ` +
+      "in the URL breaks the link — but it is not access control: anyone with " +
+      "the link can read the model until then.",
+  };
+}
+
+/** The privacy line every successful link carries, exact about what left. */
+function privacyLine(expiry: ShareExpiry | undefined): string {
+  return (
+    "The model travels in the URL fragment (after `#`), which browsers " +
+    "never send to a server" +
+    (expiry === undefined
+      ? " — nothing about this model is uploaded, stored or logged anywhere."
+      : ". Signing the expiry used a SHA-256 fingerprint of the payload, " +
+        "never the model itself, and nothing was stored.")
+  );
+}
+
+/**
+ * The sequence half of `create_share_link`. Same codec, same tiers, same
+ * privacy — the differences are the route (`/view/sequence`) and that there
+ * is no diagram to scope to: a sequence document is one flow, so the oversize
+ * refusal offers the canonical text and nothing smaller.
+ */
+async function sequenceShareLink(
+  file: SequenceLabFile,
+  sourceFormat: "alab" | "mermaid",
+  diagramId: string | undefined,
+  ttlDays: number | undefined,
+): Promise<McpTextResult> {
+  if (diagramId !== undefined) {
+    return errorResult(
+      "`diagram_id` is for C4 models — a sequence document is a single flow " +
+        "with no diagrams to open at. Omit it.",
+    );
+  }
+
+  if (!canEncodeShare()) {
+    return errorResult(
+      "This server cannot build share links — its JavaScript runtime lacks " +
+        "CompressionStream. Send the canonical .alab sequence text from " +
+        "format_sequence instead.",
+    );
+  }
+
+  // Canonical text, like the C4 branch: deterministic, and the same bytes
+  // format_sequence hands out, so a shared flow and a committed one agree.
+  const payload = serializeSequenceText(file);
+
+  const minted = await mintExpiry(payload, ttlDays);
+  if (minted.status === "error") return errorResult(minted.message);
+
+  const fragment = await encodeShareFragment(payload, null, minted.expiry);
+  // Minted against `/view/seq`, the short alias that forwards to
+  // `/view/sequence` with the fragment intact: the route is part of the same
+  // length budget as the payload, so the alias's five saved characters go to
+  // the document instead. Links minted against the long route still open —
+  // the playground's address did not move, only what NEW links say.
+  const url = `${publicOrigin()}/view/seq#${fragment}`;
+
+  if (url.length > MAX_SHARE_URL_LENGTH) {
+    return errorResult(
+      joinSections(
+        `This sequence document does not fit in a share link: the URL would ` +
+          `be ${url.length.toLocaleString("en-US")} characters, over the ` +
+          `${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character ceiling ` +
+          `past which enough carrier apps truncate that the link would fail ` +
+          `silently for whoever receives it. A sequence document has no ` +
+          `sub-diagrams to scope a smaller link to.`,
+        "To share it, save the canonical `.alab` sequence text below as a " +
+          "file and send that — the playground at /view/sequence accepts it " +
+          "by paste:",
+        fence("", payload),
+      ),
+    );
+  }
+
+  const withinSafeLength = url.length <= SHARE_URL_SAFE_LENGTH;
+  return textResult(
+    joinSections(
+      `Share link for ${JSON.stringify(file.metadata.title)} ` +
+        `(${url.length.toLocaleString("en-US")} characters — ` +
+        (withinSafeLength
+          ? `under ${SHARE_URL_SAFE_LENGTH.toLocaleString("en-US")}, safe in essentially any app):`
+          : `within the ${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character ceiling):`),
+      url,
+      withinSafeLength ? null : EMAIL_CAVEAT,
+      "Opens in the sequence playground.",
+      minted.line ?? null,
+      privacyLine(minted.expiry),
+      // The link carries the .alab conversion of what was PASTED, so a caller
+      // holding Mermaid must hear the loss here — after this, only the .alab
+      // form travels.
+      sourceFormat === "mermaid" ? MERMAID_SEQUENCE_CAVEAT : null,
+    ),
+  );
+}
+
 export async function createShareLink(
   source: string,
   format: CheckChoice,
   diagramId: string | undefined,
   ttlDays: number | undefined,
 ): Promise<McpTextResult> {
+  // Sequence documents first, and regardless of `format`: the two headers
+  // (`archlab 1.0 sequence`, `sequenceDiagram`) can never parse as any C4
+  // reading, so honouring a forced C4 `format` here could only produce a
+  // misleading parse error. A sequence PARSE error is final — the text is a
+  // sequence document, just a broken one — while "c4-detected",
+  // "unknown-format" and "size" all fall through to the C4 reader, which owns
+  // those verdicts and their messages.
+  const sequence = readSequence(source);
+  if (sequence.status === "ok") {
+    return sequenceShareLink(
+      sequence.file,
+      sequence.format,
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (sequence.kind === "parse") return errorResult(sequence.message);
+
   const read = readSource(source, format);
   if (read.status === "error") return errorResult(read.message);
 
@@ -197,36 +372,9 @@ export async function createShareLink(
     );
   }
 
-  // Expiry, when asked for. Signed HERE rather than by POSTing to
-  // `/api/share/sign`: this tool already runs on the server, so it can use the
-  // private key directly — a self-fetch would need an absolute origin and add a
-  // hop that can fail for reasons unrelated to signing.
-  let expiry: ShareExpiry | undefined;
-  let expiryLine: string | undefined;
-  if (ttlDays !== undefined) {
-    if (!Number.isInteger(ttlDays) || ttlDays < 1 || ttlDays > 400) {
-      return errorResult(
-        "`ttl_days` must be a whole number of days between 1 and 400.",
-      );
-    }
-    const expiresAt = Math.floor(Date.now() / 1000) + ttlDays * 86_400;
-    const signed = await signExpiry(await shareDigestFor(aftText), expiresAt);
-    if (signed.status !== "ok") {
-      // Refuse rather than silently hand back a permanent link: the caller
-      // asked for an expiry, and a link that quietly lacks one is worse than
-      // an error that says why.
-      return errorResult(
-        `Could not create an expiring link — ${signed.message}. ` +
-          "Omit `ttl_days` for a link that never expires.",
-      );
-    }
-    expiry = { expiresAt, signature: signed.signature };
-    expiryLine =
-      `Expires ${new Date(expiresAt * 1000).toISOString()} ` +
-      `(${ttlDays.toString()} day${ttlDays === 1 ? "" : "s"}). The expiry is signed, so editing it ` +
-      "in the URL breaks the link — but it is not access control: anyone with " +
-      "the link can read the model until then.";
-  }
+  const minted = await mintExpiry(aftText, ttlDays);
+  if (minted.status === "error") return errorResult(minted.message);
+  const { expiry, line: expiryLine } = minted;
 
   // The canonical `.alab` text is what travels: it is deterministic, lossless
   // and materially smaller than the JSON, which is what makes a whole model
@@ -300,12 +448,7 @@ export async function createShareLink(
       // Precise about what did and did not leave the machine. With `ttl_days`
       // a SHA-256 of the payload was signed here; the model itself still never
       // travels to a server, and nothing was stored either way.
-      "The model travels in the URL fragment (after `#`), which browsers " +
-        "never send to a server" +
-        (expiry === undefined
-          ? " — nothing about this model is uploaded, stored or logged anywhere."
-          : ". Signing the expiry used a SHA-256 fingerprint of the payload, " +
-            "never the model itself, and nothing was stored."),
+      privacyLine(expiry),
     ),
   );
 }

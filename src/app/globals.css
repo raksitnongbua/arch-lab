@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "../features/editor/styles/canvas-motion.css";
 @import "../features/sequence/styles/sequence-motion.css";
+@import "../features/mcp/styles/mcp-motion.css";
 
 /* ---------------------------------------------------------------------------
  * arch-lab theming

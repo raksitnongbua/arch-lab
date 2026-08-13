@@ -12,13 +12,14 @@ interface ViewPageProps {
 }
 
 /**
- * `c4` and `sequence` are RESERVED model ids: they are static sibling
- * segments (`/view/c4`, `/view/sequence`), and Next.js resolves a static
- * segment before a dynamic one — a bundled model registered under either
- * name would build fine and then silently never be reachable. Throwing at
- * build time turns that silent shadowing into a failed build.
+ * `c4`, `sequence` and `seq` are RESERVED model ids: they are static sibling
+ * segments (`/view/c4`, `/view/sequence`, and the short share-link alias
+ * `/view/seq`), and Next.js resolves a static segment before a dynamic one —
+ * a bundled model registered under any of these names would build fine and
+ * then silently never be reachable. Throwing at build time turns that silent
+ * shadowing into a failed build.
  */
-const RESERVED_MODEL_IDS = new Set(["c4", "sequence"]);
+const RESERVED_MODEL_IDS = new Set(["c4", "sequence", "seq"]);
 
 export function generateStaticParams(): Array<{ modelId: string }> {
   const ids = listViewerModelIds();

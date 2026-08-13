@@ -16,11 +16,11 @@
  *     `sequenceDiagram` (a lossy import — the caveat shows whenever the
  *     pane's content parsed as Mermaid). A C4 document is redirected to
  *     `/view/c4` by message, not mis-parsed.
- *   - NO Share button, and no second JSON pane: the share codec is
- *     C4-specific (`viewer/share/codec.ts` carries `.alab` C4 text), so
- *     offering — or faking — a Share here would mint links that cannot
- *     open. When the codec learns sequence payloads, the button belongs
- *     here too.
+ *   - The SAME Share control as the C4 viewer (`viewer/share/share-button`,
+ *     wrapped by `../share/share-button.tsx`): one codec, one panel, one
+ *     expiry system — only the route, the noun and the panel's opening
+ *     direction differ. No second JSON pane, though: a sequence document
+ *     has one canonical text form and nothing to sync it against.
  *
  * WHY diagram-over-source rather than the C4 playground's side-by-side: a
  * sequence diagram's participants spread HORIZONTALLY, so width is the axis
@@ -66,6 +66,10 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import {
+  ShareLinkFailurePage,
+  type ShareOpenFailure,
+} from "@/components/share/share-link-failure";
 import { decodeShareFragment } from "@/features/viewer/share/codec";
 
 import { MERMAID_SEQUENCE_EXAMPLE, SEQUENCE_EXAMPLE } from "../input/example";
@@ -93,6 +97,10 @@ export function SequencePlayground(): React.JSX.Element {
   const [error, setError] = useState<SequenceInputError | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [pending, setPending] = useState<string | null>(null);
+  /** A share link that would not open; non-null takes over the whole page. */
+  const [shareFailure, setShareFailure] = useState<ShareOpenFailure | null>(
+    null,
+  );
 
   /** Scopes the export button's lookup for the live <svg>. */
   const diagramPaneRef = useRef<HTMLElement>(null);
@@ -205,37 +213,94 @@ export function SequencePlayground(): React.JSX.Element {
    * a C4 document where it belongs — so a link opened on the wrong route
    * explains itself rather than failing.
    *
-   * A decoded document replaces the pane exactly as pasting would. Failures
-   * are reported through the same live region and the same error surface as a
-   * bad paste, rather than a share-specific takeover: this playground always
-   * has a working document on screen, so there is nothing for a takeover to
-   * protect the reader from. */
+   * A decoded document replaces the pane exactly as pasting would. A link
+   * that will NOT open takes over the whole page instead — the same shared
+   * failure page the C4 playground shows (PR #19 gave C4 the takeover; this
+   * route used to whisper the failure into the screen-reader-only live
+   * region, which left a sighted reader looking at the seed example and
+   * concluding it was the flow they were sent). One component for both
+   * routes, so the two cannot drift apart again. */
   useEffect(() => {
     let cancelled = false;
 
     const openFromHash = async () => {
       const decoded = await decodeShareFragment(window.location.hash);
-      if (cancelled || decoded.status === "none") return;
+      if (cancelled) return;
 
-      if (decoded.status === "error") {
-        setAnnouncement(
-          `This share link could not be opened: ${decoded.message}`,
-        );
-        return;
-      }
-      if (decoded.status === "expired") {
-        setAnnouncement(
-          "This share link has expired. The flow it carried is not shown.",
-        );
-        return;
-      }
+      // Clear any previous outcome first: `hashchange` fires for a second
+      // link opened in the same tab, and a takeover left standing would hide
+      // a GOOD link's flow behind a stale error page.
+      setShareFailure(null);
 
-      setText(decoded.aftText);
-      setPending(null);
-      applyParse(decoded.aftText);
-      setAnnouncement(
-        "Opened a sequence diagram from a share link — nothing was uploaded; the pane holds its source.",
-      );
+      switch (decoded.status) {
+        case "none":
+          return;
+
+        case "error":
+          // Takes over the page. No `setAnnouncement`: the polite live region
+          // below is not rendered on this path — the failure page carries its
+          // own `role="alert"` instead.
+          setShareFailure({ kind: "broken", reason: decoded.message });
+          return;
+
+        case "expired":
+          // Same takeover; the page's `role="status"` announces it.
+          setShareFailure({ kind: "expired", expiresAt: decoded.expiresAt });
+          return;
+
+        case "ok": {
+          const result = parseSequenceInput(decoded.aftText);
+          if (result.status === "error") {
+            if (result.error.kind === "c4-detected") {
+              // The payload is INTACT — it is a C4 model that landed on the
+              // sequence route. Both routes read the same codec and the same
+              // fragment format, so the very same fragment opens on the C4
+              // playground: offer the door, carrying the payload along,
+              // rather than reporting damage that did not happen.
+              setShareFailure({
+                kind: "wrong-document",
+                heading: "This link carries a C4 model",
+                description:
+                  "The link opened fine, but what it carries is a C4 model, " +
+                  "not a sequence diagram — the C4 playground renders those.",
+                actionHref: `/view/c4${window.location.hash}`,
+                actionLabel: "Open it in the C4 playground",
+              });
+              return;
+            }
+            // Decoding succeeded and the text still does not read as a
+            // sequence diagram, which in practice means characters went
+            // missing from the MIDDLE of the URL: a payload cut short at the
+            // end fails earlier, inside `decodeShareFragment`.
+            setShareFailure({
+              kind: "broken",
+              reason:
+                "the flow inside it does not parse — characters appear to be " +
+                "missing from the middle of the link, which happens when a long " +
+                "URL is copied across a line wrap",
+            });
+            return;
+          }
+
+          setText(decoded.aftText);
+          setPending(null);
+          applyParse(decoded.aftText);
+          setAnnouncement(
+            "Opened a sequence diagram from a share link — nothing was uploaded; the pane holds its source.",
+          );
+          return;
+        }
+
+        default: {
+          // A NEW codec status must never fall through to a page that quietly
+          // shows the seed example instead of the shared flow: this
+          // assignment fails `pnpm typecheck` the moment `DecodedShare` grows
+          // a case this switch does not map to a full-page outcome.
+          // `check:share-error-pages` asserts the guard stays here.
+          const _exhaustive: never = decoded;
+          return _exhaustive;
+        }
+      }
     };
 
     void openFromHash();
@@ -271,6 +336,28 @@ export function SequencePlayground(): React.JSX.Element {
     },
     [handleChange],
   );
+
+  // A link that did not open takes over the page, returned BEFORE the
+  // playground so the seed example is never on screen next to the message —
+  // the whole point is that there is nothing here to mistake for what was
+  // shared. Start-fresh drops the dead fragment without a reload, so the
+  // playground appears on the clean URL and the broken link is not left in
+  // the address bar.
+  const startFresh = () => {
+    window.history.replaceState(null, "", window.location.pathname);
+    setShareFailure(null);
+  };
+
+  if (shareFailure !== null) {
+    return (
+      <ShareLinkFailurePage
+        failure={shareFailure}
+        subject="sequence diagram"
+        startFreshLabel="Write your own diagram"
+        onStartFresh={startFresh}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8">
@@ -415,7 +502,12 @@ export function SequencePlayground(): React.JSX.Element {
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
-            <SequenceShareButton text={text} onAnnounce={setAnnouncement} />
+            <SequenceShareButton
+              text={text}
+              title={parsed?.file.metadata.title ?? "sequence-diagram"}
+              format={parsed?.format ?? null}
+              onAnnounce={setAnnouncement}
+            />
             <SequenceExportButton
               paneRef={diagramPaneRef}
               title={parsed?.file.metadata.title ?? "sequence-diagram"}

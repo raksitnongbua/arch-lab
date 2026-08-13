@@ -117,6 +117,22 @@ const SEQUENCE_SOURCE_ARG: McpArgDoc = {
     "meaningful line.",
 };
 
+/**
+ * `create_share_link` reads BOTH document kinds — the codec packs arbitrary
+ * text, and the route (`/view/c4` vs `/view/sequence`) is what makes a link a
+ * C4 or a sequence one — so its source argument must advertise both input
+ * languages where SOURCE_ARG and SEQUENCE_SOURCE_ARG each name only their own.
+ */
+const SHARE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The document text (max 256,000 characters). C4 models: .alab, arch-lab " +
+    "JSON, or Mermaid C4. Sequence diagrams: `.alab` sequence (first line " +
+    "`archlab 1.0 sequence`) or Mermaid `sequenceDiagram`. The kind is " +
+    "detected from the first meaningful line.",
+};
+
 const FORMAT_ARG: McpArgDoc = {
   name: "format",
   required: false,
@@ -180,11 +196,14 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     name: "convert_model",
     title: "Convert between formats",
     description:
-      "Convert a model to .alab, arch-lab JSON, or Mermaid C4. .alab and " +
+      "Convert a C4 model to .alab, arch-lab JSON, or Mermaid C4. .alab and " +
       "JSON are lossless in both directions. Mermaid is a one-way, lossy " +
       "export of a SINGLE diagram (geometry, tags, icons, drill-down links " +
       "and traceability are dropped) — good for embedding a picture in a " +
-      "README, never as a source of truth.",
+      "README, never as a source of truth. C4 models only: a sequence " +
+      "document has no Mermaid export here (Mermaid sequenceDiagram is " +
+      "import-only, via format_sequence) — sequence documents travel as " +
+      ".alab text.",
     args: [
       SOURCE_ARG,
       FORMAT_ARG,
@@ -280,20 +299,25 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     name: "create_share_link",
     title: "Create a share link",
     description:
-      "Turn a model into a URL that opens it in the arch-lab viewer, so a " +
-      "human can see the diagram. The model is encoded into the URL " +
-      "fragment, which browsers never send to a server — nothing is " +
-      "uploaded or stored. Refuses models too large to fit a link that " +
-      "would survive being pasted into chat or mail. Can optionally expire " +
-      "after a number of days.",
+      "Turn a C4 model OR a sequence diagram into a URL that opens it in " +
+      "the arch-lab viewer, so a human can see the diagram — C4 models open " +
+      "the two-pane viewer, sequence documents the sequence playground. The " +
+      "document is encoded into the URL fragment, which browsers never send " +
+      "to a server — nothing is uploaded or stored. Refuses documents too " +
+      "large to fit a link that would survive being pasted into chat or " +
+      "mail. Can optionally expire after a number of days. The format " +
+      "argument applies to the C4 readings; a sequence document is detected " +
+      "from its first line.",
     args: [
-      SOURCE_ARG,
+      SHARE_SOURCE_ARG,
       FORMAT_ARG,
       {
         name: "diagram_id",
         required: false,
         description:
-          "Open the link at this diagram. Defaults to the root diagram.",
+          "Open the link at this diagram (C4 models only — a sequence " +
+          "document is a single flow with no diagrams). Defaults to the " +
+          "root diagram.",
       },
       {
         name: "ttl_days",
@@ -307,6 +331,107 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     ],
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* Tool groups — the /mcp page's reading order                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface McpToolGroup {
+  id: string;
+  title: string;
+  /** One line on when a reader reaches for this group. */
+  blurb: string;
+  tools: readonly McpToolDoc[];
+}
+
+/**
+ * Resolve group members against `MCP_TOOLS` by name, so a group can never
+ * carry a tool document the server does not register — the tools themselves
+ * stay defined exactly once, above. A name that does not resolve throws at
+ * module load, which fails the build rather than shipping a page with a hole
+ * in it.
+ */
+function toolsNamed(...names: readonly string[]): readonly McpToolDoc[] {
+  return names.map((name) => {
+    const tool = MCP_TOOLS.find((candidate) => candidate.name === name);
+    if (tool === undefined) {
+      throw new Error(`MCP_TOOL_GROUPS names unknown tool "${name}"`);
+    }
+    return tool;
+  });
+}
+
+/**
+ * How the `/mcp` page presents the tools. Ten equal cards read as a wall; a
+ * reader deciding whether to connect needs the jobs, not the alphabet. The
+ * grouping lives HERE rather than in the component because the component is
+ * forbidden from knowing tool names — that is the whole contract of this
+ * module.
+ */
+export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
+  {
+    id: "check",
+    title: "Check and format C4 models",
+    blurb:
+      "The core loop: get the real parser's verdict on what your agent " +
+      "wrote, then commit canonical bytes that diff cleanly.",
+    tools: toolsNamed("validate_model", "format_model"),
+  },
+  {
+    id: "sequence",
+    title: "Sequence diagrams",
+    blurb:
+      "The same check-and-format loop, for message flows over time rather " +
+      "than C4 structure.",
+    tools: toolsNamed("validate_sequence", "format_sequence"),
+  },
+  {
+    id: "inspect",
+    title: "Convert and inspect",
+    blurb:
+      "Move a model between formats, or read its shape without paying for " +
+      "its full text.",
+    tools: toolsNamed("convert_model", "describe_model"),
+  },
+  {
+    id: "learn",
+    title: "Learn the format",
+    blurb:
+      "The grammar and real examples — read these before writing .alab, " +
+      "not after the first failure.",
+    tools: toolsNamed(
+      "get_syntax_reference",
+      "list_example_models",
+      "get_example_model",
+    ),
+  },
+  {
+    id: "share",
+    title: "Show a human",
+    blurb:
+      "Turn a finished C4 model or sequence flow into a link that opens " +
+      "the diagram in the viewer.",
+    tools: toolsNamed("create_share_link"),
+  },
+];
+
+/*
+ * Every tool must appear in exactly one group, checked at module load. This is
+ * the drift `check:mcp` cannot see: it compares the catalogue to the SERVER,
+ * so a tool registered and documented but left out of every group would pass
+ * it while silently vanishing from the page.
+ */
+const GROUPED_NAMES = MCP_TOOL_GROUPS.flatMap((group) =>
+  group.tools.map((tool) => tool.name),
+);
+if (
+  GROUPED_NAMES.length !== new Set(GROUPED_NAMES).size ||
+  MCP_TOOLS.some((tool) => !GROUPED_NAMES.includes(tool.name))
+) {
+  throw new Error(
+    "MCP_TOOL_GROUPS must cover every tool in MCP_TOOLS exactly once",
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /* Resources & prompts                                                         */
@@ -364,6 +489,34 @@ export const MCP_PROMPTS: readonly McpPromptDoc[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
+/* The skill — the same knowledge, without a server                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Where the skill lands in the reader's project, and the one command that puts
+ * it there.
+ *
+ * WHY `degit` AND NOT AN OWN PACKAGE. `npx <name>` needs something published to
+ * npm, and nothing here is: the repo is private and unpublished, so a
+ * `npx arch-lab-skills` in these docs would be a command that works for
+ * precisely nobody — the exact failure this whole module exists to prevent.
+ * `degit` copies a subdirectory straight out of the public GitHub repo, so the
+ * command in the docs is one that actually runs today, with no release step
+ * standing between the page and the truth. If a package is ever published this
+ * becomes a one-line change, in one place.
+ *
+ * The skill itself is generated by `scripts/build-skill.mjs` from
+ * `content/syntax-sections.ts` — the same source `get_syntax_reference` serves
+ * — and `check:skill` asserts the committed file still matches. Two
+ * hand-maintained copies of a grammar is one copy that is quietly wrong.
+ */
+export const SKILL_REPO = "raksitnongbua/arch-lab";
+export const SKILL_SOURCE_DIR = "skills/alab";
+export const SKILL_DESTINATION = ".claude/skills/alab/SKILL.md";
+
+export const SKILL_INSTALL = `npx degit ${SKILL_REPO}/${SKILL_SOURCE_DIR} .claude/skills/alab`;
+
+/* -------------------------------------------------------------------------- */
 /* Connecting                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -379,14 +532,30 @@ export interface ConnectRecipe {
 export const CONNECT_RECIPES: readonly ConnectRecipe[] = [
   {
     client: "Claude Code",
-    note: "One command, in any project. Add --scope user to make it available everywhere.",
+    /*
+     * GLOBAL (`--scope user`), which is NOT the CLI's default and is a
+     * deliberate departure. Someone following this page wants the server
+     * available next time they open a terminal, not only in whichever
+     * directory they happened to be standing in — and a local-scoped install
+     * looks identical until you cd elsewhere and the tools have silently
+     * vanished. The narrower scopes are one flag away and named in the note.
+     *
+     * The flag used to appear in the note while the command omitted it, so the
+     * copyable thing did not do what the prose beside it described.
+     * `check:mcp` now asserts that whatever scope the note names is the scope
+     * the command actually passes.
+     */
+    note:
+      "One command, once. --scope user installs it for every project on your " +
+      "machine; use --scope project to commit it to a repo instead, or drop " +
+      "the flag to keep it to the current directory.",
     language: "bash",
     snippet: (endpoint) =>
-      `claude mcp add --transport http arch-lab ${endpoint}`,
+      `claude mcp add --transport http arch-lab --scope user ${endpoint}`,
   },
   {
     client: "Claude Desktop",
-    note: "Settings → Connectors → Add custom connector, then paste the URL. Or edit the config file directly:",
+    note: "Settings → Connectors → Add custom connector, then paste the URL. Or edit claude_desktop_config.json directly:",
     language: "json",
     snippet: (endpoint) =>
       JSON.stringify(
@@ -396,8 +565,44 @@ export const CONNECT_RECIPES: readonly ConnectRecipe[] = [
       ),
   },
   {
-    client: "Cursor / VS Code",
-    note: "Add to .cursor/mcp.json or .vscode/mcp.json in your project.",
+    client: "Gemini CLI",
+    // `httpUrl` is the streamable-HTTP key; `url` in the same file means SSE,
+    // which this server does not speak. The CLI writes the right one for you,
+    // which is why the command is the snippet and the file is only mentioned.
+    note: "One command, or add it to ~/.gemini/settings.json by hand under mcpServers with the httpUrl key (url means SSE there, which this server does not speak).",
+    language: "bash",
+    snippet: (endpoint) =>
+      `gemini mcp add --transport http arch-lab ${endpoint}`,
+  },
+  {
+    client: "Codex CLI",
+    // `codex mcp add` covers stdio servers only, so an HTTP server is a
+    // config-file edit. No auth block: this server has none.
+    note: "Add to ~/.codex/config.toml. There is no CLI shortcut for HTTP servers, and no auth key is needed — this server does not authenticate.",
+    language: "toml",
+    snippet: (endpoint) => `[mcp_servers.arch-lab]\nurl = "${endpoint}"`,
+  },
+  {
+    client: "Cursor",
+    /*
+     * NOT the same shape as VS Code, which is why these are two entries now.
+     * They were one, emitting VS Code's `servers` + `type` for both — a
+     * config Cursor reads and silently ignores, so the server simply never
+     * appeared and nothing said why. Cursor wants `mcpServers`, and a remote
+     * server needs no `type` at all.
+     */
+    note: "Add to .cursor/mcp.json in your project, or ~/.cursor/mcp.json to get it everywhere.",
+    language: "json",
+    snippet: (endpoint) =>
+      JSON.stringify(
+        { mcpServers: { "arch-lab": { url: endpoint } } },
+        null,
+        2,
+      ),
+  },
+  {
+    client: "VS Code (Copilot)",
+    note: "Add to .vscode/mcp.json in your workspace, or your user mcp.json to get it everywhere.",
     language: "json",
     snippet: (endpoint) =>
       JSON.stringify(

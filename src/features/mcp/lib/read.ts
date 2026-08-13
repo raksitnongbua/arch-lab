@@ -13,6 +13,7 @@
  * the tools stay a thin shell over their real work.
  */
 
+import { detectAlabKind } from "@/features/archtext";
 import {
   checkSource,
   type CheckChoice,
@@ -21,6 +22,25 @@ import {
 
 import { guardSourceSize } from "./limits";
 import { formatNote, joinSections, renderIssues } from "./render";
+
+/**
+ * Is the text a SEQUENCE document, by its first meaningful line? Mirrors the
+ * detection in `sequence/input/parse.ts` (`archlab 1.0 sequence` header, or a
+ * Mermaid `sequenceDiagram` opener) rather than importing it, because that
+ * module's result carries parsed sequence values the C4 reader has no use for
+ * — all this door needs is the yes/no.
+ */
+function isSequenceDocument(source: string): boolean {
+  if (detectAlabKind(source) === "sequence") return true;
+  for (const rawLine of source.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line === "" || line.startsWith("%%") || line.startsWith("//")) {
+      continue;
+    }
+    return line.split(/[\s({]/, 1)[0] === "sequenceDiagram";
+  }
+  return false;
+}
 
 export type ReadResult =
   { status: "ok"; value: CheckOk } | { status: "error"; message: string };
@@ -33,6 +53,21 @@ export type ReadResult =
 export function readSource(source: string, choice: CheckChoice): ReadResult {
   const size = guardSourceSize(source);
   if (!size.ok) return { status: "error", message: size.message };
+
+  // The misdirection guard `tools/sequence.ts` documents, in reverse: a
+  // sequence document fed to a C4 tool used to come back as "INVALID … line 1,
+  // column 13", which reads as "your syntax is wrong" when only the tool
+  // choice was. Checked whatever `choice` says, because neither header can
+  // ever parse as C4 — a forced reading would just fail more confusingly.
+  if (isSequenceDocument(source)) {
+    return {
+      status: "error",
+      message:
+        "This is a sequence diagram, not a C4 model — the C4 tools cannot " +
+        "read it. Use `validate_sequence` and `format_sequence` for sequence " +
+        "documents, or `create_share_link`, which accepts both kinds.",
+    };
+  }
 
   const result = checkSource(source, choice);
 

@@ -90,6 +90,7 @@ const {
   MCP_STATUS_LABEL,
   MCP_BETA_NOTICE,
   MCP_BETA_NOTICE_SHORT,
+  CONNECT_RECIPES,
   mcpEndpointUrl,
 } = await load("src/features/mcp/catalog.ts");
 const { registerArchLabMcp } = await load("src/features/mcp/server.ts");
@@ -914,6 +915,237 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
     /n899/,
     "the scoped payload must have dropped the oversized sibling subtree",
   );
+});
+
+/* ----------------------------------------------------------------------- */
+/* 8b. Share links for SEQUENCE documents                                   */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The end-to-end path an agent actually walks for a sequence flow: author →
+ * validate_sequence → format_sequence (canonical .alab) → create_share_link.
+ * The link must land on /view/seq — the short alias that forwards to
+ * /view/sequence with the fragment intact (the C4 route would parse-error) — and
+ * decode back to the SAME canonical text format_sequence hands out, so the
+ * shared flow and the committed file cannot disagree.
+ */
+check("create_share_link mints a sequence link that decodes back", async () => {
+  const canonical = expectOk(formatSequence(VALID_SEQUENCE))
+    .split("```\n")[1]
+    .split("\n```")[0];
+
+  const text = expectOk(
+    await createShareLink(VALID_SEQUENCE, "auto", undefined, undefined),
+  );
+  const url = text.split("\n").find((line) => line.startsWith("http"));
+  assert.ok(url !== undefined, `no URL in:\n${text}`);
+  assert.match(url, /\/view\/seq#m=AF1\./);
+
+  const decoded = await decodeShareFragment(new URL(url).hash);
+  assert.equal(decoded.status, "ok");
+  assert.equal(
+    decoded.aftText.replace(/\n$/, ""),
+    canonical.replace(/\n$/, ""),
+    "the flow recovered from the link must be the canonical sequence text",
+  );
+});
+
+check(
+  "a Mermaid sequenceDiagram shares as .alab, naming the loss",
+  async () => {
+    // What travels is the .alab conversion, so the one-way caveat must be said
+    // HERE — after this call, only the converted form exists in the link.
+    const text = expectOk(
+      await createShareLink(
+        "sequenceDiagram\n  A->>B: Hello\n  B-->>A: Hi\n",
+        "auto",
+        undefined,
+        undefined,
+      ),
+    );
+    assert.match(text, /\/view\/seq#m=AF1\./);
+    assert.match(text, /one-way|lossy|dropped/i);
+  },
+);
+
+check(
+  "create_share_link rejects diagram_id on a sequence document",
+  async () => {
+    const text = expectError(
+      await createShareLink(VALID_SEQUENCE, "auto", "ctx-root", undefined),
+    );
+    assert.match(text, /no diagrams/i);
+  },
+);
+
+check("a broken sequence document gets a located sequence error", async () => {
+  // NOT the C4 reader's "unexpected text after the version" on line 1 — the
+  // text is a sequence document, so the verdict must be the sequence parser's.
+  const broken = VALID_SEQUENCE.replace(
+    'cust -> api : "POST /orders" [HTTPS]',
+    "cust -> api",
+  );
+  const text = expectError(
+    await createShareLink(broken, "auto", undefined, undefined),
+  );
+  assert.match(text, /^INVALID as \.alab sequence\./m);
+  assert.match(text, /line \d+, column \d+:/);
+});
+
+/** A valid sequence document whose share URL length scales with `count`. */
+function sizedSequence(count) {
+  const messages = Array.from(
+    { length: count },
+    (_, index) =>
+      `  a -> b : "Request number ${index} with a deliberately verbose and ` +
+      `incompressible-ish label ${index}" [HTTPS]`,
+  ).join("\n");
+  return `archlab 1.0 sequence
+title "Too big to link"
+
+@sequence
+  a:participant "Service A"
+  b:participant "Service B"
+
+${messages}
+`;
+}
+
+check("an oversized sequence is refused with the text inline", async () => {
+  // No diagram-scoped fallback exists for a sequence document (it is one
+  // flow), so the refusal must still leave the caller holding the canonical
+  // text rather than sending them on another round trip.
+  // 1,500 verbose messages encode to ~11.5k URL characters — comfortably
+  // past the 8,000 ceiling (900 lands under it; sequence text compresses
+  // harder than the C4 fixture's node lines).
+  const text = expectError(
+    await createShareLink(sizedSequence(1500), "auto", undefined, undefined),
+  );
+  assert.match(text, /does not fit in a share link/);
+  assert.match(text, /```\narchlab 1\.0 sequence/);
+});
+
+check("the C4 tools tell a sequence document where to go", () => {
+  // The misdirection guard in both directions: tools/sequence.ts already
+  // redirects C4 input, and lib/read.ts must redirect sequence input — a
+  // "line 1, column 13" parse error reads as "your syntax is wrong" when only
+  // the tool choice was.
+  const attempts = [
+    ["validate_model", () => validateModel(VALID_SEQUENCE, "auto")],
+    ["format_model", () => formatModel(VALID_SEQUENCE, "auto")],
+    [
+      "convert_model",
+      () => convertModel(VALID_SEQUENCE, "auto", "mermaid", undefined),
+    ],
+    ["describe_model", () => describeModel(VALID_SEQUENCE, "auto", false)],
+  ];
+  for (const [name, run] of attempts) {
+    const text = expectError(run());
+    assert.match(text, /sequence diagram/i, name);
+    assert.match(text, /validate_sequence/, name);
+    assert.doesNotMatch(text, /^INVALID as \.alab text/m, name);
+  }
+});
+
+/* ---- the setup recipes on /mcp ------------------------------------------- */
+
+/*
+ * These are copy-paste instructions on a public page: a recipe that is subtly
+ * wrong does not fail loudly, it produces a config the client reads and
+ * silently ignores, and the reader concludes the server is broken.
+ *
+ * Both faults below had actually shipped. Cursor and VS Code shared one entry
+ * emitting VS Code's `servers` + `type` shape, which Cursor ignores; and the
+ * Claude Code note told people to add `--scope user` while the command beside
+ * it did not.
+ */
+const ENDPOINT = "https://example.test/api/mcp";
+
+check("every recipe actually points at the endpoint", () => {
+  for (const recipe of CONNECT_RECIPES) {
+    assert.ok(
+      recipe.snippet(ENDPOINT).includes(ENDPOINT),
+      `${recipe.client} does not interpolate the endpoint`,
+    );
+  }
+});
+
+check("every recipe names a client, a note and a language", () => {
+  for (const recipe of CONNECT_RECIPES) {
+    for (const field of ["client", "note", "language"]) {
+      assert.ok(
+        typeof recipe[field] === "string" && recipe[field].length > 0,
+        `${recipe.client}: ${field} is empty`,
+      );
+    }
+  }
+  const names = CONNECT_RECIPES.map((r) => r.client);
+  assert.equal(new Set(names).size, names.length, "duplicate client names");
+});
+
+check("a note that names a flag is a note the command honours", () => {
+  // The exact drift that shipped: prose saying "--scope user" beside a command
+  // without it. Any flag the note quotes must appear in the snippet.
+  for (const recipe of CONNECT_RECIPES) {
+    if (recipe.language !== "bash") continue;
+    const snippet = recipe.snippet(ENDPOINT);
+    const quoted = recipe.note.match(/--[a-z][a-z-]+ [a-z]+/g) ?? [];
+    const primary = quoted[0];
+    if (primary === undefined) continue;
+    assert.ok(
+      snippet.includes(primary),
+      `${recipe.client}: the note leads with "${primary}" but the command ` +
+        `does not use it — ${snippet}`,
+    );
+  }
+});
+
+check("Claude Code installs globally, not into one directory", () => {
+  const recipe = CONNECT_RECIPES.find((r) => r.client === "Claude Code");
+  assert.ok(recipe, "the Claude Code recipe is gone");
+  const snippet = recipe.snippet(ENDPOINT);
+  assert.match(snippet, /--transport http/);
+  // `user` is the scope the CLI documents as "available to you across all
+  // projects". `local` (the CLI default) silently limits it to one directory.
+  assert.match(snippet, /--scope user/);
+});
+
+check("Cursor and VS Code keep their DIFFERENT config shapes", () => {
+  const cursor = CONNECT_RECIPES.find((r) => r.client === "Cursor");
+  const code = CONNECT_RECIPES.find((r) => r.client.startsWith("VS Code"));
+  assert.ok(cursor && code, "one of the two editor recipes is missing");
+  const cursorJson = JSON.parse(cursor.snippet(ENDPOINT));
+  const codeJson = JSON.parse(code.snippet(ENDPOINT));
+  // Cursor: mcpServers, and a remote server carries no `type`.
+  assert.ok(cursorJson.mcpServers, "Cursor must use the mcpServers key");
+  assert.equal(cursorJson.servers, undefined);
+  assert.equal(cursorJson.mcpServers["arch-lab"].url, ENDPOINT);
+  // VS Code: servers, with an explicit http type.
+  assert.ok(codeJson.servers, "VS Code must use the servers key");
+  assert.equal(codeJson.mcpServers, undefined);
+  assert.equal(codeJson.servers["arch-lab"].type, "http");
+});
+
+check("Gemini CLI uses the streamable-HTTP transport, not SSE", () => {
+  const recipe = CONNECT_RECIPES.find((r) => r.client === "Gemini CLI");
+  assert.ok(recipe, "the Gemini CLI recipe is gone");
+  assert.match(recipe.snippet(ENDPOINT), /--transport http/);
+  // In ~/.gemini/settings.json the key matters: `url` there means SSE.
+  assert.match(recipe.note, /httpUrl/);
+});
+
+check("every JSON recipe is parseable, and TOML ones name the server", () => {
+  for (const recipe of CONNECT_RECIPES) {
+    if (recipe.language === "json") {
+      assert.doesNotThrow(
+        () => JSON.parse(recipe.snippet(ENDPOINT)),
+        `${recipe.client} emits invalid JSON`,
+      );
+    }
+    if (recipe.language === "toml") {
+      assert.match(recipe.snippet(ENDPOINT), /^\[mcp_servers\.[\w-]+\]/m);
+    }
+  }
 });
 
 /* ----------------------------------------------------------------------- */
