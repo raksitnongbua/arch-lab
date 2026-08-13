@@ -1,142 +1,71 @@
 import { ImageResponse } from "next/og";
 
 import { APP_NAME } from "@/lib/constants";
+import {
+  OG,
+  OG_CONTENT_TYPE,
+  OG_SIZE,
+  OgCard,
+  OgMessage,
+  OgNode,
+} from "@/features/marketing/og/card";
 
 /**
- * The social card, generated at build time from JSX instead of committed as a
- * binary — there is no design tool in this repo's loop, so a checked-in PNG
- * would drift the first time the brand moved. Living beside the root layout,
- * it covers every route that does not ship its own image.
+ * The site-wide social card, generated at deploy time from JSX instead of
+ * committed as a binary — there is no design tool in this repo's loop, so a
+ * checked-in PNG would drift the first time the brand moved. Living beside the
+ * root layout, it covers every route that does not ship its own image.
  *
- * The palette is the dark theme's tokens from `globals.css`, hand-converted
- * to sRGB hex because Satori does not parse `oklch()`. If the tokens change,
- * these follow — same deal as the `themeColor` approximation in layout.tsx.
- * The miniature Container-level stack echoes the landing hero
- * (`hero-diagram.tsx`) so the card and the page someone lands on read as the
- * same product.
+ * TWO DOCUMENT KINDS, so the copy names neither. This card used to read "C4
+ * architecture diagrams that survive code review", which stopped being the
+ * whole product the day sequence diagrams shipped: a link to the sequence
+ * playground previewed as an advert for the other half. The playground routes
+ * now carry their own cards (`view/c4/opengraph-image.tsx`,
+ * `view/sequence/opengraph-image.tsx`); this one covers the product.
+ *
+ * The frame, the palette and the Satori constraints live in
+ * `features/marketing/og/card.tsx`.
  */
 
-export const alt = `${APP_NAME} — C4 architecture diagrams as plain text`;
-export const size = { width: 1200, height: 630 };
-export const contentType = "image/png";
-
-/* Dark-theme tokens, sRGB approximations. */
-const BACKGROUND = "#1b1b23";
-const CARD = "#232330";
-const BORDER = "#3c3c4d";
-const FOREGROUND = "#f2f2f8";
-const MUTED = "#a3a3b5";
-const PRIMARY = "#9d8cff";
-const ACCENT = "#4fd6e4";
-
-function Node({ name, tech }: { name: string; tech: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        width: 300,
-        padding: "18px 22px",
-        borderRadius: 14,
-        border: `1.5px solid ${BORDER}`,
-        background: CARD,
-      }}
-    >
-      <span style={{ fontSize: 24, fontWeight: 600, color: FOREGROUND }}>
-        {name}
-      </span>
-      <span style={{ fontSize: 18, color: MUTED }}>{tech}</span>
-    </div>
-  );
-}
-
-/* The connector between two nodes — a short vertical rule, offset from the
- * card's left edge so the stack reads as a diagram rather than as a list. */
-function Connector() {
-  return (
-    <div
-      style={{
-        display: "flex",
-        width: 2,
-        height: 26,
-        marginLeft: 60,
-        background: BORDER,
-      }}
-    />
-  );
-}
+export const alt = `${APP_NAME} — architecture diagrams as plain text`;
+export const size = OG_SIZE;
+export const contentType = OG_CONTENT_TYPE;
 
 export default function OpenGraphImage() {
   return new ImageResponse(
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "72px 80px",
-        background: BACKGROUND,
-        backgroundImage:
-          "linear-gradient(to right, #26262f 1px, transparent 1px), linear-gradient(to bottom, #26262f 1px, transparent 1px)",
-        backgroundSize: "56px 56px",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          maxWidth: 640,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 26,
-            letterSpacing: 2,
-            color: ACCENT,
-            marginBottom: 20,
-          }}
-        >
-          .alab — plain text on disk
-        </span>
-        <span
-          style={{
-            fontSize: 58,
-            fontWeight: 700,
-            lineHeight: 1.15,
-            color: FOREGROUND,
-          }}
-        >
-          C4 architecture diagrams that
-        </span>
-        <span
-          style={{
-            fontSize: 58,
-            fontWeight: 700,
-            lineHeight: 1.15,
-            // Satori supports background-clip: text, so the headline can
-            // carry the same primary→accent run as the landing hero.
-            backgroundImage: `linear-gradient(90deg, ${PRIMARY}, ${ACCENT})`,
-            backgroundClip: "text",
-            color: "transparent",
-          }}
-        >
-          survive code review.
-        </span>
-        <span style={{ fontSize: 30, color: MUTED, marginTop: 32 }}>
-          {APP_NAME} · local-first C4 editor · no account, no cloud
-        </span>
-      </div>
+    <OgCard
+      eyebrow=".alab — plain text on disk"
+      headline="Architecture diagrams"
+      headlineTail="that survive review."
+      footer={`${APP_NAME} · C4 and sequence · no cloud`}
+      art={
+        /* One node from each kind's illustration, stacked: the card has to
+             say "two document kinds" without becoming a collage, so it shows
+             a C4 container over a message exchange rather than two full
+             miniatures competing for the same 400px. */
+        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <OgNode name="Web App" tech="Next.js · SSR" />
+            <div
+              style={{
+                display: "flex",
+                width: 2,
+                height: 24,
+                marginLeft: 60,
+                background: OG.border,
+              }}
+            />
+            <OgNode name="Orders DB" tech="PostgreSQL" />
+          </div>
 
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <Node name="Web App" tech="Next.js · SSR" />
-        <Connector />
-        <Node name="API Service" tech="Go · REST" />
-        <Connector />
-        <Node name="Orders DB" tech="PostgreSQL" />
-      </div>
-    </div>,
+          {/* A two-message exchange — the sequence half, at a glance. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <OgMessage label="Place the order" colour={OG.lanes[2]} />
+            <OgMessage label="charge.succeeded" colour={OG.lanes[0]} />
+          </div>
+        </div>
+      }
+    />,
     size,
   );
 }
