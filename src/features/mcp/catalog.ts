@@ -379,14 +379,30 @@ export interface ConnectRecipe {
 export const CONNECT_RECIPES: readonly ConnectRecipe[] = [
   {
     client: "Claude Code",
-    note: "One command, in any project. Add --scope user to make it available everywhere.",
+    /*
+     * GLOBAL (`--scope user`), which is NOT the CLI's default and is a
+     * deliberate departure. Someone following this page wants the server
+     * available next time they open a terminal, not only in whichever
+     * directory they happened to be standing in — and a local-scoped install
+     * looks identical until you cd elsewhere and the tools have silently
+     * vanished. The narrower scopes are one flag away and named in the note.
+     *
+     * The flag used to appear in the note while the command omitted it, so the
+     * copyable thing did not do what the prose beside it described.
+     * `check:mcp` now asserts that whatever scope the note names is the scope
+     * the command actually passes.
+     */
+    note:
+      "One command, once. --scope user installs it for every project on your " +
+      "machine; use --scope project to commit it to a repo instead, or drop " +
+      "the flag to keep it to the current directory.",
     language: "bash",
     snippet: (endpoint) =>
-      `claude mcp add --transport http arch-lab ${endpoint}`,
+      `claude mcp add --transport http arch-lab --scope user ${endpoint}`,
   },
   {
     client: "Claude Desktop",
-    note: "Settings → Connectors → Add custom connector, then paste the URL. Or edit the config file directly:",
+    note: "Settings → Connectors → Add custom connector, then paste the URL. Or edit claude_desktop_config.json directly:",
     language: "json",
     snippet: (endpoint) =>
       JSON.stringify(
@@ -396,8 +412,44 @@ export const CONNECT_RECIPES: readonly ConnectRecipe[] = [
       ),
   },
   {
-    client: "Cursor / VS Code",
-    note: "Add to .cursor/mcp.json or .vscode/mcp.json in your project.",
+    client: "Gemini CLI",
+    // `httpUrl` is the streamable-HTTP key; `url` in the same file means SSE,
+    // which this server does not speak. The CLI writes the right one for you,
+    // which is why the command is the snippet and the file is only mentioned.
+    note: "One command, or add it to ~/.gemini/settings.json by hand under mcpServers with the httpUrl key (url means SSE there, which this server does not speak).",
+    language: "bash",
+    snippet: (endpoint) =>
+      `gemini mcp add --transport http arch-lab ${endpoint}`,
+  },
+  {
+    client: "Codex CLI",
+    // `codex mcp add` covers stdio servers only, so an HTTP server is a
+    // config-file edit. No auth block: this server has none.
+    note: "Add to ~/.codex/config.toml. There is no CLI shortcut for HTTP servers, and no auth key is needed — this server does not authenticate.",
+    language: "toml",
+    snippet: (endpoint) => `[mcp_servers.arch-lab]\nurl = "${endpoint}"`,
+  },
+  {
+    client: "Cursor",
+    /*
+     * NOT the same shape as VS Code, which is why these are two entries now.
+     * They were one, emitting VS Code's `servers` + `type` for both — a
+     * config Cursor reads and silently ignores, so the server simply never
+     * appeared and nothing said why. Cursor wants `mcpServers`, and a remote
+     * server needs no `type` at all.
+     */
+    note: "Add to .cursor/mcp.json in your project, or ~/.cursor/mcp.json to get it everywhere.",
+    language: "json",
+    snippet: (endpoint) =>
+      JSON.stringify(
+        { mcpServers: { "arch-lab": { url: endpoint } } },
+        null,
+        2,
+      ),
+  },
+  {
+    client: "VS Code (Copilot)",
+    note: "Add to .vscode/mcp.json in your workspace, or your user mcp.json to get it everywhere.",
     language: "json",
     snippet: (endpoint) =>
       JSON.stringify(

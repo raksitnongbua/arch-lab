@@ -90,6 +90,7 @@ const {
   MCP_STATUS_LABEL,
   MCP_BETA_NOTICE,
   MCP_BETA_NOTICE_SHORT,
+  CONNECT_RECIPES,
   mcpEndpointUrl,
 } = await load("src/features/mcp/catalog.ts");
 const { registerArchLabMcp } = await load("src/features/mcp/server.ts");
@@ -914,6 +915,107 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
     /n899/,
     "the scoped payload must have dropped the oversized sibling subtree",
   );
+});
+
+/* ---- the setup recipes on /mcp ------------------------------------------- */
+
+/*
+ * These are copy-paste instructions on a public page: a recipe that is subtly
+ * wrong does not fail loudly, it produces a config the client reads and
+ * silently ignores, and the reader concludes the server is broken.
+ *
+ * Both faults below had actually shipped. Cursor and VS Code shared one entry
+ * emitting VS Code's `servers` + `type` shape, which Cursor ignores; and the
+ * Claude Code note told people to add `--scope user` while the command beside
+ * it did not.
+ */
+const ENDPOINT = "https://example.test/api/mcp";
+
+check("every recipe actually points at the endpoint", () => {
+  for (const recipe of CONNECT_RECIPES) {
+    assert.ok(
+      recipe.snippet(ENDPOINT).includes(ENDPOINT),
+      `${recipe.client} does not interpolate the endpoint`,
+    );
+  }
+});
+
+check("every recipe names a client, a note and a language", () => {
+  for (const recipe of CONNECT_RECIPES) {
+    for (const field of ["client", "note", "language"]) {
+      assert.ok(
+        typeof recipe[field] === "string" && recipe[field].length > 0,
+        `${recipe.client}: ${field} is empty`,
+      );
+    }
+  }
+  const names = CONNECT_RECIPES.map((r) => r.client);
+  assert.equal(new Set(names).size, names.length, "duplicate client names");
+});
+
+check("a note that names a flag is a note the command honours", () => {
+  // The exact drift that shipped: prose saying "--scope user" beside a command
+  // without it. Any flag the note quotes must appear in the snippet.
+  for (const recipe of CONNECT_RECIPES) {
+    if (recipe.language !== "bash") continue;
+    const snippet = recipe.snippet(ENDPOINT);
+    const quoted = recipe.note.match(/--[a-z][a-z-]+ [a-z]+/g) ?? [];
+    const primary = quoted[0];
+    if (primary === undefined) continue;
+    assert.ok(
+      snippet.includes(primary),
+      `${recipe.client}: the note leads with "${primary}" but the command ` +
+        `does not use it — ${snippet}`,
+    );
+  }
+});
+
+check("Claude Code installs globally, not into one directory", () => {
+  const recipe = CONNECT_RECIPES.find((r) => r.client === "Claude Code");
+  assert.ok(recipe, "the Claude Code recipe is gone");
+  const snippet = recipe.snippet(ENDPOINT);
+  assert.match(snippet, /--transport http/);
+  // `user` is the scope the CLI documents as "available to you across all
+  // projects". `local` (the CLI default) silently limits it to one directory.
+  assert.match(snippet, /--scope user/);
+});
+
+check("Cursor and VS Code keep their DIFFERENT config shapes", () => {
+  const cursor = CONNECT_RECIPES.find((r) => r.client === "Cursor");
+  const code = CONNECT_RECIPES.find((r) => r.client.startsWith("VS Code"));
+  assert.ok(cursor && code, "one of the two editor recipes is missing");
+  const cursorJson = JSON.parse(cursor.snippet(ENDPOINT));
+  const codeJson = JSON.parse(code.snippet(ENDPOINT));
+  // Cursor: mcpServers, and a remote server carries no `type`.
+  assert.ok(cursorJson.mcpServers, "Cursor must use the mcpServers key");
+  assert.equal(cursorJson.servers, undefined);
+  assert.equal(cursorJson.mcpServers["arch-lab"].url, ENDPOINT);
+  // VS Code: servers, with an explicit http type.
+  assert.ok(codeJson.servers, "VS Code must use the servers key");
+  assert.equal(codeJson.mcpServers, undefined);
+  assert.equal(codeJson.servers["arch-lab"].type, "http");
+});
+
+check("Gemini CLI uses the streamable-HTTP transport, not SSE", () => {
+  const recipe = CONNECT_RECIPES.find((r) => r.client === "Gemini CLI");
+  assert.ok(recipe, "the Gemini CLI recipe is gone");
+  assert.match(recipe.snippet(ENDPOINT), /--transport http/);
+  // In ~/.gemini/settings.json the key matters: `url` there means SSE.
+  assert.match(recipe.note, /httpUrl/);
+});
+
+check("every JSON recipe is parseable, and TOML ones name the server", () => {
+  for (const recipe of CONNECT_RECIPES) {
+    if (recipe.language === "json") {
+      assert.doesNotThrow(
+        () => JSON.parse(recipe.snippet(ENDPOINT)),
+        `${recipe.client} emits invalid JSON`,
+      );
+    }
+    if (recipe.language === "toml") {
+      assert.match(recipe.snippet(ENDPOINT), /^\[mcp_servers\.[\w-]+\]/m);
+    }
+  }
 });
 
 /* ----------------------------------------------------------------------- */
