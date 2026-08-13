@@ -153,7 +153,8 @@ reviewed 2026-08-05T00:00:00Z
   db:participant "Orders DB" [PostgreSQL 16]
 
   cust -> web : "Clicks buy"
-  web ->+ api : "POST /orders" [HTTPS]
+  web ->+ api : "Place the order" [HTTPS]
+    desc "POST /api/v1/orders\\nbody { cartId }\\n201 → { orderId }"
     ! x-trace after label : true
   note right api : "Validates the cart first"
   alt "cart valid"
@@ -232,9 +233,27 @@ check(
   post.from === "web" &&
     post.to === "api" &&
     post.kind === "sync" &&
-    post.label === "POST /orders" &&
+    post.label === "Place the order" &&
     post.technology === "HTTPS" &&
     post.activate === true,
+);
+check(
+  "message desc survives as `description`, separate from the label",
+  post.description ===
+    "POST /api/v1/orders\nbody { cartId }\n201 → { orderId }" &&
+    post.label !== post.description,
+);
+check(
+  /* The dock renders a description pre-wrapped, so an author can lay a detail
+     out over several lines. That only works if a `\n` survives the round trip
+     as ONE escaped line of canonical text — a real newline in the emitted
+     `desc` would re-parse as an over-indented junk line. */
+  "a multi-line desc round-trips as a single escaped line",
+  post.description.split("\n").length === 3 &&
+    sinkEmitted.includes(
+      '    desc "POST /api/v1/orders\\nbody { cartId }\\n201 → { orderId }"',
+    ) &&
+    !sinkEmitted.includes('201 → { orderId }"\n    body'),
 );
 const alt = sink.items[3];
 const happy = alt.branches[0];
@@ -418,7 +437,7 @@ check(
 );
 check(
   "message unknown is anchored after label",
-  JSON.stringify(post).includes('"label":"POST /orders","x-trace":true'),
+  JSON.stringify(post).includes('"label":"Place the order","x-trace":true'),
   JSON.stringify(post),
 );
 check(
@@ -741,6 +760,21 @@ seqError(
   "a ! line for a field with dedicated syntax is refused",
   'archlab 1.0 sequence\ntitle "T"\n! participants : []\n\n@sequence\n',
   "has dedicated syntax",
+);
+seqError(
+  "a desc on a NOTE is refused (a note is already its own text)",
+  `${SEQ_HEAD}  note right a : "x"\n    desc "y"\n`,
+  "notes have no description",
+);
+seqError(
+  "a second desc on one message is refused",
+  `${SEQ_HEAD}  a -> b : "x"\n    desc "one"\n    desc "two"\n`,
+  'duplicate "desc" line for this message',
+);
+seqError(
+  "a desc at ITEM indent is refused (it is a continuation)",
+  `${SEQ_HEAD}  a -> b : "x"\n  desc "y"\n`,
+  "indent it 2 spaces under the participant or message",
 );
 seqError(
   "a bare reserved word as an id is refused",

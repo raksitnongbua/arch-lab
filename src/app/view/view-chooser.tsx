@@ -9,9 +9,10 @@
  * the client can notice one and forward it. The rules, in order:
  *
  *   1. On mount, if the fragment carries a share payload (`m=`), replace the
- *      route with `/view/c4` KEEPING the fragment intact — the C4 playground
- *      decodes it exactly as it always did. `router.replace`, not push: the
- *      chooser was never really visited, so Back must not return to it.
+ *      route with the playground that can READ it (see below), keeping the
+ *      fragment — which the playground decodes exactly as it always did.
+ *      `router.replace`, not push: the chooser was never really visited, so
+ *      Back must not return to it.
  *   2. The chooser's markup is ALWAYS rendered, server included, and the
  *      server and client render it identically — so hydration never aborts and
  *      the copy is in the SSR HTML. `/view` is in `sitemap.ts`; a route that
@@ -19,16 +20,27 @@
  *      concerned.
  *
  *      The flash a share-link user would otherwise see is suppressed BEFORE
- *      first paint by the inline script in `page.tsx`, which stamps
+ *      first paint by the inline script in the root layout, which stamps
  *      `data-share-forward` on <html>; `globals.css` hides the chooser while
  *      that is set. A React guard cannot do this job — the fragment is not
  *      available until the client, by which point the paint has happened.
  *
- * Every `/view#m=…` payload is a C4 model BY CONSTRUCTION: sequence sharing
- * did not exist while `/view` was the playground, and sequence links have
- * always minted against their own route (`/view/sequence`, now the shorter
- * `/view/seq` alias) — so forwarding to `/view/c4` is right for every legacy
- * link there is.
+ *   3. …and this component CLEARS that attribute whenever there is no payload.
+ *      The script cannot: it runs once per document load, and a client-side
+ *      navigation never reloads the document, so the flag outlived the URL that
+ *      set it and turned `/view` into a blank page for the rest of the session.
+ *      A pre-paint hide needs a post-hydration owner; that owner is here.
+ *
+ * WHICH PLAYGROUND a payload goes to is DECIDED BY READING IT, not assumed.
+ * This route once forwarded everything to `/view/c4`, reasoning that a
+ * `/view#m=…` link is a C4 model by construction — sequence sharing did not
+ * exist while `/view` was the playground. That held for the legacy links and
+ * not for reality: a sequence fragment reaches `/view` easily (a stale hash
+ * carried in from a sequence link, which is exactly how it was reported), and
+ * the C4 playground then refused a document that was perfectly valid and simply
+ * not its kind. A `.alab` document names its kind on line 1, so the fragment is
+ * decoded and sniffed with `detectAlabKind` — the same function
+ * `/view/sequence` uses — and forwarded to the playground that can read it.
  */
 
 import { useEffect, useSyncExternalStore } from "react";
@@ -36,7 +48,13 @@ import { ArrowRight, GitBranch, MousePointerClick } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { SHARE_PARAM_MODEL } from "@/features/viewer/share/codec";
+import { detectAlabKind } from "@/features/archtext";
+import {
+  decodeShareFragment,
+  normalizeShareFragment,
+  SHARE_FORWARD_ATTRIBUTE,
+  SHARE_PARAM_MODEL,
+} from "@/features/viewer/share/codec";
 
 /**
  * Subscribes to the fragment rather than sampling it once.
@@ -58,7 +76,7 @@ function subscribeToHash(onChange: () => void): () => void {
 }
 
 function hasSharePayload(hash: string): boolean {
-  const body = hash.replace(/^#/, "");
+  const body = normalizeShareFragment(hash);
   if (body === "") return false;
   return new URLSearchParams(body).get(SHARE_PARAM_MODEL) !== null;
 }
@@ -75,11 +93,54 @@ export function ViewChooser(): React.JSX.Element {
   const forwarding = hasSharePayload(hash);
 
   useEffect(() => {
-    if (!forwarding) return;
-    // The fragment rides along verbatim — `router.replace` preserves it as
-    // part of the href, and the playground reads it off `location.hash` on
-    // its own mount.
-    router.replace(`/view/c4${hash}`);
+    if (!forwarding) {
+      /* CLEAR THE PRE-PAINT FLAG. It is stamped by an inline script in the root
+         layout, which runs ONCE per document load and cannot run again — while
+         a client-side navigation never reloads the document. So a visitor who
+         opened ANY url carrying `#m=…` (a share link, on any route) kept the
+         attribute for the rest of the session, and the moment they navigated to
+         `/view` the stylesheet hid the chooser: a blank page with nothing to
+         click, and no forward either, because React can see there is no payload
+         to forward. Only a reload escaped it.
+         The attribute means "this document is forwarding a payload right now",
+         so the component that knows that is false has to say so. */
+      document.documentElement.removeAttribute(SHARE_FORWARD_ATTRIBUTE);
+      return;
+    }
+    /* WHICH PLAYGROUND THE PAYLOAD BELONGS TO, decided by READING it.
+       This used to forward every payload to `/view/c4` on the grounds that a
+       `/view#m=…` link is a C4 model "by construction" — true of the legacy
+       links this route was built for, and false in practice: a sequence
+       fragment reaches `/view` easily (a stale hash carried in from a sequence
+       link), and the C4 playground then refused a document that was perfectly
+       valid, just not its kind. The document names its own kind on line 1;
+       `detectAlabKind` is the same sniffer `/view/sequence` uses.
+
+       The fragment rides on NORMALIZED, not verbatim: concatenating the raw
+       hash is what let a fragment double — forward once and the URL is
+       `/view/c4#m=…`; land back here with that hash still in the bar and the
+       next forward produces `#m=…#m=…`, whose `m` value is no longer
+       base64url, so the playground refuses the link it was handed ("This share
+       link could not be opened"). Clicking /view → C4 a few times reached
+       `#m=…` five times over.
+
+       Undecodable payloads still go to `/view/c4`: that route already renders
+       the codec's own located error, and a chooser growing its own copy of
+       those messages is the drift this app keeps refusing elsewhere. */
+    const body = normalizeShareFragment(hash);
+    let cancelled = false;
+    void decodeShareFragment(body).then((decoded) => {
+      if (cancelled) return;
+      const route =
+        decoded.status === "ok" &&
+        detectAlabKind(decoded.aftText) === "sequence"
+          ? "/view/sequence"
+          : "/view/c4";
+      router.replace(`${route}#${body}`);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [forwarding, hash, router]);
 
   return (

@@ -188,6 +188,40 @@ check(
   existsSync(join(root, SHARED)),
 );
 
+/* --- 6. the pre-paint forward flag has a post-hydration owner --------------
+ * `data-share-forward` hides `/view`'s chooser so a legacy `/view#m=…` link does
+ * not flash it. The script that stamps it runs ONCE per document load and a
+ * client-side navigation never reloads — so opening any url with `#m=…` and then
+ * navigating to `/view` left the attribute set and the chooser display:none: a
+ * blank page with nothing to click, for the rest of the session. Whoever knows
+ * there is no payload must clear it. These three assertions keep the stamp, the
+ * clear and the stylesheet on ONE spelling, and keep the clear from being
+ * "simplified" away as dead code. */
+{
+  const codec = read("src/features/viewer/share/codec.ts");
+  const layout = read("src/app/layout.tsx");
+  const chooser = read("src/app/view/view-chooser.tsx");
+  const css = read("src/app/globals.css");
+  const attribute = /SHARE_FORWARD_ATTRIBUTE = "([^"]+)"/.exec(codec)?.[1];
+  check(
+    "the forward attribute is named once, in the share codec",
+    attribute !== undefined,
+  );
+  check(
+    "the root layout stamps it from that constant, not a literal",
+    layout.includes("SHARE_FORWARD_ATTRIBUTE") &&
+      !layout.includes('"data-share-forward"'),
+  );
+  check(
+    "the chooser CLEARS it (a pre-paint hide needs a post-hydration owner)",
+    /removeAttribute\(SHARE_FORWARD_ATTRIBUTE\)/.test(chooser),
+  );
+  check(
+    "the stylesheet hides the chooser on the SAME attribute name",
+    attribute !== undefined && css.includes(`[${attribute}] .af-view-chooser`),
+  );
+}
+
 if (failures > 0) {
   console.error(
     `\nshare-parity-check: ${failures} of ${assertions} assertion(s) failed.`,

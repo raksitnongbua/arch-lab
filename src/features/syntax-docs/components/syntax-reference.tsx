@@ -27,6 +27,7 @@ import {
   NODE_ATTR_ROWS,
   NODE_EXAMPLE,
   NODE_TYPE_ROWS,
+  SEQUENCE_CURL_EXAMPLE,
   SEQUENCE_FRAGMENT_EXAMPLE,
   SEQUENCE_MESSAGE_EXAMPLE,
   SEQUENCE_MINIMAL_EXAMPLE,
@@ -406,6 +407,43 @@ export function SyntaxReference(): React.JSX.Element {
           <Code>autonumber</Code> numbers every step.
         </P>
         <CodeBlock code={SEQUENCE_MESSAGE_EXAMPLE.code} label="message kinds" />
+        <P>
+          <strong>Keep the label short and put the rest in a</strong>{" "}
+          <Code>desc</Code>. Indented two spaces under its message — the same
+          continuation a node or participant takes — it carries the endpoint,
+          the payload, the failure modes: whatever would turn the arrow into a
+          paragraph. Only the label is ever drawn on the wire, so a{" "}
+          <Code>desc</Code> costs no width and widens no column; the{" "}
+          <Link href="/view/sequence" className="underline">
+            playground
+          </Link>{" "}
+          marks a message that has one with a small dot and shows the text when
+          you click the message. Notes are the exception — a note already{" "}
+          <em>is</em> its text, so it takes no <Code>desc</Code>.
+        </P>
+        <P>
+          A <Code>desc</Code> is a JSON string, so <Code>\n</Code> puts the
+          detail on <strong>separate lines</strong> — and the viewer renders it
+          as a monospace block that keeps them. That is what makes a request
+          worth reading: the method and path, the body, then one line per status
+          code, instead of all of it welded into a paragraph. The escape keeps
+          the source one line per <Code>desc</Code>, so the file stays
+          canonical.
+        </P>
+        <P>
+          Because it is a JSON string, a <Code>desc</Code> can hold a{" "}
+          <strong>whole runnable request</strong> — quotes, curl&apos;s
+          line-continuation backslashes and a JSON body included. Escape{" "}
+          <Code>&quot;</Code> as <Code>\&quot;</Code> and <Code>\</Code> as{" "}
+          <Code>\\</Code>, and the dock gives it back exactly as written:
+        </P>
+        <CodeBlock code={SEQUENCE_CURL_EXAMPLE.code} label="a curl in a desc" />
+        <P>
+          Escaping that by hand is miserable, so don&apos;t: get your editor or
+          an agent to <Code>JSON.stringify</Code> the command and paste the
+          result after <Code>desc</Code>. The <Code>desc</Code> budget is 500
+          characters, which is a request and its responses — not a tutorial.
+        </P>
         <P>
           Fragments — <Code>alt</Code>/<Code>else</Code>, <Code>par</Code>/
           <Code>and</Code>, <Code>opt</Code>, <Code>loop</Code> —{" "}

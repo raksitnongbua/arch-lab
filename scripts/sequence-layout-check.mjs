@@ -274,6 +274,101 @@ check(
   );
 }
 
+/* ---- notes WRAP: the box is the truth about the text --------------------
+ * The regression this pins: note text used to be one unbroken `<text>`, so a
+ * long note drew a single line straight through both walls of its own box and
+ * out past the viewBox, whose extents are computed from the box. Three
+ * properties together make that unrepresentable — the lines fit, the box is
+ * tall enough to hold them, and no word was dropped on the way. */
+{
+  const est = (text) =>
+    Math.ceil(text.length * SEQ.noteFontSize * SEQ.charWidthRatio);
+  const long =
+    "Never send filter[user_ids] - the spec AUTO-CREATES default settings " +
+    "rows for missing users. Never sort by updated_at - the PATCHes below " +
+    "would reshuffle the sort key and skip users entirely.";
+  const wrapped = layoutSequence(
+    parseSequenceText(
+      `archlab 1.0 sequence\ntitle "Wrapping"\n\n@sequence\n  a "A"\n  b "B"\n\n  a -> b : "x"\n  note right a : ${JSON.stringify(long)}\n  note over a b : ${JSON.stringify(long)}\n  a -> b : "y"\n`,
+    ),
+  );
+  check(
+    "every note's widest wrapped line fits inside its own box",
+    wrapped.notes.every(
+      (n) => Math.max(...n.lines.map(est)) <= n.width - SEQ.notePadX,
+    ),
+    wrapped.notes
+      .map((n) => `w=${n.width} widest=${Math.max(...n.lines.map(est))}`)
+      .join(" | "),
+  );
+  check(
+    "every note's box is tall enough for the lines it holds",
+    wrapped.notes.every((n) => n.height >= n.lines.length * SEQ.noteLineHeight),
+    wrapped.notes
+      .map((n) => `h=${n.height} lines=${n.lines.length}`)
+      .join(" | "),
+  );
+  check(
+    "wrapping loses no words",
+    wrapped.notes.every(
+      (n) => n.lines.join(" ").split(/\s+/).join(" ") === n.text,
+    ),
+    JSON.stringify(wrapped.notes.map((n) => n.lines)),
+  );
+  check(
+    "a long note wraps to MORE than one line (it is actually wrapping)",
+    wrapped.notes.every((n) => n.lines.length > 1),
+    wrapped.notes.map((n) => n.lines.length).join(", "),
+  );
+  const noteRight = wrapped.notes[0];
+  const next = wrapped.messages[1];
+  check(
+    "the row after a wrapped note clears the note's full height",
+    noteRight !== undefined &&
+      next !== undefined &&
+      next.y > noteRight.y + noteRight.height,
+    `note ${noteRight?.y}+${noteRight?.height}, next message y ${next?.y}`,
+  );
+  const viewRight = wrapped.minX + wrapped.width;
+  check(
+    "every note lies inside the viewBox",
+    wrapped.notes.every(
+      (n) => n.x >= wrapped.minX && n.x + n.width <= viewRight,
+    ),
+    `viewBox ${wrapped.minX}..${viewRight}`,
+  );
+}
+
+/* ---- message labels lie inside the viewBox ------------------------------
+ * Column gaps are capped, so an epic label is allowed to OVERLAP its
+ * neighbours — it is not allowed to be CLIPPED. The extents loop used to
+ * consider only self-message labels, and the ends of a wide centred label
+ * fell outside the viewBox. */
+{
+  const wide = layoutSequence(
+    parseSequenceText(
+      `archlab 1.0 sequence\ntitle "Wide labels"\n\n@sequence\n  a "A"\n  b "B"\n\n  a -> b : "GET /resources/accounts/settings?page[cursor]=&page[size]=100&filter[crypto_withdrawal.vault.auto_enable_detection]=true"\n  b ..> a : "ok"\n`,
+    ),
+  );
+  const viewRight = wide.minX + wide.width;
+  check(
+    "a label far wider than its arrow still lies inside the viewBox",
+    wide.messages.every((m) => {
+      const mid = (m.fromX + m.toX) / 2;
+      return (
+        mid - m.labelWidth / 2 >= wide.minX &&
+        mid + m.labelWidth / 2 <= viewRight
+      );
+    }),
+    wide.messages
+      .map(
+        (m) =>
+          `mid=${Math.round((m.fromX + m.toX) / 2)} w=${Math.round(m.labelWidth)}`,
+      )
+      .join(" | ") + ` viewBox ${wide.minX}..${viewRight}`,
+  );
+}
+
 {
   // web ->+ api opens a bar on api at step 2; api ..>- web closes it at step 9.
   const apiX = layout.participants.find((p) => p.id === "api")?.x;

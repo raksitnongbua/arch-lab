@@ -549,14 +549,34 @@ export function SequenceDiagram({
             stroke="color-mix(in oklab, var(--warning) 55%, var(--border))"
             strokeWidth={1}
           />
+          {/* ONE TSPAN PER WRAPPED LINE, from `note.lines` — never `note.text`.
+              SVG text does not wrap, so drawing the raw string put a single
+              unbroken line through both walls of the box and off the canvas
+              (see `wrapText` in lib/layout.ts). The lines are measured there,
+              which is also what gave this box its height, so the block is
+              centred by construction: start half a line-height above centre
+              for each line past the first. */}
           <text
             x={note.x + note.width / 2}
-            y={note.y + note.height / 2 + 4}
             textAnchor="middle"
             fontSize={SEQ.noteFontSize}
             fill="var(--foreground)"
           >
-            {note.text}
+            {note.lines.map((line, lineIndex) => (
+              <tspan
+                key={lineIndex}
+                x={note.x + note.width / 2}
+                y={
+                  note.y +
+                  note.height / 2 +
+                  4 -
+                  ((note.lines.length - 1) * SEQ.noteLineHeight) / 2 +
+                  lineIndex * SEQ.noteLineHeight
+                }
+              >
+                {line}
+              </tspan>
+            ))}
           </text>
         </g>
       ))}
@@ -1038,7 +1058,12 @@ function Message({
     : `M ${Math.min(fromX, toX) - 8} ${y - band} H ${Math.max(fromX, toX) + 8} V ${y + band} H ${Math.min(fromX, toX) - 8} Z ` +
       `M ${labelX - w / 2} ${y - SEQ.hitLabelTop} H ${labelX + w / 2} V ${y - SEQ.hitLabelBottom} H ${labelX - w / 2} Z`;
 
-  const ariaLabel = `Step ${message.step}: ${message.from} to ${message.to}, ${kind}${self ? ", self-message" : ""} — ${message.label}`;
+  /* The description is ANNOUNCED, not read out: it can run to 500 characters,
+     and a control whose name is a paragraph is unusable to navigate by. The
+     name says the detail exists and where it appears; the dock reads it. */
+  const ariaLabel =
+    `Step ${message.step}: ${message.from} to ${message.to}, ${kind}${self ? ", self-message" : ""} — ${message.label}` +
+    (message.description !== undefined ? ". Has details" : "");
 
   /**
    * At rest, and therefore marching. All three exclusions are deliberate: the
@@ -1215,6 +1240,15 @@ function Message({
         {message.label}
         {message.technology !== undefined ? (
           <tspan className="af-seq-label-meta"> [{message.technology}]</tspan>
+        ) : null}
+        {/* The footnote mark for a message that carries a `desc` — see
+            .af-seq-label-more. aria-hidden because the accessible name below
+            says it in words; a screen reader announcing "bullet" would be
+            noise, not an affordance. */}
+        {message.description !== undefined ? (
+          <tspan className="af-seq-label-more" aria-hidden="true">
+            {" •"}
+          </tspan>
         ) : null}
       </text>
 

@@ -549,7 +549,11 @@ export function SequencePlayground(): React.JSX.Element {
         <p id={hintId} className="text-xs text-muted-foreground">
           Tab inserts two spaces — press Escape, then Tab, to move focus out.
           The diagram re-renders as you type; while the text fails to parse it
-          keeps showing the last good version.
+          keeps showing the last good version. Keep message labels short and
+          indent a <code className="font-mono">desc &quot;…&quot;</code> under
+          one to hold the endpoint or payload — it shows as a code block when
+          the message is clicked, never on the arrow. Use{" "}
+          <code className="font-mono">\n</code> inside it for several lines.
         </p>
 
         {error !== null ? <SequenceErrorBox error={error} /> : null}

@@ -227,7 +227,8 @@ title "Checkout — Place Order"
   api:participant "Order API" [Go]
   db:participant "Orders DB" [PostgreSQL]
 
-  cust -> api : "POST /orders" [HTTPS]
+  cust -> api : "Place the order" [HTTPS]
+    desc "POST /api/v1/orders\nbody { cartId }\n201 → { orderId }\n409 → the cart moved on"
   alt "card accepted"
     api ->+ db : "INSERT order" [SQL]
     api ..>- cust : "201 Created"
@@ -244,12 +245,38 @@ auto-detection depends on. Arrows are `->` synchronous, `~>` asynchronous,
 a dedent already says where a fragment stops. Conversion is lossless in both
 directions, proven by `pnpm check:sequence`.
 
+**The label is a title, not the whole truth.** A message takes a `desc "…"`
+continuation — two spaces under it, the same continuation a participant takes —
+and only the label is ever drawn on the wire. So `"Call login API"` stays on the
+arrow and `POST /api/v1/basic/verify`, the payload and the failure modes live in
+the `desc`, which the viewer reveals in its details dock when you click the
+message; a message that has one wears a small dot after its label. Nothing in
+the `desc` is measured, so detail can never widen a column.
+
+A `desc` is a JSON string, so `\n` gives it **several lines**, and the dock
+renders it as a **monospace block** that keeps them — method and path, then the
+body, then one line per status code, which is how a request is actually read.
+Prose set in the dock's proportional font turned exactly that into one grey
+paragraph, which is the reason the row is a code block rather than text. The
+escape keeps the source one physical line per `desc`, so canonical text is
+unaffected; `pnpm check:sequence` pins that round trip. Mermaid has no
+equivalent construct, so an imported `sequenceDiagram` simply has none — one
+more reason its import is one-way.
+
 **The whole story, then the part you asked about.** The diagram owns the
 first screenful and the whole flow FITS it — scaled to your viewport the way
 the C4 viewer's fit-view works, with a small zoom pill (fit / 100% / in /
 out; past fit, drag the canvas to pan — or scroll, or use the scrollbars, all
 three moving the same pane) for reading fine
-detail. The source sits below the fold: scroll the page down to edit the
+detail. A trackpad **pinch** (or ctrl-scroll) zooms the diagram and is
+**clamped to the pill's own 10–400% range** — claimed deliberately, because
+unhandled it is the browser's page zoom, which scales the nav and the source
+pane along with the drawing and past any limit this view believes in. Notes
+**wrap** to their box: SVG text does not wrap, so a long note used to draw one
+unbroken line through both walls of its box and off the canvas, and the fix is
+measured in the layout (`pnpm check:sequence-layout` pins that the widest
+wrapped line fits, the box is tall enough, the next row clears it, and no word
+is lost). The source sits below the fold: scroll the page down to edit the
 text. An immersive mode gives the diagram the entire viewport. The diagram
 renders complete — a sequence diagram is a record of what happened, so the
 record is what you see first. At rest something travels along every message,

@@ -206,12 +206,15 @@ await check(
   async () => {
     assert.ok(existsSync(path.join(ROOT, "src/app/view/seq/page.tsx")));
     const forward = readSource("src/app/view/seq/seq-forward.tsx");
-    // The forward must be a replace (Back must skip the trampoline) and must
-    // append location.hash — dropping the fragment drops the whole document.
-    assert.match(
-      forward,
-      /router\.replace\(`\/view\/sequence\$\{window\.location\.hash\}`\)/,
-    );
+    /* The forward must be a replace (Back must skip the trampoline) and must
+       carry the fragment — dropping it drops the whole document. It reads
+       `location.hash` and forwards to `/view/sequence` with the NORMALIZED
+       body: this used to pin the raw `${window.location.hash}` interpolation,
+       which is exactly the concatenation that let a fragment double (see the
+       repeated-fragment checks above), so the shape asserted here changed with
+       the fix rather than the requirement. */
+    assert.match(forward, /router\.replace\(`\/view\/sequence\$\{/);
+    assert.match(forward, /normalizeShareFragment\(window\.location\.hash\)/);
   },
 );
 
@@ -348,6 +351,68 @@ await check(
     const wrapper = readSource("src/features/sequence/share/share-button.tsx");
     assert.ok(wrapper.includes("downloadExtension="));
     assert.ok(wrapper.includes("ARCHTEXT_EXTENSION"));
+  },
+);
+
+/* ----------------------------------------------------------------------- */
+/* A REPEATED fragment still opens                                          */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * `#m=…#m=…` was reachable by clicking: every forwarding route built its
+ * target by concatenating the current hash onto a path, so forwarding a URL
+ * that already carried a fragment appended a second one. A URL has ONE
+ * fragment, so the `m` value became `AF1.…#m=AF1.…` — still passing the
+ * version check, then failing base64url with "the link was probably truncated
+ * or altered by the app that carried it", which blamed the carrier for
+ * something this app did. Both ends are fixed; these pin both.
+ */
+await check("a fragment repeated twice still decodes", async () => {
+  const decoded = await decodeShareFragment(
+    `#${FROZEN_C4_FRAGMENT}#${FROZEN_C4_FRAGMENT}`,
+  );
+  assert.equal(decoded.status, "ok");
+  assert.equal(decoded.aftText, FROZEN_C4_TEXT);
+});
+
+await check("a fragment repeated five times still decodes", async () => {
+  const decoded = await decodeShareFragment(
+    `#${FROZEN_SEQ_FRAGMENT}${`#${FROZEN_SEQ_FRAGMENT}`.repeat(4)}`,
+  );
+  assert.equal(decoded.status, "ok");
+  assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
+});
+
+await check(
+  "the chooser forwards by DOCUMENT KIND, not always to /view/c4",
+  () => {
+    /* A sequence fragment on `/view` used to be handed to the C4 playground,
+       which refused a valid document for being the wrong kind. The chooser
+       decodes and sniffs instead of assuming. */
+    const chooser = readSource("src/app/view/view-chooser.tsx");
+    assert.match(chooser, /detectAlabKind\(/);
+    assert.match(chooser, /"\/view\/sequence"/);
+    assert.match(chooser, /"\/view\/c4"/);
+  },
+);
+
+await check(
+  "every forwarding route normalizes the hash instead of concatenating it raw",
+  () => {
+    for (const file of [
+      "src/app/view/view-chooser.tsx",
+      "src/app/view/seq/seq-forward.tsx",
+    ]) {
+      const source = readSource(file);
+      assert.ok(
+        source.includes("normalizeShareFragment"),
+        `${file} must normalize the fragment before forwarding`,
+      );
+      assert.ok(
+        !/\$\{(?:hash|window\.location\.hash)\}/.test(source),
+        `${file} must not interpolate a raw hash into the target href`,
+      );
+    }
   },
 );
 

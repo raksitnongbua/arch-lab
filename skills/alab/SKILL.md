@@ -382,6 +382,20 @@ Facts that are easy to get wrong:
   participant; `cust:actor "Customer"` draws the stick figure. Only
   `actor` and `participant` exist.
 - `[Technology]` works on participants and on messages, same as C4.
+- **A message takes a `desc "…"` continuation**, indented two spaces
+  under it, exactly like a participant's. The label is the TITLE drawn
+  on the arrow and should stay short; the `desc` holds the endpoint,
+  payload or caveat, and the viewer shows it when the message is
+  clicked. Prefer `"Call login API"` + a `desc` naming
+  `POST /api/v1/basic/verify` over one long label. Notes take no
+  `desc` — a note is already its own text.
+- **A `desc` is a JSON string, so `\n` gives it several lines**, and the
+  viewer renders it as a monospace block that keeps them. Write a
+  request as method+path, then the body, then one line per status code
+  — not as a paragraph. The escape keeps the source one physical line,
+  so the file stays canonical. It can hold a whole runnable `curl`:
+  escape `"` as `\"` and `\` as `\\`, or just JSON-stringify the
+  command and paste the result. Budget: 500 characters.
 - `autonumber` on its own line numbers every message.
 - A message from a participant to itself draws a self-loop.
 
@@ -390,15 +404,53 @@ archlab 1.0 sequence
 title "Message kinds"
 
 @sequence
+  web "Storefront"
   api:participant "Order API"
   queue:participant "Events" [Kafka]
 
+  web -> api : "Call login API" [HTTPS]
+    desc "POST /api/v1/basic/verify\nbody { email, password }\n200 → { token } (15 min)\n401 → bad credentials"
   api -> api : "Validates the cart"
   api ~> queue : "order.created" [Avro]
   queue ..> api : "ack"
   note right api : "Retries are idempotent"
   note over api queue : "Both sides are at-least-once"
 ```
+
+A `desc` carrying a complete request — this is what the escaping looks
+like in practice, and it round-trips byte for byte:
+
+```
+archlab 1.0 sequence
+title "Order intake"
+
+@sequence
+  web "Storefront" [Next.js]
+  api:participant "Order API" [Go]
+
+  web ->+ api : "Place the order" [HTTPS]
+    desc "curl https://api.shopflow.dev/v1/orders \\\n  --request POST \\\n  --header 'Content-Type: application/json' \\\n  --header 'Authorization: Bearer $SHOPFLOW_TOKEN' \\\n  --data '{\n    \"cart_id\": \"cart_8f21c3\",\n    \"address_id\": 4102,\n    \"coupon\": null\n  }'\n\n201 → { order_id }   409 → the cart changed under us"
+  api ..>- web : "201 Created"
+```
+
+**Choosing between a `desc` and a `note`.** They are not
+interchangeable, and picking wrong is the main way a valid document
+renders badly:
+
+- `desc` — belongs to ONE message, hidden until a reader clicks that
+  message, and **never measured**, so any amount of detail costs no
+  width. Use it for the endpoint, the payload, the status codes, the
+  header names: everything true of that one step.
+- `note` — always visible, wraps to a box, and costs VERTICAL space in
+  the flow. Use it for what is true across several steps: an ordering
+  hazard, a trap in the API, an invariant. A long note is fine — notes
+  wrap — so write one note, not three.
+
+**Keep labels shorter than their arrow.** Column gaps are capped, so a
+label much wider than its own arrow is drawn OVER the neighbouring
+lifelines. `validate_sequence` reports how many labels do this and
+which are worst; the fix is always the same — verb phrase on the wire,
+detail in the `desc`.
 
 **Fragments nest by INDENTATION and there is no `end` keyword** — this
 is the single biggest difference from Mermaid, whose `end` lines have

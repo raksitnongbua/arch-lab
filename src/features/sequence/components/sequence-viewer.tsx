@@ -55,7 +55,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Check, Copy, Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { SequenceLabFile } from "@/types";
 import {
@@ -230,7 +230,19 @@ export function SequenceViewer({
       const message = layout.messages.find((m) => m.step === focusedStep);
       if (message !== undefined) {
         onAnnounce(
-          `Message ${focusedStep} of ${layout.stepCount}: ${nameById.get(message.from) ?? message.from} to ${nameById.get(message.to) ?? message.to} — ${message.label}. Details open beside the diagram; Escape clears focus.`,
+          `Message ${focusedStep} of ${layout.stepCount}: ${nameById.get(message.from) ?? message.from} to ${nameById.get(message.to) ?? message.to} — ${message.label}.` +
+            /* The `desc` is READ OUT here, not merely pointed at: the dock is
+               an unfocused region, so a sighted reader sees the detail
+               appear and a screen-reader user would otherwise have to go
+               hunting for it. This is the one place the full text belongs —
+               the hit target's name deliberately only says it exists. */
+            (message.description !== undefined
+              ? /* Authored line breaks become sentence breaks: a screen
+                   reader runs a bare newline into the next word, so
+                   "…/orders body { cartId }" would arrive as one phrase. */
+                ` Details: ${message.description.split("\n").join(". ")}.`
+              : "") +
+            " Details open beside the diagram; Escape clears focus.",
         );
       }
     },
@@ -474,22 +486,40 @@ export function SequenceViewer({
    * centre fraction is exactly 0.5, and staying at 0.5 after the zoom is what
    * "keep it centred" means.
    */
-  const zoomAnchor = useRef<{ cx: number; cy: number } | null>(null);
+  const zoomAnchor = useRef<{
+    cx: number;
+    cy: number;
+    /** Where in the PANE that content point should still sit afterwards.
+     * Defaults to the pane's centre; a pinch passes the pointer instead, so
+     * the diagram grows around the fingers rather than around the middle. */
+    vx: number;
+    vy: number;
+  } | null>(null);
 
   const applyZoom = useCallback(
-    (next: number) => {
+    (
+      next: number,
+      options: { at?: { x: number; y: number }; announce?: boolean } = {},
+    ) => {
       const pane = diagramRegionRef.current;
       if (pane !== null && pane.scrollWidth > 0 && pane.scrollHeight > 0) {
+        const vx = options.at?.x ?? pane.clientWidth / 2;
+        const vy = options.at?.y ?? pane.clientHeight / 2;
         zoomAnchor.current = {
-          cx: (pane.scrollLeft + pane.clientWidth / 2) / pane.scrollWidth,
-          cy: (pane.scrollTop + pane.clientHeight / 2) / pane.scrollHeight,
+          cx: (pane.scrollLeft + vx) / pane.scrollWidth,
+          cy: (pane.scrollTop + vy) / pane.scrollHeight,
+          vx,
+          vy,
         };
       }
-      const clamped = Math.min(4, Math.max(0.1, next));
+      const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
       setZoom(clamped);
-      onAnnounce(
-        `Zoom ${Math.round(clamped * 100)} percent. Drag or scroll the diagram pane to pan.`,
-      );
+      if (options.announce !== false) {
+        onAnnounce(
+          `Zoom ${Math.round(clamped * 100)} percent. Drag or scroll the diagram pane to pan.`,
+        );
+      }
+      return clamped;
     },
     [onAnnounce],
   );
@@ -514,8 +544,8 @@ export function SequenceViewer({
     zoomAnchor.current = null;
     const pane = diagramRegionRef.current;
     if (pane === null) return;
-    pane.scrollLeft = anchor.cx * pane.scrollWidth - pane.clientWidth / 2;
-    pane.scrollTop = anchor.cy * pane.scrollHeight - pane.clientHeight / 2;
+    pane.scrollLeft = anchor.cx * pane.scrollWidth - anchor.vx;
+    pane.scrollTop = anchor.cy * pane.scrollHeight - anchor.vy;
   }, [zoom]);
 
   const stepZoom = useCallback(
@@ -530,6 +560,104 @@ export function SequenceViewer({
     setZoom("fit");
     onAnnounce("Diagram fitted to view — the whole flow is on screen.");
   }, [onAnnounce]);
+
+  /* ---- trackpad pinch (two fingers) -----------------------------------------
+   * A pinch on a trackpad is delivered as a `wheel` event with `ctrlKey` set —
+   * the platform convention every browser follows, and the same signal a mouse
+   * sends for ctrl+wheel. Unhandled, the browser applies it to the WHOLE PAGE:
+   * the nav, the source pane and the diagram all scaled together, past any
+   * limit this view believes in, and a reader who pinched to inspect one arrow
+   * had to hunt for the browser's own reset. So the gesture is claimed here and
+   * CLAMPED to the same ZOOM_MIN/ZOOM_MAX the pill obeys.
+   *
+   * A NATIVE listener with `{ passive: false }`, not React's `onWheel`, because
+   * preventDefault is the entire point and React attaches wheel handlers
+   * passively (where preventDefault does nothing but warn).
+   *
+   * Only `ctrlKey` is intercepted. A plain two-finger scroll stays the pane's
+   * own scrolling, which is how panning already works — the whole zoom model
+   * rests on this being a real scroll container.
+   *
+   * COALESCED PER FRAME. A pinch delivers wheel events far faster than this
+   * SVG can re-render, and calling setZoom on each one queues a render per
+   * event; the target accumulates in a ref and one rAF commits it, so the
+   * scale still tracks the fingers exactly while the DOM is written once a
+   * frame. The pending target is also what the NEXT event reads, so a burst
+   * inside one frame compounds correctly instead of each event stepping from
+   * the same stale base.
+   *
+   * Announcing is deferred to the END of the gesture (250ms of quiet): a live
+   * region fired per frame is unusable, and "Zoom 180 percent" is only news
+   * once the fingers stop.
+   */
+  const pinchTarget = useRef<number | null>(null);
+  const pinchFrame = useRef<number | null>(null);
+  const pinchIdle = useRef<number | null>(null);
+
+  useEffect(() => {
+    const pane = diagramRegionRef.current;
+    if (pane === null) return;
+
+    const onWheel = (event: WheelEvent): void => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+
+      const base =
+        pinchTarget.current ?? (zoom === "fit" ? measureFitScale() : zoom);
+      /* Exponential, so a pinch feels the same at 0.2 as at 2 — a linear step
+         crawls when zoomed out and lurches when zoomed in. The 0.01 factor is
+         tuned to macOS trackpad deltas; the per-event cap keeps a coarse mouse
+         wheel (deltaY of ±100 in one tick) from jumping the whole range. */
+      const factor = Math.exp(
+        -Math.max(-40, Math.min(40, event.deltaY)) * 0.01,
+      );
+      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, base * factor));
+      pinchTarget.current = next;
+
+      const rect = pane.getBoundingClientRect();
+      const at = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+
+      if (pinchFrame.current === null) {
+        pinchFrame.current = window.requestAnimationFrame(() => {
+          pinchFrame.current = null;
+          const target = pinchTarget.current;
+          if (target === null) return;
+          applyZoom(target, { at, announce: false });
+        });
+      }
+
+      if (pinchIdle.current !== null) window.clearTimeout(pinchIdle.current);
+      pinchIdle.current = window.setTimeout(() => {
+        pinchIdle.current = null;
+        const settled = pinchTarget.current;
+        pinchTarget.current = null;
+        if (settled === null) return;
+        const atLimit =
+          settled <= ZOOM_MIN + 0.001
+            ? " Minimum zoom."
+            : settled >= ZOOM_MAX - 0.001
+              ? " Maximum zoom."
+              : "";
+        onAnnounce(`Zoom ${Math.round(settled * 100)} percent.${atLimit}`);
+      }, 250);
+    };
+
+    pane.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      pane.removeEventListener("wheel", onWheel);
+      if (pinchFrame.current !== null) {
+        window.cancelAnimationFrame(pinchFrame.current);
+        pinchFrame.current = null;
+      }
+      if (pinchIdle.current !== null) {
+        window.clearTimeout(pinchIdle.current);
+        pinchIdle.current = null;
+      }
+    };
+  }, [zoom, measureFitScale, applyZoom, onAnnounce]);
 
   const handleToggleIdle = useCallback(() => {
     const next = !readIdleMotion();
@@ -803,7 +931,7 @@ export function SequenceViewer({
           onPointerCancel={handlePointerUp}
           tabIndex={0}
           role="application"
-          aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Messages, participants and fragment chips are buttons — Tab reaches them."
+          aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Pinch or hold Control and scroll to zoom between 10 and 400 percent. Messages, participants and fragment chips are buttons — Tab reaches them."
         >
           {/* Sized to the pane in fit mode, hugging the SVG when zoomed.
               Nothing is reserved for the dock, and that is the fix for a
@@ -1010,6 +1138,17 @@ export function SequenceViewer({
                     value={withTechnology(focusedMessage.to)}
                   />
                   <DockRow term="Label" value={focusedMessage.label} />
+                  {/* THE REASON THE DOCK EXISTS, for a message that carries a
+                      `desc`: the arrow shows the title, this shows what the
+                      title is short for. Directly under Label — it elaborates
+                      that row, and separating them with Technology would read
+                      as two unrelated facts. */}
+                  {focusedMessage.description !== undefined ? (
+                    <DockCodeRow
+                      term="Details"
+                      value={focusedMessage.description}
+                    />
+                  ) : null}
                   {focusedMessage.technology !== undefined ? (
                     <DockRow
                       term="Technology"
@@ -1119,8 +1258,10 @@ export function SequenceViewer({
       {/* The keyboard hint that used to live in the control strip — the
           controls are gone, the affordances are not. */}
       <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
-        Click a message, participant, or fragment chip to focus it · ← → move
-        between messages · Esc clears focus
+        Click a message, participant, or fragment chip to focus it · a{" "}
+        <span aria-hidden="true">•</span> after a label means that message
+        carries details · ← → move between messages · pinch or ctrl-scroll to
+        zoom · Esc clears focus
       </p>
 
       {/* Text alternative: the whole story as an ordered list, for readers
@@ -1141,6 +1282,19 @@ export function SequenceViewer({
   );
 }
 
+/**
+ * THE ZOOM RANGE, and the only place it is written down. Every entry point —
+ * the pill's +/− buttons and the trackpad pinch — clamps to these, so no
+ * gesture can reach a scale another gesture cannot undo.
+ *
+ * 0.1 is where a wide flow still reads as a shape; 4 is enough to inspect a
+ * hairline. Past either end the pill's button and the pinch both simply stop.
+ * Module scope rather than the component body: an effect depends on them, and
+ * a per-render constant in a dependency list is a lie about what can change.
+ */
+const ZOOM_MIN = 0.1;
+const ZOOM_MAX = 4;
+
 /** Shared icon-button styling for the zoom pill (the C4 controls' look). */
 const ZOOM_BUTTON_CLASSES =
   "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
@@ -1148,6 +1302,106 @@ const ZOOM_BUTTON_CLASSES =
 /* -------------------------------------------------------------------------- */
 /* Dock building blocks                                                         */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * A term whose value is a CODE BLOCK: a bordered, tinted, monospace panel that
+ * honours the newlines in the value.
+ *
+ * WHY THE MESSAGE DETAIL GETS THIS AND THE OTHER ROWS DO NOT. A `desc` on a
+ * message is where endpoints, payloads and status codes go — the one field in
+ * the dock whose content is usually literal text a reader will copy. Set as
+ * prose it reads as a paragraph that happens to contain a path, so
+ * `POST /api/v1/orders — body { cartId, addressId }. 201 …` arrives as one
+ * grey wall and the reader has to parse it back into fields. Monospace and
+ * pre-wrap give the author a way to lay it out (a `desc` may contain `\n`)
+ * and stop the proportional font from making `{ cartId, addressId }` look
+ * like a sentence.
+ *
+ * Wrapping is deliberate on both axes: `whitespace-pre-wrap` keeps authored
+ * newlines AND still wraps a long line, so the dock never grows a horizontal
+ * scrollbar for prose; `break-words` is what keeps an unbroken 80-character
+ * URL inside the panel rather than pushing it wider than the dock.
+ */
+function DockCodeRow({
+  term,
+  value,
+}: {
+  term: string;
+  value: string;
+}): React.JSX.Element {
+  return (
+    <div>
+      <dt className="text-xs font-medium text-muted-foreground">{term}</dt>
+      {/* The button OVERLAYS the block's top-right corner rather than sitting
+          in a header bar like `/syntax`'s CodeBlock: the dock is 18rem wide,
+          and a second chrome row would cost a line of the detail itself. It is
+          always visible, never hover-only — a hover-reveal control does not
+          exist for touch, and the dock is the mobile bottom sheet too.
+
+          `pr-9` on the <pre> is what keeps a long first line from running
+          under the button. */}
+      <dd className="relative mt-1">
+        <pre className="overflow-x-auto rounded-md border border-border bg-secondary/40 py-2 pr-9 pl-2.5 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
+          {value}
+        </pre>
+        <DockCopyButton value={value} term={term} />
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * Copy-to-clipboard for a dock code block. Same behaviour as the copy buttons
+ * on `/syntax` and `/mcp` (icon swap, 2-second reset, feedback announced in a
+ * live region rather than signalled by colour alone) — icon-only here because
+ * the dock has no room for a labelled button, so the accessible name carries
+ * what the icon means.
+ *
+ * A failed write is deliberately silent: the text is still selectable in the
+ * block, and an error toast for "your browser blocked the clipboard" helps
+ * nobody. Same choice both other copy buttons make.
+ */
+function DockCopyButton({
+  value,
+  term,
+}: {
+  value: string;
+  term: string;
+}): React.JSX.Element {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    void navigator.clipboard
+      .writeText(value)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2_000);
+      })
+      .catch(() => {
+        /* Clipboard blocked — the text stays selectable in the block. */
+      });
+  }, [value]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={
+        copied ? "Copied to clipboard" : `Copy the ${term.toLowerCase()}`
+      }
+      className="absolute top-1 right-1 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    >
+      {copied ? (
+        <Check aria-hidden="true" className="size-3.5 text-primary" />
+      ) : (
+        <Copy aria-hidden="true" className="size-3.5" />
+      )}
+      <span aria-live="polite" className="sr-only">
+        {copied ? "Copied to clipboard." : ""}
+      </span>
+    </button>
+  );
+}
 
 /** One stacked term/value row — the dock has vertical room, so it uses it. */
 function DockRow({

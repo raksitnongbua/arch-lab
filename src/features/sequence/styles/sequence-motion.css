@@ -388,6 +388,23 @@
   fill: var(--muted-foreground);
 }
 
+/* THE "THERE IS MORE" MARK — a small raised dot after the label of a message
+ * that carries a `desc`. Without it the detail is invisible until someone
+ * happens to click the right arrow, and a diagram cannot hide facts behind a
+ * gesture nobody knows to make. It is a footnote marker, so it is styled like
+ * one: muted, never bolder than the label, and it escalates to --primary with
+ * the rest of the message on focus, where the dock is already showing what it
+ * pointed at. It stays inside the label's reserved width (the +24 padding in
+ * messageLabelWidth covers it), so it can never push a column. */
+.af-seq-label-more {
+  fill: var(--muted-foreground);
+  font-weight: 600;
+}
+
+.af-seq-msg[data-focused="true"] .af-seq-label-more {
+  fill: var(--primary);
+}
+
 /* The FOCUSED message is emphasised — primary-coloured and a shade heavier,
  * the same escalation the viewer gives a selected connector — and it HOLDS
  * that emphasis after its draw finishes: the animation announces the focus,

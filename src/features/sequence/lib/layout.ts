@@ -107,9 +107,13 @@ export const SEQ = {
   selfLoopWidth: 44,
   selfLoopHeight: 26,
 
+  /** MINIMUM note box height — a wrapped note grows past it, see wrapText. */
   noteHeight: 36,
   noteGap: 10,
   notePadX: 12,
+  /** Vertical padding and per-line advance for WRAPPED note text. */
+  notePadY: 10,
+  noteLineHeight: 15,
   noteMaxWidth: 320,
   noteOffset: 16,
 
@@ -192,6 +196,14 @@ export interface LaidMessage {
   kind: SequenceMessageKind;
   label: string;
   technology?: string;
+  /**
+   * The focus-only detail (`desc` in the source). Carried through layout but
+   * NEVER measured: it is deliberately absent from `labelWidth`, because the
+   * whole point of moving text off the wire is that it stops widening
+   * columns. The renderer marks a message that has one; the viewer's dock
+   * shows it.
+   */
+  description?: string;
   self: boolean;
   /** Arrow y (for a self-message, the y of the loop's TOP segment). */
   y: number;
@@ -210,6 +222,13 @@ export interface LaidNote {
   placement: SequenceNotePlacement;
   participants: readonly string[];
   text: string;
+  /**
+   * The text WRAPPED to the box, one entry per rendered line. The renderer
+   * draws these, never `text` — see `wrapText` for what an unwrapped note did
+   * to the canvas. `text` stays for accessible names and anything that wants
+   * the note as one string.
+   */
+  lines: readonly string[];
   x: number;
   y: number;
   width: number;
@@ -336,11 +355,89 @@ function messageLabelWidth(message: SequenceMessage): number {
   return estimateWidth(message.label + tech, SEQ.labelFontSize) + 24;
 }
 
-function noteWidth(note: SequenceNote): number {
-  return Math.min(
-    estimateWidth(note.text, SEQ.noteFontSize) + SEQ.notePadX * 2,
-    SEQ.noteMaxWidth,
+/**
+ * Greedy word wrap to a pixel width, using the same estimator every other
+ * measurement here uses.
+ *
+ * THIS EXISTS BECAUSE THE BOX USED TO LIE. A note's width was capped at
+ * `noteMaxWidth` while its text stayed one unbroken `<text>` element, so a
+ * 250-character caveat drew a single 1600px line straight through both walls
+ * of its own box, out past the viewBox on both sides (the extents are computed
+ * from the box, not the text) and off the canvas — the left third and the
+ * right third simply clipped away. Worse, the failure got WORSE as a diagram
+ * got tidier: column gaps are derived from content, so shortening message
+ * labels tightens the columns, shrinks an over-note's span, and spills more
+ * text. Wrapping is what makes the box the truth about the text.
+ *
+ * A word longer than the whole line (a URL, a `filter[...]=...` query string)
+ * is HARD-SPLIT rather than allowed to overhang: overhang is the bug this
+ * function exists to remove, and a broken URL that stays inside the box is
+ * more useful than an intact one that vanishes off the canvas.
+ */
+export function wrapText(
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+): string[] {
+  const charWidth = Math.max(1, fontSize * SEQ.charWidthRatio);
+  const perLine = Math.max(1, Math.floor(maxWidth / charWidth));
+  const lines: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    let line = "";
+    const flush = (): void => {
+      lines.push(line);
+      line = "";
+    };
+    for (const word of paragraph.split(/\s+/).filter((w) => w !== "")) {
+      let rest = word;
+      // A word that cannot fit on a line of its own, split at the line width.
+      while (rest.length > perLine) {
+        if (line !== "") flush();
+        lines.push(rest.slice(0, perLine));
+        rest = rest.slice(perLine);
+      }
+      const candidate = line === "" ? rest : `${line} ${rest}`;
+      if (candidate.length <= perLine) line = candidate;
+      else {
+        if (line !== "") flush();
+        line = rest;
+      }
+    }
+    lines.push(line);
+  }
+  // A trailing empty line only happens for text ending in a newline; an empty
+  // note keeps one line so the box still has a height.
+  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+/**
+ * The note's wrapped text and the box that holds it. `contentWidth` is the
+ * room the caller can offer — an over-note spanning distant lifelines is
+ * wider than `noteMaxWidth`, and wrapping to the cap there would leave a wide
+ * box with a narrow column of text down its middle.
+ */
+function layoutNoteText(
+  text: string,
+  contentWidth: number = SEQ.noteMaxWidth - SEQ.notePadX * 2,
+): { lines: string[]; width: number; height: number } {
+  const lines = wrapText(text, contentWidth, SEQ.noteFontSize);
+  const widest = lines.reduce(
+    (max, line) => Math.max(max, estimateWidth(line, SEQ.noteFontSize)),
+    0,
   );
+  return {
+    lines,
+    width: Math.min(widest + SEQ.notePadX * 2, contentWidth + SEQ.notePadX * 2),
+    height: Math.max(
+      SEQ.noteHeight,
+      lines.length * SEQ.noteLineHeight + SEQ.notePadY * 2,
+    ),
+  };
+}
+
+function noteWidth(note: SequenceNote): number {
+  return layoutNoteText(note.text).width;
 }
 
 /**
@@ -568,6 +665,9 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
       kind: item.kind,
       label: item.label,
       ...(item.technology !== undefined ? { technology: item.technology } : {}),
+      ...(item.description !== undefined
+        ? { description: item.description }
+        : {}),
       self,
       y,
       fromX,
@@ -579,45 +679,50 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
   };
 
   const placeNote = (item: SequenceNote) => {
-    const width = noteWidth(item);
     const y = cursorY + SEQ.noteGap / 2;
+    let box: { lines: string[]; width: number; height: number };
     let x: number;
+    let width: number;
     if (item.placement === "over") {
       const xs = item.participants.map(xOf);
       const min = Math.min(...xs);
       const max = Math.max(...xs);
       // An over-note SPANS its participants: at least lifeline-to-lifeline
       // plus a shoulder, wider if the text needs it, centred on the span.
-      const spanWidth = Math.max(width, max - min + 56);
-      x = (min + max) / 2 - spanWidth / 2;
-      notes.push({
-        placement: item.placement,
-        participants: item.participants,
-        text: item.text,
-        x,
-        y,
-        width: spanWidth,
-        height: SEQ.noteHeight,
-        revealStep: stepCounter,
-      });
+      // The span is measured FIRST and handed to the text as its content
+      // width, so a note stretched between distant lifelines wraps to the
+      // room it actually has instead of to the 320px cap.
+      const span = max - min + 56;
+      box = layoutNoteText(
+        item.text,
+        Math.max(SEQ.noteMaxWidth, span) - SEQ.notePadX * 2,
+      );
+      width = Math.max(box.width, span);
+      x = (min + max) / 2 - width / 2;
     } else {
+      box = layoutNoteText(item.text);
+      width = box.width;
       const anchor = xOf(item.participants[0] ?? "");
       x =
         item.placement === "right"
           ? anchor + SEQ.noteOffset
           : anchor - SEQ.noteOffset - width;
-      notes.push({
-        placement: item.placement,
-        participants: item.participants,
-        text: item.text,
-        x,
-        y,
-        width,
-        height: SEQ.noteHeight,
-        revealStep: stepCounter,
-      });
     }
-    cursorY += SEQ.noteHeight + SEQ.noteGap;
+    notes.push({
+      placement: item.placement,
+      participants: item.participants,
+      text: item.text,
+      lines: box.lines,
+      x,
+      y,
+      width,
+      height: box.height,
+      revealStep: stepCounter,
+    });
+    // The row advances by the note's OWN height: a wrapped note is taller
+    // than `noteHeight`, and paying the fixed cost would let it grow down
+    // through the next message's arrow.
+    cursorY += box.height + SEQ.noteGap;
   };
 
   /** Steps strictly after `after`, up to and including `upTo`, ascending. */
@@ -748,7 +853,17 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
   for (const m of messages) {
     if (m.self) {
       maxX = Math.max(maxX, m.fromX + SEQ.selfLoopWidth + m.labelWidth + 8);
+      continue;
     }
+    /* A NON-SELF label is centred on the arrow's midpoint and may be wider
+       than the arrow — column gaps are capped (maxColumnGap), so an epic label
+       is allowed to sit over its neighbours rather than stretch the diagram.
+       Allowed to OVERLAP, not allowed to be CLIPPED: without this the viewBox
+       was computed from lifelines alone and the ends of such a label fell
+       outside it. Overlap is a legible compromise; a half-drawn label is not. */
+    const mid = (m.fromX + m.toX) / 2;
+    maxX = Math.max(maxX, mid + m.labelWidth / 2);
+    minX = Math.min(minX, mid - m.labelWidth / 2);
   }
 
   const viewMinX = Math.floor(Math.min(0, minX - 8));

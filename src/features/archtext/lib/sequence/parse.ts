@@ -108,6 +108,7 @@ interface PendMessage extends Loc {
   kind: SequenceMessageKind;
   label: string;
   technology?: string;
+  description?: string;
   activate?: boolean;
   deactivate?: boolean;
   raw: Map<string, Pend>;
@@ -646,7 +647,7 @@ function parseBodyLine(
         failAt(
           startLoc.line,
           startLoc.column,
-          '"desc" is a continuation — indent it 2 spaces under the participant it describes',
+          '"desc" is a continuation — indent it 2 spaces under the participant or message it describes',
         );
         break;
       case "else":
@@ -1079,28 +1080,32 @@ function parseFragmentBang(cursor: LineCursor, top: Context): void {
 
 function parseContinuation(cursor: LineCursor, target: Continuable): void {
   if (cursor.peek() !== "!") {
-    /* `desc` — participants only; a message's text is its label and a
-       note's text is the note. */
+    /* `desc` — participants and messages. On a MESSAGE it is the detail
+       behind the title: the `: "label"` stays the short thing drawn on the
+       arrow, and this carries the endpoint / payload / caveat the viewer
+       reveals on focus. Notes are still excluded — a note IS its text, so a
+       second text field on one would be two contents with no rule for
+       which wins. */
     const loc = { line: cursor.line, column: cursor.column };
     cursor.pos += "desc".length;
-    if (target.kind !== "participant") {
+    if (target.kind === "note") {
       failAt(
         loc.line,
         loc.column,
-        target.kind === "message"
-          ? 'messages have no description — the : "label" on the message line carries the text'
-          : "notes have no description — the note text itself is the content",
+        "notes have no description — the note text itself is the content",
       );
     }
     if (target.item.description !== undefined) {
       failAt(
         loc.line,
         loc.column,
-        'duplicate "desc" line for this participant',
+        `duplicate "desc" line for this ${target.kind}`,
       );
     }
     cursor.skipSpaces();
-    target.item.description = cursor.readQuoted("the participant description");
+    target.item.description = cursor.readQuoted(
+      `the ${target.kind} description`,
+    );
     cursor.expectEnd('the "desc" line');
     return;
   }
@@ -1251,6 +1256,7 @@ function resolve(
         add("kind", item.kind);
         add("label", item.label);
         add("technology", pick(item.technology, item.raw, "technology"));
+        add("description", pick(item.description, item.raw, "description"));
         add("activate", pick(item.activate, item.raw, "activate"));
         add("deactivate", pick(item.deactivate, item.raw, "deactivate"));
         return assemble(pairs, item.unknowns);

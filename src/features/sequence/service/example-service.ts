@@ -35,6 +35,25 @@ export interface SequenceExampleSource {
   text: string;
 }
 
+/**
+ * The charge call as a runnable request. Interpolated below through
+ * `JSON.stringify` rather than typed out escaped: a `desc` value is a JSON
+ * string, so curl's line-continuation backslash needs `\\\\` and every quote
+ * in the body needs `\\"` — inside a template literal that is four levels of
+ * escaping and unreadable, and a reviewer cannot tell a correct one from a
+ * broken one by eye. The readable array is the source of truth; the escaping
+ * is derived. (Same treatment in `input/example.ts` and the syntax-docs
+ * snippets, for the same reason.)
+ */
+const CHARGE_CURL = [
+  "curl https://api.payments.example/v1/charges \\",
+  "  --request POST \\",
+  "  --header 'Idempotency-Key: <order id>' \\",
+  '  --data \'{ "amount": 4250, "currency": "THB" }\'',
+  "",
+  "The key is the order id, so a retry cannot double-charge.",
+].join("\n");
+
 const CHECKOUT = `archlab 1.0 sequence
 title "Checkout — Place Order"
 description "One order placed: card charged, order stored, receipt sent."
@@ -48,11 +67,13 @@ description "One order placed: card charged, order stored, receipt sent."
   db:participant "Orders DB" [PostgreSQL]
 
   cust -> web : "Clicks Place order"
-  web ->+ api : "POST /orders" [HTTPS]
+  web ->+ api : "Place the order" [HTTPS]
+    desc "POST /api/v1/orders\\nbody { cartId, addressId }\\n201 → { orderId }\\n409 → the cart changed under us"
   api -> api : "Validates the cart"
   note right api : "Price and stock re-checked server-side"
   alt "card accepted"
     api ->+ pay : "Create charge" [REST]
+      desc ${JSON.stringify(CHARGE_CURL)}
     pay ..>- api : "charge.succeeded"
     api -> db : "INSERT order" [SQL]
     par "receipt"
@@ -80,7 +101,8 @@ description "A reset that survives a lost inbox: the link is single-use and the 
   mail:participant "Email Provider" [Postmark]
 
   user -> web : "Requests a reset"
-  web ->+ auth : "POST /reset-requests" [HTTPS]
+  web ->+ auth : "Ask for a reset link" [HTTPS]
+    desc "POST /api/v1/reset-requests\\nbody { email }\\n202 always — the response cannot say whether the address exists"
   auth -> store : "SET token, ttl 15m" [RESP]
   auth ~> mail : "Send reset link" [SMTP]
   auth ..>- web : "202 Accepted"

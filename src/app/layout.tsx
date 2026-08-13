@@ -5,7 +5,10 @@ import { Providers } from "@/app/providers";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { publicOrigin } from "@/features/mcp/lib/origin";
-import { SHARE_PARAM_MODEL } from "@/features/viewer/share/codec";
+import {
+  SHARE_FORWARD_ATTRIBUTE,
+  SHARE_PARAM_MODEL,
+} from "@/features/viewer/share/codec";
 import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 
 import "./globals.css";
@@ -90,7 +93,7 @@ export const viewport: Viewport = {
 const SHARE_FLAG_SCRIPT =
   `try{var h=location.hash.slice(1);` +
   `if(h&&new URLSearchParams(h).has(${JSON.stringify(SHARE_PARAM_MODEL)}))` +
-  `document.documentElement.setAttribute("data-share-forward","")}catch(e){}`;
+  `document.documentElement.setAttribute(${JSON.stringify(SHARE_FORWARD_ATTRIBUTE)},"")}catch(e){}`;
 
 export default function RootLayout({
   children,
