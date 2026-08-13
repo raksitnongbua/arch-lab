@@ -309,12 +309,41 @@ async function checkExpiry(
 }
 
 /**
+ * The canonical fragment body from a hash that may carry MORE THAN ONE.
+ *
+ * A URL has a single fragment — everything after the first `#` — so a hash of
+ * `#m=AF1.abc#m=AF1.abc` is one fragment whose text happens to contain `#`.
+ * `URLSearchParams` then reads `m` as `AF1.abc#m=AF1.abc`, which passes the
+ * version check (it does start with `AF1.`) and dies in base64url decoding as
+ * *"the link was probably truncated or altered by the app that carried it"* —
+ * a confusing message, because nothing was truncated and no carrier was
+ * involved: the app appended its own fragment onto a URL that already had one.
+ *
+ * Every route that forwards a share link builds its target by concatenation
+ * (`/view/c4` + the current hash), so any path that runs a forward twice
+ * doubles the fragment, and `#a#a#a#a#a` was reachable by clicking around.
+ * Both ends are fixed: forwarders hand on the normalized body, and decoding
+ * accepts a doubled one rather than blaming the messenger.
+ *
+ * Cutting at the first `#` is safe by construction: base64url is
+ * `[A-Za-z0-9_-]` only, and the diagram id rides through
+ * `encodeURIComponent`, which escapes `#` to `%23`.
+ */
+export function normalizeShareFragment(hash: string): string {
+  const body = hash.startsWith("#") ? hash.slice(1) : hash;
+  const first = body.indexOf("#");
+  return first === -1 ? body : body.slice(0, first);
+}
+
+/**
  * Decodes a location hash (with or without the leading `#`). Never throws;
  * corrupt or truncated payloads come back as `{ status: "error" }` with a
  * plain-language reason.
  */
 export async function decodeShareFragment(hash: string): Promise<DecodedShare> {
-  const body = hash.startsWith("#") ? hash.slice(1) : hash;
+  // Normalized, so a fragment a forward appended twice still opens — see
+  // `normalizeShareFragment` for how that URL comes about.
+  const body = normalizeShareFragment(hash);
   if (body === "") return { status: "none" };
 
   const params = new URLSearchParams(body);

@@ -31,15 +31,21 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { normalizeShareFragment } from "@/features/viewer/share/codec";
+
 export function SeqForward(): React.JSX.Element {
   const router = useRouter();
 
   useEffect(() => {
-    // The fragment rides along verbatim — `router.replace` keeps it as part
-    // of the href, and the playground reads it off `location.hash` on mount.
-    // Forwarding unconditionally (payload or not) keeps the alias honest:
-    // `/view/seq` always means `/view/sequence`, never a fourth destination.
-    router.replace(`/view/sequence${window.location.hash}`);
+    /* The fragment rides along as part of the href — the playground reads it
+       off `location.hash` on mount — NORMALIZED rather than concatenated raw,
+       so forwarding a URL that already carries a fragment cannot produce
+       `#m=…#m=…` (see `normalizeShareFragment`: that value stops being
+       base64url, and the playground then refuses the link).
+       Forwarding unconditionally (payload or not) keeps the alias honest:
+       `/view/seq` always means `/view/sequence`, never a fourth destination. */
+    const body = normalizeShareFragment(window.location.hash);
+    router.replace(`/view/sequence${body === "" ? "" : `#${body}`}`);
   }, [router]);
 
   return (
