@@ -31,8 +31,15 @@
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { ShareButton } from "@/features/viewer/share/share-button";
 
-/** Where a sequence share link lands. */
-const SHARE_ROUTE = "/view/sequence";
+/**
+ * Where a sequence share link lands: the SHORT alias, not the playground's
+ * own address. `/view/seq` forwards to `/view/sequence` with the fragment
+ * intact (see `app/view/seq/`), and the five characters it does not spend on
+ * the route are five more the payload can — the whole document rides in the
+ * URL, budgeted against the codec's hard length ceiling. Links minted
+ * against the long route before this alias existed still open unchanged.
+ */
+const SHARE_ROUTE = "/view/seq";
 
 export function SequenceShareButton({
   /** The document to pack — the pane's current text, verbatim. */

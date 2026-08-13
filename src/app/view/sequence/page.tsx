@@ -16,8 +16,11 @@ export const metadata: Metadata = {
  * segment shadowing `/view/[modelId]`, so `sequence` is a reserved model id
  * (asserted at build time in the `[modelId]` page).
  *
- * No share links land here: the share codec is C4-specific, so this page
- * neither offers a Share button nor decodes fragments.
+ * Share links DO land here: the playground decodes `#m=…` fragments off
+ * `location.hash` on mount, and new sequence links are minted against the
+ * shorter `/view/seq` alias (see `../seq/`), which forwards to this page
+ * with the fragment intact. Links minted against this long route before the
+ * alias existed keep working — this page's own behaviour never changed.
  */
 export default function ViewSequencePage(): React.JSX.Element {
   return <SequencePlayground />;

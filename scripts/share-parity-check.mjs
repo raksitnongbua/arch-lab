@@ -148,8 +148,12 @@ check(
   c4Shell.includes('route="/view/c4"'),
 );
 check(
-  "the sequence wrapper shares onto /view/sequence",
-  wrapper.includes('"/view/sequence"'),
+  // The SHORT alias, not the playground's own address: /view/seq forwards to
+  // /view/sequence with the fragment intact, and spends 5 fewer of the URL
+  // characters the payload is budgeted against (share-capacity-check.mjs
+  // owns the deeper assertions about that arrangement).
+  "the sequence wrapper shares onto /view/seq",
+  wrapper.includes('"/view/seq"'),
 );
 check(
   "the sequence wrapper omits the diagram pointer (no sub-diagrams to point at)",

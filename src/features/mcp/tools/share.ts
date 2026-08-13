@@ -280,7 +280,12 @@ async function sequenceShareLink(
   if (minted.status === "error") return errorResult(minted.message);
 
   const fragment = await encodeShareFragment(payload, null, minted.expiry);
-  const url = `${publicOrigin()}/view/sequence#${fragment}`;
+  // Minted against `/view/seq`, the short alias that forwards to
+  // `/view/sequence` with the fragment intact: the route is part of the same
+  // length budget as the payload, so the alias's five saved characters go to
+  // the document instead. Links minted against the long route still open —
+  // the playground's address did not move, only what NEW links say.
+  const url = `${publicOrigin()}/view/seq#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
     return errorResult(

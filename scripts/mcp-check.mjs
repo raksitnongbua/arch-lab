@@ -924,7 +924,8 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
 /*
  * The end-to-end path an agent actually walks for a sequence flow: author →
  * validate_sequence → format_sequence (canonical .alab) → create_share_link.
- * The link must land on /view/sequence (the C4 route would parse-error) and
+ * The link must land on /view/seq — the short alias that forwards to
+ * /view/sequence with the fragment intact (the C4 route would parse-error) — and
  * decode back to the SAME canonical text format_sequence hands out, so the
  * shared flow and the committed file cannot disagree.
  */
@@ -938,7 +939,7 @@ check("create_share_link mints a sequence link that decodes back", async () => {
   );
   const url = text.split("\n").find((line) => line.startsWith("http"));
   assert.ok(url !== undefined, `no URL in:\n${text}`);
-  assert.match(url, /\/view\/sequence#m=AF1\./);
+  assert.match(url, /\/view\/seq#m=AF1\./);
 
   const decoded = await decodeShareFragment(new URL(url).hash);
   assert.equal(decoded.status, "ok");
@@ -962,7 +963,7 @@ check(
         undefined,
       ),
     );
-    assert.match(text, /\/view\/sequence#m=AF1\./);
+    assert.match(text, /\/view\/seq#m=AF1\./);
     assert.match(text, /one-way|lossy|dropped/i);
   },
 );

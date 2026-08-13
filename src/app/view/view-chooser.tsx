@@ -24,8 +24,11 @@
  *      that is set. A React guard cannot do this job — the fragment is not
  *      available until the client, by which point the paint has happened.
  *
- * Sequence documents have no share codec yet, so there is nothing else the
- * fragment could mean — every payload is a C4 model by construction.
+ * Every `/view#m=…` payload is a C4 model BY CONSTRUCTION: sequence sharing
+ * did not exist while `/view` was the playground, and sequence links have
+ * always minted against their own route (`/view/sequence`, now the shorter
+ * `/view/seq` alias) — so forwarding to `/view/c4` is right for every legacy
+ * link there is.
  */
 
 import { useEffect, useSyncExternalStore } from "react";

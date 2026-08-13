@@ -61,13 +61,16 @@ import {
   type SyncedModel,
 } from "../input/sync";
 import {
+  ShareLinkFailurePage,
+  type ShareOpenFailure,
+} from "@/components/share/share-link-failure";
+
+import {
   canEncodeShare,
   decodeShareFragment,
   encodeShareFragment,
   MAX_SHARE_URL_LENGTH,
 } from "../share/codec";
-import { ShareBroken } from "../share/share-broken";
-import { ShareExpired } from "../share/share-expired";
 import { ViewerShell } from "./viewer-shell";
 
 /**
@@ -97,9 +100,10 @@ interface PaneErrorState {
 }
 
 // A share link used to have two inline outcomes here, success and failure.
-// Failure now takes over the page (`share/share-broken.tsx`), so the only thing
-// left to say in place is that the model below arrived inside the URL — which is
-// a flag, not a union.
+// Failure now takes over the page (`@/components/share/share-link-failure`,
+// shared with the sequence playground so the two routes cannot drift), so the
+// only thing left to say in place is that the model below arrived inside the
+// URL — which is a flag, not a union.
 
 export function ViewerPlayground(): React.JSX.Element {
   /* ---- state ---------------------------------------------------------- */
@@ -122,10 +126,10 @@ export function ViewerPlayground(): React.JSX.Element {
   const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
     string | null
   >(null);
-  /** Epoch seconds when a lapsed link expired; non-null takes over the page. */
-  const [expired, setExpired] = useState<number | null>(null);
-  /** Why a link could not be read; non-null takes over the page. */
-  const [broken, setBroken] = useState<string | null>(null);
+  /** A link that would not open; non-null takes over the whole page. */
+  const [shareFailure, setShareFailure] = useState<ShareOpenFailure | null>(
+    null,
+  );
 
   // JSON is opt-in. `.alab` is the format this product asks people to write —
   // it is what the syntax reference documents, what share links carry, and
@@ -221,58 +225,73 @@ export function ViewerPlayground(): React.JSX.Element {
       // worse, a GOOD link would adopt its model invisibly behind the stale
       // error page. Reset covers "none" too: a fragment with no payload is not
       // a share link, so nothing about one should still be on screen.
-      setExpired(null);
-      setBroken(null);
+      setShareFailure(null);
       setOpenedFromShare(false);
 
-      if (decoded.status === "none") return;
+      switch (decoded.status) {
+        case "none":
+          return;
 
-      if (decoded.status === "error") {
-        // Takes over the page, like expiry. No `setAnnouncement`: the polite
-        // live region lives in the editor JSX below, which this path never
-        // renders — `ShareBroken` carries its own `role="alert"` instead.
-        setBroken(decoded.message);
-        return;
+        case "error":
+          // Takes over the page. No `setAnnouncement`: the polite live region
+          // lives in the editor JSX below, which this path never renders —
+          // the failure page carries its own `role="alert"` instead.
+          setShareFailure({ kind: "broken", reason: decoded.message });
+          return;
+
+        case "expired":
+          // Takes over the whole page rather than showing a banner above the
+          // seed model — see `@/components/share/share-link-failure` for why a
+          // notice over a working editor actively misleads. No announcement
+          // for the same reason as "error": the page's `role="status"` is the
+          // thing assistive tech hears.
+          setShareFailure({ kind: "expired", expiresAt: decoded.expiresAt });
+          return;
+
+        case "ok": {
+          const result = parsePane("aft", decoded.aftText);
+          if (result.status !== "ok") {
+            // Decoding succeeded and the text still will not parse, which in
+            // practice means characters went missing from the MIDDLE of the
+            // URL: a payload cut short at the end fails earlier, in
+            // `decodeShareFragment`.
+            setShareFailure({
+              kind: "broken",
+              reason:
+                "the model inside it does not parse — characters appear to be " +
+                "missing from the middle of the link, which happens when a long " +
+                "URL is copied across a line wrap",
+            });
+            return;
+          }
+
+          setPending(null);
+          adoptSynced(result.value, null);
+          const target =
+            decoded.diagramId !== null &&
+            result.value.model.diagrams[decoded.diagramId] !== undefined
+              ? decoded.diagramId
+              : result.value.model.rootDiagramId;
+          currentDiagramRef.current = target;
+          setSharedInitialDiagram(target);
+          setShellEpoch((epoch) => epoch + 1);
+          setOpenedFromShare(true);
+          setAnnouncement(
+            "Opened a model from a share link — nothing was uploaded; both panes hold its source.",
+          );
+          return;
+        }
+
+        default: {
+          // A NEW codec status must never fall through to a silently blank or
+          // half-working page: this assignment fails `pnpm typecheck` the
+          // moment `DecodedShare` grows a case this switch does not map to a
+          // full-page outcome. `check:share-error-pages` asserts the guard
+          // stays here.
+          const _exhaustive: never = decoded;
+          return _exhaustive;
+        }
       }
-
-      if (decoded.status === "expired") {
-        // Takes over the whole page rather than showing a banner above the seed
-        // model — see `share/share-expired.tsx` for why a notice over a working
-        // editor actively misleads.
-        setExpired(decoded.expiresAt);
-        setAnnouncement(
-          "This share link has expired. The model it carried is not shown.",
-        );
-        return;
-      }
-
-      const result = parsePane("aft", decoded.aftText);
-      if (result.status !== "ok") {
-        // Decoding succeeded and the text still will not parse, which in
-        // practice means characters went missing from the MIDDLE of the URL:
-        // a payload cut short at the end fails earlier, in `decodeShareFragment`.
-        setBroken(
-          "the model inside it does not parse — characters appear to be " +
-            "missing from the middle of the link, which happens when a long " +
-            "URL is copied across a line wrap",
-        );
-        return;
-      }
-
-      setPending(null);
-      adoptSynced(result.value, null);
-      const target =
-        decoded.diagramId !== null &&
-        result.value.model.diagrams[decoded.diagramId] !== undefined
-          ? decoded.diagramId
-          : result.value.model.rootDiagramId;
-      currentDiagramRef.current = target;
-      setSharedInitialDiagram(target);
-      setShellEpoch((epoch) => epoch + 1);
-      setOpenedFromShare(true);
-      setAnnouncement(
-        "Opened a model from a share link — nothing was uploaded; both panes hold its source.",
-      );
     };
 
     void openFromHash();
@@ -436,16 +455,18 @@ export function ViewerPlayground(): React.JSX.Element {
   // `/view` URL and the dead link is not left in the address bar.
   const startFresh = () => {
     window.history.replaceState(null, "", window.location.pathname);
-    setExpired(null);
-    setBroken(null);
+    setShareFailure(null);
   };
 
-  if (expired !== null) {
-    return <ShareExpired expiresAt={expired} onStartFresh={startFresh} />;
-  }
-
-  if (broken !== null) {
-    return <ShareBroken reason={broken} onStartFresh={startFresh} />;
+  if (shareFailure !== null) {
+    return (
+      <ShareLinkFailurePage
+        failure={shareFailure}
+        subject="model"
+        startFreshLabel="Start your own model"
+        onStartFresh={startFresh}
+      />
+    );
   }
 
   return (
