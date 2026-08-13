@@ -32,6 +32,12 @@ import {
   SEQUENCE_FORMAT_LABEL,
   type SequenceInputError,
 } from "@/features/sequence/input/parse";
+/* THE VIEWER'S OWN LAYOUT, called server-side. It is a pure function of the
+   model — no DOM, no measurement — which is what lets the check scripts run it
+   under Node, and what lets this tool answer "will it FIT?" with the same
+   geometry the browser will draw rather than a character-count guess. An agent
+   cannot see its own diagram; this is the substitute for looking. */
+import { layoutSequence } from "@/features/sequence/lib/layout";
 
 import { guardSourceSize } from "../lib/limits";
 import {
@@ -123,6 +129,15 @@ interface SequenceCounts {
   async: number;
   reply: number;
   self: number;
+  /**
+   * Messages carrying a `desc`. Counted because it is the one fact about a
+   * flow an agent cannot infer from the rest of the summary and would
+   * otherwise have to re-read the document to learn — and because "9 messages,
+   * 0 with details" is the actionable half of a review: a flow whose arrows
+   * all say `"POST /orders"` and nothing else is exactly what `desc` exists to
+   * fix.
+   */
+  detailed: number;
   fragments: number;
   notes: number;
   /** Fragment kinds in document order, deduplicated. */
@@ -145,6 +160,7 @@ function countItems(items: readonly SequenceItem[]): SequenceCounts {
     async: 0,
     reply: 0,
     self: 0,
+    detailed: 0,
     fragments: 0,
     notes: 0,
     fragmentKinds: [],
@@ -158,6 +174,7 @@ function countItems(items: readonly SequenceItem[]): SequenceCounts {
         counts.messages += 1;
         counts[item.kind] += 1;
         if (isSelfMessage(item)) counts.self += 1;
+        if (item.description !== undefined) counts.detailed += 1;
       } else if (item.step === "note") {
         counts.notes += 1;
       } else {
@@ -197,6 +214,15 @@ function renderSummary(file: SequenceLabFile, counts: SequenceCounts): string {
     `Participants: ${file.participants.length}`,
     `Messages: ${parts.join(", ")}`,
   ];
+  /* Reported even when it is ZERO, unlike every other optional line here: a
+     missing `Notes:` line means "no notes", which is a choice, but a flow with
+     no details is usually an oversight, and a line that appears only when the
+     news is good tells the caller nothing when it is bad. */
+  if (counts.messages > 0) {
+    lines.push(
+      `Details (\`desc\`): ${counts.detailed} of ${counts.messages} message${counts.messages === 1 ? "" : "s"}`,
+    );
+  }
   if (counts.fragments > 0) {
     lines.push(
       `Fragments: ${counts.fragments} (${counts.fragmentKinds.join(", ")}), ` +
@@ -205,7 +231,46 @@ function renderSummary(file: SequenceLabFile, counts: SequenceCounts): string {
   }
   if (counts.notes > 0) lines.push(`Notes: ${counts.notes}`);
   if (file.autonumber === true) lines.push("Autonumber: on");
+  lines.push(renderFit(file));
   return lines.join("\n");
+}
+
+/**
+ * WILL IT FIT — the one thing a caller writing a diagram it cannot see has no
+ * other way to learn.
+ *
+ * Column gaps are capped (`maxColumnGap`), so a label far wider than its own
+ * arrow is drawn OVER its neighbours rather than stretching the diagram. That
+ * is a deliberate layout choice and it is fine once or twice; a document where
+ * a third of the labels do it is the wall of overlapping text this project
+ * added `desc` to prevent. Nothing in a parse result hints at it — the
+ * document is perfectly valid — so an agent iterates blind and ships a diagram
+ * that reads as a smear. Reporting the real number, from the real layout, with
+ * the specific remedy named, is what turns "valid" into "will look right".
+ *
+ * Notes are NOT reported here: they wrap to their box now, so a long note
+ * costs vertical space and nothing else — no advice to give.
+ */
+function renderFit(file: SequenceLabFile): string {
+  const layout = layoutSequence(file);
+  const wide = layout.messages.filter(
+    (m) => !m.self && m.labelWidth > Math.abs(m.toX - m.fromX),
+  );
+  const size = `${Math.round(layout.width)} x ${Math.round(layout.height)} px`;
+  if (wide.length === 0) return `Fit: ${size}; every label fits its arrow.`;
+  const worst = wide
+    .slice()
+    .sort((a, b) => b.labelWidth - a.labelWidth)
+    .slice(0, 3)
+    .map((m) => `${m.step}`)
+    .join(", ");
+  return (
+    `Fit: ${size}; ${wide.length} of ${layout.messages.length} labels are WIDER ` +
+    `than their own arrow (steps ${worst} worst) and will be drawn over ` +
+    "neighbouring lifelines. Shorten those labels to a verb phrase and move " +
+    "the endpoint, payload and caveats into a `desc` — a `desc` is never " +
+    "measured, so detail there costs no width."
+  );
 }
 
 /* -------------------------------------------------------------------------- */

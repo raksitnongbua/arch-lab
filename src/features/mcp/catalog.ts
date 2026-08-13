@@ -176,8 +176,11 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "`archlab 1.0 sequence`) and pasted Mermaid `sequenceDiagram` code, " +
       "reporting the line, column and offending source line on failure. On " +
       "success it summarises what the flow contains — participants, messages " +
-      "split by kind, self-messages, fragments and their nesting depth, " +
-      "notes — rather than echoing the document back. Use this for message " +
+      "split by kind, self-messages, how many messages carry a `desc` detail, " +
+      "fragments and their nesting depth, notes, and a FIT report — the " +
+      "rendered pixel size plus any labels too wide for their own arrow, " +
+      "which is the one defect a parse cannot see and a caller cannot look " +
+      "at — rather than echoing the document back. Use this for message " +
       "flows over time; use `validate_model` for C4 structure diagrams. " +
       "Passing a C4 document here says so and points you at the right tool.",
     args: [SEQUENCE_SOURCE_ARG],
@@ -189,7 +192,11 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "Rewrite sequence text as canonical `.alab` sequence — the exact bytes " +
       "arch-lab would write, so diffs stay minimal. Also the way to turn a " +
       "pasted Mermaid `sequenceDiagram` into an `.alab` sequence document, " +
-      "which is a one-way lossy import: the response names what was dropped.",
+      "which is a one-way lossy import: the response names what was dropped. " +
+      "Worth a call after writing a message `desc`, which is a JSON string and " +
+      "therefore the one place hand-escaping goes wrong: this reports the bad " +
+      "escape with a line and column, and returns the canonical single-line " +
+      "form when it is right.",
     args: [SEQUENCE_SOURCE_ARG],
   },
   {
@@ -382,7 +389,8 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
     title: "Sequence diagrams",
     blurb:
       "The same check-and-format loop, for message flows over time rather " +
-      "than C4 structure.",
+      "than C4 structure — including the `desc` continuation that keeps a " +
+      "message's endpoint and payload off the arrow.",
     tools: toolsNamed("validate_sequence", "format_sequence"),
   },
   {

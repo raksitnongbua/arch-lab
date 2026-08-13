@@ -49,6 +49,7 @@ export const MESSAGE_KEYS = [
   "kind",
   "label",
   "technology",
+  "description",
   "activate",
   "deactivate",
 ] as const;
@@ -87,6 +88,7 @@ export const SEQ_PARTICIPANT_RAW: ReadonlySet<string> = new Set([
 
 export const SEQ_MESSAGE_RAW: ReadonlySet<string> = new Set([
   "technology",
+  "description",
   "activate",
   "deactivate",
 ]);

@@ -298,6 +298,17 @@ function emitMessage(
     fallback.push(["technology", technology]);
   }
   lines.push(line);
+
+  /* The detail, on its own continuation line at pad + 2 — same shape and
+     same position as a participant's `desc`, so one indentation rule covers
+     both and the message line stays the short title it is drawn as. */
+  const description = message.description;
+  if (typeof description === "string") {
+    lines.push(`${pad}  desc ${JSON.stringify(description)}`);
+  } else if (description !== undefined) {
+    fallback.push(["description", description]);
+  }
+
   for (const [key, raw] of fallback) {
     lines.push(`${pad}  ${bangLine([key], null, raw)}`);
   }

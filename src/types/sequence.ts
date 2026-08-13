@@ -88,10 +88,27 @@ export interface SequenceMessage {
   to: string;
   kind: SequenceMessageKind;
   /** Required — an unlabelled arrow says nothing; may be `""` for imported
-   * documents whose source allowed it. */
+   * documents whose source allowed it. The arrow's TITLE: what the step does
+   * ("Call login API"), kept short because it is drawn on the wire and its
+   * width feeds column planning. */
   label: string;
   /** e.g. "HTTPS", "gRPC". */
   technology?: string;
+  /**
+   * The detail behind the title — endpoint, payload, failure modes — shown
+   * only when the message is FOCUSED, never drawn on the arrow. Same field
+   * and same <= 500 char budget as `SequenceParticipant.description`, for
+   * the same reason: a diagram that says everything on the wire is a wall of
+   * text, and a diagram that can say nothing more than the wire is a lie by
+   * omission. Absent means the label is the whole story.
+   *
+   * MAY CONTAIN NEWLINES, and viewers must honour them: the field usually
+   * holds request/response facts, which read as lines rather than as a
+   * sentence. Nothing special is needed to store them — the `.alab` `desc`
+   * line is a JSON string, so a `\n` escape is one line of canonical text
+   * either way (`scripts/sequence-check.mjs` pins that round trip).
+   */
+  description?: string;
   /**
    * Activation bars, kept as two booleans on the MESSAGE rather than as
    * standalone activate/deactivate items: in every renderer a bar starts

@@ -19,9 +19,10 @@
  * is what makes this drift-proof: whatever the stylesheet says today is what
  * the export gets, with no list of rules to maintain here.
  *
- * THREE THINGS ARE DROPPED, and each would be a defect in a still image:
+ * FOUR THINGS ARE DROPPED, and each would be a defect in a still image:
  *   - hit regions, which are invisible controls and mean nothing in a file;
  *   - the fold pill, which is an affordance for a reader who can click;
+ *   - the `desc` marker, which points at a detail only a click can reveal;
  *   - the idle comet bands, which are motion and nothing else. Frozen, they are
  *     three bright stripes across every message — the same reason reduced
  *     motion removes them rather than parking them.
@@ -68,8 +69,19 @@ const CARRIED = [
   "dominant-baseline",
 ] as const;
 
-/** Controls that mean nothing in a file, whatever the export is for. */
-const DROPPED_ALWAYS = [".af-seq-hit", ".af-seq-fold"].join(",");
+/**
+ * Controls that mean nothing in a file, whatever the export is for — and the
+ * "there is more" mark, for the same reason one step further: it is a
+ * footnote marker whose footnote is a click, and a still image has no click.
+ * Left in, it would promise a detail the file cannot show. (The detail
+ * itself does not travel; a `desc` lives in the .alab source, which is what
+ * to share when the detail is the point.)
+ */
+const DROPPED_ALWAYS = [
+  ".af-seq-hit",
+  ".af-seq-fold",
+  ".af-seq-label-more",
+].join(",");
 
 /**
  * The idle comet bands. Dropped from a STILL — frozen, they are three bright

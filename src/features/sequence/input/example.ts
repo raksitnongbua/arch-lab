@@ -3,7 +3,8 @@
  * playground's SEED_MODEL (`viewer/input/sync.ts`): an empty canvas teaches
  * nobody the format, so the seed is a realistic flow that demonstrates every
  * headline construct — both participant kinds, technologies, all three arrow
- * kinds, activation (`->+` / `..>-`), a self-message, notes in two
+ * kinds, activation (`->+` / `..>-`), a message `desc` (the short title on
+ * the wire, the endpoint behind it), a self-message, notes in two
  * placements (including an over-two-participants span), and `alt` / `par` /
  * `opt` fragments with a nested pair.
  *
@@ -14,6 +15,23 @@
  */
 
 import { parseSequenceText, serializeSequenceText } from "@/features/archtext";
+
+/**
+ * The charge call as a runnable request, interpolated into RAW below rather
+ * than typed out escaped — same reason as `SEQUENCE_CURL_EXAMPLE` in the
+ * syntax-docs snippets: hand-escaping curl's backslashes and a JSON body
+ * inside a template literal is four levels deep and wrong every time.
+ * `JSON.stringify` produces exactly what the `desc` line wants, and the
+ * readable lines stay the source of truth.
+ */
+const CHARGE_CURL = [
+  "curl https://api.payments.example/v1/charges \\",
+  "  --request POST \\",
+  "  --header 'Idempotency-Key: <order id>' \\",
+  '  --data \'{ "amount": 4250, "currency": "THB" }\'',
+  "",
+  "The idempotency key is the order id, so a retry cannot double-charge.",
+].join("\n");
 
 const RAW = `archlab 1.0 sequence
 title "Checkout — Place Order"
@@ -28,11 +46,13 @@ description "One order placed: card charged, order stored, receipt sent."
   db:participant "Orders DB" [PostgreSQL]
 
   cust -> web : "Clicks Place order"
-  web ->+ api : "POST /orders" [HTTPS]
+  web ->+ api : "Place the order" [HTTPS]
+    desc "POST /api/v1/orders\\nbody { cartId, addressId }\\n201 → { orderId }\\n409 → the cart moved on"
   api -> api : "Validates the cart"
   note right api : "Price and stock re-checked server-side"
   alt "card accepted"
     api ->+ pay : "Create charge" [REST]
+      desc ${JSON.stringify(CHARGE_CURL)}
     pay ..>- api : "charge.succeeded"
     api -> db : "INSERT order" [SQL]
     par "receipt"

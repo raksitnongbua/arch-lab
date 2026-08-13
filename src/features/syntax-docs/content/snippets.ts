@@ -212,16 +212,19 @@ title "Checkout"
 `,
 };
 
-/** Arrow kinds, a self-message, and notes. */
+/** Arrow kinds, a message `desc`, a self-message, and notes. */
 export const SEQUENCE_MESSAGE_EXAMPLE: DocSnippet = {
   id: "sequence-messages",
   code: `archlab 1.0 sequence
 title "Message kinds"
 
 @sequence
+  web "Storefront"
   api:participant "Order API"
   queue:participant "Events" [Kafka]
 
+  web -> api : "Call login API" [HTTPS]
+    desc "POST /api/v1/basic/verify\\nbody { email, password }\\n200 → { token } (15 min)\\n401 → bad credentials"
   api -> api : "Validates the cart"
   api ~> queue : "order.created" [Avro]
   queue ..> api : "ack"
@@ -255,9 +258,54 @@ title "Branching"
 `,
 };
 
+/**
+ * A `desc` holding a whole runnable request — the case the details dock's code
+ * block exists for, and the one that looks impossible in a line-structured
+ * format until you notice the `desc` value is a JSON string.
+ *
+ * BUILT BY `JSON.stringify` RATHER THAN TYPED OUT. Writing this escaped by
+ * hand means `\\\\n` for a newline, `\\\\\\\\` for curl's line-continuation
+ * backslash and `\\"` for every quote in the JSON body — four levels of
+ * escaping in a template literal, unreadable and wrong on the first attempt.
+ * Stringifying the real lines gives exactly the bytes the parser wants, and
+ * the source of truth stays the readable array below. `check:syntax-docs`
+ * pushes the result through `parseSequenceText`, so if the escaping were
+ * wrong the page could not ship.
+ */
+const CURL_DESC = [
+  "curl https://api.shopflow.dev/v1/orders \\",
+  "  --request POST \\",
+  "  --header 'Content-Type: application/json' \\",
+  "  --header 'Authorization: Bearer $SHOPFLOW_TOKEN' \\",
+  "  --data '{",
+  '    "cart_id": "cart_8f21c3",',
+  '    "address_id": 4102,',
+  '    "coupon": null',
+  "  }'",
+  "",
+  "201 → { order_id }   409 → the cart changed under us",
+].join("\n");
+
+/** A `desc` carrying a complete `curl` call, quotes and JSON body included. */
+export const SEQUENCE_CURL_EXAMPLE: DocSnippet = {
+  id: "sequence-curl-desc",
+  code: `archlab 1.0 sequence
+title "Order intake"
+
+@sequence
+  web "Storefront" [Next.js]
+  api:participant "Order API" [Go]
+
+  web ->+ api : "Place the order" [HTTPS]
+    desc ${JSON.stringify(CURL_DESC)}
+  api ..>- web : "201 Created"
+`,
+};
+
 export const SEQUENCE_SNIPPETS: readonly DocSnippet[] = [
   SEQUENCE_MINIMAL_EXAMPLE,
   SEQUENCE_MESSAGE_EXAMPLE,
+  SEQUENCE_CURL_EXAMPLE,
   SEQUENCE_FRAGMENT_EXAMPLE,
 ];
 
