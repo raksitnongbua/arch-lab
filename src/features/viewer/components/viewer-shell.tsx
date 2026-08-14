@@ -37,10 +37,23 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Expand, Maximize2, Minimize2, Shrink, Waves } from "lucide-react";
+import {
+  Download,
+  Expand,
+  HelpCircle,
+  Layers,
+  Map as MapIcon,
+  Maximize2,
+  Minimize2,
+  MousePointerClick,
+  Shrink,
+  Waves,
+  ZoomIn,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { Tour, useTour, type TourStep } from "@/components/ui/tour";
 import { EDITOR_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -89,12 +102,69 @@ function readFullscreenSupported(): boolean {
 
 const readFalse = (): boolean => false;
 
+/* ---- the tour --------------------------------------------------------------- */
+
+/**
+ * Versioned so a rewritten tour can re-show itself: bump `v1` and every
+ * browser that dismissed the old one sees the new one once.
+ */
+const C4_TOUR_KEY = "arch-lab:tour:c4:v1";
+
+/*
+ * The canvas's controls that its chrome does not explain, one step each.
+ * These strings are user-facing contracts: each names a control by what is
+ * actually rendered (the zoom chip, the readout menu, the Export control in
+ * this shell's strip), so a change to a control means rewording its step.
+ * The zoom presets stop at 200% because this canvas clamps at 250%
+ * (`lib/canvas-constants.ts`) and the menu drops what it cannot honour.
+ */
+const C4_TOUR_STEPS: readonly TourStep[] = [
+  {
+    title: "Select for details",
+    body:
+      "Click any element or connector to open its detail panel — the rest " +
+      "of the diagram dims around it. Escape deselects.",
+    icon: MousePointerClick,
+  },
+  {
+    title: "Drill into a level",
+    body:
+      "Double-click an element — or press its zoom chip — to open the view " +
+      "inside it. Escape, or the breadcrumb top-left, climbs back out.",
+    icon: Layers,
+  },
+  {
+    title: "Zoom the canvas",
+    body:
+      "In the bottom-left pill, − and + step the zoom and the readout opens " +
+      "presets (Fit, 50–200%). Pinch, or hold ⌘/Ctrl and scroll, zooms at " +
+      "the pointer; dragging empty canvas pans.",
+    icon: ZoomIn,
+  },
+  {
+    title: "The minimap",
+    body:
+      "Bottom-right, on screens wide enough to spare it: the whole diagram " +
+      "in thumbnail, with your viewport marked. Drag it to pan; scroll it " +
+      "to zoom.",
+    icon: MapIcon,
+  },
+  {
+    title: "Take it with you",
+    body:
+      "Export, in the strip under the diagram, saves this view — or every " +
+      "view at once — as SVG, PNG, or an animated GIF.",
+    icon: Download,
+  },
+];
+
 export function ViewerShell({
   model,
   initialDiagramId,
   share,
   onDiagramChange,
   defaultImmersive = false,
+  tour: tourEnabled = true,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -110,6 +180,16 @@ export function ViewerShell({
    * larger page: fixing it over the viewport would cover its own host.
    */
   defaultImmersive?: boolean;
+  /**
+   * Whether this shell offers the tour at all. On by default — a page that
+   * exists to show a model wants it.
+   *
+   * `false` is for a host that embeds the shell as EVIDENCE rather than as
+   * the destination — a preview beside something else. A card opening itself
+   * over a preview teaches the wrong page's controls, and spends the reader's
+   * one first visit somewhere it does not apply.
+   */
+  tour?: boolean;
 }): React.JSX.Element {
   // Structural read-only-ness: freeze once, before the canvas ever sees it.
   const frozenModel = useMemo(() => deepFreeze(model), [model]);
@@ -236,6 +316,11 @@ export function ViewerShell({
   const idleMotion = useIdleMotion();
   const idleState = idleMotionState(reducedMotion, idleMotion);
 
+  // The tour card only mounts once opened, so its Escape listener always
+  // registers AFTER this shell's rung-4 listener above — making "close the
+  // tour" the ladder's last rung, per the design in components/ui/tour.tsx.
+  const tour = useTour(C4_TOUR_KEY);
+
   return (
     <div
       ref={rootRef}
@@ -271,6 +356,19 @@ export function ViewerShell({
           initialDiagramId={initialDiagramId}
           onDiagramChange={handleDiagramChange}
         />
+        {/* First visit it opens itself (remembered per browser — see
+            components/ui/tour.tsx for the persistence verdicts); the strip's
+            Tour button replays it. Anchored above the canvas's bottom-left
+            zoom pill — the corner its first steps point at — and clear of
+            the top-right detail panel and bottom-right minimap. */}
+        {tourEnabled ? (
+          <Tour
+            steps={C4_TOUR_STEPS}
+            handle={tour}
+            label="C4 viewer tour"
+            className="absolute bottom-14 left-3 z-20"
+          />
+        ) : null}
       </div>
 
       <header className="border-t border-border/60 bg-background">
@@ -308,6 +406,25 @@ export function ViewerShell({
               allDiagrams={allDiagrams}
               tagColors={frozenModel.file.metadata.tagColors}
             />
+            {/* The tour's replay button. In this strip rather than on the
+                canvas: the canvas corners are all taken (breadcrumb, detail
+                panel, zoom pill, minimap), and the strip is already where
+                this view's mode-level controls live. Gone entirely when the
+                host opted out — a button that teaches this view's controls
+                has no business on a page that embeds the view as a preview of
+                something else. */}
+            {tourEnabled ? (
+              <button
+                type="button"
+                onClick={tour.start}
+                aria-label="Show the feature tour"
+                title="Tour the controls"
+                className={controlClasses}
+              >
+                <HelpCircle aria-hidden="true" />
+                <span className="hidden sm:inline">Tour</span>
+              </button>
+            ) : null}
             {/* Idle motion, matching the sequence viewer's control down to the
                 behaviour: a real button with aria-pressed, announced through
                 the shell's existing live region, persisted, and DISABLED under

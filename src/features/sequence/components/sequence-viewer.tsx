@@ -55,7 +55,17 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  EyeOff,
+  HelpCircle,
+  MousePointerClick,
+  Scan,
+  SquareMinus,
+  Waves,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 import type { SequenceLabFile } from "@/types";
 import {
@@ -65,6 +75,16 @@ import {
   writeIdleMotion,
 } from "@/lib/idle-motion";
 import { CopyButton } from "@/components/ui/copy-button";
+import { Tour, useTour, type TourStep } from "@/components/ui/tour";
+import { ZoomMenu } from "@/components/ui/zoom-menu";
+import {
+  ZOOM_BUTTON_CLASSES,
+  ZOOM_IN_TITLE,
+  ZOOM_OUT_TITLE,
+  ZOOM_PILL_CLASSES,
+  ZOOM_STEP,
+} from "@/components/ui/zoom-pill";
+import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
@@ -85,6 +105,8 @@ import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
 export function SequenceViewer({
   file,
   onAnnounce,
+  extraTourSteps,
+  tour: tourEnabled = true,
 }: {
   file: SequenceLabFile;
   /**
@@ -97,6 +119,25 @@ export function SequenceViewer({
    * immersive state.
    */
   onAnnounce: (message: string) => void;
+  /**
+   * Steps appended to the viewer's own tour. The viewer only teaches controls
+   * it renders (focus, fold, zoom); immersive mode and the source pane belong
+   * to the playground around it, so their steps arrive from there — the
+   * example view passes nothing and its tour honestly ends at zoom. One
+   * storage key covers every host: the tour is about the viewer, not a route.
+   */
+  extraTourSteps?: readonly TourStep[];
+  /**
+   * Whether this viewer offers the tour at all. On by default — every page
+   * that exists to SHOW a flow wants it.
+   *
+   * `false` is for a host that embeds the viewer as EVIDENCE rather than as
+   * the destination — a preview beside something else. A card that opened
+   * itself over a preview would teach the wrong page's controls, and would
+   * count as the reader's one first visit, spending the auto-show somewhere
+   * it does not apply.
+   */
+  tour?: boolean;
 }): React.JSX.Element {
   /**
    * COLLAPSED PARTICIPANTS — the ones whose private dependencies are folded
@@ -112,6 +153,13 @@ export function SequenceViewer({
   const hidden = useMemo(
     () => hiddenParticipants(file, collapsed),
     [file, collapsed],
+  );
+
+  /** The folded-away lifelines, named, for the restore bar. Document order,
+   * so the list reads left-to-right like the diagram did. */
+  const hiddenList = useMemo(
+    () => file.participants.filter((p) => hidden.has(p.id)).map((p) => p.name),
+    [file, hidden],
   );
 
   /**
@@ -138,6 +186,9 @@ export function SequenceViewer({
 
   const reduced = useReducedMotion();
   const idleMotion = useIdleMotion();
+  /* Named for the reader's own platform: the bar used to say "ctrl-scroll",
+     which on a Mac is the gesture that zooms the operating system. */
+  const mod = useModKey();
 
   /**
    * Focus and its nonce live in ONE state cell because they only ever change
@@ -208,6 +259,13 @@ export function SequenceViewer({
     [collapsed, file, nameById, onAnnounce],
   );
 
+  /** The one way back out of every fold at once. */
+  const handleShowAll = useCallback(() => {
+    setRawFocus(null);
+    setCollapsed(new Set());
+    onAnnounce("Every participant is showing again.");
+  }, [onAnnounce]);
+
   /**
    * Which participants are worth offering a control on, and how many each
    * would fold. Computed from the FULL file so the number on a collapsed card
@@ -221,6 +279,22 @@ export function SequenceViewer({
     }
     return counts;
   }, [file]);
+
+  /* ---- the tour ------------------------------------------------------------ */
+
+  const tour = useTour(SEQUENCE_TOUR_KEY);
+  // The fold step rides the same condition as the hint bar's fold clause: the
+  // `−` glyph only exists on cards with private dependencies, and a tour step
+  // naming a control that is not on screen sends the reader hunting.
+  const tourSteps = useMemo<readonly TourStep[]>(
+    () => [
+      FOCUS_TOUR_STEP,
+      ...(dependencyCount.size > 0 ? [FOLD_TOUR_STEP] : []),
+      ZOOM_TOUR_STEP,
+      ...(extraTourSteps ?? []),
+    ],
+    [dependencyCount, extraTourSteps],
+  );
 
   const handleFocusMessage = useCallback(
     (focusedStep: number) => {
@@ -552,7 +626,7 @@ export function SequenceViewer({
   const stepZoom = useCallback(
     (direction: 1 | -1) => {
       const current = zoom === "fit" ? measureFitScale() : zoom;
-      applyZoom(current * (direction === 1 ? 1.25 : 1 / 1.25));
+      applyZoom(current * (direction === 1 ? ZOOM_STEP : 1 / ZOOM_STEP));
     },
     [zoom, measureFitScale, applyZoom],
   );
@@ -904,6 +978,45 @@ export function SequenceViewer({
     >
       {/* No live region here — the hosting page owns the single polite
           region and focus announcements travel through `onAnnounce`. */}
+
+      {/* ---- the restore bar ----
+          Hiding a lifeline changes the diagram a LOT — columns vanish, rows
+          renumber, the drawing compacts — and the previous design left no
+          trace on screen that anything had been hidden at all. A reader who
+          folded something, scrolled, and came back had a smaller diagram and
+          no reason to believe it was still the whole story.
+
+          So: while anything is hidden the fact is stated, the hidden things
+          are NAMED (a count alone still leaves you guessing what you are
+          missing), and one control brings all of them back. It sits above the
+          diagram rather than floating over it because it is a statement about
+          the document, not a control on the canvas — and a bar that overlays
+          the drawing would hide part of what it is describing. */}
+      {hiddenList.length > 0 ? (
+        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs text-foreground">
+          <EyeOff
+            aria-hidden="true"
+            className="size-3.5 shrink-0 text-accent"
+          />
+          <span>
+            <span className="font-medium">
+              {hiddenList.length === 1
+                ? "1 participant folded away"
+                : `${hiddenList.length} participants folded away`}
+            </span>{" "}
+            <span className="text-muted-foreground">
+              — {hiddenList.join(", ")}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={handleShowAll}
+            className="ml-auto rounded-md border border-border bg-card px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            Show all
+          </button>
+        </div>
+      ) : null}
       {/* Relative wrapper: the details dock ANCHORS here so it can overlay
           the diagram pane instead of resizing it — see the aside below. */}
       <div className="relative min-h-0 flex-1">
@@ -932,7 +1045,11 @@ export function SequenceViewer({
           onPointerCancel={handlePointerUp}
           tabIndex={0}
           role="application"
-          aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Pinch or hold Control and scroll to zoom between 10 and 400 percent. Messages, participants and fragment chips are buttons — Tab reaches them."
+          /* Spelled out rather than symbolic: a screen reader announces "⌘"
+             as "command" or as nothing at all depending on the voice, and a
+             name that sometimes vanishes is worse than one that is slightly
+             long. `mod` is still the reader's own key. */
+          aria-label={`Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Pinch or hold ${mod === "⌘" ? "Command" : "Control"} and scroll to zoom between 10 and 400 percent. Messages, participants and fragment chips are buttons — Tab reaches them.`}
         >
           {/* Sized to the pane in fit mode, hugging the SVG when zoomed.
               Nothing is reserved for the dock, and that is the fix for a
@@ -999,34 +1116,32 @@ export function SequenceViewer({
             are state, not motion (the SVG re-renders at the new size), so
             reduced motion needs no branch here; announcements go through
             the page's one live region. */}
-        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-lg border border-border/70 bg-card/80 p-1 shadow-sm backdrop-blur">
+        <div className={cn("absolute bottom-3 left-3 z-10", ZOOM_PILL_CLASSES)}>
           <button
             type="button"
             onClick={() => stepZoom(-1)}
             aria-label="Zoom out"
-            title="Zoom out"
+            title={ZOOM_OUT_TITLE}
             className={ZOOM_BUTTON_CLASSES}
           >
             <ZoomOut aria-hidden="true" className="size-4" />
           </button>
-          <button
-            type="button"
-            onClick={() => applyZoom(1)}
-            aria-label={
-              zoom === "fit"
-                ? "Fitted to view — set zoom to 100 percent"
-                : `Zoom ${Math.round(zoom * 100)} percent — reset to 100 percent`
-            }
-            title="Actual size (100%)"
-            className="min-w-11 rounded-md px-1.5 py-1 text-center text-xs font-medium text-muted-foreground tabular-nums transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            {zoom === "fit" ? "Fit" : `${Math.round(zoom * 100)}%`}
-          </button>
+          {/* The only canvas of the three with a REAL fitted state — the two
+              C4 canvases fit by moving a viewport, so their readout is always
+              a number, while "Fit" here is a mode the SVG is sized in. */}
+          <ZoomMenu
+            percent={zoom === "fit" ? 100 : Math.round(zoom * 100)}
+            isFit={zoom === "fit"}
+            maxZoom={ZOOM_MAX}
+            onFit={applyFit}
+            onZoomTo={(scale) => applyZoom(scale)}
+            title="Choose a zoom level"
+          />
           <button
             type="button"
             onClick={() => stepZoom(1)}
             aria-label="Zoom in"
-            title="Zoom in"
+            title={ZOOM_IN_TITLE}
             className={ZOOM_BUTTON_CLASSES}
           >
             <ZoomIn aria-hidden="true" className="size-4" />
@@ -1070,7 +1185,39 @@ export function SequenceViewer({
           >
             <Waves aria-hidden="true" className="size-4" />
           </button>
+          {/* The tour's replay button lives in this pill for the same reason
+              the idle-motion toggle does: the strip is where view-level
+              controls already are, and the card it opens is anchored just
+              above it, so the control and its effect share a corner. Gone
+              entirely when the host opted out — a button that teaches this
+              view's controls has no business on a page that embeds the view
+              as a preview of something else. */}
+          {tourEnabled ? (
+            <button
+              type="button"
+              onClick={tour.start}
+              aria-label="Show the feature tour"
+              title="Tour the controls"
+              className={ZOOM_BUTTON_CLASSES}
+            >
+              <HelpCircle aria-hidden="true" className="size-4" />
+            </button>
+          ) : null}
         </div>
+
+        {/* First visit it opens itself (remembered per browser — see
+            components/ui/tour.tsx for the persistence verdicts); the pill
+            button replays it. Anchored above the pill, z-20 so it clears the
+            pill and the dock (both z-10); the dock sits on the RIGHT edge, so
+            the two never cover each other. */}
+        {tourEnabled ? (
+          <Tour
+            steps={tourSteps}
+            handle={tour}
+            label="Sequence viewer tour"
+            className="absolute bottom-14 left-3 z-20"
+          />
+        ) : null}
 
         {/* ---- the details dock ----
             A docked, NON-BLOCKING side panel — deliberately not a modal
@@ -1257,12 +1404,28 @@ export function SequenceViewer({
       </div>
 
       {/* The keyboard hint that used to live in the control strip — the
-          controls are gone, the affordances are not. */}
+          controls are gone, the affordances are not.
+
+          The FOLD clause is conditional, and that is the point: the `−` glyph
+          only exists on cards with private dependencies (lib/collapse.ts), so
+          on a flow where nothing folds, naming the control would send a reader
+          hunting for a glyph that is not on screen. Where it does exist it was
+          the least discoverable thing in the viewer — a 10px minus in a card
+          corner, explained only by the accessible name of a control a mouse
+          user never hears. */}
       <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
         Click a message, participant, or fragment chip to focus it · a{" "}
         <span aria-hidden="true">•</span> after a label means that message
-        carries details · ← → move between messages · pinch or ctrl-scroll to
-        zoom · Esc clears focus
+        carries details · ← → move between messages ·{" "}
+        <span className="font-medium text-foreground">{mod} + scroll</span> or
+        pinch to zoom · Esc clears focus
+        {dependencyCount.size > 0 ? (
+          <>
+            {" · "}
+            <span aria-hidden="true">−</span> on a card folds away the services
+            only it uses
+          </>
+        ) : null}
       </p>
 
       {/* Text alternative: the whole story as an ordered list, for readers
@@ -1296,9 +1459,49 @@ export function SequenceViewer({
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
 
-/** Shared icon-button styling for the zoom pill (the C4 controls' look). */
-const ZOOM_BUTTON_CLASSES =
-  "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+/* -------------------------------------------------------------------------- */
+/* The tour                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Versioned so a rewritten tour can re-show itself: bump `v1` and every
+ * browser that dismissed the old one sees the new one once.
+ */
+const SEQUENCE_TOUR_KEY = "arch-lab:tour:sequence:v1";
+
+/*
+ * The controls readers were not finding, one step each. These strings are
+ * user-facing contracts: each names a control by the label or glyph actually
+ * rendered (the `−`/`+n` fold control, the pill's readout menu), so a change
+ * to a control means rewording its step, not just its aria-label. The fold
+ * step is separate from the focus step deliberately — it is the single
+ * most-missed control in the viewer, and burying it in a list is how it got
+ * missed on the canvas.
+ */
+const FOCUS_TOUR_STEP: TourStep = {
+  title: "Focus anything",
+  body:
+    "Click any message, participant, or fragment chip to spotlight it — " +
+    "its details open beside the diagram, and ← → walk the messages in " +
+    "order. Escape, or a click on empty canvas, clears the focus.",
+  icon: MousePointerClick,
+};
+const FOLD_TOUR_STEP: TourStep = {
+  title: "Fold a card's helpers",
+  body:
+    "The − in a participant card's corner folds away the services only " +
+    "that card uses. The card then reads +n — press it, or the bar above " +
+    "the diagram, to bring them back.",
+  icon: SquareMinus,
+};
+const ZOOM_TOUR_STEP: TourStep = {
+  title: "Zoom the flow",
+  body:
+    "In the bottom-left pill, − and + step the zoom, the readout opens " +
+    "presets (Fit, 50–400%), and the frame icon refits the whole flow. " +
+    "Pinch, or hold ⌘/Ctrl and scroll, zooms at the pointer.",
+  icon: ZoomIn,
+};
 
 /* -------------------------------------------------------------------------- */
 /* Dock building blocks                                                         */

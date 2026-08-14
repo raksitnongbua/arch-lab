@@ -208,6 +208,16 @@ export function ViewChooser(): React.JSX.Element {
         </Link>
         .
       </p>
+      {/* Both cards say they accept Mermaid, which answers "where do I paste
+          it" and not "what does it become". The second question is answered
+          in the playgrounds themselves now — each pane has a format toggle
+          that rewrites the text — which is why the separate convert page this
+          paragraph used to point at is gone. */}
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        Arriving with Mermaid? Paste it into either playground: it is detected,
+        drawn, and one toggle away from the{" "}
+        <span className="font-mono">.alab</span> you can commit.
+      </p>
     </div>
   );
 }

@@ -100,6 +100,8 @@ import { ConnectionLine } from "./edges/connection-line";
 import { FrameLayer } from "./frame-layer";
 import { CreateNodeDialog } from "./overlays/create-node-dialog";
 import { QuickAddMenu } from "./overlays/quick-add-menu";
+import { CanvasMinimap } from "@/components/ui/canvas-minimap";
+
 import { ZoomIndicator } from "./zoom-indicator";
 
 /* -------------------------------------------------------------------------- */
@@ -1056,6 +1058,8 @@ function CanvasInner(): React.JSX.Element {
         <Panel position="bottom-left">
           <ZoomIndicator />
         </Panel>
+        {/* Not in a Panel: React Flow's MiniMap owns its own corner offsets. */}
+        <CanvasMinimap />
       </ReactFlow>
     </div>
   );

@@ -30,19 +30,25 @@
 import { isMultiBranch } from "@/types";
 import type { SequenceLabFile } from "@/types";
 
+import { isNormalizedTint } from "@/lib/tint";
+
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { META_KEYS, splitUnknowns } from "../schema";
 import { bangLine, isRecord, tagsLine, techBody } from "../serialize";
 import { BARE_ID_RE, valueToken } from "../text";
 import {
   ARROW_BY_MESSAGE_KIND,
+  BOX_KEYWORD,
+  BRANCH_KEYWORD_BY_KIND,
   FRAGMENT_KIND_BY_KEYWORD,
   PARTICIPANT_KIND_BY_KEYWORD,
   RESERVED_BODY_WORDS,
   SEQUENCE_BLOCK,
   SEQUENCE_HEADER_WORD,
+  TINT_ATTRIBUTE,
 } from "./keywords";
 import {
+  BOX_KEYS,
   BRANCH_KEYS,
   FRAGMENT_KEYS,
   MESSAGE_KEYS,
@@ -172,9 +178,7 @@ export function serializeSequenceText(file: SequenceLabFile): string {
 
   const participants = file.participants;
   if (!Array.isArray(participants)) invalid("participants", participants);
-  for (const value of participants) {
-    emitParticipant(lines, value);
-  }
+  emitParticipants(lines, participants, file.boxes);
 
   const items = file.items;
   if (!Array.isArray(items)) invalid("items", items);
@@ -188,7 +192,104 @@ export function serializeSequenceText(file: SequenceLabFile): string {
 /* Participants                                                               */
 /* -------------------------------------------------------------------------- */
 
-function emitParticipant(lines: string[], value: unknown): void {
+/**
+ * The participant block, with `box` brackets restored around their members.
+ *
+ * Driven by walking `participants` IN ORDER and opening a box when its first
+ * member is reached — not by emitting the boxes and then the leftovers. The
+ * array is the lifeline order and the text has to reproduce it exactly, so
+ * the order the members appear in a box's own `participants` list is never
+ * consulted; a box is only ever a bracket around a run of the real order.
+ *
+ * A box whose members are NOT such a run is unrepresentable in this text, so
+ * it is refused here rather than written as something the parser would read
+ * back differently. That is the same contract every other `invalid` call in
+ * this file has: a model this serializer cannot spell is a model no reader
+ * should have produced.
+ */
+function emitParticipants(
+  lines: string[],
+  participants: unknown[],
+  boxesValue: unknown,
+): void {
+  if (boxesValue === undefined) {
+    for (const value of participants) emitParticipant(lines, value, "  ");
+    return;
+  }
+  if (!Array.isArray(boxesValue) || boxesValue.length === 0) {
+    invalid("boxes", boxesValue);
+  }
+
+  /** participant id → the box that claims it, and which claimed it first. */
+  const boxByMember = new Map<string, { box: Record<string, unknown> }>();
+  for (const boxValue of boxesValue) {
+    if (!isRecord(boxValue)) invalid("a box", boxValue);
+    const members = boxValue.participants;
+    if (
+      !Array.isArray(members) ||
+      members.length === 0 ||
+      !members.every((id) => typeof id === "string" && id !== "")
+    ) {
+      invalid("a box participants list", members);
+    }
+    for (const id of members as string[]) {
+      if (boxByMember.has(id)) {
+        invalid(`participant "${id}" claimed by two boxes`, boxesValue);
+      }
+      boxByMember.set(id, { box: boxValue });
+    }
+  }
+
+  const emitted = new Set<Record<string, unknown>>();
+  let open: Record<string, unknown> | null = null;
+  for (const value of participants) {
+    if (!isRecord(value)) invalid("a participant", value);
+    const id = value.id;
+    if (typeof id !== "string") invalid("a participant id", id);
+    const claim = boxByMember.get(id);
+    const box = claim?.box ?? null;
+
+    if (box !== open) {
+      open = box;
+      if (box !== null) {
+        if (emitted.has(box)) {
+          invalid(
+            `a box whose members are not neighbours in participants ("${id}" is outside its run)`,
+            box,
+          );
+        }
+        emitted.add(box);
+        emitBoxOpener(lines, box);
+      }
+    }
+    emitParticipant(lines, value, box === null ? "  " : "    ");
+  }
+
+  for (const boxValue of boxesValue) {
+    if (isRecord(boxValue) && !emitted.has(boxValue)) {
+      invalid("a box whose participants are not in the document", boxValue);
+    }
+  }
+}
+
+function emitBoxOpener(lines: string[], box: Record<string, unknown>): void {
+  const label = box.label;
+  if (typeof label !== "string" || label === "") invalid("a box label", label);
+  const fallback: [string, unknown][] = [];
+  let line = `  ${BOX_KEYWORD} ${JSON.stringify(label)}`;
+  const tint = box.tint;
+  if (isNormalizedTint(tint)) line += ` ${TINT_ATTRIBUTE}=${tint}`;
+  else if (tint !== undefined) fallback.push(["tint", tint]);
+  lines.push(line);
+  for (const [key, raw] of fallback) {
+    lines.push(`    ${bangLine([key], null, raw)}`);
+  }
+  for (const u of splitUnknowns(box, BOX_KEYS)) {
+    lines.push(`    ${bangLine([u.key], u.after, u.value)}`);
+  }
+}
+
+function emitParticipant(lines: string[], value: unknown, pad: string): void {
   if (!isRecord(value)) invalid("a participant", value);
   const id = value.id;
   if (typeof id !== "string" || id === "") invalid("a participant id", id);
@@ -198,7 +299,7 @@ function emitParticipant(lines: string[], value: unknown): void {
   }
 
   const fallback: [string, unknown][] = [];
-  let line = `  ${seqIdToken(id)}`;
+  let line = `${pad}${seqIdToken(id)}`;
 
   const kind = value.kind;
   if (typeof kind === "string" && PARTICIPANT_KIND_BY_KEYWORD[kind] === kind) {
@@ -218,16 +319,16 @@ function emitParticipant(lines: string[], value: unknown): void {
 
   const description = value.description;
   if (typeof description === "string") {
-    lines.push(`    desc ${JSON.stringify(description)}`);
+    lines.push(`${pad}  desc ${JSON.stringify(description)}`);
   } else if (description !== undefined) {
     fallback.push(["description", description]);
   }
 
   for (const [key, raw] of fallback) {
-    lines.push(`    ${bangLine([key], null, raw)}`);
+    lines.push(`${pad}  ${bangLine([key], null, raw)}`);
   }
   for (const u of splitUnknowns(value, PARTICIPANT_KEYS)) {
-    lines.push(`    ${bangLine([u.key], u.after, u.value)}`);
+    lines.push(`${pad}  ${bangLine([u.key], u.after, u.value)}`);
   }
 }
 
@@ -369,15 +470,31 @@ function emitFragment(
     invalid(`a "${kind}" fragment with ${branches.length} branches`, branches);
   }
 
+  /* Only `rect` spells a tint; on any other kind a present one would be a
+     field the parser cannot read back, so it rides the `!` escape instead. */
+  const tint = fragment.tint;
+  const tintAttribute =
+    kind === "rect" && isNormalizedTint(tint)
+      ? ` ${TINT_ATTRIBUTE}=${tint}`
+      : "";
+  const tintFallback = tint !== undefined && tintAttribute === "";
+
   branches.forEach((branchValue, index) => {
     if (!isRecord(branchValue)) invalid(`a "${kind}" branch`, branchValue);
-    const keyword = index === 0 ? kind : kind === "alt" ? "else" : "and";
+    const keyword =
+      index === 0
+        ? kind
+        : (BRANCH_KEYWORD_BY_KIND[FRAGMENT_KIND_BY_KEYWORD[kind]] ?? kind);
     const fallback: [string, unknown][] = [];
     let line = `${pad}${keyword}`;
     const label = branchValue.label;
     if (typeof label === "string") line += ` ${JSON.stringify(label)}`;
     else if (label !== undefined) fallback.push(["label", label]);
+    if (index === 0) line += tintAttribute;
     lines.push(line);
+    if (index === 0 && tintFallback) {
+      lines.push(`${pad}  ${bangLine(["frag", "tint"], null, tint)}`);
+    }
 
     /* Fragment-scope unknowns ride the FIRST branch's block, right after
        the opener, spelled `! frag.<key>` so the parser can tell them from

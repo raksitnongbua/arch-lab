@@ -70,6 +70,45 @@ description "A reset that survives a lost inbox: the link is single-use and the 
       web -> user : "Asks for a fresh reset"
 `;
 
+/**
+ * The grouping example. It exists because `box`, `rect`, `critical` and
+ * `break` are the four constructs a reader is most likely to arrive holding
+ * (they are ordinary Mermaid) and least likely to discover from the other two
+ * examples, which predate them. A construct nobody can see an example of is,
+ * for practical purposes, undocumented.
+ */
+const PAYMENT_CAPTURE = `archlab 1.0 sequence
+title "Payment capture — the money leg"
+description "Where an order stops being a promise: authorise, capture, and the two ways it does not finish."
+
+@sequence
+  autonumber
+  box "Our services" tint=#bfdfff
+    api:participant "Order API" [Go]
+    ledger:participant "Ledger" [PostgreSQL]
+  box "Third party" tint=#ffe4e1
+    psp:participant "Card Processor" [Stripe]
+    risk:participant "Fraud Scoring"
+
+  rect tint=#bfdfff
+    api ->+ psp : "Authorise the card" [REST]
+      desc "POST /v1/payment_intents\\nbody { amount, currency, card_token }\\n201 → { intent_id, status: requires_capture }"
+    psp ~> risk : "Score the attempt"
+    psp ..>- api : "requires_capture"
+  critical "Capture within 7 days"
+    api ->+ psp : "Capture the intent" [REST]
+    psp ..>- api : "succeeded"
+    api -> ledger : "Post the entry" [SQL]
+  option "processor unreachable"
+    api -> api : "Schedules a retry with backoff"
+    note right api : "The authorisation holds; only the capture is late"
+  option "already captured"
+    api -> ledger : "Reconciles against the existing entry" [SQL]
+  break "card declined"
+    api ..> psp : "Void the authorisation" [REST]
+    api -> ledger : "Posts nothing — there is no money to record" [SQL]
+`;
+
 const SOURCES: readonly SequenceExampleSource[] = [
   {
     id: "checkout",
@@ -87,6 +126,12 @@ const SOURCES: readonly SequenceExampleSource[] = [
     blurb:
       "A single-use reset link, with a loop around the wait and an alt for the expired-token path — the constructs a real retry story needs.",
     text: PASSWORD_RESET,
+  },
+  {
+    id: "payment-capture",
+    blurb:
+      "Lifelines bracketed into ours and theirs, the authorisation leg highlighted, and the two ways a capture ends — the box, rect, critical and break constructs on one flow.",
+    text: PAYMENT_CAPTURE,
   },
 ];
 

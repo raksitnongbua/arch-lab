@@ -20,6 +20,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { Panel } from "@xyflow/react";
 
+import { useModKey } from "@/lib/mod-key";
+
 import {
   useShortcuts,
   type ShortcutBinding,
@@ -47,11 +49,7 @@ export function ShortcutHint(): React.JSX.Element {
   );
   useShortcuts(bindings);
 
-  const mod =
-    typeof navigator !== "undefined" &&
-    /mac|iphone|ipad|ipod/i.test(navigator.platform)
-      ? "⌘"
-      : "Ctrl";
+  const mod = useModKey();
 
   return (
     <>

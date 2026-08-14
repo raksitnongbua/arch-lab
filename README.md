@@ -16,7 +16,7 @@ Be precise about what this repo is right now:
 | Area                                  | State                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Read-only C4 viewer**               | Works today. Bundled example models (`shopflow`, `order-shop`) render with drill-down: click a node to zoom from Context down to Code, Escape to step back out. Connectors carry a marching dash so flow direction reads without hunting for the arrowhead. Export as SVG or PNG (rasterised at 2×), either the view you are on or [every diagram as one `.zip`](#exporting-images). |
-| **View-mode playground** (`/view`)    | Works today. A two-pane live editor for the two text formats — `.alab` on one side, `.archlab.json` on the other; editing either regenerates the other and re-renders the diagram. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                                                                                                      |
+| **View-mode playground** (`/view`)    | Works today. Source rail on the left, canvas on the right — `.alab` with `.archlab.json` beside it on request, editing either regenerates the other and re-renders the diagram live. Mermaid C4 imports one-way. Copy or download either format. Everything stays in the browser.                                                                                                    |
 | **`.alab` ⇄ JSON conversion**         | Works today, lossless in both directions — see [Model formats](#the-two-model-formats).                                                                                                                                                                                                                                                                                              |
 | **Mermaid C4 import**                 | Works today, one-way and lossy — see [Mermaid C4 import](#mermaid-c4-import).                                                                                                                                                                                                                                                                                                        |
 | **C4 editor**                         | Works today (`EDITOR_ENABLED` in [`src/lib/constants.ts`](src/lib/constants.ts) is `true`; two edits gate it back off — see [Enabling the editor](#enabling-the-editor)). Nodes, relationships, drill-down, and [grouping boundaries](#grouping-boundaries).                                                                                                                         |
@@ -133,6 +133,133 @@ In `.alab` they are one line each, with membership on the element:
   frame f-private "Private subnet" in=f-aws
   api:container "Order API" [Go 1.22] in=f-private
 ```
+
+## Zooming
+
+All three canvases — the C4 viewer, the C4 editor and the sequence viewer —
+wear the **same bottom-left pill**: zoom out, the live percentage (click it for
+100%), zoom in, fit to view. The chrome and the step (×1.25 a press) have one
+definition in [`components/ui/zoom-pill.tsx`](src/components/ui/zoom-pill.tsx);
+the BEHAVIOUR deliberately does not, because the two C4 canvases zoom React
+Flow's viewport while the sequence viewer scales its own SVG, and the clamps
+differ on purpose (the editor reaches 400%, the viewer 250%, each argued in its
+`canvas-constants.ts`).
+
+The `+`/`−` buttons are new to the two C4 canvases. Before them, magnifying a
+diagram meant ⌘/ctrl + scroll or a trackpad pinch — a gesture nothing on screen
+mentioned, unavailable on a plain mouse wheel, and reachable from the keyboard
+only through the editor's shortcut sheet (`?`), which the viewer does not have.
+The buttons now carry the gesture in their tooltip, so the control teaches the
+shortcut rather than replacing it: `shift+1` fits and `shift+0` resets to 100%
+in the editor, exactly as before.
+
+**The readout is a menu**, not a reset button. It used to do exactly one thing
+— jump to 100% — which is the least useful thing a percentage can offer; now it
+opens `Fit / 50 / 100 / 200 / 400%`, filtered by the canvas's own clamp so it
+never offers a level that canvas cannot reach. "Show me this at 200%" is a
+destination, not four `+` presses.
+
+**The gesture is written down**, in three places, because a plain wheel PANS
+these canvases: a reader who tries it concludes the wheel does not zoom and
+never reaches for the modifier — the failure looks like an answer, which is
+the one case worth saying more than once. So the preset menu carries a footer
+line (`⌘ + scroll or pinch to zoom at the pointer`, plus the editor's
+`shift+1` / `shift+0`), the C4 canvas hint pill and the sequence viewer's hint
+bar name it inline, and the editor's canvas strip lists it beside the other
+gestures you cannot guess. The modifier is spelled for the READER's platform
+([`lib/mod-key.ts`](src/lib/mod-key.ts)) — "Ctrl + scroll" on a Mac names the
+gesture that zooms the operating system, not the diagram. That helper also
+replaced two copies of the same platform sniff, which had been free to
+disagree between the canvas hint and the shortcut sheet.
+
+**A minimap** sits bottom-right on both C4 canvases. Zoomed past fit, a diagram
+loses the thing a diagram is for: you can read a container but no longer see
+what it sits inside, and the only way back was Fit — throwing the zoom away to
+answer "where am I?". The map answers it without moving the camera, and it is
+`pannable`/`zoomable`, so it is also a way to travel. Nodes are drawn in one
+token colour rather than per-type hues: at 160px a node is four pixels wide, so
+hue is noise and only the shape of the graph reads. Hidden below `sm`, where it
+would cover a meaningful share of the canvas it describes.
+
+## The workbench layout
+
+Both playgrounds are one screen: **source on the left, canvas on the right**,
+a viewport tall, with a draggable divider (30/70 by default), a collapsible
+rail, and immersive mode on the canvas.
+
+They used to stack — diagram first, text below the fold — and the sequence
+page argued for it in writing: a sequence diagram's participants spread
+horizontally, so width is the axis the drawing consumes, and halving it forces
+either a shrunken diagram or sideways scrolling. That is still true, and it
+lost anyway, because stacking means **editing and seeing are never on screen
+together**: you type, scroll up, scroll back down, twice per edit. The C4 page
+had a _Scroll for the .alab source_ button, which was the tell — a control
+whose only job is to move you between two halves of one task means the layout
+split the task.
+
+**The split is yours, three ways**, and each does what it is good at:
+
+- **Drag the divider** for the width you actually want. It is remembered
+  across page loads and across both playgrounds — "my editor is this wide" is
+  a statement about the workbench, not about a route — and clamped to 18–60%,
+  where the floor is the point a monospace line starts wrapping every few
+  words and the ceiling is the point the canvas stops being what the page is
+  for.
+- **Collapse** for the extreme: one click, no aim, and the canvas is
+  everything. This was once argued to be the ONLY control, on the grounds that
+  a drag handle makes "give the diagram everything" a gesture you have to aim.
+  The premise holds and the conclusion did not: aiming is a bad way to reach
+  the extreme and a fine way to reach the middle.
+- **Double-click the divider** to return to 30%, so experimenting with the
+  drag costs nothing.
+
+The divider is a real `separator` widget — arrow keys nudge it, Home and End
+take it to the clamps — because a drag-only control is one a keyboard cannot
+reach, and this one changes how the whole page reads. The source pane is
+hidden, never unmounted, so collapsing to read a wide diagram never costs the
+edit you were in the middle of, and `hidden` takes it out of the tab order,
+which is what makes the collapsed state real for a keyboard. Below `lg` the
+panes stack, source first, and the divider is not rendered at all: 30% of a
+phone is not a text editor, and a resizer for a layout that is not side by
+side is a control that appears inert.
+
+The height budget lives on each PAGE, not in the layout
+([`split-workbench.tsx`](src/components/ui/split-workbench.tsx)) — each page
+knows what chrome it puts above itself, and a height guessed in the shared
+component goes stale the first time a heading wraps.
+
+There is no separate convert page. It existed briefly, and folding its idea
+back into the playgrounds is what this layout is: the thing it did — paste
+Mermaid, see it drawn, take the `.alab` — is what a playground does, and doing
+it on its own route meant choosing a page before you could start.
+
+## Learning the controls
+
+Both diagram views carry a **tour**: a compact card, one step per control,
+that opens itself on a first visit and can be replayed any time from a button
+(the `?` in the sequence viewer's zoom pill, _Tour_ in the C4 shell's control
+strip). It exists because the alternative kept failing — the controls people
+were not finding are exactly the quiet ones (a 10px `−` in a card corner, a
+percentage that is secretly a menu), and every attempt to fix that by adding a
+second, louder control made the card busier without making the first control
+clearer.
+
+It is **not a modal**: the card teaches controls that live on the canvas
+underneath it, so a focus trap would forbid trying each one while reading
+about it. It never steals focus on open, its Escape is the LAST rung of each
+page's Escape ladder (so a press clears a diagram focus, then leaves immersive
+mode, and only then closes the tour), and the three ways out mean different
+things — _Done_ and _Don't show again_ are remembered in `localStorage` under a
+versioned key, while the close button and Escape close for the session only,
+because abandoning a tour mid-read is not a verdict on it.
+
+Steps are declared where the control lives: the sequence viewer teaches focus,
+the dependency fold and zoom, and its fold step is only injected when the
+document actually has a `−` to point at; the playground appends immersive mode
+and the source rail, which are its own controls. A host that embeds a viewer as
+EVIDENCE rather than as the destination — a preview beside something else —
+passes `tour={false}`, so it neither opens a card over the preview nor spends
+the reader's one first visit on the wrong page.
 
 ## Exporting images
 
@@ -252,9 +379,41 @@ title "Checkout — Place Order"
 types distinguishable from the first meaningful line, which is what
 auto-detection depends on. Arrows are `->` synchronous, `~>` asynchronous,
 `..>` reply; `+`/`-` suffixes open and close an activation bar; `loop`, `opt`,
-`alt`/`else` and `par`/`and` nest by indentation with no `end` keyword, because
-a dedent already says where a fragment stops. Conversion is lossless in both
-directions, proven by `pnpm check:sequence`.
+`alt`/`else`, `par`/`and`, `critical`/`option` and `break` nest by indentation
+with no `end` keyword, because a dedent already says where a fragment stops.
+Conversion is lossless in both directions, proven by `pnpm check:sequence`.
+
+**Grouping, and highlighting.** Two constructs say _these belong together_
+without saying anything about control flow:
+
+```
+@sequence
+  box "Our services" tint=#bfdfff
+    api:participant "Order API" [Go]
+    ledger:participant "Ledger" [PostgreSQL]
+  psp:participant "Card Processor" [Stripe]
+
+  rect tint=#bfdfff
+    api -> psp : "Authorise the card" [REST]
+    psp ..> api : "requires_capture"
+```
+
+`box` brackets a run of **lifelines** and takes its members as the participant
+lines nested inside it. The nesting is the point, not sugar: a bracket is drawn
+as one span from its leftmost member to its rightmost, so a box whose members
+are not neighbours has no honest drawing — and nesting makes that state
+unspellable rather than merely discouraged. `rect` highlights a run of
+**steps** instead, and takes a colour where every other fragment takes a guard.
+
+Both accept `tint=`, in `#rrggbb`, `rgb(…)` or a common colour name. Whichever
+you write is normalised to one canonical spelling on the way in
+([`lib/tint.ts`](src/lib/tint.ts)) — two documents that mean the same shade are
+the same bytes, which is what keeps the round trip byte-identical. A colour the
+format does not store is a located error in `.alab` (you typed it; you deserve
+to be told) and a silent drop on Mermaid import (it is someone else's document,
+and the caveat already covers colour). The colour is painted as a **wash**, not
+a fill: it was chosen against Mermaid's light canvas, and an opaque one would
+make a dark-theme diagram unreadable.
 
 **The label is a title, not the whole truth.** A message takes a `desc "…"`
 continuation — two spaces under it, the same continuation a participant takes —
@@ -330,9 +489,22 @@ Under `prefers-reduced-motion` nothing draws — focus dims and the details
 dock appears instantly, which is the same information without the motion.
 
 **Collapse a participant's dependencies.** A card whose downstream services
-exist only to serve it carries a `−2` pill; click it and those columns fold
-away, taking their messages with them, and the diagram compacts. Click the `+2`
-to bring them back. In the bundled Checkout flow, folding Order API hides
+exist only to serve it carries a `−`; click it and those columns fold away,
+taking their messages with them, and the diagram compacts. Click the `+2` that
+replaces it to bring them back.
+
+A `×` that hid ANY lifeline was tried and removed. It sat on the opposite
+corner of the same small card and read as a second, competing version of the
+`−` next to it — two controls that both make columns disappear, differing in a
+way you had to already know. The dependency fold is the one with a rule behind
+it, so it is the one that stayed; discoverability is now the tour's job, not a
+second button's.
+
+What did stay is **the way back**: while anything is folded, a bar above the
+diagram says how many and NAMES them, with one _Show all_. A count alone still
+leaves you guessing what you are missing, and before it there was no trace on
+screen at all — fold something, scroll away, come back, and you had a smaller
+diagram with no reason to doubt it. In the bundled Checkout flow, folding Order API hides
 Payments and Orders DB — and deliberately not the Customer, even though Order
 API emails one, because the Customer also clicks in Storefront and a participant
 the flow arrives through is never a dependency. The rule and that exact outcome
@@ -347,10 +519,41 @@ of a long flow you can tell which column is which without scrolling back up.
 The footer card is a visual repeat only — it is not a second control and not a
 second thing a screen reader announces.
 
-**Mermaid import is lossy, and says so.** Eight arrowheads collapse onto three
-kinds, `autonumber` arguments are dropped, and an `activate`/`deactivate` that
-does not bracket its adjacent message is dropped. `critical`, `break`, `rect`,
-`box`, `create` and `destroy` are refused by name rather than silently ignored.
+**The format toggle.** The source pane under the diagram has always accepted
+either format — it auto-detects on every keystroke — so a `.alab` ⇄ Mermaid
+toggle can honestly mean _rewrite what is in the box_, and that is what it
+does. Write in `.alab`, flip to Mermaid, paste it into a README; paste someone
+else's Mermaid, flip to `.alab`, commit it.
+
+That needed a **Mermaid emitter** for sequence documents
+([`sequence-emit.ts`](src/features/mermaid/lib/sequence-emit.ts)), which did
+not exist and could not have: until the model grew the blocks Mermaid actually
+draws, emitting would have had to invent a spelling for `critical`, `break`,
+`rect` and `box`. Going out is lossy in the other direction — `desc`,
+`[technology]`, and every header field except the title have no Mermaid
+equivalent, plus a participant's _unstated_ kind, which Mermaid cannot express
+— and the pane says so the moment you switch. It converts from the last GOOD
+parse, never from half-typed text, and is disabled while the text does not
+parse. `pnpm check:sequence` round-trips every bundled example out through
+Mermaid and back, with exactly those documented losses normalised — so a
+fourth, undocumented loss fails the build.
+
+**Every block Mermaid draws, arch-lab draws.** `loop`, `alt`/`else`,
+`opt`, `par`/`and`, `critical`/`option`, `break`, `rect` and `box` all import
+as themselves — the model has a kind for each (`SequenceFragmentKind`), and
+`box` is a `SequenceBox`. This took two wrong turns first, both instructive:
+refusing `rect` by name rejected a whole diagram over a background tint, and
+then flattening it silently deleted a grouping the author had drawn on
+purpose. A one-way importer may lose detail; it may not quietly change what
+the document says.
+
+**What import still loses, and says so.** Eight arrowheads collapse onto three
+kinds, `autonumber` arguments are dropped, an `activate`/`deactivate` that does
+not bracket its adjacent message is dropped, `create`/`destroy` import the
+participant but not the moment its lifeline starts or ends, and a colour that
+is not a hex, `rgb(…)` or common colour name is dropped rather than passed
+through to the renderer unvalidated. Every one of those is named in the caveat
+the playground shows on import.
 
 ## Mermaid C4 import
 
@@ -505,7 +708,7 @@ arch-lab/
     │   ├── mcp/               The MCP server behind /api/mcp, plus the /mcp page (see its README)
     │   ├── mermaid/           Mermaid C4 ⇄ arch-lab converter (pure, dependency-free)
     │   └── viewer/            Read-only viewer, /view playground, SVG/PNG export, model service
-    ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy)
+    ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy), tint normalisation
     └── types/                 C4 model types — mirrors docs/product/data-model.md
 ```
 

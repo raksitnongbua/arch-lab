@@ -454,8 +454,9 @@ detail in the `desc`.
 
 **Fragments nest by INDENTATION and there is no `end` keyword** — this
 is the single biggest difference from Mermaid, whose `end` lines have
-no equivalent here. `alt`/`else`, `par`/`and`, `opt` and `loop` open a
-block; what belongs to it is what is indented under it.
+no equivalent here. `alt`/`else`, `par`/`and`, `critical`/`option`,
+`opt`, `loop` and `break` open a block; what belongs to it is what is
+indented under it.
 
 ```
 archlab 1.0 sequence
@@ -477,6 +478,37 @@ title "Branching"
     api ..> web : "402 Payment Required"
   opt "first purchase"
     web -> web : "Shows onboarding tips"
+```
+
+**Grouping without control flow.** `box` brackets a contiguous run of
+lifelines and takes its members as the participant lines nested INSIDE
+it; `rect` highlights a run of steps. Both take an optional
+`tint=#rrggbb` (or `rgb(…)`, or a common colour name — all normalised
+to one spelling). Neither changes what happens; both survive a Mermaid
+import unchanged.
+
+```
+archlab 1.0 sequence
+title "Grouped and highlighted"
+
+@sequence
+  box "Front of house" tint=#bfdfff
+    cust:actor "Customer"
+    web "Storefront"
+  box "Payments" tint=#ffe4e1
+    pay:participant "Payments"
+    ledger:participant "Ledger"
+
+  cust -> web : "Places the order"
+  rect tint=#bfdfff
+    web -> pay : "Create charge" [REST]
+    pay -> ledger : "Post entry"
+  critical "Capture the funds"
+    pay ..> web : "charge.succeeded"
+  option "gateway timeout"
+    pay ..> web : "retry scheduled"
+  break "card declined"
+    pay ..> web : "402 Payment Required"
 ```
 
 Mermaid `sequenceDiagram` code can be imported instead of authored —

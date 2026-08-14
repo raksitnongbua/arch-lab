@@ -47,6 +47,7 @@ import { useId } from "react";
 // rationale), and re-typing the expression here would let the two drift.
 import { tagFillCss } from "@/features/editor/lib/node-colors";
 import { cn } from "@/lib/utils";
+import { TINT_WASH_OPACITY } from "@/lib/tint";
 
 import type {
   LaidFragment,
@@ -360,131 +361,193 @@ export function SequenceDiagram({
           chip (focus the whole fragment) and each branch's guard label
           (focus that branch) — small, labelled, and exactly where the eye
           reads "this is the alt / this is the [card accepted] case". */}
-      {layout.fragments.map((fragment) => (
-        <g
-          key={fragment.id}
-          className={cn(
-            "af-seq-dimmable",
-            fragmentDimmed(fragment) && "af-seq-dim",
-          )}
-        >
-          <g className="pointer-events-none">
-            <rect
-              x={fragment.x}
-              y={fragment.y}
-              width={fragment.width}
-              height={fragment.height}
-              rx={8}
-              fill="var(--canvas)"
-              fillOpacity={0.5}
-              stroke="var(--node-border)"
-              strokeWidth={1}
-            />
-            {fragment.dividers.map((divider, dividerIndex) => (
-              <line
-                key={`div-${dividerIndex}`}
-                x1={fragment.x}
-                y1={divider.y}
-                x2={fragment.x + fragment.width}
-                y2={divider.y}
+      {layout.fragments.map((fragment) => {
+        /* The chip is sized to its WORD, not to a constant: `alt` and
+           `critical` differ by five characters, and a fixed 34px box that fit
+           the first clipped the second. The guard label then starts after
+           whatever width came out, so the two never overlap. */
+        const chipWidth = Math.max(
+          34,
+          Math.ceil(estimateTextWidth(fragment.kind, SEQ.fragmentFontSize)) +
+            14,
+        );
+        return (
+          <g
+            key={fragment.id}
+            className={cn(
+              "af-seq-dimmable",
+              fragmentDimmed(fragment) && "af-seq-dim",
+            )}
+          >
+            <g className="pointer-events-none">
+              {/* A `rect` is a HIGHLIGHT, so its fill is the author's colour at
+                a wash rather than the neutral scaffolding fill every other
+                fragment gets. The wash opacity is fixed here (not taken from
+                the document) so a tint can never be strong enough to hide the
+                messages it is drawn behind. */}
+              <rect
+                x={fragment.x}
+                y={fragment.y}
+                width={fragment.width}
+                height={fragment.height}
+                rx={8}
+                fill={fragment.tint ?? "var(--canvas)"}
+                fillOpacity={
+                  fragment.tint !== undefined ? TINT_WASH_OPACITY : 0.5
+                }
                 stroke="var(--node-border)"
                 strokeWidth={1}
-                strokeDasharray="5 4"
               />
-            ))}
-          </g>
+              {fragment.dividers.map((divider, dividerIndex) => (
+                <line
+                  key={`div-${dividerIndex}`}
+                  x1={fragment.x}
+                  y1={divider.y}
+                  x2={fragment.x + fragment.width}
+                  y2={divider.y}
+                  stroke="var(--node-border)"
+                  strokeWidth={1}
+                  strokeDasharray="5 4"
+                />
+              ))}
+            </g>
 
-          {/* Kind chip — clicking it focuses the WHOLE fragment. */}
-          <FragmentControl
-            ariaLabel={`Focus the ${fragment.kind} fragment — every message in ${
-              fragment.branches.length > 1
-                ? `all ${fragment.branches.length} branches`
-                : "it"
-            }`}
-            hitX={fragment.x - 2}
-            hitY={fragment.y - 2}
-            hitWidth={38}
-            hitHeight={22}
-            onFocus={() => onFocusFragment(fragment.id, null)}
-          >
-            <rect
-              className="af-seq-chip"
-              x={fragment.x}
-              y={fragment.y}
-              width={34}
-              height={18}
-              rx={6}
-              fill="var(--secondary)"
-              stroke="var(--border)"
-            />
-            <text
-              x={fragment.x + 17}
-              y={fragment.y + 13}
-              textAnchor="middle"
-              fontSize={SEQ.fragmentFontSize}
-              fontFamily="var(--font-mono)"
-              fill="var(--secondary-foreground)"
-            >
-              {fragment.kind}
-            </text>
-          </FragmentControl>
-
-          {/* Branch 0's guard label sits beside the chip; branches 1+ label
-              their dividers (dividers[i] pairs with branches[i + 1] — the
-              layout's documented contract). Each guard focuses ITS branch. */}
-          {fragment.label !== undefined ? (
+            {/* Kind chip — clicking it focuses the WHOLE fragment. */}
             <FragmentControl
-              ariaLabel={`Focus the [${fragment.label}] branch of the ${fragment.kind} fragment`}
-              hitX={fragment.x + 40}
+              ariaLabel={`Focus the ${fragment.kind} fragment — every message in ${
+                fragment.branches.length > 1
+                  ? `all ${fragment.branches.length} branches`
+                  : "it"
+              }`}
+              hitX={fragment.x - 2}
               hitY={fragment.y - 2}
-              hitWidth={
-                estimateTextWidth(`[${fragment.label}]`, SEQ.fragmentFontSize) +
-                4
-              }
+              hitWidth={chipWidth + 4}
               hitHeight={22}
-              onFocus={() => onFocusFragment(fragment.id, 0)}
+              onFocus={() => onFocusFragment(fragment.id, null)}
             >
+              <rect
+                className="af-seq-chip"
+                x={fragment.x}
+                y={fragment.y}
+                width={chipWidth}
+                height={18}
+                rx={6}
+                fill="var(--secondary)"
+                stroke="var(--border)"
+              />
               <text
-                className="af-seq-guard"
-                x={fragment.x + 42}
+                x={fragment.x + chipWidth / 2}
                 y={fragment.y + 13}
+                textAnchor="middle"
                 fontSize={SEQ.fragmentFontSize}
-                fontStyle="italic"
-                fill="var(--muted-foreground)"
+                fontFamily="var(--font-mono)"
+                fill="var(--secondary-foreground)"
               >
-                [{fragment.label}]
+                {fragment.kind}
               </text>
             </FragmentControl>
-          ) : null}
-          {fragment.dividers.map((divider, dividerIndex) =>
-            divider.label !== undefined ? (
+
+            {/* Branch 0's guard label sits beside the chip; branches 1+ label
+              their dividers (dividers[i] pairs with branches[i + 1] — the
+              layout's documented contract). Each guard focuses ITS branch. */}
+            {fragment.label !== undefined ? (
               <FragmentControl
-                key={`guard-${dividerIndex}`}
-                ariaLabel={`Focus the [${divider.label}] branch of the ${fragment.kind} fragment`}
-                hitX={fragment.x + 8}
-                hitY={divider.y - 18}
+                ariaLabel={`Focus the [${fragment.label}] branch of the ${fragment.kind} fragment`}
+                hitX={fragment.x + chipWidth + 4}
+                hitY={fragment.y - 2}
                 hitWidth={
                   estimateTextWidth(
-                    `[${divider.label}]`,
+                    `[${fragment.label}]`,
                     SEQ.fragmentFontSize,
                   ) + 4
                 }
-                hitHeight={18}
-                onFocus={() => onFocusFragment(fragment.id, dividerIndex + 1)}
+                hitHeight={22}
+                onFocus={() => onFocusFragment(fragment.id, 0)}
               >
                 <text
                   className="af-seq-guard"
-                  x={fragment.x + 10}
-                  y={divider.y - 5}
+                  x={fragment.x + chipWidth + 6}
+                  y={fragment.y + 13}
                   fontSize={SEQ.fragmentFontSize}
                   fontStyle="italic"
                   fill="var(--muted-foreground)"
                 >
-                  [{divider.label}]
+                  [{fragment.label}]
                 </text>
               </FragmentControl>
-            ) : null,
-          )}
+            ) : null}
+            {fragment.dividers.map((divider, dividerIndex) =>
+              divider.label !== undefined ? (
+                <FragmentControl
+                  key={`guard-${dividerIndex}`}
+                  ariaLabel={`Focus the [${divider.label}] branch of the ${fragment.kind} fragment`}
+                  hitX={fragment.x + 8}
+                  hitY={divider.y - 18}
+                  hitWidth={
+                    estimateTextWidth(
+                      `[${divider.label}]`,
+                      SEQ.fragmentFontSize,
+                    ) + 4
+                  }
+                  hitHeight={18}
+                  onFocus={() => onFocusFragment(fragment.id, dividerIndex + 1)}
+                >
+                  <text
+                    className="af-seq-guard"
+                    x={fragment.x + 10}
+                    y={divider.y - 5}
+                    fontSize={SEQ.fragmentFontSize}
+                    fontStyle="italic"
+                    fill="var(--muted-foreground)"
+                  >
+                    [{divider.label}]
+                  </text>
+                </FragmentControl>
+              ) : null,
+            )}
+          </g>
+        );
+      })}
+
+      {/* ---- participant boxes: the bracket around a run of lifelines ----
+          Drawn BEFORE the header cards so the cards sit on top of the wash,
+          and `pointer-events-none` throughout: a box is a label for a group,
+          not a control. Making it clickable was considered and dropped —
+          "focus everything in this box" is the participant focus repeated N
+          times, and a click target this large would swallow the cards inside
+          it, which ARE controls.
+
+          `aria-hidden` for the same reason the footer cards are: the grouping
+          is stated in the <svg>'s own aria-label copy and in the text
+          alternative, and a screen reader meeting a bracket has nothing to do
+          with it. */}
+      {layout.boxes.map((box, index) => (
+        <g
+          key={`box-${index}`}
+          aria-hidden="true"
+          className="pointer-events-none"
+        >
+          <rect
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            rx={10}
+            fill={box.tint ?? "var(--canvas)"}
+            fillOpacity={box.tint !== undefined ? TINT_WASH_OPACITY : 0.45}
+            stroke="var(--node-border)"
+            strokeWidth={1}
+            strokeDasharray="4 3"
+          />
+          <text
+            x={box.x + 10}
+            y={box.y + SEQ.boxLabelHeight - 6}
+            fontSize={SEQ.boxLabelFontSize}
+            fontWeight={600}
+            fill="var(--muted-foreground)"
+          >
+            {box.label}
+          </text>
         </g>
       ))}
 
@@ -976,7 +1039,20 @@ function ParticipantColumn({
                 onToggleCollapse();
               }
             }}
-          />
+          >
+            {/* A HOVER tooltip, which the accessible name alone never gave a
+                pointer user: `−` is the whole visible affordance, and until
+                this <title> existed the only way to learn what it did was to
+                press it and watch the diagram change. It names WHAT folds
+                rather than only how many — "2 dependencies" counts things the
+                reader cannot see. `aria-label` above still wins the accessible
+                name, so nothing is announced twice. */}
+            <title>
+              {collapsed
+                ? `Show the ${dependencies} service${dependencies === 1 ? "" : "s"} only ${participant.name} uses`
+                : `Hide the ${dependencies} service${dependencies === 1 ? "" : "s"} only ${participant.name} uses`}
+            </title>
+          </rect>
         </g>
       ) : null}
 

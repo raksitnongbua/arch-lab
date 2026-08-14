@@ -120,6 +120,17 @@ export const SEQ = {
    */
   descriptionMaxLines: 3,
 
+  /* ---- participant boxes (`SequenceBox`) ----------------------------------
+   * The bracket is drawn AROUND the header cards, not above them, so it reads
+   * as "these lifelines are one thing" rather than as a second, unrelated
+   * label row. Its band pushes `headerTop` down by exactly `boxLabelHeight`,
+   * and only when the document has boxes — a diagram with none is not made
+   * taller by a feature it does not use. */
+  boxLabelHeight: 20,
+  boxLabelFontSize: 11,
+  boxPadX: 10,
+  boxPadBottom: 8,
+
   /** Vertical gap between the header row and the first item. */
   headerGap: 24,
   /**
@@ -299,6 +310,21 @@ export interface LaidBranch {
   steps: number[];
 }
 
+/**
+ * A `SequenceBox` placed: the bracket around a contiguous run of header
+ * cards. Geometry only — membership was already settled by the model, and a
+ * box whose members are all hidden never reaches here (see `collapse.ts`).
+ */
+export interface LaidBox {
+  label: string;
+  /** Normalised `#rrggbb`, when the document gave one. */
+  tint?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface LaidFragment {
   /**
    * Stable identity: `frag-N` where N is the fragment's pre-order position
@@ -312,6 +338,8 @@ export interface LaidFragment {
   kind: SequenceFragment["kind"];
   /** First branch's guard label — drawn beside the kind chip. */
   label?: string;
+  /** `rect` only: the highlight colour, normalised `#rrggbb`. */
+  tint?: string;
   x: number;
   y: number;
   width: number;
@@ -387,6 +415,8 @@ export interface SequenceLayout {
   /** Height of a footer card — the base header height, glyph excluded. */
   footerHeight: number;
   participants: LaidParticipant[];
+  /** Brackets over runs of header cards. Empty when the document has none. */
+  boxes: LaidBox[];
   messages: LaidMessage[];
   notes: LaidNote[];
   fragments: LaidFragment[];
@@ -659,6 +689,56 @@ function planColumns(file: SequenceLabFile): ColumnPlan {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Participant boxes                                                           */
+/* -------------------------------------------------------------------------- */
+
+function hasBoxes(file: SequenceLabFile): boolean {
+  return Array.isArray(file.boxes) && file.boxes.length > 0;
+}
+
+/**
+ * One bracket per box, spanning its members' header cards.
+ *
+ * Reads the members' PLACED x positions rather than their index, so a box
+ * needs no knowledge of column planning — and a member that is not on the
+ * canvas (hidden by a collapse) simply contributes nothing to the span. A box
+ * with no members left is dropped: `collapse.ts` already removes those from
+ * the filtered file, and this second guard costs one comparison and makes the
+ * function total for any input.
+ */
+function placeBoxes(
+  file: SequenceLabFile,
+  xById: Map<string, number>,
+  headerWidths: Map<string, number>,
+  headerTop: number,
+  headerHeight: number,
+): LaidBox[] {
+  if (!Array.isArray(file.boxes)) return [];
+  const placed: LaidBox[] = [];
+  for (const box of file.boxes) {
+    let left = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    for (const id of box.participants) {
+      const x = xById.get(id);
+      if (x === undefined) continue;
+      const half = (headerWidths.get(id) ?? SEQ.headerMinWidth) / 2;
+      left = Math.min(left, x - half);
+      right = Math.max(right, x + half);
+    }
+    if (left === Number.POSITIVE_INFINITY) continue;
+    placed.push({
+      label: box.label,
+      ...(typeof box.tint === "string" ? { tint: box.tint } : {}),
+      x: left - SEQ.boxPadX,
+      y: headerTop - SEQ.boxLabelHeight,
+      width: right - left + SEQ.boxPadX * 2,
+      height: SEQ.boxLabelHeight + headerHeight + SEQ.boxPadBottom,
+    });
+  }
+  return placed;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Pass B — rows, fragments, activations                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -670,8 +750,14 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
   const headerHeight = SEQ.headerHeight + (hasActor ? SEQ.actorGlyphHeight : 0);
 
   const heading = layoutHeading(file, order, xById, headerWidths);
-  const headerTop = SEQ.marginTop + heading.height;
+  /* The box band is reserved BEFORE the cards are placed, because the label
+     sits inside the bracket above them: adding it afterwards would either
+     overlap the heading or clip the label. Documents with no boxes reserve
+     nothing, so nothing about them moves. */
+  const boxBand = hasBoxes(file) ? SEQ.boxLabelHeight : 0;
+  const headerTop = SEQ.marginTop + heading.height + boxBand;
   const lifelineTop = headerTop + headerHeight;
+  const boxes = placeBoxes(file, xById, headerWidths, headerTop, headerHeight);
 
   const participants: LaidParticipant[] = file.participants.map((p, index) => ({
     id: p.id,
@@ -936,6 +1022,7 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
       ...(item.branches[0]?.label !== undefined
         ? { label: item.branches[0].label }
         : {}),
+      ...(typeof item.tint === "string" ? { tint: item.tint } : {}),
       x: range.min - pad,
       y: startY,
       width: range.max - range.min + pad * 2,
@@ -1007,7 +1094,8 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
     minX = Math.min(minX, mid - m.labelWidth / 2);
   }
 
-  const viewMinX = Math.floor(Math.min(0, minX - 8));
+  /* `contentMinX` is computed just below, from `minX` plus the boxes — so
+     the viewBox has to wait for it rather than reading `minX` directly. */
   const footerHeight = SEQ.headerHeight;
   const footerTop = lifelineBottom + SEQ.footerGap;
   /*
@@ -1017,7 +1105,16 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
    * and a long title — where the wrap floor is wider than the flow itself and
    * the text would otherwise cross the right edge.
    */
-  const contentMaxX = Math.max(maxX, SEQ.marginX + heading.width);
+  /* A bracket pads past its outermost card, so on the first or last column it
+     reaches beyond every other bound — include it or the box is clipped by
+     the viewBox on exactly the diagrams that use one. */
+  const contentMaxX = Math.max(
+    maxX,
+    SEQ.marginX + heading.width,
+    ...boxes.map((box) => box.x + box.width),
+  );
+  const contentMinX = Math.min(minX, ...boxes.map((box) => box.x));
+  const viewMinX = Math.floor(Math.min(0, contentMinX - 8));
   return {
     width: Math.ceil(contentMaxX + SEQ.marginX - viewMinX),
     height: Math.ceil(footerTop + footerHeight + SEQ.marginBottom),
@@ -1030,6 +1127,7 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
     footerTop,
     footerHeight,
     participants,
+    boxes,
     messages,
     notes,
     fragments,

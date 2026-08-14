@@ -29,6 +29,7 @@ import {
   NODE_TYPE_ROWS,
   SEQUENCE_CURL_EXAMPLE,
   SEQUENCE_FRAGMENT_EXAMPLE,
+  SEQUENCE_GROUPING_EXAMPLE,
   SEQUENCE_MESSAGE_EXAMPLE,
   SEQUENCE_MINIMAL_EXAMPLE,
   UNKNOWN_FIELDS_EXAMPLE,
@@ -446,7 +447,8 @@ export function SyntaxReference(): React.JSX.Element {
         </P>
         <P>
           Fragments — <Code>alt</Code>/<Code>else</Code>, <Code>par</Code>/
-          <Code>and</Code>, <Code>opt</Code>, <Code>loop</Code> —{" "}
+          <Code>and</Code>, <Code>critical</Code>/<Code>option</Code>,{" "}
+          <Code>opt</Code>, <Code>loop</Code>, <Code>break</Code> —{" "}
           <strong>
             nest by indentation, with no <Code>end</Code> keyword
           </strong>
@@ -454,6 +456,22 @@ export function SyntaxReference(): React.JSX.Element {
           belongs to a fragment is whatever is indented under it.
         </P>
         <CodeBlock code={SEQUENCE_FRAGMENT_EXAMPLE.code} label="fragments" />
+        <P>
+          Two more constructs say <em>these belong together</em> without saying
+          anything about control flow. <Code>box</Code> brackets a run of
+          lifelines and takes its members as the participant lines{" "}
+          <strong>nested inside it</strong> — nesting is what keeps a box a
+          contiguous run, which is the only shape a bracket can honestly be
+          drawn around. <Code>rect</Code> highlights a run of steps instead, and
+          takes a colour where the other fragments take a guard. Both accept{" "}
+          <Code>tint=</Code>, in <Code>#rrggbb</Code>, <Code>rgb(…)</Code> or a
+          common colour name; whichever you write is stored as one canonical
+          spelling, and drawn as a wash so it reads in both themes.
+        </P>
+        <CodeBlock
+          code={SEQUENCE_GROUPING_EXAMPLE.code}
+          label="boxes and highlights"
+        />
         <P>
           Render any of these in the{" "}
           <Link href="/view/sequence" className="underline">

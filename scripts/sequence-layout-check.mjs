@@ -752,6 +752,71 @@ check(
 }
 
 /* ----------------------------------------------------------------------- */
+/* Participant boxes — the bracket, its span, and the room it reserves      */
+/* ----------------------------------------------------------------------- */
+
+console.log("participant boxes");
+
+{
+  const BOXED = `archlab 1.0 sequence
+title "Boxed"
+
+@sequence
+  box "Ours" tint=#bfdfff
+    a "A"
+    b "B"
+  c "C"
+
+  a -> b : "x"
+  b -> c : "y"
+`;
+  const boxed = layoutSequence(parseSequenceText(BOXED));
+  const unboxed = layoutSequence(
+    parseSequenceText(
+      BOXED.replace('  box "Ours" tint=#bfdfff\n', "").replace(/^    /gm, "  "),
+    ),
+  );
+
+  check("one box in, one box placed", boxed.boxes.length === 1);
+  const [box] = boxed.boxes;
+  check(
+    "the box keeps its label and its normalised tint",
+    box.label === "Ours" && box.tint === "#bfdfff",
+  );
+
+  const a = boxed.participants.find((p) => p.id === "a");
+  const b = boxed.participants.find((p) => p.id === "b");
+  const c = boxed.participants.find((p) => p.id === "c");
+  check(
+    "the bracket spans its members' cards and no further",
+    box.x < a.x - a.headerWidth / 2 &&
+      box.x + box.width > b.x + b.headerWidth / 2 &&
+      box.x + box.width < c.x - c.headerWidth / 2,
+    `box ${box.x}..${box.x + box.width}, b ends ${b.x + b.headerWidth / 2}, c starts ${c.x - c.headerWidth / 2}`,
+  );
+  check(
+    "the bracket ENCLOSES the header cards rather than floating above them",
+    box.y < boxed.headerTop &&
+      box.y + box.height > boxed.headerTop + boxed.headerHeight,
+    `box ${box.y}..${box.y + box.height}, header ${boxed.headerTop}..${boxed.headerTop + boxed.headerHeight}`,
+  );
+  check(
+    "the label band pushes the cards down by exactly its own height",
+    boxed.headerTop - unboxed.headerTop === SEQ.boxLabelHeight,
+    `${boxed.headerTop} vs ${unboxed.headerTop}`,
+  );
+  check(
+    "a document with NO boxes reserves nothing for them",
+    unboxed.boxes.length === 0,
+  );
+  check(
+    "the bracket is inside the viewBox — a box on the first column cannot be clipped",
+    box.x >= boxed.minX && box.x + box.width <= boxed.minX + boxed.width,
+    `box ${box.x}..${box.x + box.width} vs view ${boxed.minX}..${boxed.minX + boxed.width}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

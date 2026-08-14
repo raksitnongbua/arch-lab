@@ -10,11 +10,26 @@
  * failure names a line and column) and the `<br/>` text codec.
  *
  * Supported: `participant`/`actor` (with `as` aliases and implicit
- * declaration on first use), `->>` `-->>` `->` `-->` `-x` `--x` `-)` `--)`
- * arrows, self-messages, `activate`/`deactivate` and the `+`/`-` shorthand,
- * `Note left of` / `Note right of` / `Note over` (one or two participants),
- * `loop`/`alt`/`else`/`opt`/`par`/`and`/`end`, `autonumber`, `title` and
- * `%%` comments.
+ * declaration on first use), `create`/`destroy` lifecycle lines, `->>` `-->>`
+ * `->` `-->` `-x` `--x` `-)` `--)` arrows, self-messages,
+ * `activate`/`deactivate` and the `+`/`-` shorthand, `Note left of` /
+ * `Note right of` / `Note over` (one or two participants),
+ * `loop`/`alt`/`else`/`opt`/`par`/`and`/`critical`/`option`/`break`/`end`,
+ * the two purely visual blocks `rect` and `box`, `autonumber` (including
+ * `autonumber off`), `title` and `%%` comments.
+ *
+ * EVERY BLOCK MERMAID DRAWS IS A BLOCK ARCH-LAB DRAWS. `critical`/`option`,
+ * `break` and `rect` are fragment kinds in the model (`SequenceFragmentKind`)
+ * and `box` is a `SequenceBox`, so nothing here is flattened, approximated or
+ * refused. Two earlier versions of this file did both and both were wrong:
+ * refusing rejected a whole diagram over a background tint, and flattening
+ * silently deleted a grouping the author drew on purpose. What survives an
+ * import is now a question about the ARROWS, not about the boxes.
+ *
+ * The colours come too: `rect rgb(191, 223, 255)` and `box Aqua Name` are
+ * normalised to `#rrggbb` (`@/lib/tint`) and drawn as a wash. A colour this
+ * app cannot store is dropped — the ONE thing about a block that is still
+ * lossy, and it is in the caveat.
  *
  * What is LOSSY is named, in full, by `MERMAID_SEQUENCE_CAVEAT` below —
  * the same honesty contract as the C4 importer's `MERMAID_CAVEAT`.
@@ -24,6 +39,7 @@
  */
 
 import type {
+  SequenceBox,
   SequenceBranch,
   SequenceFragment,
   SequenceFragmentKind,
@@ -34,6 +50,8 @@ import type {
   SequenceNote,
   SequenceParticipant,
 } from "@/types";
+
+import { normalizeTint } from "@/lib/tint";
 
 import { MERMAID_IMPORT_TIMESTAMP } from "./defaults";
 import { failAt } from "./errors";
@@ -52,9 +70,13 @@ export const MERMAID_SEQUENCE_CAVEAT =
   "and lossy — the eight arrowheads collapse to three kinds (->>, -> " +
   "become sync; -->>, --> become replies; -x, --x, -), --) become async, " +
   "losing the open, cross and async head shapes), autonumber start/step " +
-  "arguments are dropped, and an activate/deactivate line that does not " +
-  "bracket the message next to it is dropped. Save as .alab to keep " +
-  "everything else.";
+  "arguments are dropped, an activate/deactivate line that does not " +
+  "bracket the message next to it is dropped, a rect or box colour that is " +
+  "not a hex, rgb() or common named colour is dropped, and create/destroy " +
+  "import the participant but not the moment its lifeline starts or ends. " +
+  "Every block itself survives — loop, alt/else, opt, par/and, " +
+  "critical/option, break, rect and box all import as themselves. Save as " +
+  ".alab to keep everything else.";
 
 /* -------------------------------------------------------------------------- */
 /* Options                                                                     */
@@ -92,31 +114,43 @@ const MERMAID_SEQ_ARROWS: readonly (readonly [string, SequenceMessageKind])[] =
     ["->", "sync"],
   ];
 
-/** Block keywords that OPEN a fragment. `critical`, `break`, `rect` and
- * `box` are refused with a naming error rather than half-imported. */
+/**
+ * Block keywords that OPEN a fragment. One-to-one with the model's kinds —
+ * the Mermaid word and the arch-lab word are the same word for all seven,
+ * which is what "no approximation" means in practice.
+ */
 const FRAGMENT_OPENERS: Readonly<Record<string, SequenceFragmentKind>> = {
   loop: "loop",
   opt: "opt",
   alt: "alt",
   par: "par",
+  critical: "critical",
+  break: "break",
+  rect: "rect",
 };
 
-const UNSUPPORTED_BLOCKS: ReadonlySet<string> = new Set([
-  "critical",
-  "break",
-  "rect",
-  "box",
-  "create",
-  "destroy",
-]);
+/** Continuation keyword → the fragment kind it may extend. */
+const BRANCH_CONTINUATIONS: Readonly<Record<string, SequenceFragmentKind>> = {
+  else: "alt",
+  and: "par",
+  option: "critical",
+};
 
 /* -------------------------------------------------------------------------- */
 /* The importer                                                                */
 /* -------------------------------------------------------------------------- */
 
 interface OpenBlock {
-  fragment: SequenceFragment;
-  branch: SequenceBranch;
+  /** The Mermaid word that opened it, quoted verbatim by every error about
+   * it. Now always equal to the model kind, except for `box`. */
+  opener: string;
+  /** `null` for a `box`, which groups lifelines rather than steps. */
+  fragment: SequenceFragment | null;
+  /** Where the lines below this opener land. A `box` contributes no items,
+   * so it passes the ENCLOSING target through unchanged. */
+  items: SequenceItem[];
+  /** Non-null inside a `box`: participants declared below join it. */
+  box: SequenceBox | null;
   line: number;
   column: number;
 }
@@ -144,12 +178,16 @@ export function parseMermaidSequence(
     if (participantIds.has(id)) return;
     participantIds.add(id);
     participants.push(explicit ?? { id, name: id });
+    /* Inside a `box`, a newly declared lifeline joins it — including one
+       auto-declared by first USE, which is how Mermaid itself behaves. */
+    stack[stack.length - 1]?.box?.participants.push(id);
   };
 
   const rootItems: SequenceItem[] = [];
+  const boxes: SequenceBox[] = [];
   const stack: OpenBlock[] = [];
   const currentItems = (): SequenceItem[] =>
-    stack.length === 0 ? rootItems : stack[stack.length - 1].branch.items;
+    stack.length === 0 ? rootItems : stack[stack.length - 1].items;
   /* For folding standalone activate/deactivate onto the message they
      bracket (see the caveat for the unfoldable case). */
   let lastMessage: SequenceMessage | null = null;
@@ -178,7 +216,25 @@ export function parseMermaidSequence(
       continue;
     }
 
-    const word = text.split(/[\s:]/, 1)[0];
+    /* `create participant X as Y` is a participant line with a lifeline
+       start time we have nowhere to keep, so the prefix is peeled off and
+       the rest re-dispatched — one declaration path, not two. `destroy X`
+       is the same loss with nothing left over, so it is simply dropped. */
+    let statement = text;
+    if (statement === "destroy" || statement.startsWith("destroy ")) continue;
+    if (statement.startsWith("create ")) {
+      statement = statement.slice("create ".length).trim();
+      const created = statement.split(/[\s:]/, 1)[0];
+      if (created !== "participant" && created !== "actor") {
+        failAt(
+          lineNo,
+          startCol,
+          '"create" introduces a participant — write "create participant X" or "create actor X"',
+          text.slice(0, 40),
+        );
+      }
+    }
+    const word = statement.split(/[\s:]/, 1)[0];
     const lower = word.toLowerCase();
 
     /* ----------------------------- keywords ----------------------------- */
@@ -193,12 +249,14 @@ export function parseMermaidSequence(
     }
     if (word === "autonumber") {
       /* Start/step arguments (`autonumber 10 10`) are dropped — named in
-         the caveat. The flag itself survives. */
-      autonumber = true;
+         the caveat. The flag itself survives, and `autonumber off` turns it
+         back off: Mermaid lets a later line withdraw an earlier one, so the
+         LAST word wins rather than the first. */
+      autonumber = statement.slice(word.length).trim() !== "off";
       continue;
     }
     if (word === "participant" || word === "actor") {
-      const rest = text.slice(word.length).trim();
+      const rest = statement.slice(word.length).trim();
       if (rest === "") {
         failAt(lineNo, startCol, `"${word}" is missing its name`, word);
       }
@@ -258,9 +316,60 @@ export function parseMermaidSequence(
       currentItems().push(parseNote(text, lineNo, startCol, declare));
       continue;
     }
+    if (word === "box") {
+      /* `box <colour?> <label>` — Mermaid's colour is an optional FIRST word
+         and the label is everything after it, with no punctuation between
+         them. So the colour is only a colour when the rest is non-empty:
+         `box Payments` names a box, it does not tint an unnamed one. */
+      const rest = statement.slice(word.length).trim();
+      const [firstWord, ...restWords] = rest.split(/\s+/);
+      const leadingTint =
+        restWords.length > 0 && firstWord !== undefined
+          ? normalizeTint(firstWord)
+          : null;
+      const label = decodeInlineBreaks(
+        leadingTint === null && firstWord !== "transparent"
+          ? rest
+          : restWords.join(" "),
+      ).trim();
+      if (label === "") {
+        failAt(
+          lineNo,
+          startCol,
+          '"box" needs a name — write "box Payments" or "box Aqua Payments"',
+          "box",
+        );
+      }
+      const box: SequenceBox = {
+        label,
+        ...(leadingTint !== null ? { tint: leadingTint } : {}),
+        participants: [],
+      };
+      boxes.push(box);
+      stack.push({
+        opener: word,
+        fragment: null,
+        /* A box holds lifelines, not steps. Mermaid allows nothing but
+           participant lines inside one, so passing the enclosing target
+           through costs nothing and keeps `currentItems()` total. */
+        items: currentItems(),
+        box,
+        line: lineNo,
+        column: startCol,
+      });
+      continue;
+    }
     const opener = FRAGMENT_OPENERS[word];
     if (opener !== undefined) {
-      const label = decodeInlineBreaks(text.slice(word.length).trim());
+      /* `rect rgb(191, 223, 255)` puts a COLOUR where every other fragment
+         puts a label, so the tail is read as one or the other by kind —
+         never as both, which would make `rect Payments` ambiguous. */
+      const tail = statement.slice(word.length).trim();
+      const tint = opener === "rect" ? normalizeTint(tail) : null;
+      const label =
+        opener === "rect" && (tint !== null || tail === "")
+          ? ""
+          : decodeInlineBreaks(tail);
       /* `label` before `items`: the model's canonical key order
          (BRANCH_KEYS), so an imported model is byte-for-byte the same JSON
          a `.alab` parse of its own serialization would produce. */
@@ -269,28 +378,41 @@ export function parseMermaidSequence(
       const fragment: SequenceFragment = {
         step: "fragment",
         kind: opener,
+        ...(tint !== null ? { tint } : {}),
         branches: [branch],
       };
       currentItems().push(fragment);
-      stack.push({ fragment, branch, line: lineNo, column: startCol });
+      stack.push({
+        opener: word,
+        fragment,
+        items: branch.items,
+        box: null,
+        line: lineNo,
+        column: startCol,
+      });
       continue;
     }
-    if (word === "else" || word === "and") {
+    const continues = BRANCH_CONTINUATIONS[word];
+    if (continues !== undefined) {
       const top = stack[stack.length - 1];
-      const wants = word === "else" ? "alt" : "par";
-      if (top === undefined || top.fragment.kind !== wants) {
+      if (top === undefined || top.opener !== continues) {
         failAt(
           lineNo,
           startCol,
-          `"${word}" without an open "${wants}" block${top !== undefined ? ` — the innermost block is "${top.fragment.kind}"` : ""}`,
+          `"${word}" without an open "${continues}" block${top !== undefined ? ` — the innermost block is "${top.opener}"` : ""}`,
           word,
         );
       }
-      const label = decodeInlineBreaks(text.slice(word.length).trim());
+      /* `fragment` is non-null for every opener a continuation names — a
+         `box` is never one of them — but the type does not know that, and
+         asserting it here beats widening the field. */
+      const fragment = top.fragment;
+      if (fragment === null) continue;
+      const label = decodeInlineBreaks(statement.slice(word.length).trim());
       const branch: SequenceBranch =
         label === "" ? { items: [] } : { label, items: [] };
-      top.fragment.branches.push(branch);
-      top.branch = branch;
+      fragment.branches.push(branch);
+      top.items = branch.items;
       continue;
     }
     if (word === "end") {
@@ -298,24 +420,16 @@ export function parseMermaidSequence(
         failAt(
           lineNo,
           startCol,
-          'unmatched "end" — there is no open loop/alt/opt/par block to close',
+          'unmatched "end" — there is no open loop/alt/opt/par/critical/break/rect/box block to close',
           "end",
         );
       }
       stack.pop();
       continue;
     }
-    if (UNSUPPORTED_BLOCKS.has(word)) {
-      failAt(
-        lineNo,
-        startCol,
-        `"${word}" is not supported by this importer — supported statements are participant, actor, messages, activate/deactivate, Note, loop, alt/else, opt, par/and, end, autonumber and title`,
-        word,
-      );
-    }
 
     /* ----------------------------- messages ----------------------------- */
-    const message = parseMessage(text, lineNo, startCol, declare);
+    const message = parseMessage(statement, lineNo, startCol, declare);
     currentItems().push(message);
     lastMessage = message;
   }
@@ -332,8 +446,8 @@ export function parseMermaidSequence(
     failAt(
       open.line,
       open.column,
-      `the "${open.fragment.kind}" block opened here is never closed — expected "end"`,
-      open.fragment.kind,
+      `the "${open.opener}" block opened here is never closed — expected "end"`,
+      open.opener,
     );
   }
 
@@ -346,6 +460,12 @@ export function parseMermaidSequence(
       updatedAt: timestamp,
     },
     participants,
+    /* An empty box is dropped rather than kept: Mermaid allows `box X / end`
+       with nothing between, and a bracket over no lifelines has no drawing —
+       the `.alab` grammar refuses to spell one for the same reason. */
+    ...(boxes.some((box) => box.participants.length > 0)
+      ? { boxes: boxes.filter((box) => box.participants.length > 0) }
+      : {}),
     ...(autonumber ? { autonumber: true } : {}),
     items: rootItems,
   };
@@ -426,7 +546,7 @@ function parseMessage(
     failAt(
       line,
       column,
-      `"${text.split(/\s/, 1)[0]}" is not a recognised sequenceDiagram statement — expected a message (A->>B: text), participant, actor, Note, activate/deactivate, loop/alt/opt/par/end, autonumber or title`,
+      `"${text.split(/\s/, 1)[0]}" is not a recognised sequenceDiagram statement — expected a message (A->>B: text), participant, actor, create/destroy, Note, activate/deactivate, loop/alt/else/opt/par/and/critical/option/break/rect/box/end, autonumber or title`,
       text.slice(0, 40),
     );
   }

@@ -147,6 +147,12 @@ export const CANVAS_HINTS: readonly ShortcutEntry[] = [
   { keys: ["drag ↗"], what: "add related" },
   { keys: ["click ●"], what: "connect" },
   { keys: ["mod", "Z"], what: "undo" },
+  /* Zoom is here on the same "cannot guess it" test as the rest. A plain
+     wheel PANS this canvas, so the reader who tries it concludes the wheel
+     does not zoom and never tries the modifier — the failure looks like an
+     answer. The zoom pill's preset menu says it too, for whoever opens that
+     first; this line is for whoever never does. */
+  { keys: ["mod", "scroll"], what: "zoom" },
 ];
 
 /** Opens the full sheet. `?` is the near-universal convention for exactly this. */

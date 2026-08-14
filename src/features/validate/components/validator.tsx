@@ -14,19 +14,15 @@
  * hears "Valid …" / "1 problem …" without having to hunt for the panel.
  */
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Info } from "lucide-react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { HandoffLink } from "@/components/share/handoff-link";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  canEncodeShare,
-  encodeShareFragment,
-  MAX_HANDOFF_URL_LENGTH,
-} from "@/features/viewer/share/codec";
 import { cn } from "@/lib/utils";
 
 import {
@@ -281,13 +277,27 @@ function ValidCard({ result }: { result: CheckOk }): React.JSX.Element {
           ))}
         </ul>
 
+        {/* The caveat ends in "save as .alab or arch-lab JSON", which is
+            advice this reader cannot act on from here — the conversion is what
+            they came holding Mermaid for. The playground is where it happens:
+            it imports the same source and its panes hold the result. */}
         {result.format === "mermaid" ? (
           <p className="rounded-md border border-accent/30 bg-accent/8 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {MERMAID_CAVEAT}
+            {MERMAID_CAVEAT}{" "}
+            <Link
+              href="/view/c4"
+              className="font-medium text-primary hover:underline"
+            >
+              Open it in the playground to get the .alab
+            </Link>
           </p>
         ) : null}
 
-        <OpenInViewMode aftText={result.aftText} />
+        <HandoffLink
+          alabText={result.aftText}
+          path="/view/c4"
+          label="Open in view mode"
+        />
       </div>
 
       <AdvisoryPanel advisories={result.advisories} />
@@ -446,66 +456,5 @@ function IssueRow({ issue }: { issue: CheckIssue }): React.JSX.Element {
         </pre>
       )}
     </li>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Hand-off                                                                    */
-/* -------------------------------------------------------------------------- */
-
-/**
- * A valid model should be one click from being seen. The canonical `.alab`
- * text is carried to `/view` inside a share-link fragment — the same
- * codec the viewer's Share button and the syntax reference use, so no new
- * hand-off channel is invented here.
- *
- * Encoding needs the platform's CompressionStream, so it happens on the
- * client and the link renders only once the fragment exists. When the
- * browser cannot encode, or the model exceeds the codec's HANDOFF ceiling,
- * nothing is rendered. That ceiling — not the share tiers — is the right
- * test here: this is same-origin navigation the user clicks themselves, so
- * carrier truncation cannot happen to it; only the runaway guard applies.
- */
-function OpenInViewMode({
-  aftText,
-}: {
-  aftText: string;
-}): React.JSX.Element | null {
-  // The encoded fragment is stored WITH the text it was made from, so a stale
-  // link is simply not matched on the next render — no reset-in-effect, and
-  // no window where the button points at the previous model.
-  const [encoded, setEncoded] = useState<{
-    source: string;
-    href: string;
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!canEncodeShare()) return;
-    void encodeShareFragment(aftText, null).then((fragment) => {
-      if (cancelled) return;
-      const target = `/view/c4#${fragment}`;
-      if (
-        `${window.location.origin}${target}`.length <= MAX_HANDOFF_URL_LENGTH
-      ) {
-        setEncoded({ source: aftText, href: target });
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [aftText]);
-
-  const href =
-    encoded !== null && encoded.source === aftText ? encoded.href : null;
-  if (href === null) return null;
-  return (
-    <Link
-      href={href}
-      className={buttonClasses({ variant: "outline", size: "sm" })}
-    >
-      <ArrowUpRight aria-hidden="true" />
-      Open in view mode
-    </Link>
   );
 }
