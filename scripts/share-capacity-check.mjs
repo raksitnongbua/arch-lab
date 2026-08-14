@@ -201,22 +201,23 @@ await check(
   },
 );
 
-await check(
-  "the /view/seq forward page exists and carries the fragment",
-  async () => {
-    assert.ok(existsSync(path.join(ROOT, "src/app/view/seq/page.tsx")));
-    const forward = readSource("src/app/view/seq/seq-forward.tsx");
-    /* The forward must be a replace (Back must skip the trampoline) and must
-       carry the fragment — dropping it drops the whole document. It reads
-       `location.hash` and forwards to `/view/sequence` with the NORMALIZED
-       body: this used to pin the raw `${window.location.hash}` interpolation,
-       which is exactly the concatenation that let a fragment double (see the
-       repeated-fragment checks above), so the shape asserted here changed with
-       the fix rather than the requirement. */
-    assert.match(forward, /router\.replace\(`\/view\/sequence\$\{/);
-    assert.match(forward, /normalizeShareFragment\(window\.location\.hash\)/);
-  },
-);
+await check("the minted route is the REAL page, not a trampoline", async () => {
+  /* THE PAIR FLIPPED, and this assertion is the reason to state it here:
+       `/view/seq` is what every minted link carries, so making it a forward
+       put a bounce on the most common way anyone arrives from outside — and
+       left it without an `opengraph-image`, so those links previewed with the
+       root C4 card. The short route is the page now; `/view/sequence`
+       forwards to it for the links minted before the alias existed. */
+  const seq = readSource("src/app/view/seq/page.tsx");
+  assert.ok(
+    seq.includes("<ViewPlayground"),
+    "src/app/view/seq/page.tsx must mount the merged playground",
+  );
+  assert.ok(
+    existsSync(path.join(ROOT, "src/app/view/seq/opengraph-image.tsx")),
+    "the route share links carry must own the sequence social card",
+  );
+});
 
 await check(
   '"seq" is a reserved model id (the alias cannot be shadowed)',
@@ -384,35 +385,50 @@ await check("a fragment repeated five times still decodes", async () => {
 });
 
 await check(
-  "the chooser forwards by DOCUMENT KIND, not always to /view/c4",
+  "every /view* payload opens by READING it, on the route it landed on",
   () => {
     /* A sequence fragment on `/view` used to be handed to the C4 playground,
-       which refused a valid document for being the wrong kind. The chooser
-       decodes and sniffs instead of assuming. */
-    const chooser = readSource("src/app/view/view-chooser.tsx");
-    assert.match(chooser, /detectAlabKind\(/);
-    assert.match(chooser, /"\/view\/sequence"/);
-    assert.match(chooser, /"\/view\/c4"/);
+       which refused a valid document for being the wrong kind; a chooser then
+       decoded and sniffed the fragment to forward it. The merged playground
+       deleted the forwarding entirely — every route mounts the ONE component,
+       and it renders whatever the payload parses as. These assertions keep
+       that arrangement: the mount on all three routes, and the parse-driven
+       open (not a kind sniff ahead of a redirect). */
+    const playground = readSource(
+      "src/features/playground/components/view-playground.tsx",
+    );
+    assert.match(playground, /parseViewSource\(decoded\.aftText\)/);
+    for (const route of [
+      "src/app/view/page.tsx",
+      "src/app/view/c4/page.tsx",
+      /* `/view/sequence` is deliberately absent: it is the ALIAS now and
+         forwards to `/view/seq`, which is the mounted page below. */
+      "src/app/view/seq/page.tsx",
+    ]) {
+      assert.ok(
+        readSource(route).includes("<ViewPlayground"),
+        `${route} must mount the merged playground`,
+      );
+    }
   },
 );
 
 await check(
-  "every forwarding route normalizes the hash instead of concatenating it raw",
+  "the forwarding route normalizes the hash instead of concatenating it raw",
   () => {
-    for (const file of [
-      "src/app/view/view-chooser.tsx",
-      "src/app/view/seq/seq-forward.tsx",
-    ]) {
-      const source = readSource(file);
-      assert.ok(
-        source.includes("normalizeShareFragment"),
-        `${file} must normalize the fragment before forwarding`,
-      );
-      assert.ok(
-        !/\$\{(?:hash|window\.location\.hash)\}/.test(source),
-        `${file} must not interpolate a raw hash into the target href`,
-      );
-    }
+    /* One forwarder for whichever route is currently the alias — the
+       direction has flipped once already, and a second hand-written copy is
+       where the two would drift on exactly this fragment handling. */
+    const file = "src/components/share/alias-forward.tsx";
+    const source = readSource(file);
+    assert.ok(
+      source.includes("normalizeShareFragment"),
+      `${file} must normalize the fragment before forwarding`,
+    );
+    assert.ok(
+      !/\$\{(?:hash|window\.location\.hash)\}/.test(source),
+      `${file} must not interpolate a raw hash into the target href`,
+    );
   },
 );
 

@@ -1,30 +1,30 @@
 import type { Metadata } from "next";
 
-import { ViewerPlayground } from "@/features/viewer";
+import { ViewPlayground } from "@/features/playground";
 
 export const metadata: Metadata = {
-  title: "Write your own C4 model — live two-pane editor",
+  title: "Write your own C4 model — live editor",
   description:
-    "Edit arch-lab text (.alab) and arch-lab JSON side by side — each pane regenerates the other as you type and the diagram re-renders live. Import Mermaid C4 one-way, copy or download either format, and export the diagram as an image. Everything stays in your browser.",
+    "Edit arch-lab text (.alab), arch-lab JSON, or Mermaid C4 and watch the diagram re-render live. The JSON pane stays in lossless two-way sync, the format toggle converts in place, and the diagram exports as an image. Everything stays in your browser.",
   alternates: { canonical: "/view/c4" },
 };
 
 /**
- * `/view/c4` — the C4 two-pane playground, moved here VERBATIM from `/view`
- * when `/view` became the chooser. Behaviour is unchanged; only the address
- * moved, and `ViewerPlayground` derives its URL writes from
- * `location.pathname`, so share-link decoding and the address-bar sync work
- * here without modification.
+ * `/view/c4` — the merged playground (`features/playground`), seeded with the
+ * C4 example. The component is the SAME one `/view` and `/view/sequence`
+ * mount; the seed is the routes' only difference, kept so each route's share
+ * links, sitemap entry and OG card keep describing what a visitor first sees.
  *
  * Share links land in two ways, both live:
- *   - new links are minted against this path (`/view/c4#m=…`);
- *   - legacy `/view#m=…` links are forwarded here by the chooser with the
- *     fragment intact.
+ *   - links are minted against this path (`/view/c4#m=…`) by the C4 shell's
+ *     Share panel;
+ *   - legacy `/view#m=…` links open in place on `/view` itself now — the
+ *     playground reads every payload kind, so nothing forwards here any more.
  *
  * A STATIC segment named `c4` shadows `/view/[modelId]` — Next resolves
  * static segments first — which makes `c4` a reserved model id; the
  * `[modelId]` page asserts that at build time.
  */
 export default function ViewC4Page(): React.JSX.Element {
-  return <ViewerPlayground />;
+  return <ViewPlayground seed="c4" />;
 }

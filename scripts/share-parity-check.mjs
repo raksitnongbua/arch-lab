@@ -41,15 +41,15 @@ console.log("share-parity-check");
 const SHARED = "src/features/viewer/share/share-button.tsx";
 const WRAPPER = "src/features/sequence/share/share-button.tsx";
 const C4_SHELL = "src/features/viewer/components/viewer-shell.tsx";
-const C4_PLAYGROUND = "src/features/viewer/components/viewer-playground.tsx";
-const SEQ_PLAYGROUND =
-  "src/features/sequence/components/sequence-playground.tsx";
+// The ONE merged playground every /view* route mounts. It shares C4
+// documents through the shell's panel and sequence documents through the
+// wrapper, so both mount points below are inside the same page now.
+const PLAYGROUND = "src/features/playground/components/view-playground.tsx";
 
 const shared = read(SHARED);
 const wrapper = read(WRAPPER);
 const c4Shell = read(C4_SHELL);
-const c4Playground = read(C4_PLAYGROUND);
-const seqPlayground = read(SEQ_PLAYGROUND);
+const playground = read(PLAYGROUND);
 
 /* --- 1. one implementation, two mount points ------------------------------ */
 
@@ -64,8 +64,8 @@ check(
     wrapper.includes('from "@/features/viewer/share/share-button"'),
 );
 check(
-  "the sequence playground mounts the wrapper",
-  seqPlayground.includes("<SequenceShareButton"),
+  "the playground mounts the wrapper for sequence documents",
+  playground.includes("<SequenceShareButton"),
 );
 
 /* The wrapper must stay a CONFIGURATION of the shared control, never an
@@ -102,6 +102,7 @@ function filesUnder(relative) {
 const featureFiles = [
   ...filesUnder("src/features/viewer"),
   ...filesUnder("src/features/sequence"),
+  ...filesUnder("src/features/playground"),
 ];
 const shareTriggerFiles = featureFiles.filter((file) => {
   const source = read(file);
@@ -110,7 +111,7 @@ const shareTriggerFiles = featureFiles.filter((file) => {
   );
 });
 check(
-  "exactly one file under viewer/ and sequence/ renders the Share trigger",
+  "exactly one file under viewer/, sequence/ and playground/ renders the Share trigger",
   shareTriggerFiles.length === 1 && shareTriggerFiles[0] === SHARED,
 );
 
@@ -160,19 +161,15 @@ check(
   !wrapper.includes("diagram="),
 );
 
-/* --- 4. both routes honour the same expiry semantics on OPEN -------------- */
+/* --- 4. every route honours the same expiry semantics on OPEN ------------- */
 
-/* Minting an expiring sequence link is only honest if the sequence route
-   refuses an expired one. Both playgrounds must branch on the codec's
-   "expired" status — if either stops, links expire on one route and quietly
-   keep working on the other. */
+/* Minting an expiring link is only honest if the opening route refuses an
+   expired one. One merged playground opens links on every /view* route, so
+   ONE component branching on the codec's "expired" status covers them all —
+   this check keeps that branch from being "simplified" away. */
 check(
-  'the C4 playground handles the "expired" decode status',
-  c4Playground.includes('"expired"'),
-);
-check(
-  'the sequence playground handles the "expired" decode status',
-  seqPlayground.includes('"expired"'),
+  'the playground handles the "expired" decode status',
+  playground.includes('"expired"'),
 );
 
 /* --- 5. the old duplicate must not resurrect elsewhere -------------------- */
@@ -189,18 +186,17 @@ check(
 );
 
 /* --- 6. the pre-paint forward flag has a post-hydration owner --------------
- * `data-share-forward` hides `/view`'s chooser so a legacy `/view#m=…` link does
- * not flash it. The script that stamps it runs ONCE per document load and a
- * client-side navigation never reloads — so opening any url with `#m=…` and then
- * navigating to `/view` left the attribute set and the chooser display:none: a
- * blank page with nothing to click, for the rest of the session. Whoever knows
- * there is no payload must clear it. These three assertions keep the stamp, the
- * clear and the stylesheet on ONE spelling, and keep the clear from being
- * "simplified" away as dead code. */
+ * `data-share-forward` hides the playground's seeded example while a `#m=…`
+ * payload decodes. The script that stamps it runs ONCE per document load and a
+ * client-side navigation never reloads — so opening any url with `#m=…` and
+ * then navigating to a /view* route would leave the attribute set and the page
+ * display:none: blank, for the rest of the session (this bit the retired
+ * `/view` chooser first). Whoever knows the payload is resolved must clear it.
+ * These three assertions keep the stamp, the clear and the stylesheet on ONE
+ * spelling, and keep the clear from being "simplified" away as dead code. */
 {
   const codec = read("src/features/viewer/share/codec.ts");
   const layout = read("src/app/layout.tsx");
-  const chooser = read("src/app/view/view-chooser.tsx");
   const css = read("src/app/globals.css");
   const attribute = /SHARE_FORWARD_ATTRIBUTE = "([^"]+)"/.exec(codec)?.[1];
   check(
@@ -213,12 +209,12 @@ check(
       !layout.includes('"data-share-forward"'),
   );
   check(
-    "the chooser CLEARS it (a pre-paint hide needs a post-hydration owner)",
-    /removeAttribute\(SHARE_FORWARD_ATTRIBUTE\)/.test(chooser),
+    "the playground CLEARS it (a pre-paint hide needs a post-hydration owner)",
+    /removeAttribute\(SHARE_FORWARD_ATTRIBUTE\)/.test(playground),
   );
   check(
-    "the stylesheet hides the chooser on the SAME attribute name",
-    attribute !== undefined && css.includes(`[${attribute}] .af-view-chooser`),
+    "the stylesheet hides the pending block on the SAME attribute name",
+    attribute !== undefined && css.includes(`[${attribute}] .af-share-pending`),
   );
 }
 

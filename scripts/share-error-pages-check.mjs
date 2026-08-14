@@ -1,25 +1,28 @@
 #!/usr/bin/env node
 /**
  * Share-link failure-page check: EVERY decode status the share codec can
- * return must map to a full-page outcome in BOTH playgrounds — the C4 route
- * and the sequence route — through the ONE shared failure page.
+ * return must map to a full-page outcome in the playground (the ONE merged
+ * component every `/view*` route mounts) through the ONE shared failure page.
  *
  * The history this guards against: PR #19 gave the C4 playground a full-page
  * takeover for links that will not open, while the sequence playground kept
  * "reporting" the same failures into a screen-reader-only live region. A
  * sighted reader who opened a broken or expired sequence link saw the seed
  * example render normally and concluded it was the flow they were sent —
- * nothing failed loudly, so nobody noticed until a user did.
+ * nothing failed loudly, so nobody noticed until a user did. The two
+ * playgrounds have since merged into one, which removes the drift BETWEEN
+ * routes; this script keeps the remaining copy honest, and keeps the list
+ * below ready to grow should a second `#m=…` host ever appear.
  *
  * Two layers of defence, and this script asserts both stay in place:
- *   1. Each playground handles `decodeShareFragment`'s result in a `switch`
+ *   1. The playground handles `decodeShareFragment`'s result in a `switch`
  *      whose `default` assigns the value to `never` — so `pnpm typecheck`
- *      fails the moment the codec grows a status a playground does not map.
+ *      fails the moment the codec grows a status it does not map.
  *      (This script checks the guard EXISTS; the compiler checks it is
  *      exhaustive.)
- *   2. Both playgrounds mount the SAME failure page component, and that
- *      component renders a distinct full page per failure kind — a second
- *      copy is how the two routes drifted apart before.
+ *   2. It mounts the shared failure page component, and that component
+ *      renders a distinct full page per failure kind — a second copy is how
+ *      the two routes drifted apart before.
  *
  * Static source assertions, in the same spirit as share-parity-check.mjs.
  */
@@ -49,8 +52,7 @@ const CODEC = "src/features/viewer/share/codec.ts";
 const SHARED_PAGE = "src/components/share/share-link-failure.tsx";
 const SHARED_PAGE_IMPORT = "@/components/share/share-link-failure";
 const PLAYGROUNDS = [
-  ["C4", "src/features/viewer/components/viewer-playground.tsx"],
-  ["sequence", "src/features/sequence/components/sequence-playground.tsx"],
+  ["merged", "src/features/playground/components/view-playground.tsx"],
 ];
 
 const codec = read(CODEC);
@@ -125,8 +127,11 @@ const kinds = kindsMatch
     ]
   : [];
 check(
-  `the failure union carries the three known kinds (found: ${kinds.join(", ")})`,
-  ["expired", "broken", "wrong-document"].every((k) => kinds.includes(k)),
+  // "wrong-document" used to be a third kind — an intact payload of the other
+  // playground's kind. The merged playground reads every payload kind, so the
+  // state became unreachable and was deleted with the merge.
+  `the failure union carries the two known kinds (found: ${kinds.join(", ")})`,
+  ["expired", "broken"].every((k) => kinds.includes(k)),
 );
 for (const kind of kinds) {
   check(

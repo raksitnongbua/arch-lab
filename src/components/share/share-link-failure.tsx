@@ -2,17 +2,16 @@
 
 /**
  * The whole page when a share link did not produce a diagram — ONE component
- * for every viewer that opens `#m=…` links (the C4 playground and the
- * sequence playground), because the failure states are exactly where the two
- * drifted apart before: the C4 route gained full-page takeovers (PR #19)
- * while the sequence route kept announcing failures into a screen-reader-only
- * live region, leaving sighted readers staring at the seed example and
- * concluding it was the diagram they were sent. A single component makes the
- * next divergence a merge conflict instead of a bug report;
- * `check:share-error-pages` fails the build if either playground stops
- * mounting it, or if the codec grows a decode status neither page maps.
+ * for every host that opens `#m=…` links, because failure states are exactly
+ * where hosts drifted apart before: the C4 route gained full-page takeovers
+ * (PR #19) while the sequence route kept announcing failures into a
+ * screen-reader-only live region, leaving sighted readers staring at the seed
+ * example and concluding it was the diagram they were sent. A single
+ * component makes the next divergence a merge conflict instead of a bug
+ * report; `check:share-error-pages` fails the build if the playground stops
+ * mounting it, or if the codec grows a decode status it does not map.
  *
- * Three failure kinds, three different reader actions — deliberately NOT one
+ * Two failure kinds, two different reader actions — deliberately NOT one
  * generic apology, because the reader's next move differs:
  *   - `expired`: nothing broke. The link worked and its author chose an end
  *     date, so no red, no error tone — a clock, the date, and "ask for a
@@ -24,23 +23,23 @@
  *     "something went wrong" would send readers after the wrong fix. The
  *     footer names the most likely real-world culprit — a long URL clipped by
  *     the app that carried it — and points at the `.alab` file as the fix.
- *   - `wrong-document`: the payload is intact but belongs to the OTHER
- *     playground. Neutral tone and a one-click way through that carries the
- *     payload with it; calling this "broken" would report damage that did
- *     not happen.
+ *
+ * There USED to be a third kind, `wrong-document` — an intact payload of the
+ * other playground's kind, answered with a door to that playground. The
+ * merged playground reads every payload kind, so the state is unreachable:
+ * deleted rather than kept as a branch nothing can take.
  *
  * Full-screen (an early return in the host, never a banner): a banner sits on
  * top of *something* — the seed example — and a half-read banner leaves the
  * reader believing the example is what they were sent.
  *
- * No route strings live here beyond `/demo`: anything under `/view/*` is
- * passed in by the host (`actionHref`), so a route rename cannot strand a
- * hardcoded link inside this shared component.
+ * No route strings live here beyond `/demo`, so a `/view/*` rename cannot
+ * strand a hardcoded link inside this shared component.
  */
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { ArrowRightLeft, Clock, Link2Off } from "lucide-react";
+import { Clock, Link2Off } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 
@@ -54,16 +53,7 @@ export type ShareOpenFailure =
    * opened — …", straight from the codec or the host's parse step — never a
    * raw exception.
    */
-  | { kind: "broken"; reason: string }
-  /** Intact payload, wrong playground — offer the door, not an apology. */
-  | {
-      kind: "wrong-document";
-      heading: string;
-      description: string;
-      /** Where the payload actually opens — MUST carry the fragment along. */
-      actionHref: string;
-      actionLabel: string;
-    };
+  | { kind: "broken"; reason: string };
 
 export interface ShareLinkFailurePageProps {
   failure: ShareOpenFailure;
@@ -84,9 +74,7 @@ export function ShareLinkFailurePage({
   const heading =
     failure.kind === "expired"
       ? "This share link has expired"
-      : failure.kind === "broken"
-        ? "This share link could not be opened"
-        : failure.heading;
+      : "This share link could not be opened";
 
   useEffect(() => {
     // The route's metadata title still describes the editor, which is NOT on
@@ -193,51 +181,6 @@ export function ShareLinkFailurePage({
             sent it to send it again, or to send the{" "}
             <span className="font-mono">.alab</span> file instead: the file
             cannot be truncated the way a URL can.
-          </>
-        }
-      />
-    );
-  }
-
-  /* ---- wrong-document --------------------------------------------------- */
-
-  if (failure.kind === "wrong-document") {
-    return (
-      <FailureShell
-        // `role="status"` here too: the link is intact, so shouting "alert"
-        // would misreport a working link as damage.
-        role="status"
-        icon={
-          <span
-            aria-hidden="true"
-            className="flex size-14 items-center justify-center rounded-full border border-accent/40 bg-accent/10 text-accent"
-          >
-            <ArrowRightLeft className="size-7" />
-          </span>
-        }
-        heading={heading}
-        body={failure.description}
-        actions={
-          <>
-            <Link
-              href={failure.actionHref}
-              className={buttonClasses({ size: "sm" })}
-            >
-              {failure.actionLabel}
-            </Link>
-            <button
-              type="button"
-              onClick={onStartFresh}
-              className={buttonClasses({ variant: "outline", size: "sm" })}
-            >
-              {startFreshLabel}
-            </button>
-          </>
-        }
-        footer={
-          <>
-            Nothing was lost — the whole document travels inside the link
-            itself, and following the button above carries it along.
           </>
         }
       />

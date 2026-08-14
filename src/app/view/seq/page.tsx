@@ -1,29 +1,42 @@
 import type { Metadata } from "next";
 
-import { SeqForward } from "./seq-forward";
+import { ViewPlayground } from "@/features/playground";
 
 export const metadata: Metadata = {
-  title: "Sequence diagram playground",
-  // A forwarding alias must not compete with the page it forwards to:
-  // canonical names the real playground, and noindex keeps the trampoline
-  // itself out of search results entirely.
-  alternates: { canonical: "/view/sequence" },
-  robots: { index: false },
+  title: "Sequence diagram playground — write it, then explore it",
+  description:
+    "Write .alab sequence text or paste a Mermaid sequenceDiagram and see the whole flow at once: activation bars, notes and nested fragments. Click any message or participant to animate and inspect it. Everything stays in your browser.",
+  alternates: { canonical: "/view/seq" },
 };
 
 /**
- * `/view/seq` — the short route sequence SHARE LINKS are minted against
- * (see `features/sequence/share/share-button.tsx` and the MCP
- * `create_share_link`), existing purely to spend fewer URL characters on the
- * route so more remain for the payload. It renders nothing but a client
- * forward to `/view/sequence`, fragment intact — the reasoning lives on
- * `SeqForward`.
+ * `/view/seq` — the merged playground (`features/playground`), seeded with
+ * the sequence example. THE REAL PAGE, and it used to be the trampoline.
  *
- * Like `c4` and `sequence`, `seq` is a STATIC segment shadowing
- * `/view/[modelId]`, so it is a reserved model id — asserted at build time in
- * the `[modelId]` page. Links minted against the LONG route before this alias
- * existed keep working unchanged: `/view/sequence` is still the real page.
+ * WHY THE PAIR FLIPPED. Every sequence share link is minted against this
+ * short route, and for a good reason: the document travels in the URL
+ * fragment and competes with `MAX_SHARE_URL_LENGTH`, so the five characters
+ * `/view/seq` does not spend on the path buy roughly 7–10 more characters of
+ * document in every link (deflate-raw's observed ~0.5–0.7 payload ratio).
+ * That part was right. What was wrong was making the route people ACTUALLY
+ * ARRIVE ON a forward: opening any shared flow meant landing here, reading a
+ * holding line, and being replaced into `/view/sequence` — a bounce on the
+ * single most common way anyone reaches this app from outside it.
+ *
+ * It also quietly undid the sequence social card. A link preview is fetched
+ * for the URL as SHARED, and this route had no `opengraph-image`, so every
+ * minted sequence link previewed with the root card — "C4 architecture
+ * diagrams", the other document kind entirely, which is the exact bug that
+ * card was added to fix. The card now lives here, beside the page it
+ * describes, and `/view/sequence` re-exports it so the example routes nested
+ * under that path keep inheriting a sequence-shaped preview.
+ *
+ * `/view/sequence` is the alias now and forwards here, so links minted
+ * against the long route — every one made before the alias existed — keep
+ * working. Like `c4` and `sequence`, `seq` is a STATIC segment shadowing
+ * `/view/[modelId]`, so it is a reserved model id, asserted at build time in
+ * the `[modelId]` page.
  */
 export default function ViewSeqPage(): React.JSX.Element {
-  return <SeqForward />;
+  return <ViewPlayground seed="sequence" />;
 }

@@ -1,0 +1,292 @@
+/**
+ * One reader for the merged playground: any supported text in, one rendered
+ * document out. The five shapes the pane accepts — C4 `.alab`, sequence
+ * `.alab`, arch-lab JSON, Mermaid C4 and Mermaid `sequenceDiagram` — are all
+ * AUTO-DETECTED; the playground renders whichever canvas the text asks for.
+ *
+ * Nothing here parses anything itself. Every branch delegates to a reader a
+ * playground already trusted — `parseSequenceInput` (sequence `.alab` and
+ * Mermaid sequence), `parsePane` (C4 `.alab` and arch-lab JSON) and
+ * `importMermaid` (Mermaid C4) — so the merged page cannot disagree with what
+ * either predecessor, or a saved file, means by the same text. The retired
+ * convert page composed the same readers the same way
+ * (`features/convert/lib/convert.ts`, now only in git history).
+ *
+ * DETECTION ORDER, and why the sequence reader runs first: its own `detect`
+ * already classifies every first line this pane accepts except arch-lab JSON
+ * (`archlab 1.0 sequence`, `sequenceDiagram`, and — as its typed
+ * `c4-detected` error — both C4 dialects). Re-implementing that here would be
+ * a second heuristic to keep in step; instead its verdicts are consumed as
+ * routing, and only the one shape it cannot name (JSON, via the viewer's
+ * `detectFormat`) is resolved after it. Errors keep each parser's native
+ * precision — line/column with the quotable source line, or the validator's
+ * JSON-path issues — because the UI renders the same caret quote the rest of
+ * the site uses.
+ */
+
+import type { SequenceLabFile } from "@/types";
+
+import { ARCHTEXT_EXTENSION, serializeSequenceText } from "@/features/archtext";
+import {
+  serializeMermaidC4,
+  serializeMermaidSequence,
+} from "@/features/mermaid";
+/* PAST THE BARRELS, DELIBERATELY, and the same exception `dry.md` already
+   tolerates for `validate/lib/check.ts`: both feature barrels export React
+   components, and importing one here would drag a canvas into a module that
+   must stay PURE. Pure is not an aesthetic here — every other format module
+   in this repo is loaded by a `check:*` script through Node's type stripping,
+   which cannot read `.tsx` at all, so a barrel import silently removes this
+   file from the only test harness it could have. The input layers below are
+   pure by construction. Keep new imports here pointed at those. */
+import {
+  parseSequenceInput,
+  SEQUENCE_FORMAT_LABEL,
+  type SequenceParseErrorDetail,
+  type SequenceSourceFormat,
+} from "@/features/sequence/input/parse";
+import { SEQUENCE_EXAMPLE } from "@/features/sequence/input/example";
+import { detectFormat } from "@/features/viewer/input/detect";
+import {
+  importMermaid,
+  parsePane,
+  SEED_MODEL,
+  type AftErrorDetail,
+  type JsonPaneErrorDetail,
+  type MermaidImportError,
+  type SyncedModel,
+} from "@/features/viewer/input/sync";
+
+/* -------------------------------------------------------------------------- */
+/* Shapes                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** Which example seeds the pane — the ONLY thing the three routes vary. */
+export type SeedKind = "c4" | "sequence";
+
+/** The languages a C4 document can sit in the pane as. */
+export type C4SourceFormat = "alab" | "json" | "mermaid";
+
+export const C4_FORMAT_LABEL: Record<C4SourceFormat, string> = {
+  alab: ".alab",
+  json: "arch-lab JSON",
+  mermaid: "Mermaid C4",
+};
+
+/** The last GOOD parse — everything either canvas needs to render. */
+export type ViewDocument =
+  | { kind: "c4"; format: C4SourceFormat; synced: SyncedModel }
+  | { kind: "sequence"; format: SequenceSourceFormat; file: SequenceLabFile };
+
+/**
+ * Every way the pane's text can fail, each in its native reader's shape.
+ * `mermaid-c4` wraps `importMermaid`'s error (which carries no discriminant
+ * of its own) so one switch can render all of them.
+ */
+export type ViewSourceError =
+  | AftErrorDetail
+  | JsonPaneErrorDetail
+  | ({ kind: "mermaid-c4" } & MermaidImportError)
+  | SequenceParseErrorDetail
+  | { kind: "unknown-format"; message: string };
+
+export type ViewParseResult =
+  | { status: "ok"; value: ViewDocument }
+  | { status: "error"; error: ViewSourceError };
+
+/** The pane's format toggle values. JSON is deliberately not one of them:
+ * the JSON twin has its own pane, and a three-way toggle would give the
+ * on-disk form equal billing with the format people are asked to write. */
+export type ToggleFormat = "alab" | "mermaid";
+
+/* -------------------------------------------------------------------------- */
+/* Detection + parsing, composed                                               */
+/* -------------------------------------------------------------------------- */
+
+export function parseViewSource(text: string): ViewParseResult {
+  const sequence = parseSequenceInput(text);
+  if (sequence.status === "ok") {
+    return {
+      status: "ok",
+      value: {
+        kind: "sequence",
+        format: sequence.value.format,
+        file: sequence.value.file,
+      },
+    };
+  }
+
+  const detail = sequence.error;
+  if (detail.kind === "parse") {
+    // The text IS sequence-shaped and failed inside the sequence grammar —
+    // located where that parser located it.
+    return { status: "error", error: detail };
+  }
+
+  if (detail.kind === "c4-detected") {
+    // Either C4 dialect. `detectFormat` splits them (Mermaid header vs not);
+    // there is no "redirect to the other playground" any more — this pane IS
+    // both playgrounds, so a C4 verdict is a route into a reader, not an error.
+    if (detectFormat(text) === "mermaid") {
+      const imported = importMermaid(text);
+      return imported.status === "ok"
+        ? {
+            status: "ok",
+            value: { kind: "c4", format: "mermaid", synced: imported.value },
+          }
+        : { status: "error", error: { kind: "mermaid-c4", ...imported.error } };
+    }
+    const parsed = parsePane("aft", text);
+    if (parsed.status === "ok") {
+      return {
+        status: "ok",
+        value: { kind: "c4", format: "alab", synced: parsed.value },
+      };
+    }
+    if (parsed.error.kind !== "aft") {
+      // `parsePane("aft", …)` can only fail as "aft" or "mermaid-detected",
+      // and the Mermaid case was routed above — anything else is a
+      // programming error, not an input to explain to the user.
+      throw new Error(
+        `playground: unexpected .alab failure kind "${parsed.error.kind}"`,
+      );
+    }
+    return { status: "error", error: parsed.error };
+  }
+
+  // The sequence reader could not name the shape. The one language its
+  // detector does not know is arch-lab JSON.
+  if (detectFormat(text) === "json") {
+    const parsed = parsePane("json", text);
+    if (parsed.status === "ok") {
+      return {
+        status: "ok",
+        value: { kind: "c4", format: "json", synced: parsed.value },
+      };
+    }
+    if (parsed.error.kind !== "json") {
+      throw new Error(
+        `playground: unexpected JSON failure kind "${parsed.error.kind}"`,
+      );
+    }
+    return { status: "error", error: parsed.error };
+  }
+
+  return {
+    status: "error",
+    error: {
+      kind: "unknown-format",
+      // Two messages, as `parseSequenceInput` distinguishes for its own pane:
+      // an empty pane needs an invitation, an unrecognised one needs the list
+      // of first lines that would have worked.
+      message:
+        text.trim() === ""
+          ? "Nothing to render yet — write .alab text (`archlab 1.0` or `archlab 1.0 sequence`), paste arch-lab JSON, or paste Mermaid (C4 or a sequenceDiagram)."
+          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `{` (arch-lab JSON), a Mermaid C4 header, or `sequenceDiagram`.",
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Canonical text, conversions, and per-document lookups                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The canonical text of a parsed document IN ITS OWN pane format — what the
+ * Format button writes, and what a JSON-pane edit regenerates the source pane
+ * as. Regenerating in the pane's CURRENT format (not always `.alab`) is what
+ * keeps the format toggle honest: syncing must never silently flip the
+ * language the user chose to look at.
+ */
+export function sourceTextFor(doc: ViewDocument): string {
+  if (doc.kind === "sequence") {
+    return doc.format === "mermaid"
+      ? serializeMermaidSequence(doc.file)
+      : serializeSequenceText(doc.file);
+  }
+  switch (doc.format) {
+    case "alab":
+      return doc.synced.aftText;
+    case "json":
+      return doc.synced.jsonText;
+    case "mermaid":
+      // Default target diagram (the file's `x-mermaid.sourceDiagramId`, else
+      // the root) — the emit contract's own resolution, not a choice made here.
+      return serializeMermaidC4(doc.synced.file);
+  }
+}
+
+/** The document rewritten in the other toggle format. */
+export function convertedSourceText(
+  doc: ViewDocument,
+  to: ToggleFormat,
+): string {
+  if (doc.kind === "sequence") {
+    return to === "mermaid"
+      ? serializeMermaidSequence(doc.file)
+      : serializeSequenceText(doc.file);
+  }
+  return to === "mermaid"
+    ? serializeMermaidC4(doc.synced.file)
+    : doc.synced.aftText;
+}
+
+/**
+ * What converting a C4 document TO Mermaid drops. Stated at the moment of
+ * conversion, in the announcement and the caveat disclosure — the emit layer
+ * documents the loss (`mermaid/lib/emit.ts`, "Known lossy spots") but exports
+ * no user-facing sentence for it, so this is that sentence.
+ */
+export const MERMAID_C4_EXPORT_CAVEAT =
+  "Mermaid C4 holds a single diagram, so a multi-level model keeps only one " +
+  "level, and geometry, drill-down links and technology on people/systems " +
+  "are dropped. The .alab keeps everything.";
+
+/** "a C4 model (arch-lab JSON)" — for parse announcements. */
+export function describeDocument(doc: ViewDocument): string {
+  return doc.kind === "c4"
+    ? `a C4 model (${C4_FORMAT_LABEL[doc.format]})`
+    : `a sequence diagram (${SEQUENCE_FORMAT_LABEL[doc.format]})`;
+}
+
+/** The document's own title — file stems and the Web Share sheet. */
+export function documentTitle(doc: ViewDocument): string {
+  return doc.kind === "c4" ? doc.synced.model.title : doc.file.metadata.title;
+}
+
+/** Download extension for the pane's current format. */
+export function sourceExtension(doc: ViewDocument): string {
+  if (doc.format === "mermaid") return ".mmd";
+  return doc.kind === "c4" && doc.format === "json"
+    ? JSON_EXTENSION
+    : ARCHTEXT_EXTENSION;
+}
+
+export const JSON_EXTENSION = ".archlab.json";
+
+/* -------------------------------------------------------------------------- */
+/* Seeds                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/** The example text each route opens with — the routes' only difference. */
+export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
+  c4: SEED_MODEL.aftText,
+  sequence: SEQUENCE_EXAMPLE,
+};
+
+function mustParse(text: string): ViewDocument {
+  const result = parseViewSource(text);
+  if (result.status !== "ok") {
+    // A failing seed is a build break, not a user state — both examples are
+    // parser-verified here at module load, exactly as SEED_MODEL is.
+    throw new Error("playground: a seed example does not parse");
+  }
+  return result.value;
+}
+
+/** The parsed seed documents. The C4 one reuses `SEED_MODEL` directly rather
+ * than re-deriving it, so the two constants cannot disagree. */
+export const VIEW_SEED_DOCUMENT: Record<SeedKind, ViewDocument> = {
+  c4: { kind: "c4", format: "alab", synced: SEED_MODEL },
+  sequence: mustParse(SEQUENCE_EXAMPLE),
+};
