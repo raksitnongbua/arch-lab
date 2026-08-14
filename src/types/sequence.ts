@@ -145,11 +145,31 @@ export interface SequenceNote {
 /* -------------------------------------------------------------------------- */
 
 /**
- * `alt` and `par` are multi-branch (`else` / `and` open the 2nd+ branch);
- * `loop` and `opt` always have exactly one branch. One shape for all four —
- * a branch count rule, not four shapes — so tools walk fragments uniformly.
+ * `alt`, `par` and `critical` are multi-branch (`else` / `and` / `option`
+ * open the 2nd+ branch); `loop`, `opt`, `break` and `rect` always have
+ * exactly one branch. One shape for all seven — a branch count rule, not
+ * seven shapes — so tools walk fragments uniformly.
+ *
+ * `critical`, `break` and `rect` arrived with the Mermaid importer, which
+ * used to flatten them because the model had nowhere to put them. Two of the
+ * three are ordinary UML fragments and needed only a keyword; `rect` is the
+ * odd one and earns its place anyway:
+ *
+ *   - `critical` — the branch that MUST happen, with `option` lanes for the
+ *     circumstances that can interrupt it. Structurally an `alt`; drawn as
+ *     itself, because "critical" is the word that carries the meaning.
+ *   - `break` — the exit path out of the enclosing loop or flow. Single
+ *     branch, like `opt`, and drawn distinctly for the same reason.
+ *   - `rect` — a HIGHLIGHT, not control flow: a tinted region behind a run
+ *     of messages ("everything in here is the payment leg"). It is a
+ *     fragment because it nests, spans and encloses exactly like one, and
+ *     making it a fragment means the layout, the focus walk, the collapse
+ *     filter and the exporter all handle it with no new case. What is
+ *     different is only that it carries a {@link SequenceFragment.tint} and
+ *     draws no guard chip when it has no label.
  */
-export type SequenceFragmentKind = "loop" | "opt" | "alt" | "par";
+export type SequenceFragmentKind =
+  "loop" | "opt" | "alt" | "par" | "critical" | "break" | "rect";
 
 export interface SequenceBranch {
   /** The guard / condition / lane label ("retry x3", "cart valid"). */
@@ -161,8 +181,55 @@ export interface SequenceBranch {
 export interface SequenceFragment {
   step: "fragment";
   kind: SequenceFragmentKind;
-  /** At least one. `loop`/`opt`: exactly one; `alt`/`par`: one per lane. */
+  /**
+   * The highlight colour of a `rect`, as lowercase `#rrggbb` — the ONE
+   * spelling, normalised on the way in from whatever the source wrote
+   * (`rgb(191, 223, 255)`, `#BFDFFF`, `Aqua`), so two documents that mean the
+   * same colour are the same bytes.
+   *
+   * Rendered as a WASH rather than a fill: the author picked it against
+   * Mermaid's light canvas, and painting it opaque would make a dark-theme
+   * diagram unreadable and its own text invisible. At low alpha the hue still
+   * says "these steps belong together" in both themes, which is the whole
+   * job of the colour.
+   *
+   * Ignored on every other kind — a tinted `alt` is not a thing the grammar
+   * can spell, so nothing can produce one.
+   */
+  tint?: string;
+  /** At least one. `loop`/`opt`/`break`/`rect`: exactly one;
+   * `alt`/`par`/`critical`: one per lane. */
   branches: SequenceBranch[];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Participant boxes                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A labelled bracket over a CONTIGUOUS run of lifelines — "these three are
+ * the payments team", "everything in here is third-party". Mermaid's `box`.
+ *
+ * A separate list rather than a `box` field on each participant, for the same
+ * reason `participants` is an array and not a map: the bracket is a thing
+ * with its own label and colour, and hanging it off its members would make
+ * "the box's name" a value repeated on every member, free to disagree.
+ *
+ * CONTIGUITY IS A RULE, not a hope. A bracket is drawn as one span from its
+ * leftmost to its rightmost member, so a box whose members are interleaved
+ * with an outsider's lifeline would draw over a participant it does not
+ * contain. Both readers refuse that rather than draw a lie: the `.alab`
+ * grammar makes it unspellable (members are nested inside the box block, and
+ * nesting IS the order), and the Mermaid importer checks it.
+ */
+export interface SequenceBox {
+  /** Required — an unlabelled bracket says nothing a reader can use. */
+  label: string;
+  /** Same normalised `#rrggbb` and the same wash treatment as
+   * {@link SequenceFragment.tint}. */
+  tint?: string;
+  /** Participant ids, in lifeline order. At least one. */
+  participants: string[];
 }
 
 /** One step of the diagram. ORDERED — array position is execution order. */
@@ -196,6 +263,9 @@ export interface SequenceLabFile {
   metadata: ArchLabMetadata;
   /** Ordered: left-to-right lifeline order. Never sorted. */
   participants: SequenceParticipant[];
+  /** Labelled brackets over contiguous runs of `participants`. Absent when
+   * the document groups nothing — an empty array is not written. */
+  boxes?: SequenceBox[];
   /** Number every message when true. Absent = unstated (off). */
   autonumber?: boolean;
   /** Ordered: top-to-bottom execution order. Never sorted. */
@@ -214,9 +284,9 @@ export function isSelfMessage(message: SequenceMessage): boolean {
   return message.from === message.to;
 }
 
-/** How many branches each fragment kind may carry: `alt`/`par` grow one per
- * `else`/`and`; `loop`/`opt` are single-branch. One table, no duplicated
- * rules — the parser and any future editor both read this. */
+/** How many branches each fragment kind may carry: `alt`/`par`/`critical`
+ * grow one per `else`/`and`/`option`; the rest are single-branch. One table,
+ * no duplicated rules — the parser and any future editor both read this. */
 export const MAX_BRANCHES_BY_FRAGMENT_KIND: Record<
   SequenceFragmentKind,
   number
@@ -225,6 +295,9 @@ export const MAX_BRANCHES_BY_FRAGMENT_KIND: Record<
   opt: 1,
   alt: Number.POSITIVE_INFINITY,
   par: Number.POSITIVE_INFINITY,
+  critical: Number.POSITIVE_INFINITY,
+  break: 1,
+  rect: 1,
 };
 
 /** Whether `kind` accepts a 2nd, 3rd, … branch (`else` / `and` lines). */

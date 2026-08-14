@@ -45,6 +45,7 @@ import type {
 } from "@/types";
 
 import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+import { normalizeTint } from "@/lib/tint";
 
 import { LineCursor } from "../cursor";
 import { DEFAULT_TIMESTAMP } from "../defaults";
@@ -62,6 +63,8 @@ import {
 import type { Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import {
+  BOX_KEYWORD,
+  BRANCH_KEYWORD_BY_KIND,
   BRANCH_KEYWORDS,
   FRAGMENT_KIND_BY_KEYWORD,
   PARTICIPANT_KIND_BY_KEYWORD,
@@ -69,15 +72,19 @@ import {
   SEQUENCE_ARROWS,
   SEQUENCE_BLOCK,
   SEQUENCE_HEADER_WORD,
+  TINT_ATTRIBUTE,
 } from "./keywords";
 import {
+  BOX_KEYS,
   BRANCH_KEYS,
   FRAGMENT_KEYS,
   MESSAGE_KEYS,
   NOTE_KEYS,
   PARTICIPANT_KEYS,
+  SEQ_BOX_RAW,
   SEQ_BRANCH_RAW,
   SEQ_FILE_KEYS,
+  SEQ_FRAGMENT_RAW,
   SEQ_MESSAGE_RAW,
   SEQ_META_RAW,
   SEQ_PARTICIPANT_RAW,
@@ -131,21 +138,37 @@ interface PendBranch {
 interface PendFragment extends Loc {
   step: "fragment";
   kind: SequenceFragmentKind;
-  /** Indent of the opening keyword — `else`/`and` must reappear here. */
+  /** Normalised `#rrggbb`; `rect` only. */
+  tint?: string;
+  /** Indent of the opening keyword — `else`/`and`/`option` reappear here. */
   openerIndent: number;
   branches: PendBranch[];
   unknowns: Pend[];
+  raw: Map<string, Pend>;
 }
 
 type PendItem = PendMessage | PendNote | PendFragment;
 
-/** One open block: the root body, or one branch of one open fragment. */
+/** One open `box` block. Its members are the participant lines nested inside
+ * it, collected in text order — which is what makes a box contiguous by
+ * construction rather than by a check. */
+interface PendBox extends Loc {
+  label: string;
+  tint?: string;
+  participants: string[];
+  unknowns: Pend[];
+  raw: Map<string, Pend>;
+}
+
+/** One open block: the root body, one `box`, or one branch of one fragment. */
 interface Context {
   /** Indent items of this block sit at. */
   itemIndent: number;
   branch: PendBranch;
-  /** `null` only for the root body context. */
+  /** `null` unless this context is a fragment branch. */
   fragment: PendFragment | null;
+  /** Non-null only inside a `box` block — participants declared here join it. */
+  box?: PendBox;
 }
 
 interface Header {
@@ -193,6 +216,7 @@ export function parseSequenceText(source: string): SequenceLabFile {
   };
   const participants: PendParticipant[] = [];
   const participantById = new Map<string, PendParticipant>();
+  const boxes: PendBox[] = [];
   const rootBranch: PendBranch = { items: [], raw: new Map(), unknowns: [] };
   /* The context stack. Index 0 is the root body; a fragment opener pushes
      one context per open branch. Dedenting pops — there is no `end`
@@ -362,6 +386,7 @@ export function parseSequenceText(source: string): SequenceLabFile {
     }
 
     lastItem = parseBodyLine(cursor, contexts, participants, participantById, {
+      openBox: (box) => boxes.push(box),
       setAutonumber: (value, at) => {
         if (autonumberSeen) {
           failAt(at.line, at.column, 'duplicate "autonumber" line');
@@ -388,7 +413,14 @@ export function parseSequenceText(source: string): SequenceLabFile {
     );
   }
 
-  return resolve(header, participants, participantById, rootBranch, autonumber);
+  return resolve(
+    header,
+    participants,
+    participantById,
+    boxes,
+    rootBranch,
+    autonumber,
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -576,6 +608,7 @@ function parseHeaderBang(cursor: LineCursor, header: Header): void {
 /* -------------------------------------------------------------------------- */
 
 interface BodyHooks {
+  openBox: (box: PendBox) => void;
   setAutonumber: (value: boolean, at: Loc) => void;
   rootHasSteps: () => boolean;
 }
@@ -593,6 +626,10 @@ function parseBodyLine(
   /* `!` at ITEM indent (not a continuation — the caller filtered those)
      attaches to the enclosing fragment/branch. */
   if (cursor.peek() === "!") {
+    if (top.box !== undefined) {
+      parseBoxBang(cursor, top.box);
+      return null;
+    }
     if (top.fragment === null) {
       cursor.fail(
         `file-level "!" lines belong in the header, before ${SEQUENCE_BLOCK}`,
@@ -646,11 +683,14 @@ function parseBodyLine(
           '"desc" is a continuation — indent it 2 spaces under the participant or message it describes',
         );
         break;
-      case "else":
-      case "and":
-        parseBranchLine(cursor, startLoc, first, contexts, indent);
+      case BOX_KEYWORD:
+        parseBoxOpener(cursor, startLoc, contexts, top, indent, hooks);
         return null;
       default: {
+        if (BRANCH_KEYWORDS[first] !== undefined) {
+          parseBranchLine(cursor, startLoc, first, contexts, indent);
+          return null;
+        }
         const kind = FRAGMENT_KIND_BY_KEYWORD[first];
         if (kind !== undefined) {
           parseFragmentOpener(cursor, startLoc, kind, contexts, top, indent);
@@ -777,6 +817,9 @@ function parseParticipantLine(
   cursor.expectEnd("the participant line");
   participants.push(participant);
   participantById.set(id, participant);
+  /* Membership is recorded here, not on the box line, because the box line
+     never names its members — being nested inside it IS the membership. */
+  top.box?.participants.push(id);
   return {
     kind: "participant",
     indent: cursor.text.search(/\S/),
@@ -792,6 +835,17 @@ function parseMessageLine(
   from: string,
   top: Context,
 ): Continuable {
+  /* Caught here rather than left to the indentation rules: a message inside
+     a box otherwise lands in the throwaway branch that context carries and
+     vanishes from the document without a word. */
+  if (top.box !== undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      `a message cannot sit inside a "${BOX_KEYWORD}" — the box groups lifelines, and steps come after it at the body's own indent`,
+      from,
+    );
+  }
   let arrow: (typeof SEQUENCE_ARROWS)[number] | undefined;
   for (const candidate of SEQUENCE_ARROWS) {
     if (cursor.text.startsWith(candidate[0], cursor.pos)) {
@@ -871,6 +925,14 @@ function parseNoteLine(
   loc: Loc,
   top: Context,
 ): Continuable {
+  if (top.box !== undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      `a note cannot sit inside a "${BOX_KEYWORD}" — the box groups lifelines, and steps come after it at the body's own indent`,
+      "note",
+    );
+  }
   cursor.skipSpaces();
   const placementLoc = { line: cursor.line, column: cursor.column };
   const placement = cursor.readBare(/^[a-z]+/, "a note placement");
@@ -917,6 +979,113 @@ function parseNoteLine(
   return { kind: "note", indent: cursor.text.search(/\S/), item: note };
 }
 
+/* ---------------------------------- boxes ---------------------------------- */
+
+/**
+ * `box "Front of house" tint=#bfdfff`, with its members nested one level in.
+ *
+ * NESTING IS THE CONTIGUITY RULE. The alternative — a `box=` attribute on
+ * each participant line — would let a document name members that are not
+ * neighbours, and a bracket over a non-contiguous set has no honest drawing.
+ * Here the members are literally the lines inside the block, so the order in
+ * the text IS the order in `participants`, and the run cannot be broken
+ * without moving a line out of the block.
+ */
+function parseBoxOpener(
+  cursor: LineCursor,
+  loc: Loc,
+  contexts: Context[],
+  top: Context,
+  indent: number,
+  hooks: BodyHooks,
+): void {
+  if (top.fragment !== null || top.box !== undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      `"${BOX_KEYWORD}" groups lifelines — it belongs at the top of the ${SEQUENCE_BLOCK} body, not inside another block`,
+      BOX_KEYWORD,
+    );
+  }
+  if (hooks.rootHasSteps()) {
+    failAt(
+      loc.line,
+      loc.column,
+      `"${BOX_KEYWORD}" declares participants, so it comes before the first message`,
+      BOX_KEYWORD,
+    );
+  }
+  cursor.skipSpaces();
+  if (cursor.peek() !== '"') {
+    cursor.fail(`the "${BOX_KEYWORD}" label, in quotes`);
+  }
+  const label = cursor.readQuoted(`the "${BOX_KEYWORD}" label`);
+  if (label === "") {
+    failAt(
+      loc.line,
+      loc.column,
+      `the "${BOX_KEYWORD}" label must not be empty — a bracket with no name says nothing`,
+    );
+  }
+  const tint = readTintAttribute(cursor, BOX_KEYWORD);
+  cursor.expectEnd(`the "${BOX_KEYWORD}" line`);
+
+  const box: PendBox = {
+    ...loc,
+    label,
+    ...(tint !== undefined ? { tint } : {}),
+    participants: [],
+    unknowns: [],
+    raw: new Map(),
+  };
+  hooks.openBox(box);
+  /* A box owns no ITEMS — only participants — but it still needs a branch to
+     satisfy the context shape. Anything pushed into this throwaway branch is
+     a step declared inside a box, which `parseMessageLine` refuses below. */
+  contexts.push({
+    itemIndent: indent + 2,
+    branch: { items: [], raw: new Map(), unknowns: [] },
+    fragment: null,
+    box,
+  });
+}
+
+/**
+ * The optional `tint=<colour>` tail shared by `box` and `rect`.
+ *
+ * Refused rather than ignored when it is not a colour we store: the author
+ * typed a value, and silently dropping it means the diagram they get back is
+ * not the one they described. (The Mermaid importer makes the opposite call
+ * for the same input, deliberately — see `normalizeTint`.)
+ */
+function readTintAttribute(
+  cursor: LineCursor,
+  what: string,
+): string | undefined {
+  cursor.skipSpaces();
+  if (!cursor.text.startsWith(`${TINT_ATTRIBUTE}=`, cursor.pos))
+    return undefined;
+  cursor.pos += TINT_ATTRIBUTE.length + 1;
+  const loc = { line: cursor.line, column: cursor.column };
+  /* `rgba?\(…\)` FIRST: a bare-word alternative earlier in the alternation
+     matches the `rgb` of `rgb(1,2,3)` and stops, and the error that follows
+     blames a colour name the author never wrote. */
+  const raw = cursor.readBare(
+    /^(rgba?\([^)]*\)|#[0-9A-Fa-f]{3,8}|[A-Za-z]+)/,
+    `a colour after "${TINT_ATTRIBUTE}=" — #rrggbb, rgb(…) or a colour name`,
+  );
+  const tint = normalizeTint(raw);
+  if (tint === null) {
+    failAt(
+      loc.line,
+      loc.column,
+      `"${raw}" is not a colour this format stores — write ${TINT_ATTRIBUTE}=#rrggbb, or leave it off the "${what}" line`,
+      raw,
+    );
+  }
+  return tint;
+}
+
 /* ------------------------------- fragments -------------------------------- */
 
 function parseFragmentOpener(
@@ -927,19 +1096,32 @@ function parseFragmentOpener(
   top: Context,
   indent: number,
 ): void {
+  if (top.box !== undefined) {
+    failAt(
+      loc.line,
+      loc.column,
+      `"${kind}" is a step — it cannot sit inside a "${BOX_KEYWORD}", which holds participants`,
+      kind,
+    );
+  }
   cursor.skipSpaces();
   const branch: PendBranch = { items: [], raw: new Map(), unknowns: [] };
   if (cursor.peek() === '"') {
     branch.label = cursor.readQuoted("the fragment label");
   }
+  /* Only `rect` takes a tint: on any other kind the colour would be a value
+     the renderer never reads, i.e. a field that silently does nothing. */
+  const tint = kind === "rect" ? readTintAttribute(cursor, kind) : undefined;
   cursor.expectEnd(`the "${kind}" line`);
   const fragment: PendFragment = {
     ...loc,
     step: "fragment",
     kind,
+    ...(tint !== undefined ? { tint } : {}),
     openerIndent: indent,
     branches: [branch],
     unknowns: [],
+    raw: new Map(),
   };
   top.branch.items.push(fragment);
   contexts.push({ itemIndent: indent + 2, branch, fragment });
@@ -978,7 +1160,7 @@ function parseBranchLine(
       loc.line,
       loc.column,
       isMultiBranch(fragment.kind)
-        ? `"${keyword}" continues an "${wantsKind}" fragment, but this one is "${fragment.kind}" — use "${fragment.kind === "alt" ? "else" : "and"}"`
+        ? `"${keyword}" continues an "${wantsKind}" fragment, but this one is "${fragment.kind}" — use "${BRANCH_KEYWORD_BY_KIND[fragment.kind]}"`
         : `"${fragment.kind}" fragments have a single branch — "${keyword}" only continues "${wantsKind}"`,
       keyword,
     );
@@ -1013,6 +1195,27 @@ function parseFragmentBang(cursor: LineCursor, top: Context): void {
       );
     }
     const key = segString(path[1], "a fragment field name");
+    const fragment = top.fragment as PendFragment;
+    /* `tint` is BOTH known and raw-able: a newer minor could carry a shape
+       the `tint=` attribute cannot spell, and dropping it would be the one
+       thing the `!` escape exists to prevent. */
+    if (SEQ_FRAGMENT_RAW.has(key)) {
+      if (fragment.raw.has(key) || fragment[key as "tint"] !== undefined) {
+        failAt(
+          path[1].line,
+          path[1].column,
+          `"frag.${key}" is set twice — once on the opener line and once here`,
+        );
+      }
+      fragment.raw.set(key, {
+        key,
+        after: tail.after,
+        value: tail.value,
+        line: path[1].line,
+        column: path[1].column,
+      });
+      return;
+    }
     if (FRAGMENT_KEYS_SET.has(key)) {
       failAt(
         path[1].line,
@@ -1020,7 +1223,6 @@ function parseFragmentBang(cursor: LineCursor, top: Context): void {
         `"frag.${key}" has dedicated syntax — it cannot be set with a "!" line`,
       );
     }
-    const fragment = top.fragment as PendFragment;
     if (fragment.unknowns.some((p) => p.key === key)) {
       failAt(
         path[1].line,
@@ -1070,6 +1272,55 @@ function parseFragmentBang(cursor: LineCursor, top: Context): void {
     }
     top.branch.unknowns.push(pend);
   }
+}
+
+/** `!` inside a `box` block: one key, scoped to the box. Same three-way
+ * split as everywhere else — raw-able known key, dedicated-syntax key
+ * (refused), or an unknown carried verbatim. */
+function parseBoxBang(cursor: LineCursor, box: PendBox): void {
+  cursor.expect("!", '"!"');
+  cursor.skipSpaces();
+  const path = readPath(cursor);
+  const tail = readBangTail(cursor);
+  cursor.expectEnd('the "!" line');
+  const first = path[0];
+  if (path.length !== 1) {
+    failAt(
+      first.line,
+      first.column,
+      `"${BOX_KEYWORD}" "!" paths are one key — nothing nests under a box`,
+    );
+  }
+  const key = segString(first, "a box field name");
+  const pend: Pend = {
+    key,
+    after: tail.after,
+    value: tail.value,
+    line: first.line,
+    column: first.column,
+  };
+  if (SEQ_BOX_RAW.has(key)) {
+    if (box.raw.has(key) || box.tint !== undefined) {
+      failAt(
+        first.line,
+        first.column,
+        `"${key}" is set twice — once on the "${BOX_KEYWORD}" line and once here`,
+      );
+    }
+    box.raw.set(key, pend);
+    return;
+  }
+  if ((BOX_KEYS as readonly string[]).includes(key)) {
+    failAt(
+      first.line,
+      first.column,
+      `"${key}" has dedicated syntax — it cannot be set with a "!" line`,
+    );
+  }
+  if (box.unknowns.some((p) => p.key === key)) {
+    failAt(first.line, first.column, `duplicate "!" line for "${key}"`);
+  }
+  box.unknowns.push(pend);
 }
 
 /* ----------------------------- continuations ------------------------------ */
@@ -1175,6 +1426,7 @@ function resolve(
   header: Header,
   participants: PendParticipant[],
   participantById: Map<string, PendParticipant>,
+  boxes: PendBox[],
   rootBranch: PendBranch,
   autonumber: boolean | undefined,
 ): SequenceLabFile {
@@ -1223,6 +1475,23 @@ function resolve(
       pick(participant.description, participant.raw, "description"),
     );
     return assemble(pairs, participant.unknowns);
+  });
+
+  /* -------------------------------- boxes -------------------------------- */
+  const finalBoxes = boxes.map((box) => {
+    if (box.participants.length === 0) {
+      failAt(
+        box.line,
+        box.column,
+        `the "${BOX_KEYWORD}" named ${JSON.stringify(box.label)} holds no participants — indent them 2 spaces under it, or remove the box`,
+        BOX_KEYWORD,
+      );
+    }
+    const pairs: (readonly [string, unknown])[] = [["label", box.label]];
+    const tint = pick(box.tint, box.raw, "tint");
+    if (tint !== undefined) pairs.push(["tint", tint]);
+    pairs.push(["participants", box.participants]);
+    return assemble(pairs, box.unknowns);
   });
 
   /* -------------------------------- items -------------------------------- */
@@ -1278,14 +1547,14 @@ function resolve(
         pairs.push(["items", finalizeItems(branch.items)]);
         return assemble(pairs, branch.unknowns);
       });
-      return assemble(
-        [
-          ["step", "fragment"],
-          ["kind", item.kind],
-          ["branches", branches],
-        ],
-        item.unknowns,
-      );
+      const fragmentPairs: (readonly [string, unknown])[] = [
+        ["step", "fragment"],
+        ["kind", item.kind],
+      ];
+      const tint = pick(item.tint, item.raw, "tint");
+      if (tint !== undefined) fragmentPairs.push(["tint", tint]);
+      fragmentPairs.push(["branches", branches]);
+      return assemble(fragmentPairs, item.unknowns);
     });
 
   const items = finalizeItems(rootBranch.items);
@@ -1310,6 +1579,9 @@ function resolve(
   file.kind = "sequence";
   file.metadata = metadata;
   file.participants = finalParticipants;
+  /* Omitted when nothing groups: an empty array and no array would be two
+     spellings of "no boxes", and the serializer writes neither. */
+  if (finalBoxes.length > 0) file.boxes = finalBoxes;
   if (autonumber !== undefined) file.autonumber = autonumber;
   file.items = items;
   for (const pend of header.fileUnknowns) {

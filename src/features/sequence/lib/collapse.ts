@@ -218,9 +218,26 @@ export function collapseSequence(
   hidden: ReadonlySet<string>,
 ): SequenceLabFile {
   if (hidden.size === 0) return file;
-  return {
+  /* A box keeps only its visible members, and a box that lost all of them is
+     dropped rather than drawn empty — a bracket over nothing is a label
+     pointing at a gap. Boxes stay CONTIGUOUS through this by construction:
+     removing members from a run leaves a run. */
+  const boxes = file.boxes
+    ?.map((box) => ({
+      ...box,
+      participants: box.participants.filter((id) => !hidden.has(id)),
+    }))
+    .filter((box) => box.participants.length > 0);
+  const collapsed: SequenceLabFile = {
     ...file,
     participants: file.participants.filter((p) => !hidden.has(p.id)),
     items: filterItems(file.items, hidden),
   };
+  /* Assigned rather than spread: `boxes: undefined` inside an object literal
+     is a PRESENT key holding undefined, which is a different document from
+     one that never had boxes — and `JSON.stringify` would agree with us while
+     `Object.keys` would not. */
+  if (boxes === undefined || boxes.length === 0) delete collapsed.boxes;
+  else collapsed.boxes = boxes;
+  return collapsed;
 }

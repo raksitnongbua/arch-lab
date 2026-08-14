@@ -92,13 +92,40 @@ export const FRAGMENT_KIND_BY_KEYWORD: Readonly<
   opt: "opt",
   alt: "alt",
   par: "par",
+  critical: "critical",
+  break: "break",
+  rect: "rect",
 };
 
 /** Branch-separator keyword → the fragment kind it may extend. */
 export const BRANCH_KEYWORDS: Readonly<Record<string, SequenceFragmentKind>> = {
   else: "alt",
   and: "par",
+  option: "critical",
 };
+
+/** Fragment kind → the keyword that opens its SECOND and later branches.
+ * Derived from `BRANCH_KEYWORDS` rather than written twice, so a new
+ * multi-branch kind cannot be given a separator here and forgotten there. */
+export const BRANCH_KEYWORD_BY_KIND: Readonly<
+  Partial<Record<SequenceFragmentKind, string>>
+> = Object.fromEntries(
+  Object.entries(BRANCH_KEYWORDS).map(([keyword, kind]) => [kind, keyword]),
+);
+
+/**
+ * The one trailing attribute a `rect` or a `box` line may carry, spelled
+ * `key=value` like the C4 grammar's `owner=` and `in=`. A separate word
+ * rather than a second quoted string, because a `rect "…"` already means a
+ * LABEL and a colour that looked like one would be the kind of ambiguity
+ * this grammar exists to avoid.
+ */
+export const TINT_ATTRIBUTE = "tint";
+
+/** The block that groups a contiguous run of lifelines under one bracket
+ * (`SequenceBox`). Its members are the participant lines nested inside it —
+ * nesting is what makes a non-contiguous box unspellable. */
+export const BOX_KEYWORD = "box";
 
 /** `note <placement> …` placements, verbatim. */
 export const NOTE_PLACEMENTS: readonly SequenceNotePlacement[] = [
@@ -120,6 +147,7 @@ export const RESERVED_BODY_WORDS: ReadonlySet<string> = new Set([
   "autonumber",
   "desc",
   "null",
+  BOX_KEYWORD,
   ...Object.keys(FRAGMENT_KIND_BY_KEYWORD),
   ...Object.keys(BRANCH_KEYWORDS),
 ]);

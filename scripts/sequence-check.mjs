@@ -412,6 +412,101 @@ const HAND_MODEL = {
 }
 
 /* ----------------------------------------------------------------------- */
+/* 2b. Boxes, rect tints and the two fragment kinds that arrived with them  */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * A second canonical document rather than more lines in the kitchen sink:
+ * these constructs are the ones whose TEXT SHAPE is new — a block that holds
+ * participants (`box`), an attribute tail (`tint=`), and two fragment
+ * keywords with a separator (`option`) the grammar had no equivalent of. The
+ * round trip is the assertion that matters; everything below it names one
+ * thing that could break while the bytes still matched by accident.
+ */
+console.log("boxes, tints and the critical/break/rect fragments");
+
+const GROUPED = `archlab 1.0 sequence
+title "Grouped"
+
+@sequence
+  box "Front of house" tint=#bfdfff
+    cust:actor "Customer"
+    web "Storefront" [Next.js]
+      desc "The shop."
+  api:participant "Order API"
+  box "Data"
+    db:participant "Orders DB"
+
+  rect tint=#bfdfff
+    cust -> web : "Clicks buy"
+  critical "Reserve stock"
+    api -> db : "INSERT"
+  option "sold out"
+    api ..> web : "409"
+  break "payment declined"
+    api ..> web : "402"
+  rect "Cleanup"
+    api ~> db : "audit"
+`;
+
+const grouped = parseSequenceText(GROUPED);
+const groupedText = serializeSequenceText(grouped);
+check(
+  "a document with boxes, tints and every fragment kind round-trips byte-identically",
+  groupedText === GROUPED,
+  firstDiff(groupedText, GROUPED),
+);
+check(
+  "boxes are a file-level list of contiguous runs, in document order",
+  JSON.stringify(grouped.boxes) ===
+    JSON.stringify([
+      {
+        label: "Front of house",
+        tint: "#bfdfff",
+        participants: ["cust", "web"],
+      },
+      { label: "Data", participants: ["db"] },
+    ]),
+  JSON.stringify(grouped.boxes),
+);
+check(
+  "a boxed participant is still an ordinary member of `participants`, in text order",
+  JSON.stringify(grouped.participants.map((p) => p.id)) ===
+    '["cust","web","api","db"]',
+);
+check(
+  "a `desc` continuation still binds inside a box (one indent level deeper)",
+  grouped.participants[1].description === "The shop.",
+);
+check(
+  "`tint` rides the fragment, not the branch, and only on a rect",
+  grouped.items[0].kind === "rect" &&
+    grouped.items[0].tint === "#bfdfff" &&
+    grouped.items[0].branches[0].label === undefined &&
+    grouped.items[3].kind === "rect" &&
+    grouped.items[3].tint === undefined &&
+    grouped.items[3].branches[0].label === "Cleanup",
+  JSON.stringify(grouped.items[0]),
+);
+check(
+  "`option` opens a second branch of a critical, `break` stays single-branch",
+  grouped.items[1].kind === "critical" &&
+    grouped.items[1].branches.length === 2 &&
+    grouped.items[1].branches[1].label === "sold out" &&
+    grouped.items[2].kind === "break" &&
+    grouped.items[2].branches.length === 1,
+);
+check(
+  "a colour is NORMALISED on the way in — one spelling per colour in the file",
+  parseSequenceText(GROUPED.replace("tint=#bfdfff", "tint=rgb(191,223,255)"))
+    .boxes[0].tint === "#bfdfff",
+);
+check(
+  "a document with no boxes has NO `boxes` key (absent, not empty)",
+  !("boxes" in parseSequenceText(KITCHEN_SINK)),
+);
+
+/* ----------------------------------------------------------------------- */
 /* 3. Unknown forward-compatible fields, verbatim and in position           */
 /* ----------------------------------------------------------------------- */
 
@@ -585,23 +680,26 @@ check(
   selfMsg.from === "A" && selfMsg.to === "A" && selfMsg.kind === "async",
 );
 check(
-  "the caveat names every dropped thing (arrowheads, autonumber args, unanchored activations, approximated and transparent blocks, create/destroy)",
+  "the caveat names what is still lost (arrowheads, autonumber args, unanchored activations, unstorable colours, create/destroy) AND that every block survives",
   MERMAID_SEQUENCE_CAVEAT.includes("arrowheads collapse") &&
     MERMAID_SEQUENCE_CAVEAT.includes("autonumber start/step") &&
     MERMAID_SEQUENCE_CAVEAT.includes("activate/deactivate") &&
-    MERMAID_SEQUENCE_CAVEAT.includes("critical becomes alt") &&
-    MERMAID_SEQUENCE_CAVEAT.includes("break becomes opt") &&
-    MERMAID_SEQUENCE_CAVEAT.includes("rect and box") &&
-    MERMAID_SEQUENCE_CAVEAT.includes("create/destroy"),
+    MERMAID_SEQUENCE_CAVEAT.includes("colour") &&
+    MERMAID_SEQUENCE_CAVEAT.includes("create/destroy") &&
+    MERMAID_SEQUENCE_CAVEAT.includes("Every block itself survives") &&
+    /* The caveat must not go back to claiming a block is approximated — that
+       sentence outlived the behaviour once already. */
+    !MERMAID_SEQUENCE_CAVEAT.includes("becomes alt") &&
+    !MERMAID_SEQUENCE_CAVEAT.includes("becomes opt"),
 );
 
 /*
- * The blocks Mermaid draws that arch-lab's four fragment kinds do not cover.
- * Refusing them by name was the old behaviour and it was wrong: a whole
- * diagram was rejected over a tint (`rect`) or a bracket (`box`) that changes
- * nothing about what happens, and over two fragment words (`critical`,
- * `break`) whose labels and nesting have an obvious home. This sample is the
- * bug report that prompted the change, plus every other block beside it.
+ * EVERY BLOCK MERMAID DRAWS, imported as itself. Two earlier versions of the
+ * importer got this wrong in opposite directions — refusing `rect` by name
+ * (rejecting a whole diagram over a background tint) and then flattening it
+ * (silently deleting a grouping the author drew) — so the assertions below
+ * pin the shape of the RESULT, not just the absence of an error. The sample
+ * opens with the bug report that started it.
  */
 const MERMAID_BLOCKS = `sequenceDiagram
     box Aqua Front of house
@@ -627,7 +725,7 @@ const MERMAID_BLOCKS = `sequenceDiagram
 `;
 const blocks = parseMermaidSequence(MERMAID_BLOCKS);
 check(
-  "a `box` group imports its participants and drops only the bracket",
+  "participants import in first-use order, `create` alias included",
   JSON.stringify(blocks.participants) ===
     JSON.stringify([
       { id: "Alice", kind: "participant", name: "Alice" },
@@ -637,34 +735,87 @@ check(
   JSON.stringify(blocks.participants),
 );
 check(
-  "a `rect` block flattens: its messages land in the enclosing branch, in order",
-  blocks.items.length === 6 &&
-    blocks.items.slice(0, 3).every((item) => item.step === "message") &&
-    blocks.items[0].label === "Hello Bob" &&
-    blocks.items[1].kind === "reply" &&
-    blocks.items[2].label === "How are you?",
-  JSON.stringify(blocks.items.map((item) => item.step)),
+  "a `box` imports as a SequenceBox: label, normalised colour, its members",
+  JSON.stringify(blocks.boxes) ===
+    JSON.stringify([
+      {
+        label: "Front of house",
+        tint: "#00ffff",
+        participants: ["Alice", "Bob"],
+      },
+    ]),
+  JSON.stringify(blocks.boxes),
 );
 check(
-  "`critical`/`option` import as an alt with both guard labels",
-  blocks.items[4].step === "fragment" &&
-    blocks.items[4].kind === "alt" &&
-    blocks.items[4].branches.length === 2 &&
-    blocks.items[4].branches[0].label === "Establish a connection" &&
-    blocks.items[4].branches[1].label === "network timeout",
+  "a `box` never claims a lifeline declared after it closed",
+  !(blocks.boxes?.[0].participants ?? []).includes("Cache"),
+);
+check(
+  "`rect rgb(...)` imports as a rect fragment holding its own messages, tint normalised to hex",
+  blocks.items[0].step === "fragment" &&
+    blocks.items[0].kind === "rect" &&
+    blocks.items[0].tint === "#bfdfff" &&
+    blocks.items[0].label === undefined &&
+    blocks.items[0].branches.length === 1 &&
+    blocks.items[0].branches[0].items.length === 2 &&
+    blocks.items[0].branches[0].items[0].label === "Hello Bob",
+  JSON.stringify(blocks.items[0]),
+);
+check(
+  "the message AFTER the rect stays outside it (the block bounds the right steps)",
+  blocks.items[1].step === "message" &&
+    blocks.items[1].label === "How are you?",
+  JSON.stringify(blocks.items[1]),
+);
+check(
+  "`critical`/`option` import as a critical with both guard labels — not as an alt",
+  blocks.items[3].step === "fragment" &&
+    blocks.items[3].kind === "critical" &&
+    blocks.items[3].branches.length === 2 &&
+    blocks.items[3].branches[0].label === "Establish a connection" &&
+    blocks.items[3].branches[1].label === "network timeout",
+  JSON.stringify(blocks.items[3]),
+);
+check(
+  "`break` imports as a break, single-branch, keeping its label",
+  blocks.items[4].kind === "break" &&
+    blocks.items[4].branches.length === 1 &&
+    blocks.items[4].branches[0].label === "booking failed",
   JSON.stringify(blocks.items[4]),
 );
 check(
-  "`break` imports as a single-branch opt keeping its label",
-  blocks.items[5].kind === "opt" &&
-    blocks.items[5].branches.length === 1 &&
-    blocks.items[5].branches[0].label === "booking failed",
-  JSON.stringify(blocks.items[5]),
+  "`create participant X as Y` declares X; `destroy` adds no item",
+  blocks.items[2].to === "Cache" &&
+    blocks.items.length === 5 &&
+    blocks.items.every((item) => item.step !== "note"),
+  JSON.stringify(blocks.items.map((item) => item.step)),
 );
 check(
-  "`create participant X as Y` declares X with its alias; `destroy` adds nothing",
-  blocks.items[3].to === "Cache" &&
-    blocks.items.every((item) => item.step !== "note"),
+  "a `rect` with a WORD after it is a labelled rect, not a failed colour",
+  (() => {
+    const one = parseMermaidSequence(
+      "sequenceDiagram\n  rect Payment leg\n    A->>B: x\n  end\n",
+    ).items[0];
+    return (
+      one.kind === "rect" &&
+      one.tint === undefined &&
+      one.branches[0].label === "Payment leg"
+    );
+  })(),
+);
+check(
+  "an unstorable colour is DROPPED, not fatal — the caveat's one remaining block loss",
+  (() => {
+    const one = parseMermaidSequence(
+      "sequenceDiagram\n  rect var(--sneaky)\n    A->>B: x\n  end\n",
+    ).items[0];
+    return one.kind === "rect" && one.tint === undefined;
+  })(),
+);
+check(
+  "an empty `box` is dropped rather than kept as a bracket over nothing",
+  parseMermaidSequence("sequenceDiagram\n  box Empty\n  end\n  A->>B: x\n")
+    .boxes === undefined,
 );
 check(
   "`autonumber off` withdraws an earlier `autonumber` (last word wins)",
@@ -678,7 +829,7 @@ check(
 /* The imported model must be a first-class citizen of the .alab grammar. */
 for (const [label, model] of [
   ["the imported model", imported],
-  ["the flattened-block model", blocks],
+  ["the every-block model", blocks],
 ]) {
   const text = serializeSequenceText(model);
   const reparsed = parseSequenceText(text);

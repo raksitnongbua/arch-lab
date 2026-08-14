@@ -18,19 +18,18 @@
  * the two purely visual blocks `rect` and `box`, `autonumber` (including
  * `autonumber off`), `title` and `%%` comments.
  *
- * Blocks arrive in three shapes, which is the whole reason this file has a
- * block table rather than one map:
+ * EVERY BLOCK MERMAID DRAWS IS A BLOCK ARCH-LAB DRAWS. `critical`/`option`,
+ * `break` and `rect` are fragment kinds in the model (`SequenceFragmentKind`)
+ * and `box` is a `SequenceBox`, so nothing here is flattened, approximated or
+ * refused. Two earlier versions of this file did both and both were wrong:
+ * refusing rejected a whole diagram over a background tint, and flattening
+ * silently deleted a grouping the author drew on purpose. What survives an
+ * import is now a question about the ARROWS, not about the boxes.
  *
- *   - **Fragments** (`loop`, `opt`, `alt`, `par`) — a kind the model has.
- *   - **Fragments by approximation** (`critical` → `alt`, `break` → `opt`) —
- *     Mermaid draws more fragment kinds than UML's set we store. Both keep
- *     their labels and their nesting; only the kind word changes, and the
- *     caveat says so. Refusing them instead was tried and was wrong: it
- *     rejects a whole diagram over a label that has an obvious home.
- *   - **Transparent groups** (`rect`, `box`) — decoration, not structure.
- *     `rect` tints a region and `box` draws a bracket over lifelines;
- *     neither changes what happens, so their CONTENTS are imported into the
- *     enclosing branch and only the tint and the bracket are lost.
+ * The colours come too: `rect rgb(191, 223, 255)` and `box Aqua Name` are
+ * normalised to `#rrggbb` (`@/lib/tint`) and drawn as a wash. A colour this
+ * app cannot store is dropped — the ONE thing about a block that is still
+ * lossy, and it is in the caveat.
  *
  * What is LOSSY is named, in full, by `MERMAID_SEQUENCE_CAVEAT` below —
  * the same honesty contract as the C4 importer's `MERMAID_CAVEAT`.
@@ -40,6 +39,7 @@
  */
 
 import type {
+  SequenceBox,
   SequenceBranch,
   SequenceFragment,
   SequenceFragmentKind,
@@ -50,6 +50,8 @@ import type {
   SequenceNote,
   SequenceParticipant,
 } from "@/types";
+
+import { normalizeTint } from "@/lib/tint";
 
 import { MERMAID_IMPORT_TIMESTAMP } from "./defaults";
 import { failAt } from "./errors";
@@ -69,11 +71,12 @@ export const MERMAID_SEQUENCE_CAVEAT =
   "become sync; -->>, --> become replies; -x, --x, -), --) become async, " +
   "losing the open, cross and async head shapes), autonumber start/step " +
   "arguments are dropped, an activate/deactivate line that does not " +
-  "bracket the message next to it is dropped, critical becomes alt and " +
-  "break becomes opt (labels and nesting survive, the kind word does not), " +
-  "rect and box keep their contents but lose the tint and the bracket, and " +
-  "create/destroy import the participant but not the moment its lifeline " +
-  "starts or ends. Save as .alab to keep everything else.";
+  "bracket the message next to it is dropped, a rect or box colour that is " +
+  "not a hex, rgb() or common named colour is dropped, and create/destroy " +
+  "import the participant but not the moment its lifeline starts or ends. " +
+  "Every block itself survives — loop, alt/else, opt, par/and, " +
+  "critical/option, break, rect and box all import as themselves. Save as " +
+  ".alab to keep everything else.";
 
 /* -------------------------------------------------------------------------- */
 /* Options                                                                     */
@@ -112,36 +115,22 @@ const MERMAID_SEQ_ARROWS: readonly (readonly [string, SequenceMessageKind])[] =
   ];
 
 /**
- * Block keywords that OPEN a fragment, and the model kind each becomes.
- * `critical` and `break` are the approximations named in the caveat: the
- * value is what we store, the KEY stays the word the author wrote so every
- * error message can quote their source rather than our translation of it.
+ * Block keywords that OPEN a fragment. One-to-one with the model's kinds —
+ * the Mermaid word and the arch-lab word are the same word for all seven,
+ * which is what "no approximation" means in practice.
  */
 const FRAGMENT_OPENERS: Readonly<Record<string, SequenceFragmentKind>> = {
   loop: "loop",
   opt: "opt",
   alt: "alt",
   par: "par",
-  critical: "alt",
-  break: "opt",
+  critical: "critical",
+  break: "break",
+  rect: "rect",
 };
 
-/**
- * Block keywords that open a group with no model counterpart: their contents
- * belong to the enclosing branch and the decoration is dropped. Listed with
- * what is lost, because that is the only thing this table is for.
- */
-const TRANSPARENT_GROUPS: Readonly<Record<string, string>> = {
-  rect: "background tint",
-  box: "participant bracket",
-};
-
-/**
- * Continuation keywords → the opener each one may follow. Keyed on the
- * MERMAID word rather than the model kind so `option` after a plain `alt` is
- * still refused, even though `critical` and `alt` store the same kind.
- */
-const BRANCH_CONTINUATIONS: Readonly<Record<string, string>> = {
+/** Continuation keyword → the fragment kind it may extend. */
+const BRANCH_CONTINUATIONS: Readonly<Record<string, SequenceFragmentKind>> = {
   else: "alt",
   and: "par",
   option: "critical",
@@ -153,13 +142,15 @@ const BRANCH_CONTINUATIONS: Readonly<Record<string, string>> = {
 
 interface OpenBlock {
   /** The Mermaid word that opened it, quoted verbatim by every error about
-   * it — an author who wrote `critical` must not be told about `alt`. */
+   * it. Now always equal to the model kind, except for `box`. */
   opener: string;
-  /** `null` for a transparent group (`rect`, `box`). */
+  /** `null` for a `box`, which groups lifelines rather than steps. */
   fragment: SequenceFragment | null;
-  /** Where the lines below this opener land. For a transparent group it is
-   * the ENCLOSING target — which is all that flattening is. */
+  /** Where the lines below this opener land. A `box` contributes no items,
+   * so it passes the ENCLOSING target through unchanged. */
   items: SequenceItem[];
+  /** Non-null inside a `box`: participants declared below join it. */
+  box: SequenceBox | null;
   line: number;
   column: number;
 }
@@ -187,9 +178,13 @@ export function parseMermaidSequence(
     if (participantIds.has(id)) return;
     participantIds.add(id);
     participants.push(explicit ?? { id, name: id });
+    /* Inside a `box`, a newly declared lifeline joins it — including one
+       auto-declared by first USE, which is how Mermaid itself behaves. */
+    stack[stack.length - 1]?.box?.participants.push(id);
   };
 
   const rootItems: SequenceItem[] = [];
+  const boxes: SequenceBox[] = [];
   const stack: OpenBlock[] = [];
   const currentItems = (): SequenceItem[] =>
     stack.length === 0 ? rootItems : stack[stack.length - 1].items;
@@ -321,14 +316,44 @@ export function parseMermaidSequence(
       currentItems().push(parseNote(text, lineNo, startCol, declare));
       continue;
     }
-    if (TRANSPARENT_GROUPS[word] !== undefined) {
-      /* Contents land in the ENCLOSING branch, so nothing about this line
-         reaches the model — but the group still owns an `end`, which is why
-         it goes on the stack at all. */
+    if (word === "box") {
+      /* `box <colour?> <label>` — Mermaid's colour is an optional FIRST word
+         and the label is everything after it, with no punctuation between
+         them. So the colour is only a colour when the rest is non-empty:
+         `box Payments` names a box, it does not tint an unnamed one. */
+      const rest = statement.slice(word.length).trim();
+      const [firstWord, ...restWords] = rest.split(/\s+/);
+      const leadingTint =
+        restWords.length > 0 && firstWord !== undefined
+          ? normalizeTint(firstWord)
+          : null;
+      const label = decodeInlineBreaks(
+        leadingTint === null && firstWord !== "transparent"
+          ? rest
+          : restWords.join(" "),
+      ).trim();
+      if (label === "") {
+        failAt(
+          lineNo,
+          startCol,
+          '"box" needs a name — write "box Payments" or "box Aqua Payments"',
+          "box",
+        );
+      }
+      const box: SequenceBox = {
+        label,
+        ...(leadingTint !== null ? { tint: leadingTint } : {}),
+        participants: [],
+      };
+      boxes.push(box);
       stack.push({
         opener: word,
         fragment: null,
+        /* A box holds lifelines, not steps. Mermaid allows nothing but
+           participant lines inside one, so passing the enclosing target
+           through costs nothing and keeps `currentItems()` total. */
         items: currentItems(),
+        box,
         line: lineNo,
         column: startCol,
       });
@@ -336,7 +361,15 @@ export function parseMermaidSequence(
     }
     const opener = FRAGMENT_OPENERS[word];
     if (opener !== undefined) {
-      const label = decodeInlineBreaks(statement.slice(word.length).trim());
+      /* `rect rgb(191, 223, 255)` puts a COLOUR where every other fragment
+         puts a label, so the tail is read as one or the other by kind —
+         never as both, which would make `rect Payments` ambiguous. */
+      const tail = statement.slice(word.length).trim();
+      const tint = opener === "rect" ? normalizeTint(tail) : null;
+      const label =
+        opener === "rect" && (tint !== null || tail === "")
+          ? ""
+          : decodeInlineBreaks(tail);
       /* `label` before `items`: the model's canonical key order
          (BRANCH_KEYS), so an imported model is byte-for-byte the same JSON
          a `.alab` parse of its own serialization would produce. */
@@ -345,6 +378,7 @@ export function parseMermaidSequence(
       const fragment: SequenceFragment = {
         step: "fragment",
         kind: opener,
+        ...(tint !== null ? { tint } : {}),
         branches: [branch],
       };
       currentItems().push(fragment);
@@ -352,6 +386,7 @@ export function parseMermaidSequence(
         opener: word,
         fragment,
         items: branch.items,
+        box: null,
         line: lineNo,
         column: startCol,
       });
@@ -369,8 +404,8 @@ export function parseMermaidSequence(
         );
       }
       /* `fragment` is non-null for every opener a continuation names — a
-         transparent group is never one of them — but the type does not know
-         that, and asserting it here beats widening the field. */
+         `box` is never one of them — but the type does not know that, and
+         asserting it here beats widening the field. */
       const fragment = top.fragment;
       if (fragment === null) continue;
       const label = decodeInlineBreaks(statement.slice(word.length).trim());
@@ -425,6 +460,12 @@ export function parseMermaidSequence(
       updatedAt: timestamp,
     },
     participants,
+    /* An empty box is dropped rather than kept: Mermaid allows `box X / end`
+       with nothing between, and a bracket over no lifelines has no drawing —
+       the `.alab` grammar refuses to spell one for the same reason. */
+    ...(boxes.some((box) => box.participants.length > 0)
+      ? { boxes: boxes.filter((box) => box.participants.length > 0) }
+      : {}),
     ...(autonumber ? { autonumber: true } : {}),
     items: rootItems,
   };

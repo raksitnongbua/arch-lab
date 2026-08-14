@@ -30,9 +30,14 @@ export const SEQ_FILE_KEYS = [
   "kind",
   "metadata",
   "participants",
+  "boxes",
   "autonumber",
   "items",
 ] as const;
+
+/** A participant box (`SequenceBox`). `participants` is structural — it is
+ * the nesting in the text — so only `label` and `tint` are ever written. */
+export const BOX_KEYS = ["label", "tint", "participants"] as const;
 
 export const PARTICIPANT_KEYS = [
   "id",
@@ -56,7 +61,7 @@ export const MESSAGE_KEYS = [
 
 export const NOTE_KEYS = ["step", "placement", "participants", "text"] as const;
 
-export const FRAGMENT_KEYS = ["step", "kind", "branches"] as const;
+export const FRAGMENT_KEYS = ["step", "kind", "tint", "branches"] as const;
 
 export const BRANCH_KEYS = ["label", "items"] as const;
 
@@ -95,3 +100,10 @@ export const SEQ_MESSAGE_RAW: ReadonlySet<string> = new Set([
 
 /** `label` only: a branch's other known key (`items`) is structural. */
 export const SEQ_BRANCH_RAW: ReadonlySet<string> = new Set(["label"]);
+
+/** A fragment's `tint` may arrive from a newer minor as something other than
+ * a normalised colour; the raw escape keeps it rather than dropping it. */
+export const SEQ_FRAGMENT_RAW: ReadonlySet<string> = new Set(["tint"]);
+
+/** Same for a box's `tint`; `label` is required and has dedicated syntax. */
+export const SEQ_BOX_RAW: ReadonlySet<string> = new Set(["tint"]);

@@ -267,6 +267,46 @@ title "Branching"
 };
 
 /**
+ * GROUPING AND HIGHLIGHTING — the two constructs that say "these belong
+ * together" without saying anything about control flow.
+ *
+ * `box` groups LIFELINES and its members are the lines nested inside it,
+ * which is not decoration in the grammar: nesting is what makes a box a
+ * contiguous run, and a bracket over a non-contiguous set has no honest
+ * drawing. `rect` groups STEPS and takes a colour rather than a guard.
+ *
+ * Both accept `tint=`, and both accept only colours the format stores
+ * (`#rrggbb`, `rgb(…)`, common names) — a colour is normalised to one
+ * spelling on the way in so two documents that mean the same shade are the
+ * same bytes.
+ */
+export const SEQUENCE_GROUPING_EXAMPLE: DocSnippet = {
+  id: "sequence-grouping",
+  code: `archlab 1.0 sequence
+title "Grouped and highlighted"
+
+@sequence
+  box "Front of house" tint=#bfdfff
+    cust:actor "Customer"
+    web "Storefront"
+  box "Payments" tint=#ffe4e1
+    pay:participant "Payments"
+    ledger:participant "Ledger"
+
+  cust -> web : "Places the order"
+  rect tint=#bfdfff
+    web -> pay : "Create charge" [REST]
+    pay -> ledger : "Post entry"
+  critical "Capture the funds"
+    pay ..> web : "charge.succeeded"
+  option "gateway timeout"
+    pay ..> web : "retry scheduled"
+  break "card declined"
+    pay ..> web : "402 Payment Required"
+`,
+};
+
+/**
  * A `desc` holding a whole runnable request — the case the details dock's code
  * block exists for, and the one that looks impossible in a line-structured
  * format until you notice the `desc` value is a JSON string.

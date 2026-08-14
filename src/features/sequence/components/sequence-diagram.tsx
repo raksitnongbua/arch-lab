@@ -47,6 +47,7 @@ import { useId } from "react";
 // rationale), and re-typing the expression here would let the two drift.
 import { tagFillCss } from "@/features/editor/lib/node-colors";
 import { cn } from "@/lib/utils";
+import { TINT_WASH_OPACITY } from "@/lib/tint";
 
 import type {
   LaidFragment,
@@ -154,6 +155,13 @@ export interface SequenceDiagramProps {
   collapsed: ReadonlySet<string>;
   dependencyCount: ReadonlyMap<string, number>;
   onToggleCollapse: (id: string) => void;
+  /**
+   * Hide this one lifeline outright. Offered on EVERY card, unlike the fold —
+   * "I do not care about that column" needs no dependency structure to be a
+   * reasonable thing to want, and before this control most participants had
+   * no way to leave the diagram at all.
+   */
+  onHideParticipant: (id: string) => void;
   /*
    * There is NO onClearFocus here, deliberately. Clearing is what happens when
    * a click lands on nothing, and "nothing" is bigger than this component: in
@@ -183,6 +191,7 @@ export function SequenceDiagram({
   collapsed,
   dependencyCount,
   onToggleCollapse,
+  onHideParticipant,
 }: SequenceDiagramProps): React.JSX.Element {
   /**
    * Every dim decision below derives from THIS set (see resolveFocusSteps):
@@ -360,131 +369,193 @@ export function SequenceDiagram({
           chip (focus the whole fragment) and each branch's guard label
           (focus that branch) — small, labelled, and exactly where the eye
           reads "this is the alt / this is the [card accepted] case". */}
-      {layout.fragments.map((fragment) => (
-        <g
-          key={fragment.id}
-          className={cn(
-            "af-seq-dimmable",
-            fragmentDimmed(fragment) && "af-seq-dim",
-          )}
-        >
-          <g className="pointer-events-none">
-            <rect
-              x={fragment.x}
-              y={fragment.y}
-              width={fragment.width}
-              height={fragment.height}
-              rx={8}
-              fill="var(--canvas)"
-              fillOpacity={0.5}
-              stroke="var(--node-border)"
-              strokeWidth={1}
-            />
-            {fragment.dividers.map((divider, dividerIndex) => (
-              <line
-                key={`div-${dividerIndex}`}
-                x1={fragment.x}
-                y1={divider.y}
-                x2={fragment.x + fragment.width}
-                y2={divider.y}
+      {layout.fragments.map((fragment) => {
+        /* The chip is sized to its WORD, not to a constant: `alt` and
+           `critical` differ by five characters, and a fixed 34px box that fit
+           the first clipped the second. The guard label then starts after
+           whatever width came out, so the two never overlap. */
+        const chipWidth = Math.max(
+          34,
+          Math.ceil(estimateTextWidth(fragment.kind, SEQ.fragmentFontSize)) +
+            14,
+        );
+        return (
+          <g
+            key={fragment.id}
+            className={cn(
+              "af-seq-dimmable",
+              fragmentDimmed(fragment) && "af-seq-dim",
+            )}
+          >
+            <g className="pointer-events-none">
+              {/* A `rect` is a HIGHLIGHT, so its fill is the author's colour at
+                a wash rather than the neutral scaffolding fill every other
+                fragment gets. The wash opacity is fixed here (not taken from
+                the document) so a tint can never be strong enough to hide the
+                messages it is drawn behind. */}
+              <rect
+                x={fragment.x}
+                y={fragment.y}
+                width={fragment.width}
+                height={fragment.height}
+                rx={8}
+                fill={fragment.tint ?? "var(--canvas)"}
+                fillOpacity={
+                  fragment.tint !== undefined ? TINT_WASH_OPACITY : 0.5
+                }
                 stroke="var(--node-border)"
                 strokeWidth={1}
-                strokeDasharray="5 4"
               />
-            ))}
-          </g>
+              {fragment.dividers.map((divider, dividerIndex) => (
+                <line
+                  key={`div-${dividerIndex}`}
+                  x1={fragment.x}
+                  y1={divider.y}
+                  x2={fragment.x + fragment.width}
+                  y2={divider.y}
+                  stroke="var(--node-border)"
+                  strokeWidth={1}
+                  strokeDasharray="5 4"
+                />
+              ))}
+            </g>
 
-          {/* Kind chip — clicking it focuses the WHOLE fragment. */}
-          <FragmentControl
-            ariaLabel={`Focus the ${fragment.kind} fragment — every message in ${
-              fragment.branches.length > 1
-                ? `all ${fragment.branches.length} branches`
-                : "it"
-            }`}
-            hitX={fragment.x - 2}
-            hitY={fragment.y - 2}
-            hitWidth={38}
-            hitHeight={22}
-            onFocus={() => onFocusFragment(fragment.id, null)}
-          >
-            <rect
-              className="af-seq-chip"
-              x={fragment.x}
-              y={fragment.y}
-              width={34}
-              height={18}
-              rx={6}
-              fill="var(--secondary)"
-              stroke="var(--border)"
-            />
-            <text
-              x={fragment.x + 17}
-              y={fragment.y + 13}
-              textAnchor="middle"
-              fontSize={SEQ.fragmentFontSize}
-              fontFamily="var(--font-mono)"
-              fill="var(--secondary-foreground)"
-            >
-              {fragment.kind}
-            </text>
-          </FragmentControl>
-
-          {/* Branch 0's guard label sits beside the chip; branches 1+ label
-              their dividers (dividers[i] pairs with branches[i + 1] — the
-              layout's documented contract). Each guard focuses ITS branch. */}
-          {fragment.label !== undefined ? (
+            {/* Kind chip — clicking it focuses the WHOLE fragment. */}
             <FragmentControl
-              ariaLabel={`Focus the [${fragment.label}] branch of the ${fragment.kind} fragment`}
-              hitX={fragment.x + 40}
+              ariaLabel={`Focus the ${fragment.kind} fragment — every message in ${
+                fragment.branches.length > 1
+                  ? `all ${fragment.branches.length} branches`
+                  : "it"
+              }`}
+              hitX={fragment.x - 2}
               hitY={fragment.y - 2}
-              hitWidth={
-                estimateTextWidth(`[${fragment.label}]`, SEQ.fragmentFontSize) +
-                4
-              }
+              hitWidth={chipWidth + 4}
               hitHeight={22}
-              onFocus={() => onFocusFragment(fragment.id, 0)}
+              onFocus={() => onFocusFragment(fragment.id, null)}
             >
+              <rect
+                className="af-seq-chip"
+                x={fragment.x}
+                y={fragment.y}
+                width={chipWidth}
+                height={18}
+                rx={6}
+                fill="var(--secondary)"
+                stroke="var(--border)"
+              />
               <text
-                className="af-seq-guard"
-                x={fragment.x + 42}
+                x={fragment.x + chipWidth / 2}
                 y={fragment.y + 13}
+                textAnchor="middle"
                 fontSize={SEQ.fragmentFontSize}
-                fontStyle="italic"
-                fill="var(--muted-foreground)"
+                fontFamily="var(--font-mono)"
+                fill="var(--secondary-foreground)"
               >
-                [{fragment.label}]
+                {fragment.kind}
               </text>
             </FragmentControl>
-          ) : null}
-          {fragment.dividers.map((divider, dividerIndex) =>
-            divider.label !== undefined ? (
+
+            {/* Branch 0's guard label sits beside the chip; branches 1+ label
+              their dividers (dividers[i] pairs with branches[i + 1] — the
+              layout's documented contract). Each guard focuses ITS branch. */}
+            {fragment.label !== undefined ? (
               <FragmentControl
-                key={`guard-${dividerIndex}`}
-                ariaLabel={`Focus the [${divider.label}] branch of the ${fragment.kind} fragment`}
-                hitX={fragment.x + 8}
-                hitY={divider.y - 18}
+                ariaLabel={`Focus the [${fragment.label}] branch of the ${fragment.kind} fragment`}
+                hitX={fragment.x + chipWidth + 4}
+                hitY={fragment.y - 2}
                 hitWidth={
                   estimateTextWidth(
-                    `[${divider.label}]`,
+                    `[${fragment.label}]`,
                     SEQ.fragmentFontSize,
                   ) + 4
                 }
-                hitHeight={18}
-                onFocus={() => onFocusFragment(fragment.id, dividerIndex + 1)}
+                hitHeight={22}
+                onFocus={() => onFocusFragment(fragment.id, 0)}
               >
                 <text
                   className="af-seq-guard"
-                  x={fragment.x + 10}
-                  y={divider.y - 5}
+                  x={fragment.x + chipWidth + 6}
+                  y={fragment.y + 13}
                   fontSize={SEQ.fragmentFontSize}
                   fontStyle="italic"
                   fill="var(--muted-foreground)"
                 >
-                  [{divider.label}]
+                  [{fragment.label}]
                 </text>
               </FragmentControl>
-            ) : null,
-          )}
+            ) : null}
+            {fragment.dividers.map((divider, dividerIndex) =>
+              divider.label !== undefined ? (
+                <FragmentControl
+                  key={`guard-${dividerIndex}`}
+                  ariaLabel={`Focus the [${divider.label}] branch of the ${fragment.kind} fragment`}
+                  hitX={fragment.x + 8}
+                  hitY={divider.y - 18}
+                  hitWidth={
+                    estimateTextWidth(
+                      `[${divider.label}]`,
+                      SEQ.fragmentFontSize,
+                    ) + 4
+                  }
+                  hitHeight={18}
+                  onFocus={() => onFocusFragment(fragment.id, dividerIndex + 1)}
+                >
+                  <text
+                    className="af-seq-guard"
+                    x={fragment.x + 10}
+                    y={divider.y - 5}
+                    fontSize={SEQ.fragmentFontSize}
+                    fontStyle="italic"
+                    fill="var(--muted-foreground)"
+                  >
+                    [{divider.label}]
+                  </text>
+                </FragmentControl>
+              ) : null,
+            )}
+          </g>
+        );
+      })}
+
+      {/* ---- participant boxes: the bracket around a run of lifelines ----
+          Drawn BEFORE the header cards so the cards sit on top of the wash,
+          and `pointer-events-none` throughout: a box is a label for a group,
+          not a control. Making it clickable was considered and dropped —
+          "focus everything in this box" is the participant focus repeated N
+          times, and a click target this large would swallow the cards inside
+          it, which ARE controls.
+
+          `aria-hidden` for the same reason the footer cards are: the grouping
+          is stated in the <svg>'s own aria-label copy and in the text
+          alternative, and a screen reader meeting a bracket has nothing to do
+          with it. */}
+      {layout.boxes.map((box, index) => (
+        <g
+          key={`box-${index}`}
+          aria-hidden="true"
+          className="pointer-events-none"
+        >
+          <rect
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            rx={10}
+            fill={box.tint ?? "var(--canvas)"}
+            fillOpacity={box.tint !== undefined ? TINT_WASH_OPACITY : 0.45}
+            stroke="var(--node-border)"
+            strokeWidth={1}
+            strokeDasharray="4 3"
+          />
+          <text
+            x={box.x + 10}
+            y={box.y + SEQ.boxLabelHeight - 6}
+            fontSize={SEQ.boxLabelFontSize}
+            fontWeight={600}
+            fill="var(--muted-foreground)"
+          >
+            {box.label}
+          </text>
         </g>
       ))}
 
@@ -552,6 +623,7 @@ export function SequenceDiagram({
           paintId={cardGradId(participant.id)}
           dependencies={dependencyCount.get(participant.id) ?? 0}
           collapsed={collapsed.has(participant.id)}
+          onHide={() => onHideParticipant(participant.id)}
           onToggleCollapse={() => onToggleCollapse(participant.id)}
           onFocus={() => onFocusParticipant(participant.id)}
           onKeyDown={keyActivate(() => onFocusParticipant(participant.id))}
@@ -735,6 +807,7 @@ function ParticipantColumn({
   dependencies,
   collapsed,
   onToggleCollapse,
+  onHide,
   onFocus,
   onKeyDown,
 }: {
@@ -747,6 +820,7 @@ function ParticipantColumn({
   dependencies: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  onHide: () => void;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
@@ -913,6 +987,58 @@ function ParticipantColumn({
         }}
         onKeyDown={onKeyDown}
       />
+
+      {/* ---- the HIDE control ----
+          Top-LEFT, mirroring the fold control's top-right, and on every card
+          rather than only the ones with dependencies. The two are different
+          questions and both are worth asking: fold means "collapse what only
+          this one talks to", hide means "take this column off the diagram".
+          Before this existed the second was unaskable, and most participants
+          — an actor, a front end, a leaf store — carried no control at all.
+
+          Quiet by the same rule as the fold: a 10px `×`, no capsule, a 22×18
+          hit target regardless. The way back is never on this card (a hidden
+          card is not on screen to click) — it is the restore bar the viewer
+          renders above the diagram, which is why hiding is safe to make this
+          easy. */}
+      <g className="af-seq-fold">
+        <text
+          x={x - headerWidth / 2 + 9}
+          y={boxTop + 16}
+          textAnchor="middle"
+          fontSize={11}
+          fontWeight={600}
+          fill="var(--node-meta)"
+        >
+          ×
+        </text>
+        <rect
+          className="af-seq-hit af-seq-hit-region"
+          x={x - headerWidth / 2}
+          y={boxTop + 3}
+          width={22}
+          height={18}
+          role="button"
+          tabIndex={0}
+          aria-label={`Hide ${participant.name} from the diagram`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onHide();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onHide();
+            }
+          }}
+        >
+          <title>
+            Hide {participant.name} — &ldquo;Show all&rdquo; above the diagram
+            brings it back
+          </title>
+        </rect>
+      </g>
 
       {/* ---- the dependency FOLD control ----
           Offered only on participants that actually have private dependencies
