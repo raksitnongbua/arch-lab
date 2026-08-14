@@ -65,6 +65,14 @@ import {
   writeIdleMotion,
 } from "@/lib/idle-motion";
 import { CopyButton } from "@/components/ui/copy-button";
+import {
+  ZOOM_BUTTON_CLASSES,
+  ZOOM_IN_TITLE,
+  ZOOM_OUT_TITLE,
+  ZOOM_PILL_CLASSES,
+  ZOOM_READOUT_CLASSES,
+  ZOOM_STEP,
+} from "@/components/ui/zoom-pill";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
@@ -552,7 +560,7 @@ export function SequenceViewer({
   const stepZoom = useCallback(
     (direction: 1 | -1) => {
       const current = zoom === "fit" ? measureFitScale() : zoom;
-      applyZoom(current * (direction === 1 ? 1.25 : 1 / 1.25));
+      applyZoom(current * (direction === 1 ? ZOOM_STEP : 1 / ZOOM_STEP));
     },
     [zoom, measureFitScale, applyZoom],
   );
@@ -999,12 +1007,12 @@ export function SequenceViewer({
             are state, not motion (the SVG re-renders at the new size), so
             reduced motion needs no branch here; announcements go through
             the page's one live region. */}
-        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-lg border border-border/70 bg-card/80 p-1 shadow-sm backdrop-blur">
+        <div className={cn("absolute bottom-3 left-3 z-10", ZOOM_PILL_CLASSES)}>
           <button
             type="button"
             onClick={() => stepZoom(-1)}
             aria-label="Zoom out"
-            title="Zoom out"
+            title={ZOOM_OUT_TITLE}
             className={ZOOM_BUTTON_CLASSES}
           >
             <ZoomOut aria-hidden="true" className="size-4" />
@@ -1018,7 +1026,7 @@ export function SequenceViewer({
                 : `Zoom ${Math.round(zoom * 100)} percent — reset to 100 percent`
             }
             title="Actual size (100%)"
-            className="min-w-11 rounded-md px-1.5 py-1 text-center text-xs font-medium text-muted-foreground tabular-nums transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className={ZOOM_READOUT_CLASSES}
           >
             {zoom === "fit" ? "Fit" : `${Math.round(zoom * 100)}%`}
           </button>
@@ -1026,7 +1034,7 @@ export function SequenceViewer({
             type="button"
             onClick={() => stepZoom(1)}
             aria-label="Zoom in"
-            title="Zoom in"
+            title={ZOOM_IN_TITLE}
             className={ZOOM_BUTTON_CLASSES}
           >
             <ZoomIn aria-hidden="true" className="size-4" />
@@ -1257,12 +1265,27 @@ export function SequenceViewer({
       </div>
 
       {/* The keyboard hint that used to live in the control strip — the
-          controls are gone, the affordances are not. */}
+          controls are gone, the affordances are not.
+
+          The FOLD clause is conditional, and that is the point: the `−` glyph
+          only exists on cards with private dependencies (lib/collapse.ts), so
+          on a flow where nothing folds, naming the control would send a reader
+          hunting for a glyph that is not on screen. Where it does exist it was
+          the least discoverable thing in the viewer — a 10px minus in a card
+          corner, explained only by the accessible name of a control a mouse
+          user never hears. */}
       <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
         Click a message, participant, or fragment chip to focus it · a{" "}
         <span aria-hidden="true">•</span> after a label means that message
         carries details · ← → move between messages · pinch or ctrl-scroll to
         zoom · Esc clears focus
+        {dependencyCount.size > 0 ? (
+          <>
+            {" · "}
+            <span aria-hidden="true">−</span> on a card hides the services only
+            it uses, <span aria-hidden="true">+n</span> brings them back
+          </>
+        ) : null}
       </p>
 
       {/* Text alternative: the whole story as an ordered list, for readers
@@ -1295,10 +1318,6 @@ export function SequenceViewer({
  */
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
-
-/** Shared icon-button styling for the zoom pill (the C4 controls' look). */
-const ZOOM_BUTTON_CLASSES =
-  "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
 
 /* -------------------------------------------------------------------------- */
 /* Dock building blocks                                                         */

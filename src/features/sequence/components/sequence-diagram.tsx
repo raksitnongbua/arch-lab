@@ -976,7 +976,20 @@ function ParticipantColumn({
                 onToggleCollapse();
               }
             }}
-          />
+          >
+            {/* A HOVER tooltip, which the accessible name alone never gave a
+                pointer user: `−` is the whole visible affordance, and until
+                this <title> existed the only way to learn what it did was to
+                press it and watch the diagram change. It names WHAT folds
+                rather than only how many — "2 dependencies" counts things the
+                reader cannot see. `aria-label` above still wins the accessible
+                name, so nothing is announced twice. */}
+            <title>
+              {collapsed
+                ? `Show the ${dependencies} service${dependencies === 1 ? "" : "s"} only ${participant.name} uses`
+                : `Hide the ${dependencies} service${dependencies === 1 ? "" : "s"} only ${participant.name} uses`}
+            </title>
+          </rect>
         </g>
       ) : null}
 

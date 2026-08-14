@@ -37,6 +37,7 @@ Be precise about what this repo is right now:
 | `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                     |
 | `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
 | `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
+| `/convert`                   | Mermaid → `.alab` on its own page: paste either dialect, it is detected, and the canonical text comes back with a copy, a download and a link into the playground that renders it.  |
 | `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
 | `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
 | `/editor`                    | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Gated off by `EDITOR_ENABLED` into a coming-soon page.                          |
@@ -133,6 +134,25 @@ In `.alab` they are one line each, with membership on the element:
   frame f-private "Private subnet" in=f-aws
   api:container "Order API" [Go 1.22] in=f-private
 ```
+
+## Zooming
+
+All three canvases — the C4 viewer, the C4 editor and the sequence viewer —
+wear the **same bottom-left pill**: zoom out, the live percentage (click it for
+100%), zoom in, fit to view. The chrome and the step (×1.25 a press) have one
+definition in [`components/ui/zoom-pill.tsx`](src/components/ui/zoom-pill.tsx);
+the BEHAVIOUR deliberately does not, because the two C4 canvases zoom React
+Flow's viewport while the sequence viewer scales its own SVG, and the clamps
+differ on purpose (the editor reaches 400%, the viewer 250%, each argued in its
+`canvas-constants.ts`).
+
+The `+`/`−` buttons are new to the two C4 canvases. Before them, magnifying a
+diagram meant ⌘/ctrl + scroll or a trackpad pinch — a gesture nothing on screen
+mentioned, unavailable on a plain mouse wheel, and reachable from the keyboard
+only through the editor's shortcut sheet (`?`), which the viewer does not have.
+The buttons now carry the gesture in their tooltip, so the control teaches the
+shortcut rather than replacing it: `shift+1` fits and `shift+0` resets to 100%
+in the editor, exactly as before.
 
 ## Exporting images
 
@@ -330,9 +350,13 @@ Under `prefers-reduced-motion` nothing draws — focus dims and the details
 dock appears instantly, which is the same information without the motion.
 
 **Collapse a participant's dependencies.** A card whose downstream services
-exist only to serve it carries a `−2` pill; click it and those columns fold
+exist only to serve it carries a `−` glyph; click it and those columns fold
 away, taking their messages with them, and the diagram compacts. Click the `+2`
-to bring them back. In the bundled Checkout flow, folding Order API hides
+that replaces it to bring them back. Both the glyph and the count are quiet by
+design, so two things say what they do: the control has a hover tooltip naming
+the services it folds, and the hint bar under the diagram gains a clause about
+it — but only on a flow where something actually folds, since a diagram with no
+private dependencies shows no glyph to hunt for. In the bundled Checkout flow, folding Order API hides
 Payments and Orders DB — and deliberately not the Customer, even though Order
 API emails one, because the Customer also clicks in Storefront and a participant
 the flow arrives through is never a dependency. The rule and that exact outcome
@@ -349,8 +373,13 @@ second thing a screen reader announces.
 
 **Mermaid import is lossy, and says so.** Eight arrowheads collapse onto three
 kinds, `autonumber` arguments are dropped, and an `activate`/`deactivate` that
-does not bracket its adjacent message is dropped. `critical`, `break`, `rect`,
-`box`, `create` and `destroy` are refused by name rather than silently ignored.
+does not bracket its adjacent message is dropped. The blocks arch-lab has no
+kind for are imported rather than refused, because none of them changes what
+happens: `critical` becomes an `alt` and `break` an `opt` (labels and nesting
+survive, the kind word does not), `rect` and `box` keep their contents and lose
+only the tint and the bracket, and `create`/`destroy` import the participant
+but not the moment its lifeline starts or ends. Every one of those losses is
+named in the caveat the playground shows on import.
 
 ## Mermaid C4 import
 
@@ -370,6 +399,19 @@ import:
 Everything else — names, descriptions, technologies, relationships, `<br/>`
 decoding, `_Ext` externality, `BiRel` bidirectionality — carries over.
 `pnpm check:mermaid` proves the mapping.
+
+### Just the text: `/convert`
+
+Both playgrounds import Mermaid as a side effect of putting a diagram on
+screen, which is the wrong shape for the errand "I have Mermaid, I want the
+`.alab` my repo will hold" — it makes you pick a playground before you can
+find out. [`/convert`](#routes) is that errand named: paste either dialect,
+the page detects which it is, and the canonical `.alab` comes back with a copy
+button, a download, the import's caveat, and a link that opens it in the
+playground that renders it. It parses through exactly the readers the
+playgrounds use — `checkSource` for C4, `parseSequenceInput` for sequence — so
+it cannot disagree with them, and `pnpm check:validate-samples` asserts both of
+its one-click samples convert to `.alab` that parses back.
 
 ## Use it from an AI agent (MCP) — beta
 
@@ -473,7 +515,7 @@ Then open <http://localhost:3000>.
 | `pnpm check:sequence-collapse` | Proves folding a participant's dependencies: on the real example, collapsing Order API hides exactly Payments and Orders DB — not Storefront, which calls it, and not the Customer, which it emails but which also acts elsewhere. Also that folding is transitive, that a shared service stops the cascade, that the filtered file leaves no message pointing at a hidden participant and no empty fragment, and that it still lays out.                                                             |
 | `pnpm check:sequence-motion`   | Proves idle motion's cross-file facts, which no type can catch: the comet's bands still match the C4 viewer's own dasharrays and offsets (read from its stylesheet, so "same as C4" cannot rot) while its clock stays deliberately slower, solid kinds are never given a dasharray (a dashed sync arrow reads as async), the reply's keyframes advance exactly its dash period, the head stays low-duty, and reduced motion removes the comet rather than parking three bright stripes on every line. |
 | `pnpm check:syntax-docs`       | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser — C4 snippets through the C4 parser and sequence snippets through the sequence one, each first confirmed to be DETECTED as that kind — and every deliberately-broken snippet fails with exactly the line, column and message the page shows.                                                                                                                                                       |
-| `pnpm check:validate-samples`  | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                                                                                                                                                                                                                               |
+| `pnpm check:validate-samples`  | Proves both tool pages' sample documents: each `/validate` sample checks out exactly as the page claims, and each `/convert` sample converts to `.alab` of the promised kind that parses back.                                                                                                                                                                                                                                                                                                        |
 | `pnpm check:advisories`        | Proves the [review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites its source — c4model.com for the C4 family, the constant that defines the limit for the format family. The title cap is proven on both document kinds, at the boundary, and in code points rather than UTF-16 units.                                                                                     |
 | `pnpm check:export-archive`    | Proves the multi-diagram export: the hand-rolled ZIP writer emits an archive that parses back byte-for-byte with valid CRC-32s (and that the system `unzip` accepts, when one is installed), drill order survives, and archive names stay unique.                                                                                                                                                                                                                                                     |
 | `pnpm check:frames`            | Proves boundary editing: creating one around a selection is a single undo entry, refused input leaves the model untouched, nesting cycles are impossible, deleting a boundary re-homes rather than cascades, and the file the editor would save passes the real validator.                                                                                                                                                                                                                            |
@@ -494,12 +536,13 @@ arch-lab/
 ├── public/                    Static assets
 ├── scripts/                   The check:* verification scripts
 └── src/
-    ├── app/                   App Router: /, /demo, /view/[modelId], /view, /syntax, /validate, /mcp, /api/mcp, /editor
+    ├── app/                   App Router: /, /demo, /view/[modelId], /view, /syntax, /validate, /convert, /mcp, /api/mcp, /editor
     ├── components/
     │   ├── ui/                Generic primitives (button, card, badge, dialog, tooltip, toast, …)
     │   └── layout/            App chrome (header, footer, theme-toggle)
     ├── features/
     │   ├── archtext/          The .alab text format: parser + canonical serializer (see its README)
+    │   ├── convert/          Mermaid -> .alab as its own errand, behind /convert
     │   ├── editor/            The full C4 canvas — built, currently gated (see its README)
     │   ├── marketing/         Landing-page hero diagram
     │   ├── mcp/               The MCP server behind /api/mcp, plus the /mcp page (see its README)
