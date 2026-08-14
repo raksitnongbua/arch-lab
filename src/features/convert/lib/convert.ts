@@ -20,6 +20,8 @@
  * the text.
  */
 
+import type { SequenceLabFile } from "@/types";
+
 import { detectAlabKind, serializeSequenceText } from "@/features/archtext";
 import { MERMAID_DIAGRAM_TYPES } from "@/features/mermaid";
 /* Reached past the two barrels on purpose, and the same way
@@ -34,6 +36,8 @@ import {
   parseSequenceInput,
 } from "@/features/sequence/input/parse";
 import { MERMAID_CAVEAT, checkSource } from "@/features/validate/lib/check";
+import { importMermaid } from "@/features/viewer/input/sync";
+import type { ViewerModel } from "@/features/viewer/lib/model";
 
 /** Which arch-lab document the pasted Mermaid becomes. */
 export type ConvertKind = "c4" | "sequence";
@@ -49,9 +53,18 @@ export const CONVERT_PLAYGROUND_PATH: Record<ConvertKind, string> = {
   sequence: "/view/sequence",
 };
 
-export interface ConvertOk {
+/**
+ * A successful conversion carries the RENDERABLE document as well as the
+ * text, because the page's whole job is now "see it, then take the text".
+ * Discriminated on `kind` so the caller cannot hand a sequence document to
+ * the C4 renderer: the two are different shapes and the compiler says so.
+ *
+ * The payloads are what each renderer already takes — a `ViewerModel` for
+ * `ViewerShell`, a `SequenceLabFile` for `SequenceViewer` — rather than a
+ * third intermediate shape this feature would then own and keep in step.
+ */
+interface ConvertOkBase {
   status: "ok";
-  kind: ConvertKind;
   /** The document's own title — the download's file stem. */
   title: string;
   /** Canonical `.alab` text: what arch-lab would write for this model. */
@@ -59,6 +72,18 @@ export interface ConvertOk {
   /** What this import DROPPED, in the importer's own words. */
   caveat: string;
 }
+
+export interface ConvertOkC4 extends ConvertOkBase {
+  kind: "c4";
+  model: ViewerModel;
+}
+
+export interface ConvertOkSequence extends ConvertOkBase {
+  kind: "sequence";
+  file: SequenceLabFile;
+}
+
+export type ConvertOk = ConvertOkC4 | ConvertOkSequence;
 
 /** A located failure, in the shape `/validate` and both playgrounds render. */
 export interface ConvertFailed {
@@ -160,6 +185,7 @@ function convertSequence(source: string): ConvertOk | ConvertFailed {
     title: parsed.value.file.metadata.title,
     alabText: serializeSequenceText(parsed.value.file),
     caveat: MERMAID_SEQUENCE_CAVEAT,
+    file: parsed.value.file,
   };
 }
 
@@ -168,13 +194,23 @@ function convertC4(source: string): ConvertOk | ConvertFailed | ConvertIdle {
      letting the checker re-decide would put two heuristics in one path. */
   const checked = checkSource(source, "mermaid");
   if (checked.status === "ok") {
-    return {
-      status: "ok",
-      kind: "c4",
-      title: checked.summary.title,
-      alabText: checked.aftText,
-      caveat: MERMAID_CAVEAT,
-    };
+    /* Imported a SECOND time, through the viewer's own path, purely for the
+       `ViewerModel` the renderer needs. Both calls run the same
+       `parseMermaidC4` and the importer is deterministic, so the two cannot
+       disagree — and the alternative, widening `checkSource` to return a
+       viewer model, would put a rendering concern inside the validator. The
+       cost is one extra parse of a document a human just pasted. */
+    const imported = importMermaid(source);
+    if (imported.status === "ok") {
+      return {
+        status: "ok",
+        kind: "c4",
+        title: checked.summary.title,
+        alabText: checked.aftText,
+        caveat: MERMAID_CAVEAT,
+        model: imported.value.model,
+      };
+    }
   }
   if (checked.status === "error") {
     const [first] = checked.issues;
@@ -187,9 +223,17 @@ function convertC4(source: string): ConvertOk | ConvertFailed | ConvertIdle {
       lineText: first?.lineText ?? null,
     };
   }
-  /* `empty` / `unknown-format` are both ruled out above — an empty source
-     returned early and the header matched a C4 diagram type. Reported rather
-     than assumed away, so a change in `checkSource` shows up as a message
-     instead of a crash. */
-  return { status: checked.status, message: checked.message };
+  /* Everything left is unreachable today and reported rather than assumed
+     away: `empty`/`unknown-format` are ruled out above (an empty source
+     returned early, and the header matched a C4 diagram type), and a
+     `checkSource` that says OK while `importMermaid` refuses would mean the
+     two paths had drifted. If either ever happens, this says so instead of
+     crashing or rendering a blank canvas. */
+  return {
+    status: "unknown-format",
+    message:
+      checked.status === "ok"
+        ? "This parses as Mermaid C4 but could not be turned into a diagram — please report it."
+        : checked.message,
+  };
 }

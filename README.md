@@ -26,21 +26,21 @@ Be precise about what this repo is right now:
 
 ## Routes
 
-| Route                        | What it is                                                                                                                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                          | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                               |
-| `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                          |
-| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.         |
-| `/view`                      | Chooser: C4 model or sequence diagram. Also where legacy `/view#m=…` share links land — they forward to `/view/c4` with the fragment intact.                                        |
-| `/view/c4`                   | The paste-your-own C4 playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                           |
-| `/view/sequence`             | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message, participant, or fragment to animate and inspect it.      |
-| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                     |
-| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                     |
-| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.            |
-| `/convert`                   | Mermaid → `.alab` on its own page: paste either dialect, it is detected, and the canonical text comes back with a copy, a download and a link into the playground that renders it.  |
-| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist. |
-| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                         |
-| `/editor`                    | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Gated off by `EDITOR_ENABLED` into a coming-soon page.                          |
+| Route                        | What it is                                                                                                                                                                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                          | Landing page. The hero CTA and the C4 card link into the demo — the header deliberately carries no primary nav links in this release.                                                                                       |
+| `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                                                                  |
+| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.                                                 |
+| `/view`                      | Chooser: C4 model or sequence diagram. Also where legacy `/view#m=…` share links land — they forward to `/view/c4` with the fragment intact.                                                                                |
+| `/view/c4`                   | The paste-your-own C4 playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                                                                   |
+| `/view/sequence`             | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message, participant, or fragment to animate and inspect it.                                              |
+| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                                                             |
+| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                                                             |
+| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.                                                    |
+| `/convert`                   | Mermaid → `.alab`: paste either dialect on the left and it is **drawn** on the right, live, by the same renderer its playground uses. One toggle switches the pane between the Mermaid you typed and the `.alab` it became. |
+| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.                                         |
+| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                                                                 |
+| `/editor`                    | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Gated off by `EDITOR_ENABLED` into a coming-soon page.                                                                  |
 
 ## The two model formats
 
@@ -396,21 +396,23 @@ button clears too, and a second Escape exits immersive mode.
 Under `prefers-reduced-motion` nothing draws — focus dims and the details
 dock appears instantly, which is the same information without the motion.
 
-**Hide what you are not reading.** Every participant card carries a `×` that
-takes that lifeline off the diagram, and a card whose downstream services exist
-only to serve it also carries a `−` that folds those away in one go. The two
-answer different questions — "I do not care about that column" needs no model
-knowledge, while "collapse what only this one talks to" needs the dependency
-rule below — and only the second used to exist, which left most participants
-with no control at all.
+**Collapse a participant's dependencies.** A card whose downstream services
+exist only to serve it carries a `−`; click it and those columns fold away,
+taking their messages with them, and the diagram compacts. Click the `+2` that
+replaces it to bring them back.
 
-Hiding is safe to make this easy because **the way back is always on screen**:
-while anything is hidden, a bar above the diagram states how many and NAMES
-them, with one _Show all_ button. A count alone would still leave you guessing
-what you were missing, and the previous design left no trace at all — a reader
-who folded something, scrolled away and came back had a smaller diagram and no
-reason to think it was not the whole story. The last visible lifeline can never
-be hidden; an empty canvas is not a view of anything. In the bundled Checkout flow, folding Order API hides
+A `×` that hid ANY lifeline was tried and removed. It sat on the opposite
+corner of the same small card and read as a second, competing version of the
+`−` next to it — two controls that both make columns disappear, differing in a
+way you had to already know. The dependency fold is the one with a rule behind
+it, so it is the one that stayed; discoverability is now the tour's job, not a
+second button's.
+
+What did stay is **the way back**: while anything is folded, a bar above the
+diagram says how many and NAMES them, with one _Show all_. A count alone still
+leaves you guessing what you are missing, and before it there was no trace on
+screen at all — fold something, scroll away, come back, and you had a smaller
+diagram with no reason to doubt it. In the bundled Checkout flow, folding Order API hides
 Payments and Orders DB — and deliberately not the Customer, even though Order
 API emails one, because the Customer also clicks in Storefront and a participant
 the flow arrives through is never a dependency. The rule and that exact outcome
@@ -461,18 +463,33 @@ Everything else — names, descriptions, technologies, relationships, `<br/>`
 decoding, `_Ext` externality, `BiRel` bidirectionality — carries over.
 `pnpm check:mermaid` proves the mapping.
 
-### Just the text: `/convert`
+### `/convert` — paste it, see it, take the text
 
 Both playgrounds import Mermaid as a side effect of putting a diagram on
-screen, which is the wrong shape for the errand "I have Mermaid, I want the
-`.alab` my repo will hold" — it makes you pick a playground before you can
-find out. [`/convert`](#routes) is that errand named: paste either dialect,
-the page detects which it is, and the canonical `.alab` comes back with a copy
-button, a download, the import's caveat, and a link that opens it in the
-playground that renders it. It parses through exactly the readers the
-playgrounds use — `checkSource` for C4, `parseSequenceInput` for sequence — so
-it cannot disagree with them, and `pnpm check:validate-samples` asserts both of
-its one-click samples convert to `.alab` that parses back.
+screen, which is the wrong shape for "I have Mermaid, I want the `.alab` my
+repo will hold": it makes you pick a playground before you can find out.
+[`/convert`](#routes) is that errand named.
+
+**The diagram is half the page**, and it renders live. Someone arriving with
+Mermaid wants to know it worked, and a block of unfamiliar syntax is not
+evidence of that — a drawing is. It is drawn by the SAME components the
+playgrounds use (`ViewerShell`, `SequenceViewer`), not a bespoke preview: a
+second renderer would be free to disagree with the one the hand-off link
+opens, and "it looked different on the convert page" is a bug nobody could
+act on.
+
+**One pane, two faces.** A segmented toggle switches between `Mermaid` — the
+editable input — and `.alab`, what it became. Both stay mounted, so glancing
+at the other format never costs you the textarea's undo stack or your caret.
+The `.alab` face is read-only and copies or downloads instead: editing it
+would raise the question of what happens to the Mermaid beside it, and
+regenerating Mermaid from a model is exactly what a one-way importer cannot
+do. The hand-off link opens the document where it CAN be edited.
+
+Conversion runs through exactly the readers the playgrounds use —
+`checkSource` for C4, `parseSequenceInput` for sequence — so the page cannot
+disagree with them, and `pnpm check:validate-samples` asserts both one-click
+samples convert to `.alab` that parses back.
 
 ## Use it from an AI agent (MCP) — beta
 
