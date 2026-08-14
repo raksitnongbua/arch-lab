@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 
 import { Providers } from "@/app/providers";
 import { Footer } from "@/components/layout/footer";
@@ -133,8 +134,26 @@ export default function RootLayout({
             Site-wide rather than route-scoped is deliberate: the flag states a
             fact about the URL, not about a route, and nothing reads it unless it
             opts in. Same technique and same reason as the next-themes script
-            above it. */}
-        <script dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }} />
+            above it.
+
+            WHY `next/script` AND NOT A BARE `<script>`. Moving the tag up here
+            was not enough. React 19 warns "Encountered a script tag while
+            rendering React component" for ANY script element it renders on the
+            client, and the root layout does get re-rendered client-side — a
+            Fast Refresh in dev is enough, and the warning fired on
+            `/view/sequence` with no share link in sight. The warning is also
+            correct: a client-rendered script tag is inserted and never
+            executed, so on that path the tag was pure noise.
+            `strategy="beforeInteractive"` is the sanctioned way to say what
+            this needs — Next injects the source into the initial HTML, where
+            it runs before hydration, and renders nothing into the React tree
+            at all. `beforeInteractive` is only legal in the root layout, which
+            is a second reason the tag lives here. */}
+        <Script
+          id="share-forward-flag"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }}
+        />
         <Providers>
           <a
             href="#main"
