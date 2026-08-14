@@ -84,6 +84,7 @@ import {
   ZOOM_PILL_CLASSES,
   ZOOM_STEP,
 } from "@/components/ui/zoom-pill";
+import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
@@ -186,6 +187,9 @@ export function SequenceViewer({
 
   const reduced = useReducedMotion();
   const idleMotion = useIdleMotion();
+  /* Named for the reader's own platform: the bar used to say "ctrl-scroll",
+     which on a Mac is the gesture that zooms the operating system. */
+  const mod = useModKey();
 
   /**
    * Focus and its nonce live in ONE state cell because they only ever change
@@ -1042,7 +1046,11 @@ export function SequenceViewer({
           onPointerCancel={handlePointerUp}
           tabIndex={0}
           role="application"
-          aria-label="Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Pinch or hold Control and scroll to zoom between 10 and 400 percent. Messages, participants and fragment chips are buttons — Tab reaches them."
+          /* Spelled out rather than symbolic: a screen reader announces "⌘"
+             as "command" or as nothing at all depending on the voice, and a
+             name that sometimes vanishes is worse than one that is slightly
+             long. `mod` is still the reader's own key. */
+          aria-label={`Sequence diagram. Arrow keys move focus between messages, Escape clears focus. Pinch or hold ${mod === "⌘" ? "Command" : "Control"} and scroll to zoom between 10 and 400 percent. Messages, participants and fragment chips are buttons — Tab reaches them.`}
         >
           {/* Sized to the pane in fit mode, hugging the SVG when zoomed.
               Nothing is reserved for the dock, and that is the fix for a
@@ -1409,8 +1417,9 @@ export function SequenceViewer({
       <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
         Click a message, participant, or fragment chip to focus it · a{" "}
         <span aria-hidden="true">•</span> after a label means that message
-        carries details · ← → move between messages · pinch or ctrl-scroll to
-        zoom · Esc clears focus
+        carries details · ← → move between messages ·{" "}
+        <span className="font-medium text-foreground">{mod} + scroll</span> or
+        pinch to zoom · Esc clears focus
         {dependencyCount.size > 0 ? (
           <>
             {" · "}

@@ -93,6 +93,7 @@ import { FrameLayer } from "@/features/editor/components/frame-layer";
 import { ViewerNode, type ViewerFlowNode } from "./viewer-node";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
+import { useModKey } from "@/lib/mod-key";
 
 import { ViewerZoomControls } from "./viewer-zoom-controls";
 
@@ -592,6 +593,9 @@ function ViewerCanvasInner({
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
 }): React.JSX.Element {
+  /* The modifier's name for THIS reader's platform — "Ctrl + scroll" on a Mac
+     names the gesture that zooms the operating system, not the canvas. */
+  const mod = useModKey();
   const { getViewport, setViewport } = useReactFlow<
     ViewerFlowNode,
     ViewerFlowEdge
@@ -1402,6 +1406,11 @@ function ViewerCanvasInner({
         {/* Not in a Panel: React Flow's MiniMap positions itself, and
             wrapping it would fight its own corner offsets. */}
         <CanvasMinimap />
+        {/* The gesture clause is here as well as in the zoom pill's menu, and
+            the repetition is the point: a plain wheel PANS this canvas, so a
+            reader who tries it concludes the wheel does not zoom and never
+            reaches for the modifier. The failure looks like an answer, which
+            is the one case worth saying twice. */}
         <Panel position="bottom-center" className="hidden sm:block">
           <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
             Click an <span className="font-medium text-primary">element</span>{" "}
@@ -1409,8 +1418,10 @@ function ViewerCanvasInner({
             details ·{" "}
             <span className="font-medium text-primary">double-click</span> or
             the <span className="font-medium text-primary">zoom chip</span> to
-            zoom in · <kbd className="font-mono text-[10px]">Esc</kbd> steps
-            back · drag to pan
+            zoom in ·{" "}
+            <span className="font-medium text-primary">{mod} + scroll</span>{" "}
+            zooms · <kbd className="font-mono text-[10px]">Esc</kbd> steps back
+            · drag to pan
           </p>
         </Panel>
       </ReactFlow>

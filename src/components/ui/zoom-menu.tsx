@@ -16,6 +16,16 @@
  * somewhere else would be worse than not offering it. Pass `maxZoom` and any
  * preset above it is dropped.
  *
+ * IT ALSO CARRIES THE GESTURES, in a footer row. Wheel-zoom is the fastest
+ * way to work a canvas and the least discoverable — nothing on screen said
+ * the modifier was needed, so a plain scroll pans and the reader concludes
+ * the wheel does not zoom. A tooltip on the `+` button already named it, and
+ * tooltips are for people who already suspect a control exists. The menu is
+ * the one place a reader is DEMONSTRABLY thinking about zoom, so it is where
+ * the shortcut belongs. The modifier is spelled for the reader's own platform
+ * (`useModKey`), because "Ctrl + scroll" on a Mac names a key that zooms the
+ * whole operating system instead.
+ *
  * Keyboard and dismissal are deliberately plain: a `<details>`-free popover
  * with Escape-to-close, click-outside-to-close, and real `<button>` rows, so
  * it works with the keyboard without owning a focus trap. It is a five-item
@@ -26,6 +36,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Check } from "lucide-react";
 
 import { ZOOM_READOUT_CLASSES } from "@/components/ui/zoom-pill";
+import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,6 +59,7 @@ export function ZoomMenu({
   onFit,
   onZoomTo,
   title,
+  keyboardHint,
 }: {
   /** Current zoom, already rounded to a percentage. */
   percent: number;
@@ -59,10 +71,19 @@ export function ZoomMenu({
   onZoomTo: (scale: number) => void;
   /** Tooltip for the readout button. */
   title: string;
+  /**
+   * This canvas's KEYBOARD route, appended to the gesture line — the editor
+   * has `shift+1` / `shift+0`, the two viewers have no bindings of their own.
+   * Passed in rather than detected: a menu that advertised a shortcut the
+   * host does not register would be the exact lie the shortcut sheet's
+   * check script exists to prevent.
+   */
+  keyboardHint?: string;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const mod = useModKey();
 
   /* One listener pair while open, none while closed. `pointerdown` rather
      than `click` so the menu is gone before the canvas beneath it reacts —
@@ -148,6 +169,19 @@ export function ZoomMenu({
               </button>
             );
           })}
+          {/* Not a menu item: it is not something to choose, and a `role`
+              other than the radios' would make the group's "1 of 4" counts
+              wrong. A plain paragraph inside the menu, read after them. */}
+          <p className="mt-1 border-t border-border/60 px-2.5 pt-1.5 text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground">{mod} + scroll</span>{" "}
+            or pinch to zoom at the pointer
+            {keyboardHint === undefined ? null : (
+              <>
+                <br />
+                {keyboardHint}
+              </>
+            )}
+          </p>
         </div>
       ) : null}
     </div>

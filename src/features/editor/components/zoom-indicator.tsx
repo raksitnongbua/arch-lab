@@ -72,7 +72,8 @@ export function ZoomIndicator(): React.JSX.Element {
         onZoomTo={(scale) => {
           void zoomTo(scale, { duration: duration("fitView") });
         }}
-        title="Choose a zoom level — shift + 0 for 100%, shift + 1 to fit"
+        title="Choose a zoom level"
+        keyboardHint="shift + 1 fits · shift + 0 is 100%"
       />
       <button
         type="button"

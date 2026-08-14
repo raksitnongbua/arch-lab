@@ -12,31 +12,13 @@
  * for the same question.
  */
 
-import { useMemo } from "react";
-
 import { Dialog } from "@/components/ui/dialog";
+import { useModKey } from "@/lib/mod-key";
 
 import {
   SHORTCUT_GROUPS,
   type ShortcutEntry,
 } from "../../lib/shortcut-catalog";
-
-/**
- * `mod` is Cmd on Apple platforms and Ctrl elsewhere — the same resolution the
- * shortcut registry does, so the sheet cannot advertise a key the binding is not
- * listening for. Read at render, not module load, because this is a client
- * component and `navigator` is only there in the browser.
- */
-function useModLabel(): string {
-  return useMemo(
-    () =>
-      typeof navigator !== "undefined" &&
-      /mac|iphone|ipad|ipod/i.test(navigator.platform)
-        ? "⌘"
-        : "Ctrl",
-    [],
-  );
-}
 
 const PRETTY: Readonly<Record<string, string>> = {
   shift: "⇧",
@@ -119,7 +101,7 @@ export function ShortcutSheet({
   open,
   onClose,
 }: ShortcutSheetProps): React.JSX.Element | null {
-  const mod = useModLabel();
+  const mod = useModKey();
   if (!open) return null;
 
   return (

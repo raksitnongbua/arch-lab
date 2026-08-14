@@ -160,6 +160,19 @@ opens `Fit / 50 / 100 / 200 / 400%`, filtered by the canvas's own clamp so it
 never offers a level that canvas cannot reach. "Show me this at 200%" is a
 destination, not four `+` presses.
 
+**The gesture is written down**, in three places, because a plain wheel PANS
+these canvases: a reader who tries it concludes the wheel does not zoom and
+never reaches for the modifier — the failure looks like an answer, which is
+the one case worth saying more than once. So the preset menu carries a footer
+line (`⌘ + scroll or pinch to zoom at the pointer`, plus the editor's
+`shift+1` / `shift+0`), the C4 canvas hint pill and the sequence viewer's hint
+bar name it inline, and the editor's canvas strip lists it beside the other
+gestures you cannot guess. The modifier is spelled for the READER's platform
+([`lib/mod-key.ts`](src/lib/mod-key.ts)) — "Ctrl + scroll" on a Mac names the
+gesture that zooms the operating system, not the diagram. That helper also
+replaced two copies of the same platform sniff, which had been free to
+disagree between the canvas hint and the shortcut sheet.
+
 **A minimap** sits bottom-right on both C4 canvases. Zoomed past fit, a diagram
 loses the thing a diagram is for: you can read a container but no longer see
 what it sits inside, and the only way back was Fit — throwing the zoom away to
