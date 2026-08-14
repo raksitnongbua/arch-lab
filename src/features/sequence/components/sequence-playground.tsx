@@ -565,9 +565,12 @@ export function SequencePlayground(): React.JSX.Element {
           collapse is what settles the width argument: one click and the canvas
           is the whole workbench. See components/ui/split-workbench.tsx. */}
         <SplitWorkbench
-          collapsed={sourceCollapsed}
+          /* Immersive collapses the RAIL, it does not hide the workbench:
+             hiding the frame would hide the canvas inside it, and the canvas
+             is what immersive enlarges. Or-ing the two here also means
+             leaving immersive restores the rail to whatever the reader had. */
+          collapsed={sourceCollapsed || isImmersive}
           sourceLabel="sequence source"
-          hidden={isImmersive}
           source={
             <>
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
