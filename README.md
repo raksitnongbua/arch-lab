@@ -183,9 +183,9 @@ would cover a meaningful share of the canvas it describes.
 
 ## The workbench layout
 
-Both playgrounds are one screen: **source on the left at 30%, canvas on the
-right at 70%**, a viewport tall, with the left rail collapsible and immersive
-mode on the canvas.
+Both playgrounds are one screen: **source on the left, canvas on the right**,
+a viewport tall, with a draggable divider (30/70 by default), a collapsible
+rail, and immersive mode on the canvas.
 
 They used to stack — diagram first, text below the fold — and the sequence
 page argued for it in writing: a sequence diagram's participants spread
@@ -197,15 +197,31 @@ had a _Scroll for the .alab source_ button, which was the tell — a control
 whose only job is to move you between two halves of one task means the layout
 split the task.
 
-**The collapse is the answer to the width argument**, not a convenience: one
-click and the canvas is the whole workbench, which is the stacked layout's best
-case on demand instead of a permanent tax. The rail collapses rather than the
-panes resizing, because a drag handle makes "give the diagram everything" a
-gesture you have to aim. The source pane is hidden, never unmounted, so
-collapsing to read a wide diagram never costs the edit you were in the middle
-of — and `hidden` takes it out of the tab order, which is what makes the
-collapsed state real for a keyboard. Below `lg` the panes stack, source first:
-30% of a phone is not a text editor.
+**The split is yours, three ways**, and each does what it is good at:
+
+- **Drag the divider** for the width you actually want. It is remembered
+  across page loads and across both playgrounds — "my editor is this wide" is
+  a statement about the workbench, not about a route — and clamped to 18–60%,
+  where the floor is the point a monospace line starts wrapping every few
+  words and the ceiling is the point the canvas stops being what the page is
+  for.
+- **Collapse** for the extreme: one click, no aim, and the canvas is
+  everything. This was once argued to be the ONLY control, on the grounds that
+  a drag handle makes "give the diagram everything" a gesture you have to aim.
+  The premise holds and the conclusion did not: aiming is a bad way to reach
+  the extreme and a fine way to reach the middle.
+- **Double-click the divider** to return to 30%, so experimenting with the
+  drag costs nothing.
+
+The divider is a real `separator` widget — arrow keys nudge it, Home and End
+take it to the clamps — because a drag-only control is one a keyboard cannot
+reach, and this one changes how the whole page reads. The source pane is
+hidden, never unmounted, so collapsing to read a wide diagram never costs the
+edit you were in the middle of, and `hidden` takes it out of the tab order,
+which is what makes the collapsed state real for a keyboard. Below `lg` the
+panes stack, source first, and the divider is not rendered at all: 30% of a
+phone is not a text editor, and a resizer for a layout that is not side by
+side is a control that appears inert.
 
 The height budget lives on each PAGE, not in the layout
 ([`split-workbench.tsx`](src/components/ui/split-workbench.tsx)) — each page
