@@ -83,8 +83,10 @@ const {
 const {
   parseMermaidC4,
   parseMermaidSequence,
+  serializeMermaidSequence,
   MermaidParseError,
   MERMAID_SEQUENCE_CAVEAT,
+  MERMAID_SEQUENCE_EXPORT_CAVEAT,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/mermaid/index.ts")).href
 );
@@ -1206,6 +1208,99 @@ for (const kind of ["alt", "par", "opt", "loop"]) {
     shownKinds.has(kind),
   );
 }
+
+/* ---- 7b. …and survives the trip OUT to Mermaid and back ------------------ */
+
+/*
+ * The export half (`serializeMermaidSequence`), added so the playground can
+ * offer a real `.alab` ⇄ Mermaid toggle rather than a one-way door.
+ *
+ * The assertion is a ROUND TRIP through Mermaid with the documented losses
+ * normalised away, run over every bundled example — the same "the examples
+ * are the proof" discipline the canonical-text check above uses. Anything the
+ * export drops has to be dropped ON PURPOSE and named in the caveat; this is
+ * what stops a quiet fourth loss appearing later.
+ */
+console.log("\nmermaid sequenceDiagram export (.alab → Mermaid → .alab)");
+
+check(
+  "the export caveat names every loss (desc, technology, header, unstated kind, tinted rect label)",
+  MERMAID_SEQUENCE_EXPORT_CAVEAT.includes("desc") &&
+    MERMAID_SEQUENCE_EXPORT_CAVEAT.includes("[technology]") &&
+    MERMAID_SEQUENCE_EXPORT_CAVEAT.includes("header field") &&
+    MERMAID_SEQUENCE_EXPORT_CAVEAT.includes("unstated") &&
+    MERMAID_SEQUENCE_EXPORT_CAVEAT.includes("rect"),
+);
+
+/**
+ * Everything Mermaid CAN hold, in a comparable shape. The three fields
+ * stripped here are the three the caveat promises to lose — normalising them
+ * is how this test distinguishes "documented loss" from "bug", and adding a
+ * fourth stripped field to make a failure go away is the thing not to do.
+ */
+const mermaidComparable = (file) =>
+  JSON.stringify({
+    title: file.metadata.title,
+    autonumber: file.autonumber ?? null,
+    participants: file.participants.map((p) => ({
+      id: p.id,
+      // Unstated → participant: Mermaid has only the two words.
+      kind: p.kind ?? "participant",
+      name: p.name,
+    })),
+    boxes: file.boxes ?? null,
+    items: JSON.parse(
+      JSON.stringify(file.items, (key, value) =>
+        key === "description" || key === "technology" ? undefined : value,
+      ),
+    ),
+  });
+
+for (const id of exampleIds) {
+  const example = loadSequenceExample(id);
+  if (example.status !== "ok") continue;
+  const mermaid = serializeMermaidSequence(example.file);
+  check(
+    `example "${id}" exports to Mermaid and imports back with everything Mermaid can hold`,
+    mermaidComparable(parseMermaidSequence(mermaid)) ===
+      mermaidComparable(example.file),
+    firstDiff(
+      JSON.stringify(
+        JSON.parse(mermaidComparable(parseMermaidSequence(mermaid))),
+        null,
+        1,
+      ),
+      JSON.stringify(JSON.parse(mermaidComparable(example.file)), null, 1),
+    ),
+  );
+  check(
+    `example "${id}" exports deterministically`,
+    serializeMermaidSequence(example.file) === mermaid,
+  );
+}
+
+check(
+  "the export writes a Mermaid header and indents its body",
+  serializeMermaidSequence(
+    loadSequenceExample("payment-capture").file,
+  ).startsWith("sequenceDiagram\n    title "),
+);
+check(
+  "a semicolon in a note survives the export verbatim (punctuation is not rewritten)",
+  serializeMermaidSequence(
+    parseSequenceText(
+      `${SEQ_HEAD}  note right a : "holds; only the capture is late"\n`,
+    ),
+  ).includes("holds; only the capture is late"),
+);
+check(
+  "an id Mermaid cannot spell is substituted, not emitted raw",
+  serializeMermaidSequence(
+    parseSequenceText(
+      'archlab 1.0 sequence\ntitle "T"\n\n@sequence\n  "a.b" "A"\n  c "C"\n  "a.b" -> c : "x"\n',
+    ),
+  ).includes("a_b"),
+);
 
 /* ---- 8. a sequence document survives the SHARE codec --------------------- */
 

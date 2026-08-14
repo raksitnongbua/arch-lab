@@ -59,7 +59,14 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ArrowDownToLine, Expand, FileText, Info, Shrink } from "lucide-react";
+import {
+  ArrowDownToLine,
+  Expand,
+  FileText,
+  Info,
+  Repeat2,
+  Shrink,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +89,12 @@ import {
   SHARE_FORWARD_ATTRIBUTE,
 } from "@/features/viewer/share/codec";
 
+import {
+  MERMAID_SEQUENCE_EXPORT_CAVEAT,
+  serializeMermaidSequence,
+} from "@/features/mermaid";
+import { serializeSequenceText } from "@/features/archtext";
+
 import { MERMAID_SEQUENCE_EXAMPLE, SEQUENCE_EXAMPLE } from "../input/example";
 import { SequenceExportButton } from "../export/export-button";
 import { SequenceShareButton } from "../share/share-button";
@@ -91,6 +104,7 @@ import {
   SEQUENCE_FORMAT_LABEL,
   type ParsedSequence,
   type SequenceInputError,
+  type SequenceSourceFormat,
 } from "../input/parse";
 import { SequenceViewer } from "./sequence-viewer";
 
@@ -233,6 +247,45 @@ export function SequencePlayground(): React.JSX.Element {
       applyParse(source);
     },
     [applyParse],
+  );
+
+  /**
+   * THE FORMAT TOGGLE: rewrite the pane in the other format, in place.
+   *
+   * Not a second pane and not a read-only preview. This box has always held
+   * EITHER format — it auto-detects on every keystroke — so "switch format"
+   * can honestly mean "convert what is in the box", which is the thing people
+   * ask for: write in `.alab`, flip to Mermaid, paste it into a README.
+   *
+   * IT ONLY EVER RUNS ON A DOCUMENT THAT PARSES, from the LAST GOOD parse
+   * rather than the raw text: converting half a line has no meaning, and
+   * silently converting a stale model would replace the reader's work with
+   * something they cannot see the source of.
+   *
+   * Going to Mermaid is LOSSY (`MERMAID_SEQUENCE_EXPORT_CAVEAT` — desc,
+   * technology, and the header beyond the title), and the notice under the
+   * pane says so the moment it happens. It is not guarded behind a
+   * confirmation: the conversion is visible in the box, one Undo away in the
+   * textarea's own history, and a dialog in front of a formatting button
+   * teaches people to dismiss dialogs.
+   */
+  const convertPane = useCallback(
+    (to: SequenceSourceFormat) => {
+      if (parsed === null || parsed.format === to) return;
+      const converted =
+        to === "mermaid"
+          ? serializeMermaidSequence(parsed.file)
+          : serializeSequenceText(parsed.file);
+      setText(converted);
+      setPending(null);
+      applyParse(converted);
+      setAnnouncement(
+        to === "mermaid"
+          ? `Converted the pane to Mermaid. ${MERMAID_SEQUENCE_EXPORT_CAVEAT}`
+          : "Converted the pane to .alab — nothing is lost in this direction.",
+      );
+    },
+    [parsed, applyParse],
   );
 
   /* ---- opening a share link (`#m=…`) --------------------------------------
@@ -466,14 +519,10 @@ export function SequencePlayground(): React.JSX.Element {
                 The route that hands it over goes with the sentence that asks
                 for it. */}
             <p className="text-sm leading-relaxed text-foreground">
-              <span className="font-semibold">Imported from Mermaid.</span>{" "}
+              <span className="font-semibold">This pane holds Mermaid.</span>{" "}
               {MERMAID_SEQUENCE_CAVEAT}{" "}
-              <Link
-                href="/convert"
-                className="font-medium text-primary hover:underline"
-              >
-                Get the .alab text
-              </Link>
+              <span className="font-semibold">Going the other way:</span>{" "}
+              {MERMAID_SEQUENCE_EXPORT_CAVEAT}
             </p>
           </div>
         ) : null}
@@ -565,15 +614,57 @@ export function SequencePlayground(): React.JSX.Element {
           className={cn("flex min-w-0 flex-col gap-2", isImmersive && "hidden")}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <label
-              htmlFor={textareaId}
-              className="text-sm font-medium text-foreground"
-            >
-              Sequence text{" "}
-              <span className="font-mono text-xs text-muted-foreground">
-                (.alab or Mermaid)
-              </span>
-            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <label
+                htmlFor={textareaId}
+                className="text-sm font-medium text-foreground"
+              >
+                Sequence text
+              </label>
+              {/* A radiogroup, not two buttons: one choice with two values,
+                  and a screen reader should hear it that way. It shows what
+                  the pane IS (detected from the text) and switches by
+                  rewriting it — see `convertPane`. Disabled while the text
+                  does not parse, because there is no document to convert. */}
+              <div
+                role="radiogroup"
+                aria-label="Source format"
+                className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5"
+              >
+                {(["alab", "mermaid"] as const).map((format) => {
+                  const current = parsed?.format === format;
+                  return (
+                    <button
+                      key={format}
+                      type="button"
+                      role="radio"
+                      aria-checked={current}
+                      disabled={parsed === null}
+                      onClick={() => convertPane(format)}
+                      title={
+                        current
+                          ? `The pane is ${SEQUENCE_FORMAT_LABEL[format]}`
+                          : `Rewrite the pane as ${SEQUENCE_FORMAT_LABEL[format]}`
+                      }
+                      className={cn(
+                        "rounded-md px-2 py-0.5 font-mono text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40",
+                        current
+                          ? "bg-secondary font-medium text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {format === "alab" ? ".alab" : "Mermaid"}
+                    </button>
+                  );
+                })}
+              </div>
+              {parsed !== null ? (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Repeat2 aria-hidden="true" className="size-3.5" />
+                  switches by rewriting the text
+                </span>
+              ) : null}
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <SequenceShareButton
                 text={text}

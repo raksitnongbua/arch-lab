@@ -468,6 +468,25 @@ of a long flow you can tell which column is which without scrolling back up.
 The footer card is a visual repeat only — it is not a second control and not a
 second thing a screen reader announces.
 
+**The format toggle.** The source pane under the diagram has always accepted
+either format — it auto-detects on every keystroke — so a `.alab` ⇄ Mermaid
+toggle can honestly mean _rewrite what is in the box_, and that is what it
+does. Write in `.alab`, flip to Mermaid, paste it into a README; paste someone
+else's Mermaid, flip to `.alab`, commit it.
+
+That needed a **Mermaid emitter** for sequence documents
+([`sequence-emit.ts`](src/features/mermaid/lib/sequence-emit.ts)), which did
+not exist and could not have: until the model grew the blocks Mermaid actually
+draws, emitting would have had to invent a spelling for `critical`, `break`,
+`rect` and `box`. Going out is lossy in the other direction — `desc`,
+`[technology]`, and every header field except the title have no Mermaid
+equivalent, plus a participant's _unstated_ kind, which Mermaid cannot express
+— and the pane says so the moment you switch. It converts from the last GOOD
+parse, never from half-typed text, and is disabled while the text does not
+parse. `pnpm check:sequence` round-trips every bundled example out through
+Mermaid and back, with exactly those documented losses normalised — so a
+fourth, undocumented loss fails the build.
+
 **Every block Mermaid draws, arch-lab draws.** `loop`, `alt`/`else`,
 `opt`, `par`/`and`, `critical`/`option`, `break`, `rect` and `box` all import
 as themselves — the model has a kind for each (`SequenceFragmentKind`), and
