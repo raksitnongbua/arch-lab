@@ -10,11 +10,27 @@
  * failure names a line and column) and the `<br/>` text codec.
  *
  * Supported: `participant`/`actor` (with `as` aliases and implicit
- * declaration on first use), `->>` `-->>` `->` `-->` `-x` `--x` `-)` `--)`
- * arrows, self-messages, `activate`/`deactivate` and the `+`/`-` shorthand,
- * `Note left of` / `Note right of` / `Note over` (one or two participants),
- * `loop`/`alt`/`else`/`opt`/`par`/`and`/`end`, `autonumber`, `title` and
- * `%%` comments.
+ * declaration on first use), `create`/`destroy` lifecycle lines, `->>` `-->>`
+ * `->` `-->` `-x` `--x` `-)` `--)` arrows, self-messages,
+ * `activate`/`deactivate` and the `+`/`-` shorthand, `Note left of` /
+ * `Note right of` / `Note over` (one or two participants),
+ * `loop`/`alt`/`else`/`opt`/`par`/`and`/`critical`/`option`/`break`/`end`,
+ * the two purely visual blocks `rect` and `box`, `autonumber` (including
+ * `autonumber off`), `title` and `%%` comments.
+ *
+ * Blocks arrive in three shapes, which is the whole reason this file has a
+ * block table rather than one map:
+ *
+ *   - **Fragments** (`loop`, `opt`, `alt`, `par`) — a kind the model has.
+ *   - **Fragments by approximation** (`critical` → `alt`, `break` → `opt`) —
+ *     Mermaid draws more fragment kinds than UML's set we store. Both keep
+ *     their labels and their nesting; only the kind word changes, and the
+ *     caveat says so. Refusing them instead was tried and was wrong: it
+ *     rejects a whole diagram over a label that has an obvious home.
+ *   - **Transparent groups** (`rect`, `box`) — decoration, not structure.
+ *     `rect` tints a region and `box` draws a bracket over lifelines;
+ *     neither changes what happens, so their CONTENTS are imported into the
+ *     enclosing branch and only the tint and the bracket are lost.
  *
  * What is LOSSY is named, in full, by `MERMAID_SEQUENCE_CAVEAT` below —
  * the same honesty contract as the C4 importer's `MERMAID_CAVEAT`.
@@ -52,9 +68,12 @@ export const MERMAID_SEQUENCE_CAVEAT =
   "and lossy — the eight arrowheads collapse to three kinds (->>, -> " +
   "become sync; -->>, --> become replies; -x, --x, -), --) become async, " +
   "losing the open, cross and async head shapes), autonumber start/step " +
-  "arguments are dropped, and an activate/deactivate line that does not " +
-  "bracket the message next to it is dropped. Save as .alab to keep " +
-  "everything else.";
+  "arguments are dropped, an activate/deactivate line that does not " +
+  "bracket the message next to it is dropped, critical becomes alt and " +
+  "break becomes opt (labels and nesting survive, the kind word does not), " +
+  "rect and box keep their contents but lose the tint and the bracket, and " +
+  "create/destroy import the participant but not the moment its lifeline " +
+  "starts or ends. Save as .alab to keep everything else.";
 
 /* -------------------------------------------------------------------------- */
 /* Options                                                                     */
@@ -92,31 +111,55 @@ const MERMAID_SEQ_ARROWS: readonly (readonly [string, SequenceMessageKind])[] =
     ["->", "sync"],
   ];
 
-/** Block keywords that OPEN a fragment. `critical`, `break`, `rect` and
- * `box` are refused with a naming error rather than half-imported. */
+/**
+ * Block keywords that OPEN a fragment, and the model kind each becomes.
+ * `critical` and `break` are the approximations named in the caveat: the
+ * value is what we store, the KEY stays the word the author wrote so every
+ * error message can quote their source rather than our translation of it.
+ */
 const FRAGMENT_OPENERS: Readonly<Record<string, SequenceFragmentKind>> = {
   loop: "loop",
   opt: "opt",
   alt: "alt",
   par: "par",
+  critical: "alt",
+  break: "opt",
 };
 
-const UNSUPPORTED_BLOCKS: ReadonlySet<string> = new Set([
-  "critical",
-  "break",
-  "rect",
-  "box",
-  "create",
-  "destroy",
-]);
+/**
+ * Block keywords that open a group with no model counterpart: their contents
+ * belong to the enclosing branch and the decoration is dropped. Listed with
+ * what is lost, because that is the only thing this table is for.
+ */
+const TRANSPARENT_GROUPS: Readonly<Record<string, string>> = {
+  rect: "background tint",
+  box: "participant bracket",
+};
+
+/**
+ * Continuation keywords → the opener each one may follow. Keyed on the
+ * MERMAID word rather than the model kind so `option` after a plain `alt` is
+ * still refused, even though `critical` and `alt` store the same kind.
+ */
+const BRANCH_CONTINUATIONS: Readonly<Record<string, string>> = {
+  else: "alt",
+  and: "par",
+  option: "critical",
+};
 
 /* -------------------------------------------------------------------------- */
 /* The importer                                                                */
 /* -------------------------------------------------------------------------- */
 
 interface OpenBlock {
-  fragment: SequenceFragment;
-  branch: SequenceBranch;
+  /** The Mermaid word that opened it, quoted verbatim by every error about
+   * it — an author who wrote `critical` must not be told about `alt`. */
+  opener: string;
+  /** `null` for a transparent group (`rect`, `box`). */
+  fragment: SequenceFragment | null;
+  /** Where the lines below this opener land. For a transparent group it is
+   * the ENCLOSING target — which is all that flattening is. */
+  items: SequenceItem[];
   line: number;
   column: number;
 }
@@ -149,7 +192,7 @@ export function parseMermaidSequence(
   const rootItems: SequenceItem[] = [];
   const stack: OpenBlock[] = [];
   const currentItems = (): SequenceItem[] =>
-    stack.length === 0 ? rootItems : stack[stack.length - 1].branch.items;
+    stack.length === 0 ? rootItems : stack[stack.length - 1].items;
   /* For folding standalone activate/deactivate onto the message they
      bracket (see the caveat for the unfoldable case). */
   let lastMessage: SequenceMessage | null = null;
@@ -178,7 +221,25 @@ export function parseMermaidSequence(
       continue;
     }
 
-    const word = text.split(/[\s:]/, 1)[0];
+    /* `create participant X as Y` is a participant line with a lifeline
+       start time we have nowhere to keep, so the prefix is peeled off and
+       the rest re-dispatched — one declaration path, not two. `destroy X`
+       is the same loss with nothing left over, so it is simply dropped. */
+    let statement = text;
+    if (statement === "destroy" || statement.startsWith("destroy ")) continue;
+    if (statement.startsWith("create ")) {
+      statement = statement.slice("create ".length).trim();
+      const created = statement.split(/[\s:]/, 1)[0];
+      if (created !== "participant" && created !== "actor") {
+        failAt(
+          lineNo,
+          startCol,
+          '"create" introduces a participant — write "create participant X" or "create actor X"',
+          text.slice(0, 40),
+        );
+      }
+    }
+    const word = statement.split(/[\s:]/, 1)[0];
     const lower = word.toLowerCase();
 
     /* ----------------------------- keywords ----------------------------- */
@@ -193,12 +254,14 @@ export function parseMermaidSequence(
     }
     if (word === "autonumber") {
       /* Start/step arguments (`autonumber 10 10`) are dropped — named in
-         the caveat. The flag itself survives. */
-      autonumber = true;
+         the caveat. The flag itself survives, and `autonumber off` turns it
+         back off: Mermaid lets a later line withdraw an earlier one, so the
+         LAST word wins rather than the first. */
+      autonumber = statement.slice(word.length).trim() !== "off";
       continue;
     }
     if (word === "participant" || word === "actor") {
-      const rest = text.slice(word.length).trim();
+      const rest = statement.slice(word.length).trim();
       if (rest === "") {
         failAt(lineNo, startCol, `"${word}" is missing its name`, word);
       }
@@ -258,9 +321,22 @@ export function parseMermaidSequence(
       currentItems().push(parseNote(text, lineNo, startCol, declare));
       continue;
     }
+    if (TRANSPARENT_GROUPS[word] !== undefined) {
+      /* Contents land in the ENCLOSING branch, so nothing about this line
+         reaches the model — but the group still owns an `end`, which is why
+         it goes on the stack at all. */
+      stack.push({
+        opener: word,
+        fragment: null,
+        items: currentItems(),
+        line: lineNo,
+        column: startCol,
+      });
+      continue;
+    }
     const opener = FRAGMENT_OPENERS[word];
     if (opener !== undefined) {
-      const label = decodeInlineBreaks(text.slice(word.length).trim());
+      const label = decodeInlineBreaks(statement.slice(word.length).trim());
       /* `label` before `items`: the model's canonical key order
          (BRANCH_KEYS), so an imported model is byte-for-byte the same JSON
          a `.alab` parse of its own serialization would produce. */
@@ -272,25 +348,36 @@ export function parseMermaidSequence(
         branches: [branch],
       };
       currentItems().push(fragment);
-      stack.push({ fragment, branch, line: lineNo, column: startCol });
+      stack.push({
+        opener: word,
+        fragment,
+        items: branch.items,
+        line: lineNo,
+        column: startCol,
+      });
       continue;
     }
-    if (word === "else" || word === "and") {
+    const continues = BRANCH_CONTINUATIONS[word];
+    if (continues !== undefined) {
       const top = stack[stack.length - 1];
-      const wants = word === "else" ? "alt" : "par";
-      if (top === undefined || top.fragment.kind !== wants) {
+      if (top === undefined || top.opener !== continues) {
         failAt(
           lineNo,
           startCol,
-          `"${word}" without an open "${wants}" block${top !== undefined ? ` — the innermost block is "${top.fragment.kind}"` : ""}`,
+          `"${word}" without an open "${continues}" block${top !== undefined ? ` — the innermost block is "${top.opener}"` : ""}`,
           word,
         );
       }
-      const label = decodeInlineBreaks(text.slice(word.length).trim());
+      /* `fragment` is non-null for every opener a continuation names — a
+         transparent group is never one of them — but the type does not know
+         that, and asserting it here beats widening the field. */
+      const fragment = top.fragment;
+      if (fragment === null) continue;
+      const label = decodeInlineBreaks(statement.slice(word.length).trim());
       const branch: SequenceBranch =
         label === "" ? { items: [] } : { label, items: [] };
-      top.fragment.branches.push(branch);
-      top.branch = branch;
+      fragment.branches.push(branch);
+      top.items = branch.items;
       continue;
     }
     if (word === "end") {
@@ -298,24 +385,16 @@ export function parseMermaidSequence(
         failAt(
           lineNo,
           startCol,
-          'unmatched "end" — there is no open loop/alt/opt/par block to close',
+          'unmatched "end" — there is no open loop/alt/opt/par/critical/break/rect/box block to close',
           "end",
         );
       }
       stack.pop();
       continue;
     }
-    if (UNSUPPORTED_BLOCKS.has(word)) {
-      failAt(
-        lineNo,
-        startCol,
-        `"${word}" is not supported by this importer — supported statements are participant, actor, messages, activate/deactivate, Note, loop, alt/else, opt, par/and, end, autonumber and title`,
-        word,
-      );
-    }
 
     /* ----------------------------- messages ----------------------------- */
-    const message = parseMessage(text, lineNo, startCol, declare);
+    const message = parseMessage(statement, lineNo, startCol, declare);
     currentItems().push(message);
     lastMessage = message;
   }
@@ -332,8 +411,8 @@ export function parseMermaidSequence(
     failAt(
       open.line,
       open.column,
-      `the "${open.fragment.kind}" block opened here is never closed — expected "end"`,
-      open.fragment.kind,
+      `the "${open.opener}" block opened here is never closed — expected "end"`,
+      open.opener,
     );
   }
 
@@ -426,7 +505,7 @@ function parseMessage(
     failAt(
       line,
       column,
-      `"${text.split(/\s/, 1)[0]}" is not a recognised sequenceDiagram statement — expected a message (A->>B: text), participant, actor, Note, activate/deactivate, loop/alt/opt/par/end, autonumber or title`,
+      `"${text.split(/\s/, 1)[0]}" is not a recognised sequenceDiagram statement — expected a message (A->>B: text), participant, actor, create/destroy, Note, activate/deactivate, loop/alt/else/opt/par/and/critical/option/break/rect/box/end, autonumber or title`,
       text.slice(0, 40),
     );
   }

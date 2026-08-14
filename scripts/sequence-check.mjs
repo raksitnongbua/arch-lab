@@ -585,22 +585,109 @@ check(
   selfMsg.from === "A" && selfMsg.to === "A" && selfMsg.kind === "async",
 );
 check(
-  "the caveat names every dropped thing (arrowheads, autonumber args, unanchored activations)",
+  "the caveat names every dropped thing (arrowheads, autonumber args, unanchored activations, approximated and transparent blocks, create/destroy)",
   MERMAID_SEQUENCE_CAVEAT.includes("arrowheads collapse") &&
     MERMAID_SEQUENCE_CAVEAT.includes("autonumber start/step") &&
-    MERMAID_SEQUENCE_CAVEAT.includes("activate/deactivate"),
+    MERMAID_SEQUENCE_CAVEAT.includes("activate/deactivate") &&
+    MERMAID_SEQUENCE_CAVEAT.includes("critical becomes alt") &&
+    MERMAID_SEQUENCE_CAVEAT.includes("break becomes opt") &&
+    MERMAID_SEQUENCE_CAVEAT.includes("rect and box") &&
+    MERMAID_SEQUENCE_CAVEAT.includes("create/destroy"),
+);
+
+/*
+ * The blocks Mermaid draws that arch-lab's four fragment kinds do not cover.
+ * Refusing them by name was the old behaviour and it was wrong: a whole
+ * diagram was rejected over a tint (`rect`) or a bracket (`box`) that changes
+ * nothing about what happens, and over two fragment words (`critical`,
+ * `break`) whose labels and nesting have an obvious home. This sample is the
+ * bug report that prompted the change, plus every other block beside it.
+ */
+const MERMAID_BLOCKS = `sequenceDiagram
+    box Aqua Front of house
+        participant Alice
+        participant Bob
+    end
+    rect rgb(191, 223, 255)
+        Alice->>Bob: Hello Bob
+        Bob-->>Alice: Hi Alice
+    end
+    Alice->>Bob: How are you?
+    create participant Cache as Redis
+    Alice->>Cache: warm
+    critical Establish a connection
+        Alice->>Bob: connect
+    option network timeout
+        Alice->>Bob: retry
+    end
+    break booking failed
+        Alice->>Bob: cancel
+    end
+    destroy Cache
+`;
+const blocks = parseMermaidSequence(MERMAID_BLOCKS);
+check(
+  "a `box` group imports its participants and drops only the bracket",
+  JSON.stringify(blocks.participants) ===
+    JSON.stringify([
+      { id: "Alice", kind: "participant", name: "Alice" },
+      { id: "Bob", kind: "participant", name: "Bob" },
+      { id: "Cache", kind: "participant", name: "Redis" },
+    ]),
+  JSON.stringify(blocks.participants),
+);
+check(
+  "a `rect` block flattens: its messages land in the enclosing branch, in order",
+  blocks.items.length === 6 &&
+    blocks.items.slice(0, 3).every((item) => item.step === "message") &&
+    blocks.items[0].label === "Hello Bob" &&
+    blocks.items[1].kind === "reply" &&
+    blocks.items[2].label === "How are you?",
+  JSON.stringify(blocks.items.map((item) => item.step)),
+);
+check(
+  "`critical`/`option` import as an alt with both guard labels",
+  blocks.items[4].step === "fragment" &&
+    blocks.items[4].kind === "alt" &&
+    blocks.items[4].branches.length === 2 &&
+    blocks.items[4].branches[0].label === "Establish a connection" &&
+    blocks.items[4].branches[1].label === "network timeout",
+  JSON.stringify(blocks.items[4]),
+);
+check(
+  "`break` imports as a single-branch opt keeping its label",
+  blocks.items[5].kind === "opt" &&
+    blocks.items[5].branches.length === 1 &&
+    blocks.items[5].branches[0].label === "booking failed",
+  JSON.stringify(blocks.items[5]),
+);
+check(
+  "`create participant X as Y` declares X with its alias; `destroy` adds nothing",
+  blocks.items[3].to === "Cache" &&
+    blocks.items.every((item) => item.step !== "note"),
+);
+check(
+  "`autonumber off` withdraws an earlier `autonumber` (last word wins)",
+  parseMermaidSequence("sequenceDiagram\n  autonumber\n  A->>B: x\n")
+    .autonumber === true &&
+    parseMermaidSequence(
+      "sequenceDiagram\n  autonumber\n  autonumber off\n  A->>B: x\n",
+    ).autonumber === undefined,
 );
 
 /* The imported model must be a first-class citizen of the .alab grammar. */
-{
-  const text = serializeSequenceText(imported);
+for (const [label, model] of [
+  ["the imported model", imported],
+  ["the flattened-block model", blocks],
+]) {
+  const text = serializeSequenceText(model);
   const reparsed = parseSequenceText(text);
   check(
-    "the imported model survives .alab serialize → parse structurally",
-    JSON.stringify(reparsed) === JSON.stringify(imported),
+    `${label} survives .alab serialize → parse structurally`,
+    JSON.stringify(reparsed) === JSON.stringify(model),
     firstDiff(
       JSON.stringify(reparsed, null, 2),
-      JSON.stringify(imported, null, 2),
+      JSON.stringify(model, null, 2),
     ),
   );
 }
@@ -825,9 +912,19 @@ mmdError(
   'without an open "alt"',
 );
 mmdError(
-  "an unsupported block (rect) is refused by name",
-  "sequenceDiagram\n  rect rgb(0,0,0)\n  A->>B: hi\n  end\n",
-  '"rect" is not supported',
+  "an unclosed transparent group is refused, pointing at its opener",
+  "sequenceDiagram\n  rect rgb(0,0,0)\n  A->>B: hi\n",
+  'the "rect" block opened here is never closed',
+);
+mmdError(
+  "an option outside critical is refused (naming critical, not alt)",
+  "sequenceDiagram\n  alt one\n    A->>B: hi\n  option two\n  end\n",
+  'without an open "critical"',
+);
+mmdError(
+  "create must introduce a participant",
+  "sequenceDiagram\n  create thing X\n",
+  '"create" introduces a participant',
 );
 mmdError(
   "gibberish is refused with the statement list",
