@@ -92,6 +92,8 @@ import {
 import { FrameLayer } from "@/features/editor/components/frame-layer";
 import { ViewerNode, type ViewerFlowNode } from "./viewer-node";
 import { ViewerToolbar } from "./viewer-toolbar";
+import { CanvasMinimap } from "@/components/ui/canvas-minimap";
+
 import { ViewerZoomControls } from "./viewer-zoom-controls";
 
 const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
@@ -1397,6 +1399,9 @@ function ViewerCanvasInner({
         <Panel position="bottom-left">
           <ViewerZoomControls />
         </Panel>
+        {/* Not in a Panel: React Flow's MiniMap positions itself, and
+            wrapping it would fight its own corner offsets. */}
+        <CanvasMinimap />
         <Panel position="bottom-center" className="hidden sm:block">
           <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
             Click an <span className="font-medium text-primary">element</span>{" "}

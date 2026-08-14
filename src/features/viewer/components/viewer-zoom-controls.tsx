@@ -13,8 +13,9 @@
  *    than replacing it.
  *  - Zoom readout — the live percentage straight from the React Flow
  *    viewport (`useViewport` re-renders on every zoom change, so it tracks
- *    wheel, pinch, fit and programmatic zooms alike). Clicking it resets
- *    zoom to exactly 100%.
+ *    wheel, pinch, fit and programmatic zooms alike). Clicking it opens the
+ *    preset menu (Fit / 50 / 100 / 200%, filtered by this canvas's own 250%
+ *    clamp): "show me this at 200%" is a destination, not four `+` presses.
  *  - Fit view — recentres and rescales the current diagram to fill the
  *    canvas, with the same padding every automatic fit uses. Animated with
  *    the shared `fitView` duration; under `prefers-reduced-motion`,
@@ -29,17 +30,17 @@
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { useReactFlow, useViewport } from "@xyflow/react";
 
+import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
   ZOOM_IN_TITLE,
   ZOOM_OUT_TITLE,
   ZOOM_PILL_CLASSES,
-  ZOOM_READOUT_CLASSES,
   ZOOM_STEP,
 } from "@/components/ui/zoom-pill";
 import { duration } from "@/features/editor/lib/motion";
 
-import { FIT_PADDING } from "../lib/canvas-constants";
+import { FIT_PADDING, MAX_ZOOM } from "../lib/canvas-constants";
 
 export function ViewerZoomControls(): React.JSX.Element {
   const { fitView, zoomTo, getZoom } = useReactFlow();
@@ -65,17 +66,21 @@ export function ViewerZoomControls(): React.JSX.Element {
       >
         <ZoomOut aria-hidden="true" className="size-4" />
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          void zoomTo(1, { duration: duration("fitView") });
+      <ZoomMenu
+        percent={percent}
+        /* React Flow has no "fitted" state to read back — a fit is just a
+           viewport — so the readout always shows a number here. Only the
+           sequence viewer, whose fit is a real mode, ever shows "Fit". */
+        isFit={false}
+        maxZoom={MAX_ZOOM}
+        onFit={() => {
+          void fitView({ padding: FIT_PADDING, duration: duration("fitView") });
         }}
-        aria-label={`Zoom ${percent} percent — reset to 100 percent`}
-        title="Actual size (100%)"
-        className={ZOOM_READOUT_CLASSES}
-      >
-        {percent}%
-      </button>
+        onZoomTo={(scale) => {
+          void zoomTo(scale, { duration: duration("fitView") });
+        }}
+        title="Choose a zoom level"
+      />
       <button
         type="button"
         onClick={() => step(1)}

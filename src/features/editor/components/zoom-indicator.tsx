@@ -19,16 +19,16 @@
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { useReactFlow, useViewport } from "@xyflow/react";
 
+import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
   ZOOM_IN_TITLE,
   ZOOM_OUT_TITLE,
   ZOOM_PILL_CLASSES,
-  ZOOM_READOUT_CLASSES,
   ZOOM_STEP,
 } from "@/components/ui/zoom-pill";
 
-import { FIT_VIEW_PADDING_PX } from "../lib/canvas-constants";
+import { FIT_VIEW_PADDING_PX, MAX_ZOOM } from "../lib/canvas-constants";
 import { duration } from "../lib/motion";
 
 export function ZoomIndicator(): React.JSX.Element {
@@ -43,6 +43,16 @@ export function ZoomIndicator(): React.JSX.Element {
     void zoomTo(next, { duration: duration("fitView") });
   };
 
+  const fit = (): void => {
+    void fitView({
+      /* The `px` unit is load-bearing: a bare number is a FRACTION of the
+         viewport to React Flow, so `48` would pad by 4800%. Same string the
+         `shift+1` binding in `canvas.tsx` passes. */
+      padding: `${FIT_VIEW_PADDING_PX}px`,
+      duration: duration("fitView"),
+    });
+  };
+
   return (
     <div className={ZOOM_PILL_CLASSES}>
       <button
@@ -54,17 +64,16 @@ export function ZoomIndicator(): React.JSX.Element {
       >
         <ZoomOut aria-hidden="true" className="size-4" />
       </button>
-      <button
-        type="button"
-        title="Actual size (100%) — shift + 0"
-        aria-label={`Zoom ${percent} percent — reset to 100 percent`}
-        className={ZOOM_READOUT_CLASSES}
-        onClick={() => {
-          void zoomTo(1, { duration: duration("fitView") });
+      <ZoomMenu
+        percent={percent}
+        isFit={false}
+        maxZoom={MAX_ZOOM}
+        onFit={fit}
+        onZoomTo={(scale) => {
+          void zoomTo(scale, { duration: duration("fitView") });
         }}
-      >
-        {percent}%
-      </button>
+        title="Choose a zoom level — shift + 0 for 100%, shift + 1 to fit"
+      />
       <button
         type="button"
         onClick={() => step(1)}
@@ -76,15 +85,7 @@ export function ZoomIndicator(): React.JSX.Element {
       </button>
       <button
         type="button"
-        onClick={() => {
-          void fitView({
-            /* The `px` unit is load-bearing: a bare number is a FRACTION of
-               the viewport to React Flow, so `48` would pad by 4800%. Same
-               string the `shift+1` binding in `canvas.tsx` passes. */
-            padding: `${FIT_VIEW_PADDING_PX}px`,
-            duration: duration("fitView"),
-          });
-        }}
+        onClick={fit}
         aria-label="Fit the diagram to the view"
         title="Fit to view — shift + 1"
         className={ZOOM_BUTTON_CLASSES}

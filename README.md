@@ -154,6 +154,21 @@ The buttons now carry the gesture in their tooltip, so the control teaches the
 shortcut rather than replacing it: `shift+1` fits and `shift+0` resets to 100%
 in the editor, exactly as before.
 
+**The readout is a menu**, not a reset button. It used to do exactly one thing
+— jump to 100% — which is the least useful thing a percentage can offer; now it
+opens `Fit / 50 / 100 / 200 / 400%`, filtered by the canvas's own clamp so it
+never offers a level that canvas cannot reach. "Show me this at 200%" is a
+destination, not four `+` presses.
+
+**A minimap** sits bottom-right on both C4 canvases. Zoomed past fit, a diagram
+loses the thing a diagram is for: you can read a container but no longer see
+what it sits inside, and the only way back was Fit — throwing the zoom away to
+answer "where am I?". The map answers it without moving the camera, and it is
+`pannable`/`zoomable`, so it is also a way to travel. Nodes are drawn in one
+token colour rather than per-type hues: at 160px a node is four pixels wide, so
+hue is noise and only the shape of the graph reads. Hidden below `sm`, where it
+would cover a meaningful share of the canvas it describes.
+
 ## Exporting images
 
 The **Export** menu in view mode asks two independent questions: how much, and
@@ -272,9 +287,41 @@ title "Checkout — Place Order"
 types distinguishable from the first meaningful line, which is what
 auto-detection depends on. Arrows are `->` synchronous, `~>` asynchronous,
 `..>` reply; `+`/`-` suffixes open and close an activation bar; `loop`, `opt`,
-`alt`/`else` and `par`/`and` nest by indentation with no `end` keyword, because
-a dedent already says where a fragment stops. Conversion is lossless in both
-directions, proven by `pnpm check:sequence`.
+`alt`/`else`, `par`/`and`, `critical`/`option` and `break` nest by indentation
+with no `end` keyword, because a dedent already says where a fragment stops.
+Conversion is lossless in both directions, proven by `pnpm check:sequence`.
+
+**Grouping, and highlighting.** Two constructs say _these belong together_
+without saying anything about control flow:
+
+```
+@sequence
+  box "Our services" tint=#bfdfff
+    api:participant "Order API" [Go]
+    ledger:participant "Ledger" [PostgreSQL]
+  psp:participant "Card Processor" [Stripe]
+
+  rect tint=#bfdfff
+    api -> psp : "Authorise the card" [REST]
+    psp ..> api : "requires_capture"
+```
+
+`box` brackets a run of **lifelines** and takes its members as the participant
+lines nested inside it. The nesting is the point, not sugar: a bracket is drawn
+as one span from its leftmost member to its rightmost, so a box whose members
+are not neighbours has no honest drawing — and nesting makes that state
+unspellable rather than merely discouraged. `rect` highlights a run of
+**steps** instead, and takes a colour where every other fragment takes a guard.
+
+Both accept `tint=`, in `#rrggbb`, `rgb(…)` or a common colour name. Whichever
+you write is normalised to one canonical spelling on the way in
+([`lib/tint.ts`](src/lib/tint.ts)) — two documents that mean the same shade are
+the same bytes, which is what keeps the round trip byte-identical. A colour the
+format does not store is a located error in `.alab` (you typed it; you deserve
+to be told) and a silent drop on Mermaid import (it is someone else's document,
+and the caveat already covers colour). The colour is painted as a **wash**, not
+a fill: it was chosen against Mermaid's light canvas, and an opaque one would
+make a dark-theme diagram unreadable.
 
 **The label is a title, not the whole truth.** A message takes a `desc "…"`
 continuation — two spaces under it, the same continuation a participant takes —
@@ -349,14 +396,21 @@ button clears too, and a second Escape exits immersive mode.
 Under `prefers-reduced-motion` nothing draws — focus dims and the details
 dock appears instantly, which is the same information without the motion.
 
-**Collapse a participant's dependencies.** A card whose downstream services
-exist only to serve it carries a `−` glyph; click it and those columns fold
-away, taking their messages with them, and the diagram compacts. Click the `+2`
-that replaces it to bring them back. Both the glyph and the count are quiet by
-design, so two things say what they do: the control has a hover tooltip naming
-the services it folds, and the hint bar under the diagram gains a clause about
-it — but only on a flow where something actually folds, since a diagram with no
-private dependencies shows no glyph to hunt for. In the bundled Checkout flow, folding Order API hides
+**Hide what you are not reading.** Every participant card carries a `×` that
+takes that lifeline off the diagram, and a card whose downstream services exist
+only to serve it also carries a `−` that folds those away in one go. The two
+answer different questions — "I do not care about that column" needs no model
+knowledge, while "collapse what only this one talks to" needs the dependency
+rule below — and only the second used to exist, which left most participants
+with no control at all.
+
+Hiding is safe to make this easy because **the way back is always on screen**:
+while anything is hidden, a bar above the diagram states how many and NAMES
+them, with one _Show all_ button. A count alone would still leave you guessing
+what you were missing, and the previous design left no trace at all — a reader
+who folded something, scrolled away and came back had a smaller diagram and no
+reason to think it was not the whole story. The last visible lifeline can never
+be hidden; an empty canvas is not a view of anything. In the bundled Checkout flow, folding Order API hides
 Payments and Orders DB — and deliberately not the Customer, even though Order
 API emails one, because the Customer also clicks in Storefront and a participant
 the flow arrives through is never a dependency. The rule and that exact outcome
@@ -371,15 +425,22 @@ of a long flow you can tell which column is which without scrolling back up.
 The footer card is a visual repeat only — it is not a second control and not a
 second thing a screen reader announces.
 
-**Mermaid import is lossy, and says so.** Eight arrowheads collapse onto three
-kinds, `autonumber` arguments are dropped, and an `activate`/`deactivate` that
-does not bracket its adjacent message is dropped. The blocks arch-lab has no
-kind for are imported rather than refused, because none of them changes what
-happens: `critical` becomes an `alt` and `break` an `opt` (labels and nesting
-survive, the kind word does not), `rect` and `box` keep their contents and lose
-only the tint and the bracket, and `create`/`destroy` import the participant
-but not the moment its lifeline starts or ends. Every one of those losses is
-named in the caveat the playground shows on import.
+**Every block Mermaid draws, arch-lab draws.** `loop`, `alt`/`else`,
+`opt`, `par`/`and`, `critical`/`option`, `break`, `rect` and `box` all import
+as themselves — the model has a kind for each (`SequenceFragmentKind`), and
+`box` is a `SequenceBox`. This took two wrong turns first, both instructive:
+refusing `rect` by name rejected a whole diagram over a background tint, and
+then flattening it silently deleted a grouping the author had drawn on
+purpose. A one-way importer may lose detail; it may not quietly change what
+the document says.
+
+**What import still loses, and says so.** Eight arrowheads collapse onto three
+kinds, `autonumber` arguments are dropped, an `activate`/`deactivate` that does
+not bracket its adjacent message is dropped, `create`/`destroy` import the
+participant but not the moment its lifeline starts or ends, and a colour that
+is not a hex, `rgb(…)` or common colour name is dropped rather than passed
+through to the renderer unvalidated. Every one of those is named in the caveat
+the playground shows on import.
 
 ## Mermaid C4 import
 
@@ -548,7 +609,7 @@ arch-lab/
     │   ├── mcp/               The MCP server behind /api/mcp, plus the /mcp page (see its README)
     │   ├── mermaid/           Mermaid C4 ⇄ arch-lab converter (pure, dependency-free)
     │   └── viewer/            Read-only viewer, /view playground, SVG/PNG export, model service
-    ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy)
+    ├── lib/                   cn() helper, constants (EDITOR_ENABLED, THEMES, C4 level copy), tint normalisation
     └── types/                 C4 model types — mirrors docs/product/data-model.md
 ```
 
