@@ -117,41 +117,15 @@ export function SequenceViewer({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  /**
-   * Lifelines hidden ONE BY ONE, by name, independently of the dependency
-   * fold. Two mechanisms rather than one because they answer different
-   * questions: `collapsed` is "fold what only this service talks to", which
-   * needs the model to work out the set, while this is "I do not care about
-   * that column", which needs nothing but the id. Folding by dependency
-   * could never express the second — a participant with no private
-   * dependencies had no control at all, which was most of them.
-   */
-  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(
-    () => new Set(),
+  const hidden = useMemo(
+    () => hiddenParticipants(file, collapsed),
+    [file, collapsed],
   );
 
-  const hidden = useMemo(() => {
-    const byCollapse = hiddenParticipants(file, collapsed);
-    if (dismissed.size === 0) return byCollapse;
-    const all = new Set([...byCollapse, ...dismissed]);
-    /* NEVER hide the last lifeline. An empty canvas is not a view of
-       anything, and the only way out of one would be the restore bar — which
-       is exactly the kind of state a reader reads as breakage. The guard
-       lives here, once, rather than in each control that can hide. */
-    if (all.size >= file.participants.length) {
-      const last = file.participants[file.participants.length - 1];
-      if (last !== undefined) all.delete(last.id);
-    }
-    return all;
-  }, [file, collapsed, dismissed]);
-
-  /** Hidden lifelines with their names, for the restore bar. Ordered as the
-   * document orders them, so the list reads left-to-right like the diagram. */
+  /** The folded-away lifelines, named, for the restore bar. Document order,
+   * so the list reads left-to-right like the diagram did. */
   const hiddenList = useMemo(
-    () =>
-      file.participants
-        .filter((p) => hidden.has(p.id))
-        .map((p) => ({ id: p.id, name: p.name })),
+    () => file.participants.filter((p) => hidden.has(p.id)).map((p) => p.name),
     [file, hidden],
   );
 
@@ -249,28 +223,9 @@ export function SequenceViewer({
     [collapsed, file, nameById, onAnnounce],
   );
 
-  /** Hide one lifeline by name. Same focus-dropping rule as folding, and for
-   * the same reason: the layout numbers what it draws, so the steps renumber
-   * underneath a held focus. */
-  const handleHide = useCallback(
-    (id: string) => {
-      setRawFocus(null);
-      setDismissed((previous) => {
-        const next = new Set(previous);
-        next.add(id);
-        return next;
-      });
-      onAnnounce(
-        `${nameById.get(id) ?? id} hidden. Use "Show all" above the diagram to bring it back.`,
-      );
-    },
-    [nameById, onAnnounce],
-  );
-
-  /** The one way back, and it is always offered while anything is hidden. */
+  /** The one way back out of every fold at once. */
   const handleShowAll = useCallback(() => {
     setRawFocus(null);
-    setDismissed(new Set());
     setCollapsed(new Set());
     onAnnounce("Every participant is showing again.");
   }, [onAnnounce]);
@@ -994,11 +949,11 @@ export function SequenceViewer({
           <span>
             <span className="font-medium">
               {hiddenList.length === 1
-                ? "1 participant hidden"
-                : `${hiddenList.length} participants hidden`}
+                ? "1 participant folded away"
+                : `${hiddenList.length} participants folded away`}
             </span>{" "}
             <span className="text-muted-foreground">
-              — {hiddenList.map((entry) => entry.name).join(", ")}
+              — {hiddenList.join(", ")}
             </span>
           </span>
           <button
@@ -1091,7 +1046,6 @@ export function SequenceViewer({
               collapsed={collapsed}
               dependencyCount={dependencyCount}
               onToggleCollapse={handleToggleCollapse}
-              onHideParticipant={handleHide}
             />
           </div>
         </div>
@@ -1375,13 +1329,12 @@ export function SequenceViewer({
         Click a message, participant, or fragment chip to focus it · a{" "}
         <span aria-hidden="true">•</span> after a label means that message
         carries details · ← → move between messages · pinch or ctrl-scroll to
-        zoom · Esc clears focus · <span aria-hidden="true">×</span> on a card
-        hides that lifeline
+        zoom · Esc clears focus
         {dependencyCount.size > 0 ? (
           <>
             {" · "}
-            <span aria-hidden="true">−</span> hides the services only that card
-            uses
+            <span aria-hidden="true">−</span> on a card folds away the services
+            only it uses
           </>
         ) : null}
       </p>

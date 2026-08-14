@@ -155,13 +155,6 @@ export interface SequenceDiagramProps {
   collapsed: ReadonlySet<string>;
   dependencyCount: ReadonlyMap<string, number>;
   onToggleCollapse: (id: string) => void;
-  /**
-   * Hide this one lifeline outright. Offered on EVERY card, unlike the fold —
-   * "I do not care about that column" needs no dependency structure to be a
-   * reasonable thing to want, and before this control most participants had
-   * no way to leave the diagram at all.
-   */
-  onHideParticipant: (id: string) => void;
   /*
    * There is NO onClearFocus here, deliberately. Clearing is what happens when
    * a click lands on nothing, and "nothing" is bigger than this component: in
@@ -191,7 +184,6 @@ export function SequenceDiagram({
   collapsed,
   dependencyCount,
   onToggleCollapse,
-  onHideParticipant,
 }: SequenceDiagramProps): React.JSX.Element {
   /**
    * Every dim decision below derives from THIS set (see resolveFocusSteps):
@@ -623,7 +615,6 @@ export function SequenceDiagram({
           paintId={cardGradId(participant.id)}
           dependencies={dependencyCount.get(participant.id) ?? 0}
           collapsed={collapsed.has(participant.id)}
-          onHide={() => onHideParticipant(participant.id)}
           onToggleCollapse={() => onToggleCollapse(participant.id)}
           onFocus={() => onFocusParticipant(participant.id)}
           onKeyDown={keyActivate(() => onFocusParticipant(participant.id))}
@@ -807,7 +798,6 @@ function ParticipantColumn({
   dependencies,
   collapsed,
   onToggleCollapse,
-  onHide,
   onFocus,
   onKeyDown,
 }: {
@@ -820,7 +810,6 @@ function ParticipantColumn({
   dependencies: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
-  onHide: () => void;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
 }): React.JSX.Element {
@@ -987,58 +976,6 @@ function ParticipantColumn({
         }}
         onKeyDown={onKeyDown}
       />
-
-      {/* ---- the HIDE control ----
-          Top-LEFT, mirroring the fold control's top-right, and on every card
-          rather than only the ones with dependencies. The two are different
-          questions and both are worth asking: fold means "collapse what only
-          this one talks to", hide means "take this column off the diagram".
-          Before this existed the second was unaskable, and most participants
-          — an actor, a front end, a leaf store — carried no control at all.
-
-          Quiet by the same rule as the fold: a 10px `×`, no capsule, a 22×18
-          hit target regardless. The way back is never on this card (a hidden
-          card is not on screen to click) — it is the restore bar the viewer
-          renders above the diagram, which is why hiding is safe to make this
-          easy. */}
-      <g className="af-seq-fold">
-        <text
-          x={x - headerWidth / 2 + 9}
-          y={boxTop + 16}
-          textAnchor="middle"
-          fontSize={11}
-          fontWeight={600}
-          fill="var(--node-meta)"
-        >
-          ×
-        </text>
-        <rect
-          className="af-seq-hit af-seq-hit-region"
-          x={x - headerWidth / 2}
-          y={boxTop + 3}
-          width={22}
-          height={18}
-          role="button"
-          tabIndex={0}
-          aria-label={`Hide ${participant.name} from the diagram`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onHide();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              event.stopPropagation();
-              onHide();
-            }
-          }}
-        >
-          <title>
-            Hide {participant.name} — &ldquo;Show all&rdquo; above the diagram
-            brings it back
-          </title>
-        </rect>
-      </g>
 
       {/* ---- the dependency FOLD control ----
           Offered only on participants that actually have private dependencies
