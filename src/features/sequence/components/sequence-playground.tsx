@@ -517,23 +517,42 @@ export function SequencePlayground(): React.JSX.Element {
           {announcement}
         </p>
 
-        {/* The Mermaid import is honest about loss the moment it happens. */}
+        {/* ONE LINE, with the detail folded away.
+            This used to open "This pane holds Mermaid." and then print both
+            caveats in full — some 90 words, permanently, above a page that is
+            now exactly one viewport tall. It was three rows the canvas did not
+            get, saying something the reader had already worked out by watching
+            their paste turn into a diagram.
+
+            The caveats are still CONTRACTS and are still here, verbatim, one
+            disclosure click away. What changed is which of the two facts is
+            shouted: "it converted" is news the first time and obvious after,
+            while "here is what conversion drops" is reference material you go
+            looking for. Progressive disclosure puts them in that order. */}
         {parsed?.format === "mermaid" && error === null ? (
-          <div className="flex shrink-0 items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
-            <Info
-              aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0 text-accent"
-            />
-            {/* Both directions' losses, stated together, because the pane's
-                own toggle can now go either way — naming only the import's
-                loss would leave the export looking free. */}
-            <p className="text-sm leading-relaxed text-foreground">
-              <span className="font-semibold">This pane holds Mermaid.</span>{" "}
-              {MERMAID_SEQUENCE_CAVEAT}{" "}
-              <span className="font-semibold">Going the other way:</span>{" "}
+          <details className="group shrink-0 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-sm text-foreground">
+            <summary className="flex cursor-pointer list-none items-center gap-2">
+              <Info
+                aria-hidden="true"
+                className="size-4 shrink-0 text-accent"
+              />
+              <span>
+                Mermaid — converted for you. Use the toggle for{" "}
+                <span className="font-mono">.alab</span>.
+              </span>
+              <span className="ml-auto text-xs text-muted-foreground underline-offset-2 group-hover:underline">
+                what conversion drops
+              </span>
+            </summary>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              <span className="font-medium text-foreground">Coming in:</span>{" "}
+              {MERMAID_SEQUENCE_CAVEAT}
+            </p>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              <span className="font-medium text-foreground">Going out:</span>{" "}
               {MERMAID_SEQUENCE_EXPORT_CAVEAT}
             </p>
-          </div>
+          </details>
         ) : null}
 
         {/* ---- the workbench: source at 30%, canvas at 70% ----
