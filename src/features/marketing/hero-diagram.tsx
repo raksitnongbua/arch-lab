@@ -12,7 +12,11 @@ import { RedisIcon } from "@/features/editor/lib/icons/svg/redis";
  * kinds this product reads — a miniature Container-level C4 diagram drawn with
  * the editor's real stack icons, and a miniature sequence flow — stacked over
  * two ghost "sheets" that hint at the levels beneath (the Context→Container
- * drill-down). The `C4 / Sequence` labels in its header say which is showing.
+ * drill-down). The `C4 / Sequence` labels in its header say which is showing,
+ * and the header's LEFT side swaps with them: a level breadcrumb over the C4
+ * panel, the flow's own title over the sequence one — a sequence document has
+ * no levels, so a breadcrumb left standing over it would be the header
+ * asserting something the format cannot express.
  *
  * WHY IT ALTERNATES rather than showing one: the banner is the first thing a
  * reader sees, and a single C4 diagram made the sequence viewer look like a
@@ -106,28 +110,57 @@ export function HeroDiagram({ className }: { className?: string }) {
             card reading as a flat rectangle without competing with the nodes. */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/6 via-transparent to-accent/8" />
 
-        {/* Header: level breadcrumb + the file the model lives in. */}
+        {/* Header: what the panel below is, and which kind is showing.
+            THE LEFT SIDE SWAPS WITH THE PANEL. It used to be a fixed
+            `L1 Context › L2 Container` breadcrumb, which stayed put while the
+            card alternated — so for half of every cycle the header labelled a
+            sequence flow with C4 altitudes. A sequence document has no levels
+            at all: the drill-down is a C4 idea, and claiming one over a flow
+            is not a cosmetic mismatch but the header saying something untrue.
+
+            Both labels sit in ONE grid cell and cross-fade on the same
+            `af-hero-kind` clock the panels use, so they cannot drift out of
+            step, and the header keeps its height whichever is showing. */}
         <div className="relative flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5">
-          <p className="flex items-center gap-1.5 font-mono text-[10px]">
-            <span
+          <div className="grid min-w-0">
+            <p className="af-hero-kind col-start-1 row-start-1 flex items-center gap-1.5 font-mono text-[10px]">
+              <span
+                style={delay(BEAT.header)}
+                className="af-hero-fade text-muted-foreground"
+              >
+                L1 Context
+              </span>
+              <span
+                style={delay(BEAT.header + 60)}
+                className="af-hero-fade text-muted-foreground/50"
+              >
+                ›
+              </span>
+              <span
+                style={delay(BEAT.header + 120)}
+                className="af-hero-node rounded bg-gradient-to-r from-primary/22 to-accent/16 px-1.5 py-0.5 font-medium text-primary"
+              >
+                L2 Container
+              </span>
+            </p>
+            {/* The sequence half names the FLOW, because that is what a
+                sequence document has where a C4 model has a level — its title
+                is the one thing the real viewer stamps above the lifelines. */}
+            <p
               style={delay(BEAT.header)}
-              className="af-hero-fade text-muted-foreground"
+              className="af-hero-kind af-hero-kind-alt col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 font-mono text-[10px]"
             >
-              L1 Context
-            </span>
-            <span
-              style={delay(BEAT.header + 60)}
-              className="af-hero-fade text-muted-foreground/50"
-            >
-              ›
-            </span>
-            <span
-              style={delay(BEAT.header + 120)}
-              className="af-hero-node rounded bg-gradient-to-r from-primary/22 to-accent/16 px-1.5 py-0.5 font-medium text-primary"
-            >
-              L2 Container
-            </span>
-          </p>
+              <span className="af-hero-fade truncate text-muted-foreground">
+                Place an order
+              </span>
+              <span className="af-hero-fade shrink-0 text-muted-foreground/50">
+                ·
+              </span>
+              <span className="af-hero-fade shrink-0 text-muted-foreground/70">
+                4 participants
+              </span>
+            </p>
+          </div>
           {/* The document KINDS, and which one is on screen. These are not
               decoration and not a control: the card ALTERNATES between a C4
               diagram and a sequence flow, and each label lights while its panel
