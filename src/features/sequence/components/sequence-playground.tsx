@@ -59,12 +59,13 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ArrowDownToLine, Expand, Info, Shrink } from "lucide-react";
+import { ArrowDownToLine, Expand, FileText, Info, Shrink } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { buttonClasses } from "@/components/ui/button";
+import type { TourStep } from "@/components/ui/tour";
 import { cn } from "@/lib/utils";
 
 import {
@@ -95,6 +96,30 @@ import { SequenceViewer } from "./sequence-viewer";
 
 /** Same rest-before-parse the C4 playground uses — one convention. */
 const PARSE_DEBOUNCE_MS = 300;
+
+/*
+ * This page's additions to the viewer's tour (see the `extraTourSteps` prop):
+ * immersive mode and the below-the-fold source pane are THIS page's controls,
+ * so their steps live here rather than in a viewer that renders neither. The
+ * wording restates the layout decisions above — "scroll down to the text" is
+ * the design, so it is what the tour must say.
+ */
+const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
+  {
+    title: "Go immersive",
+    body:
+      "Immersive, at the top right of this pane, hides everything but the " +
+      "diagram. Escape brings it back — a focused message clears first.",
+    icon: Expand,
+  },
+  {
+    title: "The text behind it",
+    body:
+      "The source that draws this diagram sits below it — scroll the page " +
+      "down to edit; the diagram re-renders as you type.",
+    icon: FileText,
+  },
+];
 
 export function SequencePlayground(): React.JSX.Element {
   const [text, setText] = useState(SEQUENCE_EXAMPLE);
@@ -510,7 +535,11 @@ export function SequencePlayground(): React.JSX.Element {
             </button>
           </div>
           {parsed !== null ? (
-            <SequenceViewer file={parsed.file} onAnnounce={setAnnouncement} />
+            <SequenceViewer
+              file={parsed.file}
+              onAnnounce={setAnnouncement}
+              extraTourSteps={PLAYGROUND_TOUR_STEPS}
+            />
           ) : (
             // Only reachable when the SEED itself failed to parse — a build
             // break, not a user state (the seed is parser-verified at module

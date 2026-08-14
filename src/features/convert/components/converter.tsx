@@ -443,6 +443,11 @@ function PreviewPane({
         <SequenceViewer
           key={`${preview.title}:${preview.alabText.length}`}
           file={preview.file}
+          /* No tour here: the viewer is EVIDENCE that the conversion worked,
+             not the destination. A card opening itself over the preview would
+             teach the wrong page's controls, and it would spend the reader's
+             one first visit somewhere it does not apply. */
+          tour={false}
           /* The convert page runs no live region of its own: the diagram here
              is a preview of a conversion, and its focus commentary would
              compete with the verdict strip for the same attention. Focus
@@ -453,6 +458,7 @@ function PreviewPane({
         <ViewerShell
           key={`${preview.title}:${preview.alabText.length}`}
           model={preview.model}
+          tour={false}
         />
       )}
     </section>

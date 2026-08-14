@@ -169,6 +169,34 @@ token colour rather than per-type hues: at 160px a node is four pixels wide, so
 hue is noise and only the shape of the graph reads. Hidden below `sm`, where it
 would cover a meaningful share of the canvas it describes.
 
+## Learning the controls
+
+Both diagram views carry a **tour**: a compact card, one step per control,
+that opens itself on a first visit and can be replayed any time from a button
+(the `?` in the sequence viewer's zoom pill, _Tour_ in the C4 shell's control
+strip). It exists because the alternative kept failing — the controls people
+were not finding are exactly the quiet ones (a 10px `−` in a card corner, a
+percentage that is secretly a menu), and every attempt to fix that by adding a
+second, louder control made the card busier without making the first control
+clearer.
+
+It is **not a modal**: the card teaches controls that live on the canvas
+underneath it, so a focus trap would forbid trying each one while reading
+about it. It never steals focus on open, its Escape is the LAST rung of each
+page's Escape ladder (so a press clears a diagram focus, then leaves immersive
+mode, and only then closes the tour), and the three ways out mean different
+things — _Done_ and _Don't show again_ are remembered in `localStorage` under a
+versioned key, while the close button and Escape close for the session only,
+because abandoning a tour mid-read is not a verdict on it.
+
+Steps are declared where the control lives: the sequence viewer teaches focus,
+the dependency fold and zoom, and its fold step is only injected when the
+document actually has a `−` to point at; the playground appends immersive mode
+and the source pane, which are its own controls. A page that embeds a viewer as
+EVIDENCE rather than as the destination — `/convert`'s live preview — passes
+`tour={false}`, so it neither opens a card over the preview nor spends the
+reader's one first visit on the wrong page.
+
 ## Exporting images
 
 The **Export** menu in view mode asks two independent questions: how much, and

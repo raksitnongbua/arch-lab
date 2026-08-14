@@ -55,7 +55,17 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EyeOff, Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  EyeOff,
+  HelpCircle,
+  MousePointerClick,
+  Scan,
+  SquareMinus,
+  Waves,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 import type { SequenceLabFile } from "@/types";
 import {
@@ -65,6 +75,7 @@ import {
   writeIdleMotion,
 } from "@/lib/idle-motion";
 import { CopyButton } from "@/components/ui/copy-button";
+import { Tour, useTour, type TourStep } from "@/components/ui/tour";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
@@ -93,6 +104,8 @@ import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
 export function SequenceViewer({
   file,
   onAnnounce,
+  extraTourSteps,
+  tour: tourEnabled = true,
 }: {
   file: SequenceLabFile;
   /**
@@ -105,6 +118,26 @@ export function SequenceViewer({
    * immersive state.
    */
   onAnnounce: (message: string) => void;
+  /**
+   * Steps appended to the viewer's own tour. The viewer only teaches controls
+   * it renders (focus, fold, zoom); immersive mode and the source pane belong
+   * to the playground around it, so their steps arrive from there — the
+   * example view passes nothing and its tour honestly ends at zoom. One
+   * storage key covers every host: the tour is about the viewer, not a route.
+   */
+  extraTourSteps?: readonly TourStep[];
+  /**
+   * Whether this viewer offers the tour at all. On by default — every page
+   * that exists to SHOW a flow wants it.
+   *
+   * `/convert` turns it off, and that is the case the flag exists for: the
+   * viewer is embedded there as a live PREVIEW of a conversion, so a card
+   * that opened itself over the preview would be teaching the wrong page's
+   * controls, and it would count as the reader's one first visit — spending
+   * the auto-show somewhere it does not apply. A page that embeds the viewer
+   * as evidence rather than as the destination should pass `false`.
+   */
+  tour?: boolean;
 }): React.JSX.Element {
   /**
    * COLLAPSED PARTICIPANTS — the ones whose private dependencies are folded
@@ -243,6 +276,22 @@ export function SequenceViewer({
     }
     return counts;
   }, [file]);
+
+  /* ---- the tour ------------------------------------------------------------ */
+
+  const tour = useTour(SEQUENCE_TOUR_KEY);
+  // The fold step rides the same condition as the hint bar's fold clause: the
+  // `−` glyph only exists on cards with private dependencies, and a tour step
+  // naming a control that is not on screen sends the reader hunting.
+  const tourSteps = useMemo<readonly TourStep[]>(
+    () => [
+      FOCUS_TOUR_STEP,
+      ...(dependencyCount.size > 0 ? [FOLD_TOUR_STEP] : []),
+      ZOOM_TOUR_STEP,
+      ...(extraTourSteps ?? []),
+    ],
+    [dependencyCount, extraTourSteps],
+  );
 
   const handleFocusMessage = useCallback(
     (focusedStep: number) => {
@@ -1129,7 +1178,39 @@ export function SequenceViewer({
           >
             <Waves aria-hidden="true" className="size-4" />
           </button>
+          {/* The tour's replay button lives in this pill for the same reason
+              the idle-motion toggle does: the strip is where view-level
+              controls already are, and the card it opens is anchored just
+              above it, so the control and its effect share a corner. Gone
+              entirely when the host opted out — a button that teaches this
+              view's controls has no business on a page that embeds the view
+              as a preview of something else. */}
+          {tourEnabled ? (
+            <button
+              type="button"
+              onClick={tour.start}
+              aria-label="Show the feature tour"
+              title="Tour the controls"
+              className={ZOOM_BUTTON_CLASSES}
+            >
+              <HelpCircle aria-hidden="true" className="size-4" />
+            </button>
+          ) : null}
         </div>
+
+        {/* First visit it opens itself (remembered per browser — see
+            components/ui/tour.tsx for the persistence verdicts); the pill
+            button replays it. Anchored above the pill, z-20 so it clears the
+            pill and the dock (both z-10); the dock sits on the RIGHT edge, so
+            the two never cover each other. */}
+        {tourEnabled ? (
+          <Tour
+            steps={tourSteps}
+            handle={tour}
+            label="Sequence viewer tour"
+            className="absolute bottom-14 left-3 z-20"
+          />
+        ) : null}
 
         {/* ---- the details dock ----
             A docked, NON-BLOCKING side panel — deliberately not a modal
@@ -1369,6 +1450,50 @@ export function SequenceViewer({
  */
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
+
+/* -------------------------------------------------------------------------- */
+/* The tour                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Versioned so a rewritten tour can re-show itself: bump `v1` and every
+ * browser that dismissed the old one sees the new one once.
+ */
+const SEQUENCE_TOUR_KEY = "arch-lab:tour:sequence:v1";
+
+/*
+ * The controls readers were not finding, one step each. These strings are
+ * user-facing contracts: each names a control by the label or glyph actually
+ * rendered (the `−`/`+n` fold control, the pill's readout menu), so a change
+ * to a control means rewording its step, not just its aria-label. The fold
+ * step is separate from the focus step deliberately — it is the single
+ * most-missed control in the viewer, and burying it in a list is how it got
+ * missed on the canvas.
+ */
+const FOCUS_TOUR_STEP: TourStep = {
+  title: "Focus anything",
+  body:
+    "Click any message, participant, or fragment chip to spotlight it — " +
+    "its details open beside the diagram, and ← → walk the messages in " +
+    "order. Escape, or a click on empty canvas, clears the focus.",
+  icon: MousePointerClick,
+};
+const FOLD_TOUR_STEP: TourStep = {
+  title: "Fold a card's helpers",
+  body:
+    "The − in a participant card's corner folds away the services only " +
+    "that card uses. The card then reads +n — press it, or the bar above " +
+    "the diagram, to bring them back.",
+  icon: SquareMinus,
+};
+const ZOOM_TOUR_STEP: TourStep = {
+  title: "Zoom the flow",
+  body:
+    "In the bottom-left pill, − and + step the zoom, the readout opens " +
+    "presets (Fit, 50–400%), and the frame icon refits the whole flow. " +
+    "Pinch, or hold ⌘/Ctrl and scroll, zooms at the pointer.",
+  icon: ZoomIn,
+};
 
 /* -------------------------------------------------------------------------- */
 /* Dock building blocks                                                         */
