@@ -751,7 +751,14 @@
 }
 
 /* The half-cycle offset. Negative, so the sequence side is already mid-cycle on
-   the first frame instead of the card sitting on a blank panel for 8 seconds. */
+   the first frame instead of the card sitting on a blank panel for 8 seconds.
+   THE WHOLE CLASS IS THIS ONE DECLARATION, which makes it fragile in a
+   specific way worth naming: an inline `animation-delay` on the same element
+   overrides it, and the element then runs in PHASE with its counterpart
+   instead of opposite it — both halves visible at once, printed over each
+   other. That shipped once, on the header's flow title, because the element
+   was also given a staged entrance. Put entrance delays on the CHILDREN of an
+   `-alt` element, never on the element itself. */
 .af-hero-kind-alt {
   animation-delay: -8.5s;
 }
@@ -911,4 +918,73 @@
 
 [data-share-forward] .af-share-opening {
   display: flex;
+}
+
+/* ---------------------------------------------------------------------------
+   Landing: the "talk through" preview.
+
+   The section it belongs to claims a sequence diagram RESPONDS to you — click
+   a message and it redraws itself while the rest recedes. That claim was
+   illustrated with a still, which is the weakest possible evidence for it: a
+   picture of a response is not a response. So the preview performs the claim
+   on a loop, with focus moving between its three messages exactly as it moves
+   when a reader clicks them in the real viewer.
+
+   It is AMBIENT, unlike the hero's one-shot assembly next door, and that is
+   the same distinction `af-frame-march` records: this is not an entrance, it
+   is the resting behaviour of the thing being described.
+
+   Each message is drawn TWICE — a resting copy in `--edge` that never
+   animates, and a lit copy in `--primary` that draws itself, holds, and fades.
+   Two copies rather than animating `stroke` between two colours: the resting
+   line must stay put while the lit one draws over it, which one element cannot
+   do, and interpolating a token-valued stroke is not a thing CSS can be relied
+   on for anyway.
+
+   `pathLength="1"` on the lit lines is what lets one keyframe draw arrows of
+   different lengths: the dash geometry is normalised, so `stroke-dashoffset:
+   1 → 0` is "undrawn → drawn" whatever the real span. Without it every arrow
+   would need its own length hard-coded here, which is exactly the kind of
+   duplicated magic number that goes stale when the drawing is nudged.
+
+   Only `opacity` and `stroke-dashoffset` animate — no layout, no colour
+   interpolation — so the loop stays off the layout path.
+   --------------------------------------------------------------------------- */
+
+@keyframes af-talk-focus {
+  /* One THIRD of the cycle per message, staggered by negative delays in the
+     markup, so exactly one is lit at any moment and the hand-off is seamless.
+     The draw takes the first ~4% (≈360ms of a 9s cycle) — near enough the
+     viewer's own focus draw to read as the same gesture. */
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 1;
+  }
+  4% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  28% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  33%,
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+.af-talk-focus {
+  animation: af-talk-focus 9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .af-talk-focus {
+    /* Parked on the RESTING state of the real viewer, which is every message
+       drawn and none of them spotlighted — not on an arbitrary frame of the
+       loop. The reader loses the demonstration and keeps a true picture. */
+    animation: none;
+    opacity: 0;
+  }
 }
