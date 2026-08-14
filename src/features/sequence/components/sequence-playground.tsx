@@ -435,9 +435,20 @@ export function SequencePlayground(): React.JSX.Element {
               aria-hidden="true"
               className="mt-0.5 size-4 shrink-0 text-accent"
             />
+            {/* The caveat ends by telling the reader to save as .alab, which
+                until `/convert` existed was advice with no button behind it:
+                the pane holds Mermaid, and the .alab it became was never shown.
+                The route that hands it over goes with the sentence that asks
+                for it. */}
             <p className="text-sm leading-relaxed text-foreground">
               <span className="font-semibold">Imported from Mermaid.</span>{" "}
-              {MERMAID_SEQUENCE_CAVEAT}
+              {MERMAID_SEQUENCE_CAVEAT}{" "}
+              <Link
+                href="/convert"
+                className="font-medium text-primary hover:underline"
+              >
+                Get the .alab text
+              </Link>
             </p>
           </div>
         ) : null}

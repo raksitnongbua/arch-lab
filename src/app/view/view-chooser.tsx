@@ -208,6 +208,20 @@ export function ViewChooser(): React.JSX.Element {
         </Link>
         .
       </p>
+      {/* Both cards say they accept Mermaid, which answers "where do I paste
+          it" and not "what does it become". Someone arriving from Mermaid
+          usually wants the second thing, and this is the last screen before
+          they have to guess which playground their diagram belongs to. */}
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        Arriving with Mermaid and only after the text?{" "}
+        <Link
+          href="/convert"
+          className="font-medium text-primary hover:underline"
+        >
+          Convert it to <span className="font-mono">.alab</span>
+        </Link>{" "}
+        — either dialect, detected for you.
+      </p>
     </div>
   );
 }

@@ -637,8 +637,19 @@ export function ViewerPlayground(): React.JSX.Element {
             <Import aria-hidden="true" />
             Import from Mermaid
           </button>
+          {/* The second sentence is for the reader whose errand is the TEXT,
+              not the diagram: this control converts into the panes, and until
+              `/convert` existed that was the only door to a conversion — you
+              had to open a playground to reach one. */}
           <p className="text-xs text-muted-foreground">
-            One-way and lossy — converts Mermaid C4 into both panes.
+            One-way and lossy — converts Mermaid C4 into both panes. Just want
+            the <span className="font-mono">.alab</span>?{" "}
+            <Link
+              href="/convert"
+              className="font-medium text-primary hover:underline"
+            >
+              Convert it on its own page
+            </Link>
           </p>
         </div>
 
