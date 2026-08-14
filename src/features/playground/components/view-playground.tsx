@@ -926,43 +926,31 @@ export function ViewPlayground({
                       switches by rewriting the text
                     </span>
                   </div>
-                  {/* KIND-SPECIFIC actions, changing only when the detected
-                      KIND changes (a deliberate paste, not a keystroke): a
-                      sequence document's Share/Export live here because its
-                      canvas has no control strip of its own for them, while a
-                      C4 document gets them from the ViewerShell strip and
-                      keeps this row for the pane-local Format/Copy/Download
-                      its predecessor had. Rendering all five for both kinds
-                      would add controls neither page shipped. */}
+                  {/* PANE-LOCAL actions only — Format, Copy, Download, all of
+                      which act on the text beside them.
+
+                      Share and Export are NOT here, and that is a bug fix
+                      rather than a tidy-up. They open ~288px dropdown panels,
+                      and this rail scrolls (`overflow-y: auto`), which the CSS
+                      spec computes to `auto` on BOTH axes — so a panel wider
+                      than a 30% rail was clipped at its edge, losing the left
+                      half of every label. They now sit in the canvas strip,
+                      where the C4 shell has always put its own pair: same
+                      controls, same place, no clipping ancestor, and they are
+                      about the DIAGRAM rather than about the text. */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {doc.kind === "sequence" ? (
-                      <>
-                        <SequenceShareButton
-                          text={text}
-                          title={documentTitle(doc)}
-                          format={doc.format}
-                          onAnnounce={setAnnouncement}
-                        />
-                        <SequenceExportButton
-                          paneRef={diagramPaneRef}
-                          title={documentTitle(doc)}
-                          onAnnounce={setAnnouncement}
-                        />
-                      </>
-                    ) : (
-                      <PaneActions
-                        pane="source"
-                        heading="source text"
-                        value={text}
-                        filename={`${stem}${paneExtension}`}
-                        mime={
-                          doc.format === "json"
-                            ? "application/json"
-                            : "text/plain"
-                        }
-                        onFormat={handleFormat}
-                      />
-                    )}
+                    <PaneActions
+                      pane="source"
+                      heading="source text"
+                      value={text}
+                      filename={`${stem}${paneExtension}`}
+                      mime={
+                        doc.format === "json"
+                          ? "application/json"
+                          : "text/plain"
+                      }
+                      onFormat={handleFormat}
+                    />
                   </div>
                 </div>
 
@@ -1152,29 +1140,61 @@ export function ViewPlayground({
                         : "Diagram"}
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setImmersive(!isImmersive)}
-                    aria-pressed={isImmersive}
-                    aria-label={
-                      isImmersive
-                        ? "Exit immersive mode (Escape at the top level)"
-                        : "Enter immersive mode — hide the site chrome and the source rail"
-                    }
-                    title={
-                      isImmersive ? "Exit immersive mode" : "Immersive mode"
-                    }
-                    className={buttonClasses({ variant: "ghost", size: "sm" })}
-                  >
-                    {isImmersive ? (
-                      <Shrink aria-hidden="true" />
-                    ) : (
-                      <Expand aria-hidden="true" />
+                  {/* Share and Export live in the CANVAS strip, matching the
+                      C4 shell's own strip control-for-control. Two reasons,
+                      and the first is a defect: in the source rail their
+                      dropdown panels were clipped by that column's scroll box
+                      (see the note on the rail's action row). The second is
+                      that both act on the diagram — Export renders what is on
+                      screen, Share hands over the document being drawn — so
+                      the canvas is where they belonged anyway.
+
+                      Hidden in immersive: the strip stays visible there so the
+                      exit is one click away, and a menu that opened over a
+                      fullscreen diagram would be covering the thing it exports. */}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {isImmersive ? null : (
+                      <>
+                        <SequenceShareButton
+                          text={text}
+                          title={documentTitle(doc)}
+                          format={doc.format}
+                          onAnnounce={setAnnouncement}
+                        />
+                        <SequenceExportButton
+                          paneRef={diagramPaneRef}
+                          title={documentTitle(doc)}
+                          onAnnounce={setAnnouncement}
+                        />
+                      </>
                     )}
-                    <span className="hidden sm:inline">
-                      {isImmersive ? "Exit immersive" : "Immersive"}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setImmersive(!isImmersive)}
+                      aria-pressed={isImmersive}
+                      aria-label={
+                        isImmersive
+                          ? "Exit immersive mode (Escape at the top level)"
+                          : "Enter immersive mode — hide the site chrome and the source rail"
+                      }
+                      title={
+                        isImmersive ? "Exit immersive mode" : "Immersive mode"
+                      }
+                      className={buttonClasses({
+                        variant: "ghost",
+                        size: "sm",
+                      })}
+                    >
+                      {isImmersive ? (
+                        <Shrink aria-hidden="true" />
+                      ) : (
+                        <Expand aria-hidden="true" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {isImmersive ? "Exit immersive" : "Immersive"}
+                      </span>
+                    </button>
+                  </span>
                 </div>
                 <SequenceViewer
                   file={doc.file}

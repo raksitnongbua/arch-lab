@@ -278,7 +278,14 @@ export function SequenceExportButton({
           <ChevronDown aria-hidden="true" className="size-3.5 opacity-60" />
         </summary>
 
-        <div className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-3 rounded-lg border border-border bg-card p-3 shadow-lg">
+        {/* `max-w` and an internal scroll, not just a fixed width: this panel
+            opens inside whatever column its button was placed in, and a menu
+            that is wider or taller than that column gets CLIPPED rather than
+            overflowing — which cost this one the left half of every label
+            when the button briefly sat in the 30% source rail. Capping both
+            axes means the worst case is a panel that scrolls, which is a menu
+            you can still read and use. */}
+        <div className="absolute right-0 z-20 mt-1 flex max-h-[min(32rem,70svh)] w-72 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             Format
             <select
