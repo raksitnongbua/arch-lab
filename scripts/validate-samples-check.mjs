@@ -147,86 +147,10 @@ for (const sample of SAMPLES) {
   );
 }
 
-/* ---- /convert samples convert, through the real importers --------------- */
-
-/*
- * Same contract, other page: `/convert` offers one sample per Mermaid dialect
- * and promises each becomes `.alab`. A sample that stopped converting would
- * hand a reader a broken paste on the page whose entire job is conversion, so
- * it is asserted here rather than left to be noticed.
- *
- * The round trip is the part worth pinning: converting is only useful if what
- * comes out is a document the rest of the app READS BACK — which is what makes
- * "copy this into your repo" a true instruction.
- */
-console.log("\n/convert samples (converted through the real importers)");
-
-const { convertMermaid } = await import(
-  pathToFileURL(path.join(ROOT, "src/features/convert/lib/convert.ts")).href
-);
-const { CONVERT_SAMPLES } = await import(
-  pathToFileURL(path.join(ROOT, "src/features/convert/content/samples.ts")).href
-);
-const { detectAlabKind, parseArchText, parseSequenceText } = await import(
-  pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
-);
-
-/** label -> the document kind the conversion must produce. */
-const CONVERT_EXPECTED = new Map([
-  ["Mermaid sequenceDiagram", "sequence"],
-  ["Mermaid C4", "c4"],
-]);
-
-if (CONVERT_SAMPLES.length !== CONVERT_EXPECTED.size) {
-  fail(
-    "convert sample list",
-    `CONVERT_SAMPLES has ${CONVERT_SAMPLES.length} entries but this script expects ${CONVERT_EXPECTED.size} — add the new sample's expectation here.`,
-  );
-}
-
-for (const sample of CONVERT_SAMPLES) {
-  if (!CONVERT_EXPECTED.has(sample.label)) {
-    fail(sample.label, "no expectation declared in this script");
-    continue;
-  }
-  const expected = CONVERT_EXPECTED.get(sample.label);
-  const result = convertMermaid(sample.source);
-  if (result.status !== "ok") {
-    fail(
-      sample.label,
-      `expected a ${expected} conversion, got status "${result.status}": ${result.message}`,
-    );
-    continue;
-  }
-  if (result.kind !== expected) {
-    fail(sample.label, `converted to "${result.kind}", expected "${expected}"`);
-    continue;
-  }
-  if (detectAlabKind(result.alabText) !== expected) {
-    fail(
-      sample.label,
-      `the .alab it produced does not announce itself as ${expected} on line 1`,
-    );
-    continue;
-  }
-  try {
-    if (expected === "sequence") parseSequenceText(result.alabText);
-    else parseArchText(result.alabText);
-  } catch (error) {
-    fail(sample.label, `the .alab it produced does not parse back: ${error}`);
-    continue;
-  }
-  if (result.caveat.length === 0) {
-    fail(sample.label, "converted with no caveat — the loss must be named");
-    continue;
-  }
-  ok(`${sample.label} — converts to ${result.kind} .alab that parses back`);
-}
-
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
   console.error(`\n${failures} of ${validated} sample check(s) FAILED`);
   process.exit(1);
 }
-console.log(`\nAll ${validated} /validate and /convert samples verified.`);
+console.log(`\nAll ${validated} /validate samples verified.`);

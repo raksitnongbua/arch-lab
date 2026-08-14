@@ -184,10 +184,10 @@ export function ViewerShell({
    * Whether this shell offers the tour at all. On by default — a page that
    * exists to show a model wants it.
    *
-   * `/convert` passes `false`: the shell is embedded there as a live PREVIEW
-   * of a conversion, so a card opening itself over the preview would teach
-   * the wrong page's controls AND spend the reader's one first visit
-   * somewhere it does not apply.
+   * `false` is for a host that embeds the shell as EVIDENCE rather than as
+   * the destination — a preview beside something else. A card opening itself
+   * over a preview teaches the wrong page's controls, and spends the reader's
+   * one first visit somewhere it does not apply.
    */
   tour?: boolean;
 }): React.JSX.Element {

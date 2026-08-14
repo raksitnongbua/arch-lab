@@ -131,12 +131,11 @@ export function SequenceViewer({
    * Whether this viewer offers the tour at all. On by default — every page
    * that exists to SHOW a flow wants it.
    *
-   * `/convert` turns it off, and that is the case the flag exists for: the
-   * viewer is embedded there as a live PREVIEW of a conversion, so a card
-   * that opened itself over the preview would be teaching the wrong page's
-   * controls, and it would count as the reader's one first visit — spending
-   * the auto-show somewhere it does not apply. A page that embeds the viewer
-   * as evidence rather than as the destination should pass `false`.
+   * `false` is for a host that embeds the viewer as EVIDENCE rather than as
+   * the destination — a preview beside something else. A card that opened
+   * itself over a preview would teach the wrong page's controls, and would
+   * count as the reader's one first visit, spending the auto-show somewhere
+   * it does not apply.
    */
   tour?: boolean;
 }): React.JSX.Element {

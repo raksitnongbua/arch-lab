@@ -11,12 +11,6 @@ export function Footer() {
           <span className="font-mono">{APP_NAME}</span> — local-first
           architecture documentation. C4 today; more diagram types planned.
         </p>
-        {/* Two links, not a link list: the syntax reference is where the
-            format is learned, and `/convert` is where a reader who already has
-            Mermaid gets into it. The header nav deliberately does not carry
-            Convert — a fifth entry there overflows a 393px viewport (see the
-            width note in `header.tsx`), and the footer is where a route
-            reached once per document belongs. */}
         <p>
           Saves as plain text you can read. Diff it, review it, commit it.{" "}
           <Link
@@ -24,13 +18,6 @@ export function Footer() {
             className="font-medium text-foreground hover:underline"
           >
             <span className="font-mono">.alab</span> syntax reference
-          </Link>{" "}
-          ·{" "}
-          <Link
-            href="/convert"
-            className="font-medium text-foreground hover:underline"
-          >
-            Mermaid → <span className="font-mono">.alab</span>
           </Link>
         </p>
       </div>

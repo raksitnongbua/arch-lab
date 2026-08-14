@@ -279,16 +279,16 @@ function ValidCard({ result }: { result: CheckOk }): React.JSX.Element {
 
         {/* The caveat ends in "save as .alab or arch-lab JSON", which is
             advice this reader cannot act on from here — the conversion is what
-            they came holding Mermaid for. The route that does it goes with the
-            sentence that asks for it. */}
+            they came holding Mermaid for. The playground is where it happens:
+            it imports the same source and its panes hold the result. */}
         {result.format === "mermaid" ? (
           <p className="rounded-md border border-accent/30 bg-accent/8 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {MERMAID_CAVEAT}{" "}
             <Link
-              href="/convert"
+              href="/view/c4"
               className="font-medium text-primary hover:underline"
             >
-              Convert it to .alab
+              Open it in the playground to get the .alab
             </Link>
           </p>
         ) : null}

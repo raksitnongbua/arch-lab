@@ -16,9 +16,11 @@
  * truncation the share tiers guard against cannot happen to it.
  *
  * Lives in `components/share` rather than in either caller because two pages
- * now do exactly this (`/validate` and `/convert`), and a second copy of an
- * encode-then-measure effect is precisely the kind of duplication that drifts
- * — one copy would keep the old ceiling after the other moved.
+ * did exactly this, and a second copy of an encode-then-measure effect is
+ * precisely the kind of duplication that drifts — one copy would keep the old
+ * ceiling after the other moved. Only `/validate` uses it today; it stays
+ * shared because the next page that hands a document somewhere should not
+ * write this effect again.
  */
 
 import { useEffect, useState } from "react";

@@ -22,16 +22,15 @@
  *     direction differ. No second JSON pane, though: a sequence document
  *     has one canonical text form and nothing to sync it against.
  *
- * WHY diagram-over-source rather than the C4 playground's side-by-side: a
- * sequence diagram's participants spread HORIZONTALLY, so width is the axis
- * the diagram actually consumes — halving it to seat a text column forces
- * either a shrunken diagram or sideways scrolling on every real flow. The
- * diagram section OWNS the first screenful (viewport-height pane; the
- * viewer fits the whole flow inside it, C4-fitView style, with zoom
- * controls for detail) and the source is a full-width strip BELOW THE
- * FOLD — scrolling the page is how you reach the text. The collapse toggle
- * this pane once had is gone: it existed to hand the source's rows to the
- * diagram, and the diagram no longer needs them.
+ * LAYOUT: source rail at 30%, canvas at 70%, one viewport tall
+ * (`components/ui/split-workbench.tsx` carries the full argument). This page
+ * used to stack them and argued for it: a sequence diagram's participants
+ * spread HORIZONTALLY, so width is the axis the drawing consumes, and halving
+ * it forces either a shrunken diagram or sideways scrolling. That is still
+ * true and it lost anyway — stacking meant the text and the diagram were
+ * never on screen together, so every edit was a scroll up and a scroll back.
+ * The rail COLLAPSES, which is what settles the width argument: one click and
+ * the canvas is the whole workbench.
  *
  * IMMERSIVE MODE — the same in-page pattern as `viewer-shell.tsx` (its
  * fullscreen-blocked fallback, promoted to the primary control here): the
@@ -70,6 +69,10 @@ import {
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  SourceRailToggle,
+  SplitWorkbench,
+} from "@/components/ui/split-workbench";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { buttonClasses } from "@/components/ui/button";
 import type { TourStep } from "@/components/ui/tour";
@@ -165,6 +168,10 @@ export function SequencePlayground(): React.JSX.Element {
 
   const [isImmersive, setIsImmersive] = useState(false);
   const immersiveRef = useRef(false);
+
+  /** The left rail's fold. Page state, not the layout's, because the toolbar
+   * button that flips it lives in the canvas column's own chrome. */
+  const [sourceCollapsed, setSourceCollapsed] = useState(false);
 
   const setImmersive = useCallback((next: boolean) => {
     immersiveRef.current = next;
@@ -469,10 +476,14 @@ export function SequencePlayground(): React.JSX.Element {
       <div
         className={cn(
           SHARE_PENDING_CLASS,
-          "mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-5 sm:px-8",
+          /* A viewport tall on `lg` (minus the sticky 4rem header) so the
+             workbench below can fill what is left — the height budget lives
+             HERE because this page knows what chrome it puts above it. Below
+             `lg` the panes stack and the page scrolls normally. */
+          "mx-auto flex w-full max-w-[110rem] flex-col gap-3 px-5 py-4 sm:px-8 lg:h-[calc(100svh-4rem)]",
         )}
       >
-        <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             Explore a sequence diagram
           </h1>
@@ -480,13 +491,13 @@ export function SequencePlayground(): React.JSX.Element {
             <span className="size-1.5 rounded-full bg-accent" />
             click to focus
           </Badge>
+          {/* One line, not a paragraph. The page is a viewport tall now and
+              every row of prose here is a row the canvas does not get; what
+              this used to explain — click to focus, the formats, the controls
+              — the tour teaches on demand and the pane's own toggle shows. */}
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-            Write <span className="font-mono text-foreground">.alab</span>{" "}
-            sequence text or paste a Mermaid{" "}
-            <span className="font-mono text-foreground">sequenceDiagram</span> —
-            auto-detected, rendered live and complete; click any message or
-            participant to spotlight it. Nothing leaves your browser. Building a
-            C4 model instead?{" "}
+            <span className="font-mono text-foreground">.alab</span> or Mermaid,
+            auto-detected and rendered live. Nothing leaves your browser.{" "}
             <Link
               href="/view/c4"
               className="font-medium text-primary hover:underline"
@@ -508,16 +519,14 @@ export function SequencePlayground(): React.JSX.Element {
 
         {/* The Mermaid import is honest about loss the moment it happens. */}
         {parsed?.format === "mermaid" && error === null ? (
-          <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
+          <div className="flex shrink-0 items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
             <Info
               aria-hidden="true"
               className="mt-0.5 size-4 shrink-0 text-accent"
             />
-            {/* The caveat ends by telling the reader to save as .alab, which
-                until `/convert` existed was advice with no button behind it:
-                the pane holds Mermaid, and the .alab it became was never shown.
-                The route that hands it over goes with the sentence that asks
-                for it. */}
+            {/* Both directions' losses, stated together, because the pane's
+                own toggle can now go either way — naming only the import's
+                loss would leave the export looking free. */}
             <p className="text-sm leading-relaxed text-foreground">
               <span className="font-semibold">This pane holds Mermaid.</span>{" "}
               {MERMAID_SEQUENCE_CAVEAT}{" "}
@@ -527,201 +536,214 @@ export function SequencePlayground(): React.JSX.Element {
           </div>
         ) : null}
 
-        {/* ---- the diagram pane — it OWNS the screen ----
-          Height is the viewport minus the chrome above (site header + page
-          header + this page's padding ≈ 12rem), so the diagram section fills
-          the first screenful and the whole flow FITS inside it (the viewer
-          scales the SVG to this box — its fit mode needs a definite height,
-          which is why this is a clamp and not flex-grown). The source pane
-          sits below the fold in normal page flow: scrolling the PAGE is how
-          you reach the text. */}
-        <section
-          ref={diagramPaneRef}
-          aria-label="Rendered sequence diagram"
-          className={cn(
-            "flex min-w-0 flex-col overflow-hidden bg-background",
-            isImmersive
-              ? // Immersive: cover the viewport. Site chrome and the source
-                // pane are BEHIND the fixed section, untouched — the same
-                // "cover, never edit" rule as viewer-shell.tsx.
-                "fixed inset-0 z-50"
-              : // 10.5rem = the chrome above this section (site header + page
-                // header + paddings, ~168px measured at desktop widths): the
-                // section's bottom edge lands just inside the first viewport,
-                // and the source section's first row starts just below it —
-                // "scroll down to see the text", literally.
-                "h-[calc(100svh-10.5rem)] min-h-[24rem] rounded-xl border border-border shadow-sm",
-          )}
-        >
-          {/* The toolbar strip stays visible in immersive mode too — the exit
-            must always be one click away, not only one keystroke. */}
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
-            <span className="truncate text-xs text-muted-foreground">
-              {isImmersive
-                ? "Immersive — Escape exits (a focused message clears first)"
-                : "Diagram"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setImmersive(!isImmersive)}
-              aria-pressed={isImmersive}
-              aria-label={
-                isImmersive
-                  ? "Exit immersive mode (Escape at the top level)"
-                  : "Enter immersive mode — hide the site chrome and the source pane"
-              }
-              title={isImmersive ? "Exit immersive mode" : "Immersive mode"}
-              className={buttonClasses({ variant: "ghost", size: "sm" })}
-            >
-              {isImmersive ? (
-                <Shrink aria-hidden="true" />
-              ) : (
-                <Expand aria-hidden="true" />
-              )}
-              <span className="hidden sm:inline">
-                {isImmersive ? "Exit immersive" : "Immersive"}
-              </span>
-            </button>
-          </div>
-          {parsed !== null ? (
-            <SequenceViewer
-              file={parsed.file}
-              onAnnounce={setAnnouncement}
-              extraTourSteps={PLAYGROUND_TOUR_STEPS}
-            />
-          ) : (
-            // Only reachable when the SEED itself failed to parse — a build
-            // break, not a user state (the seed is parser-verified at module
-            // load). Still: never a silently blank canvas.
-            <p className="p-6 text-sm text-muted-foreground">
-              Nothing to render yet — fix the error shown under the text pane.
-            </p>
-          )}
-        </section>
-
-        {/* ---- the source pane — BELOW THE FOLD, reached by page scroll ----
-          The collapse toggle this section used to carry is GONE, on purpose:
-          it existed to hand the source's rows to the diagram, but the
-          diagram's height no longer depends on this section at all — it
-          already owns the first screenful, and the source starts below the
-          fold. Scrolling past something is the same gesture as folding it,
-          minus a state to manage and a control to explain. `hidden` in
-          immersive (never unmounted): the textarea keeps its DOM — and with
-          it the browser's undo stack — and leaves the tab order while the
-          fixed section covers the page. */}
-        <section
-          aria-label="Sequence source editor"
-          className={cn("flex min-w-0 flex-col gap-2", isImmersive && "hidden")}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <label
-                htmlFor={textareaId}
-                className="text-sm font-medium text-foreground"
-              >
-                Sequence text
-              </label>
-              {/* A radiogroup, not two buttons: one choice with two values,
+        {/* ---- the workbench: source at 30%, canvas at 70% ----
+          The diagram and the text it comes from are on screen TOGETHER, which
+          is the whole change. This page used to stack them — canvas first,
+          source below the fold — and argued for it: a sequence diagram's
+          participants spread horizontally, so width is the axis the drawing
+          consumes. That is still true, and it lost anyway, because stacking
+          made every edit a scroll up and a scroll back down. The rail's
+          collapse is what settles the width argument: one click and the canvas
+          is the whole workbench. See components/ui/split-workbench.tsx. */}
+        <SplitWorkbench
+          collapsed={sourceCollapsed}
+          sourceLabel="sequence source"
+          hidden={isImmersive}
+          source={
+            <>
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label
+                    htmlFor={textareaId}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Sequence text
+                  </label>
+                  {/* A radiogroup, not two buttons: one choice with two values,
                   and a screen reader should hear it that way. It shows what
                   the pane IS (detected from the text) and switches by
                   rewriting it — see `convertPane`. Disabled while the text
                   does not parse, because there is no document to convert. */}
-              <div
-                role="radiogroup"
-                aria-label="Source format"
-                className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5"
-              >
-                {(["alab", "mermaid"] as const).map((format) => {
-                  const current = parsed?.format === format;
-                  return (
-                    <button
-                      key={format}
-                      type="button"
-                      role="radio"
-                      aria-checked={current}
-                      disabled={parsed === null}
-                      onClick={() => convertPane(format)}
-                      title={
-                        current
-                          ? `The pane is ${SEQUENCE_FORMAT_LABEL[format]}`
-                          : `Rewrite the pane as ${SEQUENCE_FORMAT_LABEL[format]}`
-                      }
-                      className={cn(
-                        "rounded-md px-2 py-0.5 font-mono text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40",
-                        current
-                          ? "bg-secondary font-medium text-foreground"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {format === "alab" ? ".alab" : "Mermaid"}
-                    </button>
-                  );
-                })}
+                  <div
+                    role="radiogroup"
+                    aria-label="Source format"
+                    className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5"
+                  >
+                    {(["alab", "mermaid"] as const).map((format) => {
+                      const current = parsed?.format === format;
+                      return (
+                        <button
+                          key={format}
+                          type="button"
+                          role="radio"
+                          aria-checked={current}
+                          disabled={parsed === null}
+                          onClick={() => convertPane(format)}
+                          title={
+                            current
+                              ? `The pane is ${SEQUENCE_FORMAT_LABEL[format]}`
+                              : `Rewrite the pane as ${SEQUENCE_FORMAT_LABEL[format]}`
+                          }
+                          className={cn(
+                            "rounded-md px-2 py-0.5 font-mono text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40",
+                            current
+                              ? "bg-secondary font-medium text-foreground"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {format === "alab" ? ".alab" : "Mermaid"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {parsed !== null ? (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Repeat2 aria-hidden="true" className="size-3.5" />
+                      switches by rewriting the text
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <SequenceShareButton
+                    text={text}
+                    title={parsed?.file.metadata.title ?? "sequence-diagram"}
+                    format={parsed?.format ?? null}
+                    onAnnounce={setAnnouncement}
+                  />
+                  <SequenceExportButton
+                    paneRef={diagramPaneRef}
+                    title={parsed?.file.metadata.title ?? "sequence-diagram"}
+                    onAnnounce={setAnnouncement}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => loadExample(SEQUENCE_EXAMPLE)}
+                    className={buttonClasses({ variant: "ghost", size: "sm" })}
+                  >
+                    <ArrowDownToLine aria-hidden="true" />
+                    .alab example
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadExample(MERMAID_SEQUENCE_EXAMPLE)}
+                    className={buttonClasses({ variant: "ghost", size: "sm" })}
+                  >
+                    <ArrowDownToLine aria-hidden="true" />
+                    Mermaid example
+                  </button>
+                </div>
+              </div>
+              <textarea
+                id={textareaId}
+                value={text}
+                onChange={(event) => handleChange(event.target.value)}
+                onKeyDown={handleKeyDown}
+                aria-describedby={hintId}
+                aria-invalid={error !== null}
+                spellCheck={false}
+                rows={12}
+                className={cn(
+                  /* Fills the rail on `lg` and stops resizing: the column has
+                     a height now, and a drag handle that fights it would let
+                     the textarea push the hint off the bottom. Stacked, it
+                     keeps its own minimum and the page scrolls. */
+                  "w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-lg:min-h-[14rem] lg:min-h-0 lg:flex-1 lg:resize-none",
+                  error !== null ? "border-destructive/60" : "border-border",
+                )}
+              />
+              {/* Scrolls rather than growing: an error with a quoted source
+                  line and a caret is several lines tall, and in a 30% rail it
+                  would otherwise squeeze the editor it is about. */}
+              <div className="shrink-0 space-y-2 overflow-y-auto lg:max-h-52">
+                {error !== null ? <SequenceErrorBox error={error} /> : null}
+                <p id={hintId} className="text-xs text-muted-foreground">
+                  Tab inserts two spaces — press Escape, then Tab, to move focus
+                  out. The diagram re-renders as you type; while the text fails
+                  to parse it keeps showing the last good version. Keep message
+                  labels short and indent a{" "}
+                  <code className="font-mono">desc &quot;…&quot;</code> under
+                  one to hold the endpoint or payload — it shows as a code block
+                  when the message is clicked, never on the arrow. Use{" "}
+                  <code className="font-mono">\n</code> inside it for several
+                  lines.
+                </p>
+              </div>
+            </>
+          }
+          canvas={
+            <section
+              ref={diagramPaneRef}
+              aria-label="Rendered sequence diagram"
+              className={cn(
+                "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background",
+                isImmersive
+                  ? // Immersive: cover the viewport. Site chrome and the source
+                    // rail are BEHIND the fixed section, untouched — the same
+                    // "cover, never edit" rule as viewer-shell.tsx.
+                    "fixed inset-0 z-50"
+                  : "rounded-xl border border-border shadow-sm max-lg:h-[70svh]",
+              )}
+            >
+              {/* The toolbar strip stays visible in immersive mode too — the
+                exit must always be one click away, not only one keystroke. */}
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
+                <span className="flex min-w-0 items-center gap-1">
+                  {/* The rail toggle sits with the CANVAS, not with the rail
+                      it hides: a control that vanishes along with the thing it
+                      controls cannot bring it back. */}
+                  {isImmersive ? null : (
+                    <SourceRailToggle
+                      collapsed={sourceCollapsed}
+                      onToggle={() => setSourceCollapsed(!sourceCollapsed)}
+                      sourceLabel="sequence source"
+                    />
+                  )}
+                  <span className="truncate text-xs text-muted-foreground">
+                    {isImmersive
+                      ? "Immersive — Escape exits (a focused message clears first)"
+                      : "Diagram"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setImmersive(!isImmersive)}
+                  aria-pressed={isImmersive}
+                  aria-label={
+                    isImmersive
+                      ? "Exit immersive mode (Escape at the top level)"
+                      : "Enter immersive mode — hide the site chrome and the source rail"
+                  }
+                  title={isImmersive ? "Exit immersive mode" : "Immersive mode"}
+                  className={buttonClasses({ variant: "ghost", size: "sm" })}
+                >
+                  {isImmersive ? (
+                    <Shrink aria-hidden="true" />
+                  ) : (
+                    <Expand aria-hidden="true" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isImmersive ? "Exit immersive" : "Immersive"}
+                  </span>
+                </button>
               </div>
               {parsed !== null ? (
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Repeat2 aria-hidden="true" className="size-3.5" />
-                  switches by rewriting the text
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <SequenceShareButton
-                text={text}
-                title={parsed?.file.metadata.title ?? "sequence-diagram"}
-                format={parsed?.format ?? null}
-                onAnnounce={setAnnouncement}
-              />
-              <SequenceExportButton
-                paneRef={diagramPaneRef}
-                title={parsed?.file.metadata.title ?? "sequence-diagram"}
-                onAnnounce={setAnnouncement}
-              />
-              <button
-                type="button"
-                onClick={() => loadExample(SEQUENCE_EXAMPLE)}
-                className={buttonClasses({ variant: "ghost", size: "sm" })}
-              >
-                <ArrowDownToLine aria-hidden="true" />
-                .alab example
-              </button>
-              <button
-                type="button"
-                onClick={() => loadExample(MERMAID_SEQUENCE_EXAMPLE)}
-                className={buttonClasses({ variant: "ghost", size: "sm" })}
-              >
-                <ArrowDownToLine aria-hidden="true" />
-                Mermaid example
-              </button>
-            </div>
-          </div>
-
-          <textarea
-            id={textareaId}
-            value={text}
-            onChange={(event) => handleChange(event.target.value)}
-            onKeyDown={handleKeyDown}
-            aria-describedby={hintId}
-            aria-invalid={error !== null}
-            spellCheck={false}
-            rows={12}
-            className={cn(
-              "min-h-[14rem] w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              error !== null ? "border-destructive/60" : "border-border",
-            )}
-          />
-          <p id={hintId} className="text-xs text-muted-foreground">
-            Tab inserts two spaces — press Escape, then Tab, to move focus out.
-            The diagram re-renders as you type; while the text fails to parse it
-            keeps showing the last good version. Keep message labels short and
-            indent a <code className="font-mono">desc &quot;…&quot;</code> under
-            one to hold the endpoint or payload — it shows as a code block when
-            the message is clicked, never on the arrow. Use{" "}
-            <code className="font-mono">\n</code> inside it for several lines.
-          </p>
-
-          {error !== null ? <SequenceErrorBox error={error} /> : null}
-        </section>
+                <SequenceViewer
+                  file={parsed.file}
+                  onAnnounce={setAnnouncement}
+                  extraTourSteps={PLAYGROUND_TOUR_STEPS}
+                />
+              ) : (
+                // Only reachable when the SEED itself failed to parse — a build
+                // break, not a user state (the seed is parser-verified at module
+                // load). Still: never a silently blank canvas.
+                <p className="p-6 text-sm text-muted-foreground">
+                  Nothing to render yet — fix the error shown under the text
+                  pane.
+                </p>
+              )}
+            </section>
+          }
+        />
       </div>
     </>
   );
