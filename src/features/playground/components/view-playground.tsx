@@ -1137,34 +1137,35 @@ export function ViewPlayground({
                 </div>
               ) : null}
 
-              {/* `shrink-0` and scrollable: the hint is reference material,
-                  so it may not squeeze the editor it describes — and on a
-                  short window it scrolls rather than growing the column. */}
+              {/* ONE LINE. This was five sentences — how Tab behaves, that the
+                  diagram re-renders as you type, that a failed parse keeps the
+                  last good version, and where a sequence `desc` goes — sitting
+                  permanently under the editor in a rail perhaps 320px wide.
+                  Most of it answered questions the page answers by itself: you
+                  learn "it re-renders as you type" by typing, and the error box
+                  already says the diagram is showing the last good version when
+                  it matters.
+
+                  What survives is the part that is genuinely unguessable and
+                  has a real cost when missed — Tab types spaces here, so a
+                  keyboard reader needs telling how to leave the field. The
+                  authoring guidance moved to the reference page that documents
+                  it properly rather than being paraphrased in the furniture. */}
               <p
                 id={editingHintId}
-                className="max-h-28 shrink-0 overflow-y-auto text-xs text-muted-foreground"
+                className="shrink-0 text-xs text-muted-foreground"
               >
-                Tab inserts two spaces inside the editor — press Escape, then
-                Tab, to move focus out. The diagram re-renders as you type;
-                while the text fails to parse it keeps showing the last good
-                version.{" "}
-                {doc.kind === "sequence" ? (
-                  // The sequence grammar's one non-obvious authoring rule,
-                  // kept from its page verbatim: where long payloads go.
-                  <>
-                    Keep message labels short and indent a{" "}
-                    <code className="font-mono">desc &quot;…&quot;</code> under
-                    one to hold the endpoint or payload — it shows as a code
-                    block when the message is clicked, never on the arrow. Use{" "}
-                    <code className="font-mono">\n</code> inside it for several
-                    lines.
-                  </>
-                ) : (
-                  <>
-                    Format rewrites a pane to its canonical form; nothing is
-                    reformatted while you type.
-                  </>
-                )}
+                <kbd className="font-mono">Tab</kbd> indents ·{" "}
+                <kbd className="font-mono">Esc</kbd> then{" "}
+                <kbd className="font-mono">Tab</kbd> leaves the editor ·{" "}
+                <Link
+                  href={
+                    doc.kind === "sequence" ? "/syntax#sequence" : "/syntax"
+                  }
+                  className="text-primary hover:underline"
+                >
+                  syntax reference
+                </Link>
               </p>
             </div>
           }
