@@ -184,20 +184,30 @@ export function HeroDiagram({ className }: { className?: string }) {
               Each label is layered: a muted base that is always there, with the
               lit copy on top running the same swap keyframe as its panel. That
               keeps the two in lockstep by construction and needs no colour
-              keyframes. */}
+              keyframes.
+
+              THE PILL'S PADDING LIVES ON THE WRAPPER, not as a negative margin
+              on the overlay. The lit copy used to be `absolute inset-0` pulled
+              out with `-mx-1.5`, which made it 6px wider than its slot on each
+              side — exactly the `gap-1.5` between the two labels. So whenever
+              one lit up, its pill closed the gap and sat flush against the
+              other word. Padding the wrapper instead means the pill is the
+              size of the box it is in, the gap is real space between two
+              padded boxes, and the two can never touch however the words
+              change length. */}
           <p
             style={delay(BEAT.header + 180)}
-            className="af-hero-fade flex shrink-0 items-center gap-1.5 font-mono text-[10px]"
+            className="af-hero-fade flex shrink-0 items-center gap-2 font-mono text-[10px]"
           >
-            <span className="relative">
+            <span className="relative rounded px-1.5 py-0.5">
               <span className="text-muted-foreground/60">C4</span>
-              <span className="af-hero-kind absolute inset-0 -mx-1.5 -my-0.5 rounded bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
+              <span className="af-hero-kind absolute inset-0 rounded bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
                 C4
               </span>
             </span>
-            <span className="relative">
+            <span className="relative rounded px-1.5 py-0.5">
               <span className="text-muted-foreground/60">Sequence</span>
-              <span className="af-hero-kind af-hero-kind-alt absolute inset-0 -mx-1.5 -my-0.5 rounded bg-accent/15 px-1.5 py-0.5 font-medium text-accent">
+              <span className="af-hero-kind af-hero-kind-alt absolute inset-0 rounded bg-accent/15 px-1.5 py-0.5 font-medium text-accent">
                 Sequence
               </span>
             </span>
