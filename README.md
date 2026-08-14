@@ -202,10 +202,14 @@ they differ only in which example seeds an empty pane. Keeping them is what
 keeps existing `#m=…` share links, the sitemap and the OG images working, and
 a share payload now simply opens in place whatever kind it holds.
 
-The `.alab example` / `Mermaid example` buttons are gone: with one pane that
-reads anything, the seed IS the example, and two buttons that replace your
-work with someone else's are a poor trade for a page you arrive at to paste
-into.
+The pane carries **one example button per KIND** — _C4 example_ and _Sequence
+example_ — and the current kind's own button is disabled rather than hidden,
+since a pair that appears and disappears as you paste is a moving target.
+Both kinds side by side is the point: this page draws either from the same
+box, and the fastest way to say so is a button that turns a C4 model into a
+sequence flow in front of you. The predecessor pages offered `.alab example` /
+`Mermaid example` — two FORMATS of the one kind each could draw — which the
+format toggle beside the pane now covers on its own.
 
 ## The workbench layout
 

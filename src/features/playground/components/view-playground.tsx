@@ -56,6 +56,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   AlignLeft,
+  ArrowDownToLine,
   Braces,
   Download,
   Expand,
@@ -643,6 +644,33 @@ export function ViewPlayground({
    * visible in the box, one Undo away in the textarea's own history, and a
    * dialog in front of a formatting button teaches people to dismiss dialogs.
    */
+  /**
+   * Replace the pane with one of the two bundled examples.
+   *
+   * BOTH KINDS, side by side, and that is the point: this page renders either
+   * one from the same box, and the fastest way to say so is a button that
+   * turns a C4 model into a sequence flow in front of you. The predecessor
+   * pages offered `.alab example` / `Mermaid example` — two FORMATS of the one
+   * kind that page could draw — which was the right pair then and the wrong
+   * one now; the format toggle beside the pane covers that axis already.
+   *
+   * It overwrites what is in the pane, deliberately and without a
+   * confirmation: the textarea's own undo puts it back, and a dialog in front
+   * of "show me an example" is the kind people learn to dismiss unread.
+   */
+  const loadExample = useCallback(
+    (kind: SeedKind) => {
+      const example = VIEW_SEED_TEXT[kind];
+      setPending(null);
+      setText(example);
+      applyEdit("source", example);
+      setAnnouncement(
+        `Loaded the ${kind === "c4" ? "C4 model" : "sequence diagram"} example.`,
+      );
+    },
+    [applyEdit],
+  );
+
   const convertPane = useCallback(
     (to: ToggleFormat) => {
       if (doc.format === to) return;
@@ -838,16 +866,28 @@ export function ViewPlayground({
           components/ui/split-workbench.tsx for the argument). The rail's
           collapse gives the canvas everything when a wide diagram needs it. */}
         <SplitWorkbench
-          collapsed={sourceCollapsed}
+          /* Immersive collapses the RAIL; it must not hide the workbench,
+             because the canvas that fixes itself over the viewport is inside
+             it and `display: none` on an ancestor beats `position: fixed` on
+             a descendant. (Fixed once already on the branch that carries the
+             `SplitWorkbench` change; restated here because this branch is cut
+             from main, which does not have it yet.) */
+          collapsed={sourceCollapsed || isImmersive}
           sourceLabel="document source"
-          hidden={isImmersive}
           source={
-            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-0.5">
+            /* THE RAIL IS A COLUMN THAT FILLS ITS HEIGHT, not a scrolling
+               block. It used to be `overflow-y-auto`, which made the editor a
+               fixed 14 rows with dead space under it on any normal window —
+               the pane you spend the whole visit in was the one thing on the
+               page that did not use the space. Now the notices and the hint
+               are `shrink-0` and the EDITORS take what is left, so the text
+               area is as tall as the diagram beside it. */
+            <div className="flex min-h-0 flex-col gap-3">
               {/* ---- share-link outcome ---------------------------------- */}
               {/* Success only. Failure never reaches here — it took over the
                   page. */}
               {openedFromShare ? (
-                <div className="flex items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
+                <div className="flex shrink-0 items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
                   <p className="text-sm leading-relaxed text-foreground">
                     <span className="font-semibold">
                       Opened from a share link.
@@ -872,9 +912,13 @@ export function ViewPlayground({
               ) : null}
 
               {/* ---- the source pane -------------------------------------- */}
+              {/* `lg:flex-1 lg:min-h-0` — the pane takes a share of the
+                  rail's height rather than a fixed row count. With the JSON
+                  twin open the two split it; alone, the editor is as tall as
+                  the diagram beside it. */}
               <section
                 aria-label="Document source editor"
-                className="flex min-w-0 flex-col gap-2"
+                className="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -939,6 +983,31 @@ export function ViewPlayground({
                       controls, same place, no clipping ancestor, and they are
                       about the DIAGRAM rather than about the text. */}
                   <div className="flex flex-wrap items-center gap-1.5">
+                    {/* One button per KIND. The current kind's own button is
+                        disabled rather than hidden: a pair that appears and
+                        disappears as you paste is a moving target, and "you
+                        are already looking at this one" is worth saying. */}
+                    {(["c4", "sequence"] as const).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => loadExample(kind)}
+                        disabled={doc.kind === kind}
+                        title={
+                          doc.kind === kind
+                            ? `The pane already holds the ${kind === "c4" ? "C4" : "sequence"} example's kind`
+                            : `Replace the pane with the ${kind === "c4" ? "C4 model" : "sequence diagram"} example`
+                        }
+                        className={buttonClasses({
+                          variant: "ghost",
+                          size: "sm",
+                          className: "disabled:cursor-not-allowed",
+                        })}
+                      >
+                        <ArrowDownToLine aria-hidden="true" />
+                        {kind === "c4" ? "C4 example" : "Sequence example"}
+                      </button>
+                    ))}
                     <PaneActions
                       pane="source"
                       heading="source text"
@@ -964,9 +1033,14 @@ export function ViewPlayground({
                   aria-describedby={editingHintId}
                   aria-invalid={paneError?.pane === "source"}
                   spellCheck={false}
+                  /* `rows` is the MOBILE size only: stacked, the page
+                     scrolls and a fixed height is right. On `lg` the pane
+                     flexes instead (see the rail's note) and `resize-none`
+                     goes with it — a drag handle fighting a flex height lets
+                     the editor push the hint off the bottom. */
                   rows={14}
                   className={cn(
-                    "w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                    "w-full min-w-0 rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-lg:resize-y lg:min-h-0 lg:flex-1 lg:resize-none",
                     paneError?.pane === "source"
                       ? "border-destructive/60"
                       : "border-border",
@@ -982,7 +1056,7 @@ export function ViewPlayground({
               {showJson ? (
                 <section
                   aria-label="arch-lab JSON editor"
-                  className="flex min-w-0 flex-col gap-2"
+                  className="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label
@@ -1020,7 +1094,7 @@ export function ViewPlayground({
                     spellCheck={false}
                     rows={14}
                     className={cn(
-                      "w-full min-w-0 resize-y rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                      "w-full min-w-0 rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-lg:resize-y lg:min-h-0 lg:flex-1 lg:resize-none",
                       paneError?.pane === "json" &&
                         paneError.error.kind !== "mermaid-detected"
                         ? "border-destructive/60"
@@ -1034,7 +1108,7 @@ export function ViewPlayground({
               ) : null}
 
               {jsonPaneAvailable ? (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1052,7 +1126,13 @@ export function ViewPlayground({
                 </div>
               ) : null}
 
-              <p id={editingHintId} className="text-xs text-muted-foreground">
+              {/* `shrink-0` and scrollable: the hint is reference material,
+                  so it may not squeeze the editor it describes — and on a
+                  short window it scrolls rather than growing the column. */}
+              <p
+                id={editingHintId}
+                className="max-h-28 shrink-0 overflow-y-auto text-xs text-muted-foreground"
+              >
                 Tab inserts two spaces inside the editor — press Escape, then
                 Tab, to move focus out. The diagram re-renders as you type;
                 while the text fails to parse it keeps showing the last good
