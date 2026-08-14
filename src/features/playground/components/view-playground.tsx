@@ -993,32 +993,12 @@ export function ViewPlayground({
                       where the C4 shell has always put its own pair: same
                       controls, same place, no clipping ancestor, and they are
                       about the DIAGRAM rather than about the text. */}
+                  {/* The pane's OWN actions only. The two example loaders
+                      used to sit here and pushed this row onto two lines at
+                      any normal rail width, which put Copy and Download —
+                      things you reach for constantly — below a pair you press
+                      once, if ever. They moved to the foot of the rail. */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {/* One button per KIND. The current kind's own button is
-                        disabled rather than hidden: a pair that appears and
-                        disappears as you paste is a moving target, and "you
-                        are already looking at this one" is worth saying. */}
-                    {(["c4", "sequence"] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        onClick={() => loadExample(kind)}
-                        disabled={doc.kind === kind}
-                        title={
-                          doc.kind === kind
-                            ? `The pane already holds the ${kind === "c4" ? "C4" : "sequence"} example's kind`
-                            : `Replace the pane with the ${kind === "c4" ? "C4 model" : "sequence diagram"} example`
-                        }
-                        className={buttonClasses({
-                          variant: "ghost",
-                          size: "sm",
-                          className: "disabled:cursor-not-allowed",
-                        })}
-                      >
-                        <ArrowDownToLine aria-hidden="true" />
-                        {kind === "c4" ? "C4 example" : "Sequence example"}
-                      </button>
-                    ))}
                     <PaneActions
                       pane="source"
                       heading="source text"
@@ -1136,6 +1116,46 @@ export function ViewPlayground({
                   </p>
                 </div>
               ) : null}
+
+              {/* THE EXAMPLES, at the foot of the rail.
+
+                  They belong at the bottom on frequency: this is a page you
+                  arrive at to paste your own document into, so "show me one of
+                  yours" is the thing you press once at the start and never
+                  again — while Copy, Download and Format are the row you use
+                  all session. Putting the rare pair first cost the common ones
+                  their line.
+
+                  One button per KIND, and the current kind's own is DISABLED
+                  rather than hidden: a pair that appears and disappears as you
+                  paste is a moving target, and "you are already looking at
+                  this one" is worth saying. */}
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
+                <span className="text-xs text-muted-foreground">
+                  Load an example:
+                </span>
+                {(["c4", "sequence"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => loadExample(kind)}
+                    disabled={doc.kind === kind}
+                    title={
+                      doc.kind === kind
+                        ? `The pane already holds the ${kind === "c4" ? "C4" : "sequence"} example's kind`
+                        : `Replace the pane with the ${kind === "c4" ? "C4 model" : "sequence diagram"} example`
+                    }
+                    className={buttonClasses({
+                      variant: "ghost",
+                      size: "sm",
+                      className: "disabled:cursor-not-allowed",
+                    })}
+                  >
+                    <ArrowDownToLine aria-hidden="true" />
+                    {kind === "c4" ? "C4" : "Sequence"}
+                  </button>
+                ))}
+              </div>
 
               {/* ONE LINE. This was five sentences — how Tab behaves, that the
                   diagram re-renders as you type, that a failed parse keeps the
