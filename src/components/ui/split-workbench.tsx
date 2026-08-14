@@ -135,20 +135,35 @@ function useRailPercent(): number {
 /* The layout                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * THERE IS NO `hidden` PROP, and that is a fix rather than an omission.
+ *
+ * This component briefly took one, so a page entering immersive mode could
+ * hide the workbench — which hid the CANVAS too, and the canvas is the thing
+ * immersive mode exists to enlarge. `display: none` on an ancestor beats
+ * `position: fixed` on a descendant, so clicking Immersive made the diagram
+ * vanish. In the stacked layout the source and the canvas were siblings and
+ * hiding one could not touch the other; merging them into one frame is what
+ * made "hide the source" and "hide the frame" different things.
+ *
+ * So immersive is expressed the way it actually behaves: `collapsed` also
+ * covers it (`sourceCollapsed || isImmersive`), the canvas fixes itself over
+ * the viewport, and the empty frame stays in the layout behind it — which
+ * costs nothing and means leaving immersive restores the rail to whatever the
+ * reader had it at.
+ */
 export function SplitWorkbench({
   collapsed,
   sourceLabel,
   source,
   canvas,
-  /** Hidden entirely while the canvas owns the viewport (immersive mode). */
-  hidden = false,
 }: {
+  /** Hides the rail AND its divider. Immersive mode is one of its callers. */
   collapsed: boolean;
   /** Names the left rail, for the section landmark and the divider. */
   sourceLabel: string;
   source: React.ReactNode;
   canvas: React.ReactNode;
-  hidden?: boolean;
 }): React.JSX.Element {
   const railPercent = useRailPercent();
   const frameRef = useRef<HTMLDivElement>(null);
@@ -224,7 +239,6 @@ export function SplitWorkbench({
            the page to scroll, and a viewport-tall column that also stacks
            would put the canvas permanently off-screen. */
         "flex min-h-0 flex-col gap-3 lg:min-h-0 lg:flex-1 lg:flex-row lg:gap-0",
-        hidden && "hidden",
       )}
     >
       {/* The width rides a CUSTOM PROPERTY, not an inline `width`: an inline
