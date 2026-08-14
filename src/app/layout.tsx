@@ -112,10 +112,10 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col">
         {/* PRE-PAINT SHARE FLAG. Stamps `data-share-forward` on <html> when the
-            URL carries a share payload, so a page that is about to forward can
-            hide the copy it is forwarding away from — `/view` uses it, via a
-            CSS rule in globals.css, to keep a legacy `/view#m=…` link from
-            flashing the chooser.
+            URL carries a share payload, so the playground can hide its seeded
+            example — via CSS rules in globals.css — until the decoded document
+            replaces it, instead of flashing an example the visitor would take
+            for what they were sent.
 
             IT LIVES HERE, in the root layout, and that is the whole point. It
             used to sit inside `/view/page.tsx`, where React 19 logged
@@ -129,7 +129,7 @@ export default function RootLayout({
             That is also the only path that needs it. The pre-paint window
             exists on a FRESH DOCUMENT LOAD, which is exactly how a pasted share
             link arrives; a client navigation has already painted, and the
-            chooser's own hash subscription handles it there.
+            playground's own hashchange subscription handles it there.
 
             Site-wide rather than route-scoped is deliberate: the flag states a
             fact about the URL, not about a route, and nothing reads it unless it

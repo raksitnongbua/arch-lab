@@ -14,17 +14,18 @@
  *
  * Why a FORWARD rather than a second mount of the playground: the fragment
  * never reaches the server, so only the client can carry it across; and
- * mounting the playground twice would create a duplicate page whose internal
- * links, canonical URL and decode behaviour would have to be kept in sync
- * forever. One page owns the playground; this one only knows the way there.
- * The same pattern already carries legacy `/view#m=…` links to `/view/c4`
- * (see `../view-chooser.tsx`).
+ * mounting a fourth copy of the playground would create a duplicate page
+ * whose canonical URL and metadata would have to be kept in sync forever.
+ * The three real routes own the playground; this one only knows the way
+ * there. (A forward is all that is left of this pattern — the `/view`
+ * chooser that once forwarded legacy links by kind is gone, because the
+ * merged playground reads every payload kind in place.)
  *
  * `router.replace`, not push: nobody ever meant to visit this route, so Back
  * must return to wherever the link was opened from, not to the trampoline.
  *
- * Unlike the chooser there is no server-rendered content to hide while
- * forwarding — this page IS the forward — so none of the chooser's pre-paint
+ * There is no server-rendered content to hide while forwarding — this page
+ * IS the forward — so none of the playground's pre-paint
  * `data-share-forward` machinery is needed here.
  */
 

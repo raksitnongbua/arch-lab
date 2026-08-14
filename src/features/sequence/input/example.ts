@@ -1,6 +1,7 @@
 /**
- * The example the sequence playground opens with. Same philosophy as the C4
- * playground's SEED_MODEL (`viewer/input/sync.ts`): an empty canvas teaches
+ * The example the playground opens with when seeded for sequence
+ * (`/view/sequence`). Same philosophy as the C4 seed's SEED_MODEL
+ * (`viewer/input/sync.ts`): an empty canvas teaches
  * nobody the format, so the seed is a realistic flow that demonstrates every
  * headline construct — both participant kinds, technologies, all three arrow
  * kinds, activation (`->+` / `..>-`), a message `desc` (the short title on
@@ -72,25 +73,7 @@ export const SEQUENCE_EXAMPLE: string = serializeSequenceText(
   parseSequenceText(RAW),
 );
 
-/**
- * A Mermaid twin of (roughly) the same flow, for the "insert a Mermaid
- * example" affordance — it exists to demonstrate that the pane auto-detects
- * `sequenceDiagram` and imports it, caveat and all.
- */
-export const MERMAID_SEQUENCE_EXAMPLE = `sequenceDiagram
-    title Checkout happy path
-    autonumber
-    actor C as Customer
-    participant W as Storefront
-    participant A as Order API
-    C->>W: Clicks Place order
-    W->>+A: POST /orders
-    Note right of A: Validates the cart
-    alt card accepted
-        A->>DB: INSERT order
-        A-->>-W: 201 Created
-    else card declined
-        A-->>W: 402 Payment Required
-    end
-    Note over C,W: Order flow complete
-`;
+/* A Mermaid twin of this flow used to live here, feeding the playground's
+ * "Mermaid example" button. Both example buttons were removed with the merge
+ * into `features/playground` (the pane auto-detects a pasted `sequenceDiagram`
+ * without a demo affordance), so the twin went with them. */

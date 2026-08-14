@@ -31,9 +31,9 @@ Be precise about what this repo is right now:
 | `/`                          | Landing page, written for someone who has not seen this before: what it is, the two things it does that a drawing tool does not (present, and be written by an agent), and how to start. The hero CTA opens `/view/sequence` seeded with a worked flow. |
 | `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                                                                                              |
 | `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.                                                                             |
-| `/view`                      | Chooser: C4 model or sequence diagram. Also where legacy `/view#m=…` share links land — they forward to `/view/c4` with the fragment intact.                                                                                                            |
-| `/view/c4`                   | The paste-your-own C4 playground: `.alab` and JSON side by side, live sync, Mermaid import, image export.                                                                                                                                               |
-| `/view/sequence`             | The sequence playground: `.alab` sequence or Mermaid `sequenceDiagram`, the whole flow rendered at once — click a message, participant, or fragment to animate and inspect it.                                                                          |
+| `/view`                      | **The playground.** One pane that takes any supported text — C4 `.alab`, sequence `.alab`, arch-lab JSON, Mermaid C4 or a Mermaid `sequenceDiagram` — detects it and renders the matching diagram. Also where any `/view#m=…` share link lands.         |
+| `/view/c4`                   | The same playground, seeded with a C4 example. Kept as its own route so existing `#m=…` share links, the sitemap and the OG image keep working.                                                                                                         |
+| `/view/sequence`             | The same playground, seeded with a sequence example — same reason for the separate route.                                                                                                                                                               |
 | `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                                                                                         |
 | `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                                                                                         |
 | `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.                                                                                |
@@ -180,6 +180,32 @@ answer "where am I?". The map answers it without moving the camera, and it is
 token colour rather than per-type hues: at 160px a node is four pixels wide, so
 hue is noise and only the shape of the graph reads. Hidden below `sm`, where it
 would cover a meaningful share of the canvas it describes.
+
+## One playground, either kind
+
+`/view` is **one pane that reads whatever you paste**. C4 `.alab`, sequence
+`.alab`, arch-lab JSON, Mermaid C4, a Mermaid `sequenceDiagram` — it detects
+which, and renders the matching canvas. There used to be two playgrounds and a
+chooser in front of them, which asked a question ("C4 or sequence?") that the
+text already answers.
+
+Detection composes the readers that were already there rather than adding a
+heuristic: the sequence reader classifies every first line the pane accepts
+except JSON, including — as a typed `c4-detected` verdict — both C4 dialects,
+so its answers are consumed as routing and only JSON is resolved after it. The
+merged page therefore cannot disagree with what either predecessor, or a saved
+file, means by the same text. `pnpm check:view-input` asserts all five shapes,
+both seeds, and that a located error stays located.
+
+`/view/c4` and `/view/sequence` still exist and mount the same playground —
+they differ only in which example seeds an empty pane. Keeping them is what
+keeps existing `#m=…` share links, the sitemap and the OG images working, and
+a share payload now simply opens in place whatever kind it holds.
+
+The `.alab example` / `Mermaid example` buttons are gone: with one pane that
+reads anything, the seed IS the example, and two buttons that replace your
+work with someone else's are a poor trade for a page you arrive at to paste
+into.
 
 ## The workbench layout
 
@@ -676,6 +702,7 @@ Then open <http://localhost:3000>.
 | `pnpm check:sequence-collapse` | Proves folding a participant's dependencies: on the real example, collapsing Order API hides exactly Payments and Orders DB — not Storefront, which calls it, and not the Customer, which it emails but which also acts elsewhere. Also that folding is transitive, that a shared service stops the cascade, that the filtered file leaves no message pointing at a hidden participant and no empty fragment, and that it still lays out.                                                             |
 | `pnpm check:sequence-motion`   | Proves idle motion's cross-file facts, which no type can catch: the comet's bands still match the C4 viewer's own dasharrays and offsets (read from its stylesheet, so "same as C4" cannot rot) while its clock stays deliberately slower, solid kinds are never given a dasharray (a dashed sync arrow reads as async), the reply's keyframes advance exactly its dash period, the head stays low-duty, and reduced motion removes the comet rather than parking three bright stripes on every line. |
 | `pnpm check:syntax-docs`       | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser — C4 snippets through the C4 parser and sequence snippets through the sequence one, each first confirmed to be DETECTED as that kind — and every deliberately-broken snippet fails with exactly the line, column and message the page shows.                                                                                                                                                       |
+| `pnpm check:view-input`        | Proves the merged `/view` reader: all five accepted shapes detect as the right document kind, both route seeds parse, failures keep the located line/column (or JSON path) the caret quote needs, and nothing recognisable is answered with "unknown format". Also pins the module's purity — it loads through Node's type stripping, so a barrel import that drags in a `.tsx` fails here.                                                                                                           |
 | `pnpm check:validate-samples`  | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                                                                                                                                                                                                                               |
 | `pnpm check:advisories`        | Proves the [review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites its source — c4model.com for the C4 family, the constant that defines the limit for the format family. The title cap is proven on both document kinds, at the boundary, and in code points rather than UTF-16 units.                                                                                     |
 | `pnpm check:export-archive`    | Proves the multi-diagram export: the hand-rolled ZIP writer emits an archive that parses back byte-for-byte with valid CRC-32s (and that the system `unzip` accepts, when one is installed), drill order survives, and archive names stay unique.                                                                                                                                                                                                                                                     |

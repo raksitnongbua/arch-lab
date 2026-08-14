@@ -876,46 +876,31 @@
   z-index: 2;
 }
 
-/* ---- /view share-link forwarding -----------------------------------------
- * A share link minted before `/view/c4` existed lands on `/view` with the
- * model in the URL fragment. The fragment never reaches the server, so the
- * chooser's markup is rendered regardless (it has to be: `/view` is in the
- * sitemap, and a body-less route is not indexable) and an inline script in
- * `app/view/page.tsx` stamps this attribute during HTML parse — before the
- * first paint — when it spots a payload. Hiding here rather than in React is
- * the whole point: by the time React can read the fragment, the chooser has
- * already been painted.
+/* ---- share-link opening, pre-paint ----------------------------------------
+ * The playground seeds itself with an example so the page is never empty, and
+ * a share link's document cannot arrive until the client has decoded the URL
+ * fragment (which never reaches the server). Left alone, someone opening a
+ * link watches the example first and takes it for the document they were sent
+ * — the misreading the route already guards against for links that FAIL to
+ * open. So the root layout's inline script stamps `data-share-forward` on
+ * <html> during HTML parse — before the first paint — when it spots a payload,
+ * and these rules swap the seeded content for the holding state. Hiding here
+ * rather than in React is the whole point: by the time React can read the
+ * fragment, the example has already been painted.
  *
- * `display: none`, not `visibility: hidden`: the chooser is two large cards,
- * and reserving their space would leave the forwarding user staring at a
- * page-sized gap instead of nothing at all. */
-
-/* The attribute is stamped pre-paint by the root layout's script and CLEARED by
- * `view-chooser.tsx` whenever there is no payload to forward. That clearing is
- * load-bearing, not tidiness: the script runs once per document load and a
- * client-side navigation never reloads, so without it the flag outlived the URL
- * that set it and this rule blanked `/view` for the rest of the session. The
- * attribute name is `SHARE_FORWARD_ATTRIBUTE` in the share codec; it is spelled
- * literally here only because CSS cannot import. */
-[data-share-forward] .af-view-chooser {
-  display: none;
-}
-
-/* The same pre-paint swap for the two PLAYGROUNDS, which have the same problem
- * in a different shape: they seed themselves with an example so the page is
- * never empty, and a share link's document cannot arrive until the client has
- * decoded the fragment. Left alone, someone opening a link watches the example
- * first and takes it for the document they were sent — the misreading these
- * routes already guard against for links that FAIL to open.
+ * Two rules because there is something to put in the hidden block's place:
+ * the seeded content goes, the holding state arrives. Both are in the
+ * prerendered HTML and the swap is pure CSS, so it happens before first paint
+ * and costs no hydration mismatch.
  *
- * Two rules rather than one, because unlike the chooser there is something to
- * put in its place: the seeded content goes, the holding state arrives. Both are
- * in the prerendered HTML and the swap is pure CSS, so it happens before first
- * paint and costs no hydration mismatch.
- *
- * Cleared by each playground once its decode resolves — see the note above and
- * `components/share/share-opening.tsx`. Class names are spelled literally here
- * only because CSS cannot import; `SHARE_PENDING_CLASS` is the TS spelling. */
+ * The attribute is CLEARED by the playground once its decode resolves — every
+ * outcome, "no payload" included. That clearing is load-bearing, not
+ * tidiness: the script runs once per document load and a client-side
+ * navigation never reloads, so without it the flag would outlive the URL that
+ * set it and blank the route for the rest of the session (this bit `/view`'s
+ * retired chooser first). See `components/share/share-opening.tsx`. The
+ * attribute is `SHARE_FORWARD_ATTRIBUTE` and the classes `SHARE_PENDING_CLASS`
+ * in TS; they are spelled literally here only because CSS cannot import. */
 [data-share-forward] .af-share-pending {
   display: none;
 }

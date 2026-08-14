@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SequencePlayground } from "@/features/sequence";
+import { ViewPlayground } from "@/features/playground";
 
 export const metadata: Metadata = {
   title: "Sequence diagram playground — write it, then explore it",
@@ -10,18 +10,19 @@ export const metadata: Metadata = {
 };
 
 /**
- * `/view/sequence` — the sequence playground: the click-to-focus viewer on
- * top at full width, the collapsible source pane underneath (see
- * sequence-playground.tsx for why). Like its `c4` sibling this is a STATIC
- * segment shadowing `/view/[modelId]`, so `sequence` is a reserved model id
- * (asserted at build time in the `[modelId]` page).
+ * `/view/sequence` — the merged playground (`features/playground`), seeded
+ * with the sequence example. The component is the SAME one `/view` and
+ * `/view/c4` mount; the seed is the routes' only difference. Like its `c4`
+ * sibling this is a STATIC segment shadowing `/view/[modelId]`, so `sequence`
+ * is a reserved model id (asserted at build time in the `[modelId]` page).
  *
  * Share links DO land here: the playground decodes `#m=…` fragments off
  * `location.hash` on mount, and new sequence links are minted against the
  * shorter `/view/seq` alias (see `../seq/`), which forwards to this page
  * with the fragment intact. Links minted against this long route before the
- * alias existed keep working — this page's own behaviour never changed.
+ * alias existed keep working — and a C4 payload landing here now simply
+ * renders, since the playground reads every kind.
  */
 export default function ViewSequencePage(): React.JSX.Element {
-  return <SequencePlayground />;
+  return <ViewPlayground seed="sequence" />;
 }
