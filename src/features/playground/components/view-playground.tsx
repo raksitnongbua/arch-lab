@@ -881,8 +881,19 @@ export function ViewPlayground({
                the pane you spend the whole visit in was the one thing on the
                page that did not use the space. Now the notices and the hint
                are `shrink-0` and the EDITORS take what is left, so the text
-               area is as tall as the diagram beside it. */
-            <div className="flex min-h-0 flex-col gap-3">
+               area is as tall as the diagram beside it.
+
+               `lg:flex-1` ON THIS WRAPPER is the link that makes the rest of
+               that true, and leaving it off is what kept the dead space after
+               the first attempt: this div is a flex ITEM of the workbench's
+               source column, so without it its height is its content's, and
+               the `flex-1` on the editor below then distributes across a box
+               that is already exactly as tall as the editor. Every level from
+               the page's `100svh` down to the textarea has to pass the height
+               on, and `min-h-0` at each one is what lets it shrink rather than
+               overflow. Below `lg` the chain is deliberately not joined — the
+               panes stack there and the page scrolls. */
+            <div className="flex min-h-0 flex-col gap-3 lg:min-h-0 lg:flex-1">
               {/* ---- share-link outcome ---------------------------------- */}
               {/* Success only. Failure never reaches here — it took over the
                   page. */}
@@ -982,32 +993,12 @@ export function ViewPlayground({
                       where the C4 shell has always put its own pair: same
                       controls, same place, no clipping ancestor, and they are
                       about the DIAGRAM rather than about the text. */}
+                  {/* The pane's OWN actions only. The two example loaders
+                      used to sit here and pushed this row onto two lines at
+                      any normal rail width, which put Copy and Download —
+                      things you reach for constantly — below a pair you press
+                      once, if ever. They moved to the foot of the rail. */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {/* One button per KIND. The current kind's own button is
-                        disabled rather than hidden: a pair that appears and
-                        disappears as you paste is a moving target, and "you
-                        are already looking at this one" is worth saying. */}
-                    {(["c4", "sequence"] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        onClick={() => loadExample(kind)}
-                        disabled={doc.kind === kind}
-                        title={
-                          doc.kind === kind
-                            ? `The pane already holds the ${kind === "c4" ? "C4" : "sequence"} example's kind`
-                            : `Replace the pane with the ${kind === "c4" ? "C4 model" : "sequence diagram"} example`
-                        }
-                        className={buttonClasses({
-                          variant: "ghost",
-                          size: "sm",
-                          className: "disabled:cursor-not-allowed",
-                        })}
-                      >
-                        <ArrowDownToLine aria-hidden="true" />
-                        {kind === "c4" ? "C4 example" : "Sequence example"}
-                      </button>
-                    ))}
                     <PaneActions
                       pane="source"
                       heading="source text"
@@ -1126,34 +1117,75 @@ export function ViewPlayground({
                 </div>
               ) : null}
 
-              {/* `shrink-0` and scrollable: the hint is reference material,
-                  so it may not squeeze the editor it describes — and on a
-                  short window it scrolls rather than growing the column. */}
+              {/* THE EXAMPLES, at the foot of the rail.
+
+                  They belong at the bottom on frequency: this is a page you
+                  arrive at to paste your own document into, so "show me one of
+                  yours" is the thing you press once at the start and never
+                  again — while Copy, Download and Format are the row you use
+                  all session. Putting the rare pair first cost the common ones
+                  their line.
+
+                  One button per KIND, and the current kind's own is DISABLED
+                  rather than hidden: a pair that appears and disappears as you
+                  paste is a moving target, and "you are already looking at
+                  this one" is worth saying. */}
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
+                <span className="text-xs text-muted-foreground">
+                  Load an example:
+                </span>
+                {(["c4", "sequence"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => loadExample(kind)}
+                    disabled={doc.kind === kind}
+                    title={
+                      doc.kind === kind
+                        ? `The pane already holds the ${kind === "c4" ? "C4" : "sequence"} example's kind`
+                        : `Replace the pane with the ${kind === "c4" ? "C4 model" : "sequence diagram"} example`
+                    }
+                    className={buttonClasses({
+                      variant: "ghost",
+                      size: "sm",
+                      className: "disabled:cursor-not-allowed",
+                    })}
+                  >
+                    <ArrowDownToLine aria-hidden="true" />
+                    {kind === "c4" ? "C4" : "Sequence"}
+                  </button>
+                ))}
+              </div>
+
+              {/* ONE LINE. This was five sentences — how Tab behaves, that the
+                  diagram re-renders as you type, that a failed parse keeps the
+                  last good version, and where a sequence `desc` goes — sitting
+                  permanently under the editor in a rail perhaps 320px wide.
+                  Most of it answered questions the page answers by itself: you
+                  learn "it re-renders as you type" by typing, and the error box
+                  already says the diagram is showing the last good version when
+                  it matters.
+
+                  What survives is the part that is genuinely unguessable and
+                  has a real cost when missed — Tab types spaces here, so a
+                  keyboard reader needs telling how to leave the field. The
+                  authoring guidance moved to the reference page that documents
+                  it properly rather than being paraphrased in the furniture. */}
               <p
                 id={editingHintId}
-                className="max-h-28 shrink-0 overflow-y-auto text-xs text-muted-foreground"
+                className="shrink-0 text-xs text-muted-foreground"
               >
-                Tab inserts two spaces inside the editor — press Escape, then
-                Tab, to move focus out. The diagram re-renders as you type;
-                while the text fails to parse it keeps showing the last good
-                version.{" "}
-                {doc.kind === "sequence" ? (
-                  // The sequence grammar's one non-obvious authoring rule,
-                  // kept from its page verbatim: where long payloads go.
-                  <>
-                    Keep message labels short and indent a{" "}
-                    <code className="font-mono">desc &quot;…&quot;</code> under
-                    one to hold the endpoint or payload — it shows as a code
-                    block when the message is clicked, never on the arrow. Use{" "}
-                    <code className="font-mono">\n</code> inside it for several
-                    lines.
-                  </>
-                ) : (
-                  <>
-                    Format rewrites a pane to its canonical form; nothing is
-                    reformatted while you type.
-                  </>
-                )}
+                <kbd className="font-mono">Tab</kbd> indents ·{" "}
+                <kbd className="font-mono">Esc</kbd> then{" "}
+                <kbd className="font-mono">Tab</kbd> leaves the editor ·{" "}
+                <Link
+                  href={
+                    doc.kind === "sequence" ? "/syntax#sequence" : "/syntax"
+                  }
+                  className="text-primary hover:underline"
+                >
+                  syntax reference
+                </Link>
               </p>
             </div>
           }
