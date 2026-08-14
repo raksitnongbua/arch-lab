@@ -751,7 +751,14 @@
 }
 
 /* The half-cycle offset. Negative, so the sequence side is already mid-cycle on
-   the first frame instead of the card sitting on a blank panel for 8 seconds. */
+   the first frame instead of the card sitting on a blank panel for 8 seconds.
+   THE WHOLE CLASS IS THIS ONE DECLARATION, which makes it fragile in a
+   specific way worth naming: an inline `animation-delay` on the same element
+   overrides it, and the element then runs in PHASE with its counterpart
+   instead of opposite it — both halves visible at once, printed over each
+   other. That shipped once, on the header's flow title, because the element
+   was also given a staged entrance. Put entrance delays on the CHILDREN of an
+   `-alt` element, never on the element itself. */
 .af-hero-kind-alt {
   animation-delay: -8.5s;
 }

@@ -146,17 +146,31 @@ export function HeroDiagram({ className }: { className?: string }) {
             {/* The sequence half names the FLOW, because that is what a
                 sequence document has where a C4 model has a level — its title
                 is the one thing the real viewer stamps above the lifelines. */}
-            <p
-              style={delay(BEAT.header)}
-              className="af-hero-kind af-hero-kind-alt col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 font-mono text-[10px]"
-            >
-              <span className="af-hero-fade truncate text-muted-foreground">
+            {/* NO INLINE `delay()` ON THIS ELEMENT, and that is load-bearing:
+                `af-hero-kind-alt` is nothing but an `animation-delay: -8.5s`,
+                the half-cycle offset that makes this the OTHER side of the
+                swap. An inline `animationDelay` wins over the class, so a
+                staged entrance here silently put both halves on the same
+                phase and printed the C4 breadcrumb and the flow title over
+                each other. The children carry the entrance instead — they
+                have no swap clock of their own to overwrite. */}
+            <p className="af-hero-kind af-hero-kind-alt col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 font-mono text-[10px]">
+              <span
+                style={delay(BEAT.header)}
+                className="af-hero-fade truncate text-muted-foreground"
+              >
                 Place an order
               </span>
-              <span className="af-hero-fade shrink-0 text-muted-foreground/50">
+              <span
+                style={delay(BEAT.header + 60)}
+                className="af-hero-fade shrink-0 text-muted-foreground/50"
+              >
                 ·
               </span>
-              <span className="af-hero-fade shrink-0 text-muted-foreground/70">
+              <span
+                style={delay(BEAT.header + 120)}
+                className="af-hero-fade shrink-0 text-muted-foreground/70"
+              >
                 4 participants
               </span>
             </p>
