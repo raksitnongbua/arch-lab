@@ -881,8 +881,19 @@ export function ViewPlayground({
                the pane you spend the whole visit in was the one thing on the
                page that did not use the space. Now the notices and the hint
                are `shrink-0` and the EDITORS take what is left, so the text
-               area is as tall as the diagram beside it. */
-            <div className="flex min-h-0 flex-col gap-3">
+               area is as tall as the diagram beside it.
+
+               `lg:flex-1` ON THIS WRAPPER is the link that makes the rest of
+               that true, and leaving it off is what kept the dead space after
+               the first attempt: this div is a flex ITEM of the workbench's
+               source column, so without it its height is its content's, and
+               the `flex-1` on the editor below then distributes across a box
+               that is already exactly as tall as the editor. Every level from
+               the page's `100svh` down to the textarea has to pass the height
+               on, and `min-h-0` at each one is what lets it shrink rather than
+               overflow. Below `lg` the chain is deliberately not joined — the
+               panes stack there and the page scrolls. */
+            <div className="flex min-h-0 flex-col gap-3 lg:min-h-0 lg:flex-1">
               {/* ---- share-link outcome ---------------------------------- */}
               {/* Success only. Failure never reaches here — it took over the
                   page. */}
