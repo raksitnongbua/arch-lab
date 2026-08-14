@@ -26,7 +26,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/validate",
     "/view",
     "/view/c4",
-    "/view/sequence",
+    /* The SHORT route, not `/view/sequence`: the pair swapped roles (see
+       `app/view/seq/page.tsx`) and the long one is a noindex alias now.
+       Listing a route that canonicals elsewhere would ask a crawler to index
+       a trampoline. */
+    "/view/seq",
     "/mcp",
   ];
 

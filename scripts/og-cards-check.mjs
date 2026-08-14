@@ -57,7 +57,28 @@ const check = (label, ok, detail) => {
 const CARDS = [
   ["src/app/opengraph-image.tsx", "/ (and every route without its own)"],
   ["src/app/view/c4/opengraph-image.tsx", "/view/c4"],
-  ["src/app/view/sequence/opengraph-image.tsx", "/view/sequence"],
+  /* The sequence card lives with the REAL sequence page, which is the short
+     route (`/view/seq`) — that is the URL every minted share link carries, and
+     a preview is fetched for the URL as shared. It used to sit at
+     `/view/sequence`, which the pair's flip turned into an alias, and for as
+     long as it did every minted link previewed with the ROOT card: "C4
+     architecture diagrams", the other document kind, which is the exact bug
+     this card exists to fix. */
+  ["src/app/view/seq/opengraph-image.tsx", "/view/seq"],
+];
+
+/**
+ * Cards that are a RE-EXPORT of one above rather than their own drawing.
+ * `/view/sequence` needs one so the example routes nested under it inherit a
+ * sequence-shaped preview instead of the root card — but it must stay a
+ * re-export, because two copies of a card are two cards that can disagree.
+ */
+const REEXPORTED_CARDS = [
+  [
+    "src/app/view/sequence/opengraph-image.tsx",
+    "src/app/view/seq/opengraph-image.tsx",
+    "/view/sequence/[exampleId]",
+  ],
 ];
 const FRAME = "src/features/marketing/og/card.tsx";
 
@@ -86,12 +107,45 @@ for (const [file, route] of CARDS) {
   );
 }
 
+/* ---- the re-exported cards point at a real one, and draw nothing ---------- */
+
+for (const [file, target, route] of REEXPORTED_CARDS) {
+  check(
+    `${route} inherits a card (${file.split("/").slice(-2).join("/")})`,
+    existsSync(path.join(ROOT, file)),
+  );
+  if (!existsSync(path.join(ROOT, file))) continue;
+  const source = read(file);
+  const targetName = path.basename(target, ".tsx");
+  check(
+    `${route}: re-exports the ${targetName} card rather than redrawing it`,
+    source.includes(
+      `from "../${path.basename(path.dirname(target))}/${targetName}"`,
+    ) && /export\s*\{[^}]*\bdefault\b/.test(source),
+    source.slice(0, 200),
+  );
+  for (const named of ["alt", "size", "contentType"]) {
+    check(
+      `${route}: re-exports \`${named}\` (Next reads it from this segment)`,
+      new RegExp(`\\b${named}\\b`).test(source),
+    );
+  }
+  check(
+    `${route}: draws nothing of its own — one card, two mounting points`,
+    !source.includes("OgCard"),
+  );
+}
+
 /* ---- no glyph the fallback font cannot draw ------------------------------
  * Latin-1 covers the copy; the allowlist is the typography this design uses on
  * purpose (middot separators, em dash, ellipsis, arrows in a couple of labels).
  * Anything else is a tofu box waiting to ship. */
 const ALLOWED = new Set(["·", "—", "–", "…", "→", "⇢"]);
-for (const [file, route] of [...CARDS, [FRAME, "the shared frame"]]) {
+for (const [file, route] of [
+  ...CARDS,
+  ...REEXPORTED_CARDS.map(([file, , route]) => [file, route]),
+  [FRAME, "the shared frame"],
+]) {
   if (!existsSync(path.join(ROOT, file))) continue;
   const source = read(file);
   const offenders = [

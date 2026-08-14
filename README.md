@@ -26,20 +26,20 @@ Be precise about what this repo is right now:
 
 ## Routes
 
-| Route                        | What it is                                                                                                                                                                                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                          | Landing page, written for someone who has not seen this before: what it is, the two things it does that a drawing tool does not (present, and be written by an agent), and how to start. The hero CTA opens `/view/sequence` seeded with a worked flow. |
-| `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                                                                                              |
-| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.                                                                             |
-| `/view`                      | **The playground.** One pane that takes any supported text — C4 `.alab`, sequence `.alab`, arch-lab JSON, Mermaid C4 or a Mermaid `sequenceDiagram` — detects it and renders the matching diagram. Also where any `/view#m=…` share link lands.         |
-| `/view/c4`                   | The same playground, seeded with a C4 example. Kept as its own route so existing `#m=…` share links, the sitemap and the OG image keep working.                                                                                                         |
-| `/view/sequence`             | The same playground, seeded with a sequence example — same reason for the separate route.                                                                                                                                                               |
-| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                                                                                         |
-| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                                                                                         |
-| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.                                                                                |
-| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.                                                                     |
-| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                                                                                             |
-| `/editor`                    | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Gated off by `EDITOR_ENABLED` into a coming-soon page.                                                                                              |
+| Route                        | What it is                                                                                                                                                                                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                          | Landing page, written for someone who has not seen this before: what it is, the two things it does that a drawing tool does not (present, and be written by an agent), and how to start. The hero CTA opens `/view/sequence` seeded with a worked flow.                 |
+| `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                                                                                                              |
+| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.                                                                                             |
+| `/view`                      | **The playground.** One pane that takes any supported text — C4 `.alab`, sequence `.alab`, arch-lab JSON, Mermaid C4 or a Mermaid `sequenceDiagram` — detects it and renders the matching diagram. Also where any `/view#m=…` share link lands.                         |
+| `/view/c4`                   | The same playground, seeded with a C4 example. Kept as its own route so existing `#m=…` share links, the sitemap and the OG image keep working.                                                                                                                         |
+| `/view/seq`                  | The sequence playground, and **the route every sequence share link is minted against** — the short path spends fewer URL characters so more are left for the payload. `/view/sequence` forwards here with the fragment intact, for links made before the alias existed. |
+| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                                                                                                         |
+| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                                                                                                         |
+| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus [C4 review notes](#c4-conformance) on a valid model.                                                                                                |
+| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.                                                                                     |
+| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                                                                                                             |
+| `/editor`                    | The canvas editor: palette, inspector, drill-down, and [grouping boundaries](#grouping-boundaries). Gated off by `EDITOR_ENABLED` into a coming-soon page.                                                                                                              |
 
 ## The two model formats
 
@@ -197,10 +197,22 @@ merged page therefore cannot disagree with what either predecessor, or a saved
 file, means by the same text. `pnpm check:view-input` asserts all five shapes,
 both seeds, and that a located error stays located.
 
-`/view/c4` and `/view/sequence` still exist and mount the same playground —
-they differ only in which example seeds an empty pane. Keeping them is what
-keeps existing `#m=…` share links, the sitemap and the OG images working, and
-a share payload now simply opens in place whatever kind it holds.
+`/view/c4` and `/view/seq` mount the same playground and differ only in which
+example seeds an empty pane; a share payload opens in place whatever kind it
+holds.
+
+**The sequence pair points the other way now.** Every sequence share link is
+minted against `/view/seq`, because the document travels in the URL fragment
+and the five characters the short path does not spend buy roughly 7–10 more
+characters of document per link. That was already true — what was wrong is
+that the short route was a _forward_, so the most common way anyone arrives
+from outside paid a bounce, and, having no `opengraph-image` of its own, every
+minted link previewed with the root "C4 architecture diagrams" card: the exact
+wrong-kind preview the sequence card was added to fix. `/view/seq` is the real
+page now and owns that card; `/view/sequence` forwards to it, keeping every
+link minted before the alias existed. The forward has to be a component rather
+than a `redirects()` rule, because a server never sees the fragment and would
+drop the document.
 
 The pane carries **one example button per KIND** — _C4 example_ and _Sequence
 example_ — and the current kind's own button is disabled rather than hidden,
