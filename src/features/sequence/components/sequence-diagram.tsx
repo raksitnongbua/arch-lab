@@ -947,19 +947,26 @@ function ParticipantColumn({
         strokeWidth={1.5}
       />
       {/* ---- the icon, and the name it shares a row with ----
-          The pair is centred TOGETHER rather than the name being centred and
-          the icon hung off it: an icon placed relative to a centred label
-          drifts with every rename, and the card's width already reserves
-          `iconSize + iconGap` for exactly this (see `planColumns`). So the
-          row's total width is measured here, the group starts at its left
-          edge, and the name is drawn from there — which keeps the two
-          optically balanced in the card at any name length. */}
+          THE NAME IS ANCHORED, the icon is placed. An earlier version centred
+          the pair by measuring the row and drawing the name from its left
+          edge, which quietly made every label's position depend on
+          `estimateTextWidth` being right — including the labels of the many
+          participants that have no icon at all. It showed up as a name sitting
+          off-centre above a technology line that was not: the `[Go]` beneath
+          uses `textAnchor="middle"` and lands exactly, so the two disagreed
+          inside one card, which the eye catches long before absolute drift.
+
+          Now the name is `textAnchor="middle"` too, so no estimate can move
+          it. The estimate survives only to place the ICON — and a 16px mark a
+          pixel out is invisible, where a drifting word is not. With no icon
+          the name's centre IS the card's centre, so those cards are exact. */}
       {(() => {
-        const nameWidth = estimateTextWidth(participant.name, SEQ.nameFontSize);
         const Icon = icon?.byStyle[iconStyle];
-        const rowWidth =
-          nameWidth + (Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap);
-        const rowLeft = x - rowWidth / 2;
+        const iconRun =
+          Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap;
+        /* The name gives up half the icon's run so that ICON + NAME together
+           read as centred, rather than the name alone. */
+        const nameCentre = x + iconRun / 2;
         const nameY =
           boxTop +
           (participant.technology === undefined
@@ -969,7 +976,12 @@ function ParticipantColumn({
           <>
             {Icon === undefined ? null : (
               <Icon
-                x={rowLeft}
+                x={
+                  nameCentre -
+                  estimateTextWidth(participant.name, SEQ.nameFontSize) / 2 -
+                  SEQ.iconGap -
+                  SEQ.iconSize
+                }
                 /* Optically centred on the text's x-height rather than its
                    baseline: `nameY` is where the glyphs SIT, so an icon
                    aligned to it would hang below the word. */
@@ -982,10 +994,9 @@ function ParticipantColumn({
               />
             )}
             <text
-              x={
-                rowLeft + (Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap)
-              }
+              x={nameCentre}
               y={nameY}
+              textAnchor="middle"
               fontSize={SEQ.nameFontSize}
               fontWeight={600}
               fill="var(--node-foreground)"
