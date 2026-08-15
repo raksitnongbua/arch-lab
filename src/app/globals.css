@@ -988,3 +988,37 @@
     opacity: 0;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* The playground's source rail, folded before first paint                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The fold is a stored preference, and the server cannot read localStorage, so
+ * the pane it renders is always the expanded one. Left to React that meant a
+ * reader who prefers it folded watched a whole pane appear and then vanish on
+ * every load — a layout shift, not a repaint.
+ *
+ * `SOURCE_FOLD_SCRIPT` (playground/lib/source-fold.ts) stamps this attribute on
+ * <html> before first paint, so these two rules settle the layout in the very
+ * first frame with no JavaScript in the render path. React reaches the same
+ * conclusion a moment later and adds its own `hidden` class; the two agree
+ * because both hide exactly these elements, and the attribute is rewritten on
+ * every toggle so it can never fall behind.
+ *
+ * MAINTAINED BY HAND against the TypeScript constant — CSS cannot import one —
+ * and pinned by `pnpm check:viewer-motion`, which fails if the attribute name
+ * here and the constant there ever drift apart.
+ */
+[data-af-source-fold="collapsed"] [data-af-source-pane] {
+  display: none;
+}
+
+/* The divider is already `display: none` below `lg`, where the panes stack and
+   there is no boundary to drag — so it only needs hiding at the one breakpoint
+   that splits them, matching the `lg:hidden` React applies. */
+@media (width >= 64rem) {
+  [data-af-source-fold="collapsed"] [data-af-source-divider] {
+    display: none;
+  }
+}

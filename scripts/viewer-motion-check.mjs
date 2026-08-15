@@ -314,6 +314,43 @@ check("the export paints the drift with the canvas's resolved token", () => {
 });
 
 /* ----------------------------------------------------------------------- */
+/* The playground's pre-paint fold: CSS and TypeScript name the same thing  */
+/* ----------------------------------------------------------------------- */
+
+check(
+  "the source-fold attribute in globals.css matches the TypeScript constant",
+  () => {
+    /* CSS cannot import a constant, so the selector is a hand-maintained twin
+       of `SOURCE_FOLD_ATTRIBUTE`. If they drift, nothing breaks loudly — the
+       pre-paint script stamps an attribute no rule reads, and the fold goes
+       back to flashing on every load, which is exactly the bug the script was
+       added to remove. */
+    const fold = read("src/features/playground/lib/source-fold.ts");
+    const attribute = /SOURCE_FOLD_ATTRIBUTE = "([^"]+)"/.exec(fold)?.[1];
+    assert.ok(attribute, "SOURCE_FOLD_ATTRIBUTE not found — has it moved?");
+    assert.match(
+      globals,
+      new RegExp(`\\[${attribute}="collapsed"\\]`),
+      `globals.css has no rule for [${attribute}="collapsed"]`,
+    );
+    /* Both halves of what the fold hides, or a collapsed rail leaves its
+       divider hanging in the gutter. */
+    for (const hook of ["data-af-source-pane", "data-af-source-divider"]) {
+      assert.match(
+        globals,
+        new RegExp(`\\[${hook}\\]`),
+        `no rule targets [${hook}]`,
+      );
+      assert.match(
+        read("src/components/ui/split-workbench.tsx"),
+        new RegExp(hook),
+        `split-workbench renders no ${hook} hook for the stylesheet to aim at`,
+      );
+    }
+  },
+);
+
+/* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

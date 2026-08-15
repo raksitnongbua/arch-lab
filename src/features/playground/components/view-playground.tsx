@@ -126,7 +126,7 @@ import {
   type ViewDocument,
   type ViewSourceError,
 } from "../input/parse";
-import { useSourceCollapsed } from "../lib/source-fold";
+import { useSourceCollapsed } from "../lib/use-source-fold";
 
 /**
  * How long the pane rests before its content is parsed (and, for C4, the
