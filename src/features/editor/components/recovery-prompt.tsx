@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * Crash-recovery prompt (T3-B, AF-E5-S4). Props-free per dev-handoff §4.4,
+ * Crash-recovery prompt. Props-free per,
  * mounted by the frozen `editor-shell.tsx`, reads its own state.
  *
- * On boot — and again whenever the open document changes (T3-A's open flow
+ * On boot — and again whenever the open document changes ('s open flow
  * swaps `fileHandleName` / `metadata.createdAt`) — it looks for an IndexedDB
  * draft newer than what is open:
  *
- * 1. Exact D19 key match for the current document.
+ * 1. Exact draft-key match for the current document.
  * 2. Failing that, on a fresh untitled boot only, the newest draft of any
  *    document — a crashed session's key can never be recomputed because its
  *    `createdAt` died with it.

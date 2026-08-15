@@ -1,16 +1,16 @@
 /**
- * The one Zustand store (D6) — the in-memory model and every mutation this
- * sprint applies to it (D8). Implements the §4.1 contract of
- * `docs/product/dev-handoff.md` exactly.
+ * The one Zustand store — the in-memory model and every mutation this
+ * sprint applies to it. Implements the state contract of
+ * the schema exactly.
  *
  * Invariants (see ./README.md):
- * - Every mutating action is exactly ONE history entry (AF-E1-S7).
+ * - Every mutating action is exactly ONE history entry.
  * - View-state actions (`setActiveDiagram`, `setSelection`, `setViewport`,
  *   `beginLabelEdit`, …) NEVER create a history entry.
  * - The `model` object is immutable once set: mutations run on a fresh
  *   `structuredClone` and swap it in.
  * - Every node `position` written is a multiple of 8; every `size` ≥ 120×64.
- * - Level rules (AF-E2-S1) are enforced here, not in the UI: `createNode`
+ * - Level rules are enforced here, not in the UI: `createNode`
  *   throws `InvalidNodeTypeError`, `createEdge` throws
  *   `CrossDiagramEdgeError`, `createChildDiagram` throws `MaxDepthError`.
  */
@@ -65,7 +65,7 @@ import {
 } from "./model";
 
 /* -------------------------------------------------------------------------- */
-/* Contract types (§4.1)                                                       */
+/* Contract types                                                       */
 /* -------------------------------------------------------------------------- */
 
 /** The model in memory. Diagrams keyed by id; serialized back to a sorted array. */
@@ -106,7 +106,7 @@ export interface EditorState {
   activeDiagramId: string;
   selection: Selection;
   labelEdit: LabelEditTarget | null;
-  /** Per-diagram camera, for breadcrumb restore (AF-E2-S3). */
+  /** Per-diagram camera, for breadcrumb restore. */
   viewportByDiagramId: Record<string, Viewport>;
   /** Per-diagram last selected node id, for breadcrumb restore. */
   lastSelectedByDiagramId: Record<string, string | null>;
@@ -115,7 +115,7 @@ export interface EditorState {
   savedAt: number | null;
   canUndo: boolean;
   canRedo: boolean;
-  /** Set by T3-A after a successful save; used for the draft key (D19). */
+  /** Set by after a successful save; used for the draft key. */
   fileHandleName: string | null;
 }
 
@@ -152,7 +152,7 @@ export interface EditorActions {
    * aliased, so two nodes never point at one subtree.
    *
    * Throws `InvalidNodeTypeError` when any node's type is illegal at the
-   * target diagram's level (AF-E2-S1 is enforced here, not in the UI).
+   * target diagram's level (is enforced here, not in the UI).
    */
   pasteNodes(input: {
     diagramId: string;
@@ -317,7 +317,7 @@ function jsonEqual(a: unknown, b: unknown): boolean {
 /**
  * Apply a patch in place. A key explicitly set to `undefined` DELETES the
  * field (so the inspector can clear an optional like `description`; the
- * serializer omits absent fields per data-model.md), except keys listed in
+ * serializer omits absent fields), except keys listed in
  * `required`, which are never deleted. `"id"` is always ignored.
  */
 function applyPatch(
@@ -882,7 +882,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
       }
       for (const nodeId of nodeIds) findNodeOrThrow(existing, nodeId);
 
-      // Frame ids are unique WITHIN a diagram (data-model.md), not file-wide,
+      // Frame ids are unique WITHIN a diagram, not file-wide,
       // so the taken set is this diagram's frames — not every frame in the
       // file, which would needlessly suffix ids that cannot collide.
       const frameId = uniqueId(
@@ -1041,7 +1041,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
       if (diagram === undefined) {
         throw new Error(`Diagram "${diagramId}" does not exist.`);
       }
-      // Restore that diagram's last selection (AF-E2-S3); breadcrumb code may
+      // Restore that diagram's last selection; breadcrumb code may
       // refine it, but a sensible default costs nothing.
       const last = state.lastSelectedByDiagramId[diagramId];
       const selection: Selection =
@@ -1096,7 +1096,7 @@ export const useEditorStore = create<EditorStore>()((set, get) => {
       if (target === null) return;
       if (commit) {
         const trimmed = value === undefined ? "" : value.trim();
-        // An empty committed value keeps the previous one (§4.1).
+        // An empty committed value keeps the previous one.
         if (trimmed !== "") {
           if (target.kind === "node") {
             const located = findNodeAnywhere(state.model, target.id);

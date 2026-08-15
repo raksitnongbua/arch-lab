@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Store model → React Flow projection (dev-handoff §4.2/§4.3, integration
+ * Store model → React Flow projection, integration
  * risk R1). Nodes and edges are DERIVED from the editor store; React Flow
  * never owns model data. During a drag the canvas layers local positions on
  * top of this projection and commits exactly one `moveNodes` on drag stop.
@@ -27,8 +27,8 @@ import {
 } from "../state";
 
 /**
- * Fallback icon slug per node type, using the 7 generic slugs from D15.
- * T2-A's icon registry (`DEFAULT_ICON_BY_TYPE`) is the authority once it
+ * Fallback icon slug per node type, using the generic slugs.
+ * The icon registry (`DEFAULT_ICON_BY_TYPE`) is the authority once it
  * exists — these values must match it. `data.resolvedIcon` is a convenience;
  * the node component itself resolves through the registry (`resolveIcon`).
  */
@@ -105,7 +105,7 @@ export function useCanvasNodes(): CanvasProjection {
         draggable: true,
         // Colour rides the flow-node wrapper as two custom properties
         // (--node-fill/--node-stroke) that the shape classes inherit — NOT a
-        // C4NodeData field, so the frozen §4.2 contract stays untouched.
+        // C4NodeData field, so the frozen node contract stays untouched.
         // Precedence (tagColors > external tag > type) lives in node-colors.
         style: nodeColorStyle(node, model.metadata.tagColors),
         data,

@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * One draggable entry in the node palette (AF-E1-S2, owned by T2-B).
+ * One draggable entry in the node palette.
  *
  * Internal to the palette — only `palette.tsx` and the quick-add menu import
  * from here (`NODE_TYPE_META` is the shared type→label/glyph table so the two
  * creation surfaces stay visually consistent).
  *
  * Interactions:
- * - Drag encodes the §4.7 payload via `lib/drag-payload.ts`; the drag preview
+ * - Drag encodes the payload via `lib/drag-payload.ts`; the drag preview
  *   is a real node-sized ghost styled with the canvas tokens, anchored at its
  *   top-left so the preview sits exactly where the node will land.
  * - Double-click, `Enter`, and `Space` create at the viewport centre — the
@@ -41,7 +41,7 @@ export interface NodeTypeMeta {
   Icon: LucideIcon;
 }
 
-/** Shared type → presentation table for T2-B's two creation surfaces. */
+/** Shared type → presentation table for both creation surfaces. */
 export const NODE_TYPE_META: Record<C4NodeType, NodeTypeMeta> = {
   person: {
     label: "Person",
@@ -120,7 +120,7 @@ function buildDragPreview(label: string): HTMLElement {
 
 export interface PaletteItemProps {
   type: C4NodeType;
-  /** The level the palette is showing; travels in the drag payload (§4.7). */
+  /** The level the palette is showing; travels in the drag payload. */
   level: C4Level;
   /** Create at viewport centre (double-click / `Enter` / `Space`). */
   onCreate: (type: C4NodeType) => void;
@@ -149,7 +149,7 @@ export function PaletteItem({
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       // Keep the keypress out of the global shortcut registry (`Enter` is
-      // T2-A's rename combo) and stop Space from scrolling the rail.
+      // the rename combo) and stop Space from scrolling the rail.
       event.preventDefault();
       event.stopPropagation();
       onCreate(type);

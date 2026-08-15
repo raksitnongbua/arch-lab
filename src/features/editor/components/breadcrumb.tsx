@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The breadcrumb (T2-C — AF-E2-S3). Props-free per §4.4; mounted by the
+ * The breadcrumb. Props-free; mounted by the
  * frozen `editor-shell.tsx`.
  *
  * - Renders `selectBreadcrumb(state)` as `Name [Level]` segments,
@@ -115,7 +115,7 @@ function Separator(): React.JSX.Element {
  *     starts editing;
  *   - anywhere deeper, single click still navigates and double click starts
  *     editing — the same split the canvas already uses for drill-vs-rename
- *     (D5), so it is a convention here rather than a new rule.
+ *, so it is a convention here rather than a new rule.
  *
  * Committed on Enter and on blur, abandoned on Escape. An empty or
  * whitespace-only name is refused rather than written: `metadata.title` is
@@ -201,7 +201,7 @@ export function Breadcrumb(): React.JSX.Element {
   /** Natural width of the fully expanded path, recorded while expanded. */
   const expandedWidthRef = useRef(0);
 
-  /* ---- overflow: collapse middle segments into `…` (AF-E2-S3) ------------ */
+  /* ---- overflow: collapse middle segments into `…` ------------ */
 
   const segmentCountRef = useRef(segments.length);
   // Mirror render values into refs for the measurement callbacks (updating a
@@ -261,7 +261,7 @@ export function Breadcrumb(): React.JSX.Element {
     return () => cancelAnimationFrame(frame);
   }, [segments, collapsed, measure]);
 
-  /* ---- root shake (AF-E2-S3) ---------------------------------------------- */
+  /* ---- root shake ---------------------------------------------- */
 
   const lastShakeRef = useRef(shakeToken);
   useEffect(() => {

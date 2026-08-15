@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Unsaved-work guard (T3-B, AF-E5-S3).
+ * Unsaved-work guard.
  *
  * Tab close / reload: a `beforeunload` handler that arms the browser's native
  * leave confirmation while `isDirty`. Honest limitation: modern browsers
@@ -11,7 +11,7 @@
  * Batch 1), so undoing back to the last save disarms the guard for free.
  *
  * In-app destructive transitions (opening another file, starting fresh) go
- * through `confirmDiscardUnsaved` below. T3-A's open flow ships its own
+ * through `confirmDiscardUnsaved` below. The open flow ships its own
  * save / discard / cancel dialog per its acceptance criteria; this helper is
  * the shared fallback guard for any other destructive transition.
  *

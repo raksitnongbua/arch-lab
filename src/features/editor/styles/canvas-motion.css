@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------
- * Canvas micro-interaction motion (T3-C — AF-E6-S2).
+ * Canvas micro-interaction motion.
  *
  * Every duration below reads a `--motion-*` custom property that
  * `components/nodes/canvas-motion-runtime.ts` writes onto <html> from the
@@ -13,7 +13,7 @@
  * ever transitioned, so 150-node diagrams stay compositor-bound.
  * ------------------------------------------------------------------------- */
 
-/* ---- node chrome: hover elevation, drag ghost (AF-E6-S2) ----------------- */
+/* ---- node chrome: hover elevation, drag ghost ----------------- */
 
 .af-node-chrome {
   transition:
@@ -92,7 +92,7 @@
   }
 }
 
-/* ---- edges: hover + selection feedback (AF-E6-S2) -------------------------
+/* ---- edges: hover + selection feedback -------------------------
  * Stroke colour/width are set inline by the component (selected state), so
  * the hover preview needs !important. This unlayered rule also outranks
  * Tailwind's layered utilities by cascade-layer order. */

@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Single-edge inspector (AF-E3-S3): `label`, `technology`, `direction`
+ * Single-edge inspector: `label`, `technology`, `direction`
  * (`forward` | `bidirectional` | `none`) and `style` (`solid` | `dashed`).
  *
  * Text fields coalesce per editing session; the two selects are discrete —
  * one change, one undo entry. `style: "solid"` is the format default, so it
- * is written as an absent field (data-model.md omits unset optionals).
+ * is written as an absent field (unset optionals are omitted).
  */
 
 import { Input } from "@/components/ui/input";

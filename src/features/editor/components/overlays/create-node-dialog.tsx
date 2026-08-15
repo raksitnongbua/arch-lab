@@ -10,7 +10,7 @@
  * nothing at all (`zoomOnDoubleClick` is `false`), which reads as a dead app
  * rather than a missing feature.
  *
- * Props-free like the other overlays (§4.4); the position comes from the
+ * Props-free like the other overlays; the position comes from the
  * `pendingCreate` slice of the canvas interaction seam, which `canvas.tsx`
  * fills after confirming the double-click landed on the pane and not a node.
  *

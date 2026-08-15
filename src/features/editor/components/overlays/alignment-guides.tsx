@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Alignment guides (AF-E1-S3) — COMPLETE in Batch 1, owned by T1-B for the
+ * Alignment guides — COMPLETE in Batch 1, owned by for the
  * sprint. `canvas.tsx` computes alignment during a drag and publishes guide
  * lines here; this overlay renders them in flow coordinates inside the React
  * Flow viewport so they pan and zoom with the diagram. Guides appear only

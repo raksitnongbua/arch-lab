@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Animated level transitions (T2-C — AF-E2-S4). Props-free per §4.4; mounted
+ * Animated level transitions. Props-free; mounted
  * by the frozen `canvas.tsx` inside the React Flow tree.
  *
  * How it works around the instant node-set swap (integration risk R6):
@@ -274,7 +274,7 @@ export function LevelTransition(): React.JSX.Element | null {
           ),
         );
       }
-      // Briefly highlight the parent node we climbed out of (AF-E2-S4).
+      // Briefly highlight the parent node we climbed out of.
       const bounds = anchorBounds(rootEl, relation.anchorNodeId);
       if (bounds !== null) {
         const highlight = document.createElement("div");

@@ -14,7 +14,7 @@
  * person side by side — so each of those gets its own role. The four
  * internal altitudes (softwareSystem / container / component / codeElement)
  * NEVER share a canvas — a node's level is its diagram's level
- * (data-model.md A6) — so stepping their hue would buy zero side-by-side
+ * — so stepping their hue would buy zero side-by-side
  * separation and just make the four levels look like four unrelated
  * products; they stay one blue, and border weight keeps stepping by type
  * (softwareSystem carries `border-2`).
@@ -198,7 +198,7 @@ export function resolveTagColor(
  * PRECEDENCE (the rule, in one place): an author's explicit `tagColors`
  * entry beats everything — including the `external`-tag greying — because
  * `tagColors` is the file format's deliberate, user-facing colour feature
- * (AF-E3-S6) and a residue tag must never override a choice the author
+ * and a residue tag must never override a choice the author
  * typed. Then the `external` tag, then the type default.
  */
 export function nodeColorStyle(

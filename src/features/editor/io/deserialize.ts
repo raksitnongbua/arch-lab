@@ -1,5 +1,5 @@
 /**
- * Reader for `.archlab.json` text (T3-A, AF-E5-S2). Parses, validates the
+ * Reader for `.archlab.json` text. Parses, validates the
  * eight load-time hard errors (see `./validate.ts`), and reshapes the file
  * into the store's `EditorModel` — diagrams keyed by id, unknown top-level
  * fields hoisted verbatim into `unknownFields`.

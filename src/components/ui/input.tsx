@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 export type InputProps = ComponentProps<"input">;
 
 /**
- * Text input primitive. Frozen after Batch 1 (dev-handoff D10) — the inspector,
+ * Text input primitive. Frozen after Batch 1 — the inspector,
  * icon picker and quick-add menu all build on this exact surface. It is a thin
  * wrapper over the native element: every native prop (including `ref`, which
  * React 19 passes as a normal prop) flows through unchanged.

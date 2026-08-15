@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The right-rail inspector (T2-D, AF-E3-S2/S3/S4). Props-free per the §4.4
+ * The right-rail inspector. Props-free, like the other
  * mount contract — `editor-shell.tsx` is frozen and mounts exactly
  * `<InspectorPanel />`.
  *

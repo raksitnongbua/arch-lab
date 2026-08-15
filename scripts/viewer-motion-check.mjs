@@ -186,9 +186,11 @@ check("--edge-drift is defined in EVERY theme, or that theme loses it", () => {
      without reading it. A token missing from one theme is still the bug; the
      number of themes never was. */
   const themes = [
-    ...(/export const THEMES = \[([^\]]*)\]/.exec(
-      read("src/lib/constants.ts"),
-    )?.[1] ?? "").matchAll(/"([a-z-]+)"/g),
+    ...(
+      /export const THEMES = \[([^\]]*)\]/.exec(
+        read("src/lib/constants.ts"),
+      )?.[1] ?? ""
+    ).matchAll(/"([a-z-]+)"/g),
   ].length;
   const occurrences = globals.match(/--edge-drift:/g) ?? [];
   assert.equal(

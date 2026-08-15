@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Draft-field editing for the inspector (T2-D, AF-E3-S2/S3).
+ * Draft-field editing for the inspector.
  *
  * One *editing session* (focus → typing → blur) must be exactly ONE undo
  * entry, never one per keystroke. The hook does this by:
@@ -11,7 +11,7 @@
  * - committing to the store after a 300ms debounce (the canvas updates live)
  *   and again — immediately — on blur;
  * - stamping every commit of the session with the SAME `coalesceKey`, so the
- *   store's history collapses the whole run into one entry (§4.1);
+ *   store's history collapses the whole run into one entry;
  * - minting a NEW key on the next focus, so two separate sessions on the same
  *   field stay two separate undo entries.
  *
@@ -64,7 +64,7 @@ export interface InspectorFieldOptions {
    * (clear the optional field, or keep the previous required value).
    */
   commit: (next: string, coalesceKey: string) => void;
-  /** Default 300 (AF-E3-S2). */
+  /** Default 300. */
   debounceMs?: number;
 }
 

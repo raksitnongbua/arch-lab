@@ -3,7 +3,7 @@
 /**
  * `mod+c` / `mod+v` → copy and paste the node selection.
  *
- * Both combos are claims in the §4.5 shortcut registry, which already
+ * Both combos are claims in the shortcut registry, which already
  * suppresses them while focus sits in an input, textarea, select or
  * contenteditable — so `mod+c` during an inline label edit copies TEXT, as a
  * user expects, and never the node.

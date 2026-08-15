@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * "Has children" corner badge (AF-E2-S2 affordance, rendered by T2-A).
+ * "Has children" corner badge (affordance, rendered by ).
  * Presentation only — navigation is wired by the canvas's double-click
- * handler and T2-C's drill-down flows. `data-child-badge` is the stable hook
+ * handler and the drill-down flows. `data-child-badge` is the stable hook
  * for those flows.
  */
 

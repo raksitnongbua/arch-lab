@@ -1,5 +1,5 @@
 /**
- * The icon registry (dev-handoff §4.6, D15, AF-E4-S1/S2). Owned by T2-A.
+ * The icon registry.
  * Icons are referenced by slug; no SVG data or URL is ever written into the
  * model.
  *
@@ -171,7 +171,7 @@ for (const def of ICON_DEFS) {
 }
 
 /**
- * Type → default icon slug (AF-E4-S3 baseline). MUST stay in agreement with
+ * Type → default icon slug (baseline). MUST stay in agreement with
  * `FALLBACK_ICON_BY_TYPE` in `hooks/use-canvas-nodes.ts` (Batch-1-final),
  * which mirrors these values.
  */
@@ -188,7 +188,7 @@ export const DEFAULT_ICON_BY_TYPE: Record<C4NodeType, string> = {
 
 /**
  * Never throws; an unknown slug resolves to the type's generic fallback with
- * `isFallback: true` so the node can render a warning marker (AF-E4-S1 —
+ * `isFallback: true` so the node can render a warning marker (—
  * never blank, never broken). An absent icon is the type default and is NOT
  * flagged.
  */
@@ -206,7 +206,7 @@ export function resolveIcon(node: Pick<C4Node, "icon" | "type">): {
 
 /**
  * Case-insensitive substring match on name, slug and aliases — "pg" and
- * "postgres" both find PostgreSQL (AF-E4-S2). An empty query returns the full
+ * "postgres" both find PostgreSQL. An empty query returns the full
  * registry. Results keep registry order: category-major, then name.
  */
 export function searchIcons(query: string): IconDef[] {

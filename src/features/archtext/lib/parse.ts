@@ -1546,7 +1546,7 @@ function parseContinuation(
  * The name for a `^ref` node that omitted one: the name of the node it points
  * at, following the chain if that node is itself an unnamed placeholder.
  *
- * Transitive because placeholder chains are legal (data-model.md:767), and
+ * Transitive because placeholder chains are legal, and
  * cycle-guarded because a hand-written file can point two refs at each other —
  * without the guard that is an infinite loop rather than a parse error.
  *

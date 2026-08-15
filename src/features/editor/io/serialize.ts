@@ -1,8 +1,8 @@
 /**
- * Deterministic serializer for `.archlab.json` (T3-A, AF-E5-S1).
+ * Deterministic serializer for `.archlab.json`.
  *
- * Implements the write-time determinism rules of `docs/product/data-model.md`
- * §"Determinism rules" exactly:
+ * Implements the write-time determinism rules
+ * The determinism rules, exactly:
  *
  *  1. Object keys in the schema-declared order, never alphabetical/insertion.
  *  2. `diagrams`, `nodes`, `edges` sorted by `id`; `tags` sorted lexically.
@@ -30,7 +30,7 @@ import type { ArchLabMetadata } from "@/types";
 import type { EditorModel } from "../state";
 
 /* -------------------------------------------------------------------------- */
-/* Schema-declared key order (data-model.md field tables)                     */
+/* Schema-declared key order                                                  */
 /* -------------------------------------------------------------------------- */
 
 type SchemaKind =
@@ -332,7 +332,7 @@ export interface SerializeOptions {
   /**
    * Overrides `metadata.updatedAt` in the OUTPUT only (the model is never
    * mutated). Pass this only when the model actually changed since the last
-   * save — data-model.md determinism rule 6.
+   * save — determinism rule 6, below.
    */
   updatedAt?: string;
 }

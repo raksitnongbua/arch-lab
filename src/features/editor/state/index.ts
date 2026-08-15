@@ -1,6 +1,6 @@
 /**
- * The state barrel — the ONLY path other tickets import from (dev-handoff D8,
- * §4.1). Everything exported here is the frozen shared contract; internals
+ * The state barrel — the ONLY path other code imports from (
+ * ). Everything exported here is the frozen shared contract; internals
  * (`history.ts`, `model.ts`) stay private to `state/`.
  */
 

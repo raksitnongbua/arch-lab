@@ -1,5 +1,5 @@
 /**
- * Pure helpers over `EditorModel` (dev-handoff T1-A).
+ * Pure helpers over `EditorModel`.
  *
  * Everything here is side-effect free: helpers either compute a value or
  * mutate ONLY the model instance they are handed (the store always hands them
@@ -128,7 +128,7 @@ export function syncRefPlaceholders(
 /* -------------------------------------------------------------------------- */
 /* Geometry constants                                                          */
 /*                                                                             */
-/* These mirror D20 (lib/canvas-constants.ts, owned by T1-B). They are         */
+/* These mirror the canvas constants (lib/canvas-constants.ts). They are   */
 /* duplicated here deliberately: state/ must not import from a same-batch      */
 /* parallel ticket's files, and the store must be able to enforce its own      */
 /* invariants (positions ×8, sizes ≥ 120×64) without a UI present.             */
@@ -137,7 +137,7 @@ export function syncRefPlaceholders(
 export const GRID_SIZE = 8;
 export const MIN_NODE_SIZE: Size = { width: 120, height: 64 };
 export const DEFAULT_NODE_SIZE: Size = { width: 176, height: 88 };
-/** Offset applied by paste/duplicate. Mirrors `PASTE_OFFSET` in D20. */
+/** Offset applied by paste/duplicate. Mirrors `PASTE_OFFSET` in the canvas constants. */
 export const PASTE_OFFSET = 16;
 
 /** Snap a coordinate to the nearest multiple of {@link GRID_SIZE}. */
@@ -158,7 +158,7 @@ export function snapPoint(point: Point): Point {
  *
  * Drag commits go through this rather than {@link snapPoint} deliberately: the
  * canvas already applies grid snapping and sibling-alignment snapping during the
- * gesture, and honours Alt as an opt-out (AF-E1-S3). Re-quantising here would
+ * gesture, and honours Alt as an opt-out. Re-quantising here would
  * override that decision and make Alt-drags visibly jump on release. The canvas
  * owns *where* a dragged node lands; the store only guarantees integral pixels.
  */
@@ -203,7 +203,7 @@ export function slugify(text: string, fallback = "node"): string {
 
 /**
  * De-collide a slug against a set of taken ids by suffixing `-2`, `-3`, …
- * (data-model.md: ids are unique within the file and stable across renames).
+ * (ids are unique within the file and stable across renames).
  */
 export function uniqueId(base: string, taken: ReadonlySet<string>): string {
   if (!taken.has(base)) return base;
@@ -321,7 +321,7 @@ export interface DeleteCascade {
 
 /**
  * Compute everything `deleteNodes` must remove in ONE history entry
- * (AF-E3-S4): the nodes themselves, every incident edge in their diagram, and
+ *: the nodes themselves, every incident edge in their diagram, and
  * each node's entire descendant diagram subtree. Counts include the nodes and
  * edges inside removed descendant diagrams.
  */
@@ -450,7 +450,7 @@ export function applyDeleteCascade(
 
 /**
  * Create the child diagram exactly one level below `diagram`, wiring BOTH
- * pointers of the doubly-linked tree (data-model.md "How drill-down works"):
+ * pointers of the doubly-linked tree:
  * `node.childDiagramId` downward, `ownerNodeId`/`parentDiagramId` upward.
  *
  * Mutates `model` in place (the store hands it a clone). Returns the new
@@ -485,7 +485,7 @@ export function attachChildDiagram(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Boot model (D16)                                                            */
+/* Boot model                                                            */
 /* -------------------------------------------------------------------------- */
 
 export const ROOT_DIAGRAM_ID = "d-ctx-root";

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The canvas (AF-E1-S1/S3/S4). FINAL THIS SPRINT (dev-handoff D9) — every
+ * The canvas. FINAL THIS SPRINT — every
  * React Flow event handler any later ticket needs is already wired here,
  * delegating to store actions or to the interaction store below. Later
  * tickets fill their overlay/node/edge stubs; nobody reopens this file.
@@ -108,8 +108,8 @@ import { ZoomIndicator } from "./zoom-indicator";
 /* Canvas interaction store — the seam later tickets consume                   */
 /*                                                                             */
 /* canvas.tsx is final, so transient canvas gestures that later tickets react  */
-/* to are published here instead of via props. QuickAddMenu (T2-B) reads       */
-/* `pendingConnect`; NodeContextMenu (T2-C) reads `contextMenu`. Consumers     */
+/* to are published here instead of via props. QuickAddMenu reads       */
+/* `pendingConnect`; NodeContextMenu reads `contextMenu`. Consumers     */
 /* clear their slice when they close.                                          */
 /* -------------------------------------------------------------------------- */
 
@@ -158,9 +158,9 @@ export function setPendingCreate(value: PendingCreate | null): void {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Palette drag payload (dev-handoff §4.7)                                     */
+/* Palette drag payload                                     */
 /*                                                                             */
-/* The codec lives in T2-B's `lib/drag-payload.ts` (Batch 2). This file is     */
+/* The codec lives in `lib/drag-payload.ts`. This file is                  */
 /* final in Batch 1 and must build before that file exists, so it consumes     */
 /* the FROZEN wire format directly: MIME type + JSON `{ nodeType, level }`.    */
 /* -------------------------------------------------------------------------- */
@@ -221,7 +221,7 @@ function bestAxisSnap(
 /**
  * Snap `proposed` to sibling edges/centres within ALIGNMENT_THRESHOLD.
  * Returns the adjusted position and the guides to show — guides exist only
- * when an axis genuinely snapped (AF-E1-S3).
+ * when an axis genuinely snapped.
  */
 function alignToSiblings(
   nodeId: string,
@@ -425,14 +425,14 @@ function CanvasInner(): React.JSX.Element {
     setEdges(storeEdges);
   }
 
-  // Restore the per-diagram camera when navigating levels (AF-E2-S3 seam).
+  // Restore the per-diagram camera when navigating levels (seam).
   useEffect(() => {
     const saved =
       useEditorStore.getState().viewportByDiagramId[activeDiagramId];
     if (saved) void setViewport(saved);
   }, [activeDiagramId, setViewport]);
 
-  // `Alt` suspends grid snapping and alignment guides (AF-E1-S3).
+  // `Alt` suspends grid snapping and alignment guides.
   useEffect(() => {
     const update = (event: KeyboardEvent) => {
       altKeyRef.current = event.altKey;
@@ -582,7 +582,7 @@ function CanvasInner(): React.JSX.Element {
     [],
   );
 
-  /* ---- edge creation (T2-B builds on these) -------------------------------- */
+  /* ---- edge creation (builds on these) -------------------------------- */
 
   /**
    * The one rule that makes a drop invalid. Kept here rather than inline so the
@@ -634,7 +634,7 @@ function CanvasInner(): React.JSX.Element {
       // old code showed an "info" toast about self-relationships here, which
       // scolded people for cancelling.
       if (connectionState.toNode) return;
-      // Released over empty canvas → the quick-add menu (T2-B) takes over.
+      // Released over empty canvas → the quick-add menu takes over.
       const point =
         "changedTouches" in event
           ? event.changedTouches[0]
@@ -651,7 +651,7 @@ function CanvasInner(): React.JSX.Element {
     [screenToFlowPosition],
   );
 
-  /* ---- palette drop (T2-B encodes, this file consumes §4.7) ---------------- */
+  /* ---- palette drop (the palette encodes, this file consumes) --------- */
 
   const handleDragOver = useCallback((event: ReactDragEvent) => {
     if (!event.dataTransfer.types.includes(PALETTE_DRAG_MIME)) return;
@@ -666,7 +666,7 @@ function CanvasInner(): React.JSX.Element {
       event.preventDefault();
       const store = useEditorStore.getState();
       const diagram = store.model.diagrams[store.activeDiagramId];
-      // Reject a stale drag started while another level was active (§4.7).
+      // Reject a stale drag started while another level was active.
       if (!diagram || diagram.level !== payload.level) return;
       const raw = screenToFlowPosition({
         x: event.clientX,
@@ -693,7 +693,7 @@ function CanvasInner(): React.JSX.Element {
     [screenToFlowPosition],
   );
 
-  /* ---- drill / rename / context menu (T2-A and T2-C build on these) -------- */
+  /* ---- drill / rename / context menu (and build on these) -------- */
 
   const handleNodeDoubleClick = useCallback(
     (_event: unknown, flowNode: C4FlowNode) => {
@@ -709,7 +709,7 @@ function CanvasInner(): React.JSX.Element {
         goToOriginal(node);
         return;
       }
-      // D5: double-click drills when a child diagram exists, renames when not.
+      // double-click drills when a child diagram exists, renames when not.
       if (hasChildDiagram(node) && node.childDiagramId) {
         store.setActiveDiagram(node.childDiagramId);
       } else {
@@ -791,13 +791,13 @@ function CanvasInner(): React.JSX.Element {
   }, []);
 
   /**
-   * Double-click on empty canvas → the create dialog (AF-E1-S2's third entry
+   * Double-click on empty canvas → the create dialog ('s third entry
    * point, after palette drag and palette double-click).
    *
    * React Flow exposes `onPaneClick` but has no `onPaneDoubleClick`, so this
    * listens on the container and identifies the pane by its own class. The
    * check matters: without it a double-click on a node — which means "drill in
-   * or rename" (D5) — would also open the dialog, and `onNodeDoubleClick`
+   * or rename" — would also open the dialog, and `onNodeDoubleClick`
    * fires on the same gesture.
    *
    * Safe to claim because `zoomOnDoubleClick` is already `false`, so nothing
@@ -833,7 +833,7 @@ function CanvasInner(): React.JSX.Element {
     });
   }, []);
 
-  /* ---- keyboard (registry §4.5; Batch-1 combos only) ------------------------ */
+  /* ---- keyboard (the shortcut registry; Batch-1 combos only) --------------- */
 
   const bindings = useMemo<ShortcutBinding[]>(() => {
     const nudge = (dx: number, dy: number) => {

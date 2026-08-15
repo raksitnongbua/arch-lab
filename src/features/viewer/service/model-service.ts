@@ -2,7 +2,7 @@
  * The viewer's model service — the single place view-mode gets models from.
  *
  * Every model lives here as hard-coded JSON in the persisted
- * `.archlab.json` format (see `docs/product/data-model.md`) and is parsed
+ * `.archlab.json` format and is parsed
  * through the editor's REAL reader (`io/deserialize.ts`), never a bespoke
  * parser: the viewer renders anything that conforms to the file format, and
  * the ShopFlow demo is merely the first registered instance.

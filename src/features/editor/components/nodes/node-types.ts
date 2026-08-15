@@ -1,10 +1,10 @@
 /**
- * React Flow node registry (T2-A). The exported name and type
+ * React Flow node registry. The exported name and type
  * (`nodeTypes: NodeTypes`, keys = every `C4NodeType`) are the frozen contract
- * from dev-handoff §4.4; `canvas.tsx` (final) consumes it.
+ * from; `canvas.tsx` (final) consumes it.
  *
  * All 8 keys map to the one `C4NodeComponent`, which branches on
- * `data.node.type` only (AF-E3-S1) — one component, one prop contract, eight
+ * `data.node.type` only — one component, one prop contract, eight
  * visual treatments.
  */
 

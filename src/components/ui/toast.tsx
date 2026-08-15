@@ -6,7 +6,7 @@ import { AlertTriangle, Info, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------- */
-/* Contract (dev-handoff §4.9, frozen after Batch 1)                           */
+/* Contract, frozen after Batch 1)                           */
 /* -------------------------------------------------------------------------- */
 
 export interface ToastInput {
@@ -94,7 +94,7 @@ const TONE_CLASSES = {
 
 /**
  * Toast stack. Mounted exactly once, by `editor-shell.tsx`. Frozen after
- * Batch 1 (dev-handoff D10 / §4.9).
+ * Batch 1.
  */
 export function Toaster(): React.JSX.Element {
   const current = useSyncExternalStore(

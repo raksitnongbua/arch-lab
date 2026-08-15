@@ -1,5 +1,5 @@
 /**
- * Snapshot-based undo/redo (D7) — a 100-deep ring buffer of `EditorModel`
+ * Snapshot-based undo/redo — a 100-deep ring buffer of `EditorModel`
  * snapshots, plus coalescing and `transact()` grouping.
  *
  * How it fits together with the store:
@@ -10,7 +10,7 @@
  *   onto the ring buffer is equivalent to cloning, with half the copies.
  * - Each history entry stores the model as it was BEFORE the mutation, plus
  *   the monotonically increasing `revision` of that state. `isDirty` is
- *   `currentRevision !== savedRevision`, which is what makes AF-E1-S7's
+ *   `currentRevision !== savedRevision`, which is what makes 's
  *   "undo back to the last-saved snapshot clears the dirty flag" fall out for
  *   free — undo restores the revision alongside the model.
  * - Coalescing (`coalesceKey`): a mutation whose key equals the key of the
@@ -29,7 +29,7 @@
 
 import type { EditorModel } from "./store";
 
-/** AF-E1-S7: history depth ≥100. Entry 101 evicts entry 1. */
+/** : history depth ≥100. Entry 101 evicts entry 1. */
 export const HISTORY_LIMIT = 100;
 
 interface HistoryEntry {

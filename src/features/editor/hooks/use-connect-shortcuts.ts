@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * T2-B's shortcut hook (dev-handoff §3 T2-B, registry §4.5) and the shared
- * create-and-connect command behind the quick-add menu (AF-E1-S5).
+ * the shortcut hook registry) and the shared
+ * create-and-connect command behind the quick-add menu.
  *
- * §4.5 assigns T2-B no reserved global combos, so this hook claims nothing
+ * The registry assigns no reserved global combos, so this hook claims nothing
  * that could collide with another ticket: it registers only plain digit
  * accelerators (`1`…`5` — unclaimed anywhere; `shift+1`/`shift+0` differ by
  * modifier) and only while the quick-add menu is open, letting a keyboard
@@ -32,7 +32,7 @@ const MAX_QUICK_ADD_ACCELERATORS = 5;
  * then puts the new node's name into inline edit. Closes the quick-add menu
  * either way. Errors (`InvalidNodeTypeError`, `CrossDiagramEdgeError`, …)
  * roll the transaction back and surface as a toast — never an unhandled
- * throw (AF-E1-S5).
+ * throw.
  */
 export function createConnectedNode(type: C4NodeType): void {
   const pending = useCanvasInteraction.getState().pendingConnect;
@@ -78,7 +78,7 @@ export function createConnectedNode(type: C4NodeType): void {
 }
 
 /**
- * Registers T2-B's bindings. Mounted once by the quick-add menu component
+ * Registers the connect bindings. Mounted once by the quick-add menu component
  * (which `canvas.tsx` always renders), per the one-hook-file-per-ticket rule.
  */
 export function useConnectShortcuts(): void {

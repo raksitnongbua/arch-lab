@@ -2,7 +2,7 @@
 
 /**
  * The live model text pane: the canvas's model as editable `.alab` text,
- * beside the canvas. A props-free store-reading slot (dev-handoff §4.4) —
+ * beside the canvas. A props-free store-reading slot —
  * mount it anywhere inside the editor.
  *
  * Sync mechanics (the correctness story):

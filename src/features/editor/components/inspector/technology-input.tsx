@@ -2,9 +2,9 @@
 
 /**
  * `technology` free-text field with autocomplete from the icon registry
- * (AF-E3-S2): typing "post" suggests "PostgreSQL". Selecting a suggestion
+ *: typing "post" suggests "PostgreSQL". Selecting a suggestion
  * only sets the text — it NEVER touches the node's icon (an explicitly chosen
- * icon must survive, AF-E4-S3 is out of scope this sprint).
+ * icon must survive, is out of scope this sprint).
  *
  * Editing semantics come from `useInspectorField`: one undo entry per
  * focus→blur session, debounced live commits in between.

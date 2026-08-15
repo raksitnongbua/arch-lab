@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 export type TextareaProps = ComponentProps<"textarea">;
 
 /**
- * Multiline text primitive. Frozen after Batch 1 (dev-handoff D10). Same
+ * Multiline text primitive. Frozen after Batch 1. Same
  * pass-through philosophy as `Input`: all native props (and `ref`) flow
  * through, so `maxLength`, `rows`, controlled value etc. need no wrapper API.
  */

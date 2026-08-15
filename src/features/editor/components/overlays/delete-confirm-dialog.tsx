@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Delete with clear consequences (T2-D, AF-E3-S4).
+ * Delete with clear consequences.
  *
  * `requestDeleteSelection()` is the single entry point for every delete
  * gesture (Delete/Backspace via `hooks/use-delete-shortcut.ts`, the
@@ -225,7 +225,7 @@ function performDelete(preview: DeletePreview): void {
 
 /**
  * Delete the current selection, confirming first when a nested subtree is at
- * stake. Safe to call with an empty selection (no-op). Every T2-D delete
+ * stake. Safe to call with an empty selection (no-op). Every delete
  * gesture funnels through here.
  */
 export function requestDeleteSelection(): void {

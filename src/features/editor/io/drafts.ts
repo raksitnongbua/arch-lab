@@ -1,13 +1,13 @@
 /**
- * Crash-safe draft storage (T3-B, AF-E5-S4) — IndexedDB via `idb-keyval`.
+ * Crash-safe draft storage — IndexedDB via `idb-keyval`.
  *
  * A draft is a snapshot of the in-memory `EditorModel`, structured-cloned by
  * IndexedDB on write. It is deliberately NOT the canonical file serialization
- * and never imports T3-A's `io/serialize` — a draft is not a file, needs no
+ * and never imports `io/serialize` — a draft is not a file, needs no
  * deterministic formatting, and this module never touches the user's file on
- * disk. Explicit save (T3-A) is the only path that writes a file.
+ * disk. Explicit save is the only path that writes a file.
  *
- * Keys follow D19: `${fileHandleName ?? "untitled"}:${metadata.createdAt}` —
+ * Keys are `${fileHandleName ?? "untitled"}:${metadata.createdAt}` —
  * stable across reloads, distinct per document, so two files edited in
  * sequence can never cross-recover.
  *
@@ -20,7 +20,7 @@ import { createStore, del, entries, get, set, type UseStore } from "idb-keyval";
 import type { EditorModel } from "../state";
 
 export interface DraftRecord {
-  /** The D19 key this draft is stored under. */
+  /** The key this draft is stored under. */
   key: string;
   /** Snapshot of the in-memory model, exactly as the store held it. */
   model: EditorModel;
@@ -30,7 +30,7 @@ export interface DraftRecord {
   savedAt: number;
 }
 
-/** D19 draft key. `createdAt` is the model's `metadata.createdAt`. */
+/** Draft key. `createdAt` is the model's `metadata.createdAt`. */
 export function draftKey(
   fileHandleName: string | null,
   createdAt: string,
@@ -95,7 +95,7 @@ export function isDraftAutosaveSuspended(): boolean {
 
 /**
  * The last key a draft was written under this session. A save can rename the
- * document ("Save as" gives an untitled model a file name, changing its D19
+ * document ("Save as" gives an untitled model a file name, changing its draft
  * key), so clearing after a save must remove the pre-rename draft too.
  */
 let lastWrittenKey: string | null = null;

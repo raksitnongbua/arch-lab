@@ -1,6 +1,6 @@
 /**
  * Icon categories. The groups the picker renders, in display order. Owned by
- * T2-A. The first six are the dev-handoff §4.6 originals; `devops`,
+ * The first six are the originals; `devops`,
  * `observability` and `saas` were added with the thesvg brand set
  * (registry.ts header) — CI, monitoring and third-party SaaS had no home, and
  * folding ~20 brands into `generic` would have buried the generic silhouettes
@@ -33,7 +33,7 @@ export const ICON_CATEGORY_ORDER: readonly IconCategory[] = [
 ];
 
 /**
- * Human-readable group headings (AF-E4-S2). "Data & Databases" rather than
+ * Human-readable group headings. "Data & Databases" rather than
  * the original "Databases": the group now also holds the pipeline tools
  * (Airflow, Spark, dbt) that live beside the stores they feed.
  */

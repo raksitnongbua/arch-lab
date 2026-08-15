@@ -2,7 +2,7 @@
  * Schema-declared key knowledge shared by the `.alab` parser and serializer.
  *
  * `*_KEYS` mirror the key orders of `src/features/editor/io/serialize.ts`
- * (data-model.md field tables) — the serializer walks objects with these to
+ * — the serializer walks objects with these to
  * split known keys from unknown forward-compatible keys, and the parser
  * assembles objects in exactly this order so the editor's JSON writer
  * reproduces the original bytes.

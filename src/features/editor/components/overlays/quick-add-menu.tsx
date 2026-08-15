@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Quick-add menu (AF-E1-S5, owned by T2-B). Props-free per §4.4 — mounted by
+ * Quick-add menu. Props-free — mounted by
  * `canvas.tsx` inside the React Flow children, reads its state itself.
  *
  * Opens when an edge drag is released over empty canvas: `canvas.tsx`
@@ -32,9 +32,9 @@ const MENU_ITEM_HEIGHT = 38;
 const MENU_CHROME_HEIGHT = 44;
 
 export function QuickAddMenu(): React.JSX.Element | null {
-  // T2-B's registry bindings (§4.5) live for the canvas's lifetime — this
+  // The registry bindings live for the canvas's lifetime — this
   // component always renders (null when closed), so mounting them here keeps
-  // them in T2-B-owned files only.
+  // them in -owned files only.
   useConnectShortcuts();
 
   const pendingConnect = useCanvasInteraction((s) => s.pendingConnect);
@@ -67,7 +67,7 @@ export function QuickAddMenu(): React.JSX.Element | null {
     }
     if (event.key === "Enter" || event.key === " ") {
       // Let the focused option's default click fire, but keep the keypress
-      // away from the global registry (`Enter` is T2-A's rename combo).
+      // away from the global registry (`Enter` is 's rename combo).
       event.stopPropagation();
       return;
     }

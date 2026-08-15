@@ -2,7 +2,7 @@
 
 /**
  * Opens the model carried in the location fragment — the receiving half of
- * view mode's "Edit this diagram" link. Props-free per dev-handoff §4.4:
+ * view mode's "Edit this diagram" link. Props-free per:
  * mounted by the shell, reads the URL, writes the store.
  *
  * `#m=<payload>&d=<diagramId>` is the same fragment the viewer's share codec

@@ -1,10 +1,10 @@
 /**
- * The io barrel (T3-A) — serialization, validation, and the File System
+ * The io barrel — serialization, validation, and the File System
  * Access layer with its fallback.
  *
- * Note: `./drafts.ts` (T3-B, IndexedDB draft snapshots) is deliberately NOT
+ * Note: `./drafts.ts` (IndexedDB draft snapshots) is deliberately NOT
  * part of this barrel and does not import the serializer — a draft is not a
- * file (dev-handoff, T3-B scope).
+ * file.
  */
 
 export { serializeModel, type SerializeOptions } from "./serialize";

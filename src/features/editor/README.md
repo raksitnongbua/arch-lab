@@ -6,7 +6,7 @@ inspector rail, and every overlay the sprint needs.
 
 ## Canvas library: React Flow
 
-**Decided (dev-handoff D1):** the canvas is `@xyflow/react` v12. Pan/zoom,
+**Decided:** the canvas is `@xyflow/react` v12. Pan/zoom,
 selection, box-select and connection dragging are React Flow; snapping,
 alignment guides and all model logic are ours. Styled exclusively with the
 semantic tokens in `src/app/globals.css` (`--canvas`, `--canvas-grid`,
@@ -16,7 +16,7 @@ never hardcode a colour.
 ## The two frozen files
 
 **`components/canvas.tsx` and `components/editor-shell.tsx` are FINAL this
-sprint (dev-handoff D9). Nobody edits them after Batch 1.** Every React Flow
+sprint. Nobody edits them after Batch 1.** Every React Flow
 event handler later tickets need is already wired (`onConnect`,
 `onConnectEnd`, `onDrop`/`onDragOver`, `onNodeDoubleClick`,
 `onNodeContextMenu`, `onNodesChange`, `onEdgesChange`, `onSelectionChange`,
@@ -26,38 +26,25 @@ canvas interaction store (below). Also frozen after Batch 1:
 primitives (`button`, `card`, `badge`, `input`, `textarea`, `select`,
 `dialog`, `tooltip`, `toast`).
 
-## Mount points (dev-handoff §4.4)
+## Mount points
 
 Every slot is a **props-free** component that reads its state itself, so a
 later ticket replaces its file's body without touching the shell or canvas.
 
-Mounted by `editor-shell.tsx` (the shell owns rail widths and the header
-frame):
+`editor-shell.tsx` mounts the chrome — palette, breadcrumb, inspector panel,
+file actions, dirty indicator, recovery prompt — and owns the rail widths.
+`canvas.tsx` mounts what lives inside React Flow: the alignment guides, the
+quick-add menu, the level transition, the node context menu, the delete
+confirmation, and the node and edge types.
 
-| Stub                                       | Filled by |
-| ------------------------------------------ | --------- |
-| `components/palette.tsx`                   | T2-B      |
-| `components/breadcrumb.tsx`                | T2-C      |
-| `components/inspector/inspector-panel.tsx` | T2-D      |
-| `components/file-actions.tsx`              | T3-A      |
-| `components/dirty-indicator.tsx`           | T3-B      |
-| `components/recovery-prompt.tsx`           | T3-B      |
-
-Mounted by `canvas.tsx`, inside the React Flow children:
-
-| Stub                                                   | Filled by                        |
-| ------------------------------------------------------ | -------------------------------- |
-| `components/overlays/alignment-guides.tsx`             | **complete** (T1-B, this sprint) |
-| `components/overlays/quick-add-menu.tsx`               | T2-B                             |
-| `components/overlays/level-transition.tsx`             | T2-C                             |
-| `components/overlays/node-context-menu.tsx`            | T2-C                             |
-| `components/overlays/delete-confirm-dialog.tsx`        | T2-D                             |
-| `components/nodes/c4-node.tsx` + `nodes/node-types.ts` | T2-A                             |
-| `components/edges/c4-edge.tsx` + `edges/edge-types.ts` | T2-A                             |
+Those two lists used to be tables of stubs against the track that would fill
+them. Every one is filled, and the tracks were sprint bookkeeping in a document
+this repo no longer carries, so the mount points are named here and the files
+speak for themselves.
 
 The **type** exports in `nodes/c4-node.tsx` (`C4NodeData`, `C4FlowNode`,
 `C4NodeComponentProps`) and `edges/c4-edge.tsx` (`C4EdgeData`, `C4FlowEdge`,
-`C4EdgeComponentProps`) are the frozen §4.2/§4.3 contracts —
+`C4EdgeComponentProps`) are frozen contracts —
 `use-canvas-nodes.ts` and `canvas.tsx` compile against them.
 
 ## Canvas interaction store
@@ -67,10 +54,10 @@ The **type** exports in `nodes/c4-node.tsx` (`C4NodeData`, `C4FlowNode`,
 tickets react to are published there instead of via props:
 
 - `pendingConnect` — an edge drag released over empty canvas (source node id,
-  flow + screen positions). Consumed by the quick-add menu (T2-B); clear it
+  flow + screen positions). Consumed by the quick-add menu; clear it
   when the menu closes.
 - `contextMenu` — a right-clicked node (id + screen position). Consumed by
-  the node context menu (T2-C); clear it when the menu closes.
+  the node context menu; clear it when the menu closes.
 
 `Escape` and pane clicks clear both centrally.
 
@@ -93,14 +80,12 @@ per-node grid quantisation.
 
 ## Keyboard shortcuts
 
-`hooks/use-keyboard-shortcuts.ts` is the registry (dev-handoff §4.5). Each
+`hooks/use-keyboard-shortcuts.ts` is the registry. Each
 ticket registers bindings from its own hook file; duplicate ids throw in dev.
 Bindings are suppressed centrally while focus is in `input`, `textarea`,
 `select` or `[contenteditable]`. Batch 1 claims: `mod+z`, `mod+shift+z`,
 `mod+a`, `Escape`, `shift+1` (fit view), `shift+0` (reset zoom), arrow keys
-(nudge 8px, `shift+` 1px). Claimed elsewhere: `mod+ArrowDown`/`mod+ArrowUp`
-(T2-C), `Delete`/`Backspace` (T2-D), `F2`/`Enter` (T2-A), `mod+s`/`mod+o`
-(T3-A), `mod+c`/`mod+v` (T2-E).
+(nudge 8px, `shift+` 1px). Claimed elsewhere: `mod+ArrowDown`/`mod+ArrowUp`, `Delete`/`Backspace`, `F2`/`Enter`, `mod+s`/`mod+o`, `mod+c`/`mod+v`.
 
 ### Copy / paste (`mod+c` / `mod+v`)
 
@@ -180,7 +165,7 @@ target does not exist until release. `nodrag` is what stops the parent node
 being dragged instead — `stopPropagation` alone is not enough.
 
 **Why a grip and not `Alt`+drag** (for either action): every modifier is already
-claimed. `Alt` suspends grid snapping (AF-E1-S3), `Shift` is
+claimed. `Alt` suspends grid snapping, `Shift` is
 `multiSelectionKeyCode`, `Cmd`/`Ctrl` is `zoomActivationKeyCode`, `Space` is
 `panActivationKeyCode`.
 
@@ -259,9 +244,9 @@ ref's *shape*, never that the target resolves. The bug survived because
 `applyDeleteCascade` was dead code while `deleteNodes` kept an inlined copy;
 the store now calls the helper.
 
-## Palette drag payload (§4.7)
+## Palette drag payload
 
-T2-B's `lib/drag-payload.ts` owns the codec. `canvas.tsx` is Batch-1-final
+`lib/drag-payload.ts` owns the codec. `canvas.tsx` is Batch-1-final
 and must build before that file exists, so it consumes the frozen **wire
 format** directly: MIME `application/x-arch-lab-node-type`, JSON
 `{ nodeType, level }`, level-mismatch drops rejected. Keep the codec
@@ -269,14 +254,13 @@ byte-compatible with that.
 
 ## State
 
-`state/**` is owned by T1-A and is the only place model mutations live
-(dev-handoff D8). Everything here imports from `../state` (the barrel) and
-codes against the §4.1 contract. `lib/fixtures.ts` builds a 150-node
+`state/**` is the only place model mutations live. Everything here imports from `../state` (the barrel) and
+codes against the state contract. `lib/fixtures.ts` builds a 150-node
 `EditorModel` for the performance acceptance checks.
 
 ## Decisions inherited from elsewhere
 
-- **File format** — `docs/product/data-model.md`; **types** —
+- **File format** — `io/serialize.ts` and `io/validate.ts`; **types** —
   `src/types/c4.ts` (including `VALID_NODE_TYPES_BY_LEVEL`).
 - **A node's level is not stored on the node** — it is the containing
   diagram's `level`.

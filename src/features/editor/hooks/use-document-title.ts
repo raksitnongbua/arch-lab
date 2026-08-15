@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * `document.title` maintenance (T3-B, AF-E5-S3): the tab title tracks the
+ * `document.title` maintenance: the tab title tracks the
  * model title and carries a `•` prefix while there are unsaved changes.
  *
  * The clear-within-100ms-of-save guarantee holds because `markSaved` flips

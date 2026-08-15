@@ -4,10 +4,6 @@ A **local-first workspace for architecture documentation**: C4 model diagrams
 and UML-style sequence diagrams, written as plain text you own. No account, no
 upload — a document is a file, and git is the collaboration layer.
 
-Product specs live in [`docs/product/`](docs/product/) — `vision.md`,
-`user-stories.md`, `data-model.md`, `roadmap.md`, `dev-handoff.md`. Read them
-before making product decisions.
-
 ## What works today
 
 | Area                                  | State                                                                                            |

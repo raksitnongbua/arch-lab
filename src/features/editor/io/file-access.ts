@@ -1,5 +1,5 @@
 /**
- * The File System Access API layer with its graceful fallback (T3-A, D2).
+ * The File System Access API layer with its graceful fallback.
  *
  * Persistence approach is settled by the handoff: `showSaveFilePicker` /
  * `showOpenFilePicker` where available; download-blob + `<input type="file">`

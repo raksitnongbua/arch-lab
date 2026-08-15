@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The node context menu (T2-C — AF-E2-S2). Props-free per §4.4; mounted by
+ * The node context menu. Props-free; mounted by
  * the frozen `canvas.tsx`, which publishes right-clicked nodes to the
  * `useCanvasInteraction` seam. This component reads `contextMenu` from that
  * seam — no global listeners of its own for state the seam already carries —
@@ -12,8 +12,8 @@
  *   creates an empty child one level deeper first (`createChildDiagram`, ONE
  *   undo entry) and navigates in. Navigation is never an undo entry.
  * - A `code`-level node, a boundary placeholder, or a `childRef` node gets
- *   NO drill affordance in any form (AF-E2-S2, D4).
- * - "Rename" — begins inline label editing (`F2`/`Enter` stay T2-A's combos;
+ *   NO drill affordance in any form.
+ * - "Rename" — begins inline label editing (`F2`/`Enter` stay the node's combos;
  *   this just calls the store).
  *
  * Accessibility: `menu`/`menuitem` roles, focus lands on the first item on
@@ -140,7 +140,7 @@ export function NodeContextMenu(): React.JSX.Element | null {
     items.push({
       id: "drill",
       label: "Drill into",
-      // A child diagram is always exactly one level deeper (AF-E2-S1).
+      // A child diagram is always exactly one level deeper.
       hint: childLevel !== null ? LEVEL_LABEL[childLevel] : undefined,
       run: () => drillIntoNode(node.id),
     });

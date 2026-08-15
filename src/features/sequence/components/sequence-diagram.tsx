@@ -962,8 +962,7 @@ function ParticipantColumn({
           the name's centre IS the card's centre, so those cards are exact. */}
       {(() => {
         const Icon = icon?.byStyle[iconStyle];
-        const iconRun =
-          Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap;
+        const iconRun = Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap;
         /* The name gives up half the icon's run so that ICON + NAME together
            read as centred, rather than the name alone. */
         const nameCentre = x + iconRun / 2;

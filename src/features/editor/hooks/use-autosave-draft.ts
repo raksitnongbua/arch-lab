@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Debounced IndexedDB draft autosave (T3-B, AF-E5-S4).
+ * Debounced IndexedDB draft autosave.
  *
  * Strategy: a trailing timer. The first dirty store change arms a single
  * 5-second timer; when it fires, one draft is written iff the model is still
@@ -16,7 +16,7 @@
  * recognised here — so opening a file never deletes its own crash draft
  * before the recovery prompt has seen it, and a successful save always
  * deletes the matching snapshot (wired through the store, never through
- * T3-A's code).
+ * this hook's code).
  *
  * Mounted by `RecoveryPrompt`, which is always in the shell's tree.
  */
@@ -31,7 +31,7 @@ import {
 } from "../io/drafts";
 import { useEditorStore } from "../state";
 
-/** At most one draft write per this interval (AF-E5-S4: "every 5 seconds"). */
+/** At most one draft write per this interval (: "every 5 seconds"). */
 export const DRAFT_INTERVAL_MS = 5_000;
 
 export function useAutosaveDraft(): void {

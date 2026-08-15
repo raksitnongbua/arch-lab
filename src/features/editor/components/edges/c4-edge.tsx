@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * The C4 edge component (T2-A — AF-E1-S5 parallel offset, AF-E1-S6 label
- * editing, AF-E3-S3 rendering).
+ * The C4 edge component (— parallel offset, label
+ * editing, rendering).
  *
  * The exported TYPE surface (`C4EdgeData`, `C4FlowEdge`,
- * `C4EdgeComponentProps`) is the frozen contract from dev-handoff §4.3.
+ * `C4EdgeComponentProps`) is the frozen contract from
  *
  * Geometry (including the symmetric parallel-edge offset) comes from
  * `lib/edge-geometry.ts`; arrowheads (`markerEnd`/`markerStart` per
@@ -43,7 +43,7 @@ import {
 } from "../nodes/canvas-motion-runtime";
 import { EdgeLabelChip } from "./edge-label";
 
-/* ---- Contract (dev-handoff §4.3, frozen) --------------------------------- */
+/* ---- Contract, frozen) --------------------------------- */
 
 export interface C4EdgeData extends Record<string, unknown> {
   edge: C4Edge;
@@ -96,7 +96,7 @@ export function C4EdgeComponent({
   selected,
   data,
 }: C4EdgeComponentProps): React.JSX.Element {
-  // Path-draw animation (AF-E6-S2): once, on the edge's first-ever
+  // Path-draw animation: once, on the edge's first-ever
   // presentation, over `--motion-edge-draw` (200ms; 0 under reduced motion
   // via the frozen lib/motion.ts). While drawing, `pathLength={1}` +
   // `.af-edge-draw` (styles/canvas-motion.css) run the dashoffset sweep; on
