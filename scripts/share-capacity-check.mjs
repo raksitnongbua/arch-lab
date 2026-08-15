@@ -84,8 +84,12 @@ registerHooks({
 const loadModule = (relative) =>
   import(pathToFileURL(path.join(ROOT, relative)).href);
 
-const { decodeShareFragment, MAX_SHARE_URL_LENGTH, SHARE_URL_SAFE_LENGTH } =
-  await loadModule("src/features/viewer/share/codec.ts");
+const {
+  decodeShareFragment,
+  normalizeShareFragment,
+  MAX_SHARE_URL_LENGTH,
+  SHARE_URL_SAFE_LENGTH,
+} = await loadModule("src/features/viewer/share/codec.ts");
 const { createShareLink } = await loadModule("src/features/mcp/tools/share.ts");
 
 const readSource = (relative) =>
@@ -203,6 +207,48 @@ await check(
         !mcp.includes(seeded),
         `create_share_link must not still mint ${seeded}`,
       );
+    }
+  },
+);
+
+await check(
+  "every route a link was ever minted against still delivers its payload",
+  async () => {
+    /* The payload format is one compatibility surface and the ROUTES are the
+       other. Merging the seeded playgrounds into `/view` made three of them
+       forwarding aliases, so this walks the hop each old link now takes —
+       using the shipped `to` and the real `normalizeShareFragment`, not a
+       description of them — and asserts the fragment arrives intact.
+
+       A link is a bookmark someone else is holding: `/view/seq#m=…` was the
+       minted shape for every sequence share, and `/view/sequence#m=…` before
+       that. Both must open forever. */
+    const destinationOf = (file) =>
+      /AliasForward to="([^"]+)"/.exec(readSource(`src/app/view/${file}`))?.[1];
+
+    const payload = FROZEN_SEQ_FRAGMENT;
+    for (const [route, file] of [
+      ["/view/c4", "c4/page.tsx"],
+      ["/view/seq", "seq/page.tsx"],
+      ["/view/sequence", "sequence/page.tsx"],
+    ]) {
+      const to = destinationOf(file);
+      assert.ok(to, `${route} must forward somewhere`);
+      // Exactly what AliasForward does on mount.
+      const body = normalizeShareFragment(`#${payload}`);
+      const landed = `${to}${body === "" ? "" : `#${body}`}`;
+      assert.ok(
+        landed.startsWith("/view"),
+        `${route} must land on the playground, got ${landed}`,
+      );
+      assert.ok(
+        landed.endsWith(`#${payload}`),
+        `${route} must carry the payload across, got ${landed}`,
+      );
+      // and the payload that arrives still decodes to the original document
+      const decoded = await decodeShareFragment(`#${landed.split("#")[1]}`);
+      assert.equal(decoded.status, "ok", `${route} payload failed to decode`);
+      assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
     }
   },
 );
