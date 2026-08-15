@@ -29,9 +29,9 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * Modal dialog primitive. Frozen after Batch 1 (dev-handoff D10) — the
- * delete-confirm dialog (T2-D), unsaved-changes prompt (T3-A), recovery prompt
- * (T3-B) and icon picker (T2-A) all mount through this exact surface.
+ * Modal dialog primitive. Frozen after Batch 1 — the
+ * delete-confirm dialog, unsaved-changes prompt, recovery prompt
+ * and icon picker all mount through this exact surface.
  *
  * Controlled-only (`open` / `onClose`), portalled to `document.body`, focus is
  * moved into the panel on open and restored on close, Tab is trapped, Escape

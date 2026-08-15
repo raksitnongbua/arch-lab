@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * `Delete` / `Backspace` → delete the current selection (T2-D, AF-E3-S4).
+ * `Delete` / `Backspace` → delete the current selection.
  *
  * Batch 1 deliberately disabled React Flow's own `deleteKeyCode`; these two
- * combos are T2-D's claim in the shortcut registry (§4.5). Both funnel into
+ * combos are this hook's claim in the shortcut registry. Both funnel into
  * `requestDeleteSelection`, which decides between immediate delete + counted
  * toast and the confirmation dialog (child-diagram cascade).
  *

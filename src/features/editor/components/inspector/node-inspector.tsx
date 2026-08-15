@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Single-node inspector (AF-E3-S2): `name`, `description` (≤500 chars with a
+ * Single-node inspector: `name`, `description` (≤500 chars with a
  * counter), `technology` (autocomplete from the icon registry), `type`
  * (constrained to the level's legality matrix), `icon` (swatch opening
- * T2-A's IconPicker) and `tags`.
+ * the IconPicker) and `tags`.
  *
  * Text fields commit through `useInspectorField` — one undo entry per
  * editing session via the store's `coalesceKey`. Discrete controls (type,

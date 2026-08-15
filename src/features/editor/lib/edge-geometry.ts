@@ -1,5 +1,5 @@
 /**
- * Edge geometry (T2-A). Owns the parallel-edge offset curve (AF-E1-S5's
+ * Edge geometry. Owns the parallel-edge offset curve ('s
  * "second A→B edge stays readable") and the label anchor point.
  *
  * `selectParallelEdgeGroups` (state) groups edges by UNORDERED endpoint pair,
@@ -160,7 +160,7 @@ export interface ParallelEdgePathInput {
   targetY: number;
   sourcePosition: Position;
   targetPosition: Position;
-  /** 0-based position within the edge's parallel group (§4.3). */
+  /** 0-based position within the edge's parallel group. */
   parallelIndex: number;
   /** Size of that group. 1 ⇒ default bezier; >1 ⇒ symmetric offsets. */
   parallelCount: number;

@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * `tags` editor (AF-E3-S2). Chips with per-chip remove buttons plus a text
+ * `tags` editor. Chips with per-chip remove buttons plus a text
  * input: Enter or comma adds, Backspace in an empty input removes the last
  * tag. Adds and removes are discrete actions, so each is its own undo entry
  * (no coalescing). Tags are deduplicated and kept sorted lexically — the
- * order the serializer writes (data-model.md).
+ * order the serializer writes.
  */
 
 import { useState } from "react";

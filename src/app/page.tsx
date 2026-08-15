@@ -55,7 +55,7 @@ export const metadata: Metadata = {
  * the data dictionary and network diagrams (a newcomer cannot act on a
  * roadmap, and two dashed cards were a third of the fold), the C4 levels
  * grid, the sequence-constructs grid, and three of the six principles. The
- * roadmap lives in `docs/product/roadmap.md`, which is where a roadmap
+ * roadmap is not published here, which is where a roadmap
  * belongs.
  */
 

@@ -2,12 +2,12 @@
 
 /**
  * Save / Open toolbar chrome and the whole persistence orchestration
- * (T3-A, AF-E5-S1 / AF-E5-S2). Props-free, mounted by the frozen
- * `editor-shell.tsx` (dev-handoff §4.4); reads the store itself.
+ *. Props-free, mounted by the frozen
+ * `editor-shell.tsx`; reads the store itself.
  *
  * Flow rules implemented here:
  * - File System Access API where available, download + `<input type="file">`
- *   where not — feature-detected at call time (D2, R3).
+ *   where not — feature-detected at call time.
  * - A save while clean (same revision as the last save) SKIPS the write, so a
  *   no-op save leaves the file byte-identical, `updatedAt` untouched.
  * - `metadata.updatedAt` is bumped in the OUTPUT only when the model actually

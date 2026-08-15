@@ -1,7 +1,7 @@
 /**
  * TypeScript model of the arch-lab SEQUENCE document — the second document
  * type next to the C4 model in `./c4.ts`. Follows the same conventions as
- * `docs/product/data-model.md`: stable human-readable ids, deterministic key
+ * The same rules the C4 model follows: stable human-readable ids, deterministic key
  * order on write, no per-element timestamps, and forward tolerance for
  * unknown fields from newer minor versions.
  *

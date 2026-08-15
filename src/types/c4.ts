@@ -1,16 +1,16 @@
 /**
  * First-pass TypeScript sketch of the arch-lab saved-file format.
  *
- * Source of truth: `docs/product/data-model.md` (schema v1, status: proposed).
+ * Schema v1.
  * These types intentionally mirror that document field-for-field, including its
  * two structural rules:
  *
  *   - Diagrams are stored FLAT, never nested (readable diffs, O(1) lookup).
  *   - A node's C4 level is NOT stored on the node; it is the `level` of the
- *     diagram containing it (data-model.md, Assumption A6).
+ *     diagram containing it.
  *
  * Nothing here is validated at runtime yet — validation (the load-time hard
- * errors and warnings in data-model.md) belongs with the editor and will live
+ * errors and warnings) belongs with the editor and will live
  * in `src/features/editor`.
  */
 
@@ -50,7 +50,7 @@ export type C4NodeType =
   | "codeElement";
 
 /**
- * Which node types are legal at each level (AF-E3-S1). The editor's palette and
+ * Which node types are legal at each level. The editor's palette and
  * paste/drop validation both read this map — one table, no duplicated rules.
  */
 export const VALID_NODE_TYPES_BY_LEVEL = {
@@ -73,7 +73,7 @@ export type C4Abstraction =
   "Person" | "Software System" | "Container" | "Component" | "Code";
 
 /**
- * Which C4 abstraction each of our eight node types actually IS (AF-E3-S1's
+ * Which C4 abstraction each of our eight node types actually IS (the
  * companion table).
  *
  * The eight types collapse onto five abstractions for the same reason
@@ -109,7 +109,7 @@ export interface Point {
   y: number;
 }
 
-/** Minimum 120x64 per data-model.md. */
+/** Minimum 120x64. */
 export interface Size {
   width: number;
   height: number;
@@ -126,13 +126,13 @@ export interface Viewport extends Point {
 
 /**
  * `explicit` icons are user-chosen and are never auto-overridden when
- * `technology` changes; `inferred` icons are derived from it (AF-E4-S3).
+ * `technology` changes; `inferred` icons are derived from it.
  */
 export type IconSource = "explicit" | "inferred";
 
 /**
  * Points at the real element one level up. A node carrying this is a read-only
- * boundary placeholder (AF-E2-S5). Placeholders may chain.
+ * boundary placeholder. Placeholders may chain.
  */
 export interface ExternalRef {
   diagramId: string;
@@ -158,7 +158,7 @@ export interface C4Node {
   tags?: string[];
   /** Downward drill-down pointer into `diagrams[].id`. Absent => leaf. */
   childDiagramId?: string | null;
-  /** Relative path to another file holding the child subtree (AF-E5-S7). Mutually exclusive with `childDiagramId`. */
+  /** Relative path to another file holding the child subtree. Mutually exclusive with `childDiagramId`. */
   childRef?: string;
   /** Present => read-only boundary placeholder. */
   externalRef?: ExternalRef;
@@ -171,7 +171,7 @@ export interface C4Node {
    * the two disagree, and every consumer that needs the chain can walk it.
    */
   frameId?: string;
-  /** Excluded from Tidy layout (AF-E1-S10). */
+  /** Excluded from Tidy layout. */
   pinned?: boolean;
 }
 
@@ -261,7 +261,7 @@ export interface C4Diagram {
 /* File                                                                        */
 /* -------------------------------------------------------------------------- */
 
-/** Sanitised inline SVG, keyed by icon slug (AF-E4-S4). */
+/** Sanitised inline SVG, keyed by icon slug. */
 export interface CustomIcon {
   name: string;
   svg: string;
@@ -277,9 +277,9 @@ export interface ArchLabMetadata {
   createdAt: string;
   /** ISO-8601 UTC. Written only when the model actually changed. */
   updatedAt: string;
-  /** Drives the "review overdue" chip (AF-E5-S6). */
+  /** Drives the "review overdue" chip. */
   lastReviewedAt?: string;
-  /** `{ "<tag>": "<hex>" }` (AF-E3-S6). */
+  /** `{ "<tag>": "<hex>" }`. */
   tagColors?: Record<string, string>;
   customIcons?: Record<string, CustomIcon>;
   /** Diagnostic only; never read for behaviour. */
@@ -317,7 +317,7 @@ export function childLevelOf(level: C4Level): C4Level | null {
   return next ?? null;
 }
 
-/** Whether `type` may appear on a diagram at `level` (AF-E3-S1). */
+/** Whether `type` may appear on a diagram at `level`. */
 export function isNodeTypeValidAtLevel(
   type: C4NodeType,
   level: C4Level,

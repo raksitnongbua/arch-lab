@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Layout primitives for the inspector (T2-D): a titled section and a
+ * Layout primitives for the inspector: a titled section and a
  * labelled field row. Every control in the panel renders through `Field`, so
  * labels, spacing and the label→control `htmlFor` wiring stay consistent.
  */

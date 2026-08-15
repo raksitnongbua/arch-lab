@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Canvas motion runtime (T3-C — AF-E6-S2). Three small responsibilities, all
+ * Canvas motion runtime. Three small responsibilities, all
  * driven by the frozen `lib/motion.ts` so reduced-motion is honoured in one
  * place (never a duplicate media query in a component):
  *
@@ -15,7 +15,7 @@
  *    caused by level navigation, undo of a delete, or file open of a
  *    previously seen diagram state within the session.
  *
- * 3. Plays the delete animation (AF-E6-S2: fade + scale out over
+ * 3. Plays the delete animation (: fade + scale out over
  *    `nodeOut`). The store removes elements synchronously and React unmounts
  *    them on the next commit, so nothing React-side can animate the exit
  *    without delaying the mutation — and no handler may wait on an animation.
@@ -97,7 +97,7 @@ function spawnGhost(selector: string, ghostClass: string, ms: number): void {
 
 function spawnDeleteGhosts(state: EditorStore, prev: EditorStore): void {
   if (state.model === prev.model) return;
-  // A level change replaces the whole node set — that is T2-C's transition,
+  // A level change replaces the whole node set — that is 's transition,
   // not a deletion.
   if (state.activeDiagramId !== prev.activeDiagramId) return;
   const ms = duration("nodeOut");

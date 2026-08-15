@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Zoom controls (AF-E1-S1). Owned by T1-B; mounted by `canvas.tsx` in the
+ * Zoom controls. Owned by ; mounted by `canvas.tsx` in the
  * bottom-left panel.
  *
  * It was a bare percentage for a long time, and that made the editor the only

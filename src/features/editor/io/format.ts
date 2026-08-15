@@ -145,7 +145,7 @@ export function slugForTitle(title: string): string {
   return slugify(title, "untitled-model");
 }
 
-/** `"ShopFlow Platform"` → `"shopflow-platform.alab"` (AF-E5-S1). */
+/** `"ShopFlow Platform"` → `"shopflow-platform.alab"`. */
 export function deriveFileNameFor(title: string, format: ModelFormat): string {
   return `${slugForTitle(title)}${FORMAT_EXTENSION[format]}`;
 }

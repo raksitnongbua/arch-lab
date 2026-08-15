@@ -1,10 +1,9 @@
 /**
- * Load-time validation of a parsed `.archlab.json` document (T3-A,
- * AF-E5-S2). Implements the eight HARD errors of
- * `docs/product/data-model.md` §"Validation rules (load-time)" — a file that
+ * Load-time validation of a parsed `.archlab.json` document. Implements the eight HARD errors of
+ * The load-time validation rules — a file that
  * trips any of them is refused with the offending JSON path named. The
  * warnings list (back-pointer mismatches, orphaned placeholders, …) is
- * explicitly out of scope this sprint (AF-E2-S6, v0.3).
+ * explicitly out of scope (v0.3).
  *
  * This module is imported by `scripts/roundtrip-check.mjs` through Node's
  * type stripping: keep the syntax erasable (no enums, no namespaces, no

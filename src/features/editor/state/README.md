@@ -1,7 +1,7 @@
-# `state/` — the model store (T1-A)
+# `state/` — the model store
 
-One Zustand store (D6) holding the whole in-memory C4 model and **every**
-mutation applied to it this sprint (D8). Other tickets import **only** from
+One Zustand store holding the whole in-memory C4 model and **every**
+mutation applied to it this sprint. Other tickets import **only** from
 `./index.ts` and treat this directory as read-only.
 
 ## Invariants
@@ -17,7 +17,7 @@ mutation applied to it this sprint (D8). Other tickets import **only** from
    `toggleNodeSelection`, `clearSelection`, `setViewport`, `beginLabelEdit`
    create no entry; undo/redo never changes the camera or selection except to
    prune ids that no longer exist.
-4. **Snapshots, not inverse commands (D7).** History is a 100-deep ring
+4. **Snapshots, not inverse commands.** History is a 100-deep ring
    buffer of model snapshots; entry 101 evicts entry 1; it is _not_ cleared
    by level navigation. Every model object in the store is immutable once
    set — mutations run on a fresh `structuredClone` and swap it in, which is
@@ -25,8 +25,8 @@ mutation applied to it this sprint (D8). Other tickets import **only** from
 5. **Dirty tracking is revision-based.** Each mutation bumps a revision;
    snapshots carry the revision they restore. `isDirty` is
    `revision !== savedRevision`, so undoing back to the last-saved snapshot
-   clears the dirty flag (AF-E1-S7).
-6. **Level rules are enforced here, not in the UI (AF-E2-S1).**
+   clears the dirty flag.
+6. **Level rules are enforced here, not in the UI.**
    `createNode` throws `InvalidNodeTypeError` (message names the valid
    types); `createEdge` throws `CrossDiagramEdgeError` for cross-diagram
    endpoints and refuses self-edges; `createChildDiagram` throws
@@ -41,9 +41,9 @@ mutation applied to it this sprint (D8). Other tickets import **only** from
 
 | File           | Purpose                                                                                                                     |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `store.ts`     | The store: `EditorState` + `EditorActions` per dev-handoff §4.1                                                             |
+| `store.ts`     | The store: `EditorState` + `EditorActions` per                                                             |
 | `history.ts`   | Snapshot ring buffer, coalescing, `transact()`                                                                              |
-| `model.ts`     | Pure helpers: slugs/id de-collision, delete cascade, child-diagram back-pointers, grid/size normalisation, boot model (D16) |
+| `model.ts`     | Pure helpers: slugs/id de-collision, delete cascade, child-diagram back-pointers, grid/size normalisation, boot model |
 | `selectors.ts` | The pure selectors (`selectActiveDiagram`, `selectBreadcrumb`, …), memoized on object identity                              |
 | `errors.ts`    | `InvalidNodeTypeError`, `MaxDepthError`, `CrossDiagramEdgeError`                                                            |
 | `index.ts`     | The barrel — the only import path for other tickets                                                                         |

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Inline label editor (AF-E1-S6), shared by nodes and edge label chips.
+ * Inline label editor, shared by nodes and edge label chips.
  *
  * Text lives in the input's LOCAL state — keystrokes never touch the store.
  * Exactly one store call ends the edit: `endLabelEdit(true, value)` on

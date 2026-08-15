@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The editor's shortcut registry (dev-handoff §4.5). One instance, one window
+ * The editor's shortcut registry. One instance, one window
  * listener. Each ticket registers its bindings from its own hook file via
  * `useShortcuts`; nobody edits a shared keymap.
  *
@@ -14,8 +14,8 @@
  *
  * Combos reserved by Batch 1: `mod+z`, `mod+shift+z`, `mod+a`, `Escape`,
  * `shift+1`, `shift+0`, arrow keys (plain and `shift+`). Claimed elsewhere:
- * `mod+ArrowDown`/`mod+ArrowUp` (T2-C), `Delete`/`Backspace` (T2-D),
- * `F2`/`Enter` (T2-A), `mod+s`/`mod+o` (T3-A), `mod+c`/`mod+v` (T2-E).
+ * `mod+ArrowDown`/`mod+ArrowUp`, `Delete`/`Backspace`,
+ * `F2`/`Enter`, `mod+s`/`mod+o`, `mod+c`/`mod+v`.
  */
 
 import { useEffect } from "react";
@@ -85,7 +85,7 @@ function comboMatches(event: KeyboardEvent, parsed: ParsedCombo): boolean {
   return event.key === parsed.key;
 }
 
-/** Central text-focus suppression (dev-handoff §4.5). */
+/** Central text-focus suppression. */
 function isTextEditingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   return (
@@ -137,7 +137,7 @@ export function useShortcuts(bindings: ShortcutBinding[]): void {
         registry.get(binding.id)?.binding !== binding
       ) {
         throw new Error(
-          `Duplicate shortcut id "${binding.id}". Every binding id must be unique across the editor (dev-handoff §4.5).`,
+          `Duplicate shortcut id "${binding.id}". Every binding id must be unique across the editor.`,
         );
       }
       registry.set(binding.id, { binding, parsed: parseCombo(binding.combo) });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Round-trip fidelity check (T3-A, dev-handoff D18) — the roadmap's headline
+ * Round-trip fidelity check — the roadmap's headline
  * persistence criterion: open a file, change nothing, save, and the bytes
  * must be identical.
  *

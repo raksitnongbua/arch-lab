@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Per-type node shape treatments (AF-E3-S1). Two layers:
+ * Per-type node shape treatments. Two layers:
  *
  * - `SHAPE_WRAPPER_CLASSES` — border/fill/radius classes for box-like types.
  *   `database` and `queue` draw NO CSS box; their silhouette is SVG.
@@ -29,7 +29,7 @@ export const SHAPE_WRAPPER_CLASSES: Record<C4NodeType, string> = {
   // The system in focus: strongest border weight on the canvas.
   softwareSystem:
     "rounded-lg border-2 border-(--node-stroke) bg-(--node-fill) af-node-wash",
-  // External: dashed border (AF-E3-S1); the receding grey fill now arrives
+  // External: dashed border; the receding grey fill now arrives
   // via the `external` colour role rather than a hardcoded bg-muted here.
   // NO wash: external cards stay deliberately flat — matte, not lit — so
   // "not our code" recedes one more notch behind the vivid roles.

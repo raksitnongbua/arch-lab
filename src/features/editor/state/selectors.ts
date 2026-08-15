@@ -1,5 +1,5 @@
 /**
- * Pure selectors over `EditorState` (§4.1): `(state) => value`, side-effect
+ * Pure selectors over `EditorState`: `(state) => value`, side-effect
  * free, safe to pass to `useEditorStore(...)`.
  *
  * Selectors that build new objects (`selectBreadcrumb`,
@@ -32,7 +32,7 @@ export function selectActiveLevel(s: EditorState): C4Level {
   return selectActiveDiagram(s).level;
 }
 
-/** The node types the palette may offer at the active level (AF-E3-S1). */
+/** The node types the palette may offer at the active level. */
 export function selectValidNodeTypes(s: EditorState): readonly C4NodeType[] {
   return VALID_NODE_TYPES_BY_LEVEL[selectActiveLevel(s)];
 }
@@ -49,7 +49,7 @@ const breadcrumbCache = new WeakMap<
 /**
  * Root → current, always at least one segment. Labels come from the owner
  * node's name at each hop (`parentDiagramId`/`ownerNodeId` back-pointers,
- * data-model.md), or the model title at the root.
+ * ), or the model title at the root.
  */
 export function selectBreadcrumb(s: EditorState): BreadcrumbSegment[] {
   let byDiagram = breadcrumbCache.get(s.model);
@@ -200,7 +200,7 @@ const parallelGroupsCache = new WeakMap<
 >();
 
 /**
- * For parallel-edge offsetting (§4.3): edgeId → { index, count } within its
+ * For parallel-edge offsetting: edgeId → { index, count } within its
  * source|target group, for the ACTIVE diagram's edges.
  *
  * Grouping uses the UNORDERED endpoint pair, so two A→B edges AND an A→B/B→A

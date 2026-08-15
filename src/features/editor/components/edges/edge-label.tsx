@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Edge label chip (T2-A — AF-E1-S6, AF-E3-S3 rendering). A background chip at
+ * Edge label chip (— rendering). A background chip at
  * the curve's label anchor so label + technology stay legible over the line;
  * the line itself is never obscured (the chip is only as wide as its text,
  * hard-capped, with the full text in a hover tooltip).

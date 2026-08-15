@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * The editor shell. FINAL THIS SPRINT (dev-handoff D9) — every panel and
+ * The editor shell. FINAL THIS SPRINT — every panel and
  * overlay the sprint needs is already mounted below as a props-free,
- * store-reading component (§4.4). Later tickets replace their stub's body;
+ * store-reading component. Later tickets replace their stub's body;
  * nobody reopens this file.
  *
  * Layout frames (rail widths, borders, header strip) are owned here so
  * replacing a stub never moves the chrome. The canvas renders behind a
- * mounted-guard (D17): the shell itself server-renders fine, React Flow
+ * mounted-guard: the shell itself server-renders fine, React Flow
  * mounts client-side only, with a token-styled placeholder to avoid a flash.
  */
 
@@ -34,7 +34,7 @@ import { ViewModeLink } from "./view-mode-link";
 const emptySubscribe = () => () => {};
 
 export function EditorShell(): React.JSX.Element {
-  // Hydration-safe mounted guard (D17): false on the server and during
+  // Hydration-safe mounted guard: false on the server and during
   // hydration, true on the client — with no setState-in-effect cascade.
   const mounted = useSyncExternalStore(
     emptySubscribe,
@@ -89,7 +89,7 @@ export function EditorShell(): React.JSX.Element {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* Left rail — palette slot (T2-B fills the stub). */}
+        {/* Left rail — palette slot (fills the stub). */}
         <aside
           aria-label="Node palette"
           /* Stood down with the canvas: the palette exists to drag ONTO the
@@ -147,7 +147,7 @@ export function EditorShell(): React.JSX.Element {
           </aside>
         ) : null}
 
-        {/* Right rail — inspector slot (T2-D fills the stub). */}
+        {/* Right rail — inspector slot (fills the stub). */}
         <aside
           aria-label="Inspector"
           /* Same reasoning as the palette: it edits the canvas selection, so

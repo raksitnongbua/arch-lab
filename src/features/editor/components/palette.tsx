@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * The node palette (AF-E1-S2, owned by T2-B). Props-free per §4.4 — mounted
+ * The node palette. Props-free — mounted
  * by `editor-shell.tsx` in the left rail, reads the store itself.
  *
  * Shows exactly `VALID_NODE_TYPES_BY_LEVEL[activeLevel]` (via the frozen
  * `selectValidNodeTypes` selector), grouped and labelled, and re-renders as
- * you navigate levels. Items drag onto the canvas (payload per §4.7) or
+ * you navigate levels. Items drag onto the canvas (payload via `lib/drag-payload.ts`) or
  * create at the viewport centre on double-click / `Enter` / `Space`. A type
  * the store rejects (`InvalidNodeTypeError` — e.g. a stale gesture across a
  * level change) surfaces as a toast, never an unhandled throw.
@@ -63,7 +63,7 @@ function viewportCentreFlowPosition(diagramId: string): Point {
   };
 }
 
-/** Creates `type` at the viewport centre, dodging exact overlaps (AF-E1-S2). */
+/** Creates `type` at the viewport centre, dodging exact overlaps. */
 function createAtViewportCentre(type: C4NodeType): void {
   const store = useEditorStore.getState();
   const diagramId = store.activeDiagramId;

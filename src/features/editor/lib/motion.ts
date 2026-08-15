@@ -1,5 +1,5 @@
 /**
- * Motion helper (dev-handoff §4.8). Frozen after Batch 1. Every animated
+ * Motion helper. Frozen after Batch 1. Every animated
  * surface in the editor reads its duration from here so reduced-motion is
  * honoured in exactly one place — never re-check the media query in a
  * component.
@@ -16,7 +16,7 @@ export const DURATIONS = {
   nodeOut: 140,
   edgeDraw: 200,
   selection: 100,
-  levelTransition: 320, // within the 250–400ms band (AF-E2-S4)
+  levelTransition: 320, // within the 250–400ms band
   fitView: 300,
   themeCrossfade: 150,
 } as const;

@@ -61,7 +61,7 @@ export const THEMES = ["light", "dark", "midnight", "contrast"] as const;
 
 export type Theme = (typeof THEMES)[number];
 
-/** Dark is a deliberate product decision (AF-E6-S1), not an OS preference. */
+/** Dark is a deliberate product decision, not an OS preference. */
 export const DEFAULT_THEME: Theme = "dark";
 
 /** localStorage key next-themes persists the choice under. */

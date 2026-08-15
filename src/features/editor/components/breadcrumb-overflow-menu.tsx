@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The breadcrumb's two dropdowns (T2-C — AF-E2-S3):
+ * The breadcrumb's two dropdowns:
  *
  * - `BreadcrumbOverflowMenu` — the `…` menu the middle segments collapse into
  *   when the path is too wide. Root and current never enter it.

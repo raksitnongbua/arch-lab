@@ -14,7 +14,7 @@
  *      in one theme only.
  *
  * And then contrast. `globals.css` already records measured ratios for the two
- * original themes (AF-E6-S1: node-border ≥3:1 against --node), which is the
+ * original themes (: node-border ≥3:1 against --node), which is the
  * standard every later theme has to meet too. The ratios below are computed
  * from the oklch values themselves, so a palette cannot claim a figure it does
  * not hit.
@@ -225,7 +225,7 @@ const PAIRS = [
   ["--muted-foreground", "--background", 4.5, "secondary text"],
   ["--node-foreground", "--node", 7, "a node's title"],
   ["--node-meta", "--node", 4.5, "a node's technology line"],
-  /* AF-E6-S1. A node's border is what tells one kind from another, so it is
+  /* A node's border is what tells one kind from another, so it is
      held to the non-text UI minimum against its own fill. */
   ["--node-border", "--node", 3, "a node's outline"],
   ["--node-person-border", "--node-person", 3, "a person card's outline"],

@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The searchable icon picker (T2-A — AF-E4-S2). Exported signature is the
- * frozen dev-handoff §4.6 contract; T2-D's inspector imports exactly this.
+ * The searchable icon picker. Exported signature is the
+ * frozen contract; the inspector imports exactly this.
  *
  * Opens as a modal over the frozen `Dialog` primitive (built for this, per
  * its header comment). Typing filters on name, slug and aliases — "pg" and
@@ -42,7 +42,7 @@ const GRID_COLUMNS = 5;
 // the user is picking a picture here, and "use generic container icon" for a
 // queue would hand them the wrong one.
 
-/** T2-D imports exactly this (dev-handoff §4.6 — frozen). */
+/** imports exactly this — frozen). */
 export function IconPicker(props: {
   value?: string;
   nodeType: C4NodeType;

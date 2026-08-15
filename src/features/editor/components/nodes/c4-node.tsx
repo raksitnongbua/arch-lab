@@ -1,17 +1,17 @@
 "use client";
 
 /**
- * The C4 node component (T2-A — AF-E3-S1, AF-E4-S1, AF-E1-S6).
+ * The C4 node component.
  *
  * The exported TYPE surface (`C4NodeData`, `C4FlowNode`,
- * `C4NodeComponentProps`) is the frozen contract from dev-handoff §4.2 —
+ * `C4NodeComponentProps`) is the frozen contract from —
  * `use-canvas-nodes.ts` and `canvas.tsx` (both final) build against it, so it
  * must not change.
  *
  * The component branches on `data.node.type` only — never on appearance.
  * Layout lives in `node-chrome.tsx`; per-type silhouettes in
  * `node-shapes.tsx`. This file additionally registers the `F2`/`Enter`
- * rename shortcuts (§4.5 claims them for T2-A): each node registers only
+ * rename shortcuts (the registry claims them): each node registers only
  * while selected, with a per-node-unique id, guarded to the single-selection
  * case, so the registry never sees a duplicate id.
  */
@@ -33,7 +33,7 @@ import {
 } from "./canvas-motion-runtime";
 import { NodeChrome } from "./node-chrome";
 
-/* ---- Contract (dev-handoff §4.2, frozen) --------------------------------- */
+/* ---- Contract, frozen) --------------------------------- */
 
 export interface C4NodeData extends Record<string, unknown> {
   /** The model node. Read-only — mutate via the store, never in place. */
@@ -73,7 +73,7 @@ export function C4NodeComponent({
 }: C4NodeComponentProps): React.JSX.Element {
   const isPlaceholder = data.isPlaceholder;
 
-  // Create animation (AF-E6-S2): once, on the node's first-ever presentation
+  // Create animation: once, on the node's first-ever presentation
   // — never on the remounts from level navigation or undo. `duration()`
   // (frozen lib/motion.ts) gates it off entirely under reduced motion.
   const [entering] = useState(

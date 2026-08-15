@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Drill / climb orchestration (T2-C — AF-E2-S2/S3). One module owns every way
+ * Drill / climb orchestration. One module owns every way
  * of moving between levels so the rules live in one place:
  *
  * - Navigation itself is NEVER an undo entry (`setActiveDiagram` is view
@@ -9,8 +9,8 @@
  * - Before navigating, the target diagram's last-selected node is checked
  *   against its saved viewport and, when off-screen, the saved camera is
  *   re-centred on it — so the breadcrumb "re-selects and scrolls into view"
- *   (AF-E2-S3). The canvas restores `viewportByDiagramId` on diagram change.
- * - `mod+ArrowDown` / `mod+ArrowUp` are T2-C's two claims in the §4.5
+ *. The canvas restores `viewportByDiagramId` on diagram change.
+ * - `mod+ArrowDown` / `mod+ArrowUp` are two claims in the
  *   registry, registered here (the hook is mounted by the breadcrumb).
  */
 
@@ -29,7 +29,7 @@ import { MaxDepthError, selectBreadcrumb, useEditorStore } from "../state";
 import { useShortcuts, type ShortcutBinding } from "./use-keyboard-shortcuts";
 
 /* -------------------------------------------------------------------------- */
-/* Navigation feedback — the breadcrumb's root shake (AF-E2-S3)                */
+/* Navigation feedback — the breadcrumb's root shake                */
 /* -------------------------------------------------------------------------- */
 
 interface NavigationFeedbackState {
@@ -129,7 +129,7 @@ export function canDrillInto(
 ): boolean {
   if (isBoundaryPlaceholder(node)) return false;
   if (hasChildDiagram(node)) return true;
-  // A `code`-level node offers no drill affordance in any form (D4/AF-E2-S2);
+  // A `code`-level node offers no drill affordance in any form;
   // `childRef` (multi-file split) is unsupported this sprint.
   return diagramLevelHasChild && node.childRef === undefined;
 }
@@ -175,7 +175,7 @@ export function drillIntoNode(nodeId: string): void {
 
 /**
  * `mod+ArrowDown`: drill from a single selected node that HAS a child
- * diagram; a no-op on a leaf (AF-E2-S2 — creation is the context menu's job).
+ * diagram; a no-op on a leaf (— creation is the context menu's job).
  */
 function drillIntoSelection(): void {
   const store = useEditorStore.getState();

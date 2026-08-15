@@ -1,5 +1,5 @@
 /**
- * Performance-fixture generator (T1-B acceptance: 150-node pan/drag at
+ * Performance-fixture generator (acceptance: 150-node pan/drag at
  * ≥55fps). Not imported by production code — load it from the browser console
  * or a scratch page:
  *
@@ -18,7 +18,7 @@ const CONTEXT_TYPES: readonly C4NodeType[] = [
   "externalSystem",
 ];
 
-/** Grid pitch between fixture nodes, multiples of 8 (D20). */
+/** Grid pitch between fixture nodes, multiples of 8. */
 const PITCH_X = 224;
 const PITCH_Y = 136;
 

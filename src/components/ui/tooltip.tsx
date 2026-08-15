@@ -21,7 +21,7 @@ const SIDE_CLASSES: Record<TooltipSide, string> = {
 };
 
 /**
- * CSS-only tooltip primitive. Frozen after Batch 1 (dev-handoff D10). Reveals
+ * CSS-only tooltip primitive. Frozen after Batch 1. Reveals
  * on hover and on keyboard focus within the trigger; no positioning library,
  * no portal — callers place it where overflow allows. The transition collapses
  * to an instant change under `prefers-reduced-motion` via globals.css.

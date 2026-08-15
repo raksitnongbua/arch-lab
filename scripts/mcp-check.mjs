@@ -308,10 +308,7 @@ check("the advertised origin comes from the request, not a constant", () => {
   const from = (headers) =>
     requestOrigin((name) => headers[name.toLowerCase()] ?? null);
 
-  assert.equal(
-    from({ host: "arch-lab.dev" }),
-    "https://arch-lab.dev",
-  );
+  assert.equal(from({ host: "arch-lab.dev" }), "https://arch-lab.dev");
   assert.equal(
     from({ host: "internal:3000", "x-forwarded-host": "arch-lab.example" }),
     "https://arch-lab.example",

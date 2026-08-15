@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * T3-A's keyboard bindings, registered through the shared shortcut registry
- * (dev-handoff §4.5). T3-A claims exactly `mod+s` (save) and `mod+o` (open);
+ * The file keyboard bindings, registered through the shared shortcut registry
+ *. claims exactly `mod+s` (save) and `mod+o` (open);
  * suppression while focus is in an input/textarea/[contenteditable] is
  * enforced centrally by the registry.
  *

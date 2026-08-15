@@ -1,5 +1,5 @@
 /**
- * Typed errors thrown by the store's mutations (dev-handoff §4.1).
+ * Typed errors thrown by the store's mutations.
  *
  * They are thrown *before* any model change or history entry is made, so a
  * caught error always means "nothing happened".
@@ -9,7 +9,7 @@ import type { C4Level, C4NodeType } from "@/types";
 
 /**
  * Thrown by `createNode` when `type` is not legal on a diagram at `level`
- * (AF-E2-S1 / AF-E3-S1). The message names the valid types so the UI can show
+ *. The message names the valid types so the UI can show
  * it verbatim.
  */
 export class InvalidNodeTypeError extends Error {
@@ -35,7 +35,7 @@ export class InvalidNodeTypeError extends Error {
 
 /**
  * Thrown by `createChildDiagram` when the containing diagram is already at
- * `code` — there is no level below it (D4).
+ * `code` — there is no level below it.
  */
 export class MaxDepthError extends Error {
   constructor(message = 'Cannot create a child diagram below level "code".') {
@@ -46,7 +46,7 @@ export class MaxDepthError extends Error {
 
 /**
  * Thrown by `createEdge` when `source` and `target` do not both resolve to
- * nodes in the same diagram (D12 / OQ-5: cross-level relationships are
+ * nodes in the same diagram (cross-level relationships are
  * illegal).
  */
 export class CrossDiagramEdgeError extends Error {

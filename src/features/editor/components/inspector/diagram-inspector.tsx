@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Empty-selection inspector (AF-E3-S2's fallback): the active diagram's
+ * Empty-selection inspector ('s fallback): the active diagram's
  * `title` and `description`, its grouping boundaries (`./frame-list.tsx`), and
  * the model's read-only `updatedAt`. Text fields use the same
  * one-undo-per-session semantics as node fields, through `updateDiagram`'s
@@ -44,7 +44,7 @@ export function DiagramInspector({
   // `toLocaleString` then formats it in two different locales and zones on top
   // of that. Both mismatches abort hydration for the WHOLE editor tree, which
   // React then re-renders from scratch. Same hydration-safe guard the shell
-  // uses (D17): nothing on the server, the real timestamp once mounted.
+  // uses: nothing on the server, the real timestamp once mounted.
   const mounted = useSyncExternalStore(
     emptySubscribe,
     () => true,

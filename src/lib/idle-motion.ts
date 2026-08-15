@@ -19,7 +19,7 @@
  * both apply: the OS setting is a statement about the person, and a UI toggle
  * cannot overrule it.
  *
- * The store is a `useSyncExternalStore` over localStorage, the D17 mounted-guard
+ * The store is a `useSyncExternalStore` over localStorage, the mounted-guard
  * shape used by `useReducedMotion` and `diagram-inspector.tsx`: the server
  * snapshot is the DEFAULT (on), and the client corrects after hydration if a
  * stored "off" disagrees, rather than a render reading a browser API the server
@@ -52,7 +52,7 @@ function subscribeReducedMotion(onChange: () => void): () => void {
  * view is a second chance for the two reads to disagree within one render.
  *
  * `matchMedia` is a browser API, so the server snapshot is `false` and the
- * client corrects after hydration — the D17 mounted-guard pattern, which is what
+ * client corrects after hydration — the mounted-guard pattern, which is what
  * keeps a reduced-motion default from aborting hydration for a whole page.
  */
 export function useReducedMotion(): boolean {

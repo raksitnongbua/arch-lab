@@ -15,7 +15,7 @@
  * The visible caption and the announcement are ONE string. They were two, and
  * they drifted.
  *
- * Props-free, like the other overlays in this folder (§4.4). State comes from
+ * Props-free, like the other overlays in this folder. State comes from
  * React Flow's own `useConnection`, not a new store seam — the canvas already
  * knows it is connecting, and duplicating that would be a second source of
  * truth for one boolean.

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Unsaved-work marker (T3-B, AF-E5-S3). Props-free per dev-handoff §4.4,
+ * Unsaved-work marker. Props-free per,
  * mounted by the frozen `editor-shell.tsx` header, reads the store itself.
  *
  * Quiet but unmistakable: a warning-toned dot plus the word "Unsaved" — never

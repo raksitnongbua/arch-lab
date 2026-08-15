@@ -129,7 +129,7 @@ function layerOf(
  * Pure and deterministic: the only inputs are the node ids (sorted) and the
  * canonical edge set, so the parser (filling geometry in) and the serializer
  * (omitting geometry that matches) compute the same coordinates. All outputs
- * are multiples of 8 (data-model.md geometry rule).
+ * are multiples of 8 (the geometry rule).
  */
 export function defaultPositions(
   nodeIds: readonly string[],
@@ -207,7 +207,7 @@ export function defaultPositions(
   return positions;
 }
 
-/** Default size by node type (data-model.md minimum is 120×64). */
+/** Default size by node type; the minimum is 120×64. */
 export function defaultSizeFor(type: C4NodeType): Size {
   return type === "person"
     ? { width: 160, height: 96 }

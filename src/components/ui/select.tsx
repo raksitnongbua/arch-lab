@@ -7,7 +7,7 @@ export type SelectProps = ComponentProps<"select">;
 
 /**
  * Native-`<select>` primitive with consistent chrome. Frozen after Batch 1
- * (dev-handoff D10). Deliberately native rather than a listbox re-
+ *. Deliberately native rather than a listbox re-
  * implementation: the inspector's `type` / `direction` / `style` fields need
  * keyboard and screen-reader behaviour that the platform already gets right.
  * Options are passed as regular `<option>` children.

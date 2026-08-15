@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The shared node frame (T2-A): shape layer, icon + name / technology /
+ * The shared node frame: shape layer, icon + name / technology /
  * description hierarchy, inline label editor, child-count badge, `^ref`
  * source-layer chip, unknown-icon warning marker, and the four connection
  * handles the canvas relies on.
@@ -79,7 +79,7 @@ export function NodeChrome({
       ? `${C4_ABSTRACTION[node.type]}: ${node.technology}`
       : C4_ABSTRACTION[node.type];
 
-  // Name (and description) in full on hover (AF-E1-S6 / AF-E3-S2).
+  // Name (and description) in full on hover.
   const hoverText =
     node.description !== undefined && node.description !== ""
       ? `${node.name}\n\n${node.description}`
@@ -95,14 +95,14 @@ export function NodeChrome({
         // opacity their `--motion-hover` transition, driven by lib/motion.ts.
         "af-node-chrome group relative flex size-full flex-col items-center justify-center overflow-visible px-3 py-1.5 text-center text-node-foreground",
         SHAPE_WRAPPER_CLASSES[node.type],
-        // Hover raises elevation (AF-E6-S2); SVG-silhouette types (cylinder,
+        // Hover raises elevation; SVG-silhouette types (cylinder,
         // pipe) skip the box shadow — it would draw a rectangle around them.
         !svgSilhouette && "shadow-sm hover:shadow-md",
         // Content clears the cylinder rim / pipe rims.
         node.type === "database" && "pt-4",
         node.type === "queue" && "px-8",
         svgSilhouette && "rounded-lg",
-        // Drag ghost at 60% opacity (AF-E6-S2); otherwise the static
+        // Drag ghost at 60% opacity; otherwise the static
         // placeholder / external-element treatments. External is decided by
         // COLOUR ROLE (type or the Mermaid-residue `external` tag) through
         // the shared constant — this used to be an `externalSystem` literal
@@ -131,7 +131,7 @@ export function NodeChrome({
       ) : null}
 
       {/* Selection outline: always mounted so it can fade in AND out over
-          `--motion-selection` (AF-E6-S2). Sits 4px outside the node bounds,
+          `--motion-selection`. Sits 4px outside the node bounds,
           replacing the previous instant ring+offset. */}
       <span
         aria-hidden="true"

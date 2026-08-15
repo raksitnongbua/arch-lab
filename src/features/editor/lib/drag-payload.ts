@@ -1,5 +1,5 @@
 /**
- * Palette drag payload codec (dev-handoff §4.7, owned by T2-B).
+ * Palette drag payload codec.
  *
  * WIRE FORMAT — FROZEN. `canvas.tsx` (Batch-1 final) could not import this
  * file and still build in Batch 1, so its `onDrop` inlines the exact same

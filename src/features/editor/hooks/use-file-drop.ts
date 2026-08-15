@@ -2,10 +2,10 @@
 
 /**
  * Window-level drag-and-drop of a `.alab` or `.archlab.json` file
- * (T3-A, AF-E5-S2).
+ *.
  *
  * Reads the dropped file's text and — where the browser supports
- * `DataTransferItem.getAsFileSystemHandle` (feature-detected, D2/R3) — also
+ * `DataTransferItem.getAsFileSystemHandle` (feature-detected) — also
  * captures a writable handle so subsequent `Cmd+S` saves go back to the
  * dropped file without a picker. The caller (`FileActions`) owns what happens
  * next, including the unsaved-changes prompt.
