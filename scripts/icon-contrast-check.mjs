@@ -34,12 +34,7 @@ import { execFileSync } from "node:child_process";
 import { inflateSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 
-const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const require = createRequire(import.meta.url);
-const read = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
 const WORK = mkdtempSync(path.join(tmpdir(), "af-icon-contrast-"));
 
 /** Under this share of the box standing out from the canvas, a mark is not visible. */
@@ -120,79 +115,7 @@ function decode(buf) {
   return { width, height, channels, data: out };
 }
 
-const BRAND = read("src/features/editor/lib/icons/brand.tsx");
-const OVERLAY = read("src/features/editor/lib/icons/colour-overlay.tsx");
-
-const stripInk = (svg) =>
-  svg
-    .replace(/\s(?:fill|stroke)=(["'])(?!none\b|currentColor\b)[^"']*\1/g, "")
-    .replace(/\sstyle=(["'])([^"']*)\1/g, (_m, _q, decls) => {
-      const kept = decls
-        .split(";")
-        .filter(
-          (d) => !/^\s*(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)/.test(d),
-        )
-        .join(";")
-        .trim();
-      return kept === "" ? "" : ` style="${kept}"`;
-    });
-
-/** Every artwork the registry can actually render, resolved from the entries. */
-function collect() {
-  const modOf = new Map();
-  for (const [, bindings, mod] of BRAND.matchAll(
-    /import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g,
-  )) {
-    const m = /slug as (\w+)Slug/.exec(bindings);
-    if (m) modOf.set(m[1], mod);
-  }
-  const jobs = [];
-  const add = (label, style, art) => {
-    if (typeof art === "string") jobs.push({ label, style, art });
-  };
-  for (const [, n] of BRAND.matchAll(/art: withMono\((\w+)Slug/g)) {
-    const v = require(`thesvg/${modOf.get(n)}`).variants;
-    add(`brand:${modOf.get(n)}`, "colour", v.default);
-    add(`brand:${modOf.get(n)}`, "mono", v.mono);
-  }
-  for (const [, n] of BRAND.matchAll(/art: alwaysMono\((\w+)Slug/g)) {
-    const v = require(`thesvg/${modOf.get(n)}`).variants;
-    add(`brand:${modOf.get(n)}`, "both", v.mono ?? v.light);
-  }
-  for (const [, n] of BRAND.matchAll(/art: colourOnly\((\w+)Svg\)/g)) {
-    add(`brand:${modOf.get(n)}`, "both", require(`thesvg/${modOf.get(n)}`).svg);
-  }
-  for (const [, n] of BRAND.matchAll(/art: derivedMono\((\w+)Slug/g)) {
-    const svg = require(`thesvg/${modOf.get(n)}`).svg;
-    add(`brand:${modOf.get(n)}`, "colour", svg);
-    add(`brand:${modOf.get(n)}`, "mono", stripInk(svg));
-  }
-  for (const [, n] of BRAND.matchAll(/art: derivedMonoOnly\((\w+)Slug/g)) {
-    add(
-      `brand:${modOf.get(n)}`,
-      "both",
-      stripInk(require(`thesvg/${modOf.get(n)}`).svg),
-    );
-  }
-  for (const [, n] of BRAND.matchAll(
-    /art: monoFromAlternate\(\s*(\w+)Slug,[\s\S]{0,80}?(\w+)Variants,/g,
-  )) {
-    add(
-      `brand:${modOf.get(n)}`,
-      "colour",
-      require(`thesvg/${modOf.get(n)}`).svg,
-    );
-    add(
-      "brand:cockroach-labs",
-      "mono",
-      require("thesvg/cockroach-labs").variants.mono,
-    );
-  }
-  for (const [, mod] of OVERLAY.matchAll(/from "thesvg\/([a-z0-9-]+)"/g)) {
-    add(`overlay:${mod}`, "colour", require(`thesvg/${mod}`).svg);
-  }
-  return jobs;
-}
+import { collectRenderedArtwork } from "./lib/icon-artwork.mjs";
 
 const luminance = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
@@ -237,7 +160,7 @@ function coverage(art, background, ink) {
   return standOut / pixels;
 }
 
-const jobs = collect();
+const jobs = collectRenderedArtwork();
 let failures = 0;
 
 for (const job of jobs) {
@@ -246,7 +169,7 @@ for (const job of jobs) {
   if (onLight >= MIN_COVERAGE && onDark >= MIN_COVERAGE) continue;
   failures++;
   console.error(
-    `  ✗ ${job.label} (${job.style}) — light ${(onLight * 100).toFixed(1)}%, ` +
+    `  ✗ ${job.slug} (${job.style}) — light ${(onLight * 100).toFixed(1)}%, ` +
       `dark ${(onDark * 100).toFixed(1)}%`,
   );
   console.error(

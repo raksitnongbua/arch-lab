@@ -3,14 +3,11 @@ import type { SVGProps } from "react";
 /**
  * Embedding artwork from the `thesvg` package as React components.
  *
- * SHARED BY TWO CALLERS, which is why it is its own module rather than living
- * in `brand.tsx` where it started: the brand set embeds packaged marks the
- * registry has no hand-authored version of, and `colour-overlay.tsx` embeds
- * packaged marks that DO have one, to stand in for it in colour mode. Both
- * need the identical sanitising — the fixes here were each bought with a
- * shipped bug, and a second copy would be a second place to forget them.
- *
- * Nothing here is specific to which of the two is calling.
+ * Separate from `brand.tsx` because it is about EMBEDDING, not about which
+ * marks we carry: every fix in here was bought with a shipped bug (root
+ * width/height, forbidden `<style>`, slug-prefixed ids, both ink spellings in
+ * both quote styles), and that knowledge should not be tangled up with a list
+ * of logos. Nothing here knows which mark it is handling.
  */
 
 /* -------------------------------------------------------------------------- */

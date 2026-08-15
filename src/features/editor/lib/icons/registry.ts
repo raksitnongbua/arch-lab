@@ -3,58 +3,50 @@
  * Icons are referenced by slug; no SVG data or URL is ever written into the
  * model.
  *
- * Two kinds of icon now live here, told apart by the `monochrome` flag:
+ * TWO SOURCES, AND ONLY TWO:
  *
- * 1. The 59 hand-authored inline-SVG icons (38 stylised motifs plus 21
- *    generics and infrastructure primitives). These are and stay monochrome
- *    `currentColor` — legible in both themes with zero colour literals.
+ * 1. PRODUCTS come from the `thesvg` package (`./brand`) — real logos, used
+ *    NOMINATIVELY to label what a container runs, never to imply endorsement.
+ *    Each mark remains the trademark of its owner. A coloured mark is NEVER
+ *    recoloured: beyond diluting it, several upstream licences forbid
+ *    derivatives outright, so `currentColor`-ing one is not merely ugly but a
+ *    licence breach. The narrow exception is a monochrome RENDERING of a mark
+ *    that publishes none, gated on an explicit licence allowlist (brand.tsx).
  *
- * 2. Curated BRAND marks from the `thesvg` package (`./brand`). The original
- *    rule here — "stylised motifs, never traced trademarked logos" — was a
- *    deliberate trademark-avoidance stance, and it was consciously dropped
- *    (2026-08) in favour of recognisability: real logos, used NOMINATIVELY,
- *    to label what a container runs — never to imply endorsement. Each mark
- *    remains the trademark of its owner. A COLOURED brand mark renders in its
- *    own hardcoded colours and is NEVER recoloured: beyond diluting the mark,
- *    some upstream licences forbid derivatives outright (AWS's architecture
- *    icons are CC BY-ND, for one), so `currentColor`-ing one is not merely
- *    ugly but a licence breach.
+ * 2. CONCEPTS come from lucide (`./generic`) — a database, a queue, a person,
+ *    an API. Monochrome, because there is no brand colour to be faithful to;
+ *    the node's accent is the only colour that means anything, and
+ *    `currentColor` lets the canvas supply it.
  *
- *    The exception is narrow and is NOT a loophole: some brands are
- *    monochrome by design — a single flat ink, no colour to preserve — and
- *    upstream ships them as artwork with no `fill` at all. Those come out
- *    `monochrome: true` and inherit the theme's colour, because the
- *    alternative is worse: any baked ink makes the mark invisible in one of
- *    the two themes. `brand.tsx` DERIVES the flag by inspecting the artwork
- *    rather than trusting a hand-set value, which is the only version of
- *    this that has not shipped a bug — three marks were flagged coloured
- *    while carrying no ink, so nothing gave them a fill and they went black
- *    on a black canvas.
+ * WHAT WAS DELETED, and why it matters. A third family used to live here: 59
+ * hand-drawn SVGs covering both concepts AND named products. The product half
+ * was the problem — hand-drawn logos are cruder than the vendors' own, and no
+ * amount of redrawing gives them a colour version, so colour mode could never
+ * look coherent while a third of its marks had nothing to show. All of it is
+ * gone. Slugs did not change, which is the whole reason the model stores a
+ * slug and never artwork: `@postgresql` in a year-old document resolves to
+ * the new drawing with no migration.
  *
- * ONE INK OR TWO is the reader's choice, not the document's (`IconStyle`).
- * `byStyle` resolves it per icon, in both directions:
+ * ONE INK OR TWO is the reader's choice, not the document's (`IconStyle`),
+ * resolved per icon by `byStyle`. Products draw their published `mono`
+ * variant where there is one, a licensed derivation where there is not, and
+ * stay coloured in the four cases where neither is permitted. Concepts render
+ * the same either way. So each style has one coherent story: mono is a single
+ * ink throughout, colour is "every logo is the real logo, every concept is a
+ * glyph".
  *
- *   - MONO for a brand mark takes its upstream `mono` variant (45 of the 54
- *     ship one); the nine that do not stay coloured, since deriving a
- *     monochrome version by stripping colour is the recolouring above.
- *   - COLOUR for a hand-authored mark that names a real product hands over to
- *     the vendor's own logo (`./colour-overlay`, 35 of the 59). Without that,
- *     colour mode drew coloured brand logos beside flat house glyphs for
- *     PostgreSQL, Redis and Docker — a mixture that reads as a fault. The
- *     remaining 24 are abstractions with no logo in existence (`api`,
- *     `queue`, `person`, …); they keep the house glyph and take the node's
- *     accent, which is what makes the mixed board read as deliberate.
+ * WHETHER A MARK CAN BE SEEN is settled by `pnpm check:icon-contrast`, which
+ * renders all of them on a light and a dark canvas and counts the pixels that
+ * stand out. Three rounds of invisible icons shipped before that existed —
+ * white ink on white, black ink on black, unfilled paths falling back to the
+ * browser's default black — because every one of them is well-formed markup
+ * that no parser, type or build can object to.
  *
- * So each style has ONE coherent story: mono is a single ink throughout,
- * colour is "every logo is the real logo, every concept is a glyph".
- *
- * SLUG COLLISIONS: thesvg also ships `postgresql`, `redis`, `kafka`, … — the
- * hand-authored mark keeps its slug (models in the wild reference it, and the
- * monochrome set is the house style), so the curated brand list simply never
- * includes a taken slug. `ICONS` below enforces this by throwing on any
- * duplicate rather than letting `Object.fromEntries`-style last-wins shadow
- * one definition with another; the throw fires while `pnpm build` prerenders,
- * so a collision cannot ship.
+ * SLUG COLLISIONS: `ICONS` below throws on any duplicate rather than letting
+ * `Object.fromEntries`-style last-wins silently shadow one definition with
+ * another — a concept and a product claiming one slug is exactly the bug this
+ * registry must make impossible. The throw fires while `pnpm build`
+ * prerenders, so a collision cannot ship.
  */
 
 import type { C4Node, C4NodeType } from "@/types";
@@ -62,67 +54,8 @@ import type { C4Node, C4NodeType } from "@/types";
 import type { IconStyle } from "@/lib/icon-style";
 
 import { BRAND_ICON_DEFS } from "./brand";
+import { GENERIC_ICON_DEFS } from "./generic";
 import { ICON_CATEGORY_ORDER, type IconCategory } from "./categories";
-import { COLOUR_OVERLAY } from "./colour-overlay";
-import { AiModelIcon } from "./svg/ai-model";
-import { AnalyticsIcon } from "./svg/analytics";
-import { ApiIcon } from "./svg/api";
-import { AwsIcon } from "./svg/aws";
-import { AzureIcon } from "./svg/azure";
-import { BrowserIcon } from "./svg/browser";
-import { CassandraIcon } from "./svg/cassandra";
-import { ClickhouseIcon } from "./svg/clickhouse";
-import { CloudflareIcon } from "./svg/cloudflare";
-import { DatabaseIcon } from "./svg/database";
-import { DockerIcon } from "./svg/docker";
-import { DotnetIcon } from "./svg/dotnet";
-import { DynamodbIcon } from "./svg/dynamodb";
-import { ElasticsearchIcon } from "./svg/elasticsearch";
-import { EmailIcon } from "./svg/email";
-import { EnvoyIcon } from "./svg/envoy";
-import { ExternalIcon } from "./svg/external";
-import { FileIcon } from "./svg/file";
-import { FirebaseIcon } from "./svg/firebase";
-import { FirewallIcon } from "./svg/firewall";
-import { GcpIcon } from "./svg/gcp";
-import { GolangIcon } from "./svg/golang";
-import { GraphqlIcon } from "./svg/graphql";
-import { GrpcIcon } from "./svg/grpc";
-import { HaproxyIcon } from "./svg/haproxy";
-import { IdentityIcon } from "./svg/identity";
-import { InternetIcon } from "./svg/internet";
-import { JavaIcon } from "./svg/java";
-import { KafkaIcon } from "./svg/kafka";
-import { KongIcon } from "./svg/kong";
-import { KubernetesIcon } from "./svg/kubernetes";
-import { LambdaIcon } from "./svg/lambda";
-import { LoadBalancerIcon } from "./svg/load-balancer";
-import { MemcachedIcon } from "./svg/memcached";
-import { MobileIcon } from "./svg/mobile";
-import { MongodbIcon } from "./svg/mongodb";
-import { MonitoringIcon } from "./svg/monitoring";
-import { MysqlIcon } from "./svg/mysql";
-import { NatsIcon } from "./svg/nats";
-import { NextjsIcon } from "./svg/nextjs";
-import { NginxIcon } from "./svg/nginx";
-import { NodejsIcon } from "./svg/nodejs";
-import { PersonIcon } from "./svg/person";
-import { PhpIcon } from "./svg/php";
-import { PostgresqlIcon } from "./svg/postgresql";
-import { PythonIcon } from "./svg/python";
-import { QueueIcon } from "./svg/queue";
-import { RabbitmqIcon } from "./svg/rabbitmq";
-import { ReactIcon } from "./svg/react";
-import { RedisIcon } from "./svg/redis";
-import { RustIcon } from "./svg/rust";
-import { S3Icon } from "./svg/s3";
-import { SchedulerIcon } from "./svg/scheduler";
-import { SearchIcon } from "./svg/search";
-import { ServiceIcon } from "./svg/service";
-import { SqliteIcon } from "./svg/sqlite";
-import { TerraformIcon } from "./svg/terraform";
-import { TypescriptIcon } from "./svg/typescript";
-import { WebhookIcon } from "./svg/webhook";
 
 export type { IconCategory } from "./categories";
 
@@ -188,13 +121,7 @@ function resolveStyles(source: IconSource): IconDef {
   return {
     ...source,
     byStyle: {
-      /* A hand-authored icon naming a real product hands colour mode over to
-         the vendor's own logo (`colour-overlay.tsx`). Without it, colour mode
-         drew full-colour brand marks beside flat house glyphs for PostgreSQL,
-         Redis and Docker, which reads as a fault rather than a choice. The
-         overlay never touches the brand set — those slugs are disjoint by
-         construction, since a brand entry may not take a taken slug. */
-      colour: COLOUR_OVERLAY[source.slug] ?? source.Svg,
+      colour: source.Svg,
       mono: source.SvgMono ?? source.Svg,
     },
   };
@@ -206,491 +133,6 @@ export function iconsWithoutMono(): IconDef[] {
     (def) => !def.monochrome && def.SvgMono === undefined,
   );
 }
-
-/**
- * The hand-authored set, in picker display order: category-major
- * (ICON_CATEGORY_ORDER), each category in its curated order.
- */
-const HAND_AUTHORED_DEFS: readonly IconSource[] = [
-  /* -- Languages & Runtimes ------------------------------------------------ */
-  {
-    slug: "golang",
-    name: "Golang",
-    aliases: ["go", "gopher"],
-    category: "languages",
-    Svg: GolangIcon,
-    monochrome: true,
-  },
-  {
-    slug: "nextjs",
-    name: "Next.js",
-    aliases: ["next", "next.js", "vercel"],
-    category: "languages",
-    Svg: NextjsIcon,
-    monochrome: true,
-  },
-  {
-    slug: "dotnet",
-    name: ".NET",
-    aliases: ["c#", "csharp", "asp.net", "clr"],
-    category: "languages",
-    Svg: DotnetIcon,
-    monochrome: true,
-  },
-  {
-    slug: "java",
-    name: "Java",
-    aliases: ["jvm", "kotlin", "spring", "spring boot"],
-    category: "languages",
-    Svg: JavaIcon,
-    monochrome: true,
-  },
-  {
-    slug: "nodejs",
-    name: "Node.js",
-    aliases: ["node", "express", "nest", "nestjs"],
-    category: "languages",
-    Svg: NodejsIcon,
-    monochrome: true,
-  },
-  {
-    slug: "php",
-    name: "PHP",
-    aliases: ["laravel", "symfony"],
-    category: "languages",
-    Svg: PhpIcon,
-    monochrome: true,
-  },
-  {
-    slug: "python",
-    name: "Python",
-    aliases: ["py", "django", "fastapi", "flask"],
-    category: "languages",
-    Svg: PythonIcon,
-    monochrome: true,
-  },
-  {
-    slug: "react",
-    name: "React",
-    aliases: ["reactjs", "jsx", "vite", "remix"],
-    category: "languages",
-    Svg: ReactIcon,
-    monochrome: true,
-  },
-  {
-    slug: "rust",
-    name: "Rust",
-    aliases: ["rs", "cargo", "axum", "tokio"],
-    category: "languages",
-    Svg: RustIcon,
-    monochrome: true,
-  },
-  {
-    slug: "typescript",
-    name: "TypeScript",
-    aliases: ["ts", "javascript", "js"],
-    category: "languages",
-    Svg: TypescriptIcon,
-    monochrome: true,
-  },
-  /* -- Databases ----------------------------------------------------------- */
-  {
-    slug: "mongodb",
-    name: "MongoDB",
-    aliases: ["mongo", "documentdb"],
-    category: "databases",
-    Svg: MongodbIcon,
-    monochrome: true,
-  },
-  {
-    slug: "mysql",
-    name: "MySQL",
-    aliases: ["my-sql", "mariadb"],
-    category: "databases",
-    Svg: MysqlIcon,
-    monochrome: true,
-  },
-  {
-    slug: "postgresql",
-    name: "PostgreSQL",
-    aliases: ["pg", "postgres", "psql"],
-    category: "databases",
-    Svg: PostgresqlIcon,
-    monochrome: true,
-  },
-  {
-    slug: "elasticsearch",
-    name: "Elasticsearch",
-    aliases: ["elastic", "opensearch", "search", "lucene"],
-    category: "databases",
-    Svg: ElasticsearchIcon,
-    monochrome: true,
-  },
-  {
-    slug: "cassandra",
-    name: "Cassandra",
-    aliases: ["apache cassandra", "scylla", "wide column"],
-    category: "databases",
-    Svg: CassandraIcon,
-    monochrome: true,
-  },
-  {
-    slug: "clickhouse",
-    name: "ClickHouse",
-    aliases: ["olap", "column store", "analytics db"],
-    category: "databases",
-    Svg: ClickhouseIcon,
-    monochrome: true,
-  },
-  {
-    slug: "dynamodb",
-    name: "DynamoDB",
-    aliases: ["dynamo", "ddb", "key value"],
-    category: "databases",
-    Svg: DynamodbIcon,
-    monochrome: true,
-  },
-  {
-    slug: "sqlite",
-    name: "SQLite",
-    aliases: ["sqlite3", "embedded db", "local db"],
-    category: "databases",
-    Svg: SqliteIcon,
-    monochrome: true,
-  },
-  /* -- Caching & Messaging -------------------------------------------------- */
-  {
-    slug: "redis",
-    name: "Redis",
-    aliases: ["cache", "valkey"],
-    category: "messaging",
-    Svg: RedisIcon,
-    monochrome: true,
-  },
-  {
-    slug: "kafka",
-    name: "Kafka",
-    aliases: ["event stream", "streaming", "msk", "pubsub"],
-    category: "messaging",
-    Svg: KafkaIcon,
-    monochrome: true,
-  },
-  {
-    slug: "rabbitmq",
-    name: "RabbitMQ",
-    aliases: ["amqp", "rabbit"],
-    category: "messaging",
-    Svg: RabbitmqIcon,
-    monochrome: true,
-  },
-  {
-    slug: "memcached",
-    name: "Memcached",
-    aliases: ["memcache", "cache", "in memory"],
-    category: "messaging",
-    Svg: MemcachedIcon,
-    monochrome: true,
-  },
-  {
-    slug: "nats",
-    name: "NATS",
-    aliases: ["jetstream", "pub sub", "messaging"],
-    category: "messaging",
-    Svg: NatsIcon,
-    monochrome: true,
-  },
-  /* -- Networking & Edge ---------------------------------------------------- */
-  {
-    slug: "kong",
-    name: "Kong",
-    aliases: ["api gateway", "gateway"],
-    category: "networking",
-    Svg: KongIcon,
-    monochrome: true,
-  },
-  {
-    slug: "nginx",
-    name: "nginx",
-    aliases: ["reverse proxy", "web server"],
-    category: "networking",
-    Svg: NginxIcon,
-    monochrome: true,
-  },
-  {
-    slug: "graphql",
-    name: "GraphQL",
-    aliases: ["gql", "apollo", "federation"],
-    category: "networking",
-    Svg: GraphqlIcon,
-    monochrome: true,
-  },
-  {
-    slug: "grpc",
-    name: "gRPC",
-    aliases: ["rpc", "protobuf", "proto"],
-    category: "networking",
-    Svg: GrpcIcon,
-    monochrome: true,
-  },
-  {
-    slug: "envoy",
-    name: "Envoy",
-    aliases: ["sidecar", "service mesh", "istio", "proxy"],
-    category: "networking",
-    Svg: EnvoyIcon,
-    monochrome: true,
-  },
-  {
-    slug: "firewall",
-    name: "Firewall",
-    aliases: ["waf", "security group", "shield"],
-    category: "networking",
-    Svg: FirewallIcon,
-    monochrome: true,
-  },
-  {
-    slug: "haproxy",
-    name: "HAProxy",
-    aliases: ["ha proxy", "load balancer", "proxy"],
-    category: "networking",
-    Svg: HaproxyIcon,
-    monochrome: true,
-  },
-  {
-    slug: "internet",
-    name: "Internet",
-    aliases: ["globe", "www", "public network", "world"],
-    category: "networking",
-    Svg: InternetIcon,
-    monochrome: true,
-  },
-  {
-    slug: "load-balancer",
-    name: "Load balancer",
-    aliases: ["lb", "elb", "alb", "nlb", "fan out"],
-    category: "networking",
-    Svg: LoadBalancerIcon,
-    monochrome: true,
-  },
-  /* -- Cloud ----------------------------------------------------------------- */
-  {
-    slug: "cloudflare",
-    name: "Cloudflare",
-    aliases: ["cf", "cdn", "edge"],
-    category: "cloud",
-    Svg: CloudflareIcon,
-    monochrome: true,
-  },
-  {
-    slug: "aws",
-    name: "AWS",
-    aliases: ["amazon", "amazon web services", "ec2"],
-    category: "cloud",
-    Svg: AwsIcon,
-    monochrome: true,
-  },
-  {
-    slug: "azure",
-    name: "Azure",
-    aliases: ["microsoft azure", "msft"],
-    category: "cloud",
-    Svg: AzureIcon,
-    monochrome: true,
-  },
-  {
-    slug: "docker",
-    name: "Docker",
-    aliases: ["container", "oci", "compose"],
-    category: "cloud",
-    Svg: DockerIcon,
-    monochrome: true,
-  },
-  {
-    slug: "firebase",
-    name: "Firebase",
-    aliases: ["gcp firebase", "firestore"],
-    category: "cloud",
-    Svg: FirebaseIcon,
-    monochrome: true,
-  },
-  {
-    slug: "gcp",
-    name: "Google Cloud",
-    aliases: ["google", "google cloud platform", "big query"],
-    category: "cloud",
-    Svg: GcpIcon,
-    monochrome: true,
-  },
-  {
-    slug: "kubernetes",
-    name: "Kubernetes",
-    aliases: ["k8s", "eks", "gke", "aks"],
-    category: "cloud",
-    Svg: KubernetesIcon,
-    monochrome: true,
-  },
-  {
-    slug: "lambda",
-    name: "Serverless",
-    aliases: ["function", "faas", "cloud function", "lambda", "worker"],
-    category: "cloud",
-    Svg: LambdaIcon,
-    monochrome: true,
-  },
-  {
-    slug: "s3",
-    name: "Object storage",
-    aliases: ["bucket", "blob", "gcs", "s3", "minio", "object storage"],
-    category: "cloud",
-    Svg: S3Icon,
-    monochrome: true,
-  },
-  {
-    slug: "terraform",
-    name: "Terraform",
-    aliases: ["iac", "opentofu", "hcl"],
-    category: "cloud",
-    Svg: TerraformIcon,
-    monochrome: true,
-  },
-  /* -- Generic ---------------------------------------------------------------- */
-  {
-    slug: "ai-model",
-    name: "AI model",
-    aliases: ["ml", "llm", "inference", "gpu", "model"],
-    category: "generic",
-    Svg: AiModelIcon,
-    monochrome: true,
-  },
-  {
-    slug: "analytics",
-    name: "Analytics",
-    aliases: ["bi", "warehouse", "reporting", "metrics", "chart"],
-    category: "generic",
-    Svg: AnalyticsIcon,
-    monochrome: true,
-  },
-  {
-    slug: "api",
-    name: "API",
-    aliases: ["rest", "endpoint", "json", "openapi"],
-    category: "generic",
-    Svg: ApiIcon,
-    monochrome: true,
-  },
-  {
-    slug: "browser",
-    name: "Browser",
-    aliases: ["web", "web app", "spa", "frontend"],
-    category: "generic",
-    Svg: BrowserIcon,
-    monochrome: true,
-  },
-  {
-    slug: "database",
-    name: "Database",
-    aliases: ["db", "datastore", "storage"],
-    category: "generic",
-    Svg: DatabaseIcon,
-    monochrome: true,
-  },
-  {
-    slug: "email",
-    name: "Email",
-    aliases: ["mail", "smtp", "ses", "notification", "sendgrid"],
-    category: "generic",
-    Svg: EmailIcon,
-    monochrome: true,
-  },
-  {
-    slug: "external",
-    name: "External system",
-    aliases: ["third party", "3rd party", "saas"],
-    category: "generic",
-    Svg: ExternalIcon,
-    monochrome: true,
-  },
-  {
-    slug: "file",
-    name: "File store",
-    aliases: ["document", "nfs", "volume", "disk"],
-    category: "generic",
-    Svg: FileIcon,
-    monochrome: true,
-  },
-  {
-    slug: "identity",
-    name: "Identity provider",
-    aliases: ["auth", "sso", "oauth", "iam", "keycloak", "key"],
-    category: "generic",
-    Svg: IdentityIcon,
-    monochrome: true,
-  },
-  {
-    slug: "mobile",
-    name: "Mobile",
-    aliases: ["phone", "ios", "android", "app"],
-    category: "generic",
-    Svg: MobileIcon,
-    monochrome: true,
-  },
-  {
-    slug: "monitoring",
-    name: "Monitoring",
-    aliases: ["observability", "grafana", "prometheus", "apm", "logs"],
-    category: "generic",
-    Svg: MonitoringIcon,
-    monochrome: true,
-  },
-  {
-    slug: "person",
-    name: "Person",
-    aliases: ["user", "actor", "people", "customer"],
-    category: "generic",
-    Svg: PersonIcon,
-    monochrome: true,
-  },
-  {
-    slug: "queue",
-    name: "Queue",
-    aliases: ["message queue", "mq", "broker", "topic"],
-    category: "generic",
-    Svg: QueueIcon,
-    monochrome: true,
-  },
-  {
-    slug: "scheduler",
-    name: "Scheduler",
-    aliases: ["cron", "job", "timer", "batch", "worker"],
-    category: "generic",
-    Svg: SchedulerIcon,
-    monochrome: true,
-  },
-  {
-    slug: "search",
-    name: "Search",
-    aliases: ["index", "query", "find", "magnifier"],
-    category: "generic",
-    Svg: SearchIcon,
-    monochrome: true,
-  },
-  {
-    slug: "service",
-    name: "Service",
-    aliases: ["application", "app", "system", "component"],
-    category: "generic",
-    Svg: ServiceIcon,
-    monochrome: true,
-  },
-  {
-    slug: "webhook",
-    name: "Webhook",
-    aliases: ["callback", "event", "hook", "push"],
-    category: "generic",
-    Svg: WebhookIcon,
-    monochrome: true,
-  },
-];
 
 const CATEGORY_RANK: ReadonlyMap<IconCategory, number> = new Map(
   ICON_CATEGORY_ORDER.map((category, index) => [category, index]),
@@ -707,10 +149,7 @@ const rankOf = (category: IconCategory): number =>
  * internal order survives the merge. `searchIcons("")` returns exactly this
  * order.
  */
-const ICON_DEFS: readonly IconDef[] = [
-  ...HAND_AUTHORED_DEFS,
-  ...BRAND_ICON_DEFS,
-]
+const ICON_DEFS: readonly IconDef[] = [...GENERIC_ICON_DEFS, ...BRAND_ICON_DEFS]
   .sort((a, b) => rankOf(a.category) - rankOf(b.category))
   .map(resolveStyles);
 

@@ -1,347 +1,157 @@
 import type { IconVariants } from "thesvg";
 
-import type { IconCategory } from "./categories";
 import { hasBakedInk, packagedSvgComponent, stripInk } from "./embed";
+import type { IconCategory } from "./categories";
 import type { IconSource } from "./registry";
 
 /**
- * Named-and-renamed imports, never the default, DELIBERATELY — a default
- * import was tried first and shipped ~284KB of dead strings per chunk: each
- * module's default export is an object literal referencing every export, so
- * importing it keeps `license`, `url` and every artwork alive past
- * tree-shaking. `slug`/`title` come from the package rather than being
- * retyped here (dry.md — the import path already pins which module they
- * belong to).
+ * Every brand mark in the registry, from ONE source: the `thesvg` package.
  *
- * WHICH ARTWORK BINDING an icon imports is not cosmetic, and the split is
- * the price of the mono/colour switch:
+ * WHAT THIS REPLACED, and why. The registry used to draw named products with
+ * hand-authored monochrome SVGs and reach for the package only to fill gaps,
+ * which produced three visual families on one canvas — a hand-drawn Postgres
+ * elephant beside the vendor's own Redis logo beside a lucide glyph — and
+ * left half the set with no colour version at all. Colour mode could not
+ * look coherent while a third of its marks had no colour to show. All 38
+ * hand-drawn product marks are gone; every product now comes from here, in
+ * both styles wherever the package publishes both.
  *
- *   - `variants` (45 icons) — needed to reach the `mono` artwork, which the
- *     package exposes ONLY through that object; there is no per-variant
- *     subpath. It drags the light/dark/wordmark strings in with it, about
- *     150KB across the set that nothing renders. That waste buys the switch,
- *     and it is why the other nine do not pay it.
- *   - `svg` (9 icons) — upstream ships them no `mono` variant, so `variants`
- *     would cost bytes for artwork we could not use anyway. These stay
- *     coloured in mono mode; see `IconDef.byStyle`.
+ * SLUGS ARE UNCHANGED by that swap, which is the entire reason the model
+ * stores a slug and never artwork: `@postgresql` in a document written a year
+ * ago resolves to the new drawing with no migration. Where the package's own
+ * name differs from ours the module is simply imported under our slug —
+ * `golang` reads `thesvg/go`, `gcp` reads `thesvg/google-cloud`.
  *
- * A leaner route exists if the waste ever matters: generate a module holding
- * just the 45 mono strings (~52KB) and pin it to the package with a `check:*`
- * script, the way `check:skill` pins the generated skill document.
+ * NAMES AND ALIASES ARE OURS, not the package's. They are search keys people
+ * type ("pg", "postgres") and the package's titles are occasionally wrong or
+ * over-formal; that curation survived the swap deliberately.
+ *
+ * The concepts with no logo — a database, a queue, a person — are NOT here.
+ * They come from lucide (`./generic`), because there is nothing for a brand
+ * set to say about them.
  */
+
+import { variants as angularVariants } from "thesvg/angular";
+import { variants as ansibleVariants } from "thesvg/ansible";
+import { variants as argocdVariants } from "thesvg/argocd";
+import { variants as anthropicVariants } from "thesvg/anthropic";
+import { variants as apacheAirflowVariants } from "thesvg/apache-airflow";
 import {
-  slug as angularSlug,
-  title as angularTitle,
-  variants as angularVariants,
-} from "thesvg/angular";
-import {
-  slug as ansibleSlug,
-  title as ansibleTitle,
-  variants as ansibleVariants,
-} from "thesvg/ansible";
-import {
-  slug as anthropicSlug,
-  title as anthropicTitle,
-  variants as anthropicVariants,
-} from "thesvg/anthropic";
-import {
-  slug as airflowSlug,
-  title as airflowTitle,
-  variants as airflowVariants,
-} from "thesvg/apache-airflow";
-import {
-  slug as pulsarSlug,
-  title as pulsarTitle,
-  variants as pulsarVariants,
-} from "thesvg/apache-pulsar";
-import {
-  slug as sparkSlug,
-  title as sparkTitle,
-  variants as sparkVariants,
-} from "thesvg/apache-spark";
-import { slug as argocdSlug, variants as argocdVariants } from "thesvg/argocd";
-import {
-  slug as auth0Slug,
-  title as auth0Title,
-  variants as auth0Variants,
-} from "thesvg/auth0";
-import {
-  slug as bunSlug,
-  title as bunTitle,
-  variants as bunVariants,
-} from "thesvg/bun";
-import {
-  slug as celerySlug,
-  title as celeryTitle,
-  variants as celeryVariants,
-} from "thesvg/celery";
-import {
-  slug as circleciSlug,
-  title as circleciTitle,
-  variants as circleciVariants,
-} from "thesvg/circleci";
-import {
-  slug as cockroachdbSlug,
-  title as cockroachdbTitle,
-  svg as cockroachdbSvg,
-} from "thesvg/cockroachdb";
-/* Mono artwork only — the package catalogues the company separately from the
-   product, and only the company entry carries a mono variant. Our slug stays
+  license as cassandraAltLicence,
+  variants as cassandraAltVariants,
+} from "thesvg/apache-cassandra";
+import { variants as kafkaAltVariants } from "thesvg/apache-kafka";
+import { variants as apachePulsarVariants } from "thesvg/apache-pulsar";
+import { variants as apacheSparkVariants } from "thesvg/apache-spark";
+import { variants as auth0Variants } from "thesvg/auth0";
+import { variants as awsVariants } from "thesvg/aws";
+import { svg as s3Svg } from "thesvg/aws-amazon-simple-storage-service";
+import { svg as azureSvg } from "thesvg/azure";
+import { variants as bunVariants } from "thesvg/bun";
+import { svg as cassandraSvg } from "thesvg/cassandra";
+import { variants as celeryVariants } from "thesvg/celery";
+import { variants as circleciVariants } from "thesvg/circleci";
+import { variants as clickhouseVariants } from "thesvg/clickhouse";
+import { variants as cloudflareVariants } from "thesvg/cloudflare";
+import { svg as cockroachdbSvg } from "thesvg/cockroachdb";
+/* Mono artwork only. The package catalogues the company separately from the
+   product and only the company entry publishes a mono variant; our slug stays
    `cockroachdb` (monoFromAlternate explains why). */
 import {
-  variants as cockroachLabsVariants,
   license as cockroachLabsLicence,
+  variants as cockroachLabsVariants,
 } from "thesvg/cockroach-labs";
+import { variants as cplusplusVariants } from "thesvg/cplusplus";
+import { variants as databricksVariants } from "thesvg/databricks";
+import { variants as datadogVariants } from "thesvg/datadog";
+import { svg as dbtSvg } from "thesvg/dbt";
+import { variants as digitaloceanVariants } from "thesvg/digitalocean";
+import { variants as dockerVariants } from "thesvg/docker";
+import { variants as dotnetVariants } from "thesvg/dotnet";
+import { variants as dynamodbVariants } from "thesvg/dynamodb";
+import { variants as elasticsearchVariants } from "thesvg/elasticsearch";
+import { svg as envoySvg } from "thesvg/envoy";
 import {
-  slug as cplusplusSlug,
-  title as cplusplusTitle,
-  variants as cplusplusVariants,
-} from "thesvg/cplusplus";
+  license as envoyAltLicence,
+  variants as envoyAltVariants,
+} from "thesvg/envoy-proxy";
+import { variants as firebaseVariants } from "thesvg/firebase";
+import { variants as flutterVariants } from "thesvg/flutter";
+import { variants as githubVariants } from "thesvg/github";
+import { variants as githubActionsVariants } from "thesvg/github-actions";
+import { variants as gitlabVariants } from "thesvg/gitlab";
+import { variants as golangVariants } from "thesvg/go";
+import { variants as gcpVariants } from "thesvg/google-cloud";
+import { variants as grafanaVariants } from "thesvg/grafana";
+import { variants as graphqlVariants } from "thesvg/graphql";
+import { variants as grpcVariants } from "thesvg/grpc";
+import { variants as helmVariants } from "thesvg/helm";
+import { license as herokuLicence, svg as herokuSvg } from "thesvg/heroku";
+import { variants as influxdbVariants } from "thesvg/influxdb";
+import { variants as istioVariants } from "thesvg/istio";
+import { license as javaLicence, svg as javaSvg } from "thesvg/java";
+import { variants as jenkinsVariants } from "thesvg/jenkins";
+import { variants as keycloakVariants } from "thesvg/keycloak";
+import { variants as kongVariants } from "thesvg/kong";
+import { variants as kotlinVariants } from "thesvg/kotlin";
+import { variants as kubernetesVariants } from "thesvg/kubernetes";
+import { variants as lambdaVariants } from "thesvg/lambda";
+import { variants as mariadbVariants } from "thesvg/mariadb";
+import { variants as memcachedVariants } from "thesvg/memcached";
 import {
-  slug as databricksSlug,
-  title as databricksTitle,
-  variants as databricksVariants,
-} from "thesvg/databricks";
-import {
-  slug as datadogSlug,
-  title as datadogTitle,
-  variants as datadogVariants,
-} from "thesvg/datadog";
-import { slug as dbtSlug, title as dbtTitle, svg as dbtSvg } from "thesvg/dbt";
-import {
-  slug as digitaloceanSlug,
-  title as digitaloceanTitle,
-  variants as digitaloceanVariants,
-} from "thesvg/digitalocean";
-import {
-  slug as flutterSlug,
-  title as flutterTitle,
-  variants as flutterVariants,
-} from "thesvg/flutter";
-import {
-  slug as githubSlug,
-  title as githubTitle,
-  variants as githubVariants,
-} from "thesvg/github";
-import {
-  slug as githubActionsSlug,
-  title as githubActionsTitle,
-  variants as githubActionsVariants,
-} from "thesvg/github-actions";
-import {
-  slug as gitlabSlug,
-  title as gitlabTitle,
-  variants as gitlabVariants,
-} from "thesvg/gitlab";
-import {
-  slug as grafanaSlug,
-  title as grafanaTitle,
-  variants as grafanaVariants,
-} from "thesvg/grafana";
-import {
-  slug as helmSlug,
-  title as helmTitle,
-  variants as helmVariants,
-} from "thesvg/helm";
-import {
-  slug as herokuSlug,
-  title as herokuTitle,
-  svg as herokuSvg,
-  license as herokuLicence,
-} from "thesvg/heroku";
-import {
-  slug as influxdbSlug,
-  title as influxdbTitle,
-  variants as influxdbVariants,
-} from "thesvg/influxdb";
-import {
-  slug as istioSlug,
-  title as istioTitle,
-  variants as istioVariants,
-} from "thesvg/istio";
-import {
-  slug as jenkinsSlug,
-  title as jenkinsTitle,
-  variants as jenkinsVariants,
-} from "thesvg/jenkins";
-import {
-  slug as keycloakSlug,
-  title as keycloakTitle,
-  variants as keycloakVariants,
-} from "thesvg/keycloak";
-import {
-  slug as kotlinSlug,
-  title as kotlinTitle,
-  variants as kotlinVariants,
-} from "thesvg/kotlin";
-import {
-  slug as mariadbSlug,
-  title as mariadbTitle,
-  variants as mariadbVariants,
-} from "thesvg/mariadb";
-import {
-  slug as mssqlSlug,
-  title as mssqlTitle,
-  svg as mssqlSvg,
-  license as mssqlLicence,
+  license as microsoftSqlServerLicence,
+  svg as microsoftSqlServerSvg,
 } from "thesvg/microsoft-sql-server";
+import { variants as minioVariants } from "thesvg/minio";
+import { variants as mongodbVariants } from "thesvg/mongodb";
+import { variants as mysqlVariants } from "thesvg/mysql";
+import { svg as natsSvg } from "thesvg/nats";
 import {
-  slug as minioSlug,
-  title as minioTitle,
-  variants as minioVariants,
-} from "thesvg/minio";
+  license as natsAltLicence,
+  variants as natsAltVariants,
+} from "thesvg/natsdotio";
+import { variants as neo4jVariants } from "thesvg/neo4j";
+import { variants as netlifyVariants } from "thesvg/netlify";
+import { variants as newRelicVariants } from "thesvg/new-relic";
 import {
-  slug as neo4jSlug,
-  title as neo4jTitle,
-  variants as neo4jVariants,
-} from "thesvg/neo4j";
+  license as nextjsAltLicence,
+  variants as nextjsAltVariants,
+} from "thesvg/nextdotjs";
+import { svg as nextjsSvg } from "thesvg/nextjs";
+import { variants as nginxVariants } from "thesvg/nginx";
 import {
-  slug as netlifySlug,
-  title as netlifyTitle,
-  variants as netlifyVariants,
-} from "thesvg/netlify";
-import {
-  slug as newRelicSlug,
-  title as newRelicTitle,
-  variants as newRelicVariants,
-} from "thesvg/new-relic";
-import {
-  slug as oktaSlug,
-  title as oktaTitle,
-  variants as oktaVariants,
-} from "thesvg/okta";
-import {
-  slug as openaiSlug,
-  title as openaiTitle,
-  variants as openaiVariants,
-} from "thesvg/openai";
-import {
-  slug as otelSlug,
-  title as otelTitle,
-  variants as otelVariants,
-} from "thesvg/opentelemetry";
-import {
-  slug as prometheusSlug,
-  title as prometheusTitle,
-  variants as prometheusVariants,
-} from "thesvg/prometheus";
-import {
-  slug as sentrySlug,
-  title as sentryTitle,
-  variants as sentryVariants,
-} from "thesvg/sentry";
-import {
-  slug as snowflakeSlug,
-  title as snowflakeTitle,
-  variants as snowflakeVariants,
-} from "thesvg/snowflake";
-import {
-  slug as splunkSlug,
-  title as splunkTitle,
-  variants as splunkVariants,
-} from "thesvg/splunk";
-import {
-  slug as springBootSlug,
-  title as springBootTitle,
-  variants as springBootVariants,
-} from "thesvg/spring-boot";
-import {
-  slug as stripeSlug,
-  title as stripeTitle,
-  variants as stripeVariants,
-} from "thesvg/stripe";
-import {
-  slug as supabaseSlug,
-  title as supabaseTitle,
-  variants as supabaseVariants,
-} from "thesvg/supabase";
-import {
-  slug as svelteSlug,
-  title as svelteTitle,
-  variants as svelteVariants,
-} from "thesvg/svelte";
-import {
-  slug as swiftSlug,
-  title as swiftTitle,
-  variants as swiftVariants,
-} from "thesvg/swift";
-import {
-  slug as temporalSlug,
-  title as temporalTitle,
-  variants as temporalVariants,
-} from "thesvg/temporal";
-import {
-  slug as traefikSlug,
-  title as traefikTitle,
-  svg as traefikSvg,
-} from "thesvg/traefik";
-import {
-  slug as twilioSlug,
-  title as twilioTitle,
-  svg as twilioSvg,
-  license as twilioLicence,
-} from "thesvg/twilio";
-import {
-  slug as vaultSlug,
-  title as vaultTitle,
-  variants as vaultVariants,
-} from "thesvg/vault";
-import {
-  slug as vercelSlug,
-  title as vercelTitle,
-  variants as vercelVariants,
-} from "thesvg/vercel";
-import {
-  slug as vueSlug,
-  title as vueTitle,
-  svg as vueSvg,
-  license as vueLicence,
-} from "thesvg/vue";
-
-/**
- * The upstream-shipped artwork that carries NO ink of its own, for the three
- * marks (Vercel, Anthropic, OpenAI) that are monochrome by design and whose
- * default variant is white — invisible on a light canvas.
- *
- * Taking the `light` variant instead was tried and is WRONG: `light` means
- * "dark ink for light backgrounds" and bakes in `fill="#000"`, which fixes
- * the light theme by making the mark black-on-near-black in the dark one.
- * There is no single baked ink that works in both themes, and per-theme
- * artwork is not available to us — the exporter memoises markup per slug
- * (icon-markup.ts), so a theme-dependent icon would break canvas/export
- * parity.
- *
- * The way out is that these brands HAVE no colour to preserve: their marks
- * are a single flat ink by design, and upstream ships them without any. An
- * artwork that specifies no `fill` inherits one, so these three join the
- * hand-authored `currentColor` set (`monochrome: true`) and follow the theme
- * in both directions. That is not recolouring a coloured mark — there is no
- * colour being overridden — and it is why this treatment is confined to
- * brands whose identity is monochrome. A brand with real colours must keep
- * them; see the registry header.
- *
- * The ink assertion is the load-bearing part: if upstream ever bakes a fill
- * into these variants, `currentColor` would silently stop reaching the paths
- * and the mark would go back to being invisible in one theme. Failing the
- * build is the only way that gets noticed.
- */
-function inkFreeVariant(slug: string, variants: IconVariants): string {
-  /* `mono` where it exists (Vercel, Anthropic); OpenAI ships no `mono`, but
-     its `light` carries no fill either — the white default lives in `dark`. */
-  const markup = variants["mono"] ?? variants["light"];
-  if (markup === undefined) {
-    throw new Error(`brand icon "${slug}": has no "mono" or "light" variant`);
-  }
-  const baked = hasBakedInk(markup);
-  if (baked !== null) {
-    throw new Error(
-      `brand icon "${slug}": expected ink-free artwork to inherit ` +
-        `currentColor, but it bakes in ${baked} — a baked ink is ` +
-        `invisible in one of the two themes`,
-    );
-  }
-  return markup;
-}
+  license as nodejsAltLicence,
+  variants as nodejsAltVariants,
+} from "thesvg/nodedotjs";
+import { svg as nodejsSvg } from "thesvg/nodejs";
+import { variants as oktaVariants } from "thesvg/okta";
+import { variants as openaiVariants } from "thesvg/openai";
+import { variants as opentelemetryVariants } from "thesvg/opentelemetry";
+import { variants as phpVariants } from "thesvg/php";
+import { variants as postgresqlVariants } from "thesvg/postgresql";
+import { variants as prometheusVariants } from "thesvg/prometheus";
+import { variants as pythonVariants } from "thesvg/python";
+import { variants as rabbitmqVariants } from "thesvg/rabbitmq";
+import { variants as reactVariants } from "thesvg/react";
+import { variants as redisVariants } from "thesvg/redis";
+import { variants as rustVariants } from "thesvg/rust";
+import { variants as sentryVariants } from "thesvg/sentry";
+import { variants as snowflakeVariants } from "thesvg/snowflake";
+import { variants as splunkVariants } from "thesvg/splunk";
+import { variants as springBootVariants } from "thesvg/spring-boot";
+import { variants as sqliteVariants } from "thesvg/sqlite";
+import { variants as stripeVariants } from "thesvg/stripe";
+import { variants as supabaseVariants } from "thesvg/supabase";
+import { variants as svelteVariants } from "thesvg/svelte";
+import { variants as swiftVariants } from "thesvg/swift";
+import { variants as temporalVariants } from "thesvg/temporal";
+import { variants as terraformVariants } from "thesvg/terraform";
+import { license as traefikLicence, svg as traefikSvg } from "thesvg/traefik";
+import { license as twilioLicence, svg as twilioSvg } from "thesvg/twilio";
+import { variants as typescriptVariants } from "thesvg/typescript";
+import { variants as vaultVariants } from "thesvg/vault";
+import { variants as vercelVariants } from "thesvg/vercel";
+import { license as vueLicence, svg as vueSvg } from "thesvg/vue";
 
 /* -------------------------------------------------------------------------- */
 /* Choosing the artwork for each style                                         */
@@ -501,6 +311,38 @@ function monoFromAlternate(
   return { colour, mono };
 }
 
+/**
+ * The upstream artwork that carries NO ink of its own, for marks that are
+ * monochrome by design and whose default variant is white — invisible on a
+ * light canvas.
+ *
+ * Taking the `light` variant instead was tried and is WRONG: `light` means
+ * "dark ink for light backgrounds" and bakes in `fill="#000"`, which fixes the
+ * light theme by making the mark black-on-near-black in the dark one. There is
+ * no single baked ink that works in both, and per-theme artwork would break
+ * canvas/export parity (icon-markup.ts memoises per slug).
+ *
+ * These brands have no colour to preserve — one flat ink by design — so the
+ * ink-free artwork inherits `currentColor` and follows the theme in both
+ * directions. The assertion is load-bearing: if upstream ever bakes a fill in,
+ * `currentColor` would silently stop reaching the paths.
+ */
+function inkFreeVariant(slug: string, variants: IconVariants): string {
+  const markup = variants["mono"] ?? variants["light"];
+  if (markup === undefined) {
+    throw new Error(`brand icon "${slug}": has no "mono" or "light" variant`);
+  }
+  const baked = hasBakedInk(markup);
+  if (baked !== null) {
+    throw new Error(
+      `brand icon "${slug}": expected ink-free artwork to inherit ` +
+        `currentColor, but it bakes in ${baked} — a baked ink is ` +
+        `invisible in one of the two themes`,
+    );
+  }
+  return markup;
+}
+
 function alwaysMono(slug: string, variants: IconVariants): BrandArt {
   const markup = inkFreeVariant(slug, variants);
   return { colour: markup, mono: markup };
@@ -511,9 +353,9 @@ function alwaysMono(slug: string, variants: IconVariants): BrandArt {
 /* -------------------------------------------------------------------------- */
 
 interface BrandEntry {
-  /** thesvg's slug, imported from the module the path already names. */
+  /** OUR slug — what documents store, and never the package's own naming. */
   slug: string;
-  /** Display name — thesvg's title, overridden where it misspells the brand. */
+  /** OUR display name; the package's titles are sometimes wrong or over-formal. */
   name: string;
   /** Which artwork each style renders — `withMono`/`colourOnly`/`alwaysMono`. */
   art: BrandArt;
@@ -551,416 +393,697 @@ function brandDef(entry: BrandEntry): IconSource {
 }
 
 /* -------------------------------------------------------------------------- */
-/* The curated set                                                             */
+/* The set                                                                     */
 /* -------------------------------------------------------------------------- */
 
 /**
- * 54 brand marks, hand-picked from thesvg's ~6,500 for what a software
- * architecture diagram actually labels: languages and runtimes the hand set
- * lacks, the databases and data-pipeline tools beyond the big five, CI/CD and
- * IaC, observability, and the SaaS/identity providers that show up as
- * external systems. Each is imported BY SUBPATH (`thesvg/<slug>`, one module
- * per icon) so the bundle carries exactly these 54 — importing the barrel
- * would pull the full set past tree-shaking's guarantees and wreck the
- * bundle.
+ * 90 product marks. Which artwork each renders is decided by what the
+ * package actually publishes, and the helper named on each entry says which
+ * case it is — `withMono` for the great majority that ship both, and the
+ * others for the awkward cases each helper documents.
  *
- * Curation rules, in force whenever this list grows:
- *   - No slug the hand-authored registry already owns (thesvg has
- *     `postgresql`, `redis`, `kafka`, …; the hand-authored marks keep those
- *     slugs — the registry throws on a collision rather than shadowing).
- *   - Nothing containing `<style>` (see FORBIDDEN_MARKUP); `splitBrandSvg`
- *     enforces this at build time.
- *   - White-ink defaults take the upstream `light` variant (import block
- *     header).
- *
- * Sorted by category (ICON_CATEGORY_ORDER), then name — the registry's
- * stable category sort preserves this name order in the picker.
+ * Sorted by category (ICON_CATEGORY_ORDER), then name; the registry's stable
+ * category sort preserves this order in the picker.
  */
 const BRAND_ENTRIES: readonly BrandEntry[] = [
-  /* -- Languages & Runtimes ------------------------------------------------ */
+  /* -- languages ----------------------------------------------------------- */
   {
-    slug: angularSlug,
-    name: angularTitle,
-    art: withMono(angularSlug, angularVariants),
+    slug: "golang",
+    name: "Golang",
+    aliases: ["go", "gopher"],
     category: "languages",
-    aliases: ["ng"],
+    art: alwaysMono("golang", golangVariants),
   },
   {
-    slug: bunSlug,
-    name: bunTitle,
-    art: withMono(bunSlug, bunVariants),
+    slug: "nextjs",
+    name: "Next.js",
+    aliases: ["next", "next.js", "vercel"],
     category: "languages",
-    aliases: ["bunjs"],
-  },
-  {
-    slug: cplusplusSlug,
-    name: cplusplusTitle,
-    art: withMono(cplusplusSlug, cplusplusVariants),
-    category: "languages",
-    aliases: ["cpp", "c plus plus"],
-  },
-  {
-    slug: flutterSlug,
-    name: flutterTitle,
-    art: withMono(flutterSlug, flutterVariants),
-    category: "languages",
-    aliases: ["dart"],
-  },
-  {
-    slug: kotlinSlug,
-    name: kotlinTitle,
-    art: withMono(kotlinSlug, kotlinVariants),
-    category: "languages",
-    aliases: ["kt"],
-  },
-  {
-    slug: springBootSlug,
-    name: springBootTitle,
-    art: withMono(springBootSlug, springBootVariants),
-    category: "languages",
-    aliases: ["spring"],
-  },
-  {
-    slug: svelteSlug,
-    name: svelteTitle,
-    art: withMono(svelteSlug, svelteVariants),
-    category: "languages",
-    aliases: ["sveltekit"],
-  },
-  {
-    slug: swiftSlug,
-    name: swiftTitle,
-    art: withMono(swiftSlug, swiftVariants),
-    category: "languages",
-    aliases: ["ios", "swiftui"],
-  },
-  {
-    slug: vueSlug,
-    name: vueTitle,
-    art: derivedMono(vueSlug, vueSvg, vueLicence),
-    category: "languages",
-    aliases: ["vuejs", "nuxt"],
-  },
-  /* -- Data & Databases ----------------------------------------------------- */
-  {
-    slug: airflowSlug,
-    name: airflowTitle,
-    art: withMono(airflowSlug, airflowVariants),
-    category: "databases",
-    aliases: ["airflow", "dag", "etl"],
-  },
-  {
-    slug: sparkSlug,
-    name: sparkTitle,
-    art: withMono(sparkSlug, sparkVariants),
-    category: "databases",
-    aliases: ["spark", "batch"],
-  },
-  {
-    slug: cockroachdbSlug,
-    name: cockroachdbTitle,
     art: monoFromAlternate(
-      cockroachdbSlug,
+      "nextjs",
+      nextjsSvg,
+      nextjsAltVariants,
+      nextjsAltLicence,
+    ),
+  },
+  {
+    slug: "dotnet",
+    name: ".NET",
+    aliases: ["c#", "csharp", "asp.net", "clr"],
+    category: "languages",
+    art: withMono("dotnet", dotnetVariants),
+  },
+  {
+    slug: "java",
+    name: "Java",
+    aliases: ["jvm", "kotlin", "spring", "spring boot"],
+    category: "languages",
+    art: derivedMono("java", javaSvg, javaLicence),
+  },
+  {
+    slug: "nodejs",
+    name: "Node.js",
+    aliases: ["node", "express", "nest", "nestjs"],
+    category: "languages",
+    art: monoFromAlternate(
+      "nodejs",
+      nodejsSvg,
+      nodejsAltVariants,
+      nodejsAltLicence,
+    ),
+  },
+  {
+    slug: "php",
+    name: "PHP",
+    aliases: ["laravel", "symfony"],
+    category: "languages",
+    art: alwaysMono("php", phpVariants),
+  },
+  {
+    slug: "python",
+    name: "Python",
+    aliases: ["py", "django", "fastapi", "flask"],
+    category: "languages",
+    art: withMono("python", pythonVariants),
+  },
+  {
+    slug: "react",
+    name: "React",
+    aliases: ["reactjs", "jsx", "vite", "remix"],
+    category: "languages",
+    art: withMono("react", reactVariants),
+  },
+  {
+    slug: "rust",
+    name: "Rust",
+    aliases: ["rs", "cargo", "axum", "tokio"],
+    category: "languages",
+    art: alwaysMono("rust", rustVariants),
+  },
+  {
+    slug: "typescript",
+    name: "TypeScript",
+    aliases: ["ts", "javascript", "js"],
+    category: "languages",
+    art: withMono("typescript", typescriptVariants),
+  },
+  {
+    slug: "angular",
+    name: "Angular",
+    aliases: ["ng"],
+    category: "languages",
+    art: withMono("angular", angularVariants),
+  },
+  {
+    slug: "bun",
+    name: "Bun",
+    aliases: ["bunjs"],
+    category: "languages",
+    art: withMono("bun", bunVariants),
+  },
+  {
+    slug: "cplusplus",
+    name: "C++",
+    aliases: ["cpp", "c plus plus"],
+    category: "languages",
+    art: withMono("cplusplus", cplusplusVariants),
+  },
+  {
+    slug: "flutter",
+    name: "Flutter",
+    aliases: ["dart"],
+    category: "languages",
+    art: withMono("flutter", flutterVariants),
+  },
+  {
+    slug: "kotlin",
+    name: "Kotlin",
+    aliases: ["kt"],
+    category: "languages",
+    art: withMono("kotlin", kotlinVariants),
+  },
+  {
+    slug: "spring-boot",
+    name: "Spring Boot",
+    aliases: ["spring"],
+    category: "languages",
+    art: withMono("spring-boot", springBootVariants),
+  },
+  {
+    slug: "svelte",
+    name: "Svelte",
+    aliases: ["sveltekit"],
+    category: "languages",
+    art: withMono("svelte", svelteVariants),
+  },
+  {
+    slug: "swift",
+    name: "Swift",
+    aliases: ["ios", "swiftui"],
+    category: "languages",
+    art: withMono("swift", swiftVariants),
+  },
+  {
+    slug: "vue",
+    name: "Vue",
+    aliases: ["vuejs", "nuxt"],
+    category: "languages",
+    art: derivedMono("vue", vueSvg, vueLicence),
+  },
+  /* -- databases ----------------------------------------------------------- */
+  {
+    slug: "mongodb",
+    name: "MongoDB",
+    aliases: ["mongo", "documentdb"],
+    category: "databases",
+    art: withMono("mongodb", mongodbVariants),
+  },
+  {
+    slug: "mysql",
+    name: "MySQL",
+    aliases: ["my-sql", "mariadb"],
+    category: "databases",
+    art: alwaysMono("mysql", mysqlVariants),
+  },
+  {
+    slug: "postgresql",
+    name: "PostgreSQL",
+    aliases: ["pg", "postgres", "psql"],
+    category: "databases",
+    art: withMono("postgresql", postgresqlVariants),
+  },
+  {
+    slug: "elasticsearch",
+    name: "Elasticsearch",
+    aliases: ["elastic", "opensearch", "search", "lucene"],
+    category: "databases",
+    art: withMono("elasticsearch", elasticsearchVariants),
+  },
+  {
+    slug: "cassandra",
+    name: "Cassandra",
+    aliases: ["apache cassandra", "scylla", "wide column"],
+    category: "databases",
+    art: monoFromAlternate(
+      "cassandra",
+      cassandraSvg,
+      cassandraAltVariants,
+      cassandraAltLicence,
+    ),
+  },
+  {
+    slug: "clickhouse",
+    name: "ClickHouse",
+    aliases: ["olap", "column store", "analytics db"],
+    category: "databases",
+    art: withMono("clickhouse", clickhouseVariants),
+  },
+  {
+    slug: "dynamodb",
+    name: "DynamoDB",
+    aliases: ["dynamo", "ddb", "key value"],
+    category: "databases",
+    art: withMono("dynamodb", dynamodbVariants),
+  },
+  {
+    slug: "sqlite",
+    name: "SQLite",
+    aliases: ["sqlite3", "embedded db", "local db"],
+    category: "databases",
+    art: withMono("sqlite", sqliteVariants),
+  },
+  {
+    slug: "apache-airflow",
+    name: "Apache Airflow",
+    aliases: ["airflow", "dag", "etl"],
+    category: "databases",
+    art: withMono("apache-airflow", apacheAirflowVariants),
+  },
+  {
+    slug: "apache-spark",
+    name: "Apache Spark",
+    aliases: ["spark", "batch"],
+    category: "databases",
+    art: withMono("apache-spark", apacheSparkVariants),
+  },
+  {
+    slug: "cockroachdb",
+    name: "CockroachDB",
+    aliases: ["crdb", "distributed sql"],
+    category: "databases",
+    art: monoFromAlternate(
+      "cockroachdb",
       cockroachdbSvg,
       cockroachLabsVariants,
       cockroachLabsLicence,
     ),
-    category: "databases",
-    aliases: ["crdb", "distributed sql"],
   },
   {
-    slug: dbtSlug,
-    name: dbtTitle,
-    art: colourOnly(dbtSvg),
-    category: "databases",
+    slug: "dbt",
+    name: "dbt",
     aliases: ["data build tool"],
+    category: "databases",
+    art: colourOnly(dbtSvg),
   },
   {
-    slug: influxdbSlug,
-    name: influxdbTitle,
-    art: withMono(influxdbSlug, influxdbVariants),
-    category: "databases",
+    slug: "influxdb",
+    name: "InfluxDB",
     aliases: ["time series", "tsdb"],
+    category: "databases",
+    art: withMono("influxdb", influxdbVariants),
   },
   {
-    slug: mariadbSlug,
-    name: mariadbTitle,
-    art: withMono(mariadbSlug, mariadbVariants),
-    category: "databases",
+    slug: "mariadb",
+    name: "MariaDB",
     aliases: ["maria"],
+    category: "databases",
+    art: withMono("mariadb", mariadbVariants),
   },
   {
-    slug: mssqlSlug,
-    name: mssqlTitle,
-    art: derivedMono(mssqlSlug, mssqlSvg, mssqlLicence),
-    category: "databases",
+    slug: "microsoft-sql-server",
+    name: "Microsoft SQL Server ",
     aliases: ["mssql", "sql server"],
+    category: "databases",
+    art: derivedMono(
+      "microsoft-sql-server",
+      microsoftSqlServerSvg,
+      microsoftSqlServerLicence,
+    ),
   },
   {
-    slug: neo4jSlug,
-    name: neo4jTitle,
-    art: withMono(neo4jSlug, neo4jVariants),
-    category: "databases",
+    slug: "neo4j",
+    name: "Neo4j",
     aliases: ["graph db", "cypher"],
+    category: "databases",
+    art: withMono("neo4j", neo4jVariants),
   },
   {
-    slug: snowflakeSlug,
-    name: snowflakeTitle,
-    art: withMono(snowflakeSlug, snowflakeVariants),
-    category: "databases",
+    slug: "snowflake",
+    name: "Snowflake",
     aliases: ["data warehouse"],
-  },
-  {
-    slug: supabaseSlug,
-    name: supabaseTitle,
-    art: withMono(supabaseSlug, supabaseVariants),
     category: "databases",
+    art: withMono("snowflake", snowflakeVariants),
+  },
+  {
+    slug: "supabase",
+    name: "Supabase",
     aliases: ["baas"],
+    category: "databases",
+    art: withMono("supabase", supabaseVariants),
   },
-  /* -- Caching & Messaging -------------------------------------------------- */
+  /* -- messaging ----------------------------------------------------------- */
   {
-    slug: pulsarSlug,
-    name: pulsarTitle,
-    art: withMono(pulsarSlug, pulsarVariants),
+    slug: "redis",
+    name: "Redis",
+    aliases: ["cache", "valkey"],
     category: "messaging",
+    art: withMono("redis", redisVariants),
+  },
+  {
+    slug: "kafka",
+    name: "Kafka",
+    aliases: ["event stream", "streaming", "msk", "pubsub"],
+    category: "messaging",
+    /* Kafka's own mark is #1a1919 — near-black, and invisible on a dark
+       canvas — so the ink-free Apache artwork is used in BOTH styles rather
+       than only for mono. Nothing is lost: a flat black logo has no colour to
+       withhold. */
+    art: alwaysMono("kafka", kafkaAltVariants),
+  },
+  {
+    slug: "rabbitmq",
+    name: "RabbitMQ",
+    aliases: ["amqp", "rabbit"],
+    category: "messaging",
+    art: alwaysMono("kafka", rabbitmqVariants),
+  },
+  {
+    slug: "memcached",
+    name: "Memcached",
+    aliases: ["memcache", "cache", "in memory"],
+    category: "messaging",
+    art: withMono("memcached", memcachedVariants),
+  },
+  {
+    slug: "nats",
+    name: "NATS",
+    aliases: ["jetstream", "pub sub", "messaging"],
+    category: "messaging",
+    art: monoFromAlternate("nats", natsSvg, natsAltVariants, natsAltLicence),
+  },
+  {
+    slug: "apache-pulsar",
+    name: "Apache Pulsar",
     aliases: ["pulsar"],
+    category: "messaging",
+    art: withMono("apache-pulsar", apachePulsarVariants),
   },
   {
-    slug: celerySlug,
-    name: celeryTitle,
-    art: withMono(celerySlug, celeryVariants),
-    category: "messaging",
+    slug: "celery",
+    name: "Celery",
     aliases: ["task queue", "worker"],
-  },
-  {
-    slug: temporalSlug,
-    name: temporalTitle,
-    art: withMono(temporalSlug, temporalVariants),
     category: "messaging",
+    art: withMono("celery", celeryVariants),
+  },
+  {
+    slug: "temporal",
+    name: "Temporal",
     aliases: ["workflow", "durable execution"],
+    category: "messaging",
+    art: withMono("temporal", temporalVariants),
   },
-  /* -- Networking & Edge ---------------------------------------------------- */
+  /* -- networking ---------------------------------------------------------- */
   {
-    slug: istioSlug,
-    name: istioTitle,
-    art: withMono(istioSlug, istioVariants),
+    slug: "kong",
+    name: "Kong",
+    aliases: ["api gateway", "gateway"],
     category: "networking",
+    art: withMono("kong", kongVariants),
+  },
+  {
+    slug: "nginx",
+    name: "nginx",
+    aliases: ["reverse proxy", "web server"],
+    category: "networking",
+    art: withMono("nginx", nginxVariants),
+  },
+  {
+    slug: "graphql",
+    name: "GraphQL",
+    aliases: ["gql", "apollo", "federation"],
+    category: "networking",
+    art: withMono("graphql", graphqlVariants),
+  },
+  {
+    slug: "grpc",
+    name: "gRPC",
+    aliases: ["rpc", "protobuf", "proto"],
+    category: "networking",
+    art: alwaysMono("grpc", grpcVariants),
+  },
+  {
+    slug: "envoy",
+    name: "Envoy",
+    aliases: ["sidecar", "service mesh", "istio", "proxy"],
+    category: "networking",
+    art: monoFromAlternate(
+      "envoy",
+      envoySvg,
+      envoyAltVariants,
+      envoyAltLicence,
+    ),
+  },
+  {
+    slug: "istio",
+    name: "Istio",
     aliases: ["service mesh"],
-  },
-  {
-    slug: traefikSlug,
-    name: traefikTitle,
-    art: colourOnly(traefikSvg),
     category: "networking",
+    art: withMono("istio", istioVariants),
+  },
+  {
+    slug: "traefik",
+    name: "Traefik",
     aliases: ["ingress", "reverse proxy"],
+    category: "networking",
+    art: derivedMono("traefik", traefikSvg, traefikLicence),
   },
-  /* -- Cloud ----------------------------------------------------------------- */
+  /* -- cloud --------------------------------------------------------------- */
   {
-    slug: databricksSlug,
-    name: databricksTitle,
-    art: withMono(databricksSlug, databricksVariants),
+    slug: "cloudflare",
+    name: "Cloudflare",
+    aliases: ["cf", "cdn", "edge"],
     category: "cloud",
+    art: withMono("cloudflare", cloudflareVariants),
+  },
+  {
+    slug: "aws",
+    name: "AWS",
+    aliases: ["amazon", "amazon web services", "ec2"],
+    category: "cloud",
+    art: withMono("aws", awsVariants),
+  },
+  {
+    slug: "azure",
+    name: "Azure",
+    aliases: ["microsoft azure", "msft"],
+    category: "cloud",
+    art: colourOnly(azureSvg),
+  },
+  {
+    slug: "docker",
+    name: "Docker",
+    aliases: ["container", "oci", "compose"],
+    category: "cloud",
+    art: withMono("docker", dockerVariants),
+  },
+  {
+    slug: "firebase",
+    name: "Firebase",
+    aliases: ["gcp firebase", "firestore"],
+    category: "cloud",
+    art: withMono("firebase", firebaseVariants),
+  },
+  {
+    slug: "gcp",
+    name: "Google Cloud",
+    aliases: ["google", "google cloud platform", "big query"],
+    category: "cloud",
+    art: withMono("gcp", gcpVariants),
+  },
+  {
+    slug: "kubernetes",
+    name: "Kubernetes",
+    aliases: ["k8s", "eks", "gke", "aks"],
+    category: "cloud",
+    art: withMono("kubernetes", kubernetesVariants),
+  },
+  {
+    slug: "lambda",
+    name: "Serverless",
+    aliases: ["function", "faas", "cloud function", "lambda", "worker"],
+    category: "cloud",
+    art: alwaysMono("lambda", lambdaVariants),
+  },
+  {
+    slug: "s3",
+    name: "Object storage",
+    aliases: ["bucket", "blob", "gcs", "s3", "minio", "object storage"],
+    category: "cloud",
+    art: colourOnly(s3Svg),
+  },
+  {
+    slug: "terraform",
+    name: "Terraform",
+    aliases: ["iac", "opentofu", "hcl"],
+    category: "cloud",
+    art: alwaysMono("terraform", terraformVariants),
+  },
+  {
+    slug: "databricks",
+    name: "Databricks",
     aliases: ["lakehouse"],
+    category: "cloud",
+    art: withMono("databricks", databricksVariants),
   },
   {
-    slug: digitaloceanSlug,
-    name: digitaloceanTitle,
-    art: withMono(digitaloceanSlug, digitaloceanVariants),
-    category: "cloud",
+    slug: "digitalocean",
+    name: "DigitalOcean",
     aliases: ["droplet"],
+    category: "cloud",
+    art: withMono("digitalocean", digitaloceanVariants),
   },
   {
-    slug: herokuSlug,
-    name: herokuTitle,
-    art: derivedMonoOnly(herokuSlug, herokuSvg, herokuLicence),
-    category: "cloud",
+    slug: "heroku",
+    name: "Heroku",
     aliases: ["paas", "dyno"],
+    category: "cloud",
+    art: derivedMonoOnly("heroku", herokuSvg, herokuLicence),
   },
   {
-    slug: minioSlug,
-    name: minioTitle,
-    art: withMono(minioSlug, minioVariants),
-    category: "cloud",
+    slug: "minio",
+    name: "MinIO",
     aliases: ["object storage", "s3 compatible"],
+    category: "cloud",
+    art: withMono("minio", minioVariants),
   },
   {
-    slug: netlifySlug,
-    name: netlifyTitle,
-    art: withMono(netlifySlug, netlifyVariants),
-    category: "cloud",
+    slug: "netlify",
+    name: "Netlify",
     aliases: ["jamstack"],
-  },
-  {
-    slug: vercelSlug,
-    name: vercelTitle,
-    art: alwaysMono(vercelSlug, vercelVariants),
     category: "cloud",
+    art: withMono("netlify", netlifyVariants),
+  },
+  {
+    slug: "vercel",
+    name: "Vercel",
     aliases: ["hosting"],
+    category: "cloud",
+    art: alwaysMono("vercel", vercelVariants),
   },
-  /* -- CI/CD & DevOps --------------------------------------------------------- */
+  /* -- devops -------------------------------------------------------------- */
   {
-    slug: ansibleSlug,
-    name: ansibleTitle,
-    art: withMono(ansibleSlug, ansibleVariants),
-    category: "devops",
-    aliases: ["playbook", "configuration management"],
-  },
-  {
-    slug: argocdSlug,
+    slug: "argocd",
     // thesvg titles it "Argocd"; the project spells itself "Argo CD".
     name: "Argo CD",
-    art: withMono(argocdSlug, argocdVariants),
-    category: "devops",
     aliases: ["argo", "gitops"],
+    category: "devops",
+    art: withMono("argocd", argocdVariants),
   },
   {
-    slug: circleciSlug,
-    name: circleciTitle,
-    art: withMono(circleciSlug, circleciVariants),
+    slug: "ansible",
+    name: "Ansible",
+    aliases: ["playbook", "configuration management"],
     category: "devops",
+    art: withMono("ansible", ansibleVariants),
+  },
+  {
+    slug: "circleci",
+    name: "CircleCI",
     aliases: ["ci"],
+    category: "devops",
+    art: withMono("circleci", circleciVariants),
   },
   {
-    slug: githubSlug,
-    name: githubTitle,
-    art: alwaysMono(githubSlug, githubVariants),
-    category: "devops",
+    slug: "github",
+    name: "GitHub",
     aliases: ["gh", "git"],
+    category: "devops",
+    art: alwaysMono("github", githubVariants),
   },
   {
-    slug: githubActionsSlug,
-    name: githubActionsTitle,
-    art: withMono(githubActionsSlug, githubActionsVariants),
-    category: "devops",
+    slug: "github-actions",
+    name: "GitHub Actions",
     aliases: ["ci", "workflow"],
+    category: "devops",
+    art: withMono("github-actions", githubActionsVariants),
   },
   {
-    slug: gitlabSlug,
-    name: gitlabTitle,
-    art: withMono(gitlabSlug, gitlabVariants),
-    category: "devops",
+    slug: "gitlab",
+    name: "GitLab",
     aliases: ["git", "ci"],
+    category: "devops",
+    art: withMono("gitlab", gitlabVariants),
   },
   {
-    slug: helmSlug,
-    name: helmTitle,
-    art: withMono(helmSlug, helmVariants),
-    category: "devops",
+    slug: "helm",
+    name: "Helm",
     aliases: ["chart", "k8s package"],
+    category: "devops",
+    art: withMono("helm", helmVariants),
   },
   {
-    slug: jenkinsSlug,
-    name: jenkinsTitle,
-    art: withMono(jenkinsSlug, jenkinsVariants),
-    category: "devops",
+    slug: "jenkins",
+    name: "Jenkins",
     aliases: ["ci", "build server"],
-  },
-  {
-    slug: vaultSlug,
-    name: vaultTitle,
-    art: withMono(vaultSlug, vaultVariants),
     category: "devops",
+    art: withMono("jenkins", jenkinsVariants),
+  },
+  {
+    slug: "vault",
+    name: "Vault",
     aliases: ["hashicorp", "secrets"],
+    category: "devops",
+    art: withMono("vault", vaultVariants),
   },
-  /* -- Observability ----------------------------------------------------------- */
+  /* -- observability ------------------------------------------------------- */
   {
-    slug: datadogSlug,
-    name: datadogTitle,
-    art: withMono(datadogSlug, datadogVariants),
-    category: "observability",
+    slug: "datadog",
+    name: "Datadog",
     aliases: ["apm"],
+    category: "observability",
+    art: withMono("datadog", datadogVariants),
   },
   {
-    slug: grafanaSlug,
-    name: grafanaTitle,
-    art: withMono(grafanaSlug, grafanaVariants),
-    category: "observability",
+    slug: "grafana",
+    name: "Grafana",
     aliases: ["dashboards"],
+    category: "observability",
+    art: withMono("grafana", grafanaVariants),
   },
   {
-    slug: newRelicSlug,
-    name: newRelicTitle,
-    art: withMono(newRelicSlug, newRelicVariants),
-    category: "observability",
+    slug: "new-relic",
+    name: "New Relic",
     aliases: ["apm"],
+    category: "observability",
+    art: withMono("new-relic", newRelicVariants),
   },
   {
-    slug: otelSlug,
-    name: otelTitle,
-    art: withMono(otelSlug, otelVariants),
-    category: "observability",
+    slug: "opentelemetry",
+    name: "OpenTelemetry",
     aliases: ["otel", "tracing"],
+    category: "observability",
+    art: withMono("opentelemetry", opentelemetryVariants),
   },
   {
-    slug: prometheusSlug,
-    name: prometheusTitle,
-    art: withMono(prometheusSlug, prometheusVariants),
-    category: "observability",
+    slug: "prometheus",
+    name: "Prometheus",
     aliases: ["metrics"],
+    category: "observability",
+    art: withMono("prometheus", prometheusVariants),
   },
   {
-    slug: sentrySlug,
-    name: sentryTitle,
-    art: alwaysMono(sentrySlug, sentryVariants),
-    category: "observability",
+    slug: "sentry",
+    name: "Sentry",
     aliases: ["error tracking", "crash"],
-  },
-  {
-    slug: splunkSlug,
-    name: splunkTitle,
-    art: withMono(splunkSlug, splunkVariants),
     category: "observability",
+    art: alwaysMono("sentry", sentryVariants),
+  },
+  {
+    slug: "splunk",
+    name: "Splunk",
     aliases: ["siem", "logs"],
+    category: "observability",
+    art: withMono("splunk", splunkVariants),
   },
-  /* -- SaaS & Identity --------------------------------------------------------- */
+  /* -- saas ---------------------------------------------------------------- */
   {
-    slug: anthropicSlug,
-    name: anthropicTitle,
-    art: alwaysMono(anthropicSlug, anthropicVariants),
-    category: "saas",
+    slug: "anthropic",
+    name: "Anthropic",
     aliases: ["claude", "llm"],
+    category: "saas",
+    art: withMono("anthropic", anthropicVariants),
   },
   {
-    slug: auth0Slug,
-    name: auth0Title,
-    art: withMono(auth0Slug, auth0Variants),
-    category: "saas",
+    slug: "auth0",
+    name: "Auth0",
     aliases: ["auth", "oauth"],
+    category: "saas",
+    art: withMono("auth0", auth0Variants),
   },
   {
-    slug: keycloakSlug,
-    name: keycloakTitle,
-    art: withMono(keycloakSlug, keycloakVariants),
-    category: "saas",
+    slug: "keycloak",
+    name: "Keycloak",
     aliases: ["sso", "oidc"],
+    category: "saas",
+    art: withMono("keycloak", keycloakVariants),
   },
   {
-    slug: oktaSlug,
-    name: oktaTitle,
-    art: withMono(oktaSlug, oktaVariants),
-    category: "saas",
+    slug: "okta",
+    name: "Okta",
     aliases: ["sso", "identity"],
+    category: "saas",
+    art: withMono("okta", oktaVariants),
   },
   {
-    slug: openaiSlug,
-    name: openaiTitle,
-    art: alwaysMono(openaiSlug, openaiVariants),
-    category: "saas",
+    slug: "openai",
+    name: "OpenAI",
     aliases: ["gpt", "chatgpt", "llm"],
+    category: "saas",
+    art: alwaysMono("openai", openaiVariants),
   },
   {
-    slug: stripeSlug,
-    name: stripeTitle,
-    art: withMono(stripeSlug, stripeVariants),
-    category: "saas",
+    slug: "stripe",
+    name: "Stripe",
     aliases: ["payments", "billing"],
+    category: "saas",
+    art: withMono("stripe", stripeVariants),
   },
   {
-    slug: twilioSlug,
-    name: twilioTitle,
-    art: derivedMono(twilioSlug, twilioSvg, twilioLicence),
-    category: "saas",
+    slug: "twilio",
+    name: "Twilio",
     aliases: ["sms", "voice"],
+    category: "saas",
+    art: derivedMono("twilio", twilioSvg, twilioLicence),
   },
 ];
 

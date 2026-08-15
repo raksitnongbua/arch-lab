@@ -907,27 +907,22 @@ on its own.
 
 ## Third-party assets
 
-Brand icons in the editor's icon registry come from the
-[`thesvg`](https://www.npmjs.com/package/thesvg) npm package (code licensed
-MIT). The brand marks themselves remain the trademarks and property of their
-respective owners; they are used nominatively — to label what a container
-runs — and are embedded unmodified (some upstream licences are
-no-derivatives, and the registry's no-recolour rule exists for exactly that
-reason; see `src/features/editor/lib/icons/registry.ts`).
+Icons come from two places and nowhere else. Product marks are from
+[`thesvg`](https://www.npmjs.com/package/thesvg) (package code MIT); the marks
+themselves remain the trademarks and property of their owners and are used
+nominatively — to label what a container runs — and embedded unmodified. Some
+upstream licences are no-derivatives, which is why the registry never
+recolours a mark; where a brand publishes no monochrome version one is
+produced from its own artwork, but only where the licence clearly permits a
+derivative. Per-brand terms are exported by each icon module (`license`,
+`url`) and recorded in the [thesvg repository](https://github.com/glincker/thesvg).
 
-Diagrams can be drawn with icons in one ink or in brand colours — a reader
-preference, not a document property, toggled beside the zoom control. Both
-styles use artwork the package publishes rather than deriving any: mono mode
-selects each mark's upstream `mono` variant, and colour mode swaps the
-hand-authored mark for the vendor's own logo where one exists (35 of the 59).
-Icons for abstract concepts — `api`, `queue`, `person` — have no logo and keep
-their hand-authored glyph in both styles, tinted with the node's accent. Where
-a brand publishes no monochrome mark, one is produced from its own artwork,
-but only where the licence clearly permits a derivative; exactly one mark
-(dbt) permits neither and stays in colour in mono mode. Marks whose only
-published artwork is white ink or a wordmark are not carried at all — the
-hand-authored icon serves both styles for those, since it follows the theme.
-Per-brand licence terms are recorded upstream: each icon module exports its
-`license` and source `url`, and the full metadata lives in the
-[thesvg repository](https://github.com/glincker/thesvg). The remaining
-registry icons are hand-authored, monochrome, and original to this project.
+Icons for things with no logo — a database, a queue, a person, an API — are
+from [lucide](https://lucide.dev), which also draws the application's own
+interface, so a diagram and the chrome around it share one visual language.
+
+Diagrams can be drawn with icons in one ink or in brand colours: a reader
+preference, not a document property, toggled beside the zoom control. Four
+marks stay coloured in mono mode because their licences permit neither an
+adopted nor a derived monochrome version. `pnpm check:icon-contrast` renders
+every icon on a light and a dark canvas and fails if any cannot be seen.

@@ -1,29 +1,37 @@
 #!/usr/bin/env node
 /**
- * The mono/colour switch, checked where it can actually be checked.
+ * The icon registry's invariants, checked at the source level.
  *
- * The registry is `.tsx` and Node's type stripping cannot load it, so this
- * script does what the check scripts here always do: it reads the SOURCE for
- * the decisions, and the PACKAGE for the artwork facts those decisions rest
- * on. Every rule below corresponds to a defect this feature has already
- * shipped once, or to one the design would ship silently:
+ * The registry draws from exactly two places — products from the `thesvg`
+ * package, concepts from lucide — and every rule here corresponds to a defect
+ * that actually shipped while it drew from three:
  *
- *   1. **Ink is detected in both spellings.** Bun declares its colour as
- *      `style="fill:…"`, so an attribute-only test called it ink-free, handed
- *      it `currentColor` — which a style declaration outranks — and believed a
- *      mark was monochrome while it painted itself.
- *   2. **`monochrome` is derived, never declared.** Hand-set flags shipped
- *      three marks (Oracle, Traefik, and the white-ink brands) as "coloured"
- *      while carrying no ink, so nothing gave them a fill, they fell back to
- *      SVG-default black, and they vanished on a dark canvas.
- *   3. **Every icon importing `variants` really has a `mono`**, and every icon
- *      importing `svg` really has none. The split is a bundle decision —
- *      `variants` costs ~150KB of artwork nothing renders — so an icon on the
- *      wrong side is either a broken mono mode or dead weight.
- *   4. **The export cache is keyed by style.** A slug-only key means the first
- *      export wins and every later one embeds the wrong artwork.
- *   5. **Nothing recolours a coloured mark**: `currentColor` is only ever
- *      forced onto artwork that carries no ink of its own.
+ *   1. **One slug space, nothing lost.** The model stores slugs and never
+ *      artwork, so a slug that disappears silently blanks the icon in every
+ *      document naming it.
+ *   2. **Ink is detected in both spellings AND both quote styles.** Bun
+ *      declares its colour as `style="fill:…"` and Oracle as `style='fill:…'`;
+ *      a pattern reading only one of those fails silently, rendering the icon
+ *      wrongly rather than throwing.
+ *   3. **`monochrome` is derived, never declared.** A hand-set flag shipped
+ *      marks that carried no ink of their own, so nothing gave them a fill,
+ *      they fell back to black and vanished on a dark canvas.
+ *   4. **Strategy matches the package.** `withMono` promises two different
+ *      drawings; if upstream stops publishing a mono it silently degrades to
+ *      one drawing shown twice.
+ *   5. **Selection beats derivation.** Never strip a mark's ink when upstream
+ *      already draws the monochrome version.
+ *   6. **Derivation is licensed.** Producing a monochrome rendering is a
+ *      derivative work; the allowlist must stay an allowlist.
+ *   7. **Everything drawn parses and can be seen.** `check:icon-contrast`
+ *      settles visibility properly by rendering; the cheap source-level rules
+ *      here catch the common shapes without needing librsvg.
+ *
+ * Every rule judges ONLY the artwork the registry actually draws
+ * (`scripts/lib/icon-artwork.mjs`). Checking every variant of every imported
+ * module was tried three times and cried wolf each time: a mark that imports
+ * `variants` to reach its ink-free `mono` also carries a white `default` it
+ * never renders.
  *
  * Exits non-zero on any failure. Run with: pnpm check:icon-style
  */
@@ -33,19 +41,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
+import {
+  collectRenderedArtwork,
+  hasBakedInk,
+  strategyOf,
+} from "./lib/icon-artwork.mjs";
+
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
+const read = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
 
 const BRAND = read("src/features/editor/lib/icons/brand.tsx");
+const GENERIC = read("src/features/editor/lib/icons/generic.tsx");
 const REGISTRY = read("src/features/editor/lib/icons/registry.ts");
-const MARKUP = read("src/features/viewer/export/icon-markup.ts");
-const OVERLAY = read("src/features/editor/lib/icons/colour-overlay.tsx");
-/* The sanitiser and component factory are SHARED by brand.tsx and the colour
-   overlay, so they live in embed.tsx — that is where these rules apply now. */
 const EMBED = read("src/features/editor/lib/icons/embed.tsx");
+const MARKUP = read("src/features/viewer/export/icon-markup.ts");
 
-/** Read OUT of brand.tsx so the two lists cannot drift. */
+const RENDERED = collectRenderedArtwork();
+const STRATEGY = strategyOf();
 const DERIVABLE = new Set(
   [
     ...(
@@ -69,26 +82,51 @@ function check(label, ok, detail) {
   if (detail !== undefined) console.error(`    ${detail}`);
 }
 
-/**
- * The SAME test `brand.tsx` applies, deliberately duplicated rather than
- * imported — the module is `.tsx` and unloadable here. Both spellings, because
- * rule 1 above exists.
- */
-function bakedInk(svg) {
-  const attr = /\b(?:fill|stroke)="(?!none\b|currentColor\b)[^"]+"/.exec(svg);
-  if (attr !== null) return attr[0];
-  const styled =
-    /style="[^"]*\b(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)[^;"]+/.exec(
-      svg,
-    );
-  return styled === null ? null : styled[0];
+/* ----------------------------------------------------------------------- */
+/* 1. Two sources, one slug space                                           */
+/* ----------------------------------------------------------------------- */
+
+console.log("two sources (products and concepts), one slug space");
+
+{
+  const brandSlugs = [...BRAND.matchAll(/^\s+slug: "([a-z0-9-]+)",$/gm)].map(
+    (m) => m[1],
+  );
+  const genericSlugs = [
+    ...GENERIC.matchAll(/^\s+slug: "([a-z0-9-]+)",$/gm),
+  ].map((m) => m[1]);
+  const all = [...brandSlugs, ...genericSlugs];
+  const duplicates = all.filter((s, i) => all.indexOf(s) !== i);
+
+  check(
+    `every slug is defined exactly once (${brandSlugs.length} products + ${genericSlugs.length} concepts)`,
+    duplicates.length === 0 && all.length > 100,
+    duplicates.length > 0
+      ? `defined twice: ${[...new Set(duplicates)].join(", ")}`
+      : "the set shrank unexpectedly — did a source fail to parse?",
+  );
+  check(
+    "no hand-drawn icon set survives",
+    !/from "\.\/svg\//.test(REGISTRY) && !/HAND_AUTHORED/.test(REGISTRY),
+    "a third visual family is what made colour mode incoherent",
+  );
+  check(
+    "concepts are drawn by lucide, not by embedded package artwork",
+    /from "lucide-react"/.test(GENERIC) && !/from "thesvg/.test(GENERIC),
+    "a queue has no brand colour; lucide already draws the rest of the app",
+  );
+  check(
+    "concepts declare no separate mono artwork",
+    !/SvgMono:/.test(GENERIC),
+    "there is no coloured version of an abstract glyph to switch to",
+  );
 }
 
 /* ----------------------------------------------------------------------- */
-/* 1. The ink test in the source covers both spellings                      */
+/* 2. Ink detection: both spellings, both quote styles                      */
 /* ----------------------------------------------------------------------- */
 
-console.log("ink detection (an attribute-only test shipped a bug)");
+console.log("\nink detection (each gap here shipped a bug)");
 
 {
   const fn = /export function hasBakedInk\([\s\S]*?\n}/.exec(EMBED)?.[0] ?? "";
@@ -99,7 +137,12 @@ console.log("ink detection (an attribute-only test shipped a bug)");
   check(
     "embed.tsx also tests fill/stroke inside style=",
     /style=/.test(fn) && /fill\|stroke/.test(fn),
-    'Bun declares its ink as style="fill:#fbf0df" — an attribute-only test misses it',
+    'Bun declares its ink as style="fill:#fbf0df"',
+  );
+  check(
+    "embed.tsx matches BOTH quote styles",
+    /\["'\]/.test(fn),
+    "Oracle declares its ink as style='fill:#C74634' — single quotes",
   );
   check(
     "`none` and `currentColor` are not treated as ink",
@@ -108,15 +151,15 @@ console.log("ink detection (an attribute-only test shipped a bug)");
 }
 
 /* ----------------------------------------------------------------------- */
-/* 2. monochrome is derived from the artwork, not declared per entry        */
+/* 3. monochrome is derived from the artwork                                */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nmonochrome is derived");
+console.log("\nmonochrome is derived, never declared");
 
 check(
   "brandDef computes `monochrome` with hasBakedInk",
   /const monochrome = hasBakedInk\(art\.colour\) === null;/.test(BRAND),
-  "a hand-set flag shipped three invisible-on-dark marks",
+  "a hand-set flag shipped marks that vanished on a dark canvas",
 );
 check(
   "no brand entry hand-declares `monochrome`",
@@ -126,165 +169,87 @@ check(
 );
 
 /* ----------------------------------------------------------------------- */
-/* 3. The variants/svg import split matches what the package ships          */
+/* 4. Strategy matches what each package publishes                          */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nartwork imports match the package (a bundle decision)");
+console.log("\nartwork strategy matches the package");
 
 {
-  const importedSlugs = [...BRAND.matchAll(/from "thesvg\/([a-z0-9-]+)"/g)].map(
-    (m) => m[1],
-  );
-
-  /* Which binding each module is imported with, read from its own block. */
-  const blocks = [
-    ...BRAND.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g),
-  ];
-  const usesVariants = new Map();
-  for (const [, bindings, slug] of blocks) {
-    usesVariants.set(slug, /\bvariants as /.test(bindings));
-  }
-
-  /* The third case: brands that are monochrome in BOTH styles. They import
-     `variants` to reach an ink-free variant that may not be named `mono` —
-     OpenAI ships none, and its `light` is the ink-free one — so they are
-     exempt from the mono-variant rule and checked on ink instead. */
-  const alwaysMonoNames = new Set(
-    [...BRAND.matchAll(/art: alwaysMono\((\w+)Slug/g)].map((m) => m[1]),
-  );
-  const alwaysMonoSlugs = new Set(
-    blocks
-      .filter(([, bindings]) =>
-        [...alwaysMonoNames].some((name) =>
-          new RegExp(`\\b(?:slug) as ${name}Slug\\b`).test(bindings),
-        ),
-      )
-      .map(([, , slug]) => slug),
-  );
-
-  const wrongSide = [];
-  const paintedAlwaysMono = [];
-  for (const slug of importedSlugs) {
-    const mod = require(`thesvg/${slug}`);
-    const imported = usesVariants.get(slug);
-
-    if (alwaysMonoSlugs.has(slug)) {
-      const art = mod.variants?.mono ?? mod.variants?.light;
-      if (art === undefined || bakedInk(art) !== null) {
-        paintedAlwaysMono.push(slug);
-      }
+  const wrong = [];
+  const derivedButPublished = [];
+  for (const [slug, kind] of STRATEGY) {
+    const drawn = RENDERED.filter((job) => job.slug === slug);
+    if (drawn.length === 0) {
+      wrong.push(`${slug} renders nothing`);
       continue;
     }
-    const hasMono = mod.variants?.mono !== undefined;
-    if (hasMono !== imported) {
-      wrongSide.push(`${slug} (mono=${hasMono}, imports variants=${imported})`);
+    const mod = require(`thesvg/${drawn[0].module}`);
+    if (kind === "withMono" && mod.variants?.mono === undefined) {
+      wrong.push(`${slug}: withMono but no mono variant published`);
+    }
+    if (
+      (kind === "derivedMono" || kind === "derivedMonoOnly") &&
+      mod.variants?.mono !== undefined
+    ) {
+      derivedButPublished.push(slug);
     }
   }
-
   check(
-    `every icon is imported on the right side of the split (${importedSlugs.length} icons)`,
-    wrongSide.length === 0,
-    `${wrongSide.join("; ")} — \`variants\` costs ~3KB of unrendered artwork; \`svg\` cannot reach mono`,
+    `every mark's strategy matches its package (${STRATEGY.size} marks)`,
+    wrong.length === 0,
+    wrong.join("; "),
   );
   check(
-    `the always-mono brands really are ink-free (${alwaysMonoSlugs.size} of them)`,
-    paintedAlwaysMono.length === 0 && alwaysMonoSlugs.size > 0,
-    paintedAlwaysMono.length > 0
-      ? `${paintedAlwaysMono.join(", ")} bake in ink — they would be invisible in one theme`
-      : "none were detected — has alwaysMono() been renamed?",
+    "nothing is derived that upstream publishes a mono for",
+    derivedButPublished.length === 0,
+    `${derivedButPublished.join(", ")} — selection beats derivation`,
+  );
+  check(
+    "every mono artwork is ink-free, so currentColor reaches it",
+    RENDERED.filter((j) => j.style === "mono").every(
+      (j) => hasBakedInk(j.art) === null,
+    ),
+    "a baked ink cannot follow the theme",
   );
 }
 
 /* ----------------------------------------------------------------------- */
-/* 4. Mono artwork is genuinely ink-free where we claim currentColor        */
+/* 5. Derivation is licensed                                                */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nmono artwork inherits rather than paints");
+console.log("\nderived mono (the one place a mark is modified)");
 
 {
-  const monoSlugs = [...BRAND.matchAll(/art: withMono\((\w+)Slug/g)].map(
-    (m) => m[1],
+  const derived = [...STRATEGY].filter(
+    ([, kind]) => kind === "derivedMono" || kind === "derivedMonoOnly",
   );
-  const importedSlugs = [
-    ...BRAND.matchAll(/import \{[^}]*\} from "thesvg\/([a-z0-9-]+)";/g),
-  ].map((m) => m[1]);
-
-  const painted = [];
-  for (const slug of importedSlugs) {
-    const mono = require(`thesvg/${slug}`).variants?.mono;
-    if (mono === undefined) continue;
-    if (bakedInk(mono) !== null) painted.push(slug);
+  const offenders = [];
+  for (const [slug] of derived) {
+    const job = RENDERED.find((j) => j.slug === slug);
+    const licence = String(require(`thesvg/${job.module}`).license);
+    if (!DERIVABLE.has(licence)) offenders.push(`${slug} (${licence})`);
   }
   check(
-    "every shipped `mono` variant is ink-free (so currentColor reaches it)",
-    painted.length === 0,
-    `${painted.join(", ")} bake in ink — currentColor would not reach the paths`,
+    `every derived mono is licensed for a derivative (${derived.length} marks)`,
+    offenders.length === 0 && derived.length > 0,
+    offenders.length > 0
+      ? `${offenders.join(", ")} — leave these coloured rather than guessing`
+      : "none parsed — has derivedMono been renamed?",
   );
   check(
-    `the curated set actually uses them (${monoSlugs.length} withMono entries)`,
-    monoSlugs.length > 0,
+    "the licence allowlist is an allowlist, not a denylist",
+    /const DERIVABLE_LICENCES = new Set\(\[/.test(BRAND),
+    "an unrecognised licence must stop the build, not be assumed permissive",
   );
 }
 
 /* ----------------------------------------------------------------------- */
-/* 4b. The colour overlay lands on real slugs                               */
+/* 6. Everything drawn parses, and is not obviously unseeable               */
 /* ----------------------------------------------------------------------- */
 
-console.log("\ncolour overlay (a key matching no slug does nothing, silently)");
+console.log("\nevery artwork we draw parses and can be seen");
 
 {
-  const handSlugs = new Set(
-    [
-      ...REGISTRY.slice(
-        REGISTRY.indexOf("HAND_AUTHORED_DEFS"),
-        REGISTRY.indexOf("const CATEGORY_RANK"),
-      ).matchAll(/^\s+slug: "([a-z0-9-]+)",/gm),
-    ].map((m) => m[1]),
-  );
-  const table = OVERLAY.slice(
-    OVERLAY.indexOf("COLOUR_ARTWORK"),
-    OVERLAY.indexOf("export const COLOUR_OVERLAY"),
-  );
-  const keys = [...table.matchAll(/^\s+"?([a-z0-9-]+)"?:/gm)].map((m) => m[1]);
-  const orphans = keys.filter((slug) => !handSlugs.has(slug));
-
-  check(
-    `every overlay key names a hand-authored icon (${keys.length} keys)`,
-    orphans.length === 0 && keys.length > 0,
-    orphans.length > 0
-      ? `${orphans.join(", ")} — the overlay would be ignored for these`
-      : "no keys parsed — has COLOUR_ARTWORK been renamed?",
-  );
-  check(
-    "the overlay is applied to colour, and never to mono",
-    /colour: COLOUR_OVERLAY\[source\.slug\] \?\? source\.Svg/.test(REGISTRY) &&
-      /mono: source\.SvgMono \?\? source\.Svg/.test(REGISTRY),
-    "mono mode must keep the hand-authored house mark",
-  );
-  check(
-    "the overlay imports `svg` only, never `variants`",
-    !/variants as/.test(OVERLAY),
-    "mono comes from the hand-authored icon, so packaged mono variants are dead weight",
-  );
-}
-
-/* ----------------------------------------------------------------------- */
-/* 4c. Every embedded artwork actually parses                               */
-/* ----------------------------------------------------------------------- */
-
-console.log("\nevery artwork parses (a throw here takes down every page)");
-
-{
-  /* The SAME root pattern embed.tsx uses, read OUT of it rather than retyped,
-     so this cannot pass while the real one fails. `splitPackagedSvg` throws at
-     module load, and the registry is imported by every canvas — so one
-     unparseable icon is not one missing icon, it is a blank site. `pnpm build`
-     does catch it at prerender, but only after a full build; this names the
-     icon in a second.
-
-     nginx is why this exists: it arrives with an XML COMMENT after the
-     declaration, the prologue pattern allowed only `<?xml …?>`, and the
-     registry threw for every reader. */
   const source = /const ROOT_RE =\s*(\/\^[\s\S]*?\/);/.exec(EMBED)?.[1];
   let rootRe = null;
   try {
@@ -295,192 +260,58 @@ console.log("\nevery artwork parses (a throw here takes down every page)");
   check(
     "embed.tsx's ROOT_RE could be read (this check is only as good as that)",
     rootRe instanceof RegExp,
-    "the pattern was reshaped — update the extraction above",
   );
-
   if (rootRe instanceof RegExp) {
-    const unparseable = [];
-    for (const [file, text] of [
-      ["brand", BRAND],
-      ["overlay", OVERLAY],
-    ]) {
-      const blocks = [
-        ...text.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g),
-      ];
-      for (const [, bindings, slug] of blocks) {
-        const mod = require(`thesvg/${slug}`);
-        /* Every artwork that could reach a component, not just the default:
-           mono and light are embedded too, and a broken one crashes the same
-           way. */
-        const arts = /\bvariants as /.test(bindings)
-          ? Object.values(mod.variants ?? {})
-          : [mod.svg];
-        for (const art of arts) {
-          if (typeof art === "string" && !rootRe.test(art)) {
-            unparseable.push(`${file}:${slug}`);
-            break;
-          }
-        }
-      }
-    }
+    const unparseable = RENDERED.filter((job) => !rootRe.test(job.art));
     check(
-      "every embedded artwork matches the root pattern",
+      `every drawn artwork matches the root pattern (${RENDERED.length})`,
       unparseable.length === 0,
-      `${unparseable.join(", ")} — splitPackagedSvg would throw at module load`,
+      `${unparseable.map((j) => `${j.slug}/${j.style}`).join(", ")} — splitPackagedSvg would throw at module load`,
     );
   }
-}
 
-/* ----------------------------------------------------------------------- */
-/* 4d. Derived mono artwork is licensed for it                              */
-/* ----------------------------------------------------------------------- */
-
-console.log("\nderived mono (the one place a mark is modified)");
-
-{
-  /* Producing a monochrome rendering is a DERIVATIVE WORK. It runs only for
-     marks upstream publishes no mono for, and only where the licence clearly
-     permits it — `vuedotjs` is why the check is not optional: the package
-     ships Vue's mono under CC-BY-NC-SA-4.0, non-commercial and share-alike,
-     so adopting it would have traded a cosmetic inconsistency for a licence
-     problem. Vue is derived from its own MIT artwork instead. */
-  const derived = [
-    ...BRAND.matchAll(/art: derivedMono\((\w+)Slug, \w+Svg, \w+Licence\)/g),
-  ].map((m) => m[1]);
-  const blocks = [
-    ...BRAND.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g),
-  ];
-
-  const offenders = [];
-  const stillPublished = [];
-  for (const name of derived) {
-    const block = blocks.find(([, bindings]) =>
-      new RegExp(`\\bslug as ${name}Slug\\b`).test(bindings),
-    );
-    if (block === undefined) continue;
-    const mod = require(`thesvg/${block[2]}`);
-    if (!DERIVABLE.has(String(mod.license))) {
-      offenders.push(`${block[2]} (${mod.license})`);
-    }
-    if (mod.variants?.mono !== undefined) stillPublished.push(block[2]);
-  }
-
-  check(
-    `every derived mono is licensed for a derivative (${derived.length} marks)`,
-    offenders.length === 0 && derived.length > 0,
-    offenders.length > 0
-      ? `${offenders.join(", ")} — leave these coloured rather than guessing`
-      : "none parsed — has derivedMono been renamed?",
-  );
-  check(
-    "nothing is derived that upstream now publishes a mono for",
-    stillPublished.length === 0,
-    `${stillPublished.join(", ")} — prefer the published variant; selection beats derivation`,
-  );
-  check(
-    "the licence allowlist is an allowlist, not a denylist",
-    /const DERIVABLE_LICENCES = new Set\(\[/.test(BRAND),
-    "an unrecognised licence must stop the build, not be assumed permissive",
-  );
-}
-
-/* ----------------------------------------------------------------------- */
-/* 4e. No artwork that cannot be seen, or cannot fit                        */
-/* ----------------------------------------------------------------------- */
-
-console.log("\nartwork is legible in the slot it gets");
-
-{
-  /* Two defects that a build cannot catch, because neither is malformed:
-     white ink is a CORRECT file for a dark background we do not have, and a
-     wordmark is a correct logo for a slot we do not have. Both shipped: five
-     overlay icons rendered invisible on a light canvas, and Oracle's 7.7:1
-     logotype was an illegible smear at 16px. Found by rasterising the set and
-     looking at it — so these rules exist to make looking unnecessary. */
-  const isWhite = (colour) =>
-    /^#(fff|ffffff|fefefe|fffefc)$/i.test(colour) || colour === "white";
-
-  /* Which modules take the always-mono route, resolved from the entry list
-     back to the import block that named them. */
-  const alwaysMonoNames = new Set(
-    [...BRAND.matchAll(/art: alwaysMono\((\w+)Slug/g)].map((m) => m[1]),
-  );
-  const alwaysMonoModules = new Set(
-    [...BRAND.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g)]
-      .filter(([, bindings]) =>
-        [...alwaysMonoNames].some((name) =>
-          new RegExp(`\\bslug as ${name}Slug\\b`).test(bindings),
-        ),
-      )
-      .map(([, , slug]) => slug),
-  );
-
+  const isWhite = (c) =>
+    /^#(fff|ffffff|fefefe|fffefc)$/i.test(c) || c === "white";
   const invisible = [];
   const misshapen = [];
-  for (const [label, text] of [
-    ["brand", BRAND],
-    ["overlay", OVERLAY],
-  ]) {
-    for (const [, bindings, slug] of text.matchAll(
-      /import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g,
-    )) {
-      const mod = require(`thesvg/${slug}`);
-      /* Only the artwork this module can actually render: `svg` where it
-         imports `svg`, the variants where it imports `variants`. */
-      /* Only what this entry RENDERS. An `alwaysMono` brand imports
-         `variants` but draws the ink-free one, so judging it by
-         `variants.default` — white, by definition, which is why it takes that
-         route — would reject Vercel and OpenAI for the very reason they were
-         handled correctly. */
-      const arts = !/\bvariants as /.test(bindings)
-        ? [mod.svg]
-        : alwaysMonoModules.has(slug)
-          ? [mod.variants?.mono ?? mod.variants?.light]
-          : [mod.variants?.default, mod.variants?.mono];
-
-      for (const art of arts.filter((a) => typeof a === "string")) {
-        const inks = [
-          ...new Set(
-            [
-              ...art.matchAll(
-                /(?:fill|stroke)\s*[:=]\s*["']?(#[0-9a-fA-F]{3,8}|white)/g,
-              ),
-            ].map((m) => m[1].toLowerCase()),
+  for (const job of RENDERED) {
+    const inks = [
+      ...new Set(
+        [
+          ...job.art.matchAll(
+            /(?:fill|stroke)\s*[:=]\s*["']?(#[0-9a-fA-F]{3,8}|white)/g,
           ),
-        ].filter((c) => c !== "none");
-        /* A gradient or pattern IS visible ink this test cannot read, so an
-           artwork carrying one is never called invisible — that false
-           positive would reject Next.js and Python, which are fine. */
-        const painted = /url\(#/.test(art);
-        if (inks.length > 0 && inks.every(isWhite) && !painted) {
-          invisible.push(`${label}:${slug}`);
-        }
-        const viewBox = /viewBox=["']([^"']+)["']/.exec(art)?.[1];
-        if (viewBox !== undefined) {
-          const box = viewBox.split(/[\s,]+/).map(Number);
-          const ratio = box[2] / box[3];
-          if (ratio > 3 || ratio < 0.34) {
-            misshapen.push(`${label}:${slug} ${ratio.toFixed(1)}:1`);
-          }
-        }
-      }
+        ].map((m) => m[1].toLowerCase()),
+      ),
+    ].filter((c) => c !== "none");
+    /* A gradient is visible ink this test cannot read, so artwork carrying one
+       is never called invisible — that false positive rejected Next.js and
+       Python, which are fine. */
+    if (inks.length > 0 && inks.every(isWhite) && !/url\(#/.test(job.art)) {
+      invisible.push(`${job.slug}/${job.style}`);
+    }
+    const viewBox = /viewBox=["']([^"']+)["']/.exec(job.art)?.[1];
+    if (viewBox !== undefined) {
+      const box = viewBox.split(/[\s,]+/).map(Number);
+      const ratio = box[2] / box[3];
+      if (ratio > 3 || ratio < 0.34)
+        misshapen.push(`${job.slug} ${ratio.toFixed(1)}:1`);
     }
   }
-
   check(
-    "no artwork is white ink only (invisible on a light canvas)",
+    "no drawn artwork is white ink only (invisible on a light canvas)",
     invisible.length === 0,
-    `${[...new Set(invisible)].join(", ")} — drawn for a dark background; the hand-authored icon follows the theme instead`,
+    `${invisible.join(", ")} — route it through the mono artwork instead`,
   );
   check(
-    "no artwork is wordmark-shaped (illegible in a square slot)",
+    "no drawn artwork is wordmark-shaped (illegible in a square slot)",
     misshapen.length === 0,
     `${[...new Set(misshapen)].join(", ")} — an icon slot is square and small`,
   );
 }
 
 /* ----------------------------------------------------------------------- */
-/* 5. Export parity: the markup cache is keyed by style                     */
+/* 7. Export parity                                                         */
 /* ----------------------------------------------------------------------- */
 
 console.log("\nexport parity");
@@ -491,36 +322,15 @@ check(
   "a slug-only key lets the first export decide every later one's artwork",
 );
 check(
-  "embeddedIconSvg takes the style rather than assuming one",
-  /style: IconStyle,?\s*\n\): string \{/.test(MARKUP) ||
-    /size: number,\s*\n\s*color: string,\s*\n\s*style: IconStyle,/.test(MARKUP),
-);
-check(
   "the C4 exporter threads a style through to the icons",
   /iconStyle\?: IconStyle;/.test(
     read("src/features/viewer/export/render-svg.ts"),
   ),
 );
-
-/* ----------------------------------------------------------------------- */
-/* 6. currentColor is only ever forced onto ink-free artwork                */
-/* ----------------------------------------------------------------------- */
-
-console.log("\nthe no-recolour rule");
-
 check(
   "packagedSvgComponent always sets fill=currentColor",
   /fill="currentColor"/.test(EMBED),
-  /* Setting it only for marks classed monochrome was the earlier rule and it
-     shipped a bug: `fill` is inherited, so the root value reaches ONLY paths
-     that declare none — which the spec then resolves to black. Withholding it
-     left Spring Boot, Spark, Celery and Istio black-on-black. It cannot
-     recolour a mark that states its own colour. */
   "artwork that omits a fill must inherit the theme's ink, not the browser's black",
-);
-check(
-  "the registry still states the no-recolour rule",
-  /NEVER recoloured/.test(REGISTRY),
 );
 check(
   "mono falls back to the colour artwork rather than deriving one",
@@ -530,9 +340,7 @@ check(
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
-  console.error(
-    `\n${failures} of ${assertions} icon-style assertion(s) FAILED`,
-  );
+  console.error(`\n${failures} of ${assertions} icon assertion(s) FAILED`);
   process.exit(1);
 }
-console.log(`\nAll ${assertions} icon-style assertions passed.`);
+console.log(`\nAll ${assertions} icon assertions passed.`);

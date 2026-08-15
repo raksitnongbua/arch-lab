@@ -1,11 +1,18 @@
+import { ICONS } from "@/features/editor/lib/icons/registry";
+
 import type { CSSProperties, SVGProps } from "react";
 
 import { cn } from "@/lib/utils";
-import { GolangIcon } from "@/features/editor/lib/icons/svg/golang";
-import { NextjsIcon } from "@/features/editor/lib/icons/svg/nextjs";
-import { PersonIcon } from "@/features/editor/lib/icons/svg/person";
-import { PostgresqlIcon } from "@/features/editor/lib/icons/svg/postgresql";
-import { RedisIcon } from "@/features/editor/lib/icons/svg/redis";
+
+/* The hero borrows the registry's own artwork rather than importing icon
+   files: there are no icon files any more (brand.tsx / generic.tsx), and a
+   marketing page drawing its own copies is exactly how the two drift. Mono,
+   because this is decorative chrome tinted by the section's palette. */
+const PersonIcon = ICONS["person"].byStyle.mono;
+const NextjsIcon = ICONS["nextjs"].byStyle.mono;
+const GolangIcon = ICONS["golang"].byStyle.mono;
+const PostgresqlIcon = ICONS["postgresql"].byStyle.mono;
+const RedisIcon = ICONS["redis"].byStyle.mono;
 
 /**
  * Decorative hero visual: one card that ALTERNATES between the two document
