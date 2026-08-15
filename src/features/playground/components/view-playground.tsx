@@ -126,6 +126,7 @@ import {
   type ViewDocument,
   type ViewSourceError,
 } from "../input/parse";
+import { useSourceCollapsed } from "../lib/source-fold";
 
 /**
  * How long the pane rests before its content is parsed (and, for C4, the
@@ -225,8 +226,10 @@ export function ViewPlayground({
   const [jsonVisible, setJsonVisible] = useState(false);
 
   /** The left rail's fold. The toggle lives in the canvas column's own strip,
-   * because a control that vanishes with the thing it hides cannot restore it. */
-  const [sourceCollapsed, setSourceCollapsed] = useState(false);
+   * because a control that vanishes with the thing it hides cannot restore it.
+   * REMEMBERED across visits (`lib/source-fold.ts`) — folding the rail is a
+   * statement about how you read this page, not a gesture to redo each time. */
+  const [sourceCollapsed, setSourceCollapsed] = useSourceCollapsed();
 
   /** Scopes the sequence export button's lookup for the live <svg>. */
   const diagramPaneRef = useRef<HTMLElement>(null);
