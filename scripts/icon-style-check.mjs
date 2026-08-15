@@ -259,6 +259,69 @@ console.log("\ncolour overlay (a key matching no slug does nothing, silently)");
 }
 
 /* ----------------------------------------------------------------------- */
+/* 4c. Every embedded artwork actually parses                               */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nevery artwork parses (a throw here takes down every page)");
+
+{
+  /* The SAME root pattern embed.tsx uses, read OUT of it rather than retyped,
+     so this cannot pass while the real one fails. `splitPackagedSvg` throws at
+     module load, and the registry is imported by every canvas — so one
+     unparseable icon is not one missing icon, it is a blank site. `pnpm build`
+     does catch it at prerender, but only after a full build; this names the
+     icon in a second.
+
+     nginx is why this exists: it arrives with an XML COMMENT after the
+     declaration, the prologue pattern allowed only `<?xml …?>`, and the
+     registry threw for every reader. */
+  const source = /const ROOT_RE =\s*(\/\^[\s\S]*?\/);/.exec(EMBED)?.[1];
+  let rootRe = null;
+  try {
+    rootRe = source === null ? null : eval(source);
+  } catch {
+    rootRe = null;
+  }
+  check(
+    "embed.tsx's ROOT_RE could be read (this check is only as good as that)",
+    rootRe instanceof RegExp,
+    "the pattern was reshaped — update the extraction above",
+  );
+
+  if (rootRe instanceof RegExp) {
+    const unparseable = [];
+    for (const [file, text] of [
+      ["brand", BRAND],
+      ["overlay", OVERLAY],
+    ]) {
+      const blocks = [
+        ...text.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g),
+      ];
+      for (const [, bindings, slug] of blocks) {
+        const mod = require(`thesvg/${slug}`);
+        /* Every artwork that could reach a component, not just the default:
+           mono and light are embedded too, and a broken one crashes the same
+           way. */
+        const arts = /\bvariants as /.test(bindings)
+          ? Object.values(mod.variants ?? {})
+          : [mod.svg];
+        for (const art of arts) {
+          if (typeof art === "string" && !rootRe.test(art)) {
+            unparseable.push(`${file}:${slug}`);
+            break;
+          }
+        }
+      }
+    }
+    check(
+      "every embedded artwork matches the root pattern",
+      unparseable.length === 0,
+      `${unparseable.join(", ")} — splitPackagedSvg would throw at module load`,
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 /* 5. Export parity: the markup cache is keyed by style                     */
 /* ----------------------------------------------------------------------- */
 

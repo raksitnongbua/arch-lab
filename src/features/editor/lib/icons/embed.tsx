@@ -45,7 +45,23 @@ const DROPPED_ROOT_ATTRS = new Set([
  */
 const FORBIDDEN_MARKUP = ["<style", "<script", "<foreignObject"];
 
-const ROOT_RE = /^\s*(?:<\?xml[^?]*\?>\s*)?<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/;
+/**
+ * The `<svg>` root, with whatever XML prologue precedes it.
+ *
+ * The prologue is a REPEATING group of declarations and comments, not just an
+ * optional `<?xml …?>`, because that narrower version shipped a crash: nginx
+ * arrives as `<?xml …?><!-- Uploaded to: SVG Repo … -->\n<svg …>`, the comment
+ * did not match, and the whole registry threw at module load — taking every
+ * page that imports it down, not merely the one icon. Editors and exporters
+ * routinely stamp a comment in beside the declaration, so treating that as
+ * malformed was the bug.
+ *
+ * The prologue is DISCARDED rather than re-emitted: a comment carries no paint
+ * and an XML declaration is invalid anywhere but the very start of a document,
+ * which is not where an embedded icon sits.
+ */
+const ROOT_RE =
+  /^(?:\s*(?:<\?xml[^?]*\?>|<!--[\s\S]*?-->))*\s*<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/;
 
 /**
  * Splits one packaged SVG into the pieces our own `<svg>` root re-hosts: the
