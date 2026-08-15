@@ -31,6 +31,7 @@ import type { C4Level, C4Node, C4NodeType } from "@/types";
 
 import { RefBadge } from "@/features/editor/components/nodes/ref-badge";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
+import { useIconStyle } from "@/lib/icon-style";
 import {
   colorRoleForNode,
   EXTERNAL_DIM_CLASS,
@@ -164,7 +165,8 @@ function ViewerNodeInner({
     onOpenReference,
   } = data;
   const { def } = resolveIcon(node);
-  const Icon = def.Svg;
+  const [iconStyle] = useIconStyle();
+  const Icon = def.byStyle[iconStyle];
 
   // Per-instance gradient id (sanitised — useId's delimiters are not valid
   // inside url(#…)). Never shared: a duplicate id would silently recolour the

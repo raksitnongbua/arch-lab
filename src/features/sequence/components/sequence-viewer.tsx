@@ -76,6 +76,7 @@ import {
 } from "@/lib/idle-motion";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
+import { IconStyleToggle } from "@/components/ui/icon-style-toggle";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
@@ -1155,6 +1156,12 @@ export function SequenceViewer({
           >
             <Scan aria-hidden="true" className="size-4" />
           </button>
+          {/* A hairline before the view-level toggles: everything above
+              changes how much of the diagram you see, everything below
+              changes how it is drawn, and without the rule the icon and
+              motion toggles read as further zoom steps. */}
+          <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-border/70" />
+          <IconStyleToggle />
           {/* Idle-motion toggle — it lives in this pill because the strip
               is where view-level controls already are. Under reduced motion
               the button DISABLES rather than pretending: the OS preference

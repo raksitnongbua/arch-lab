@@ -27,13 +27,26 @@ import { createRoot } from "react-dom/client";
 import type { C4Node } from "@/types";
 
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
+import type { IconStyle } from "@/lib/icon-style";
 
-const markupBySlug = new Map<string, string>();
+/**
+ * Keyed by STYLE AND SLUG, not slug alone. A slug-only key was the shape
+ * before the mono/colour switch existed and is now a parity bug waiting to
+ * happen: the first export of a diagram would win the cache entry, and every
+ * later export would embed that artwork no matter which style the canvas was
+ * showing — a coloured PNG of a mono board, or the reverse, depending only on
+ * which the reader exported first.
+ */
+const markupByStyleAndSlug = new Map<string, string>();
 
-/** Renders (once) and returns the raw `<svg …>…</svg>` markup for a node's icon. */
-function iconMarkup(node: Pick<C4Node, "icon" | "type">): string {
+/** Renders (once per style) the raw `<svg …>…</svg>` markup for a node's icon. */
+function iconMarkup(
+  node: Pick<C4Node, "icon" | "type">,
+  style: IconStyle,
+): string {
   const { def } = resolveIcon(node);
-  const cached = markupBySlug.get(def.slug);
+  const key = `${style}:${def.slug}`;
+  const cached = markupByStyleAndSlug.get(key);
   if (cached !== undefined) return cached;
 
   const host = document.createElement("div");
@@ -41,12 +54,12 @@ function iconMarkup(node: Pick<C4Node, "icon" | "type">): string {
   // flushSync: the markup must exist synchronously, before unmount below.
   // Called from an event handler, never during a React render pass.
   flushSync(() => {
-    root.render(createElement(def.Svg));
+    root.render(createElement(def.byStyle[style]));
   });
   const markup = host.innerHTML;
   root.unmount();
 
-  markupBySlug.set(def.slug, markup);
+  markupByStyleAndSlug.set(key, markup);
   return markup;
 }
 
@@ -68,8 +81,9 @@ export function embeddedIconSvg(
   y: number,
   size: number,
   color: string,
+  style: IconStyle,
 ): string {
-  const markup = iconMarkup(node);
+  const markup = iconMarkup(node, style);
   const positioned = markup.replace(
     /^<svg\s/,
     `<svg x="${x}" y="${y}" width="${size}" height="${size}" `,

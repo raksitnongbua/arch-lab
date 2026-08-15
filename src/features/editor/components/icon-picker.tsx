@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useIconStyle } from "@/lib/icon-style";
 import { cn } from "@/lib/utils";
 import type { C4NodeType } from "@/types";
 
@@ -52,6 +53,7 @@ export function IconPicker(props: {
 
   const [query, setQuery] = useState("");
   const results = useMemo(() => searchIcons(query), [query]);
+  const [iconStyle] = useIconStyle();
 
   // Keyboard cursor over the flat result order (category-major).
   const [activeSlug, setActiveSlug] = useState<string | null>(
@@ -180,7 +182,13 @@ export function IconPicker(props: {
                       isCurrent && "border-ring bg-selection",
                     )}
                   >
-                    <def.Svg className="size-6" />
+                    {/* The picker previews the style the CANVAS will use —
+                        choosing a mark that then renders differently is the
+                        kind of surprise a picker exists to prevent. */}
+                    {(() => {
+                      const Preview = def.byStyle[iconStyle];
+                      return <Preview className="size-6" />;
+                    })()}
                     <span className="w-full truncate text-[10px] leading-tight">
                       {def.name}
                     </span>

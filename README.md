@@ -911,9 +911,16 @@ Brand icons in the editor's icon registry come from the
 [`thesvg`](https://www.npmjs.com/package/thesvg) npm package (code licensed
 MIT). The brand marks themselves remain the trademarks and property of their
 respective owners; they are used nominatively — to label what a container
-runs — and are embedded unmodified, in their own colours (some upstream
-licences are no-derivatives, and the registry's no-recolour rule exists for
-exactly that reason; see `src/features/editor/lib/icons/registry.ts`).
+runs — and are embedded unmodified (some upstream licences are
+no-derivatives, and the registry's no-recolour rule exists for exactly that
+reason; see `src/features/editor/lib/icons/registry.ts`).
+
+Diagrams can be drawn with icons in one ink or in brand colours — a reader
+preference, not a document property, toggled beside the zoom control. Both
+styles use artwork the package publishes: mono mode selects each mark's
+upstream `mono` variant and never derives one by stripping colour, so the
+nine marks with no monochrome artwork published stay in colour, and the
+toggle says so.
 Per-brand licence terms are recorded upstream: each icon module exports its
 `license` and source `url`, and the full metadata lives in the
 [thesvg repository](https://github.com/glincker/thesvg). The remaining

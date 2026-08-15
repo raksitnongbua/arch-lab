@@ -2,33 +2,42 @@ import type { SVGProps } from "react";
 import type { IconVariants } from "thesvg";
 
 import type { IconCategory } from "./categories";
-import type { IconDef } from "./registry";
+import type { IconSource } from "./registry";
 
 /**
- * Named-and-renamed imports, three bindings per icon, DELIBERATELY — a
- * default import was tried first and shipped ~284KB of dead strings per
- * chunk: each module's default export is an object literal referencing every
- * export, including a `variants` record that carries the mono/light/dark/
- * wordmark artwork as full SVG strings, so importing the default keeps them
- * all alive past tree-shaking. Importing only the consts we read lets the
- * bundler drop the unused variants, `license` and `url`. `slug`/`title` come
- * from the package rather than being retyped here (dry.md — the import path
- * already pins which module they belong to).
+ * Named-and-renamed imports, never the default, DELIBERATELY — a default
+ * import was tried first and shipped ~284KB of dead strings per chunk: each
+ * module's default export is an object literal referencing every export, so
+ * importing it keeps `license`, `url` and every artwork alive past
+ * tree-shaking. `slug`/`title` come from the package rather than being
+ * retyped here (dry.md — the import path already pins which module they
+ * belong to).
  *
- * The three brands that are monochrome BY DESIGN (Vercel, Anthropic, OpenAI)
- * import `variants` instead: their default artwork is white ink, and they
- * take the upstream ink-free variant so they can follow the theme in both
- * directions — see `inkFreeVariant`.
+ * WHICH ARTWORK BINDING an icon imports is not cosmetic, and the split is
+ * the price of the mono/colour switch:
+ *
+ *   - `variants` (45 icons) — needed to reach the `mono` artwork, which the
+ *     package exposes ONLY through that object; there is no per-variant
+ *     subpath. It drags the light/dark/wordmark strings in with it, about
+ *     150KB across the set that nothing renders. That waste buys the switch,
+ *     and it is why the other nine do not pay it.
+ *   - `svg` (9 icons) — upstream ships them no `mono` variant, so `variants`
+ *     would cost bytes for artwork we could not use anyway. These stay
+ *     coloured in mono mode; see `IconDef.byStyle`.
+ *
+ * A leaner route exists if the waste ever matters: generate a module holding
+ * just the 45 mono strings (~52KB) and pin it to the package with a `check:*`
+ * script, the way `check:skill` pins the generated skill document.
  */
 import {
   slug as angularSlug,
   title as angularTitle,
-  svg as angularSvg,
+  variants as angularVariants,
 } from "thesvg/angular";
 import {
   slug as ansibleSlug,
   title as ansibleTitle,
-  svg as ansibleSvg,
+  variants as ansibleVariants,
 } from "thesvg/ansible";
 import {
   slug as anthropicSlug,
@@ -38,34 +47,34 @@ import {
 import {
   slug as airflowSlug,
   title as airflowTitle,
-  svg as airflowSvg,
+  variants as airflowVariants,
 } from "thesvg/apache-airflow";
 import {
   slug as pulsarSlug,
   title as pulsarTitle,
-  svg as pulsarSvg,
+  variants as pulsarVariants,
 } from "thesvg/apache-pulsar";
 import {
   slug as sparkSlug,
   title as sparkTitle,
-  svg as sparkSvg,
+  variants as sparkVariants,
 } from "thesvg/apache-spark";
-import { slug as argocdSlug, svg as argocdSvg } from "thesvg/argocd";
+import { slug as argocdSlug, variants as argocdVariants } from "thesvg/argocd";
 import {
   slug as auth0Slug,
   title as auth0Title,
-  svg as auth0Svg,
+  variants as auth0Variants,
 } from "thesvg/auth0";
-import { slug as bunSlug, title as bunTitle, svg as bunSvg } from "thesvg/bun";
+import { slug as bunSlug, title as bunTitle, variants as bunVariants } from "thesvg/bun";
 import {
   slug as celerySlug,
   title as celeryTitle,
-  svg as celerySvg,
+  variants as celeryVariants,
 } from "thesvg/celery";
 import {
   slug as circleciSlug,
   title as circleciTitle,
-  svg as circleciSvg,
+  variants as circleciVariants,
 } from "thesvg/circleci";
 import {
   slug as cockroachdbSlug,
@@ -75,53 +84,53 @@ import {
 import {
   slug as cplusplusSlug,
   title as cplusplusTitle,
-  svg as cplusplusSvg,
+  variants as cplusplusVariants,
 } from "thesvg/cplusplus";
 import {
   slug as databricksSlug,
   title as databricksTitle,
-  svg as databricksSvg,
+  variants as databricksVariants,
 } from "thesvg/databricks";
 import {
   slug as datadogSlug,
   title as datadogTitle,
-  svg as datadogSvg,
+  variants as datadogVariants,
 } from "thesvg/datadog";
 import { slug as dbtSlug, title as dbtTitle, svg as dbtSvg } from "thesvg/dbt";
 import {
   slug as digitaloceanSlug,
   title as digitaloceanTitle,
-  svg as digitaloceanSvg,
+  variants as digitaloceanVariants,
 } from "thesvg/digitalocean";
 import {
   slug as flutterSlug,
   title as flutterTitle,
-  svg as flutterSvg,
+  variants as flutterVariants,
 } from "thesvg/flutter";
 import {
   slug as githubSlug,
   title as githubTitle,
-  svg as githubSvg,
+  variants as githubVariants,
 } from "thesvg/github";
 import {
   slug as githubActionsSlug,
   title as githubActionsTitle,
-  svg as githubActionsSvg,
+  variants as githubActionsVariants,
 } from "thesvg/github-actions";
 import {
   slug as gitlabSlug,
   title as gitlabTitle,
-  svg as gitlabSvg,
+  variants as gitlabVariants,
 } from "thesvg/gitlab";
 import {
   slug as grafanaSlug,
   title as grafanaTitle,
-  svg as grafanaSvg,
+  variants as grafanaVariants,
 } from "thesvg/grafana";
 import {
   slug as helmSlug,
   title as helmTitle,
-  svg as helmSvg,
+  variants as helmVariants,
 } from "thesvg/helm";
 import {
   slug as herokuSlug,
@@ -131,32 +140,32 @@ import {
 import {
   slug as influxdbSlug,
   title as influxdbTitle,
-  svg as influxdbSvg,
+  variants as influxdbVariants,
 } from "thesvg/influxdb";
 import {
   slug as istioSlug,
   title as istioTitle,
-  svg as istioSvg,
+  variants as istioVariants,
 } from "thesvg/istio";
 import {
   slug as jenkinsSlug,
   title as jenkinsTitle,
-  svg as jenkinsSvg,
+  variants as jenkinsVariants,
 } from "thesvg/jenkins";
 import {
   slug as keycloakSlug,
   title as keycloakTitle,
-  svg as keycloakSvg,
+  variants as keycloakVariants,
 } from "thesvg/keycloak";
 import {
   slug as kotlinSlug,
   title as kotlinTitle,
-  svg as kotlinSvg,
+  variants as kotlinVariants,
 } from "thesvg/kotlin";
 import {
   slug as mariadbSlug,
   title as mariadbTitle,
-  svg as mariadbSvg,
+  variants as mariadbVariants,
 } from "thesvg/mariadb";
 import {
   slug as mssqlSlug,
@@ -166,27 +175,27 @@ import {
 import {
   slug as minioSlug,
   title as minioTitle,
-  svg as minioSvg,
+  variants as minioVariants,
 } from "thesvg/minio";
 import {
   slug as neo4jSlug,
   title as neo4jTitle,
-  svg as neo4jSvg,
+  variants as neo4jVariants,
 } from "thesvg/neo4j";
 import {
   slug as netlifySlug,
   title as netlifyTitle,
-  svg as netlifySvg,
+  variants as netlifyVariants,
 } from "thesvg/netlify";
 import {
   slug as newRelicSlug,
   title as newRelicTitle,
-  svg as newRelicSvg,
+  variants as newRelicVariants,
 } from "thesvg/new-relic";
 import {
   slug as oktaSlug,
   title as oktaTitle,
-  svg as oktaSvg,
+  variants as oktaVariants,
 } from "thesvg/okta";
 import {
   slug as openaiSlug,
@@ -196,7 +205,7 @@ import {
 import {
   slug as otelSlug,
   title as otelTitle,
-  svg as otelSvg,
+  variants as otelVariants,
 } from "thesvg/opentelemetry";
 import {
   slug as oracleSlug,
@@ -206,52 +215,52 @@ import {
 import {
   slug as prometheusSlug,
   title as prometheusTitle,
-  svg as prometheusSvg,
+  variants as prometheusVariants,
 } from "thesvg/prometheus";
 import {
   slug as sentrySlug,
   title as sentryTitle,
-  svg as sentrySvg,
+  variants as sentryVariants,
 } from "thesvg/sentry";
 import {
   slug as snowflakeSlug,
   title as snowflakeTitle,
-  svg as snowflakeSvg,
+  variants as snowflakeVariants,
 } from "thesvg/snowflake";
 import {
   slug as splunkSlug,
   title as splunkTitle,
-  svg as splunkSvg,
+  variants as splunkVariants,
 } from "thesvg/splunk";
 import {
   slug as springBootSlug,
   title as springBootTitle,
-  svg as springBootSvg,
+  variants as springBootVariants,
 } from "thesvg/spring-boot";
 import {
   slug as stripeSlug,
   title as stripeTitle,
-  svg as stripeSvg,
+  variants as stripeVariants,
 } from "thesvg/stripe";
 import {
   slug as supabaseSlug,
   title as supabaseTitle,
-  svg as supabaseSvg,
+  variants as supabaseVariants,
 } from "thesvg/supabase";
 import {
   slug as svelteSlug,
   title as svelteTitle,
-  svg as svelteSvg,
+  variants as svelteVariants,
 } from "thesvg/svelte";
 import {
   slug as swiftSlug,
   title as swiftTitle,
-  svg as swiftSvg,
+  variants as swiftVariants,
 } from "thesvg/swift";
 import {
   slug as temporalSlug,
   title as temporalTitle,
-  svg as temporalSvg,
+  variants as temporalVariants,
 } from "thesvg/temporal";
 import {
   slug as traefikSlug,
@@ -266,7 +275,7 @@ import {
 import {
   slug as vaultSlug,
   title as vaultTitle,
-  svg as vaultSvg,
+  variants as vaultVariants,
 } from "thesvg/vault";
 import {
   slug as vercelSlug,
@@ -377,6 +386,26 @@ function splitBrandSvg(
 }
 
 /**
+ * Does this artwork paint itself, rather than inheriting the colour around it?
+ *
+ * BOTH spellings must be checked. An attribute-only test was tried and was
+ * wrong: Bun declares its ink as `style="fill:#fbf0df"`, so an attribute test
+ * reports it ink-free, hands it `currentColor` — which a `style` declaration
+ * outranks — and the mark quietly keeps painting itself while the registry
+ * believes it is monochrome. `none` and `currentColor` are not ink: the first
+ * paints nothing, the second is the inheritance we are asking for.
+ */
+function hasBakedInk(svg: string): string | null {
+  const attr = /\b(?:fill|stroke)="(?!none\b|currentColor\b)[^"]+"/.exec(svg);
+  if (attr !== null) return attr[0];
+  const styled =
+    /style="[^"]*\b(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)[^;"]+/.exec(
+      svg,
+    );
+  return styled === null ? null : styled[0];
+}
+
+/**
  * The upstream-shipped artwork that carries NO ink of its own, for the three
  * marks (Vercel, Anthropic, OpenAI) that are monochrome by design and whose
  * default variant is white — invisible on a light canvas.
@@ -410,17 +439,71 @@ function inkFreeVariant(slug: string, variants: IconVariants): string {
   if (markup === undefined) {
     throw new Error(`brand icon "${slug}": has no "mono" or "light" variant`);
   }
-  const baked = /\b(?:fill|stroke)="(?!none\b|currentColor\b)[^"]+"/.exec(
-    markup,
-  );
+  const baked = hasBakedInk(markup);
   if (baked !== null) {
     throw new Error(
       `brand icon "${slug}": expected ink-free artwork to inherit ` +
-        `currentColor, but it bakes in ${baked[0]} — a baked ink is ` +
+        `currentColor, but it bakes in ${baked} — a baked ink is ` +
         `invisible in one of the two themes`,
     );
   }
   return markup;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Choosing the artwork for each style                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The two artworks one brand mark can render: its own colours, and a single
+ * ink that follows the theme.
+ */
+interface BrandArt {
+  colour: string;
+  /**
+   * Absent when upstream ships no `mono` variant. The mark then stays
+   * coloured in mono mode — see `IconDef.byStyle`; we may not derive one.
+   */
+  mono?: string;
+}
+
+/**
+ * A mark with both artworks. `default` is the colour artwork rather than the
+ * `svg` export so that both come from ONE object — reading the colour from
+ * `svg` and the mono from `variants` would import the module twice over and
+ * let the two drift if upstream ever made them disagree.
+ */
+function withMono(slug: string, variants: IconVariants): BrandArt {
+  const colour = variants["default"];
+  const mono = variants["mono"];
+  if (colour === undefined || mono === undefined) {
+    throw new Error(
+      `brand icon "${slug}": expected both "default" and "mono" variants — ` +
+        `import \`svg\` and use colourOnly() if upstream dropped the mono`,
+    );
+  }
+  return { colour, mono };
+}
+
+/**
+ * A mark upstream ships no `mono` for. Imports `svg` alone DELIBERATELY: the
+ * whole `variants` object would drag the light/dark/wordmark artwork into the
+ * bundle (~150KB across the set) to gain nothing.
+ */
+function colourOnly(svg: string): BrandArt {
+  return { colour: svg };
+}
+
+/**
+ * A brand that is monochrome in BOTH styles — Vercel, Anthropic, OpenAI. They
+ * have no colour artwork worth the name: their marks are one flat ink by
+ * design and the "colour" variant is white-on-white. Colour mode therefore
+ * shows the same ink-free artwork mono mode does, which is honest rather than
+ * a gap: there is no colour being withheld.
+ */
+function alwaysMono(slug: string, variants: IconVariants): BrandArt {
+  const markup = inkFreeVariant(slug, variants);
+  return { colour: markup, mono: markup };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -466,27 +549,37 @@ interface BrandEntry {
   slug: string;
   /** Display name — thesvg's title, overridden where it misspells the brand. */
   name: string;
-  /** The artwork actually rendered: the default, or an ink-free variant. */
-  svg: string;
+  /** Which artwork each style renders — `withMono`/`colourOnly`/`alwaysMono`. */
+  art: BrandArt;
   category: IconCategory;
   aliases: string[];
-  /**
-   * True ONLY for the brands that are monochrome by design and ship ink-free
-   * artwork (`inkFreeVariant`): they follow `currentColor` like the
-   * hand-authored set. Defaults to false — a brand with real colours keeps
-   * them, and nothing may set this to force one into the theme.
-   */
-  monochrome?: boolean;
 }
 
-function brandDef(entry: BrandEntry): IconDef {
-  const monochrome = entry.monochrome ?? false;
+/**
+ * `monochrome` is DERIVED from the artwork, never declared. Hand-declaring it
+ * shipped a bug twice: three marks were flagged coloured while carrying no
+ * ink of their own (Oracle, Traefik, and the default-variant reading of the
+ * white-ink brands), so nothing gave them a `fill`, they fell back to the SVG
+ * default of black, and they vanished against a dark canvas. The artwork
+ * already knows the answer — asking it cannot drift the way a flag does.
+ */
+function brandDef(entry: BrandEntry): IconSource {
+  const { slug, art } = entry;
+  const monochrome = hasBakedInk(art.colour) === null;
   return {
-    slug: entry.slug,
+    slug,
     name: entry.name,
     aliases: entry.aliases,
     category: entry.category,
-    Svg: brandSvgComponent(entry.slug, entry.svg, monochrome),
+    Svg: brandSvgComponent(slug, art.colour, monochrome),
+    /* Undefined where the two artworks are the same string: the registry
+       reads absence as "Svg already answers for both styles", so pointing
+       SvgMono at an identical component would only cost a second render
+       path and a second export-cache entry for one drawing. */
+    SvgMono:
+      art.mono === undefined || art.mono === art.colour
+        ? undefined
+        : brandSvgComponent(slug, art.mono, hasBakedInk(art.mono) === null),
     monochrome,
   };
 }
@@ -522,63 +615,63 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: angularSlug,
     name: angularTitle,
-    svg: angularSvg,
+    art: withMono(angularSlug, angularVariants),
     category: "languages",
     aliases: ["ng"],
   },
   {
     slug: bunSlug,
     name: bunTitle,
-    svg: bunSvg,
+    art: withMono(bunSlug, bunVariants),
     category: "languages",
     aliases: ["bunjs"],
   },
   {
     slug: cplusplusSlug,
     name: cplusplusTitle,
-    svg: cplusplusSvg,
+    art: withMono(cplusplusSlug, cplusplusVariants),
     category: "languages",
     aliases: ["cpp", "c plus plus"],
   },
   {
     slug: flutterSlug,
     name: flutterTitle,
-    svg: flutterSvg,
+    art: withMono(flutterSlug, flutterVariants),
     category: "languages",
     aliases: ["dart"],
   },
   {
     slug: kotlinSlug,
     name: kotlinTitle,
-    svg: kotlinSvg,
+    art: withMono(kotlinSlug, kotlinVariants),
     category: "languages",
     aliases: ["kt"],
   },
   {
     slug: springBootSlug,
     name: springBootTitle,
-    svg: springBootSvg,
+    art: withMono(springBootSlug, springBootVariants),
     category: "languages",
     aliases: ["spring"],
   },
   {
     slug: svelteSlug,
     name: svelteTitle,
-    svg: svelteSvg,
+    art: withMono(svelteSlug, svelteVariants),
     category: "languages",
     aliases: ["sveltekit"],
   },
   {
     slug: swiftSlug,
     name: swiftTitle,
-    svg: swiftSvg,
+    art: withMono(swiftSlug, swiftVariants),
     category: "languages",
     aliases: ["ios", "swiftui"],
   },
   {
     slug: vueSlug,
     name: vueTitle,
-    svg: vueSvg,
+    art: colourOnly(vueSvg),
     category: "languages",
     aliases: ["vuejs", "nuxt"],
   },
@@ -586,77 +679,77 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: airflowSlug,
     name: airflowTitle,
-    svg: airflowSvg,
+    art: withMono(airflowSlug, airflowVariants),
     category: "databases",
     aliases: ["airflow", "dag", "etl"],
   },
   {
     slug: sparkSlug,
     name: sparkTitle,
-    svg: sparkSvg,
+    art: withMono(sparkSlug, sparkVariants),
     category: "databases",
     aliases: ["spark", "batch"],
   },
   {
     slug: cockroachdbSlug,
     name: cockroachdbTitle,
-    svg: cockroachdbSvg,
+    art: colourOnly(cockroachdbSvg),
     category: "databases",
     aliases: ["crdb", "distributed sql"],
   },
   {
     slug: dbtSlug,
     name: dbtTitle,
-    svg: dbtSvg,
+    art: colourOnly(dbtSvg),
     category: "databases",
     aliases: ["data build tool"],
   },
   {
     slug: influxdbSlug,
     name: influxdbTitle,
-    svg: influxdbSvg,
+    art: withMono(influxdbSlug, influxdbVariants),
     category: "databases",
     aliases: ["time series", "tsdb"],
   },
   {
     slug: mariadbSlug,
     name: mariadbTitle,
-    svg: mariadbSvg,
+    art: withMono(mariadbSlug, mariadbVariants),
     category: "databases",
     aliases: ["maria"],
   },
   {
     slug: mssqlSlug,
     name: mssqlTitle,
-    svg: mssqlSvg,
+    art: colourOnly(mssqlSvg),
     category: "databases",
     aliases: ["mssql", "sql server"],
   },
   {
     slug: neo4jSlug,
     name: neo4jTitle,
-    svg: neo4jSvg,
+    art: withMono(neo4jSlug, neo4jVariants),
     category: "databases",
     aliases: ["graph db", "cypher"],
   },
   {
     slug: oracleSlug,
     name: oracleTitle,
-    svg: oracleSvg,
+    art: colourOnly(oracleSvg),
     category: "databases",
     aliases: ["oracle db", "plsql"],
   },
   {
     slug: snowflakeSlug,
     name: snowflakeTitle,
-    svg: snowflakeSvg,
+    art: withMono(snowflakeSlug, snowflakeVariants),
     category: "databases",
     aliases: ["data warehouse"],
   },
   {
     slug: supabaseSlug,
     name: supabaseTitle,
-    svg: supabaseSvg,
+    art: withMono(supabaseSlug, supabaseVariants),
     category: "databases",
     aliases: ["baas"],
   },
@@ -664,21 +757,21 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: pulsarSlug,
     name: pulsarTitle,
-    svg: pulsarSvg,
+    art: withMono(pulsarSlug, pulsarVariants),
     category: "messaging",
     aliases: ["pulsar"],
   },
   {
     slug: celerySlug,
     name: celeryTitle,
-    svg: celerySvg,
+    art: withMono(celerySlug, celeryVariants),
     category: "messaging",
     aliases: ["task queue", "worker"],
   },
   {
     slug: temporalSlug,
     name: temporalTitle,
-    svg: temporalSvg,
+    art: withMono(temporalSlug, temporalVariants),
     category: "messaging",
     aliases: ["workflow", "durable execution"],
   },
@@ -686,14 +779,14 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: istioSlug,
     name: istioTitle,
-    svg: istioSvg,
+    art: withMono(istioSlug, istioVariants),
     category: "networking",
     aliases: ["service mesh"],
   },
   {
     slug: traefikSlug,
     name: traefikTitle,
-    svg: traefikSvg,
+    art: colourOnly(traefikSvg),
     category: "networking",
     aliases: ["ingress", "reverse proxy"],
   },
@@ -701,43 +794,42 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: databricksSlug,
     name: databricksTitle,
-    svg: databricksSvg,
+    art: withMono(databricksSlug, databricksVariants),
     category: "cloud",
     aliases: ["lakehouse"],
   },
   {
     slug: digitaloceanSlug,
     name: digitaloceanTitle,
-    svg: digitaloceanSvg,
+    art: withMono(digitaloceanSlug, digitaloceanVariants),
     category: "cloud",
     aliases: ["droplet"],
   },
   {
     slug: herokuSlug,
     name: herokuTitle,
-    svg: herokuSvg,
+    art: colourOnly(herokuSvg),
     category: "cloud",
     aliases: ["paas", "dyno"],
   },
   {
     slug: minioSlug,
     name: minioTitle,
-    svg: minioSvg,
+    art: withMono(minioSlug, minioVariants),
     category: "cloud",
     aliases: ["object storage", "s3 compatible"],
   },
   {
     slug: netlifySlug,
     name: netlifyTitle,
-    svg: netlifySvg,
+    art: withMono(netlifySlug, netlifyVariants),
     category: "cloud",
     aliases: ["jamstack"],
   },
   {
     slug: vercelSlug,
     name: vercelTitle,
-    svg: inkFreeVariant(vercelSlug, vercelVariants),
-    monochrome: true,
+    art: alwaysMono(vercelSlug, vercelVariants),
     category: "cloud",
     aliases: ["hosting"],
   },
@@ -745,7 +837,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: ansibleSlug,
     name: ansibleTitle,
-    svg: ansibleSvg,
+    art: withMono(ansibleSlug, ansibleVariants),
     category: "devops",
     aliases: ["playbook", "configuration management"],
   },
@@ -753,56 +845,56 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
     slug: argocdSlug,
     // thesvg titles it "Argocd"; the project spells itself "Argo CD".
     name: "Argo CD",
-    svg: argocdSvg,
+    art: withMono(argocdSlug, argocdVariants),
     category: "devops",
     aliases: ["argo", "gitops"],
   },
   {
     slug: circleciSlug,
     name: circleciTitle,
-    svg: circleciSvg,
+    art: withMono(circleciSlug, circleciVariants),
     category: "devops",
     aliases: ["ci"],
   },
   {
     slug: githubSlug,
     name: githubTitle,
-    svg: githubSvg,
+    art: withMono(githubSlug, githubVariants),
     category: "devops",
     aliases: ["gh", "git"],
   },
   {
     slug: githubActionsSlug,
     name: githubActionsTitle,
-    svg: githubActionsSvg,
+    art: withMono(githubActionsSlug, githubActionsVariants),
     category: "devops",
     aliases: ["ci", "workflow"],
   },
   {
     slug: gitlabSlug,
     name: gitlabTitle,
-    svg: gitlabSvg,
+    art: withMono(gitlabSlug, gitlabVariants),
     category: "devops",
     aliases: ["git", "ci"],
   },
   {
     slug: helmSlug,
     name: helmTitle,
-    svg: helmSvg,
+    art: withMono(helmSlug, helmVariants),
     category: "devops",
     aliases: ["chart", "k8s package"],
   },
   {
     slug: jenkinsSlug,
     name: jenkinsTitle,
-    svg: jenkinsSvg,
+    art: withMono(jenkinsSlug, jenkinsVariants),
     category: "devops",
     aliases: ["ci", "build server"],
   },
   {
     slug: vaultSlug,
     name: vaultTitle,
-    svg: vaultSvg,
+    art: withMono(vaultSlug, vaultVariants),
     category: "devops",
     aliases: ["hashicorp", "secrets"],
   },
@@ -810,49 +902,49 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: datadogSlug,
     name: datadogTitle,
-    svg: datadogSvg,
+    art: withMono(datadogSlug, datadogVariants),
     category: "observability",
     aliases: ["apm"],
   },
   {
     slug: grafanaSlug,
     name: grafanaTitle,
-    svg: grafanaSvg,
+    art: withMono(grafanaSlug, grafanaVariants),
     category: "observability",
     aliases: ["dashboards"],
   },
   {
     slug: newRelicSlug,
     name: newRelicTitle,
-    svg: newRelicSvg,
+    art: withMono(newRelicSlug, newRelicVariants),
     category: "observability",
     aliases: ["apm"],
   },
   {
     slug: otelSlug,
     name: otelTitle,
-    svg: otelSvg,
+    art: withMono(otelSlug, otelVariants),
     category: "observability",
     aliases: ["otel", "tracing"],
   },
   {
     slug: prometheusSlug,
     name: prometheusTitle,
-    svg: prometheusSvg,
+    art: withMono(prometheusSlug, prometheusVariants),
     category: "observability",
     aliases: ["metrics"],
   },
   {
     slug: sentrySlug,
     name: sentryTitle,
-    svg: sentrySvg,
+    art: withMono(sentrySlug, sentryVariants),
     category: "observability",
     aliases: ["error tracking", "crash"],
   },
   {
     slug: splunkSlug,
     name: splunkTitle,
-    svg: splunkSvg,
+    art: withMono(splunkSlug, splunkVariants),
     category: "observability",
     aliases: ["siem", "logs"],
   },
@@ -860,54 +952,53 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: anthropicSlug,
     name: anthropicTitle,
-    svg: inkFreeVariant(anthropicSlug, anthropicVariants),
-    monochrome: true,
+    art: alwaysMono(anthropicSlug, anthropicVariants),
     category: "saas",
     aliases: ["claude", "llm"],
   },
   {
     slug: auth0Slug,
     name: auth0Title,
-    svg: auth0Svg,
+    art: withMono(auth0Slug, auth0Variants),
     category: "saas",
     aliases: ["auth", "oauth"],
   },
   {
     slug: keycloakSlug,
     name: keycloakTitle,
-    svg: keycloakSvg,
+    art: withMono(keycloakSlug, keycloakVariants),
     category: "saas",
     aliases: ["sso", "oidc"],
   },
   {
     slug: oktaSlug,
     name: oktaTitle,
-    svg: oktaSvg,
+    art: withMono(oktaSlug, oktaVariants),
     category: "saas",
     aliases: ["sso", "identity"],
   },
   {
     slug: openaiSlug,
     name: openaiTitle,
-    svg: inkFreeVariant(openaiSlug, openaiVariants),
-    monochrome: true,
+    art: alwaysMono(openaiSlug, openaiVariants),
     category: "saas",
     aliases: ["gpt", "chatgpt", "llm"],
   },
   {
     slug: stripeSlug,
     name: stripeTitle,
-    svg: stripeSvg,
+    art: withMono(stripeSlug, stripeVariants),
     category: "saas",
     aliases: ["payments", "billing"],
   },
   {
     slug: twilioSlug,
     name: twilioTitle,
-    svg: twilioSvg,
+    art: colourOnly(twilioSvg),
     category: "saas",
     aliases: ["sms", "voice"],
   },
 ];
 
-export const BRAND_ICON_DEFS: readonly IconDef[] = BRAND_ENTRIES.map(brandDef);
+export const BRAND_ICON_DEFS: readonly IconSource[] =
+  BRAND_ENTRIES.map(brandDef);

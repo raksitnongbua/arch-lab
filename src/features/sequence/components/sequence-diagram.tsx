@@ -46,6 +46,7 @@ import { useId } from "react";
 // "a hue at our validated card lightness" (node-colors.ts carries the full
 // rationale), and re-typing the expression here would let the two drift.
 import { ICONS } from "@/features/editor/lib/icons/registry";
+import { useIconStyle } from "@/lib/icon-style";
 import { tagFillCss } from "@/features/editor/lib/node-colors";
 import { cn } from "@/lib/utils";
 import { TINT_WASH_OPACITY } from "@/lib/tint";
@@ -830,6 +831,11 @@ function ParticipantColumn({
      to draw it would be the renderer enforcing a rule the format does not. */
   const icon =
     participant.icon === undefined ? undefined : ICONS[participant.icon];
+  /* The sequence exporter clones the LIVE DOM (its render-svg.ts explains
+     the strategy), so reading the reader's style here is all export parity
+     needs — unlike the C4 exporter, which re-renders from the model and has
+     to be handed the style explicitly. */
+  const [iconStyle] = useIconStyle();
   /**
    * The participant's LANE colour — its header border, lifeline and actor
    * glyph, assigned by the layout (LaidParticipant.lane; globals.css owns
@@ -950,7 +956,7 @@ function ParticipantColumn({
           optically balanced in the card at any name length. */}
       {(() => {
         const nameWidth = estimateTextWidth(participant.name, SEQ.nameFontSize);
-        const Icon = icon?.Svg;
+        const Icon = icon?.byStyle[iconStyle];
         const rowWidth =
           nameWidth + (Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap);
         const rowLeft = x - rowWidth / 2;

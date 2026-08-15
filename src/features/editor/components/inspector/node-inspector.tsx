@@ -35,6 +35,8 @@ import { SHAPE_LABEL } from "@/features/viewer/lib/labels";
 
 import { InvalidNodeTypeError, useEditorStore } from "../../state";
 import { canDrillInto, drillIntoNode } from "../../hooks/use-level-navigation";
+import { useIconStyle } from "@/lib/icon-style";
+
 import { resolveIcon } from "../../lib/icons/registry";
 import { IconPicker } from "../icon-picker";
 import { Field, InspectorSection } from "./field";
@@ -122,7 +124,8 @@ export function NodeInspector({
   };
 
   const resolved = resolveIcon(node);
-  const IconSvg = resolved.def.Svg;
+  const [iconStyle] = useIconStyle();
+  const IconSvg = resolved.def.byStyle[iconStyle];
 
   return (
     <InspectorSection title={NODE_TYPE_LABELS[node.type]}>

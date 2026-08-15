@@ -20,15 +20,21 @@
  *    icons are CC BY-ND, for one), so `currentColor`-ing one is not merely
  *    ugly but a licence breach.
  *
- *    The exception is narrow and is NOT a loophole: three brands (Vercel,
- *    Anthropic, OpenAI) are monochrome by design — a single flat ink, no
- *    colour to preserve — and upstream ships them as artwork with no `fill`
- *    at all. Those carry `monochrome: true` and inherit the theme's colour,
- *    because the alternative is worse: any baked ink makes the mark
- *    invisible in one of the two themes, and per-theme artwork would break
- *    canvas/export parity (icon-markup.ts memoises per slug). `brand.tsx`
- *    asserts the artwork really is ink-free, so this cannot silently become
- *    the recolouring of a coloured mark.
+ *    The exception is narrow and is NOT a loophole: some brands are
+ *    monochrome by design — a single flat ink, no colour to preserve — and
+ *    upstream ships them as artwork with no `fill` at all. Those come out
+ *    `monochrome: true` and inherit the theme's colour, because the
+ *    alternative is worse: any baked ink makes the mark invisible in one of
+ *    the two themes. `brand.tsx` DERIVES the flag by inspecting the artwork
+ *    rather than trusting a hand-set value, which is the only version of
+ *    this that has not shipped a bug — three marks were flagged coloured
+ *    while carrying no ink, so nothing gave them a fill and they went black
+ *    on a black canvas.
+ *
+ * ONE INK OR TWO is the reader's choice, not the document's (`IconStyle`).
+ * `byStyle` resolves it per icon: 45 brand marks ship an upstream `mono`
+ * variant, and the nine that do not stay coloured in mono mode — deriving a
+ * monochrome version by stripping colour is exactly the recolouring above.
  *
  * SLUG COLLISIONS: thesvg also ships `postgresql`, `redis`, `kafka`, … — the
  * hand-authored mark keeps its slug (models in the wild reference it, and the
@@ -40,6 +46,8 @@
  */
 
 import type { C4Node, C4NodeType } from "@/types";
+
+import type { IconStyle } from "@/lib/icon-style";
 
 import { BRAND_ICON_DEFS } from "./brand";
 import { ICON_CATEGORY_ORDER, type IconCategory } from "./categories";
@@ -105,7 +113,13 @@ import { WebhookIcon } from "./svg/webhook";
 
 export type { IconCategory } from "./categories";
 
-export interface IconDef {
+type IconSvg = React.FC<React.SVGProps<SVGSVGElement>>;
+
+/**
+ * What an icon DECLARES — the authoring shape, used by the literals below and
+ * by `brand.tsx`. Consumers get `IconDef`, which adds the per-style lookup.
+ */
+export interface IconSource {
   /** e.g. "postgresql" — what the model stores. */
   slug: string;
   /** e.g. "PostgreSQL". */
@@ -114,19 +128,68 @@ export interface IconDef {
   aliases: string[];
   category: IconCategory;
   /** Inline SVG component; `currentColor` where monochrome. */
-  Svg: React.FC<React.SVGProps<SVGSVGElement>>;
+  Svg: IconSvg;
   /**
-   * True for the hand-authored `currentColor` set; false for brand marks,
-   * which carry their own immutable colours (file header — never recolour).
+   * The monochrome artwork, for readers who prefer one ink (`IconStyle`).
+   * ABSENT means "`Svg` is already the answer" — true of every hand-authored
+   * icon, and of the nine brand marks that ship no `mono` variant. Read it
+   * through `byStyle`, never directly, so those two cases stay one case at
+   * the call site.
+   */
+  SvgMono?: IconSvg;
+  /**
+   * True when `Svg` paints with `currentColor`: the hand-authored set, plus
+   * the brand marks whose artwork carries no ink of its own. False for a
+   * coloured brand mark, whose colours are immutable (file header — never
+   * recolour).
    */
   monochrome: boolean;
+}
+
+export interface IconDef extends IconSource {
+  /**
+   * The artwork for each reader style, RESOLVED — both keys always present.
+   *
+   * A lookup rather than a `pickIcon(def, style)` helper on purpose. The
+   * helper existed first and every call site tripped
+   * `react-hooks/static-components`: a component returned from a function
+   * call cannot be told apart, by lint, from one DEFINED during render (which
+   * remounts its subtree every frame). These components are built once at
+   * module load, so the warning was false — but five suppressions teach a
+   * reader to ignore a rule that is usually right, and a table is what the
+   * data was anyway.
+   */
+  readonly byStyle: Readonly<Record<IconStyle, IconSvg>>;
+}
+
+/**
+ * Falling back to `Svg` for mono is not a compromise but the correct answer
+ * twice over: a hand-authored icon IS monochrome already, and a brand mark
+ * with no upstream `mono` variant has no monochrome artwork we are allowed to
+ * invent — deriving one by stripping colour is the recolouring the registry
+ * forbids. So mono mode is best-effort by design, and a few marks stay
+ * coloured in it; `IconStyleToggle` says how many rather than letting it read
+ * as a rendering bug.
+ */
+function resolveStyles(source: IconSource): IconDef {
+  return {
+    ...source,
+    byStyle: { colour: source.Svg, mono: source.SvgMono ?? source.Svg },
+  };
+}
+
+/** Brand marks that stay coloured in mono mode — upstream ships no `mono`. */
+export function iconsWithoutMono(): IconDef[] {
+  return ICON_DEFS.filter(
+    (def) => !def.monochrome && def.SvgMono === undefined,
+  );
 }
 
 /**
  * The hand-authored set, in picker display order: category-major
  * (ICON_CATEGORY_ORDER), each category in its curated order.
  */
-const HAND_AUTHORED_DEFS: readonly IconDef[] = [
+const HAND_AUTHORED_DEFS: readonly IconSource[] = [
   /* -- Languages & Runtimes ------------------------------------------------ */
   {
     slug: "golang",
@@ -625,7 +688,9 @@ const rankOf = (category: IconCategory): number =>
 const ICON_DEFS: readonly IconDef[] = [
   ...HAND_AUTHORED_DEFS,
   ...BRAND_ICON_DEFS,
-].sort((a, b) => rankOf(a.category) - rankOf(b.category));
+]
+  .sort((a, b) => rankOf(a.category) - rankOf(b.category))
+  .map(resolveStyles);
 
 /**
  * Slug → def. Built with an explicit duplicate check (file header, "slug

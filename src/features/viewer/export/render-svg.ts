@@ -24,6 +24,7 @@
  */
 
 import { LEVEL_LABEL } from "@/lib/constants";
+import { DEFAULT_ICON_STYLE, type IconStyle } from "@/lib/icon-style";
 import { CHAR_WIDTH_RATIO, MONO_CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import type { C4Diagram, C4Edge, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
@@ -421,6 +422,7 @@ function nodeContent(
   theme: ExportTheme,
   shape: ShapeResult,
   paint: { fill: string; stroke: string },
+  iconStyle: IconStyle,
 ): string {
   const { x, y } = node.position;
   const { width: w, height: h } = node.size;
@@ -476,6 +478,7 @@ function nodeContent(
       ICON_SIZE,
       // Accent-tinted, like the renderers (node-chrome.tsx explains).
       paint.stroke,
+      iconStyle,
     ),
   );
   for (const line of nameLines) {
@@ -932,6 +935,13 @@ export interface RenderDiagramOptions {
    * embedded somewhere that already carries a shared key.
    */
   includeLegend?: boolean;
+  /**
+   * Which icon artwork to embed. MUST be the style the canvas is showing, or
+   * the exported file disagrees with the diagram the reader was looking at.
+   * Defaults to `DEFAULT_ICON_STYLE` for callers with no reader context
+   * (server-side card rendering, tests).
+   */
+  iconStyle?: IconStyle;
 }
 
 /**
@@ -974,6 +984,7 @@ export function renderDiagramSvg(
   }
 
   const markerId = "af-arrow";
+  const iconStyle = options.iconStyle ?? DEFAULT_ICON_STYLE;
 
   // The key is laid out BEFORE the page is sized: it can widen a narrow
   // diagram (a two-node context view is narrower than one legend column) and
@@ -1074,7 +1085,7 @@ export function renderDiagramSvg(
         : colorRoleForNode(node) === "external"
           ? ` opacity="${EXTERNAL_NODE_OPACITY}"`
           : "";
-      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape, paint)}</g>`;
+      return `<g${opacity}>${shape.markup}${nodeContent(node, theme, shape, paint, iconStyle)}</g>`;
     })
     .join("");
 
