@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { listSequenceExamples } from "@/features/sequence/service/example-service";
+import { VIEW_EXAMPLE_PARAM } from "@/features/playground/lib/example-param";
 import { listViewerModels } from "@/features/viewer";
 import { EDITOR_ENABLED, LEVEL_META_BY_LEVEL } from "@/lib/constants";
 
@@ -145,7 +146,7 @@ export default function DemoPage(): React.JSX.Element {
                     </ul>
 
                     <Link
-                      href={`/view/${summary.id}`}
+                      href={`/view?${VIEW_EXAMPLE_PARAM}=${summary.id}`}
                       className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors group-hover:text-primary/90 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       Open in view mode
@@ -250,7 +251,7 @@ export default function DemoPage(): React.JSX.Element {
                     </ul>
 
                     <Link
-                      href={`/view/sequence/${summary.id}`}
+                      href={`/view?${VIEW_EXAMPLE_PARAM}=${summary.id}`}
                       className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors group-hover:text-primary/90 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                       Open in view mode

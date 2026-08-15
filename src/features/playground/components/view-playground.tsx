@@ -54,7 +54,14 @@
  * no new cross-feature deep imports (`dry.md`).
  */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlignLeft,
   Braces,
@@ -180,10 +187,17 @@ type PaneErrorState =
 
 export function ViewPlayground({
   seed,
+  initialText,
   initialSourceCollapsed = false,
 }: {
   /** Which example fills the pane when no share payload does. */
   seed: SeedKind;
+  /**
+   * A bundled example's text, resolved by the route from `?e=`. Server-side,
+   * so the example is in the first byte rather than fetched after hydration.
+   * Absent means "use the kind's seed".
+   */
+  initialText?: string;
   /**
    * The reader's stored rail fold, read from the request cookie by the route
    * that mounts this. Passed in rather than read here because only a SERVER
@@ -195,8 +209,24 @@ export function ViewPlayground({
 }): React.JSX.Element {
   /* ---- state ---------------------------------------------------------- */
 
-  const seedDoc = VIEW_SEED_DOCUMENT[seed];
-  const [text, setText] = useState(VIEW_SEED_TEXT[seed]);
+  /* An `?e=` example, when the route resolved one, otherwise the kind's
+     built-in seed. Parsed rather than trusted: an example is the same kind of
+     text a reader could paste, so it goes through the one reader everything
+     else does — a broken bundled example then shows the parser's own located
+     message instead of a blank canvas. */
+  const seedDoc = useMemo(
+    () =>
+      initialText === undefined
+        ? VIEW_SEED_DOCUMENT[seed]
+        : (() => {
+            const parsed = parseViewSource(initialText);
+            return parsed.status === "ok"
+              ? parsed.value
+              : VIEW_SEED_DOCUMENT[seed];
+          })(),
+    [initialText, seed],
+  );
+  const [text, setText] = useState(initialText ?? VIEW_SEED_TEXT[seed]);
   /** The last GOOD document — what the canvas renders, error or not. */
   const [doc, setDoc] = useState<ViewDocument>(seedDoc);
   const [jsonText, setJsonText] = useState(

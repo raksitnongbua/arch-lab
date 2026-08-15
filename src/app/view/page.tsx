@@ -6,6 +6,10 @@ import {
   isCollapsedCookie,
   SOURCE_FOLD_COOKIE,
 } from "@/features/playground/lib/source-fold";
+import {
+  exampleTextFor,
+  VIEW_EXAMPLE_PARAM,
+} from "@/features/playground/lib/example-param";
 import { seedFromParam, VIEW_SEED_PARAM } from "@/features/playground/lib/seed";
 
 export const metadata: Metadata = {
@@ -47,9 +51,15 @@ export default async function ViewPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<React.JSX.Element> {
   const [store, params] = await Promise.all([cookies(), searchParams]);
+  /* `?e=` names a bundled example and wins over `?d=`, which only chooses
+     which built-in seed to fall back to — an example already implies its
+     kind. A share payload beats both: the playground reads `#m=` on mount and
+     replaces whatever was seeded, because a link carries its own document. */
+  const example = exampleTextFor(params[VIEW_EXAMPLE_PARAM]);
   return (
     <ViewPlayground
       seed={seedFromParam(params[VIEW_SEED_PARAM])}
+      initialText={example ?? undefined}
       initialSourceCollapsed={isCollapsedCookie(
         store.get(SOURCE_FOLD_COOKIE)?.value,
       )}
