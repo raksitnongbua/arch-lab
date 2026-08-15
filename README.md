@@ -904,3 +904,17 @@ on its own.
 - **Sequence diagrams, the data dictionary, and network diagrams are planned,
   not built.** Only C4 exists today.
 - **The editor is not in this release** — see above.
+
+## Third-party assets
+
+Brand icons in the editor's icon registry come from the
+[`thesvg`](https://www.npmjs.com/package/thesvg) npm package (code licensed
+MIT). The brand marks themselves remain the trademarks and property of their
+respective owners; they are used nominatively — to label what a container
+runs — and are embedded unmodified, in their own colours (some upstream
+licences are no-derivatives, and the registry's no-recolour rule exists for
+exactly that reason; see `src/features/editor/lib/icons/registry.ts`).
+Per-brand licence terms are recorded upstream: each icon module exports its
+`license` and source `url`, and the full metadata lives in the
+[thesvg repository](https://github.com/glincker/thesvg). The remaining
+registry icons are hand-authored, monochrome, and original to this project.

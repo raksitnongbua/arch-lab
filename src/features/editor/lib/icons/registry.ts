@@ -1,18 +1,39 @@
 /**
  * The icon registry (dev-handoff §4.6, D15, AF-E4-S1/S2). Owned by T2-A.
+ * Icons are referenced by slug; no SVG data or URL is ever written into the
+ * model.
  *
- * 59 hand-authored inline-SVG icons: 38 named marks plus 21 generics and
- * infrastructure primitives. Icons are referenced by slug; no SVG data or URL
- * is ever written into the model. All of them are monochrome and follow
- * `currentColor`, so they stay legible in both themes with zero colour
- * literals.
+ * Two kinds of icon now live here, told apart by the `monochrome` flag:
  *
- * The named marks are stylised motifs, never traced trademarked logos.
+ * 1. The 59 hand-authored inline-SVG icons (38 stylised motifs plus 21
+ *    generics and infrastructure primitives). These are and stay monochrome
+ *    `currentColor` — legible in both themes with zero colour literals.
+ *
+ * 2. Curated BRAND marks from the `thesvg` package (`./brand`). The original
+ *    rule here — "stylised motifs, never traced trademarked logos" — was a
+ *    deliberate trademark-avoidance stance, and it was consciously dropped
+ *    (2026-08) in favour of recognisability: real logos, used NOMINATIVELY,
+ *    to label what a container runs — never to imply endorsement. Each mark
+ *    remains the trademark of its owner. Brand marks render in their own
+ *    hardcoded colours and are NEVER recoloured: beyond diluting the mark,
+ *    some upstream licences forbid derivatives outright (AWS's architecture
+ *    icons are CC BY-ND, for one), so `currentColor`-ing them is not merely
+ *    ugly but a licence breach. `monochrome: false` is the marker; nothing
+ *    may flip it to squeeze a brand mark into the theme.
+ *
+ * SLUG COLLISIONS: thesvg also ships `postgresql`, `redis`, `kafka`, … — the
+ * hand-authored mark keeps its slug (models in the wild reference it, and the
+ * monochrome set is the house style), so the curated brand list simply never
+ * includes a taken slug. `ICONS` below enforces this by throwing on any
+ * duplicate rather than letting `Object.fromEntries`-style last-wins shadow
+ * one definition with another; the throw fires while `pnpm build` prerenders,
+ * so a collision cannot ship.
  */
 
 import type { C4Node, C4NodeType } from "@/types";
 
-import { type IconCategory } from "./categories";
+import { BRAND_ICON_DEFS } from "./brand";
+import { ICON_CATEGORY_ORDER, type IconCategory } from "./categories";
 import { AiModelIcon } from "./svg/ai-model";
 import { AnalyticsIcon } from "./svg/analytics";
 import { ApiIcon } from "./svg/api";
@@ -85,14 +106,18 @@ export interface IconDef {
   category: IconCategory;
   /** Inline SVG component; `currentColor` where monochrome. */
   Svg: React.FC<React.SVGProps<SVGSVGElement>>;
+  /**
+   * True for the hand-authored `currentColor` set; false for brand marks,
+   * which carry their own immutable colours (file header — never recolour).
+   */
   monochrome: boolean;
 }
 
 /**
- * Registry order = picker display order: category-major (ICON_CATEGORY_ORDER),
- * then name. `searchIcons("")` returns exactly this order.
+ * The hand-authored set, in picker display order: category-major
+ * (ICON_CATEGORY_ORDER), each category in its curated order.
  */
-const ICON_DEFS: readonly IconDef[] = [
+const HAND_AUTHORED_DEFS: readonly IconDef[] = [
   /* -- Languages & Runtimes ------------------------------------------------ */
   {
     slug: "golang",
@@ -573,9 +598,42 @@ const ICON_DEFS: readonly IconDef[] = [
   },
 ];
 
-export const ICONS: Record<string, IconDef> = Object.fromEntries(
-  ICON_DEFS.map((def) => [def.slug, def]),
+const CATEGORY_RANK: ReadonlyMap<IconCategory, number> = new Map(
+  ICON_CATEGORY_ORDER.map((category, index) => [category, index]),
 );
+
+const rankOf = (category: IconCategory): number =>
+  CATEGORY_RANK.get(category) ?? ICON_CATEGORY_ORDER.length;
+
+/**
+ * Registry order = picker display order: category-major, hand-authored icons
+ * first within each category (the house monochrome set leads), brand marks
+ * after them, name-sorted (brand.tsx keeps its list in that order). The sort
+ * key is the category ALONE — JS sort is stable, so each source list's
+ * internal order survives the merge. `searchIcons("")` returns exactly this
+ * order.
+ */
+const ICON_DEFS: readonly IconDef[] = [
+  ...HAND_AUTHORED_DEFS,
+  ...BRAND_ICON_DEFS,
+].sort((a, b) => rankOf(a.category) - rankOf(b.category));
+
+/**
+ * Slug → def. Built with an explicit duplicate check (file header, "slug
+ * collisions"): a map literal or `fromEntries` would let the LAST definition
+ * silently win, and a brand icon shadowing a hand-authored slug (or vice
+ * versa) is exactly the bug this registry must make impossible.
+ */
+export const ICONS: Record<string, IconDef> = {};
+for (const def of ICON_DEFS) {
+  if (ICONS[def.slug] !== undefined) {
+    throw new Error(
+      `icon slug "${def.slug}" is defined twice — the hand-authored mark ` +
+        `owns its slug; drop or rename the brand entry in brand.tsx`,
+    );
+  }
+  ICONS[def.slug] = def;
+}
 
 /**
  * Type → default icon slug (AF-E4-S3 baseline). MUST stay in agreement with

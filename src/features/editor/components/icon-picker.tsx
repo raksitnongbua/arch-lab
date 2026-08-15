@@ -6,7 +6,8 @@
  *
  * Opens as a modal over the frozen `Dialog` primitive (built for this, per
  * its header comment). Typing filters on name, slug and aliases — "pg" and
- * "postgres" both find PostgreSQL. Results are grouped by the six categories
+ * "postgres" both find PostgreSQL. Results are grouped by the categories
+ * (ICON_CATEGORY_ORDER — six at handoff, grown since with the brand set)
  * and arrow-key navigable from the search field; `Enter` selects, `Escape`
  * closes (handled by the Dialog). The current icon is highlighted; no match
  * offers "use generic <type> icon".
