@@ -22,6 +22,7 @@
  * Run with: pnpm check:og-cards
  */
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -190,6 +191,57 @@ check(
   })(),
   "every OG.lanes hex must appear in globals.css as a --seq-lane-* value",
 );
+
+/* -------------------------------------------------------------------------- */
+/* The tab icon parses                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `src/app/icon.svg` is served as the favicon, and a favicon that fails to
+ * parse has nowhere to report it: the browser silently draws its own default
+ * globe, the page looks unbranded, and nothing in the build, the types or the
+ * other checks says a word. That shipped — the file's own comment named the
+ * theme tokens the CSS way, `--primary`, and XML forbids a double hyphen
+ * inside a comment, so the whole file was unparseable.
+ *
+ * Parsed with a real XML parser rather than pattern-matched, because the
+ * failure was a rule about comments that no reasonable regex would have been
+ * written to catch.
+ */
+{
+  const iconPath = path.join(ROOT, "src/app/icon.svg");
+  const svg = readFileSync(iconPath, "utf8");
+  /* Node ships no XML parser, so a real one is used where the machine has it.
+     `xmllint` comes with libxml2 and is present on macOS and most CI images;
+     where it is not, the rule below still runs, and the rule is what actually
+     caught this. */
+  let parseError = null;
+  let parserRan = false;
+  try {
+    execFileSync("xmllint", ["--noout", iconPath], { stdio: "pipe" });
+    parserRan = true;
+  } catch (error) {
+    const stderr = error?.stderr?.toString() ?? "";
+    if (error?.code === "ENOENT") {
+      console.log("  · xmllint not installed — skipping the XML parse");
+    } else {
+      parserRan = true;
+      parseError = stderr.trim() || "xmllint rejected the file";
+    }
+  }
+  if (parserRan) {
+    check(
+      "src/app/icon.svg is well-formed XML (browsers silently ignore one that is not)",
+      parseError === null,
+      parseError ?? undefined,
+    );
+  }
+  check(
+    "the tab icon carries no double hyphen (invalid inside an XML comment)",
+    !/<!--[\s\S]*?--[\s\S]*?-->/.test(svg.replace(/<!--|-->/g, "\u0000")),
+    "a `--` inside the comment makes the whole file unparseable",
+  );
+}
 
 if (failures > 0) {
   console.error(`\nog-cards-check: ${failures} of ${assertions} failed.`);
