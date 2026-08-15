@@ -1,7 +1,7 @@
-import type { SVGProps } from "react";
 import type { IconVariants } from "thesvg";
 
 import type { IconCategory } from "./categories";
+import { hasBakedInk, packagedSvgComponent } from "./embed";
 import type { IconSource } from "./registry";
 
 /**
@@ -65,7 +65,11 @@ import {
   title as auth0Title,
   variants as auth0Variants,
 } from "thesvg/auth0";
-import { slug as bunSlug, title as bunTitle, variants as bunVariants } from "thesvg/bun";
+import {
+  slug as bunSlug,
+  title as bunTitle,
+  variants as bunVariants,
+} from "thesvg/bun";
 import {
   slug as celerySlug,
   title as celeryTitle,
@@ -284,127 +288,6 @@ import {
 } from "thesvg/vercel";
 import { slug as vueSlug, title as vueTitle, svg as vueSvg } from "thesvg/vue";
 
-/* -------------------------------------------------------------------------- */
-/* Sanitising the package markup                                               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Root attributes that must NOT ride along into our document. `width`/`height`
- * because the consumer sizes the icon (the picker via className, the exporter
- * by injecting concrete attributes — a leftover pair would produce a duplicate
- * attribute, which is invalid XML and kills PNG rasterisation). `viewBox` is
- * re-emitted on our own root. The rest is document plumbing that carries no
- * paint: React owns `xmlns`/`aria-*`, and a root `id`/`class` could collide
- * across icons once several are embedded in one exported file.
- */
-const DROPPED_ROOT_ATTRS = new Set([
-  "viewBox",
-  "width",
-  "height",
-  "id",
-  "class",
-  "role",
-  "xml:space",
-  "preserveAspectRatio",
-]);
-
-/**
- * Markup that must never appear in an icon we embed. `<style>` because its
- * class selectors are document-global: two icons both declaring `.cls-1` in
- * one exported SVG restyle each other. The other two for hygiene — the
- * package is trusted, but an export must stay a pure image.
- */
-const FORBIDDEN_MARKUP = ["<style", "<script", "<foreignObject"];
-
-const ROOT_RE = /^\s*(?:<\?xml[^?]*\?>\s*)?<svg\b([^>]*)>([\s\S]*)<\/svg>\s*$/;
-
-/**
- * Splits one brand SVG into the pieces our own `<svg>` root re-hosts: the
- * `viewBox`, and the inner markup with the original root's PAINT attributes
- * (fill, stroke, style, …) preserved on a wrapping `<g>` — several marks
- * (Prometheus, the OpenAI/Anthropic light variants) colour their paths only
- * through root-level inheritance, so dropping those attributes would render
- * them invisible.
- *
- * Internal `id`s are prefixed with the icon's slug. This is the one edit ever
- * made to brand markup, and it is serialisation plumbing, not a design change
- * (visually byte-identical, like minification): gradient ids in the package
- * are generic (`a`, `b`, `SVGID_1_`), and two icons embedded in one exported
- * document would otherwise capture each other's `url(#…)` references.
- *
- * Throws on anything it cannot make safe. The registry module loads while
- * `pnpm build` prerenders, so a bad curation fails the build loudly instead
- * of shipping a broken or bleeding icon.
- */
-function splitBrandSvg(
-  slug: string,
-  svg: string,
-): { viewBox: string; inner: string } {
-  const match = ROOT_RE.exec(svg);
-  if (match === null) {
-    throw new Error(`brand icon "${slug}": markup is not a single <svg> root`);
-  }
-  const [, rootAttrs, body] = match;
-
-  const viewBox = /viewBox="([^"]+)"/.exec(rootAttrs)?.[1];
-  if (viewBox === undefined) {
-    throw new Error(`brand icon "${slug}": root has no viewBox`);
-  }
-  for (const tag of FORBIDDEN_MARKUP) {
-    if (body.includes(tag)) {
-      throw new Error(
-        `brand icon "${slug}": contains ${tag} — pick a variant without it`,
-      );
-    }
-  }
-
-  const kept: string[] = [];
-  for (const attr of rootAttrs.matchAll(/([A-Za-z_:][\w:.-]*)="([^"]*)"/g)) {
-    const name = attr[1];
-    if (
-      DROPPED_ROOT_ATTRS.has(name) ||
-      name.startsWith("xmlns") ||
-      name.startsWith("aria-") ||
-      name.startsWith("data-")
-    ) {
-      continue;
-    }
-    kept.push(`${name}="${attr[2]}"`);
-  }
-
-  let inner = kept.length > 0 ? `<g ${kept.join(" ")}>${body}</g>` : body;
-  const prefix = `af-brand-${slug}-`;
-  inner = inner
-    .replace(/\bid="([^"]+)"/g, (_m, id: string) => `id="${prefix}${id}"`)
-    .replace(/url\(#([^)]+)\)/g, (_m, id: string) => `url(#${prefix}${id})`)
-    .replace(
-      /\b(href|xlink:href)="#([^"]+)"/g,
-      (_m, name: string, id: string) => `${name}="#${prefix}${id}"`,
-    );
-
-  return { viewBox, inner: inner.trim() };
-}
-
-/**
- * Does this artwork paint itself, rather than inheriting the colour around it?
- *
- * BOTH spellings must be checked. An attribute-only test was tried and was
- * wrong: Bun declares its ink as `style="fill:#fbf0df"`, so an attribute test
- * reports it ink-free, hands it `currentColor` — which a `style` declaration
- * outranks — and the mark quietly keeps painting itself while the registry
- * believes it is monochrome. `none` and `currentColor` are not ink: the first
- * paints nothing, the second is the inheritance we are asking for.
- */
-function hasBakedInk(svg: string): string | null {
-  const attr = /\b(?:fill|stroke)="(?!none\b|currentColor\b)[^"]+"/.exec(svg);
-  if (attr !== null) return attr[0];
-  const styled =
-    /style="[^"]*\b(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)[^;"]+/.exec(
-      svg,
-    );
-  return styled === null ? null : styled[0];
-}
-
 /**
  * The upstream-shipped artwork that carries NO ink of its own, for the three
  * marks (Vercel, Anthropic, OpenAI) that are monochrome by design and whose
@@ -510,40 +393,6 @@ function alwaysMono(slug: string, variants: IconVariants): BrandArt {
 /* The component and def factories                                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * A registry-shaped component around one brand mark. The inner markup goes in
- * via `dangerouslySetInnerHTML`: it is TRUSTED PACKAGE CONTENT, pinned by the
- * lockfile — never user input, never network — sanitised above for document
- * hygiene (not for injection). Re-hosting under our own `<svg>` root keeps the
- * registry contract (`React.FC<SVGProps<SVGSVGElement>>`) and keeps the
- * exporter's capture working: its `innerHTML` snapshot must start with
- * `<svg ` for `embeddedIconSvg` to inject position and size.
- */
-function brandSvgComponent(
-  slug: string,
-  markup: string,
-  monochrome: boolean,
-): React.FC<SVGProps<SVGSVGElement>> {
-  const { viewBox, inner } = splitBrandSvg(slug, markup);
-  const html = { __html: inner };
-  /* `fill` is an INHERITED property, so declaring it once on our root reaches
-     every path of an ink-free mark (`inkFreeVariant` guarantees none of them
-     overrides it). Coloured marks must not carry this: it would be the
-     recolouring the registry forbids. */
-  const fill = monochrome ? "currentColor" : undefined;
-  return function BrandIcon(props: SVGProps<SVGSVGElement>) {
-    return (
-      <svg
-        viewBox={viewBox}
-        fill={fill}
-        aria-hidden="true"
-        dangerouslySetInnerHTML={html}
-        {...props}
-      />
-    );
-  };
-}
-
 interface BrandEntry {
   /** thesvg's slug, imported from the module the path already names. */
   slug: string;
@@ -571,7 +420,7 @@ function brandDef(entry: BrandEntry): IconSource {
     name: entry.name,
     aliases: entry.aliases,
     category: entry.category,
-    Svg: brandSvgComponent(slug, art.colour, monochrome),
+    Svg: packagedSvgComponent(slug, art.colour, monochrome),
     /* Undefined where the two artworks are the same string: the registry
        reads absence as "Svg already answers for both styles", so pointing
        SvgMono at an identical component would only cost a second render
@@ -579,7 +428,7 @@ function brandDef(entry: BrandEntry): IconSource {
     SvgMono:
       art.mono === undefined || art.mono === art.colour
         ? undefined
-        : brandSvgComponent(slug, art.mono, hasBakedInk(art.mono) === null),
+        : packagedSvgComponent(slug, art.mono, hasBakedInk(art.mono) === null),
     monochrome,
   };
 }

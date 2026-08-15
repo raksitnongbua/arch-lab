@@ -917,10 +917,11 @@ reason; see `src/features/editor/lib/icons/registry.ts`).
 
 Diagrams can be drawn with icons in one ink or in brand colours — a reader
 preference, not a document property, toggled beside the zoom control. Both
-styles use artwork the package publishes: mono mode selects each mark's
-upstream `mono` variant and never derives one by stripping colour, so the
-nine marks with no monochrome artwork published stay in colour, and the
-toggle says so.
+styles use artwork the package publishes rather than deriving any: mono mode
+selects each mark's upstream `mono` variant, and colour mode swaps the
+hand-authored mark for the vendor's own logo where one exists (35 of the 59).
+Icons for abstract concepts — `api`, `queue`, `person` — have no logo and keep
+their hand-authored glyph in both styles, tinted with the node's accent.
 Per-brand licence terms are recorded upstream: each icon module exports its
 `license` and source `url`, and the full metadata lives in the
 [thesvg repository](https://github.com/glincker/thesvg). The remaining

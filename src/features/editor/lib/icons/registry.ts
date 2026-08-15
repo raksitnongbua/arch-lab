@@ -32,9 +32,21 @@
  *    on a black canvas.
  *
  * ONE INK OR TWO is the reader's choice, not the document's (`IconStyle`).
- * `byStyle` resolves it per icon: 45 brand marks ship an upstream `mono`
- * variant, and the nine that do not stay coloured in mono mode — deriving a
- * monochrome version by stripping colour is exactly the recolouring above.
+ * `byStyle` resolves it per icon, in both directions:
+ *
+ *   - MONO for a brand mark takes its upstream `mono` variant (45 of the 54
+ *     ship one); the nine that do not stay coloured, since deriving a
+ *     monochrome version by stripping colour is the recolouring above.
+ *   - COLOUR for a hand-authored mark that names a real product hands over to
+ *     the vendor's own logo (`./colour-overlay`, 35 of the 59). Without that,
+ *     colour mode drew coloured brand logos beside flat house glyphs for
+ *     PostgreSQL, Redis and Docker — a mixture that reads as a fault. The
+ *     remaining 24 are abstractions with no logo in existence (`api`,
+ *     `queue`, `person`, …); they keep the house glyph and take the node's
+ *     accent, which is what makes the mixed board read as deliberate.
+ *
+ * So each style has ONE coherent story: mono is a single ink throughout,
+ * colour is "every logo is the real logo, every concept is a glyph".
  *
  * SLUG COLLISIONS: thesvg also ships `postgresql`, `redis`, `kafka`, … — the
  * hand-authored mark keeps its slug (models in the wild reference it, and the
@@ -51,6 +63,7 @@ import type { IconStyle } from "@/lib/icon-style";
 
 import { BRAND_ICON_DEFS } from "./brand";
 import { ICON_CATEGORY_ORDER, type IconCategory } from "./categories";
+import { COLOUR_OVERLAY } from "./colour-overlay";
 import { AiModelIcon } from "./svg/ai-model";
 import { AnalyticsIcon } from "./svg/analytics";
 import { ApiIcon } from "./svg/api";
@@ -174,7 +187,16 @@ export interface IconDef extends IconSource {
 function resolveStyles(source: IconSource): IconDef {
   return {
     ...source,
-    byStyle: { colour: source.Svg, mono: source.SvgMono ?? source.Svg },
+    byStyle: {
+      /* A hand-authored icon naming a real product hands colour mode over to
+         the vendor's own logo (`colour-overlay.tsx`). Without it, colour mode
+         drew full-colour brand marks beside flat house glyphs for PostgreSQL,
+         Redis and Docker, which reads as a fault rather than a choice. The
+         overlay never touches the brand set — those slugs are disjoint by
+         construction, since a brand entry may not take a taken slug. */
+      colour: COLOUR_OVERLAY[source.slug] ?? source.Svg,
+      mono: source.SvgMono ?? source.Svg,
+    },
   };
 }
 

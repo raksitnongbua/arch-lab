@@ -40,6 +40,10 @@ const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 const BRAND = read("src/features/editor/lib/icons/brand.tsx");
 const REGISTRY = read("src/features/editor/lib/icons/registry.ts");
 const MARKUP = read("src/features/viewer/export/icon-markup.ts");
+const OVERLAY = read("src/features/editor/lib/icons/colour-overlay.tsx");
+/* The sanitiser and component factory are SHARED by brand.tsx and the colour
+   overlay, so they live in embed.tsx — that is where these rules apply now. */
+const EMBED = read("src/features/editor/lib/icons/embed.tsx");
 
 let failures = 0;
 let assertions = 0;
@@ -77,15 +81,15 @@ function bakedInk(svg) {
 console.log("ink detection (an attribute-only test shipped a bug)");
 
 {
-  const fn = /function hasBakedInk\([\s\S]*?\n}/.exec(BRAND)?.[0] ?? "";
+  const fn = /export function hasBakedInk\([\s\S]*?\n}/.exec(EMBED)?.[0] ?? "";
   check(
-    "brand.tsx tests fill/stroke ATTRIBUTES",
+    "embed.tsx tests fill/stroke ATTRIBUTES",
     /\\b\(\?:fill\|stroke\)="/.test(fn),
   );
   check(
-    "brand.tsx also tests fill/stroke inside style=",
+    "embed.tsx also tests fill/stroke inside style=",
     /style="\[\^"\]\*/.test(fn) && /fill\|stroke/.test(fn),
-    "Bun declares its ink as style=\"fill:#fbf0df\" — an attribute-only test misses it",
+    'Bun declares its ink as style="fill:#fbf0df" — an attribute-only test misses it',
   );
   check(
     "`none` and `currentColor` are not treated as ink",
@@ -118,12 +122,14 @@ check(
 console.log("\nartwork imports match the package (a bundle decision)");
 
 {
-  const importedSlugs = [
-    ...BRAND.matchAll(/from "thesvg\/([a-z0-9-]+)"/g),
-  ].map((m) => m[1]);
+  const importedSlugs = [...BRAND.matchAll(/from "thesvg\/([a-z0-9-]+)"/g)].map(
+    (m) => m[1],
+  );
 
   /* Which binding each module is imported with, read from its own block. */
-  const blocks = [...BRAND.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g)];
+  const blocks = [
+    ...BRAND.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g),
+  ];
   const usesVariants = new Map();
   for (const [, bindings, slug] of blocks) {
     usesVariants.set(slug, /\bvariants as /.test(bindings));
@@ -211,6 +217,48 @@ console.log("\nmono artwork inherits rather than paints");
 }
 
 /* ----------------------------------------------------------------------- */
+/* 4b. The colour overlay lands on real slugs                               */
+/* ----------------------------------------------------------------------- */
+
+console.log("\ncolour overlay (a key matching no slug does nothing, silently)");
+
+{
+  const handSlugs = new Set(
+    [
+      ...REGISTRY.slice(
+        REGISTRY.indexOf("HAND_AUTHORED_DEFS"),
+        REGISTRY.indexOf("const CATEGORY_RANK"),
+      ).matchAll(/^\s+slug: "([a-z0-9-]+)",/gm),
+    ].map((m) => m[1]),
+  );
+  const table = OVERLAY.slice(
+    OVERLAY.indexOf("COLOUR_ARTWORK"),
+    OVERLAY.indexOf("export const COLOUR_OVERLAY"),
+  );
+  const keys = [...table.matchAll(/^\s+"?([a-z0-9-]+)"?:/gm)].map((m) => m[1]);
+  const orphans = keys.filter((slug) => !handSlugs.has(slug));
+
+  check(
+    `every overlay key names a hand-authored icon (${keys.length} keys)`,
+    orphans.length === 0 && keys.length > 0,
+    orphans.length > 0
+      ? `${orphans.join(", ")} — the overlay would be ignored for these`
+      : "no keys parsed — has COLOUR_ARTWORK been renamed?",
+  );
+  check(
+    "the overlay is applied to colour, and never to mono",
+    /colour: COLOUR_OVERLAY\[source\.slug\] \?\? source\.Svg/.test(REGISTRY) &&
+      /mono: source\.SvgMono \?\? source\.Svg/.test(REGISTRY),
+    "mono mode must keep the hand-authored house mark",
+  );
+  check(
+    "the overlay imports `svg` only, never `variants`",
+    !/variants as/.test(OVERLAY),
+    "mono comes from the hand-authored icon, so packaged mono variants are dead weight",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 /* 5. Export parity: the markup cache is keyed by style                     */
 /* ----------------------------------------------------------------------- */
 
@@ -228,7 +276,9 @@ check(
 );
 check(
   "the C4 exporter threads a style through to the icons",
-  /iconStyle\?: IconStyle;/.test(read("src/features/viewer/export/render-svg.ts")),
+  /iconStyle\?: IconStyle;/.test(
+    read("src/features/viewer/export/render-svg.ts"),
+  ),
 );
 
 /* ----------------------------------------------------------------------- */
@@ -238,8 +288,8 @@ check(
 console.log("\nthe no-recolour rule");
 
 check(
-  "brandSvgComponent only sets fill=currentColor when monochrome",
-  /const fill = monochrome \? "currentColor" : undefined;/.test(BRAND),
+  "packagedSvgComponent only sets fill=currentColor when monochrome",
+  /const fill = monochrome \? "currentColor" : undefined;/.test(EMBED),
   "forcing currentColor onto a coloured mark is the licence breach the registry forbids",
 );
 check(
@@ -254,7 +304,9 @@ check(
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
-  console.error(`\n${failures} of ${assertions} icon-style assertion(s) FAILED`);
+  console.error(
+    `\n${failures} of ${assertions} icon-style assertion(s) FAILED`,
+  );
   process.exit(1);
 }
 console.log(`\nAll ${assertions} icon-style assertions passed.`);
