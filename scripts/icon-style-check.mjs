@@ -509,9 +509,14 @@ check(
 console.log("\nthe no-recolour rule");
 
 check(
-  "packagedSvgComponent only sets fill=currentColor when monochrome",
-  /const fill = monochrome \? "currentColor" : undefined;/.test(EMBED),
-  "forcing currentColor onto a coloured mark is the licence breach the registry forbids",
+  "packagedSvgComponent always sets fill=currentColor",
+  /fill="currentColor"/.test(EMBED),
+  /* Setting it only for marks classed monochrome was the earlier rule and it
+     shipped a bug: `fill` is inherited, so the root value reaches ONLY paths
+     that declare none — which the spec then resolves to black. Withholding it
+     left Spring Boot, Spark, Celery and Istio black-on-black. It cannot
+     recolour a mark that states its own colour. */
+  "artwork that omits a fill must inherit the theme's ink, not the browser's black",
 );
 check(
   "the registry still states the no-recolour rule",

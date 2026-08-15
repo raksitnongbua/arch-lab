@@ -34,7 +34,8 @@ import type { SVGProps } from "react";
  * One slug differs from ours and is mapped at the import: `gcp` is
  * `thesvg/google-cloud`.
  *
- * FIVE MORE ARE DELIBERATELY ABSENT — php, rust, golang, mysql and grpc —
+ * SIX MORE ARE DELIBERATELY ABSENT — php, rust, golang, mysql, grpc and
+ * kafka —
  * and this is the second list nobody should "complete". Their packaged
  * artwork is WHITE INK, drawn for a dark background, so adding them rendered
  * five invisible icons on a light canvas. They were caught by rasterising the
@@ -43,7 +44,9 @@ import type { SVGProps } from "react";
  * Rust, Go and gRPC have no coloured mark at all — they are monochrome
  * brands — and MySQL's only coloured artwork is a wordmark. For all five the
  * hand-authored icon is strictly better: it already follows the theme, so it
- * is legible in both.
+ * is legible in both. Kafka is the mirror image of the same problem: its mark
+ * is near-black (#1a1919), so it disappeared against a DARK canvas and, being
+ * a single flat ink, offered nothing the hand-authored icon did not.
  *
  * `svg` alone is imported, never `variants` — mono comes from the
  * hand-authored icon, so the packaged monochrome variants would be dead
@@ -65,7 +68,6 @@ import { svg as clickhouseColour } from "thesvg/clickhouse";
 import { svg as dynamodbColour } from "thesvg/dynamodb";
 import { svg as sqliteColour } from "thesvg/sqlite";
 import { svg as redisColour } from "thesvg/redis";
-import { svg as kafkaColour } from "thesvg/kafka";
 import { svg as rabbitmqColour } from "thesvg/rabbitmq";
 import { svg as memcachedColour } from "thesvg/memcached";
 import { svg as natsColour } from "thesvg/nats";
@@ -81,7 +83,7 @@ import { svg as dockerColour } from "thesvg/docker";
 import { svg as firebaseColour } from "thesvg/firebase";
 import { svg as kubernetesColour } from "thesvg/kubernetes";
 
-import { hasBakedInk, packagedSvgComponent } from "./embed";
+import { packagedSvgComponent } from "./embed";
 
 /** Slug → the vendor's own coloured artwork, for colour mode only. */
 const COLOUR_ARTWORK: Readonly<Record<string, string>> = {
@@ -100,7 +102,6 @@ const COLOUR_ARTWORK: Readonly<Record<string, string>> = {
   dynamodb: dynamodbColour,
   sqlite: sqliteColour,
   redis: redisColour,
-  kafka: kafkaColour,
   rabbitmq: rabbitmqColour,
   memcached: memcachedColour,
   nats: natsColour,
@@ -118,17 +119,16 @@ const COLOUR_ARTWORK: Readonly<Record<string, string>> = {
 };
 
 /**
- * Built once at module load, like the rest of the registry. `hasBakedInk`
- * decides the `fill` treatment per artwork rather than assuming colour: if a
- * vendor ever ships an ink-free drawing here it must still inherit a colour,
- * or it renders black on a dark canvas — the bug this registry has now shipped
- * twice.
+ * Built once at module load, like the rest of the registry. Every component
+ * carries `fill="currentColor"` (embed.tsx): a path with its own colour keeps
+ * it, and a path without one inherits the theme's ink rather than the black
+ * the browser would otherwise supply.
  */
 export const COLOUR_OVERLAY: Readonly<
   Record<string, React.FC<SVGProps<SVGSVGElement>>>
 > = Object.fromEntries(
   Object.entries(COLOUR_ARTWORK).map(([slug, svg]) => [
     slug,
-    packagedSvgComponent(slug, svg, hasBakedInk(svg) === null),
+    packagedSvgComponent(slug, svg),
   ]),
 );

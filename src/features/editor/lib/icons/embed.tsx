@@ -206,24 +206,36 @@ export function stripInk(svg: string): string {
  * registry contract (`React.FC<SVGProps<SVGSVGElement>>`) and keeps the
  * exporter's capture working: its `innerHTML` snapshot must start with
  * `<svg ` for `embeddedIconSvg` to inject position and size.
+ *
+ * `fill="currentColor"` IS SET ON EVERY MARK, coloured ones included, and that
+ * is not the recolouring the registry forbids — it is the opposite. `fill` is
+ * inherited, so a path that declares its own colour keeps it and the root
+ * value never reaches it. The root value is consumed ONLY by paths that
+ * declare no fill, which the SVG spec then resolves to the initial value:
+ * BLACK. Plenty of packaged marks are drawn that way — Spring Boot, Spark,
+ * Celery and Istio leave most of their paths unfilled — so they rendered
+ * black-on-black on a dark canvas, invisible to anyone using the dark theme.
+ *
+ * An earlier version set this only for marks classed monochrome, on the
+ * reasoning that a coloured mark must not be touched. That reasoning was
+ * wrong twice over: it withheld a colour from artwork that had asked for one
+ * by omission, and the "is it monochrome" classification it depended on could
+ * be flipped by a single stray hex anywhere in the file. Artwork that leaves a
+ * fill unspecified is deferring to its context by design; supplying the
+ * theme's ink is answering that, and it is strictly better than the black the
+ * browser would otherwise pick.
  */
 export function packagedSvgComponent(
   slug: string,
   markup: string,
-  monochrome: boolean,
 ): React.FC<SVGProps<SVGSVGElement>> {
   const { viewBox, inner } = splitPackagedSvg(slug, markup);
   const html = { __html: inner };
-  /* `fill` is an INHERITED property, so declaring it once on our root reaches
-     every path of an ink-free mark (the caller guarantees none of them
-     overrides it). Coloured marks must not carry this: it would be the
-     recolouring the registry forbids. */
-  const fill = monochrome ? "currentColor" : undefined;
   return function PackagedIcon(props: SVGProps<SVGSVGElement>) {
     return (
       <svg
         viewBox={viewBox}
-        fill={fill}
+        fill="currentColor"
         aria-hidden="true"
         dangerouslySetInnerHTML={html}
         {...props}

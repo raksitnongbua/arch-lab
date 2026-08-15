@@ -38,6 +38,7 @@
     "check:vscode-grammar": "node scripts/vscode-grammar-check.mjs",
     "check:viewer-motion": "node scripts/viewer-motion-check.mjs",
     "check:mcp-motion": "node scripts/mcp-motion-check.mjs",
+    "check:icon-contrast": "node scripts/icon-contrast-check.mjs",
     "check:icon-style": "node scripts/icon-style-check.mjs",
     "check:og-cards": "node scripts/og-cards-check.mjs",
     "build:skill": "node scripts/build-skill.mjs",

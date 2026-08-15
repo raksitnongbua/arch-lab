@@ -446,6 +446,26 @@ function derivedMono(slug: string, svg: string, licence: string): BrandArt {
 }
 
 /**
+ * A mark whose ONLY published colour fails one of our two themes, so the
+ * monochrome rendering is used in BOTH styles.
+ *
+ * Heroku is the case: its brand colour is #430098, a purple dark enough to
+ * vanish against a dark canvas — measured, not guessed (`check:icon-contrast`
+ * renders every mark on both themes and counts the pixels that stand out).
+ * The alternatives were worse: showing it anyway means an invisible icon for
+ * anyone on the dark theme, and lightening the purple is the recolouring the
+ * registry forbids. One legible ink beats a brand colour nobody can see.
+ *
+ * The same reasoning routes GitHub and Sentry through `alwaysMono` — both are
+ * near-black marks that publish an ink-free variant, so they need no derived
+ * one.
+ */
+function derivedMonoOnly(slug: string, svg: string, licence: string): BrandArt {
+  const { mono } = derivedMono(slug, svg, licence);
+  return { colour: mono as string, mono };
+}
+
+/**
  * A mark whose mono artwork lives under a DIFFERENT package slug than its
  * colour artwork — the package catalogues some brands twice (the product and
  * the company), and only one entry carries a mono variant.
@@ -517,7 +537,7 @@ function brandDef(entry: BrandEntry): IconSource {
     name: entry.name,
     aliases: entry.aliases,
     category: entry.category,
-    Svg: packagedSvgComponent(slug, art.colour, monochrome),
+    Svg: packagedSvgComponent(slug, art.colour),
     /* Undefined where the two artworks are the same string: the registry
        reads absence as "Svg already answers for both styles", so pointing
        SvgMono at an identical component would only cost a second render
@@ -525,7 +545,7 @@ function brandDef(entry: BrandEntry): IconSource {
     SvgMono:
       art.mono === undefined || art.mono === art.colour
         ? undefined
-        : packagedSvgComponent(slug, art.mono, hasBakedInk(art.mono) === null),
+        : packagedSvgComponent(slug, art.mono),
     monochrome,
   };
 }
@@ -752,7 +772,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: herokuSlug,
     name: herokuTitle,
-    art: derivedMono(herokuSlug, herokuSvg, herokuLicence),
+    art: derivedMonoOnly(herokuSlug, herokuSvg, herokuLicence),
     category: "cloud",
     aliases: ["paas", "dyno"],
   },
@@ -803,7 +823,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: githubSlug,
     name: githubTitle,
-    art: withMono(githubSlug, githubVariants),
+    art: alwaysMono(githubSlug, githubVariants),
     category: "devops",
     aliases: ["gh", "git"],
   },
@@ -881,7 +901,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: sentrySlug,
     name: sentryTitle,
-    art: withMono(sentrySlug, sentryVariants),
+    art: alwaysMono(sentrySlug, sentryVariants),
     category: "observability",
     aliases: ["error tracking", "crash"],
   },
