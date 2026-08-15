@@ -14,12 +14,21 @@
  *    deliberate trademark-avoidance stance, and it was consciously dropped
  *    (2026-08) in favour of recognisability: real logos, used NOMINATIVELY,
  *    to label what a container runs — never to imply endorsement. Each mark
- *    remains the trademark of its owner. Brand marks render in their own
- *    hardcoded colours and are NEVER recoloured: beyond diluting the mark,
+ *    remains the trademark of its owner. A COLOURED brand mark renders in its
+ *    own hardcoded colours and is NEVER recoloured: beyond diluting the mark,
  *    some upstream licences forbid derivatives outright (AWS's architecture
- *    icons are CC BY-ND, for one), so `currentColor`-ing them is not merely
- *    ugly but a licence breach. `monochrome: false` is the marker; nothing
- *    may flip it to squeeze a brand mark into the theme.
+ *    icons are CC BY-ND, for one), so `currentColor`-ing one is not merely
+ *    ugly but a licence breach.
+ *
+ *    The exception is narrow and is NOT a loophole: three brands (Vercel,
+ *    Anthropic, OpenAI) are monochrome by design — a single flat ink, no
+ *    colour to preserve — and upstream ships them as artwork with no `fill`
+ *    at all. Those carry `monochrome: true` and inherit the theme's colour,
+ *    because the alternative is worse: any baked ink makes the mark
+ *    invisible in one of the two themes, and per-theme artwork would break
+ *    canvas/export parity (icon-markup.ts memoises per slug). `brand.tsx`
+ *    asserts the artwork really is ink-free, so this cannot silently become
+ *    the recolouring of a coloured mark.
  *
  * SLUG COLLISIONS: thesvg also ships `postgresql`, `redis`, `kafka`, … — the
  * hand-authored mark keeps its slug (models in the wild reference it, and the

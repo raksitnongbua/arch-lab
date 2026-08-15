@@ -12,7 +12,9 @@
  *
  * Results are memoised per icon slug — sound because every registry icon is
  * theme-independent: monochrome icons take colour from the OUTSIDE (the
- * `<g color>` wrapper below), brand marks carry fixed colours of their own.
+ * `<g color>` wrapper below) — the hand-authored set and the three ink-free
+ * brand marks alike — and coloured brand marks carry fixed colours of their
+ * own.
  * A theme-dependent icon would need this cache keyed by theme and is one
  * reason the registry chooses a single artwork per slug rather than per-theme
  * variants.
@@ -52,10 +54,11 @@ function iconMarkup(node: Pick<C4Node, "icon" | "type">): string {
  * The node's icon as embeddable SVG: positioned at (x, y), sized `size`.
  * The `<g color>` wrapper resolves the MONOCHROME icons' `currentColor` to
  * the given concrete colour (`color` is inheritable as a presentation
- * attribute); brand marks carry explicit fills that never reference
- * `currentColor`, so for them the wrapper is inert and the mark keeps its own
- * colours — exactly as on canvas, and as the registry's no-recolour rule
- * requires. The size injection relies on brand components stripping the
+ * attribute) — which is what the three ink-free brand marks want too, since
+ * they inherit their fill. A COLOURED brand mark carries explicit fills that
+ * never reference `currentColor`, so for it the wrapper is inert and the mark
+ * keeps its own colours — exactly as on canvas, and as the registry's
+ * no-recolour rule requires. The size injection relies on brand components stripping the
  * upstream `width`/`height` (brand.tsx) — a duplicate attribute would be
  * invalid XML and break PNG rasterisation.
  */

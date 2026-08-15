@@ -15,9 +15,10 @@ import type { IconDef } from "./registry";
  * from the package rather than being retyped here (dry.md — the import path
  * already pins which module they belong to).
  *
- * The three icons whose DEFAULT artwork is white ink (drawn for dark
- * backgrounds) import `variants` instead and take the upstream `light`
- * variant — see `lightVariant`.
+ * The three brands that are monochrome BY DESIGN (Vercel, Anthropic, OpenAI)
+ * import `variants` instead: their default artwork is white ink, and they
+ * take the upstream ink-free variant so they can follow the theme in both
+ * directions — see `inkFreeVariant`.
  */
 import {
   slug as angularSlug,
@@ -376,14 +377,48 @@ function splitBrandSvg(
 }
 
 /**
- * The upstream-shipped `light` variant (dark ink for light backgrounds) —
- * for the marks whose default artwork is white ink. Choosing a shipped
- * variant is selection, not modification; the no-recolour rule stands.
+ * The upstream-shipped artwork that carries NO ink of its own, for the three
+ * marks (Vercel, Anthropic, OpenAI) that are monochrome by design and whose
+ * default variant is white — invisible on a light canvas.
+ *
+ * Taking the `light` variant instead was tried and is WRONG: `light` means
+ * "dark ink for light backgrounds" and bakes in `fill="#000"`, which fixes
+ * the light theme by making the mark black-on-near-black in the dark one.
+ * There is no single baked ink that works in both themes, and per-theme
+ * artwork is not available to us — the exporter memoises markup per slug
+ * (icon-markup.ts), so a theme-dependent icon would break canvas/export
+ * parity.
+ *
+ * The way out is that these brands HAVE no colour to preserve: their marks
+ * are a single flat ink by design, and upstream ships them without any. An
+ * artwork that specifies no `fill` inherits one, so these three join the
+ * hand-authored `currentColor` set (`monochrome: true`) and follow the theme
+ * in both directions. That is not recolouring a coloured mark — there is no
+ * colour being overridden — and it is why this treatment is confined to
+ * brands whose identity is monochrome. A brand with real colours must keep
+ * them; see the registry header.
+ *
+ * The ink assertion is the load-bearing part: if upstream ever bakes a fill
+ * into these variants, `currentColor` would silently stop reaching the paths
+ * and the mark would go back to being invisible in one theme. Failing the
+ * build is the only way that gets noticed.
  */
-function lightVariant(slug: string, variants: IconVariants): string {
-  const markup = variants["light"];
+function inkFreeVariant(slug: string, variants: IconVariants): string {
+  /* `mono` where it exists (Vercel, Anthropic); OpenAI ships no `mono`, but
+     its `light` carries no fill either — the white default lives in `dark`. */
+  const markup = variants["mono"] ?? variants["light"];
   if (markup === undefined) {
-    throw new Error(`brand icon "${slug}": has no "light" variant`);
+    throw new Error(`brand icon "${slug}": has no "mono" or "light" variant`);
+  }
+  const baked = /\b(?:fill|stroke)="(?!none\b|currentColor\b)[^"]+"/.exec(
+    markup,
+  );
+  if (baked !== null) {
+    throw new Error(
+      `brand icon "${slug}": expected ink-free artwork to inherit ` +
+        `currentColor, but it bakes in ${baked[0]} — a baked ink is ` +
+        `invisible in one of the two themes`,
+    );
   }
   return markup;
 }
@@ -404,13 +439,20 @@ function lightVariant(slug: string, variants: IconVariants): string {
 function brandSvgComponent(
   slug: string,
   markup: string,
+  monochrome: boolean,
 ): React.FC<SVGProps<SVGSVGElement>> {
   const { viewBox, inner } = splitBrandSvg(slug, markup);
   const html = { __html: inner };
+  /* `fill` is an INHERITED property, so declaring it once on our root reaches
+     every path of an ink-free mark (`inkFreeVariant` guarantees none of them
+     overrides it). Coloured marks must not carry this: it would be the
+     recolouring the registry forbids. */
+  const fill = monochrome ? "currentColor" : undefined;
   return function BrandIcon(props: SVGProps<SVGSVGElement>) {
     return (
       <svg
         viewBox={viewBox}
+        fill={fill}
         aria-hidden="true"
         dangerouslySetInnerHTML={html}
         {...props}
@@ -424,20 +466,28 @@ interface BrandEntry {
   slug: string;
   /** Display name — thesvg's title, overridden where it misspells the brand. */
   name: string;
-  /** The artwork actually rendered: the default, or the `light` variant. */
+  /** The artwork actually rendered: the default, or an ink-free variant. */
   svg: string;
   category: IconCategory;
   aliases: string[];
+  /**
+   * True ONLY for the brands that are monochrome by design and ship ink-free
+   * artwork (`inkFreeVariant`): they follow `currentColor` like the
+   * hand-authored set. Defaults to false — a brand with real colours keeps
+   * them, and nothing may set this to force one into the theme.
+   */
+  monochrome?: boolean;
 }
 
 function brandDef(entry: BrandEntry): IconDef {
+  const monochrome = entry.monochrome ?? false;
   return {
     slug: entry.slug,
     name: entry.name,
     aliases: entry.aliases,
     category: entry.category,
-    Svg: brandSvgComponent(entry.slug, entry.svg),
-    monochrome: false,
+    Svg: brandSvgComponent(entry.slug, entry.svg, monochrome),
+    monochrome,
   };
 }
 
@@ -686,7 +736,8 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: vercelSlug,
     name: vercelTitle,
-    svg: lightVariant(vercelSlug, vercelVariants),
+    svg: inkFreeVariant(vercelSlug, vercelVariants),
+    monochrome: true,
     category: "cloud",
     aliases: ["hosting"],
   },
@@ -809,7 +860,8 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: anthropicSlug,
     name: anthropicTitle,
-    svg: lightVariant(anthropicSlug, anthropicVariants),
+    svg: inkFreeVariant(anthropicSlug, anthropicVariants),
+    monochrome: true,
     category: "saas",
     aliases: ["claude", "llm"],
   },
@@ -837,7 +889,8 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: openaiSlug,
     name: openaiTitle,
-    svg: lightVariant(openaiSlug, openaiVariants),
+    svg: inkFreeVariant(openaiSlug, openaiVariants),
+    monochrome: true,
     category: "saas",
     aliases: ["gpt", "chatgpt", "llm"],
   },
