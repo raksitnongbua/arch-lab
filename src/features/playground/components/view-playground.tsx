@@ -3,7 +3,8 @@
 /**
  * THE playground — one page for every document arch-lab can render. Mounted
  * at `/view`, `/view/c4` and `/view/sequence`, which differ ONLY in which
- * example seeds the pane; one source rail on the LEFT holds ONE textarea, and
+ * example seeds the pane (`/demo` lists them all — this page does not offer
+ * its own picker); one source rail on the LEFT holds ONE textarea, and
  * every edit is auto-detected and rendered on the RIGHT: `ViewerShell` for a
  * C4 model, `SequenceViewer` for a sequence document. C4 `.alab`, sequence
  * `.alab`, arch-lab JSON, Mermaid C4 and Mermaid `sequenceDiagram` all just
@@ -56,7 +57,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   AlignLeft,
-  ArrowDownToLine,
   Braces,
   Download,
   Expand,
@@ -659,33 +659,6 @@ export function ViewPlayground({
    * visible in the box, one Undo away in the textarea's own history, and a
    * dialog in front of a formatting button teaches people to dismiss dialogs.
    */
-  /**
-   * Replace the pane with one of the two bundled examples.
-   *
-   * BOTH KINDS, side by side, and that is the point: this page renders either
-   * one from the same box, and the fastest way to say so is a button that
-   * turns a C4 model into a sequence flow in front of you. The predecessor
-   * pages offered `.alab example` / `Mermaid example` — two FORMATS of the one
-   * kind that page could draw — which was the right pair then and the wrong
-   * one now; the format toggle beside the pane covers that axis already.
-   *
-   * It overwrites what is in the pane, deliberately and without a
-   * confirmation: the textarea's own undo puts it back, and a dialog in front
-   * of "show me an example" is the kind people learn to dismiss unread.
-   */
-  const loadExample = useCallback(
-    (kind: SeedKind) => {
-      const example = VIEW_SEED_TEXT[kind];
-      setPending(null);
-      setText(example);
-      applyEdit("source", example);
-      setAnnouncement(
-        `Loaded the ${kind === "c4" ? "C4 model" : "sequence diagram"} example.`,
-      );
-    },
-    [applyEdit],
-  );
-
   const convertPane = useCallback(
     (to: ToggleFormat) => {
       if (doc.format === to) return;
@@ -1008,11 +981,12 @@ export function ViewPlayground({
                       where the C4 shell has always put its own pair: same
                       controls, same place, no clipping ancestor, and they are
                       about the DIAGRAM rather than about the text. */}
-                  {/* The pane's OWN actions only. The two example loaders
-                      used to sit here and pushed this row onto two lines at
-                      any normal rail width, which put Copy and Download —
-                      things you reach for constantly — below a pair you press
-                      once, if ever. They moved to the foot of the rail. */}
+                  {/* The pane's OWN actions only. Example LOADERS are
+                      deliberately absent: this page renders whatever you put
+                      in it, and `/demo` is the one place that lists what is
+                      available. Offering a couple of them here too gave a
+                      reader two doors to the same room, one of which showed
+                      two of the six examples. */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <PaneActions
                       pane="source"
@@ -1131,46 +1105,6 @@ export function ViewPlayground({
                   </p>
                 </div>
               ) : null}
-
-              {/* THE EXAMPLES, at the foot of the rail.
-
-                  They belong at the bottom on frequency: this is a page you
-                  arrive at to paste your own document into, so "show me one of
-                  yours" is the thing you press once at the start and never
-                  again — while Copy, Download and Format are the row you use
-                  all session. Putting the rare pair first cost the common ones
-                  their line.
-
-                  One button per KIND, and the current kind's own is DISABLED
-                  rather than hidden: a pair that appears and disappears as you
-                  paste is a moving target, and "you are already looking at
-                  this one" is worth saying. */}
-              <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
-                <span className="text-xs text-muted-foreground">
-                  Load an example:
-                </span>
-                {(["c4", "sequence"] as const).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    onClick={() => loadExample(kind)}
-                    disabled={doc.kind === kind}
-                    title={
-                      doc.kind === kind
-                        ? `The pane already holds the ${kind === "c4" ? "C4" : "sequence"} example's kind`
-                        : `Replace the pane with the ${kind === "c4" ? "C4 model" : "sequence diagram"} example`
-                    }
-                    className={buttonClasses({
-                      variant: "ghost",
-                      size: "sm",
-                      className: "disabled:cursor-not-allowed",
-                    })}
-                  >
-                    <ArrowDownToLine aria-hidden="true" />
-                    {kind === "c4" ? "C4" : "Sequence"}
-                  </button>
-                ))}
-              </div>
 
               {/* ONE LINE. This was five sentences — how Tab behaves, that the
                   diagram re-renders as you type, that a failed parse keeps the
