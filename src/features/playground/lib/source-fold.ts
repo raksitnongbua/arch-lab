@@ -1,10 +1,3 @@
-/* THE STORE, WITHOUT THE HOOK, and that split is forced rather than chosen:
-   `SOURCE_FOLD_SCRIPT` is read by the ROOT LAYOUT, a server component, and
-   Next refuses to let one import any module that so much as imports
-   `useSyncExternalStore`. So the React binding lives next door in
-   `use-source-fold.ts`; everything either side of the boundary shares the
-   constants here rather than restating them. */
-
 /**
  * Whether the playground's source rail is folded away, remembered across
  * visits.
@@ -12,105 +5,106 @@
  * WHY IT PERSISTS AT ALL. Folding the rail is not a passing gesture like
  * scrolling — it is a statement about how you use this page. A reader who has
  * a document they only want to LOOK at folds the text away, and before this
- * the page handed it back on every visit, so the fold had to be redone every
- * single time. Nothing else on the page has that shape: the JSON pane opens
- * to answer a question and closes when it is answered, and immersive mode is
- * explicitly a mode you leave.
+ * the page handed it back on every visit. Nothing else here has that shape:
+ * the JSON pane opens to answer a question and closes when it is answered,
+ * and immersive mode is explicitly a mode you leave.
  *
- * ONE KEY FOR EVERY PLAYGROUND ROUTE, not one per route. `/view`, `/view/c4`
- * and `/view/seq` mount the same workbench, and "give me more canvas" is a
- * statement about how you read a diagram rather than about which kind you
- * happened to open. Scoping it per route would mean folding the rail three
- * times to get one preference. (Same argument as `lib/idle-motion.ts`, whose
- * key is unscoped for exactly this reason.)
+ * WHY A COOKIE AND NOT localStorage, which is what this used first. The
+ * server renders this page, and localStorage is invisible to it — so the
+ * server always rendered the rail EXPANDED and the client folded it a moment
+ * later. That is a whole-pane layout shift on every single load, and it is
+ * exactly what a reader who folds the rail sees most.
  *
- * EXPANDED IS THE DEFAULT, because the server cannot read localStorage. That
- * used to mean a reader who preferred it folded watched the rail appear and
- * then vanish on every load — a whole-pane layout shift, which is far more
- * jarring than the icon swaps this codebase accepts elsewhere. So the fold is
- * applied BEFORE FIRST PAINT by `SOURCE_FOLD_SCRIPT`, which stamps
- * `SOURCE_FOLD_ATTRIBUTE` on <html>; `globals.css` hides the pane on that
- * attribute alone, with no JavaScript and no React involved.
+ * Two attempts to paper over it are worth recording so neither is tried
+ * again. Rendering nothing until hydration swaps a flash for a blank page. A
+ * pre-paint script stamping an attribute for CSS to read LOOKS right and is
+ * not: `next/script` with `strategy="beforeInteractive"` does not emit an
+ * executable inline tag at all — it pushes the source into `self.__next_s`
+ * for Next's runtime to run once the framework bundle is up, which is after
+ * first paint. The script was in the HTML and the flash was still there.
  *
- * The attribute is kept in sync on every write, not just at boot, so the CSS
- * rule and React's own `hidden` class can never disagree. React still owns
- * the state — the attribute is how the FIRST paint learns what React will
- * conclude a moment later. One frame of `aria-expanded` still reads the
- * default before hydration corrects it; that is invisible and self-healing,
- * where the layout shift was neither.
+ * A cookie travels WITH THE REQUEST, so the server knows the answer before it
+ * renders a byte and there is nothing to correct afterwards. No script, no
+ * flash, no hydration mismatch — the markup is right the first time.
+ *
+ * THE COST, stated plainly: reading a cookie opts these routes out of static
+ * rendering. That is the honest price of server-rendering a per-reader
+ * preference, and it is confined to the three playground routes; nothing else
+ * on the site reads it.
+ *
+ * ONE KEY FOR ALL THREE PLAYGROUND ROUTES. `/view`, `/view/c4` and
+ * `/view/seq` mount the same workbench, and "give me more canvas" is about
+ * how you read a diagram rather than which kind you opened. (Same argument as
+ * `lib/idle-motion.ts`, whose key is unscoped for the same reason.)
  *
  * IMMERSIVE MODE IS NOT STORED HERE and must not be folded into it. Immersive
- * also hides the rail, but it is a mode with an announced exit (Escape), and
+ * also hides the rail, but it is a mode with an announced exit, and
  * persisting it would strand a reader on a page whose way out they have to
- * remember from a previous session. `view-playground.tsx` keeps them separate
- * and passes `sourceCollapsed || isImmersive` to the workbench.
- *
- * localStorage failures (private mode, quota) degrade to session-only state:
- * reads fall back to the default and writes still notify this tab, so the
- * toggle keeps working — it just forgets on reload. The `storage` event fires
- * only in OTHER tabs, so writes notify a local listener set too; both paths
- * funnel through the one subscribe.
+ * remember from a previous session.
  */
 
-const SOURCE_FOLD_KEY = "arch-lab:source-collapsed";
+/** The cookie the server reads and the toggle writes. */
+export const SOURCE_FOLD_COOKIE = "af-source-collapsed";
 
-/**
- * Stamped on <html> before first paint, and kept current on every write.
- * `globals.css` is the only reader — the value is deliberately the same
- * "collapsed" string stored in localStorage so the script can copy it across
- * without interpreting it.
- *
- * PINNED TO THE STYLESHEET by `pnpm check:viewer-motion`: CSS cannot import a
- * constant, so the selector in globals.css is a hand-maintained twin of this
- * name and a check script asserts the two still match.
- */
-export const SOURCE_FOLD_ATTRIBUTE = "data-af-source-fold";
 const COLLAPSED = "collapsed";
 
 /**
- * The pre-paint script. Built from the constants above so the key, the
- * attribute and the value are each defined once, and wrapped in try/catch for
- * the same reason the share-flag script is: a throwing pre-paint script aborts
- * the rest of the parse, and no layout preference is worth a blank page.
+ * A year, in seconds. Long enough that the preference outlives the reason
+ * someone set it; a session cookie would forget on every browser restart,
+ * which is the same annoyance in slower motion.
  */
-export const SOURCE_FOLD_SCRIPT =
-  `try{if(localStorage.getItem(${JSON.stringify(SOURCE_FOLD_KEY)})===${JSON.stringify(COLLAPSED)})` +
-  `document.documentElement.setAttribute(${JSON.stringify(SOURCE_FOLD_ATTRIBUTE)},${JSON.stringify(COLLAPSED)})}catch(e){}`;
-const listeners = new Set<() => void>();
+const MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 
+/**
+ * The server's read, from a cookie value it already has. Takes the VALUE
+ * rather than reaching for `next/headers` itself, so this module stays a pure
+ * function the check scripts can exercise and the caller keeps the choice of
+ * how it obtained the request.
+ */
+export function isCollapsedCookie(value: string | undefined): boolean {
+  return value === COLLAPSED;
+}
+
+/** The client's read, from `document.cookie`. */
 export function readSourceCollapsed(): boolean {
   try {
-    return window.localStorage.getItem(SOURCE_FOLD_KEY) === COLLAPSED;
+    return document.cookie
+      .split(";")
+      .some((part) => part.trim() === `${SOURCE_FOLD_COOKIE}=${COLLAPSED}`);
   } catch {
     return false;
   }
 }
 
+const listeners = new Set<() => void>();
+
+/**
+ * `SameSite=Lax` and no `Secure`: this is a layout preference, not a
+ * credential, and forcing `Secure` would silently drop it on `http://localhost`
+ * during development — a preference that works everywhere except the machine
+ * it is developed on is worse than none. `path=/` because all three playground
+ * routes share it.
+ */
 export function writeSourceCollapsed(collapsed: boolean): void {
-  /* The attribute first, and OUTSIDE the try: it is what the stylesheet reads,
-     so it must track the toggle even where storage is denied — otherwise a
-     private-mode reader folds the rail and the CSS keeps showing it. */
-  if (collapsed) {
-    document.documentElement.setAttribute(SOURCE_FOLD_ATTRIBUTE, COLLAPSED);
-  } else {
-    document.documentElement.removeAttribute(SOURCE_FOLD_ATTRIBUTE);
-  }
   try {
-    window.localStorage.setItem(
-      SOURCE_FOLD_KEY,
-      collapsed ? COLLAPSED : "expanded",
-    );
+    document.cookie =
+      `${SOURCE_FOLD_COOKIE}=${collapsed ? COLLAPSED : "expanded"};` +
+      `path=/;max-age=${MAX_AGE_SECONDS};samesite=lax`;
   } catch {
-    /* Session-only degradation — see the module comment. */
+    /* A browser refusing cookies still gets a working toggle for this
+       session — it just forgets on reload. */
   }
   for (const listener of listeners) listener();
 }
 
+/**
+ * No `storage` event exists for cookies, so this notifies only the tab that
+ * wrote. Two tabs disagreeing about a pane's fold until one reloads is a
+ * non-event; inventing a polling loop for it would not be.
+ */
 export function subscribeSourceCollapsed(onChange: () => void): () => void {
   listeners.add(onChange);
-  window.addEventListener("storage", onChange);
   return () => {
     listeners.delete(onChange);
-    window.removeEventListener("storage", onChange);
   };
 }

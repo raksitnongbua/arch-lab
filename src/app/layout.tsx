@@ -10,7 +10,6 @@ import {
   SHARE_FORWARD_ATTRIBUTE,
   SHARE_PARAM_MODEL,
 } from "@/features/viewer/share/codec";
-import { SOURCE_FOLD_SCRIPT } from "@/features/playground/lib/source-fold";
 import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
 
 import "./globals.css";
@@ -154,16 +153,6 @@ export default function RootLayout({
           id="share-forward-flag"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }}
-        />
-        {/* Kept apart from the share flag rather than merged into one tag:
-            they answer to different features and fail independently, and a
-            single try/catch around both would let a change to one silently
-            take the other down with it. Both are two lines and neither
-            fetches anything. */}
-        <Script
-          id="source-fold-state"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: SOURCE_FOLD_SCRIPT }}
         />
         <Providers>
           <a

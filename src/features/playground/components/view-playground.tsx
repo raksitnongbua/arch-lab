@@ -180,9 +180,18 @@ type PaneErrorState =
 
 export function ViewPlayground({
   seed,
+  initialSourceCollapsed = false,
 }: {
   /** Which example fills the pane when no share payload does. */
   seed: SeedKind;
+  /**
+   * The reader's stored rail fold, read from the request cookie by the route
+   * that mounts this. Passed in rather than read here because only a SERVER
+   * component can see the request, and the whole point is that the first
+   * rendered byte already has the right layout. Defaults to expanded, which
+   * is what a caller with no request context (a test, a story) should get.
+   */
+  initialSourceCollapsed?: boolean;
 }): React.JSX.Element {
   /* ---- state ---------------------------------------------------------- */
 
@@ -227,9 +236,12 @@ export function ViewPlayground({
 
   /** The left rail's fold. The toggle lives in the canvas column's own strip,
    * because a control that vanishes with the thing it hides cannot restore it.
-   * REMEMBERED across visits (`lib/source-fold.ts`) — folding the rail is a
-   * statement about how you read this page, not a gesture to redo each time. */
-  const [sourceCollapsed, setSourceCollapsed] = useSourceCollapsed();
+   * REMEMBERED across visits in a cookie the SERVER reads, so the first
+   * rendered byte already has the right layout — see `lib/source-fold.ts` for
+   * why localStorage could not do that without a visible correction. */
+  const [sourceCollapsed, setSourceCollapsed] = useSourceCollapsed(
+    initialSourceCollapsed,
+  );
 
   /** Scopes the sequence export button's lookup for the live <svg>. */
   const diagramPaneRef = useRef<HTMLElement>(null);

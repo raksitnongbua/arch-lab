@@ -245,14 +245,7 @@ export function SplitWorkbench({
           width applies at every breakpoint, and below `lg` these are stacked
           rows where a 30%-wide editor is nonsense. As a variable,
           `lg:w-[var(--rail)]` keeps it to the one breakpoint that splits. */}
-      {/* `data-af-source-pane` is a hook for the stylesheet, not styling of its
-          own: the playground's fold is applied before first paint by an
-          attribute on <html> (playground/lib/source-fold.ts), and the CSS
-          needs something stable to aim at — the class below is composed at
-          render time and does not exist yet when that rule has to apply. The
-          two agree by construction: both hide this element and nothing else. */}
       <section
-        data-af-source-pane=""
         aria-label={sourceLabel}
         style={{ "--rail": `${railPercent}%` } as React.CSSProperties}
         className={cn(
@@ -266,7 +259,6 @@ export function SplitWorkbench({
       {/* The divider. Gone when the rail is — there is no boundary to move —
           and never rendered below `lg`, where the panes stack. */}
       <div
-        data-af-source-divider=""
         role="separator"
         aria-orientation="vertical"
         aria-label={`Resize the ${sourceLabel}`}

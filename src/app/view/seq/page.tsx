@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 
+import { cookies } from "next/headers";
+
 import { ViewPlayground } from "@/features/playground";
+import {
+  isCollapsedCookie,
+  SOURCE_FOLD_COOKIE,
+} from "@/features/playground/lib/source-fold";
 
 export const metadata: Metadata = {
   title: "Sequence diagram playground — write it, then explore it",
@@ -36,7 +42,22 @@ export const metadata: Metadata = {
  * working. Like `c4` and `sequence`, `seq` is a STATIC segment shadowing
  * `/view/[modelId]`, so it is a reserved model id, asserted at build time in
  * the `[modelId]` page.
+ *
+
+ * The rail fold is read from the request cookie and rendered SERVER-SIDE, so
+ * the pane is already in the right state in the first byte — see
+ * `playground/lib/source-fold.ts` for why the client-only versions of this
+ * all flashed. Reading a cookie opts this route out of static rendering,
+ * which is the honest price of server-rendering a per-reader preference.
  */
-export default function ViewSeqPage(): React.JSX.Element {
-  return <ViewPlayground seed="sequence" />;
+export default async function ViewSeqPage(): Promise<React.JSX.Element> {
+  const store = await cookies();
+  return (
+    <ViewPlayground
+      seed="sequence"
+      initialSourceCollapsed={isCollapsedCookie(
+        store.get(SOURCE_FOLD_COOKIE)?.value,
+      )}
+    />
+  );
 }

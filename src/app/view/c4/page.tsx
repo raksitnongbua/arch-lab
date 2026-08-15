@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 
+import { cookies } from "next/headers";
+
 import { ViewPlayground } from "@/features/playground";
+import {
+  isCollapsedCookie,
+  SOURCE_FOLD_COOKIE,
+} from "@/features/playground/lib/source-fold";
 
 export const metadata: Metadata = {
   title: "Write your own C4 model — live editor",
@@ -24,7 +30,22 @@ export const metadata: Metadata = {
  * A STATIC segment named `c4` shadows `/view/[modelId]` — Next resolves
  * static segments first — which makes `c4` a reserved model id; the
  * `[modelId]` page asserts that at build time.
+ *
+
+ * The rail fold is read from the request cookie and rendered SERVER-SIDE, so
+ * the pane is already in the right state in the first byte — see
+ * `playground/lib/source-fold.ts` for why the client-only versions of this
+ * all flashed. Reading a cookie opts this route out of static rendering,
+ * which is the honest price of server-rendering a per-reader preference.
  */
-export default function ViewC4Page(): React.JSX.Element {
-  return <ViewPlayground seed="c4" />;
+export default async function ViewC4Page(): Promise<React.JSX.Element> {
+  const store = await cookies();
+  return (
+    <ViewPlayground
+      seed="c4"
+      initialSourceCollapsed={isCollapsedCookie(
+        store.get(SOURCE_FOLD_COOKIE)?.value,
+      )}
+    />
+  );
 }

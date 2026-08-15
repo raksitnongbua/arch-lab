@@ -337,39 +337,44 @@ check("the canvas skeleton's fade duration matches its class", () => {
 });
 
 /* ----------------------------------------------------------------------- */
-/* The playground's pre-paint fold: CSS and TypeScript name the same thing  */
+/* The playground's rail fold is decided by the SERVER                      */
 /* ----------------------------------------------------------------------- */
 
 check(
-  "the source-fold attribute in globals.css matches the TypeScript constant",
+  "the rail fold is read from a cookie on the server, not after paint",
   () => {
-    /* CSS cannot import a constant, so the selector is a hand-maintained twin
-       of `SOURCE_FOLD_ATTRIBUTE`. If they drift, nothing breaks loudly — the
-       pre-paint script stamps an attribute no rule reads, and the fold goes
-       back to flashing on every load, which is exactly the bug the script was
-       added to remove. */
+    /* The client-only versions of this all flashed, and one of them looked
+     correct: `next/script` with `strategy="beforeInteractive"` does not emit
+     an executable inline tag, it pushes into `self.__next_s` for Next's
+     runtime to run after first paint. The only arrangement with nothing to
+     correct is the server rendering the right markup, so these assertions
+     guard that shape rather than any particular implementation of a fallback. */
     const fold = read("src/features/playground/lib/source-fold.ts");
-    const attribute = /SOURCE_FOLD_ATTRIBUTE = "([^"]+)"/.exec(fold)?.[1];
-    assert.ok(attribute, "SOURCE_FOLD_ATTRIBUTE not found — has it moved?");
-    assert.match(
-      globals,
-      new RegExp(`\\[${attribute}="collapsed"\\]`),
-      `globals.css has no rule for [${attribute}="collapsed"]`,
+    assert.match(fold, /SOURCE_FOLD_COOKIE/, "the preference is not a cookie");
+    /* USE, not the word — the comment explaining why localStorage was wrong is
+     the most valuable line in that file and must not trip its own check. */
+    assert.doesNotMatch(
+      fold,
+      /localStorage\s*\.\s*(?:get|set)Item/,
+      "localStorage is invisible to the server, which is what caused the flash",
     );
-    /* Both halves of what the fold hides, or a collapsed rail leaves its
-       divider hanging in the gutter. */
-    for (const hook of ["data-af-source-pane", "data-af-source-divider"]) {
+    for (const route of [
+      "src/app/view/page.tsx",
+      "src/app/view/c4/page.tsx",
+      "src/app/view/seq/page.tsx",
+    ]) {
+      const source = read(route);
       assert.match(
-        globals,
-        new RegExp(`\\[${hook}\\]`),
-        `no rule targets [${hook}]`,
-      );
-      assert.match(
-        read("src/components/ui/split-workbench.tsx"),
-        new RegExp(hook),
-        `split-workbench renders no ${hook} hook for the stylesheet to aim at`,
+        source,
+        /initialSourceCollapsed=\{isCollapsedCookie\(/,
+        `${route} does not pass the stored fold into the playground`,
       );
     }
+    assert.match(
+      read("src/features/playground/lib/use-source-fold.ts"),
+      /\(\) => initial/,
+      "the server snapshot must be what the server rendered, or hydration corrects it visibly",
+    );
   },
 );
 
