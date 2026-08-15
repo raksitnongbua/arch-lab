@@ -21,7 +21,21 @@
  * components drop in with zero restyling.
  * ------------------------------------------------------------------------- */
 
-@custom-variant dark (&:is(.dark *));
+/* Every DARK-FAMILY theme, not just `.dark`.
+ *
+ * `dark:` utilities key off this one selector, so a dark-family theme absent
+ * from it takes the LIGHT branch of all of them while the tokens around it are
+ * dark — a stray white control in one theme, and in no test.
+ *
+ * Listing the themes here rather than stamping a second class on <html> is
+ * forced as well as tidier: next-themes writes its value through
+ * `classList.add`/`remove`, and DOMTokenList rejects any token containing a
+ * space, so "dark midnight" throws InvalidCharacterError at runtime. One class
+ * per theme is the only thing it can write; this is where the family is
+ * declared instead.
+ *
+ * `pnpm check:themes` fails if a dark-family theme is missing from this list. */
+@custom-variant dark (&:is(.dark *, .midnight *, .contrast *));
 
 /* --- Theme: light -------------------------------------------------------- */
 :root {
@@ -443,10 +457,12 @@
  *   2. Add the name to THEMES in src/lib/constants.ts — the provider
  *      (src/app/providers.tsx) and the toggle both read that list, so they
  *      pick it up with no further edits.
- *   3. Add it to THEME_CLASSES (lib/constants.ts) too, and give a DARK-FAMILY
- *      theme the `dark` class alongside its own: Tailwind's `dark:` variant
- *      keys off `.dark` alone, so without it every `dark:` utility in the app
- *      would take its light branch under your new theme. Describe it in
+ *   3. For a DARK-FAMILY theme, add its name to the `dark` custom-variant at
+ *      the top of this file and to the `color-scheme: dark` rule near the
+ *      bottom. Without the first, every `dark:` utility in the app takes its
+ *      LIGHT branch under your theme. (A second class on <html> would be the
+ *      obvious alternative and is impossible: next-themes writes through
+ *      DOMTokenList, which rejects a value containing a space.) Describe it in
  *      THEME_META (layout/theme-toggle.tsx) so the picker has a label.
  *   4. Nothing else. No Tailwind change — @theme inline below already points
  *      every utility at the custom properties. `pnpm check:themes` measures
@@ -530,7 +546,11 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  html.dark {
+  /* Native scrollbars and form controls, for every dark-family theme — the
+     same list as the `dark` variant above, and pinned to it by check:themes. */
+  html.dark,
+  html.midnight,
+  html.contrast {
     color-scheme: dark;
   }
 

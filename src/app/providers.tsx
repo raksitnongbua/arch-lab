@@ -2,12 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 
-import {
-  DEFAULT_THEME,
-  THEMES,
-  THEME_CLASSES,
-  THEME_STORAGE_KEY,
-} from "@/lib/constants";
+import { DEFAULT_THEME, THEMES, THEME_STORAGE_KEY } from "@/lib/constants";
 
 /**
  * Client-side providers, mounted once in the root layout.
@@ -26,7 +21,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       attribute="class"
       defaultTheme={DEFAULT_THEME}
       themes={[...THEMES]}
-      value={THEME_CLASSES}
       enableSystem={false}
       disableTransitionOnChange
       storageKey={THEME_STORAGE_KEY}

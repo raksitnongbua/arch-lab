@@ -177,57 +177,40 @@ for (const theme of declared) {
 /* Dark-family themes also wear .dark                                       */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nevery dark-family theme also carries .dark");
+console.log("\nevery dark-family theme is in the dark variant");
 
 {
-  /* Tailwind's variant is `dark (&:is(.dark *))`, so all ~12 `dark:` utilities
-     in the app key off that ONE class. A dark-family theme stamping only its
-     own name would leave every one of them on its light branch while the
-     tokens around it were dark — a failure that shows up as a stray white
-     button in one theme, and in no test. */
-  const map =
-    /export const THEME_CLASSES: Record<Theme, string> = \{([\s\S]*?)\};/.exec(
-      CONSTANTS,
-    )?.[1];
-  check("THEME_CLASSES is declared", map !== undefined);
-  if (map !== undefined) {
-    const classes = new Map(
-      [...map.matchAll(/(\w+):\s*"([^"]+)"/g)].map((m) => [
-        m[1],
-        m[2].split(/\s+/),
-      ]),
-    );
-    const wrong = [];
-    for (const [theme, tokens] of palettes) {
-      if (theme === "light") continue;
-      const list = classes.get(theme);
-      if (list === undefined) {
-        wrong.push(`${theme} has no entry`);
-        continue;
-      }
-      if (!list.includes(theme))
-        wrong.push(`${theme} does not stamp its own class`);
-      /* "dark family" is decided by the palette, not by the name: a background
-         darker than its foreground is the definition that cannot go stale. */
-      const bg = parseOklch(tokens.get("--background"));
-      const fg = parseOklch(tokens.get("--foreground"));
-      if (
-        bg !== null &&
-        fg !== null &&
-        luminance(bg) < luminance(fg) &&
-        !list.includes("dark")
-      ) {
-        wrong.push(
-          `${theme} is dark-family but does not carry .dark — every dark: utility would use its light branch`,
-        );
-      }
-    }
-    check(
-      `every theme stamps the classes it needs (${classes.size} mapped)`,
-      wrong.length === 0,
-      wrong.join("; "),
-    );
+  /* Tailwind's `dark:` utilities key off ONE selector, so a dark-family theme
+     missing from it takes the light branch of every one of them while its
+     tokens are dark. Stamping a second class on <html> is the obvious
+     alternative and is impossible — next-themes writes through DOMTokenList,
+     which rejects a token containing a space ("dark midnight" throws
+     InvalidCharacterError), which is exactly how this was found. */
+  const variant = /@custom-variant dark \(([^)]*)\)/.exec(CSS)?.[1] ?? "";
+  const colorScheme =
+    /((?:\s*html\.[a-z-]+,?)+)\s*\{\s*color-scheme: dark/.exec(CSS)?.[1] ?? "";
+
+  const missingVariant = [];
+  const missingScheme = [];
+  for (const [theme, tokens] of palettes) {
+    /* "dark family" is decided by the PALETTE, not the name: a background
+       darker than its foreground is the definition that cannot go stale. */
+    const bg = parseOklch(tokens.get("--background"));
+    const fg = parseOklch(tokens.get("--foreground"));
+    if (bg === null || fg === null || luminance(bg) >= luminance(fg)) continue;
+    if (!variant.includes(`.${theme} `)) missingVariant.push(theme);
+    if (!colorScheme.includes(`html.${theme}`)) missingScheme.push(theme);
   }
+  check(
+    "every dark-family theme appears in the `dark` custom-variant",
+    missingVariant.length === 0,
+    `${missingVariant.join(", ")} — every dark: utility would use its light branch`,
+  );
+  check(
+    "every dark-family theme sets color-scheme: dark",
+    missingScheme.length === 0,
+    `${missingScheme.join(", ")} — native scrollbars and form controls stay light`,
+  );
 }
 
 /* ----------------------------------------------------------------------- */

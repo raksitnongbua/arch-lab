@@ -50,32 +50,14 @@ export const APP_DESCRIPTION =
  *   2. a matching CSS block in `globals.css` redefining every concrete colour
  *      (see the EXTENSION POINT comment there) — a theme with no block is
  *      offered in the picker and silently renders as light;
- *   3. an entry in `THEME_CLASSES` below, and one in `THEME_META` in
- *      `layout/theme-toggle.tsx`, which is a `Record<Theme, …>` so the
- *      compiler asks for it rather than the menu rendering a bare slug.
+ *   3. an entry in `THEME_META` in `layout/theme-toggle.tsx` — a
+ *      `Record<Theme, …>`, so the compiler asks for it rather than the menu
+ *      rendering a bare slug — and, for a DARK-FAMILY theme, its name in the
+ *      `dark` variant and the `color-scheme` rule in `globals.css`.
  *
  * The provider and the picker both read this list, so nothing else changes.
  */
 export const THEMES = ["light", "dark", "midnight", "contrast"] as const;
-
-/**
- * The class list each theme stamps on <html>.
- *
- * The dark-family themes carry `.dark` AS WELL AS their own name, and that is
- * not decoration. Tailwind's variant is `dark (&:is(.dark *))`, so every
- * `dark:` utility in the app keys off that one class — under a bare
- * `.midnight` they would all fall back to their light branch while the tokens
- * around them were dark. The theme's own class comes second and, being later
- * in `globals.css` than `.dark`, wins the token assignments at equal
- * specificity. `html.dark { color-scheme: dark }` rides along for free, which
- * is what keeps native scrollbars and form controls dark in every one of them.
- */
-export const THEME_CLASSES: Record<Theme, string> = {
-  light: "light",
-  dark: "dark",
-  midnight: "dark midnight",
-  contrast: "dark contrast",
-};
 
 export type Theme = (typeof THEMES)[number];
 
