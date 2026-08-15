@@ -43,12 +43,21 @@ export const APP_DESCRIPTION =
 /* -------------------------------------------------------------------------- */
 
 /**
- * Every theme the app knows about. Each entry needs exactly one matching CSS
- * block in `src/app/globals.css` (see the EXTENSION POINT comment there).
- * The provider and the toggle both read this list, so adding "midnight" here
- * plus a `.midnight { ... }` CSS block is the whole change.
+ * Every theme the app knows about. Adding one takes three edits, and
+ * `pnpm check:themes` fails on each of them being forgotten:
+ *
+ *   1. this list;
+ *   2. a matching CSS block in `globals.css` redefining every concrete colour
+ *      (see the EXTENSION POINT comment there) — a theme with no block is
+ *      offered in the picker and silently renders as light;
+ *   3. an entry in `THEME_META` in `layout/theme-toggle.tsx` — a
+ *      `Record<Theme, …>`, so the compiler asks for it rather than the menu
+ *      rendering a bare slug — and, for a DARK-FAMILY theme, its name in the
+ *      `dark` variant and the `color-scheme` rule in `globals.css`.
+ *
+ * The provider and the picker both read this list, so nothing else changes.
  */
-export const THEMES = ["light", "dark"] as const;
+export const THEMES = ["light", "dark", "midnight", "contrast"] as const;
 
 export type Theme = (typeof THEMES)[number];
 

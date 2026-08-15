@@ -1,9 +1,16 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { Check, Contrast, Moon, MoonStar, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
+import { THEMES, type Theme } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 const NOOP_SUBSCRIBE = () => () => {};
@@ -16,7 +23,7 @@ const NOOP_SUBSCRIBE = () => () => {};
  * there is no mismatch warning. (An `useEffect(() => setMounted(true))` would do
  * the same thing but trips `react-hooks/set-state-in-effect`.)
  */
-function useIsHydrated() {
+function useIsHydrated(): boolean {
   return useSyncExternalStore(
     NOOP_SUBSCRIBE,
     () => true,
@@ -25,50 +32,158 @@ function useIsHydrated() {
 }
 
 /**
- * Light/dark switch.
+ * How each theme presents itself. Keyed by `Theme`, so adding a name to THEMES
+ * without describing it here is a type error rather than a menu row reading
+ * "midnight" with no icon — the compiler is the reminder.
+ */
+const THEME_META: Record<
+  Theme,
+  { label: string; hint: string; Icon: typeof Sun }
+> = {
+  light: { label: "Light", hint: "Paper white", Icon: Sun },
+  dark: { label: "Dark", hint: "The default", Icon: Moon },
+  midnight: { label: "Midnight", hint: "True black, for OLED", Icon: MoonStar },
+  contrast: {
+    label: "High contrast",
+    hint: "Stronger outlines",
+    Icon: Contrast,
+  },
+};
+
+/**
+ * The theme picker.
  *
- * Two details worth keeping:
+ * IT WAS A TWO-STATE BUTTON, and could not survive a third theme: one click
+ * meant one destination, so a fourth entry would have made "toggle" a cycle
+ * nobody can aim. It is a menu now, and the menu is where a reader chooses
+ * rather than guesses what comes next.
  *
- *  - **Which icon shows is decided by CSS, not JS** (`dark:` variants on both
- *    icons). next-themes stamps `.dark` on <html> before first paint, so the
- *    correct icon is already correct on the very first frame — no post-hydration
- *    swap. Both icons are always in the DOM and cross-fade, so the button box
- *    never changes size: zero layout shift.
- *  - **The label needs the resolved theme**, which only exists client-side
- *    (it lives in localStorage). Until hydration the button is inert with a
- *    neutral label, so a screen reader is never told the wrong action.
+ * The list is THEMES, not a copy: `lib/constants.ts` already drives the
+ * provider, and a second list here is how a theme ends up available in one and
+ * absent from the other.
+ *
+ * WHAT THE OLD BUTTON GOT RIGHT AND THIS KEEPS. The trigger icon is decided by
+ * CSS variants, not by JavaScript reading the theme — next-themes stamps the
+ * class on <html> before first paint, so the right icon is right on the very
+ * first frame with no post-hydration swap. The menu ROWS are a different case:
+ * they need the resolved name to mark the current one, which only exists on the
+ * client, so the tick appears after hydration. That is invisible — the menu is
+ * shut until someone opens it.
+ *
+ * Dismissal is the `ui/zoom-menu.tsx` arrangement: Escape closes,
+ * pointerdown-outside closes, no focus trap. A short list of radio rows under a
+ * button is not a dialog.
  */
 export function ThemeToggle({ className }: { className?: string }) {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const hydrated = useIsHydrated();
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
 
-  const next = resolvedTheme === "dark" ? "light" : "dark";
-  const label = hydrated ? `Switch to ${next} theme` : "Theme";
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // Consumed, so this Escape does not also act on the page underneath —
+      // one press, one step.
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [open]);
+
+  const current = hydrated ? (theme as Theme | undefined) : undefined;
+  const label =
+    current === undefined
+      ? "Theme"
+      : `Theme — ${THEME_META[current]?.label ?? current}`;
 
   return (
-    <button
-      type="button"
-      onClick={() => setTheme(next)}
-      disabled={!hydrated}
-      aria-label={label}
-      title={hydrated ? label : undefined}
-      className={cn(
-        "relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground backdrop-blur",
-        "transition-colors duration-200 hover:border-foreground/25 hover:bg-card hover:text-foreground",
-        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
-        "disabled:cursor-default",
-        className,
-      )}
-    >
-      {/* Sun is visible in light, Moon in dark. Driven purely by the .dark class. */}
-      <Sun
-        aria-hidden="true"
-        className="absolute size-4 scale-100 rotate-0 opacity-100 transition-all duration-300 dark:scale-50 dark:-rotate-90 dark:opacity-0"
-      />
-      <Moon
-        aria-hidden="true"
-        className="absolute size-4 scale-50 rotate-90 opacity-0 transition-all duration-300 dark:scale-100 dark:rotate-0 dark:opacity-100"
-      />
-    </button>
+    <div ref={wrapperRef} className={cn("relative", className)}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls={open ? menuId : undefined}
+        aria-label={label}
+        title={label}
+        className={cn(
+          "relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground backdrop-blur",
+          "transition-colors duration-200 hover:border-foreground/25 hover:bg-card hover:text-foreground",
+          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+        )}
+      >
+        {/* Both icons are always mounted and cross-fade on the `dark:` variant,
+            so the button box never changes size and the correct one is correct
+            in the first frame. The dark-family themes (dark, midnight,
+            contrast) all carry `.dark`-adjacent grounds, so the moon is right
+            for every one of them — the specific theme is named in the menu,
+            which is where the distinction matters. */}
+        <Sun
+          aria-hidden="true"
+          className="absolute size-4 scale-100 rotate-0 opacity-100 transition-all duration-300 dark:scale-50 dark:-rotate-90 dark:opacity-0"
+        />
+        <Moon
+          aria-hidden="true"
+          className="absolute size-4 scale-50 rotate-90 opacity-0 transition-all duration-300 dark:scale-100 dark:rotate-0 dark:opacity-100"
+        />
+      </button>
+
+      {open ? (
+        <div
+          id={menuId}
+          role="menu"
+          aria-label="Theme"
+          className="absolute top-full right-0 z-50 mt-1.5 min-w-52 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+        >
+          {THEMES.map((name) => {
+            const meta = THEME_META[name];
+            const isCurrent = current === name;
+            return (
+              <button
+                key={name}
+                type="button"
+                role="menuitemradio"
+                aria-checked={isCurrent}
+                onClick={() => {
+                  setTheme(name);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
+                  isCurrent ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <meta.Icon aria-hidden="true" className="size-4 shrink-0" />
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-xs font-medium">{meta.label}</span>
+                  <span className="text-[11px] leading-tight opacity-70">
+                    {meta.hint}
+                  </span>
+                </span>
+                <Check
+                  aria-hidden="true"
+                  className={cn(
+                    "ml-auto size-3.5 shrink-0",
+                    !isCurrent && "invisible",
+                  )}
+                />
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }

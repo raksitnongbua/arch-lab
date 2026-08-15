@@ -179,9 +179,23 @@ check("the drift paints with the shared token, not a second spelling", () => {
   assert.match(globals, /--edge-drift:/);
 });
 
-check("--edge-drift is defined in BOTH themes, or dark mode loses it", () => {
+check("--edge-drift is defined in EVERY theme, or that theme loses it", () => {
+  /* Counted against THEMES rather than a literal. This asserted "exactly 2"
+     and broke the moment a third theme arrived — a check that has to be
+     edited whenever the thing it guards grows teaches people to edit it
+     without reading it. A token missing from one theme is still the bug; the
+     number of themes never was. */
+  const themes = [
+    ...(/export const THEMES = \[([^\]]*)\]/.exec(
+      read("src/lib/constants.ts"),
+    )?.[1] ?? "").matchAll(/"([a-z-]+)"/g),
+  ].length;
   const occurrences = globals.match(/--edge-drift:/g) ?? [];
-  assert.equal(occurrences.length, 2, `found ${occurrences.length}, want 2`);
+  assert.equal(
+    occurrences.length,
+    themes,
+    `found ${occurrences.length} definitions for ${themes} themes`,
+  );
 });
 
 /* ---- 2. one dash rhythm per connector ------------------------------------ */
