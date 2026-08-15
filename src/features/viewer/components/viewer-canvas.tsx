@@ -82,6 +82,7 @@ import {
 } from "../lib/canvas-constants";
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
+import { CanvasSkeleton } from "./canvas-skeleton";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
 import { ViewerNodeDetail, type NodeDetail } from "./viewer-node-detail";
 import {
@@ -1341,6 +1342,10 @@ function ViewerCanvasInner({
       className="viewer-canvas absolute inset-0 outline-none"
     >
       <style>{EDGE_INTERACTION_CSS}</style>
+      {/* Above the graph and below the controls: it covers the unfitted first
+          frame without swallowing the strip a reader might already be aiming
+          at. Removes itself once the nodes are measured. */}
+      <CanvasSkeleton />
       {detail !== null ? (
         // Focus effect while a relationship is selected: every node except
         // the two endpoints recedes. Stylesheet-driven (node ids are model

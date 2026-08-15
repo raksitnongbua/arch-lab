@@ -313,6 +313,29 @@ check("the export paints the drift with the canvas's resolved token", () => {
   assert.match(button, /theme\.primary/);
 });
 
+check("the canvas skeleton's fade duration matches its class", () => {
+  /* A timer cannot read a Tailwind class, so the two are written separately
+     and must agree: if FADE_MS is shorter the skeleton unmounts mid-fade and
+     snaps away, and if it is longer the reader waits on an already-invisible
+     overlay. */
+  const skeleton = read("src/features/viewer/components/canvas-skeleton.tsx");
+  const ms = Number(/const FADE_MS = (\d+);/.exec(skeleton)?.[1]);
+  assert.ok(Number.isFinite(ms), "FADE_MS not found in canvas-skeleton.tsx");
+  assert.match(
+    skeleton,
+    new RegExp(`duration-${ms}\\b`),
+    `FADE_MS is ${ms} but no matching duration-${ms} class is applied`,
+  );
+  /* It lifts on React Flow's own measurement signal rather than a timer
+     guessing when the fit happened. */
+  assert.match(skeleton, /useNodesInitialized/);
+  assert.match(
+    read("src/features/viewer/components/viewer-canvas.tsx"),
+    /<CanvasSkeleton \/>/,
+    "the canvas renders no skeleton, so the unfitted first frame is visible",
+  );
+});
+
 /* ----------------------------------------------------------------------- */
 /* The playground's pre-paint fold: CSS and TypeScript name the same thing  */
 /* ----------------------------------------------------------------------- */
