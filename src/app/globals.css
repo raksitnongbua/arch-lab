@@ -246,6 +246,192 @@
   --seq-lane-5: #9085e9;
 }
 
+/* --- Two more themes ---------------------------------------------------------
+ * Both are DARK-FAMILY and both redefine the full token set, per the extension
+ * point above: anything omitted falls back to the light values, which in a dark
+ * theme means white text on a white card in one place nobody looks.
+ *
+ * `midnight` is the OLED variant — a true black ground, with cards and nodes
+ * lifted just enough to read as surfaces rather than holes. Everything above
+ * the ground is a shade lighter than `dark`'s, because contrast is measured
+ * against what a token actually sits on, and here that is black.
+ *
+ * `contrast` is the accessibility variant: near-black ground, pure white text,
+ * and borders far brighter than any other theme's, since an outline is what
+ * tells one node kind from another. Its accents are lightened rather than
+ * saturated — chroma does not buy luminance contrast, which is the thing being
+ * measured.
+ *
+ * Every pair in both is verified by `pnpm check:themes` against the same
+ * minimums the two original themes meet, computed from these oklch values.
+ * ---------------------------------------------------------------------------- */
+
+.midnight {
+  --background: oklch(0 0 0);
+  --foreground: oklch(0.96 0.006 275);
+
+  --card: oklch(0.17 0.016 275);
+  --card-foreground: oklch(0.96 0.006 275);
+
+  --popover: oklch(0.17 0.016 275);
+  --popover-foreground: oklch(0.96 0.006 275);
+
+  --primary: oklch(0.68 0.19 285);
+  --primary-foreground: oklch(0.16 0.03 285);
+
+  --secondary: oklch(0.23 0.018 275);
+  --secondary-foreground: oklch(0.94 0.006 275);
+
+  --muted: oklch(0.23 0.018 275);
+  --muted-foreground: oklch(0.72 0.018 275);
+
+  --accent: oklch(0.78 0.13 195);
+  --accent-foreground: oklch(0.18 0.03 195);
+
+  --destructive: oklch(0.66 0.2 25);
+  --destructive-foreground: oklch(0.16 0.03 25);
+
+  --success: oklch(0.72 0.16 155);
+  --success-foreground: oklch(0.16 0.03 155);
+
+  --warning: oklch(0.82 0.15 80);
+  --warning-foreground: oklch(0.2 0.04 80);
+
+  --border: oklch(0.28 0.018 275);
+  --input: oklch(0.28 0.018 275);
+  --ring: oklch(0.68 0.19 285);
+
+  --canvas: oklch(0 0 0);
+  --canvas-grid: oklch(0.2 0.016 275);
+  --node: oklch(0.185 0.018 275);
+  --node-foreground: oklch(0.96 0.006 275);
+  /* AF-E6-S1: ≥3:1 against --node (measured 3.61:1; was L 0.33 at 1.43:1). */
+  --node-border: oklch(0.53 0.024 275);
+  /* Secondary text on node fills (light block has the design notes). */
+  --node-meta: oklch(0.79 0.02 275);
+
+  /* Dark counterparts of the per-role node colours (light block has the
+     design notes). Fills carry real chroma at L≈0.30; borders brighten to
+     L≈0.66 so each card reads as a lit, coloured object on the dark canvas.
+     Ratios (audit script): name is --node-foreground vs fill, meta is
+     --node-meta vs fill, border vs its own fill. */
+  /* name 11.93:1, meta 6.95:1, border 4.46:1 (wash-top: 9.82 / 5.72 / 3.67) */
+  --node-person: oklch(0.28 0.07 295);
+  --node-person-border: oklch(0.68 0.14 295);
+  /* name 11.82:1, meta 6.88:1, border 4.48:1 (wash-top: 9.78 / 5.70 / 3.71) */
+  --node-internal: oklch(0.275 0.06 250);
+  --node-internal-border: oklch(0.67 0.12 250);
+  /* name 14.80:1, meta 8.62:1, border 3.44:1 (no wash — external stays matte) */
+  --node-external: oklch(0.205 0.012 265);
+  --node-external-border: oklch(0.53 0.024 275);
+  /* name 11.78:1, meta 6.86:1, border 4.50:1 (wash-top: 9.73 / 5.67 / 3.72) */
+  --node-database: oklch(0.27 0.055 195);
+  --node-database-border: oklch(0.66 0.11 195);
+  /* name 11.59:1, meta 6.75:1, border 4.57:1 (wash-top: 9.53 / 5.55 / 3.76) */
+  --node-queue: oklch(0.275 0.055 150);
+  --node-queue-border: oklch(0.67 0.11 150);
+
+  /* Dark pins for the rebuilt tagColors fills (light block explains). */
+  --tag-fill-l: 0.275;
+  --tag-fill-c: 0.06;
+
+  --edge: oklch(0.62 0.02 275);
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.68 0.19 285 / 0.24);
+
+  /* Dark counterparts of the sequence lane tokens (the light block carries
+     the full validation notes — order, absent yellow, relief rule). Same
+     slots, same path through the CVD-safe adjacency graph. */
+  --seq-lane-1: #199e70;
+  --seq-lane-2: #d95926;
+  --seq-lane-3: #3987e5;
+  --seq-lane-4: #d55181;
+  --seq-lane-5: #9085e9;
+}
+
+.contrast {
+  --background: oklch(0.05 0 0);
+  --foreground: oklch(1 0 0);
+
+  --card: oklch(0.12 0 0);
+  --card-foreground: oklch(1 0 0);
+
+  --popover: oklch(0.12 0 0);
+  --popover-foreground: oklch(1 0 0);
+
+  --primary: oklch(0.82 0.19 285);
+  --primary-foreground: oklch(0.05 0 0);
+
+  --secondary: oklch(0.22 0 0);
+  --secondary-foreground: oklch(1 0 0);
+
+  --muted: oklch(0.22 0 0);
+  --muted-foreground: oklch(0.88 0 0);
+
+  --accent: oklch(0.88 0.13 195);
+  --accent-foreground: oklch(0.05 0 0);
+
+  --destructive: oklch(0.75 0.2 25);
+  --destructive-foreground: oklch(0.16 0.03 25);
+
+  --success: oklch(0.84 0.16 155);
+  --success-foreground: oklch(0.16 0.03 155);
+
+  --warning: oklch(0.9 0.15 80);
+  --warning-foreground: oklch(0.2 0.04 80);
+
+  --border: oklch(0.72 0.01 275);
+  --input: oklch(0.72 0.01 275);
+  --ring: oklch(0.9 0.16 285);
+
+  --canvas: oklch(0.05 0 0);
+  --canvas-grid: oklch(0.3 0 0);
+  --node: oklch(0.13 0 0);
+  --node-foreground: oklch(1 0 0);
+  /* AF-E6-S1: ≥3:1 against --node (measured 3.61:1; was L 0.33 at 1.43:1). */
+  --node-border: oklch(0.86 0.02 275);
+  /* Secondary text on node fills (light block has the design notes). */
+  --node-meta: oklch(0.9 0.01 275);
+
+  /* Dark counterparts of the per-role node colours (light block has the
+     design notes). Fills carry real chroma at L≈0.30; borders brighten to
+     L≈0.66 so each card reads as a lit, coloured object on the dark canvas.
+     Ratios (audit script): name is --node-foreground vs fill, meta is
+     --node-meta vs fill, border vs its own fill. */
+  /* name 11.93:1, meta 6.95:1, border 4.46:1 (wash-top: 9.82 / 5.72 / 3.67) */
+  --node-person: oklch(0.2 0.06 295);
+  --node-person-border: oklch(0.85 0.14 295);
+  /* name 11.82:1, meta 6.88:1, border 4.48:1 (wash-top: 9.78 / 5.70 / 3.71) */
+  --node-internal: oklch(0.2 0.05 250);
+  --node-internal-border: oklch(0.85 0.12 250);
+  /* name 14.80:1, meta 8.62:1, border 3.44:1 (no wash — external stays matte) */
+  --node-external: oklch(0.15 0.01 265);
+  --node-external-border: oklch(0.86 0.02 275);
+  /* name 11.78:1, meta 6.86:1, border 4.50:1 (wash-top: 9.73 / 5.67 / 3.72) */
+  --node-database: oklch(0.2 0.05 195);
+  --node-database-border: oklch(0.87 0.11 195);
+  /* name 11.59:1, meta 6.75:1, border 4.57:1 (wash-top: 9.53 / 5.55 / 3.76) */
+  --node-queue: oklch(0.2 0.05 150);
+  --node-queue-border: oklch(0.87 0.11 150);
+
+  /* Dark pins for the rebuilt tagColors fills (light block explains). */
+  --tag-fill-l: 0.2;
+  --tag-fill-c: 0.06;
+
+  --edge: oklch(0.8 0.02 275);
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.82 0.19 285 / 0.3);
+
+  /* Dark counterparts of the sequence lane tokens (the light block carries
+     the full validation notes — order, absent yellow, relief rule). Same
+     slots, same path through the CVD-safe adjacency graph. */
+  --seq-lane-1: #199e70;
+  --seq-lane-2: #d95926;
+  --seq-lane-3: #3987e5;
+  --seq-lane-4: #d55181;
+  --seq-lane-5: #9085e9;
+}
+
 /* --- EXTENSION POINT: adding a third theme ------------------------------------
  * Themes are pure data — a class selector that reassigns the tokens above.
  * To add e.g. "midnight" (OLED black) or "contrast" (high-contrast):
@@ -257,8 +443,14 @@
  *   2. Add the name to THEMES in src/lib/constants.ts — the provider
  *      (src/app/providers.tsx) and the toggle both read that list, so they
  *      pick it up with no further edits.
- *   3. Nothing else. No Tailwind change, no component change — @theme inline
- *      below already points every utility at the custom properties.
+ *   3. Add it to THEME_CLASSES (lib/constants.ts) too, and give a DARK-FAMILY
+ *      theme the `dark` class alongside its own: Tailwind's `dark:` variant
+ *      keys off `.dark` alone, so without it every `dark:` utility in the app
+ *      would take its light branch under your new theme. Describe it in
+ *      THEME_META (layout/theme-toggle.tsx) so the picker has a label.
+ *   4. Nothing else. No Tailwind change — @theme inline below already points
+ *      every utility at the custom properties. `pnpm check:themes` measures
+ *      the result and fails if a pair is illegible or a token was missed.
  *
  * Example skeleton:
  *

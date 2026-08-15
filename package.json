@@ -40,6 +40,7 @@
     "check:mcp-motion": "node scripts/mcp-motion-check.mjs",
     "check:icon-contrast": "node scripts/icon-contrast-check.mjs",
     "check:icon-style": "node scripts/icon-style-check.mjs",
+    "check:themes": "node scripts/theme-check.mjs",
     "check:og-cards": "node scripts/og-cards-check.mjs",
     "build:skill": "node scripts/build-skill.mjs",
     "check:skill": "node scripts/skill-check.mjs"
