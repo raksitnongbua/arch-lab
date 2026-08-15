@@ -115,7 +115,11 @@ function decode(buf) {
   return { width, height, channels, data: out };
 }
 
-import { collectRenderedArtwork } from "./lib/icon-artwork.mjs";
+import {
+  collectRenderedArtwork,
+  luminanceOf,
+  nodeCardColours,
+} from "./lib/icon-artwork.mjs";
 
 const luminance = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
@@ -162,6 +166,54 @@ function coverage(art, background, ink) {
 
 const jobs = collectRenderedArtwork();
 let failures = 0;
+
+/* ------------------------------------------------------------------------ */
+/* A mark's OWN ink, against the card it sits on                            */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * The rendered test below asks "is anything visible". This asks the sharper
+ * question the rendered one cannot: does the mark's OWN colour survive?
+ *
+ * Kong is the case that forced it. Its artwork is partly #003459 and partly
+ * unfilled; the unfilled half inherits the node's accent and renders fine, so
+ * coverage looked healthy while the navy half was invisible against a blue
+ * container card — a logo drawn half-missing. Coverage cannot see that, and
+ * nor can a page-background test, because the card is not the page.
+ *
+ * Only marks whose ENTIRE declared ink collapses into a card are failed. The
+ * gap between the ones that are genuinely lost (Δ0–5: Vault, Helm, Kong,
+ * Ansible, CircleCI) and the next nearest (Δ17) is wide, so the threshold sits
+ * in it rather than at either edge.
+ */
+const MIN_INK_SEPARATION = 10;
+const THEMES = nodeCardColours();
+
+for (const job of jobs) {
+  const inks = [
+    ...new Set(
+      [
+        ...job.art.matchAll(/(?:fill|stroke)\s*[:=]\s*["']?(#[0-9a-fA-F]{6})/g),
+      ].map((m) => m[1]),
+    ),
+  ];
+  if (inks.length === 0) continue; // inherits the accent, which the theme picks to contrast
+  for (const [theme, { cards }] of Object.entries(THEMES)) {
+    for (const card of cards) {
+      const separation = Math.max(
+        ...inks.map((ink) => Math.abs(luminanceOf(ink) - luminanceOf(card))),
+      );
+      if (separation >= MIN_INK_SEPARATION) continue;
+      failures++;
+      console.error(
+        `  ✗ ${job.slug} (${job.style}) — its own ink vanishes into the ${theme} ${card} card (Δlum ${separation.toFixed(0)})`,
+      );
+      console.error(
+        "    route it through the mono artwork so it takes the node's accent instead",
+      );
+    }
+  }
+}
 
 for (const job of jobs) {
   const onLight = coverage(job.art, "#ffffff", "#111111");

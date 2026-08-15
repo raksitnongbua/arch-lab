@@ -758,7 +758,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
     name: "Kong",
     aliases: ["api gateway", "gateway"],
     category: "networking",
-    art: withMono("kong", kongVariants),
+    art: alwaysMono("kong", kongVariants),
   },
   {
     slug: "nginx",
@@ -934,14 +934,14 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
     name: "Ansible",
     aliases: ["playbook", "configuration management"],
     category: "devops",
-    art: withMono("ansible", ansibleVariants),
+    art: alwaysMono("ansible", ansibleVariants),
   },
   {
     slug: "circleci",
     name: "CircleCI",
     aliases: ["ci"],
     category: "devops",
-    art: withMono("circleci", circleciVariants),
+    art: alwaysMono("circleci", circleciVariants),
   },
   {
     slug: "github",
@@ -969,7 +969,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
     name: "Helm",
     aliases: ["chart", "k8s package"],
     category: "devops",
-    art: withMono("helm", helmVariants),
+    art: alwaysMono("helm", helmVariants),
   },
   {
     slug: "jenkins",
@@ -983,7 +983,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
     name: "Vault",
     aliases: ["hashicorp", "secrets"],
     category: "devops",
-    art: withMono("vault", vaultVariants),
+    art: alwaysMono("vault", vaultVariants),
   },
   /* -- observability ------------------------------------------------------- */
   {
