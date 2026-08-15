@@ -98,6 +98,7 @@ interface PendParticipant extends Loc {
   id: string;
   kind?: SequenceParticipantKind;
   name: string;
+  icon?: string;
   technology?: string;
   description?: string;
   raw: Map<string, Pend>;
@@ -810,9 +811,35 @@ function parseParticipantLine(
     raw: new Map(),
     unknowns: [],
   };
-  cursor.skipSpaces();
-  if (cursor.peek() === "[") {
-    participant.technology = readTechnology(cursor);
+  /* `@icon` then `[technology]`, the same order and the same spelling as a
+     C4 node line — one vocabulary across both document kinds, so someone who
+     has written one can write the other without a second lookup. Unlike C4
+     there is no `!`/`~` source suffix: nothing infers icons here (see
+     `SequenceParticipant.icon`), so there is no inference to override. */
+  for (;;) {
+    cursor.skipSpaces();
+    if (cursor.atEnd()) break;
+    const attrLoc = { line: cursor.line, column: cursor.column };
+    if (cursor.peek() === "@") {
+      if (participant.icon !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, "duplicate @icon attribute");
+      }
+      cursor.pos += 1;
+      participant.icon = cursor.readIdToken("the icon slug");
+      continue;
+    }
+    if (cursor.peek() === "[") {
+      if (participant.technology !== undefined) {
+        failAt(
+          attrLoc.line,
+          attrLoc.column,
+          "duplicate [technology] attribute",
+        );
+      }
+      participant.technology = readTechnology(cursor);
+      continue;
+    }
+    break;
   }
   cursor.expectEnd("the participant line");
   participants.push(participant);
@@ -1466,6 +1493,7 @@ function resolve(
     add("id", participant.id);
     add("kind", pick(participant.kind, participant.raw, "kind"));
     add("name", participant.name);
+    add("icon", pick(participant.icon, participant.raw, "icon"));
     add(
       "technology",
       pick(participant.technology, participant.raw, "technology"),

@@ -457,6 +457,16 @@ export function SyntaxReference(): React.JSX.Element {
         </P>
         <CodeBlock code={SEQUENCE_FRAGMENT_EXAMPLE.code} label="fragments" />
         <P>
+          A participant takes the same <Code>@icon</Code> a C4 node does, in the
+          same place on the line — after the name, before{" "}
+          <Code>[technology]</Code> — and from the same set of slugs. One
+          vocabulary across both document kinds, because a participant and a
+          container are usually the same system drawn twice, and two icon
+          namespaces would let them disagree about what to call one. There is no{" "}
+          <Code>!</Code>/<Code>~</Code> suffix here: nothing infers icons for a
+          sequence document, so there is no inference to override.
+        </P>
+        <P>
           Two more constructs say <em>these belong together</em> without saying
           anything about control flow. <Code>box</Code> brackets a run of
           lifelines and takes its members as the participant lines{" "}

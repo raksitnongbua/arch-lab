@@ -39,10 +39,15 @@ export const SEQ_FILE_KEYS = [
  * the nesting in the text — so only `label` and `tint` are ever written. */
 export const BOX_KEYS = ["label", "tint", "participants"] as const;
 
+/* `icon` sits between `name` and `technology`, matching the order the text
+   writes them (`api:participant "Order API" @golang [Go]`) — the key order and
+   the line order are the same order, which is what keeps a round trip
+   byte-stable without anyone holding two sequences in their head. */
 export const PARTICIPANT_KEYS = [
   "id",
   "kind",
   "name",
+  "icon",
   "technology",
   "description",
 ] as const;
@@ -87,6 +92,7 @@ export const SEQ_META_RAW: ReadonlySet<string> = new Set([
 
 export const SEQ_PARTICIPANT_RAW: ReadonlySet<string> = new Set([
   "kind",
+  "icon",
   "technology",
   "description",
 ]);

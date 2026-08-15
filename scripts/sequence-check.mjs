@@ -509,6 +509,73 @@ check(
 );
 
 /* ----------------------------------------------------------------------- */
+/* 2c. Participant icons                                                    */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * `@icon` on a participant, spelled and ordered exactly as a C4 node line
+ * spells it. The risk this pins is not "does it parse" but "does it stay put":
+ * the token sits BETWEEN the name and `[technology]`, and the model's key
+ * order has to agree with that, or a round trip reorders the line and stops
+ * being byte-identical.
+ */
+console.log("participant icons");
+
+const ICONED = `archlab 1.0 sequence
+title "Icons"
+
+@sequence
+  cust:actor "Customer" @person
+  api:participant "Order API" @golang [Go 1.22]
+    desc "Owns order state."
+  db:participant "Orders DB" @postgresql [PostgreSQL 16]
+  plain "No icon here"
+
+  cust -> api : "Place the order"
+  api -> db : "INSERT"
+`;
+
+const iconed = parseSequenceText(ICONED);
+const iconedText = serializeSequenceText(iconed);
+check(
+  "a document with icons round-trips byte-identically",
+  iconedText === ICONED,
+  firstDiff(iconedText, ICONED),
+);
+check(
+  "the icon lands between name and technology, in the model's key order",
+  JSON.stringify(iconed.participants[1]) ===
+    '{"id":"api","kind":"participant","name":"Order API","icon":"golang","technology":"Go 1.22","description":"Owns order state."}',
+  JSON.stringify(iconed.participants[1]),
+);
+check(
+  "a participant without one carries NO icon key (absent, not empty)",
+  !("icon" in iconed.participants[3]),
+);
+/* Inline rather than via `seqError`, which is declared with the other
+   malformed-input helpers further down and is not initialised yet here. */
+check(
+  "a second @icon on one participant is refused",
+  (() => {
+    try {
+      parseSequenceText(
+        'archlab 1.0 sequence\ntitle "T"\n\n@sequence\n  c "C" @one @two\n',
+      );
+      return false;
+    } catch (error) {
+      return (
+        error instanceof ArchTextParseError &&
+        error.message.includes("duplicate @icon")
+      );
+    }
+  })(),
+);
+check(
+  "the export caveat says Mermaid cannot carry an icon",
+  MERMAID_SEQUENCE_EXPORT_CAVEAT.includes("icon"),
+);
+
+/* ----------------------------------------------------------------------- */
 /* 3. Unknown forward-compatible fields, verbatim and in position           */
 /* ----------------------------------------------------------------------- */
 

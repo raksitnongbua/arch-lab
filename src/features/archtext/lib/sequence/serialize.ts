@@ -309,6 +309,13 @@ function emitParticipant(lines: string[], value: unknown, pad: string): void {
   }
   line += ` ${JSON.stringify(name)}`;
 
+  /* Between the name and the technology, mirroring the C4 node line and the
+     model's key order. A non-string icon (a newer minor's shape) rides the
+     `!` escape rather than being coerced into a slug. */
+  const icon = value.icon;
+  if (typeof icon === "string" && icon !== "") line += ` @${icon}`;
+  else if (icon !== undefined) fallback.push(["icon", icon]);
+
   const technology = value.technology;
   if (typeof technology === "string") {
     line += ` [${techBody(technology)}]`;

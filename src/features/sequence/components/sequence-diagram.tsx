@@ -45,6 +45,7 @@ import { useId } from "react";
 // Cross-feature on purpose: the tag-fill rebuild is the ONE definition of
 // "a hue at our validated card lightness" (node-colors.ts carries the full
 // rationale), and re-typing the expression here would let the two drift.
+import { ICONS } from "@/features/editor/lib/icons/registry";
 import { tagFillCss } from "@/features/editor/lib/node-colors";
 import { cn } from "@/lib/utils";
 import { TINT_WASH_OPACITY } from "@/lib/tint";
@@ -821,6 +822,14 @@ function ParticipantColumn({
     (participant.kind === "actor" ? SEQ.actorGlyphHeight : 0);
   const boxHeight = layout.headerHeight - (boxTop - layout.headerTop);
   const isActor = participant.kind === "actor";
+  /* The SHARED registry, not a second one: a participant and a C4 container
+     are usually the same system drawn twice, and two icon vocabularies would
+     let them disagree about what to call one. An unknown slug resolves to
+     nothing and the card simply draws without an icon — a document that names
+     an icon this build does not have is still a valid document, and refusing
+     to draw it would be the renderer enforcing a rule the format does not. */
+  const icon =
+    participant.icon === undefined ? undefined : ICONS[participant.icon];
   /**
    * The participant's LANE colour — its header border, lifeline and actor
    * glyph, assigned by the layout (LaidParticipant.lane; globals.css owns
@@ -931,21 +940,55 @@ function ParticipantColumn({
         stroke={lane}
         strokeWidth={1.5}
       />
-      <text
-        x={x}
-        y={
+      {/* ---- the icon, and the name it shares a row with ----
+          The pair is centred TOGETHER rather than the name being centred and
+          the icon hung off it: an icon placed relative to a centred label
+          drifts with every rename, and the card's width already reserves
+          `iconSize + iconGap` for exactly this (see `planColumns`). So the
+          row's total width is measured here, the group starts at its left
+          edge, and the name is drawn from there — which keeps the two
+          optically balanced in the card at any name length. */}
+      {(() => {
+        const nameWidth = estimateTextWidth(participant.name, SEQ.nameFontSize);
+        const Icon = icon?.Svg;
+        const rowWidth =
+          nameWidth + (Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap);
+        const rowLeft = x - rowWidth / 2;
+        const nameY =
           boxTop +
           (participant.technology === undefined
             ? boxHeight / 2 + 4
-            : boxHeight / 2 - 3)
-        }
-        textAnchor="middle"
-        fontSize={SEQ.nameFontSize}
-        fontWeight={600}
-        fill="var(--node-foreground)"
-      >
-        {participant.name}
-      </text>
+            : boxHeight / 2 - 3);
+        return (
+          <>
+            {Icon === undefined ? null : (
+              <Icon
+                x={rowLeft}
+                /* Optically centred on the text's x-height rather than its
+                   baseline: `nameY` is where the glyphs SIT, so an icon
+                   aligned to it would hang below the word. */
+                y={nameY - SEQ.iconSize + 3}
+                width={SEQ.iconSize}
+                height={SEQ.iconSize}
+                /* Monochrome registry icons paint with `currentColor`; a
+                   brand mark carries its own fills and ignores this. */
+                color="var(--node-meta)"
+              />
+            )}
+            <text
+              x={
+                rowLeft + (Icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap)
+              }
+              y={nameY}
+              fontSize={SEQ.nameFontSize}
+              fontWeight={600}
+              fill="var(--node-foreground)"
+            >
+              {participant.name}
+            </text>
+          </>
+        );
+      })()}
       {participant.technology !== undefined ? (
         <text
           x={x}

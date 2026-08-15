@@ -56,6 +56,20 @@ export interface SequenceParticipant {
   name: string;
   /** Absent = unstated (rendered as `participant`). */
   kind?: SequenceParticipantKind;
+  /**
+   * Icon slug from the shared registry (`editor/lib/icons`), e.g.
+   * `"postgresql"` — the same vocabulary a C4 node's `icon` uses, because a
+   * participant and a container are the same system drawn twice and a second
+   * icon namespace would make them disagree about what to call one.
+   *
+   * EXPLICIT ONLY, unlike C4, which also carries an `iconSource` so an
+   * icon INFERRED from `technology` can be re-inferred when the technology
+   * changes while a user's own choice is never overwritten. Nothing infers
+   * icons for a sequence document — there is no editor writing them — so the
+   * flag would record a distinction nothing makes. If inference arrives, this
+   * grows an `iconSource` beside it exactly as the C4 node did.
+   */
+  icon?: string;
   /** Free text, e.g. "Next.js", "PostgreSQL 16". */
   technology?: string;
   /** <= 500 chars, same budget as `C4Node.description`. */

@@ -75,7 +75,7 @@ registerHooks({
 const { parseSequenceText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutSequence, SEQ } = await import(
+const { layoutSequence, SEQ, estimateTextWidth } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/lib/layout.ts")).href
 );
 const { SEQUENCE_EXAMPLE } = await import(
@@ -749,6 +749,77 @@ check(
       bare.heading.height < clamped.heading.height,
     `bare ${bare.heading.height} vs clamped ${clamped.heading.height}`,
   );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Participant icons — measured, not merely drawn                          */
+/* ----------------------------------------------------------------------- */
+
+console.log("participant icons");
+
+{
+  /* A name LONG ENOUGH to clear `headerMinWidth`, deliberately: at the floor
+     both cards measure the same 112 and the icon's contribution is absorbed
+     by the clamp, which would make an exact-delta assertion pass or fail on
+     the length of a word rather than on the layout. The floor case is
+     asserted separately below. */
+  const WITH = `archlab 1.0 sequence
+title "Iconed"
+
+@sequence
+  a "Storefront Web Application" @nextjs
+  b "Orders DB"
+
+  a -> b : "x"
+`;
+  const withIcon = layoutSequence(parseSequenceText(WITH));
+  const withoutIcon = layoutSequence(
+    parseSequenceText(WITH.replace(" @nextjs", "")),
+  );
+
+  const widthOf = (layout, id) =>
+    layout.participants.find((p) => p.id === id).headerWidth;
+
+  check(
+    "an icon widens its own card by the icon box plus its gutter",
+    widthOf(withIcon, "a") - widthOf(withoutIcon, "a") ===
+      SEQ.iconSize + SEQ.iconGap,
+    `${widthOf(withIcon, "a")} vs ${widthOf(withoutIcon, "a")}`,
+  );
+  check(
+    "a participant without one is not widened",
+    widthOf(withIcon, "b") === widthOf(withoutIcon, "b"),
+  );
+  check(
+    "the slug reaches the renderer on the laid participant",
+    withIcon.participants.find((p) => p.id === "a").icon === "nextjs" &&
+      withIcon.participants.find((p) => p.id === "b").icon === undefined,
+  );
+  /* The reason the width is measured at all: an icon drawn without being
+     measured would either overlap the name or push it past the card. */
+  check(
+    "the name plus the icon still fits inside the card",
+    estimateTextWidth("Storefront Web Application", SEQ.nameFontSize) +
+      SEQ.iconSize +
+      SEQ.iconGap <=
+      widthOf(withIcon, "a"),
+  );
+  {
+    /* At the minimum width the icon costs nothing — there is already slack
+       inside the card — and the card must not shrink below the floor to
+       "make room" either. */
+    const short = layoutSequence(
+      parseSequenceText(
+        'archlab 1.0 sequence\ntitle "T"\n\n@sequence\n  a "A" @nextjs\n  b "B"\n\n  a -> b : "x"\n',
+      ),
+    );
+    check(
+      "a short name keeps the minimum card width, icon or not",
+      widthOf(short, "a") === SEQ.headerMinWidth &&
+        widthOf(short, "b") === SEQ.headerMinWidth,
+      `${widthOf(short, "a")} / ${widthOf(short, "b")}`,
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */

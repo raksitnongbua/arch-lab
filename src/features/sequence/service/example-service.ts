@@ -84,11 +84,11 @@ description "Where an order stops being a promise: authorise, capture, and the t
 @sequence
   autonumber
   box "Our services" tint=#bfdfff
-    api:participant "Order API" [Go]
-    ledger:participant "Ledger" [PostgreSQL]
+    api:participant "Order API" @golang [Go]
+    ledger:participant "Ledger" @postgresql [PostgreSQL]
   box "Third party" tint=#ffe4e1
-    psp:participant "Card Processor" [Stripe]
-    risk:participant "Fraud Scoring"
+    psp:participant "Card Processor" @external [Stripe]
+    risk:participant "Fraud Scoring" @ai-model
 
   rect tint=#bfdfff
     api ->+ psp : "Authorise the card" [REST]
@@ -130,7 +130,7 @@ const SOURCES: readonly SequenceExampleSource[] = [
   {
     id: "payment-capture",
     blurb:
-      "Lifelines bracketed into ours and theirs, the authorisation leg highlighted, and the two ways a capture ends — the box, rect, critical and break constructs on one flow.",
+      "Lifelines bracketed into ours and theirs with an icon each, the authorisation leg highlighted, and the two ways a capture ends — box, rect, critical, break and @icon on one flow.",
     text: PAYMENT_CAPTURE,
   },
 ];

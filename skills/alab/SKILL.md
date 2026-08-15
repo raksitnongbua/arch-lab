@@ -360,9 +360,9 @@ title "Checkout"
 
 @sequence
   autonumber
-  cust:actor "Customer"
-  web "Storefront" [Next.js]
-  api:participant "Order API" [Go]
+  cust:actor "Customer" @person
+  web "Storefront" @nextjs [Next.js]
+  api:participant "Order API" @golang [Go]
 
   cust -> web : "Clicks Place order"
   web ->+ api : "POST /orders" [HTTPS]
