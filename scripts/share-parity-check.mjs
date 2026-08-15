@@ -71,6 +71,13 @@ check(
 /* The wrapper must stay a CONFIGURATION of the shared control, never an
    implementation. Any of these appearing in it means someone started a second
    copy — the exact failure mode this check exists to catch. */
+/* Tested on CODE, with comments stripped first. The wrapper's header explains
+   why its route is short and names the ceiling the URL competes with, which is
+   exactly the comment this codebase wants — and matching the bare word would
+   fail it for saying so. Only real use is a second implementation. */
+const wrapperCode = wrapper
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/(?<!:)\/\/[^\n]*/g, "");
 for (const forbidden of [
   "encodeShareFragment",
   "mintExpiry",
@@ -80,7 +87,7 @@ for (const forbidden of [
 ]) {
   check(
     `the sequence wrapper does not reimplement the panel (no ${forbidden})`,
-    !wrapper.includes(forbidden),
+    !wrapperCode.includes(forbidden),
   );
 }
 
@@ -144,17 +151,21 @@ check(
 
 /* --- 3. each viewer states only its genuine differences ------------------- */
 
+/* Both mint onto the SAME route now, which is the point of the merge: the
+   playground is one page, and a share link carries its own document so it
+   needs no seed in the URL at all. Two minting sites that can drift, will —
+   so they are asserted to agree rather than each asserted separately. */
 check(
-  "the C4 shell shares onto /view/c4",
-  c4Shell.includes('route="/view/c4"'),
+  "both viewers share onto the one playground route",
+  c4Shell.includes('route="/view"') && wrapper.includes('"/view"'),
 );
 check(
-  // The SHORT alias, not the playground's own address: /view/seq forwards to
-  // /view/sequence with the fragment intact, and spends 5 fewer of the URL
-  // characters the payload is budgeted against (share-capacity-check.mjs
-  // owns the deeper assertions about that arrangement).
-  "the sequence wrapper shares onto /view/seq",
-  wrapper.includes('"/view/seq"'),
+  // Bare `/view`, not a seeded path: the seed moved to `?d=` and a share link
+  // does not carry one — it supplies the document and the reader detects the
+  // kind. share-capacity-check.mjs owns the deeper assertions about the
+  // budget this route shares with the payload.
+  "the sequence wrapper mints no seed into the link",
+  !wrapperCode.includes("/view/seq") && !wrapperCode.includes("?d="),
 );
 check(
   "the sequence wrapper omits the diagram pointer (no sub-diagrams to point at)",

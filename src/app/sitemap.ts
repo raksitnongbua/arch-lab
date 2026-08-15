@@ -24,17 +24,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/editor",
     "/syntax",
     "/validate",
-    /* `/view` is deliberately ABSENT: it renders the same page as `/view/c4`
-       and canonicals to it, and asking a crawler to index a URL that points
-       its canonical elsewhere is two signals disagreeing. The page stays
-       reachable and still opens `/view#m=…` share links; it just does not
-       compete with the page it duplicates. */
-    "/view/c4",
-    /* The SHORT route, not `/view/sequence`: the pair swapped roles (see
-       `app/view/seq/page.tsx`) and the long one is a noindex alias now.
-       Listing a route that canonicals elsewhere would ask a crawler to index
-       a trampoline. */
-    "/view/seq",
+    /* ONE playground URL. `/view/c4` and `/view/seq` were separate entries
+       when they were separate pages; they are forwarding aliases now, and
+       listing a route that canonicals elsewhere asks a crawler to index a
+       trampoline. The seed lives in `?d=`, which a sitemap has no reason to
+       enumerate — it changes the starting text, not the page. */
+    "/view",
     "/mcp",
   ];
 

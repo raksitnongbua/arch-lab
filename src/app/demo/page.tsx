@@ -268,10 +268,7 @@ export default function DemoPage(): React.JSX.Element {
         Have a model of your own? Paste it —{" "}
         <span className="font-mono text-foreground">.archlab.json</span> or
         Mermaid C4 code — into{" "}
-        <Link
-          href="/view/c4"
-          className="font-medium text-primary hover:underline"
-        >
+        <Link href="/view" className="font-medium text-primary hover:underline">
           view mode
         </Link>{" "}
         to render it right here in the browser, or write a sequence document in{" "}

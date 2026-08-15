@@ -14,8 +14,10 @@
  * BOTH DOCUMENT KINDS. The codec compresses arbitrary text, so what makes a
  * link a C4 link or a sequence link is the ROUTE it lands on, not the payload
  * (see `sequence/share/share-button.tsx`, which shares the same reasoning): a
- * C4 model mints against `/view/c4`, a sequence document against
- * `/view/sequence`. Detection is by the document's first meaningful line —
+ * Both kinds mint against bare `/view`: the playground is one route, and a
+ * share link needs no seed in its URL because it carries the document and the
+ * reader detects the kind from the text. Detection here is by the first
+ * meaningful line —
  * the same sniff the playgrounds use — so an agent that authored a sequence
  * flow gets a working link from the same tool, not a C4 parse error.
  *
@@ -176,7 +178,7 @@ async function scopedOffers(
       diagram.id === file.rootDiagramId ? null : diagram.id,
       expiry,
     );
-    const url = `${origin}/view/c4#${fragment}`;
+    const url = `${origin}/view#${fragment}`;
     if (url.length > MAX_SHARE_URL_LENGTH) continue;
     offers.push({ diagramId: diagram.id, title: diagram.title, url });
   }
@@ -280,12 +282,13 @@ async function sequenceShareLink(
   if (minted.status === "error") return errorResult(minted.message);
 
   const fragment = await encodeShareFragment(payload, null, minted.expiry);
-  // Minted against `/view/seq`, the short alias that forwards to
-  // `/view/sequence` with the fragment intact: the route is part of the same
-  // length budget as the payload, so the alias's five saved characters go to
-  // the document instead. Links minted against the long route still open —
+  // Minted against bare `/view`. The route shares the payload's length
+  // budget, and the seed that used to sit in the path is a query param the
+  // link does not need: it carries its own document, and the reader detects
+  // the kind. `/view/seq` and `/view/sequence` still forward, so links minted
+  // before this keep opening.
   // the playground's address did not move, only what NEW links say.
-  const url = `${publicOrigin()}/view/seq#${fragment}`;
+  const url = `${publicOrigin()}/view#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
     return errorResult(
@@ -384,10 +387,9 @@ export async function createShareLink(
     diagramId ?? null,
     expiry,
   );
-  // Minted against /view/c4 — the C4 playground's address since /view became
-  // the chooser. Links minted before the move (`/view#m=…`) still resolve:
-  // the chooser forwards them with the fragment intact.
-  const url = `${publicOrigin()}/view/c4#${fragment}`;
+  // Minted against bare `/view` — see the sequence tool above for why the
+  // route carries no seed.
+  const url = `${publicOrigin()}/view#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
     // Refuse — but leave the caller holding something actionable in THIS

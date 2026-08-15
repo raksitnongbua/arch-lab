@@ -105,7 +105,7 @@ export default async function SequenceExamplePage({
             the playground, so no route is lost when that happens. */}
         <HandoffLink
           alabText={serializeSequenceText(example.file)}
-          path="/view/seq"
+          path="/view"
           label="Open in the playground"
         />
       </div>
