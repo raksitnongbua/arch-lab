@@ -38,6 +38,8 @@
     "check:vscode-grammar": "node scripts/vscode-grammar-check.mjs",
     "check:viewer-motion": "node scripts/viewer-motion-check.mjs",
     "check:mcp-motion": "node scripts/mcp-motion-check.mjs",
+    "check:icon-contrast": "node scripts/icon-contrast-check.mjs",
+    "check:icon-style": "node scripts/icon-style-check.mjs",
     "check:og-cards": "node scripts/og-cards-check.mjs",
     "build:skill": "node scripts/build-skill.mjs",
     "check:skill": "node scripts/skill-check.mjs"
@@ -54,6 +56,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.6.0",
+    "thesvg": "3.2.21",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },

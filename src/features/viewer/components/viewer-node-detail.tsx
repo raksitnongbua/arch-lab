@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import type { C4Edge, C4Level, C4Node } from "@/types";
 
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
+import { useIconStyle } from "@/lib/icon-style";
 
 import {
   C4_ABSTRACTION,
@@ -148,7 +149,8 @@ export function ViewerNodeDetail({
 }): React.JSX.Element {
   const { node, level, outgoing, incoming, drill } = detail;
   const { def } = resolveIcon(node);
-  const Icon = def.Svg;
+  const [iconStyle] = useIconStyle();
+  const Icon = def.byStyle[iconStyle];
   const hasConnections = outgoing.length > 0 || incoming.length > 0;
 
   return (

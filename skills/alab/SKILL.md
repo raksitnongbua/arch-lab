@@ -16,8 +16,8 @@ wrong in ways that look right.
 **You do not need a server to write these files.** `.alab` is plain text —
 use your own file tools. What this skill gives you is the grammar. What it
 cannot give you is the parser's verdict on a file you have written: for that,
-either connect the [arch-lab MCP server](https://arch-lab-dev.vercel.app/mcp) and call
-`validate_model`, or paste the file into the validator at https://arch-lab-dev.vercel.app/validate.
+either connect the [arch-lab MCP server](https://arch-lab.dev/mcp) and call
+`validate_model`, or paste the file into the validator at https://arch-lab.dev/validate.
 
 ## Contents
 
@@ -360,9 +360,9 @@ title "Checkout"
 
 @sequence
   autonumber
-  cust:actor "Customer"
-  web "Storefront" [Next.js]
-  api:participant "Order API" [Go]
+  cust:actor "Customer" @person
+  web "Storefront" @nextjs [Next.js]
+  api:participant "Order API" @golang [Go]
 
   cust -> web : "Clicks Place order"
   web ->+ api : "POST /orders" [HTTPS]

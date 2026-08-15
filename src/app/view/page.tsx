@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 
+import { cookies } from "next/headers";
+
 import { ViewPlayground } from "@/features/playground";
+import {
+  isCollapsedCookie,
+  SOURCE_FOLD_COOKIE,
+} from "@/features/playground/lib/source-fold";
 
 export const metadata: Metadata = {
   title: "Diagram playground — write it, see it rendered live",
@@ -39,7 +45,22 @@ export const metadata: Metadata = {
  * segments FIRST — so those two words are reserved model ids.
  * `[modelId]/page.tsx`'s generateStaticParams throws at build time if the
  * registry ever claims one.
+ *
+
+ * The rail fold is read from the request cookie and rendered SERVER-SIDE, so
+ * the pane is already in the right state in the first byte — see
+ * `playground/lib/source-fold.ts` for why the client-only versions of this
+ * all flashed. Reading a cookie opts this route out of static rendering,
+ * which is the honest price of server-rendering a per-reader preference.
  */
-export default function ViewPage(): React.JSX.Element {
-  return <ViewPlayground seed="c4" />;
+export default async function ViewPage(): Promise<React.JSX.Element> {
+  const store = await cookies();
+  return (
+    <ViewPlayground
+      seed="c4"
+      initialSourceCollapsed={isCollapsedCookie(
+        store.get(SOURCE_FOLD_COOKIE)?.value,
+      )}
+    />
+  );
 }

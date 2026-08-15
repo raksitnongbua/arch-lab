@@ -309,8 +309,8 @@ check("the advertised origin comes from the request, not a constant", () => {
     requestOrigin((name) => headers[name.toLowerCase()] ?? null);
 
   assert.equal(
-    from({ host: "arch-lab-dev.vercel.app" }),
-    "https://arch-lab-dev.vercel.app",
+    from({ host: "arch-lab.dev" }),
+    "https://arch-lab.dev",
   );
   assert.equal(
     from({ host: "internal:3000", "x-forwarded-host": "arch-lab.example" }),

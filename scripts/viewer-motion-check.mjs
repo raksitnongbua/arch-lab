@@ -314,6 +314,48 @@ check("the export paints the drift with the canvas's resolved token", () => {
 });
 
 /* ----------------------------------------------------------------------- */
+/* The playground's rail fold is decided by the SERVER                      */
+/* ----------------------------------------------------------------------- */
+
+check(
+  "the rail fold is read from a cookie on the server, not after paint",
+  () => {
+    /* The client-only versions of this all flashed, and one of them looked
+     correct: `next/script` with `strategy="beforeInteractive"` does not emit
+     an executable inline tag, it pushes into `self.__next_s` for Next's
+     runtime to run after first paint. The only arrangement with nothing to
+     correct is the server rendering the right markup, so these assertions
+     guard that shape rather than any particular implementation of a fallback. */
+    const fold = read("src/features/playground/lib/source-fold.ts");
+    assert.match(fold, /SOURCE_FOLD_COOKIE/, "the preference is not a cookie");
+    /* USE, not the word — the comment explaining why localStorage was wrong is
+     the most valuable line in that file and must not trip its own check. */
+    assert.doesNotMatch(
+      fold,
+      /localStorage\s*\.\s*(?:get|set)Item/,
+      "localStorage is invisible to the server, which is what caused the flash",
+    );
+    for (const route of [
+      "src/app/view/page.tsx",
+      "src/app/view/c4/page.tsx",
+      "src/app/view/seq/page.tsx",
+    ]) {
+      const source = read(route);
+      assert.match(
+        source,
+        /initialSourceCollapsed=\{isCollapsedCookie\(/,
+        `${route} does not pass the stored fold into the playground`,
+      );
+    }
+    assert.match(
+      read("src/features/playground/lib/use-source-fold.ts"),
+      /\(\) => initial/,
+      "the server snapshot must be what the server rendered, or hydration corrects it visibly",
+    );
+  },
+);
+
+/* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

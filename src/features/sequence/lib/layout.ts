@@ -120,6 +120,19 @@ export const SEQ = {
    */
   descriptionMaxLines: 3,
 
+  /* ---- the participant icon -----------------------------------------------
+   * Drawn INSIDE the card, left of the name, the way a C4 node wears its own
+   * — one visual vocabulary across the two document kinds, since a
+   * participant and a container are usually the same system drawn twice.
+   *
+   * It is 16px square with a 6px gutter, and both numbers are REAL LAYOUT:
+   * the card's width is derived from its text, so an icon that drew without
+   * being measured would either overlap the name or push it past the card's
+   * edge. `planColumns` adds `iconSize + iconGap` to the name's measured
+   * width for exactly the participants that carry one. */
+  iconSize: 16,
+  iconGap: 6,
+
   /* ---- participant boxes (`SequenceBox`) ----------------------------------
    * The bracket is drawn AROUND the header cards, not above them, so it reads
    * as "these lifelines are one thing" rather than as a second, unrelated
@@ -218,6 +231,8 @@ export interface LaidParticipant {
   id: string;
   name: string;
   kind: SequenceParticipantKind;
+  /** Icon slug from the shared registry; the renderer resolves it. */
+  icon?: string;
   technology?: string;
   description?: string;
   /** Lifeline x — the centre of the header box. */
@@ -623,7 +638,12 @@ function planColumns(file: SequenceLabFile): ColumnPlan {
 
   const headerWidths = new Map<string, number>();
   for (const p of file.participants) {
-    const nameW = estimateWidth(p.name, SEQ.nameFontSize);
+    /* The icon shares the name's row, so its box and gutter widen THAT line
+       and not the technology line below it — measuring the wider of the two
+       rows is what the card's width has always been. */
+    const nameW =
+      estimateWidth(p.name, SEQ.nameFontSize) +
+      (p.icon === undefined ? 0 : SEQ.iconSize + SEQ.iconGap);
     const techW =
       p.technology === undefined
         ? 0
@@ -765,6 +785,7 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
     // Absent means "unstated"; the model keeps the omission (see
     // types/sequence.ts) but a renderer treats it as `participant`.
     kind: p.kind ?? "participant",
+    ...(p.icon !== undefined ? { icon: p.icon } : {}),
     ...(p.technology !== undefined ? { technology: p.technology } : {}),
     ...(p.description !== undefined ? { description: p.description } : {}),
     x: xById.get(p.id) ?? SEQ.marginX,

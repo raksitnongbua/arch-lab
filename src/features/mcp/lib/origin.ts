@@ -37,8 +37,14 @@
  * Kept correct as a courtesy, not relied upon: `documentedOrigin` reaches this
  * only outside a request, and everything else prefers configuration or the
  * request itself.
+ *
+ * It is now the same origin the FORMAT already claims — `.alab` and
+ * `.archlab.json` documents carry `$schema
+ * "https://arch-lab.dev/schema/v1/…"`, written long before the site answered
+ * there. Those two agreeing is worth something: a reader who follows the
+ * schema URL out of a file they were sent now arrives somewhere real.
  */
-export const DEFAULT_PUBLIC_ORIGIN = "https://arch-lab-dev.vercel.app";
+export const DEFAULT_PUBLIC_ORIGIN = "https://arch-lab.dev";
 
 /** Strips trailing slashes so callers can concatenate a path safely. */
 function normalize(origin: string): string {

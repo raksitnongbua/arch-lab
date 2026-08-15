@@ -19,6 +19,7 @@
 import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { useReactFlow, useViewport } from "@xyflow/react";
 
+import { IconStyleToggle } from "@/components/ui/icon-style-toggle";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
@@ -93,6 +94,12 @@ export function ZoomIndicator(): React.JSX.Element {
       >
         <Scan aria-hidden="true" className="size-4" />
       </button>
+      {/* A hairline, not a gap: the icon style is a different KIND of
+          control from the zoom cluster beside it — one changes how much you
+          see, the other how it is drawn — and grouping them without a divider
+          invites reading the toggle as another zoom step. */}
+      <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-border/70" />
+      <IconStyleToggle />
     </div>
   );
 }

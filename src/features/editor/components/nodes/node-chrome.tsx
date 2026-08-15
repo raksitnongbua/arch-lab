@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { C4_ABSTRACTION, SHAPE_LABEL } from "@/features/viewer/lib/labels";
 
 import { goToOriginal } from "../../lib/goto-original";
+import { useIconStyle } from "@/lib/icon-style";
+
 import { resolveIcon } from "../../lib/icons/registry";
 import { colorRoleForNode, EXTERNAL_DIM_CLASS } from "../../lib/node-colors";
 import { ChildBadge } from "./child-badge";
@@ -66,7 +68,8 @@ export function NodeChrome({
   // The component resolves through the registry itself; `data.resolvedIcon`
   // is a convenience for consumers without registry access.
   const { def, isFallback } = resolveIcon(node);
-  const Icon = def.Svg;
+  const [iconStyle] = useIconStyle();
+  const Icon = def.byStyle[iconStyle];
 
   // C4 metadata convention: [Container: Go] — the ABSTRACTION always (never
   // the silhouette's name: a cylinder is still a Container), technology when

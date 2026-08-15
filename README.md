@@ -425,6 +425,30 @@ auto-detection depends on. Arrows are `->` synchronous, `~>` asynchronous,
 with no `end` keyword, because a dedent already says where a fragment stops.
 Conversion is lossless in both directions, proven by `pnpm check:sequence`.
 
+**Icons on lifelines.** A participant takes the same `@icon` a C4 node does,
+in the same place on the line and from the same registry:
+
+```
+  api:participant "Order API" @golang [Go 1.22]
+  db:participant "Orders DB" @postgresql [PostgreSQL 16]
+```
+
+One vocabulary across both document kinds, deliberately — a participant and a
+container are usually the same system drawn twice, and two icon namespaces
+would let them disagree about what to call one. There is no `!`/`~` source
+suffix as C4 has: nothing infers icons for a sequence document, so there is no
+inference to override, and the model carries no `iconSource` to record a
+distinction nothing makes.
+
+The icon is REAL LAYOUT, not decoration painted on top: the card's width comes
+from its text, so `planColumns` adds the icon's box and gutter to the name's
+measured width for exactly the participants that carry one — otherwise it
+would overlap the name or push it past the card's edge. `pnpm
+check:sequence-layout` pins that, including the case where a short name keeps
+the minimum card width and the icon costs nothing. An unknown slug draws no
+icon rather than failing: a document naming an icon this build does not ship
+is still a valid document.
+
 **Grouping, and highlighting.** Two constructs say _these belong together_
 without saying anything about control flow:
 
@@ -623,7 +647,7 @@ server, so Claude Code, Claude Desktop, Cursor and anything else speaking the
 protocol can work with `.alab` models:
 
 ```bash
-claude mcp add --transport http arch-lab https://arch-lab-dev.vercel.app/api/mcp
+claude mcp add --transport http arch-lab https://arch-lab.dev/api/mcp
 ```
 
 Ten read-only tools: `validate_model`, `format_model`, `convert_model`,
@@ -678,7 +702,7 @@ a response. The caveat also travels in the server's `initialize` instructions,
 for agents that connect without a human reading this.
 
 Details, per-client setup and the honest limits are on
-[`/mcp`](https://arch-lab-dev.vercel.app/mcp); the implementation is
+[`/mcp`](https://arch-lab.dev/mcp); the implementation is
 documented in `src/features/mcp/README.md`.
 
 ## Getting started
@@ -880,3 +904,25 @@ on its own.
 - **Sequence diagrams, the data dictionary, and network diagrams are planned,
   not built.** Only C4 exists today.
 - **The editor is not in this release** — see above.
+
+## Third-party assets
+
+Icons come from two places and nowhere else. Product marks are from
+[`thesvg`](https://www.npmjs.com/package/thesvg) (package code MIT); the marks
+themselves remain the trademarks and property of their owners and are used
+nominatively — to label what a container runs — and embedded unmodified. Some
+upstream licences are no-derivatives, which is why the registry never
+recolours a mark; where a brand publishes no monochrome version one is
+produced from its own artwork, but only where the licence clearly permits a
+derivative. Per-brand terms are exported by each icon module (`license`,
+`url`) and recorded in the [thesvg repository](https://github.com/glincker/thesvg).
+
+Icons for things with no logo — a database, a queue, a person, an API — are
+from [lucide](https://lucide.dev), which also draws the application's own
+interface, so a diagram and the chrome around it share one visual language.
+
+Diagrams can be drawn with icons in one ink or in brand colours: a reader
+preference, not a document property, toggled beside the zoom control. Four
+marks stay coloured in mono mode because their licences permit neither an
+adopted nor a derived monochrome version. `pnpm check:icon-contrast` renders
+every icon on a light and a dark canvas and fails if any cannot be seen.

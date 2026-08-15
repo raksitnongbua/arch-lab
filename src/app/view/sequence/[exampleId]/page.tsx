@@ -1,9 +1,8 @@
-import { ArrowUpRight } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { buttonClasses } from "@/components/ui/button";
+import { HandoffLink } from "@/components/share/handoff-link";
+import { serializeSequenceText } from "@/features/archtext";
 import { SequenceExampleView } from "@/features/sequence/components/sequence-example-view";
 import {
   listSequenceExampleIds,
@@ -92,13 +91,23 @@ export default async function SequenceExamplePage({
             </p>
           ) : null}
         </div>
-        <Link
-          href="/view/sequence"
-          className={buttonClasses({ variant: "outline", size: "sm" })}
-        >
-          Write your own
-          <ArrowUpRight aria-hidden="true" />
-        </Link>
+        {/* Carries THIS example's document into the playground, rather than
+            opening an empty one. From a page showing a flow, the thing you
+            want to edit is that flow — the same reasoning as the C4 viewer's
+            "Edit this diagram", and the same codec, so no second hand-off
+            channel is invented. Nothing is uploaded: the document travels in
+            the URL fragment, which never reaches a server.
+
+            It replaced a plain link to the playground, which arrived blank and
+            left the reader to retype an example they were already looking at.
+            `HandoffLink` renders nothing where the browser cannot compress or
+            the document is too large for a URL; the header nav still reaches
+            the playground, so no route is lost when that happens. */}
+        <HandoffLink
+          alabText={serializeSequenceText(example.file)}
+          path="/view/seq"
+          label="Open in the playground"
+        />
       </div>
       <SequenceExampleView file={example.file} />
     </div>

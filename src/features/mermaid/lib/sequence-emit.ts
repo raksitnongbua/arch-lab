@@ -20,6 +20,10 @@
  *     message text is one string; appending "[Go]" to a name would turn a
  *     structured field into a naming convention, which is how it stops being
  *     data.
+ *   - `@icon` on a participant. Mermaid's sequence renderer draws no icons at
+ *     all, so there is nothing to map onto — and folding the slug into the
+ *     displayed name would put the word "postgresql" on a lifeline that
+ *     already says "Orders DB".
  *   - Everything the `.alab` HEADER carries beyond the title: description,
  *     owner, tags, timestamps, and any `!` forward-compatible field. Mermaid
  *     has a `title` and nothing else.
@@ -62,6 +66,7 @@ export const MERMAID_SEQUENCE_EXPORT_CAVEAT =
   "message's desc detail, [technology] on participants and messages, and " +
   "every header field except the title (description, owner, tags, " +
   "timestamps) have no Mermaid equivalent and are left behind, a participant " +
+  "icon has nowhere to go (Mermaid draws no icons), " +
   "whose kind is unstated comes back as a participant (Mermaid has only " +
   "participant and actor), and a rect that carries both a label and a tint " +
   "keeps the tint. Everything else survives: participants, boxes, messages, " +

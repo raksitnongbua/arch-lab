@@ -18,6 +18,9 @@ import { cn } from "@/lib/utils";
  *
  *   View — the one entry that puts a model on screen, so it leads, and it is
  *     the one entry drawn as a button (see `cta` below).
+ *   Demo — finished examples, next to View because the two answer the same
+ *     question ("show me one") from opposite ends: an empty canvas to fill,
+ *     or four models already built.
  *   Syntax, Validate, MCP — the reference trio, adjacent on purpose: reading
  *     the grammar, testing something against it, and pointing an agent at both
  *     are the same errand. MCP sits last of the three, being the one you reach
@@ -27,9 +30,14 @@ import { cn } from "@/lib/utils";
  *     that can disappear, so keeping it at the end means EDITOR_ENABLED toggles
  *     a trailing item rather than resequencing the whole nav.
  *
- * The Demo entry was removed on request (do not re-add it). The Editor entry
- * is gated behind EDITOR_ENABLED; flipping that flag restores it with no other
- * change.
+ * Demo replaced the outbound "About C4" link (2026-08). That link sent a
+ * first-time reader to another website to find out what a C4 diagram is,
+ * which is a strange thing for this site to do when it can show them four.
+ * With it gone, nothing in the header leaves the site, so the row no longer
+ * needs its outside-the-<nav> slot at all.
+ *
+ * The Editor entry is gated behind EDITOR_ENABLED; flipping that flag
+ * restores it with no other change.
  *
  * WHY THE ROW COLLAPSES BELOW `sm`. The original measurement: four entries
  * plus the wordmark and the theme toggle came to ~404px against a 393px
@@ -40,9 +48,11 @@ import { cn } from "@/lib/utils";
  * overflow again at 375px (iPhone SE, 13 mini) — one more entry, one longer
  * label, or one wider system font tips it. Shaving per-entry pixels has run
  * out of viewport, so below `sm` the entries move behind a single menu button
- * instead. That also returns the wordmark to phones (they showed only the
- * mark) and makes About C4 reachable on a phone at all — it was `hidden`
- * below `sm` with no fallback.
+ * instead, which also returns the wordmark to phones (they showed only the
+ * mark). The count has since changed again — Demo arrived, About C4 left —
+ * but the conclusion does not depend on the exact number: the row ran out of
+ * viewport, and the menu is what makes adding an entry a content decision
+ * rather than a layout one.
  *
  * The mobile panel is the same non-trapping popover `ui/zoom-menu.tsx` argues
  * for: Escape-to-close, pointerdown-outside-to-close, no focus trap. It is a
@@ -64,8 +74,8 @@ const NAV_LINKS: ReadonlyArray<{
   /**
    * Drawn as a button-styled call to action rather than a text link. A
    * button, not a group separator, because a separator only splits the row
-   * into clusters — a reader still sees five equally-weighted text links and
-   * no answer to "where do I start". The button silhouette is the one
+   * into clusters — a reader still sees a row of equally-weighted text links
+   * and no answer to "where do I start". The button silhouette is the one
    * affordance readers already rank above plain links. It uses the `outline`
    * variant, not `primary`: this header renders on every route, and a filled
    * primary button in permanent view would compete with the content's own
@@ -75,9 +85,16 @@ const NAV_LINKS: ReadonlyArray<{
 }> = [
   // View leads: it is the one place you can actually put a model on screen,
   // where the header otherwise offered three ways to read ABOUT the format and
-  // none to use it. This is not the removed Demo entry — that pointed at the
-  // bundled examples index, this is the playground itself.
+  // none to use it. Demo is a different promise — finished examples to look
+  // at, rather than an empty canvas to fill — which is why it sits second and
+  // not as the CTA.
   { href: "/view", label: "View", cta: true },
+  // Demo was dropped from this list once, when View replaced it, on the
+  // reasoning that a reader wants to USE the tool rather than browse samples.
+  // It is back (2026-08) in place of the outbound "About C4" link: sending a
+  // first-time reader to another website to learn what a C4 diagram is was a
+  // worse answer than showing them four finished ones here.
+  { href: "/demo", label: "Demo" },
   { href: "/syntax", label: "Syntax" },
   { href: "/validate", label: "Validate" },
   { href: "/mcp", label: "MCP", status: MCP_STATUS_LABEL },
@@ -186,18 +203,6 @@ export function Header(): React.JSX.Element {
             </nav>
           ) : null}
 
-          <a
-            href="https://c4model.com"
-            target="_blank"
-            rel="noreferrer noopener"
-            className={cn(
-              "hidden rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-flex",
-              FOCUS_RING,
-            )}
-          >
-            About C4
-          </a>
-
           {/* Separates in-app routes from the theme control without adding a
               third gap size. Hidden on narrow screens where the row is tight. */}
           <span
@@ -256,24 +261,6 @@ export function Header(): React.JSX.Element {
               />
             ))}
           </nav>
-          {/* About C4 rides in the panel because below `sm` this is its only
-              home — the row's copy is display-none there. Outside the <nav>,
-              as on the row: it leaves the site, so it is not primary
-              navigation. */}
-          <div className="border-t border-border/60 p-3">
-            <a
-              href="https://c4model.com"
-              target="_blank"
-              rel="noreferrer noopener"
-              onClick={closeMenu}
-              className={cn(
-                "flex w-full rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground",
-                FOCUS_RING,
-              )}
-            >
-              About C4
-            </a>
-          </div>
         </div>
       ) : null}
     </header>
