@@ -5,7 +5,7 @@ import { Validator } from "@/features/validate";
 export const metadata: Metadata = {
   title: "Validate a model — arch-lab",
   description:
-    "Check .alab text, arch-lab JSON, or Mermaid C4 against the real parsers. Get the exact line and column of any problem, and a summary of what a valid model contains. Runs entirely in your browser.",
+    "Check .alab, arch-lab JSON or Mermaid C4 against the real parsers and get the exact line and column of any problem. Runs entirely in your browser.",
   alternates: { canonical: "/validate" },
 };
 

@@ -5,7 +5,7 @@ import { ViewPlayground } from "@/features/playground";
 export const metadata: Metadata = {
   title: "Sequence diagram playground — write it, then explore it",
   description:
-    "Write .alab sequence text or paste a Mermaid sequenceDiagram and see the whole flow at once: activation bars, notes and nested fragments. Click any message or participant to animate and inspect it. Everything stays in your browser.",
+    "Write .alab sequence text or paste a Mermaid sequenceDiagram and click through the flow message by message. Free, no account, runs in your browser.",
   alternates: { canonical: "/view/seq" },
 };
 

@@ -1212,6 +1212,11 @@ export function ViewPlayground({
                 </div>
                 <ViewerShell
                   key={shellEpoch}
+                  /* The page owns the `h1`; the model's title is a level
+                     below it here. Two `h1`s left `/view` and `/view/c4`
+                     with no primary topic for a crawler and no primary
+                     heading for a screen reader. */
+                  titleAs="h2"
                   model={doc.synced.model}
                   initialDiagramId={sharedInitialDiagram ?? undefined}
                   share={{ kind: "payload", text: doc.synced.aftText }}

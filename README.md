@@ -718,6 +718,7 @@ Then open <http://localhost:3000>.
 | `pnpm check:sequence-collapse` | Proves folding a participant's dependencies: on the real example, collapsing Order API hides exactly Payments and Orders DB — not Storefront, which calls it, and not the Customer, which it emails but which also acts elsewhere. Also that folding is transitive, that a shared service stops the cascade, that the filtered file leaves no message pointing at a hidden participant and no empty fragment, and that it still lays out.                                                             |
 | `pnpm check:sequence-motion`   | Proves idle motion's cross-file facts, which no type can catch: the comet's bands still match the C4 viewer's own dasharrays and offsets (read from its stylesheet, so "same as C4" cannot rot) while its clock stays deliberately slower, solid kinds are never given a dasharray (a dashed sync arrow reads as async), the reply's keyframes advance exactly its dash period, the head stays low-duty, and reduced motion removes the comet rather than parking three bright stripes on every line. |
 | `pnpm check:syntax-docs`       | Proves the `/syntax` reference page: every `.alab` snippet it displays parses with the real parser — C4 snippets through the C4 parser and sequence snippets through the sequence one, each first confirmed to be DETECTED as that kind — and every deliberately-broken snippet fails with exactly the line, column and message the page shows.                                                                                                                                                       |
+| `pnpm check:seo`               | Pins the SEO invariants that are invisible when broken: every meta description inside the 160-character budget a result actually renders, every indexable route naming a canonical, no two routes self-canonicalising to the same content, no sitemap entry that canonicals elsewhere, structured data derived from the tool catalogue rather than hand-typed, and no deprecated schema type.                                                                                                         |
 | `pnpm check:view-input`        | Proves the merged `/view` reader: all five accepted shapes detect as the right document kind, both route seeds parse, failures keep the located line/column (or JSON path) the caret quote needs, and nothing recognisable is answered with "unknown format". Also pins the module's purity — it loads through Node's type stripping, so a barrel import that drags in a `.tsx` fails here.                                                                                                           |
 | `pnpm check:validate-samples`  | Proves the `/validate` page's sample documents: each one checks out exactly as the page claims it will.                                                                                                                                                                                                                                                                                                                                                                                               |
 | `pnpm check:advisories`        | Proves the [review notes](#c4-conformance): every rule fires on a document that violates it, no rule fires on one that does not, none of them ever changes the verdict, and every rule cites its source — c4model.com for the C4 family, the constant that defines the limit for the format family. The title cap is proven on both document kinds, at the boundary, and in code points rather than UTF-16 units.                                                                                     |
@@ -758,6 +759,72 @@ arch-lab/
 Each feature is consumed only through its `index.ts` barrel; nothing outside a
 feature imports its internals. The saved-file shape has exactly one definition
 (`src/types/`); extend it rather than declaring a parallel one.
+
+## Discoverability
+
+Search and link previews are treated as part of the product, and the rules
+that keep them honest are pinned by `pnpm check:seo` rather than left to
+review.
+
+**Descriptions are budgeted.** A result truncates around 155–160 characters
+and a link preview around 200, so a longer one is copy written for nobody.
+Five routes were running 195–341, including the site-wide `APP_DESCRIPTION`
+that doubles as the Open Graph and Twitter text, whose back half was the
+roadmap.
+
+**One URL per page.** `/view` and `/view/c4` rendered the same playground with
+the same seed and each named itself canonical — two URLs competing, with the
+winner picked on signals nobody chose. `/view` canonicals into `/view/c4` now
+and leaves the sitemap, while still rendering, because `/view#m=…` share links
+minted before the split have to keep opening. `/view/sequence` does the same
+into `/view/seq`.
+
+**One `h1` per page.** The viewer shell renders the model's title, which is
+the page heading on `/view/[modelId]` and a level below it inside the
+playground — where the page has its own. It takes a `titleAs` prop instead of
+assuming, because two `h1`s leave both a screen reader's heading list and a
+crawler's topic signal with no primary.
+
+**Structured data is derived.** The home page carries a `WebSite` +
+`SoftwareApplication` graph; `/mcp` carries one for the SERVER it documents,
+whose `featureList` is read from the same catalogue the server registers from,
+so the markup cannot advertise a tool that does not exist. Deliberately no
+`FAQPage` (a Google answer type for government and health sites) and no
+`HowTo` (deprecated in 2023).
+
+### Being readable by assistants
+
+Half this product's pitch is that an AI agent authors your diagrams, so being
+absent from the assistants people ask "how do I write a C4 diagram as text"
+would mean losing the audience most likely to want it. Four things follow, and
+`pnpm check:seo` pins all of them.
+
+**`/llms.txt`** is the index — what the site is, the MCP endpoint, the tool
+names, where the grammar lives. **`/llms-full.txt`** is the content: the whole
+grammar, every tool, and what each format conversion drops, as one plain-text
+document. Both are route handlers rather than files in `public/`, because
+every fact in them comes from the MCP catalogue and the shared syntax
+reference — the one document `check:syntax-docs` verifies example by example
+against the real parser. A hand-maintained copy would be a second version to
+keep true, and the only thing worse than no machine-readable grammar is a
+stale one.
+
+**The AI crawlers are named in `robots.txt`** even though `*` already allows
+them. A named rule cannot be revoked by accident: the blanket rule is one
+careless `disallow` away from taking them with it, and that failure is silent
+— nothing breaks, the site simply stops being citable. Training crawlers are
+deliberately neither listed nor blocked; `*` decides for them, which is not a
+question this file should answer on the owner's behalf.
+
+**The pages that carry answers are server-rendered**, because AI crawlers do
+not execute JavaScript. That is already true of `/`, `/mcp` and `/syntax`, and
+now asserted rather than assumed.
+
+**The landing page opens with a definition** — "arch-lab is a browser-based
+editor for architecture diagrams written as plain text" — rather than with an
+action. Both audiences want that sentence: a newcomer asking what this is, and
+an assistant asked the same question, which extracts an "X is a Y that Z"
+sentence and paraphrases anything else.
 
 ## Theming
 

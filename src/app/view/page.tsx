@@ -5,8 +5,21 @@ import { ViewPlayground } from "@/features/playground";
 export const metadata: Metadata = {
   title: "Diagram playground — write it, see it rendered live",
   description:
-    "One playground for every document arch-lab reads: write .alab (C4 or sequence), paste arch-lab JSON, or paste Mermaid — the format is auto-detected and the diagram renders as you type. Share links, image export, and a lossless JSON twin for C4 models. Everything runs in your browser.",
-  alternates: { canonical: "/view" },
+    "Write .alab, arch-lab JSON or Mermaid — the format is detected and the diagram renders as you type. Runs entirely in your browser.",
+  /**
+   * CANONICAL TO `/view/c4`, not to itself, because this page and that one
+   * are the SAME page: the merged playground with the same C4 seed. Two URLs
+   * serving identical content compete, and a search engine picks a winner on
+   * signals nobody chose. `/view/c4` is the one to keep — it carries the
+   * intent-specific title, description and social card, and `/view/seq` holds
+   * the other kind, so between them the two document kinds are covered and
+   * this route has no distinct intent left of its own.
+   *
+   * The page stays, and stays rendering: `/view#m=…` share links minted
+   * before the split still land here and must open in place. A canonical is a
+   * consolidation signal, not a redirect.
+   */
+  alternates: { canonical: "/view/c4" },
 };
 
 /**

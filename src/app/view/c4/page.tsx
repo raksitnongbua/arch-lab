@@ -5,7 +5,7 @@ import { ViewPlayground } from "@/features/playground";
 export const metadata: Metadata = {
   title: "Write your own C4 model — live editor",
   description:
-    "Edit arch-lab text (.alab), arch-lab JSON, or Mermaid C4 and watch the diagram re-render live. The JSON pane stays in lossless two-way sync, the format toggle converts in place, and the diagram exports as an image. Everything stays in your browser.",
+    "Edit .alab, arch-lab JSON or Mermaid C4 and watch the C4 diagram re-render live. Drill into any box, export as an image. Free, no account, runs in your browser.",
   alternates: { canonical: "/view/c4" },
 };
 

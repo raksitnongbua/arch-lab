@@ -5,7 +5,7 @@ import { SyntaxReference } from "@/features/syntax-docs";
 export const metadata: Metadata = {
   title: "The .alab syntax — arch-lab text format reference",
   description:
-    "Reference for the .alab text format: a readable, Mermaid-like, lossless twin of .archlab.json. Header lines, diagrams, nodes, edges, unknown-field escapes, indentation rules and error format — every example verified against the real parser.",
+    "The .alab text format, construct by construct — nodes, edges, drill-down, sequence messages and fragments. Every example is verified against the real parser.",
   alternates: { canonical: "/syntax" },
 };
 

@@ -6,7 +6,7 @@ import { listViewerModelIds } from "@/features/viewer";
 
 /**
  * Every page a crawler should know about. The static routes are written out
- * by hand — there are nine and they change with the router, not with data —
+ * by hand — there are eight and they change with the router, not with data —
  * while the `/view/[modelId]` entries come from the same registry that feeds
  * `generateStaticParams`, so a bundled example added there appears here
  * without anyone remembering a second list.
@@ -24,7 +24,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/editor",
     "/syntax",
     "/validate",
-    "/view",
+    /* `/view` is deliberately ABSENT: it renders the same page as `/view/c4`
+       and canonicals to it, and asking a crawler to index a URL that points
+       its canonical elsewhere is two signals disagreeing. The page stays
+       reachable and still opens `/view#m=…` share links; it just does not
+       compete with the page it duplicates. */
     "/view/c4",
     /* The SHORT route, not `/view/sequence`: the pair swapped roles (see
        `app/view/seq/page.tsx`) and the long one is a noindex alias now.
