@@ -165,6 +165,7 @@ export function ViewerShell({
   onDiagramChange,
   defaultImmersive = false,
   tour: tourEnabled = true,
+  titleAs: TitleTag = "h1",
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -190,6 +191,16 @@ export function ViewerShell({
    * one first visit somewhere it does not apply.
    */
   tour?: boolean;
+  /**
+   * Heading level for the model's title.
+   *
+   * `h1` is right where this shell IS the page — `/view/[modelId]`, whose
+   * only heading is the model's name. It is wrong inside the playground,
+   * which has its own `h1` above it: two `h1`s on one document leaves both
+   * a screen reader's heading list and a crawler's topic signal with no
+   * primary, and `/view` and `/view/c4` were shipping exactly that.
+   */
+  titleAs?: "h1" | "h2";
 }): React.JSX.Element {
   // Structural read-only-ness: freeze once, before the canvas ever sees it.
   const frozenModel = useMemo(() => deepFreeze(model), [model]);
@@ -375,9 +386,9 @@ export function ViewerShell({
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
+              <TitleTag className="truncate text-lg font-semibold tracking-tight text-foreground">
                 {frozenModel.title}
-              </h1>
+              </TitleTag>
               <Badge variant="accent">
                 <span className="size-1.5 rounded-full bg-accent" />
                 View mode · read-only

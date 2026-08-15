@@ -22,6 +22,7 @@
     "check:sequence-export": "node scripts/sequence-export-check.mjs",
     "check:syntax-docs": "node scripts/syntax-docs-check.mjs",
     "check:validate-samples": "node scripts/validate-samples-check.mjs",
+    "check:seo": "node scripts/seo-check.mjs",
     "check:view-input": "node scripts/view-input-check.mjs",
     "check:advisories": "node scripts/advisories-check.mjs",
     "check:export-archive": "node scripts/export-archive-check.mjs",

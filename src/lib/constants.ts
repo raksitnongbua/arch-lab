@@ -22,8 +22,21 @@ export const APP_NAME = "arch-lab";
  */
 export const EDITOR_ENABLED: boolean = true;
 
+/**
+ * The site's one description, and it is a BUDGETED string: it is the meta
+ * description, the Open Graph and Twitter description, and the `description`
+ * of the home page's JSON-LD. A search result truncates around 155–160
+ * characters and a link preview around 200, so anything past that is written
+ * for nobody. Keep it under 160.
+ *
+ * It used to run 267 characters and open with "a local-first workspace for
+ * architecture documentation" — a phrase nobody searches — then spend its
+ * back half on the roadmap, which was cut off in every result it appeared in.
+ * What survives leads with what the thing does and names the two features
+ * people arrive for.
+ */
 export const APP_DESCRIPTION =
-  "A local-first workspace for architecture documentation — C4 model diagrams and sequence diagrams today, with a data dictionary and network diagrams planned. Everything saves as plain, reviewable text you own, and an MCP server lets an AI agent author and validate it.";
+  "Write C4 and sequence diagrams as plain text, watch them render live in your browser, and let an AI agent author them over MCP. No account, nothing uploaded.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

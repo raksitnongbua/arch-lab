@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 
+import {
+  MCP_SERVER_NAME,
+  MCP_STATUS_LABEL,
+  MCP_TOOLS,
+} from "@/features/mcp/catalog";
 import { McpGuide } from "@/features/mcp/components/mcp-guide";
-import { documentedOrigin } from "@/features/mcp/lib/origin";
+import { documentedOrigin, publicOrigin } from "@/features/mcp/lib/origin";
+import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "MCP server (beta) — use arch-lab from your AI agent",
   description:
-    "Connect Claude Code, Claude Desktop, Cursor or any MCP client to arch-lab: validate .alab models against the real parser, convert between .alab, arch-lab JSON and Mermaid C4, read the verified syntax reference, and turn a model into a share link. Hosted, read-only, nothing stored. In beta — tool names and response wording may still change.",
+    "Connect Claude Code, Cursor or any MCP client and let your agent write C4 and sequence diagrams the real parser has already checked. Hosted, read-only.",
   alternates: { canonical: "/mcp" },
 };
 
@@ -28,7 +34,53 @@ export const metadata: Metadata = {
  * function invocation per view is a cheap price for a page that cannot be
  * wrong about itself.
  */
+/**
+ * Structured data for the SERVER this page documents — a distinct piece of
+ * software from the site itself, with its own endpoint and its own feature
+ * list, which is why it gets a node here rather than leaning on the home
+ * page's `SoftwareApplication`.
+ *
+ * `featureList` is READ FROM THE CATALOGUE the server registers from, so the
+ * markup cannot advertise a tool the server does not expose — the same rule
+ * the visible page already follows. A hand-typed list here would be a second
+ * place to forget when a tool is renamed.
+ *
+ * Deliberately NOT `FAQPage` or `HowTo`: the first is for government and
+ * healthcare answers and the second was deprecated in 2023, and a connect
+ * guide is neither.
+ */
+function mcpJsonLd(origin: string): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: `${APP_NAME} MCP server`,
+    alternateName: MCP_SERVER_NAME,
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Any (Model Context Protocol client)",
+    url: `${origin}/mcp`,
+    softwareVersion: MCP_STATUS_LABEL,
+    description:
+      "A Model Context Protocol server that lets an AI agent read, validate " +
+      "and convert arch-lab C4 and sequence documents against the real parser.",
+    featureList: MCP_TOOLS.map((tool) => tool.name),
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    isAccessibleForFree: true,
+  });
+}
+
 export default async function McpPage(): Promise<React.JSX.Element> {
   const headerList = await headers();
-  return <McpGuide origin={documentedOrigin((name) => headerList.get(name))} />;
+  return (
+    <>
+      {/* Built from `publicOrigin()` rather than the request host: a canonical
+          URL in structured data has to be the one canonical names, and the
+          visible endpoint below is host-derived for a different reason (it has
+          to work when pasted, whatever domain served it). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: mcpJsonLd(publicOrigin()) }}
+      />
+      <McpGuide origin={documentedOrigin((name) => headerList.get(name))} />
+    </>
+  );
 }
