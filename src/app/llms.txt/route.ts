@@ -54,14 +54,19 @@ Use the server for the two things a file editor cannot do alone: get the exact
 grammar, and get the real parser's verdict on something you wrote. There is no
 mutation API — you edit \`.alab\` files yourself.
 
+## Full reference
+
+- ${origin}/llms-full.txt — the whole grammar, every MCP tool, and what each
+  format conversion drops, as one plain-text document
+
 ## Pages
 
-- ${origin}/ — what this is
-- ${origin}/view/c4 — write a C4 model, rendered live
-- ${origin}/view/seq — write a sequence diagram, rendered live
-- ${origin}/syntax — the \`.alab\` syntax reference
-- ${origin}/validate — check a document and get a located verdict
-- ${origin}/demo — finished examples
+- ${origin}/ — what this is, in one screen
+- ${origin}/view/c4 — write a C4 model as text and see it rendered live
+- ${origin}/view/seq — write a sequence diagram and click through it
+- ${origin}/syntax — the \`.alab\` grammar, every example parser-verified
+- ${origin}/validate — paste a document, get a located verdict
+- ${origin}/demo — finished examples of both kinds
 `;
 
   return new Response(body, {

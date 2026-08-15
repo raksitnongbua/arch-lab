@@ -20,6 +20,12 @@
  *      up query strings and trailing variants as separate documents.
  *   5. **Structured data comes from the catalogue**, not from hand-typed
  *      lists that go stale the first time a tool is renamed.
+ *   6. **GEO**: the assistants people ask are named in robots.txt rather than
+ *      left to a `*` that one careless edit revokes; the pages carrying the
+ *      answers are server-rendered, because AI crawlers do not run
+ *      JavaScript; and `/llms-full.txt` embeds the SHARED syntax reference
+ *      rather than a copy, since the only thing worse than no machine-readable
+ *      grammar is a stale one.
  *
  * Source-level, deliberately: it runs in CI with no network and no browser,
  * and every one of these is decided in the source rather than at runtime.
@@ -185,6 +191,78 @@ console.log("\nagent-readable index");
       "a hand-typed endpoint is how a moved URL survives in print",
     );
   }
+}
+
+/* ----------------------------------------------------------------------- */
+/* 7. GEO: reachable by assistants, and quotable when reached               */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nGEO (what an assistant can reach and quote)");
+
+{
+  const robots = read("src/app/robots.ts");
+  /* Named rather than left to `*`, so removing one is a decision somebody
+     makes on purpose. The failure mode of losing them is silent: nothing
+     breaks, the site just stops being citable. */
+  for (const crawler of [
+    "GPTBot",
+    "OAI-SearchBot",
+    "ChatGPT-User",
+    "ClaudeBot",
+    "PerplexityBot",
+    "Google-Extended",
+  ]) {
+    check(`robots.txt names ${crawler}`, robots.includes(`"${crawler}"`));
+  }
+  check(
+    "every crawler rule still refuses /api/",
+    (robots.match(/disallow: "\/api\/"/g) ?? []).length >= 2,
+    "an agent belongs at the MCP endpoint through a client, not a crawl",
+  );
+
+  const full = "src/app/llms-full.txt/route.ts";
+  check("/llms-full.txt is served", existsSync(path.join(ROOT, full)));
+  if (existsSync(path.join(ROOT, full))) {
+    const source = read(full);
+    check(
+      "/llms-full.txt embeds the SHARED syntax reference, not a copy",
+      source.includes("syntaxReferenceMarkdown"),
+      "the one document `check:syntax-docs` verifies against the real parser",
+    );
+    check(
+      "/llms-full.txt nests the embedded reference under its own headings",
+      /replace\(\/\^## \/gm/.test(source),
+      "a flat outline tells an extractor every section is a peer topic",
+    );
+    check(
+      "/llms-full.txt lists the tools from the catalogue",
+      source.includes("MCP_TOOLS.map"),
+    );
+  }
+  check(
+    "/llms.txt points at the full document",
+    read("src/app/llms.txt/route.ts").includes("/llms-full.txt"),
+  );
+
+  /* AI crawlers do not execute JavaScript, so the pages that carry the
+     answers must not be client components. The playground may be — what it
+     renders is a document the reader pastes, not content to be cited. */
+  for (const [route, file] of [
+    ["/", "src/app/page.tsx"],
+    ["/mcp", "src/app/mcp/page.tsx"],
+    ["/syntax", "src/app/syntax/page.tsx"],
+  ]) {
+    check(
+      `${route} is server-rendered (AI crawlers do not run JS)`,
+      !read(file).startsWith('"use client"'),
+    );
+  }
+
+  check(
+    "the landing page opens with a definition, not an action",
+    /is a browser-based editor/.test(read("src/app/page.tsx")),
+    'an assistant asked "what is X" extracts "X is a Y that Z" and paraphrases the rest',
+  );
 }
 
 /* ----------------------------------------------------------------------- */

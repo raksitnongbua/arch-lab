@@ -792,13 +792,39 @@ so the markup cannot advertise a tool that does not exist. Deliberately no
 `FAQPage` (a Google answer type for government and health sites) and no
 `HowTo` (deprecated in 2023).
 
-**`/llms.txt`** states what the site is for a model reading it rather than a
-person — the MCP endpoint, the tool names, and where the grammar lives. It
-earns its place here more than on most sites: half the pitch is that an agent
-authors the diagrams, and a site that asks agents to use it while making them
-scrape a React page for the endpoint is arguing against itself. Every fact in
-it comes from the MCP catalogue, which is why it is a route handler and not a
-file in `public/`.
+### Being readable by assistants
+
+Half this product's pitch is that an AI agent authors your diagrams, so being
+absent from the assistants people ask "how do I write a C4 diagram as text"
+would mean losing the audience most likely to want it. Four things follow, and
+`pnpm check:seo` pins all of them.
+
+**`/llms.txt`** is the index — what the site is, the MCP endpoint, the tool
+names, where the grammar lives. **`/llms-full.txt`** is the content: the whole
+grammar, every tool, and what each format conversion drops, as one plain-text
+document. Both are route handlers rather than files in `public/`, because
+every fact in them comes from the MCP catalogue and the shared syntax
+reference — the one document `check:syntax-docs` verifies example by example
+against the real parser. A hand-maintained copy would be a second version to
+keep true, and the only thing worse than no machine-readable grammar is a
+stale one.
+
+**The AI crawlers are named in `robots.txt`** even though `*` already allows
+them. A named rule cannot be revoked by accident: the blanket rule is one
+careless `disallow` away from taking them with it, and that failure is silent
+— nothing breaks, the site simply stops being citable. Training crawlers are
+deliberately neither listed nor blocked; `*` decides for them, which is not a
+question this file should answer on the owner's behalf.
+
+**The pages that carry answers are server-rendered**, because AI crawlers do
+not execute JavaScript. That is already true of `/`, `/mcp` and `/syntax`, and
+now asserted rather than assumed.
+
+**The landing page opens with a definition** — "arch-lab is a browser-based
+editor for architecture diagrams written as plain text" — rather than with an
+action. Both audiences want that sentence: a newcomer asking what this is, and
+an assistant asked the same question, which extracts an "X is a Y that Z"
+sentence and paraphrases anything else.
 
 ## Theming
 

@@ -172,14 +172,23 @@ export default function Home() {
               , and an agent can write.
             </h1>
 
+            {/* A DEFINITION FIRST, then the detail. The lead used to open
+                "Describe a system in a few lines of text and arch-lab draws
+                it" — which describes an action and never says what the thing
+                IS. Both audiences want the same sentence: a newcomer asking
+                "what is this", and an assistant asked "what is arch-lab",
+                which extracts an "X is a Y that Z" sentence and paraphrases
+                anything else. Twelve words buys a claim that can be quoted
+                back correctly. */}
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
-              Describe a system in a few lines of text and{" "}
               <span className="font-mono text-base text-foreground sm:text-lg">
                 {APP_NAME}
               </span>{" "}
-              draws it — a C4 model you can drill into, or a sequence flow you
-              can click through message by message. Your AI agent can write that
-              text for you.
+              is a browser-based editor for architecture diagrams written as
+              plain text. Describe a system in a few lines and it draws it — a
+              C4 model you can drill into, or a sequence flow you can click
+              through message by message. Your AI agent can write that text for
+              you.
             </p>
 
             {/* ONE primary destination. The old hero offered three buttons and
