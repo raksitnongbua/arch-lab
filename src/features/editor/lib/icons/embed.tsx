@@ -151,6 +151,37 @@ export function hasBakedInk(svg: string): string | null {
 }
 
 /**
+ * The same artwork with its colour removed, so it inherits `currentColor`.
+ *
+ * THIS IS THE ONE PLACE A MARK IS MODIFIED, and it is deliberately narrow.
+ * The registry's rule is that a coloured mark is never recoloured — beyond
+ * diluting it, several upstream licences forbid derivatives outright — so
+ * this runs ONLY where the caller has checked the licence permits it
+ * (`derivedMono` in brand.tsx does that check and throws otherwise) and only
+ * to reach a monochrome rendering, which is the ordinary, sanctioned way to
+ * show a logo in one ink.
+ *
+ * `none` survives: it is not ink but the absence of it, and dropping it turns
+ * a stroke-only outline into a filled blob. `currentColor` survives for the
+ * same reason it exists — it is already the inheritance being asked for.
+ */
+export function stripInk(svg: string): string {
+  return svg
+    .replace(/\s(?:fill|stroke)="(?!none\b|currentColor\b)[^"]*"/g, "")
+    .replace(/\sstyle="([^"]*)"/g, (_match, decls: string) => {
+      const kept = decls
+        .split(";")
+        .filter(
+          (decl) =>
+            !/^\s*(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)/.test(decl),
+        )
+        .join(";")
+        .trim();
+      return kept === "" ? "" : ` style="${kept}"`;
+    });
+}
+
+/**
  * A registry-shaped component around one packaged mark. The inner markup goes in
  * via `dangerouslySetInnerHTML`: it is TRUSTED PACKAGE CONTENT, pinned by the
  * lockfile — never user input, never network — sanitised above for document

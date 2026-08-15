@@ -1,7 +1,7 @@
 import type { IconVariants } from "thesvg";
 
 import type { IconCategory } from "./categories";
-import { hasBakedInk, packagedSvgComponent } from "./embed";
+import { hasBakedInk, packagedSvgComponent, stripInk } from "./embed";
 import type { IconSource } from "./registry";
 
 /**
@@ -85,6 +85,13 @@ import {
   title as cockroachdbTitle,
   svg as cockroachdbSvg,
 } from "thesvg/cockroachdb";
+/* Mono artwork only — the package catalogues the company separately from the
+   product, and only the company entry carries a mono variant. Our slug stays
+   `cockroachdb` (monoFromAlternate explains why). */
+import {
+  variants as cockroachLabsVariants,
+  license as cockroachLabsLicence,
+} from "thesvg/cockroach-labs";
 import {
   slug as cplusplusSlug,
   title as cplusplusTitle,
@@ -140,6 +147,7 @@ import {
   slug as herokuSlug,
   title as herokuTitle,
   svg as herokuSvg,
+  license as herokuLicence,
 } from "thesvg/heroku";
 import {
   slug as influxdbSlug,
@@ -175,6 +183,7 @@ import {
   slug as mssqlSlug,
   title as mssqlTitle,
   svg as mssqlSvg,
+  license as mssqlLicence,
 } from "thesvg/microsoft-sql-server";
 import {
   slug as minioSlug,
@@ -275,6 +284,7 @@ import {
   slug as twilioSlug,
   title as twilioTitle,
   svg as twilioSvg,
+  license as twilioLicence,
 } from "thesvg/twilio";
 import {
   slug as vaultSlug,
@@ -286,7 +296,12 @@ import {
   title as vercelTitle,
   variants as vercelVariants,
 } from "thesvg/vercel";
-import { slug as vueSlug, title as vueTitle, svg as vueSvg } from "thesvg/vue";
+import {
+  slug as vueSlug,
+  title as vueTitle,
+  svg as vueSvg,
+  license as vueLicence,
+} from "thesvg/vue";
 
 /**
  * The upstream-shipped artwork that carries NO ink of its own, for the three
@@ -384,6 +399,93 @@ function colourOnly(svg: string): BrandArt {
  * shows the same ink-free artwork mono mode does, which is honest rather than
  * a gap: there is no colour being withheld.
  */
+/**
+ * Licences under which producing a monochrome rendering of a mark is
+ * unambiguously permitted. Deliberately an ALLOWLIST, not a denylist: the
+ * package also ships marks under `brand-use` and CC-BY-NC-SA, and the failure
+ * mode of guessing wrong is a licence breach rather than an ugly icon, so an
+ * unrecognised value must stop the build rather than be assumed permissive.
+ */
+const DERIVABLE_LICENCES = new Set([
+  "MIT",
+  "CC0-1.0",
+  "Apache-2.0",
+  "BSD-3-Clause",
+  "Unlicense",
+]);
+
+/**
+ * A mark whose monochrome version we PRODUCE, because upstream publishes none
+ * and the licence allows it.
+ *
+ * This is the single exception to "never modify a brand mark", and it is worth
+ * saying exactly why it is not a hole in that rule. The rule guards two
+ * things: the licence, and the mark's integrity. The licence is checked here
+ * and the build fails on anything not on the allowlist. Integrity survives
+ * because a one-ink rendering is how logos are shown in monochrome contexts
+ * everywhere — it is the entire premise of Simple Icons, which is where the
+ * package's own `mono` variants come from. We are producing the variant
+ * upstream simply has not got round to.
+ *
+ * It stays narrow on purpose: it runs only for marks with NO published mono,
+ * and the result is asserted ink-free, so a mark that survives stripping with
+ * colour intact (a `<style>` block, an embedded raster) fails the build rather
+ * than shipping half-recoloured.
+ */
+function derivedMono(slug: string, svg: string, licence: string): BrandArt {
+  if (!DERIVABLE_LICENCES.has(licence)) {
+    throw new Error(
+      `brand icon "${slug}": licence "${licence}" does not clearly permit a ` +
+        `derived work — leave it coloured in mono mode rather than guessing`,
+    );
+  }
+  const mono = stripInk(svg);
+  const remaining = hasBakedInk(mono);
+  if (remaining !== null) {
+    throw new Error(
+      `brand icon "${slug}": stripping ink left ${remaining} behind, so the ` +
+        `mark would render half-recoloured — use colourOnly() instead`,
+    );
+  }
+  return { colour: svg, mono };
+}
+
+/**
+ * A mark whose mono artwork lives under a DIFFERENT package slug than its
+ * colour artwork — the package catalogues some brands twice (the product and
+ * the company), and only one entry carries a mono variant.
+ *
+ * The registry slug is ours and never changes: a model in the wild says
+ * `@cockroachdb`, and repointing that at the package's own naming would break
+ * every document using it. Only the artwork is borrowed.
+ *
+ * The alternate's LICENCE is checked, not assumed. Vue is why: its mono lives
+ * under `vuedotjs`, which is CC-BY-NC-SA-4.0 — non-commercial and
+ * share-alike — so adopting it would have traded a cosmetic inconsistency for
+ * a licence problem. Vue takes the derived route from its own MIT artwork
+ * instead.
+ */
+function monoFromAlternate(
+  slug: string,
+  colour: string,
+  alternate: IconVariants,
+  licence: string,
+): BrandArt {
+  if (!DERIVABLE_LICENCES.has(licence)) {
+    throw new Error(
+      `brand icon "${slug}": the alternate artwork is licensed "${licence}" — ` +
+        `not clearly usable here`,
+    );
+  }
+  const mono = alternate["mono"];
+  if (mono === undefined || hasBakedInk(mono) !== null) {
+    throw new Error(
+      `brand icon "${slug}": the alternate ships no ink-free mono variant`,
+    );
+  }
+  return { colour, mono };
+}
+
 function alwaysMono(slug: string, variants: IconVariants): BrandArt {
   const markup = inkFreeVariant(slug, variants);
   return { colour: markup, mono: markup };
@@ -520,7 +622,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: vueSlug,
     name: vueTitle,
-    art: colourOnly(vueSvg),
+    art: derivedMono(vueSlug, vueSvg, vueLicence),
     category: "languages",
     aliases: ["vuejs", "nuxt"],
   },
@@ -542,7 +644,12 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: cockroachdbSlug,
     name: cockroachdbTitle,
-    art: colourOnly(cockroachdbSvg),
+    art: monoFromAlternate(
+      cockroachdbSlug,
+      cockroachdbSvg,
+      cockroachLabsVariants,
+      cockroachLabsLicence,
+    ),
     category: "databases",
     aliases: ["crdb", "distributed sql"],
   },
@@ -570,7 +677,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: mssqlSlug,
     name: mssqlTitle,
-    art: colourOnly(mssqlSvg),
+    art: derivedMono(mssqlSlug, mssqlSvg, mssqlLicence),
     category: "databases",
     aliases: ["mssql", "sql server"],
   },
@@ -657,7 +764,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: herokuSlug,
     name: herokuTitle,
-    art: colourOnly(herokuSvg),
+    art: derivedMono(herokuSlug, herokuSvg, herokuLicence),
     category: "cloud",
     aliases: ["paas", "dyno"],
   },
@@ -843,7 +950,7 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
   {
     slug: twilioSlug,
     name: twilioTitle,
-    art: colourOnly(twilioSvg),
+    art: derivedMono(twilioSlug, twilioSvg, twilioLicence),
     category: "saas",
     aliases: ["sms", "voice"],
   },

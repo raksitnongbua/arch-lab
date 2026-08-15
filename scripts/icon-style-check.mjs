@@ -45,6 +45,16 @@ const OVERLAY = read("src/features/editor/lib/icons/colour-overlay.tsx");
    overlay, so they live in embed.tsx — that is where these rules apply now. */
 const EMBED = read("src/features/editor/lib/icons/embed.tsx");
 
+/** Read OUT of brand.tsx so the two lists cannot drift. */
+const DERIVABLE = new Set(
+  [
+    ...(
+      /const DERIVABLE_LICENCES = new Set\(\[([\s\S]*?)\]\)/.exec(BRAND)?.[1] ??
+      ""
+    ).matchAll(/"([^"]+)"/g),
+  ].map((m) => m[1]),
+);
+
 let failures = 0;
 let assertions = 0;
 
@@ -319,6 +329,59 @@ console.log("\nevery artwork parses (a throw here takes down every page)");
       `${unparseable.join(", ")} — splitPackagedSvg would throw at module load`,
     );
   }
+}
+
+/* ----------------------------------------------------------------------- */
+/* 4d. Derived mono artwork is licensed for it                              */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nderived mono (the one place a mark is modified)");
+
+{
+  /* Producing a monochrome rendering is a DERIVATIVE WORK. It runs only for
+     marks upstream publishes no mono for, and only where the licence clearly
+     permits it — `vuedotjs` is why the check is not optional: the package
+     ships Vue's mono under CC-BY-NC-SA-4.0, non-commercial and share-alike,
+     so adopting it would have traded a cosmetic inconsistency for a licence
+     problem. Vue is derived from its own MIT artwork instead. */
+  const derived = [
+    ...BRAND.matchAll(/art: derivedMono\((\w+)Slug, \w+Svg, \w+Licence\)/g),
+  ].map((m) => m[1]);
+  const blocks = [
+    ...BRAND.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g),
+  ];
+
+  const offenders = [];
+  const stillPublished = [];
+  for (const name of derived) {
+    const block = blocks.find(([, bindings]) =>
+      new RegExp(`\\bslug as ${name}Slug\\b`).test(bindings),
+    );
+    if (block === undefined) continue;
+    const mod = require(`thesvg/${block[2]}`);
+    if (!DERIVABLE.has(String(mod.license))) {
+      offenders.push(`${block[2]} (${mod.license})`);
+    }
+    if (mod.variants?.mono !== undefined) stillPublished.push(block[2]);
+  }
+
+  check(
+    `every derived mono is licensed for a derivative (${derived.length} marks)`,
+    offenders.length === 0 && derived.length > 0,
+    offenders.length > 0
+      ? `${offenders.join(", ")} — leave these coloured rather than guessing`
+      : "none parsed — has derivedMono been renamed?",
+  );
+  check(
+    "nothing is derived that upstream now publishes a mono for",
+    stillPublished.length === 0,
+    `${stillPublished.join(", ")} — prefer the published variant; selection beats derivation`,
+  );
+  check(
+    "the licence allowlist is an allowlist, not a denylist",
+    /const DERIVABLE_LICENCES = new Set\(\[/.test(BRAND),
+    "an unrecognised licence must stop the build, not be assumed permissive",
+  );
 }
 
 /* ----------------------------------------------------------------------- */

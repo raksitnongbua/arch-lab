@@ -921,7 +921,10 @@ styles use artwork the package publishes rather than deriving any: mono mode
 selects each mark's upstream `mono` variant, and colour mode swaps the
 hand-authored mark for the vendor's own logo where one exists (35 of the 59).
 Icons for abstract concepts — `api`, `queue`, `person` — have no logo and keep
-their hand-authored glyph in both styles, tinted with the node's accent.
+their hand-authored glyph in both styles, tinted with the node's accent. Where
+a brand publishes no monochrome mark, one is produced from its own artwork,
+but only where the licence clearly permits a derivative; exactly one mark
+(dbt) permits neither and stays in colour in mono mode.
 Per-brand licence terms are recorded upstream: each icon module exports its
 `license` and source `url`, and the full metadata lives in the
 [thesvg repository](https://github.com/glincker/thesvg). The remaining
