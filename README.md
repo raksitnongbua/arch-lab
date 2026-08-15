@@ -924,7 +924,9 @@ Icons for abstract concepts — `api`, `queue`, `person` — have no logo and ke
 their hand-authored glyph in both styles, tinted with the node's accent. Where
 a brand publishes no monochrome mark, one is produced from its own artwork,
 but only where the licence clearly permits a derivative; exactly one mark
-(dbt) permits neither and stays in colour in mono mode.
+(dbt) permits neither and stays in colour in mono mode. Marks whose only
+published artwork is white ink or a wordmark are not carried at all — the
+hand-authored icon serves both styles for those, since it follows the theme.
 Per-brand licence terms are recorded upstream: each icon module exports its
 `license` and source `url`, and the full metadata lives in the
 [thesvg repository](https://github.com/glincker/thesvg). The remaining

@@ -94,11 +94,11 @@ console.log("ink detection (an attribute-only test shipped a bug)");
   const fn = /export function hasBakedInk\([\s\S]*?\n}/.exec(EMBED)?.[0] ?? "";
   check(
     "embed.tsx tests fill/stroke ATTRIBUTES",
-    /\\b\(\?:fill\|stroke\)="/.test(fn),
+    /\(\?:fill\|stroke\)=/.test(fn),
   );
   check(
     "embed.tsx also tests fill/stroke inside style=",
-    /style="\[\^"\]\*/.test(fn) && /fill\|stroke/.test(fn),
+    /style=/.test(fn) && /fill\|stroke/.test(fn),
     'Bun declares its ink as style="fill:#fbf0df" — an attribute-only test misses it',
   );
   check(
@@ -381,6 +381,101 @@ console.log("\nderived mono (the one place a mark is modified)");
     "the licence allowlist is an allowlist, not a denylist",
     /const DERIVABLE_LICENCES = new Set\(\[/.test(BRAND),
     "an unrecognised licence must stop the build, not be assumed permissive",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 4e. No artwork that cannot be seen, or cannot fit                        */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nartwork is legible in the slot it gets");
+
+{
+  /* Two defects that a build cannot catch, because neither is malformed:
+     white ink is a CORRECT file for a dark background we do not have, and a
+     wordmark is a correct logo for a slot we do not have. Both shipped: five
+     overlay icons rendered invisible on a light canvas, and Oracle's 7.7:1
+     logotype was an illegible smear at 16px. Found by rasterising the set and
+     looking at it — so these rules exist to make looking unnecessary. */
+  const isWhite = (colour) =>
+    /^#(fff|ffffff|fefefe|fffefc)$/i.test(colour) || colour === "white";
+
+  /* Which modules take the always-mono route, resolved from the entry list
+     back to the import block that named them. */
+  const alwaysMonoNames = new Set(
+    [...BRAND.matchAll(/art: alwaysMono\((\w+)Slug/g)].map((m) => m[1]),
+  );
+  const alwaysMonoModules = new Set(
+    [...BRAND.matchAll(/import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g)]
+      .filter(([, bindings]) =>
+        [...alwaysMonoNames].some((name) =>
+          new RegExp(`\\bslug as ${name}Slug\\b`).test(bindings),
+        ),
+      )
+      .map(([, , slug]) => slug),
+  );
+
+  const invisible = [];
+  const misshapen = [];
+  for (const [label, text] of [
+    ["brand", BRAND],
+    ["overlay", OVERLAY],
+  ]) {
+    for (const [, bindings, slug] of text.matchAll(
+      /import \{([^}]*)\} from "thesvg\/([a-z0-9-]+)";/g,
+    )) {
+      const mod = require(`thesvg/${slug}`);
+      /* Only the artwork this module can actually render: `svg` where it
+         imports `svg`, the variants where it imports `variants`. */
+      /* Only what this entry RENDERS. An `alwaysMono` brand imports
+         `variants` but draws the ink-free one, so judging it by
+         `variants.default` — white, by definition, which is why it takes that
+         route — would reject Vercel and OpenAI for the very reason they were
+         handled correctly. */
+      const arts = !/\bvariants as /.test(bindings)
+        ? [mod.svg]
+        : alwaysMonoModules.has(slug)
+          ? [mod.variants?.mono ?? mod.variants?.light]
+          : [mod.variants?.default, mod.variants?.mono];
+
+      for (const art of arts.filter((a) => typeof a === "string")) {
+        const inks = [
+          ...new Set(
+            [
+              ...art.matchAll(
+                /(?:fill|stroke)\s*[:=]\s*["']?(#[0-9a-fA-F]{3,8}|white)/g,
+              ),
+            ].map((m) => m[1].toLowerCase()),
+          ),
+        ].filter((c) => c !== "none");
+        /* A gradient or pattern IS visible ink this test cannot read, so an
+           artwork carrying one is never called invisible — that false
+           positive would reject Next.js and Python, which are fine. */
+        const painted = /url\(#/.test(art);
+        if (inks.length > 0 && inks.every(isWhite) && !painted) {
+          invisible.push(`${label}:${slug}`);
+        }
+        const viewBox = /viewBox=["']([^"']+)["']/.exec(art)?.[1];
+        if (viewBox !== undefined) {
+          const box = viewBox.split(/[\s,]+/).map(Number);
+          const ratio = box[2] / box[3];
+          if (ratio > 3 || ratio < 0.34) {
+            misshapen.push(`${label}:${slug} ${ratio.toFixed(1)}:1`);
+          }
+        }
+      }
+    }
+  }
+
+  check(
+    "no artwork is white ink only (invisible on a light canvas)",
+    invisible.length === 0,
+    `${[...new Set(invisible)].join(", ")} — drawn for a dark background; the hand-authored icon follows the theme instead`,
+  );
+  check(
+    "no artwork is wordmark-shaped (illegible in a square slot)",
+    misshapen.length === 0,
+    `${[...new Set(misshapen)].join(", ")} — an icon slot is square and small`,
   );
 }
 

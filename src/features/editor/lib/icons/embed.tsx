@@ -91,7 +91,7 @@ export function splitPackagedSvg(
   }
   const [, rootAttrs, body] = match;
 
-  const viewBox = /viewBox="([^"]+)"/.exec(rootAttrs)?.[1];
+  const viewBox = /viewBox=(["'])([^"']+)\1/.exec(rootAttrs)?.[2];
   if (viewBox === undefined) {
     throw new Error(`icon "${slug}": root has no viewBox`);
   }
@@ -104,7 +104,9 @@ export function splitPackagedSvg(
   }
 
   const kept: string[] = [];
-  for (const attr of rootAttrs.matchAll(/([A-Za-z_:][\w:.-]*)="([^"]*)"/g)) {
+  for (const attr of rootAttrs.matchAll(
+    /([A-Za-z_:][\w:.-]*)=(["'])([^"']*)\2/g,
+  )) {
     const name = attr[1];
     if (
       DROPPED_ROOT_ATTRS.has(name) ||
@@ -114,17 +116,20 @@ export function splitPackagedSvg(
     ) {
       continue;
     }
-    kept.push(`${name}="${attr[2]}"`);
+    kept.push(`${name}="${attr[3]}"`);
   }
 
   let inner = kept.length > 0 ? `<g ${kept.join(" ")}>${body}</g>` : body;
   const prefix = `af-brand-${slug}-`;
   inner = inner
-    .replace(/\bid="([^"]+)"/g, (_m, id: string) => `id="${prefix}${id}"`)
+    .replace(
+      /\bid=(["'])([^"']+)\1/g,
+      (_m, _q: string, id: string) => `id="${prefix}${id}"`,
+    )
     .replace(/url\(#([^)]+)\)/g, (_m, id: string) => `url(#${prefix}${id})`)
     .replace(
-      /\b(href|xlink:href)="#([^"]+)"/g,
-      (_m, name: string, id: string) => `${name}="#${prefix}${id}"`,
+      /\b(href|xlink:href)=(["'])#([^"']+)\2/g,
+      (_m, name: string, _q: string, id: string) => `${name}="#${prefix}${id}"`,
     );
 
   return { viewBox, inner: inner.trim() };
@@ -133,18 +138,27 @@ export function splitPackagedSvg(
 /**
  * Does this artwork paint itself, rather than inheriting the colour around it?
  *
- * BOTH spellings must be checked. An attribute-only test was tried and was
- * wrong: Bun declares its ink as `style="fill:#fbf0df"`, so an attribute test
- * reports it ink-free, hands it `currentColor` — which a `style` declaration
- * outranks — and the mark quietly keeps painting itself while the registry
- * believes it is monochrome. `none` and `currentColor` are not ink: the first
- * paints nothing, the second is the inheritance we are asking for.
+ * BOTH spellings AND BOTH QUOTE STYLES must be checked; each was learned from
+ * a shipped bug. Bun declares its ink as `style="fill:#fbf0df"`, so an
+ * attribute-only test called it ink-free, handed it `currentColor` — which a
+ * `style` declaration outranks — and the mark kept painting itself while the
+ * registry believed it was monochrome. Oracle then did the same thing one
+ * level down, with `style='fill:#C74634'` in SINGLE quotes, which a
+ * double-quote-only pattern misses just as completely.
+ *
+ * Every attribute pattern in this file matches both quote styles for that
+ * reason: SVG allows either, the package mixes them, and a pattern that reads
+ * only one of them fails SILENTLY — the icon renders, wrongly, rather than
+ * throwing. `none` and `currentColor` are not ink: the first paints nothing,
+ * the second is the inheritance we are asking for.
  */
 export function hasBakedInk(svg: string): string | null {
-  const attr = /\b(?:fill|stroke)="(?!none\b|currentColor\b)[^"]+"/.exec(svg);
+  const attr = /\b(?:fill|stroke)=(["'])(?!none\b|currentColor\b)[^"']+\1/.exec(
+    svg,
+  );
   if (attr !== null) return attr[0];
   const styled =
-    /style="[^"]*\b(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)[^;"]+/.exec(
+    /style=(["'])[^"']*\b(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)[^;"']+/.exec(
       svg,
     );
   return styled === null ? null : styled[0];
@@ -167,18 +181,21 @@ export function hasBakedInk(svg: string): string | null {
  */
 export function stripInk(svg: string): string {
   return svg
-    .replace(/\s(?:fill|stroke)="(?!none\b|currentColor\b)[^"]*"/g, "")
-    .replace(/\sstyle="([^"]*)"/g, (_match, decls: string) => {
-      const kept = decls
-        .split(";")
-        .filter(
-          (decl) =>
-            !/^\s*(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)/.test(decl),
-        )
-        .join(";")
-        .trim();
-      return kept === "" ? "" : ` style="${kept}"`;
-    });
+    .replace(/\s(?:fill|stroke)=(["'])(?!none\b|currentColor\b)[^"']*\1/g, "")
+    .replace(
+      /\sstyle=(["'])([^"']*)\1/g,
+      (_match, _quote: string, decls: string) => {
+        const kept = decls
+          .split(";")
+          .filter(
+            (decl) =>
+              !/^\s*(?:fill|stroke)\s*:\s*(?!none\b|currentColor\b)/.test(decl),
+          )
+          .join(";")
+          .trim();
+        return kept === "" ? "" : ` style="${kept}"`;
+      },
+    );
 }
 
 /**

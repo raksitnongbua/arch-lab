@@ -221,11 +221,6 @@ import {
   variants as otelVariants,
 } from "thesvg/opentelemetry";
 import {
-  slug as oracleSlug,
-  title as oracleTitle,
-  svg as oracleSvg,
-} from "thesvg/oracle";
-import {
   slug as prometheusSlug,
   title as prometheusTitle,
   variants as prometheusVariants,
@@ -687,13 +682,6 @@ const BRAND_ENTRIES: readonly BrandEntry[] = [
     art: withMono(neo4jSlug, neo4jVariants),
     category: "databases",
     aliases: ["graph db", "cypher"],
-  },
-  {
-    slug: oracleSlug,
-    name: oracleTitle,
-    art: colourOnly(oracleSvg),
-    category: "databases",
-    aliases: ["oracle db", "plsql"],
   },
   {
     slug: snowflakeSlug,

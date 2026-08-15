@@ -31,8 +31,19 @@ import type { SVGProps } from "react";
  *     one exported file.
  *   - `lambda`: the package ships no coloured variant, only monochrome.
  *
- * Two slugs differ from ours and are mapped at the import: `golang` is
- * `thesvg/go`, `gcp` is `thesvg/google-cloud`.
+ * One slug differs from ours and is mapped at the import: `gcp` is
+ * `thesvg/google-cloud`.
+ *
+ * FIVE MORE ARE DELIBERATELY ABSENT — php, rust, golang, mysql and grpc —
+ * and this is the second list nobody should "complete". Their packaged
+ * artwork is WHITE INK, drawn for a dark background, so adding them rendered
+ * five invisible icons on a light canvas. They were caught by rasterising the
+ * set and looking at it, not by reading the markup: white ink is not a
+ * malformed file, it is a correct file for a context we do not have. PHP,
+ * Rust, Go and gRPC have no coloured mark at all — they are monochrome
+ * brands — and MySQL's only coloured artwork is a wordmark. For all five the
+ * hand-authored icon is strictly better: it already follows the theme, so it
+ * is legible in both.
  *
  * `svg` alone is imported, never `variants` — mono comes from the
  * hand-authored icon, so the packaged monochrome variants would be dead
@@ -43,14 +54,10 @@ import { svg as nextjsColour } from "thesvg/nextjs";
 import { svg as dotnetColour } from "thesvg/dotnet";
 import { svg as javaColour } from "thesvg/java";
 import { svg as nodejsColour } from "thesvg/nodejs";
-import { svg as phpColour } from "thesvg/php";
 import { svg as pythonColour } from "thesvg/python";
 import { svg as reactColour } from "thesvg/react";
-import { svg as rustColour } from "thesvg/rust";
 import { svg as typescriptColour } from "thesvg/typescript";
-import { svg as golangColour } from "thesvg/go";
 import { svg as mongodbColour } from "thesvg/mongodb";
-import { svg as mysqlColour } from "thesvg/mysql";
 import { svg as postgresqlColour } from "thesvg/postgresql";
 import { svg as elasticsearchColour } from "thesvg/elasticsearch";
 import { svg as cassandraColour } from "thesvg/cassandra";
@@ -65,7 +72,6 @@ import { svg as natsColour } from "thesvg/nats";
 import { svg as kongColour } from "thesvg/kong";
 import { svg as nginxColour } from "thesvg/nginx";
 import { svg as graphqlColour } from "thesvg/graphql";
-import { svg as grpcColour } from "thesvg/grpc";
 import { svg as envoyColour } from "thesvg/envoy";
 import { svg as cloudflareColour } from "thesvg/cloudflare";
 import { svg as awsColour } from "thesvg/aws";
@@ -83,14 +89,10 @@ const COLOUR_ARTWORK: Readonly<Record<string, string>> = {
   dotnet: dotnetColour,
   java: javaColour,
   nodejs: nodejsColour,
-  php: phpColour,
   python: pythonColour,
   react: reactColour,
-  rust: rustColour,
   typescript: typescriptColour,
-  golang: golangColour,
   mongodb: mongodbColour,
-  mysql: mysqlColour,
   postgresql: postgresqlColour,
   elasticsearch: elasticsearchColour,
   cassandra: cassandraColour,
@@ -105,7 +107,6 @@ const COLOUR_ARTWORK: Readonly<Record<string, string>> = {
   kong: kongColour,
   nginx: nginxColour,
   graphql: graphqlColour,
-  grpc: grpcColour,
   envoy: envoyColour,
   cloudflare: cloudflareColour,
   aws: awsColour,
