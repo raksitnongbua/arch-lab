@@ -9,9 +9,15 @@
     Fixed brand hex rather than theme tokens, and a transparent ground: a tab
     icon is composited onto browser chrome we do not control, so it cannot use
     `currentColor` or `oklch()` and must stay legible on both light and dark
-    strips. These two are the dark theme's --primary and --accent as sRGB, the
-    same pair opengraph-image.tsx hand-converts, so the tab and the social card
-    are the same two colours.
+    strips. These two are the dark theme's primary and accent tokens as sRGB,
+    the same pair opengraph-image.tsx hand-converts, so the tab and the social
+    card are the same two colours.
+
+    NO DOUBLE HYPHEN may appear in this comment. XML forbids it inside one, and
+    naming those tokens the CSS way made this whole file unparseable — every
+    browser silently fell back to its default globe, because a favicon that
+    fails to parse has nowhere to report the failure. `pnpm check:og-cards`
+    now parses this file for exactly that reason.
   -->
   <rect
     x="4.25"
