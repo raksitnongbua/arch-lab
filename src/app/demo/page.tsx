@@ -34,22 +34,39 @@ export const metadata: Metadata = {
  * A BROKEN EXAMPLE STAYS VISIBLE. A bundled document that fails to parse is a
  * bug in this repo, and hiding it behind a filter is how it stays one.
  */
+/** The heading and the intro take the first two slots of the entrance cascade. */
+const C4_BASE = 2;
+
 export default function DemoPage(): React.JSX.Element {
   const models = listViewerModels();
   const sequences = listSequenceExamples();
 
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8 sm:py-16">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+      <h1
+        className="af-demo-row text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+        style={{ "--row": 0 } as React.CSSProperties}
+      >
         Examples
       </h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
+      <p
+        className="af-demo-row mt-3 max-w-2xl text-muted-foreground"
+        style={{ "--row": 1 } as React.CSSProperties}
+      >
         Real documents, parsed by the same reader the app uses. Open one in the
         playground and edit it as text.
       </p>
 
-      <Section title="C4 models">
-        {models.map((listing) =>
+      {/* `base` continues the cascade across sections rather than restarting
+          it: two lists each counting from zero animate in lockstep, which reads
+          as a glitch rather than an order. */}
+      <Section
+        title="C4 models"
+        kind="c4"
+        accent="var(--primary)"
+        base={C4_BASE}
+      >
+        {models.map((listing, row) =>
           listing.status === "invalid" ? (
             <Broken
               key={listing.id}
@@ -62,6 +79,7 @@ export default function DemoPage(): React.JSX.Element {
               id={listing.summary.id}
               title={listing.summary.title}
               description={listing.summary.description}
+              row={C4_BASE + row + 1}
               meta={[
                 `${listing.summary.diagramCount} diagrams`,
                 `${listing.summary.nodeCount} elements`,
@@ -72,8 +90,13 @@ export default function DemoPage(): React.JSX.Element {
         )}
       </Section>
 
-      <Section title="Sequence diagrams">
-        {sequences.map((listing) =>
+      <Section
+        title="Sequence diagrams"
+        kind="sequence"
+        accent="var(--accent)"
+        base={C4_BASE + models.length + 1}
+      >
+        {sequences.map((listing, row) =>
           listing.status === "invalid" ? (
             <Broken
               key={listing.id}
@@ -86,6 +109,7 @@ export default function DemoPage(): React.JSX.Element {
               id={listing.summary.id}
               title={listing.summary.title}
               description={listing.summary.description}
+              row={C4_BASE + models.length + row + 2}
               meta={[
                 `${listing.summary.participantCount} participants`,
                 `${listing.summary.messageCount} messages`,
@@ -98,24 +122,90 @@ export default function DemoPage(): React.JSX.Element {
   );
 }
 
+/**
+ * One kind of document, with its own colour and its own glyph.
+ *
+ * THE GROUPING IS THE POINT of this page — a C4 model and a sequence diagram
+ * are different things to look at, and a heading alone made them read as one
+ * list with a label in the middle. Each section now carries an accent
+ * (`--primary` for C4, `--accent` for sequence) that its rows inherit through
+ * `currentColor`, and a glyph drawn from the kind itself: stacked frames for
+ * C4's nesting, two lifelines and a message for a sequence. Not icons chosen
+ * from a set — the shapes the reader is about to open.
+ *
+ * The tint is applied through `text-(--kind)` on the section, so a row's
+ * connector picks it up without either of them naming a colour.
+ */
 function Section({
   title,
+  kind,
+  accent,
+  base,
   children,
 }: {
   title: string;
+  kind: "c4" | "sequence";
+  accent: string;
+  /** Where this section sits in the page-wide entrance cascade. */
+  base: number;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <section className="mt-10">
-      <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        {title}
-      </h2>
-      {/* A divided list, not a grid of cards: six rows read faster than six
-          boxes, and the kind headings already do the grouping a grid would. */}
-      <ul className="mt-3 divide-y divide-border/60 border-y border-border/60">
-        {children}
-      </ul>
+    <section
+      className="af-demo-kind af-demo-row mt-12"
+      style={{ "--kind": accent, "--row": base } as React.CSSProperties}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="af-demo-glyph text-(--kind)">
+          {kind === "c4" ? <C4Glyph /> : <SequenceGlyph />}
+        </span>
+        <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          {title}
+        </h2>
+        {/* A rule that runs out to the edge, tinted with the kind: it is what
+            makes the two groups read as two at a glance, before any word is. */}
+        <span
+          aria-hidden="true"
+          className="h-px flex-1 bg-linear-to-r from-(--kind)/40 to-transparent"
+        />
+      </div>
+      <ul className="mt-2 divide-y divide-border/60">{children}</ul>
     </section>
+  );
+}
+
+/** C4's nesting: a frame holding a frame. */
+function C4Glyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+    >
+      <rect x="1.2" y="2.6" width="13.6" height="10.8" rx="2.2" />
+      <rect x="4.4" y="5.6" width="7.2" height="4.8" rx="1.4" />
+    </svg>
+  );
+}
+
+/** A sequence: two lifelines and the message between them. */
+function SequenceGlyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    >
+      <path d="M3.4 2v12M12.6 2v12" strokeDasharray="2 2" />
+      <path d="M3.4 7.4h9.2M10.6 5.6l2 1.8-2 1.8" />
+    </svg>
   );
 }
 
@@ -124,22 +214,30 @@ function ExampleCard({
   title,
   description,
   meta,
+  row,
 }: {
   id: string;
   title: string;
   description: string | null;
   meta: string[];
+  /** Position in its section — drives the entrance stagger, nothing else. */
+  row: number;
 }): React.JSX.Element {
   return (
-    <li>
+    <li className="af-demo-row" style={{ "--row": row } as React.CSSProperties}>
       {/* The whole row is the link — one target, no separate call to action
           competing with the title above it. */}
       <Link
         href={`/view?${VIEW_EXAMPLE_PARAM}=${id}`}
-        className="group flex flex-col gap-1 py-4 transition-colors hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none sm:px-2"
+        className="group flex flex-col gap-1 rounded-md px-2 py-4 transition-colors hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none"
       >
-        <span className="font-medium text-foreground group-hover:text-primary">
-          {title}
+        <span className="flex items-center gap-0 text-(--kind)">
+          {/* Grows out of nothing on hover and meets the title — the gesture a
+              diagram is made of, rather than an underline. */}
+          <span aria-hidden="true" className="af-demo-tick h-px bg-current" />
+          <span className="font-medium text-foreground transition-[margin,color] duration-200 group-hover:ml-2 group-hover:text-(--kind)">
+            {title}
+          </span>
         </span>
         {description === null ? null : (
           <span className="text-sm text-muted-foreground">{description}</span>
