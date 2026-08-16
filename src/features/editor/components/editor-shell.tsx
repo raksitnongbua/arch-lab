@@ -16,7 +16,6 @@ import { useState, useSyncExternalStore } from "react";
 import { Code2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 import { ModelTextPane } from "../text-pane";
@@ -161,9 +160,11 @@ export function EditorShell(): React.JSX.Element {
         </aside>
       </div>
 
-      {/* Global editor overlays. */}
+      {/* Global editor overlays. The Toaster is NOT here any more: it is
+          mounted once in the root layout, because `toast()` is called from
+          routes this shell never renders. Two of them would double every
+          toast on this page. */}
       <RecoveryPrompt />
-      <Toaster />
     </div>
   );
 }

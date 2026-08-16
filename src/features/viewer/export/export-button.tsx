@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { MENU_ITEM_CLASSES } from "@/components/ui/menu-item";
 import { toast } from "@/components/ui/toast";
 import { LEVEL_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -302,8 +303,8 @@ export function ViewerExportButton({
     [allDiagrams, diagram, modelTitle, scope, tagColors, sharpness, smoothness],
   );
 
-  const itemClasses =
-    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none";
+  /* Shared with the sequence exporter — see `ui/menu-item.ts` for why. */
+  const itemClasses = MENU_ITEM_CLASSES;
 
   return (
     <div ref={rootRef} className="relative shrink-0">
