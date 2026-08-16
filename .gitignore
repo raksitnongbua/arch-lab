@@ -65,4 +65,13 @@ yarn-error.log*
 # agent tooling and git worktrees. .claude/worktrees holds nested checkouts of
 # this same repository, so leaving it untracked but unignored lets `git add -A`
 # stage a worktree as an embedded gitlink.
-.claude/
+#
+# Ignore the CONTENTS rather than the directory itself, so the re-include below
+# can reach inside. `.claude/` as a blanket rule cannot be undone by a later
+# negation — git never descends into an excluded directory, so `!.claude/rules/`
+# under it would never match anything.
+.claude/*
+# ...except the project rules, which README.md links to and reviewers need to
+# see in a diff. Everything else under .claude/ — worktrees, settings.local.json
+# — stays ignored by the line above.
+!.claude/rules/
