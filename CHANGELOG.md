@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-08-16
+
+### Changed
+
+- `/mcp` is now titled and headed "An MCP server for architecture diagrams".
+  It previously read "Use arch-lab from your AI agent", which names the page
+  only to someone who already knows what arch-lab is — not the reader arriving
+  from a search result or from an agent's answer.
+
+### Fixed
+
+- `/editor`'s meta description was 232 characters, 72 past the point a search
+  result truncates, so its tail was written for nobody. It is now 141.
+
 ## [1.0.0] - 2026-08-16
 
 The first tagged release. Everything below shipped between the initial commit on
@@ -95,4 +109,5 @@ Notable fixes that changed observable behaviour:
 - Sequence participant names are anchored rather than measured.
 - `background-clip: text` sliced the final glyph of the hero headline.
 
+[1.0.1]: https://github.com/raksitnongbua/arch-lab/releases/tag/v1.0.1
 [1.0.0]: https://github.com/raksitnongbua/arch-lab/releases/tag/v1.0.0
