@@ -70,9 +70,11 @@ registerHooks({
   },
 });
 
-const { parseViewSource, VIEW_SEED_TEXT, describeDocument } = await import(
-  pathToFileURL(path.join(ROOT, "src/features/playground/input/parse.ts")).href
-);
+const { parseViewSource, VIEW_SEED_TEXT, VIEW_STARTER_TEXT, describeDocument } =
+  await import(
+    pathToFileURL(path.join(ROOT, "src/features/playground/input/parse.ts"))
+      .href
+  );
 
 /* ----------------------------------------------------------------------- */
 /* Harness                                                                  */
@@ -310,6 +312,35 @@ for (const [label, text] of [
     read("src/app/view/page.tsx").includes("exampleTextFor"),
     "resolving after hydration would show the seed, then replace it",
   );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The starters the source pane offers must parse                           */
+/* ----------------------------------------------------------------------- */
+
+{
+  /* A starter is what replaces the pane when someone presses "Start from",
+     so one that does not parse greets a new document with a parse error —
+     the exact moment a first document is most likely to be abandoned. Each is
+     also asserted to detect as the kind its button claims, because the button
+     is a promise about which grammar you are now writing. */
+  for (const [kind, text] of Object.entries(VIEW_STARTER_TEXT)) {
+    const parsed = parseViewSource(text);
+    check(
+      `the ${kind} starter parses`,
+      parsed.status === "ok",
+      parsed.status === "ok" ? undefined : JSON.stringify(parsed.error),
+    );
+    check(
+      `the ${kind} starter detects as ${kind}`,
+      parsed.status === "ok" && parsed.value.kind === kind,
+    );
+    check(
+      `the ${kind} starter is smaller than the ${kind} seed example`,
+      text.length < VIEW_SEED_TEXT[kind].length,
+      "a starter is a shape to type into; the seed is a finished document",
+    );
+  }
 }
 
 if (failures > 0) {

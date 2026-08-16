@@ -181,9 +181,27 @@ export async function copyPngToClipboard(
   rendered: RenderedSvg,
   scale: number = PNG_SCALE,
 ): Promise<void> {
-  await navigator.clipboard.write([
-    new ClipboardItem({ "image/png": renderPngBlob(rendered, scale) }),
-  ]);
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({ "image/png": renderPngBlob(rendered, scale) }),
+    ]);
+    return;
+  } catch (error) {
+    /* THE FALLBACK IS NOT BELT-AND-BRACES. Not every engine accepts a promise
+       in `ClipboardItem` — Firefox took it long after shipping
+       `clipboard.write` — and there the constructor rejects outright, so the
+       promise form alone means "copy silently does nothing in Firefox".
+       Awaiting the blob first loses Safari's gesture, which is why that is the
+       SECOND attempt and not the first: each browser gets the form it accepts,
+       and the one that needs the gesture never reaches this line.
+
+       Rethrown if the retry fails too — a copy that quietly does nothing is
+       the failure this whole path exists to avoid. */
+    if (error instanceof Error && error.name === "NotAllowedError") throw error;
+    await navigator.clipboard.write([
+      new ClipboardItem({ "image/png": await renderPngBlob(rendered, scale) }),
+    ]);
+  }
 }
 
 export async function downloadPng(

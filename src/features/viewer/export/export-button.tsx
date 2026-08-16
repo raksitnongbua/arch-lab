@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { LEVEL_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { C4Diagram } from "@/types";
@@ -224,7 +225,12 @@ export function ViewerExportButton({
                `copyPngToClipboard` is handed the un-awaited blob on purpose —
                Safari spends the user gesture otherwise. */
             await copyPngToClipboard(rendered, C4_SHARPNESS[sharpness] * 2);
+            /* A TOAST, not only the live region. The announcement below is
+               `sr-only`, so a sighted reader got no signal at all — success
+               and failure looked identical, which is exactly how a working
+               copy reads as broken. */
             setAnnouncement("Copied the diagram to the clipboard as a PNG.");
+            toast({ message: "Copied as PNG — paste it anywhere." });
             return;
           }
           if (kind === "svg") {
@@ -286,6 +292,9 @@ export function ViewerExportButton({
       } catch (error) {
         const detail = describeError(error);
         setAnnouncement(`Export failed: ${detail}`);
+        /* Failures were sr-only too, so an export that could not happen said
+           nothing to most people. */
+        toast({ message: `Export failed: ${detail}`, tone: "error" });
       } finally {
         setBusy(false);
       }
@@ -398,7 +407,8 @@ export function ViewerExportButton({
               <span>
                 Copy PNG
                 <span className="block text-xs text-muted-foreground">
-                  To the clipboard, at {PNG_SCALE * C4_SHARPNESS[sharpness]}×
+                  To the clipboard at {PNG_SCALE * C4_SHARPNESS[sharpness]}×
+                  resolution
                 </span>
               </span>
             </button>

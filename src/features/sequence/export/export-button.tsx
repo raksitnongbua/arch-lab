@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import {
   canCopyPng,
   copyPngToClipboard,
@@ -230,6 +231,9 @@ export function SequenceExportButton({
            — Safari spends the user gesture otherwise (see the helper). */
           await copyPngToClipboard(rendered, PNG_SCALE_BY_SHARPNESS[sharpness]);
           onAnnounce("Copied the diagram to the clipboard as a PNG.");
+          /* The same toast the C4 exporter raises, wording included: one
+             action should not report itself two ways. */
+          toast({ message: "Copied as PNG — paste it anywhere." });
           setStatus({ kind: "idle" });
           return;
         }
@@ -278,6 +282,11 @@ export function SequenceExportButton({
         const message = describeError(error);
         setStatus({ kind: "error", message });
         onAnnounce(`Export failed: ${message}.`);
+        /* Toasted as well as shown in the panel, because the C4 exporter has
+           no panel to show it in — one action reporting itself two different
+           ways depending on which diagram you are looking at is the mismatch,
+           not the extra line. */
+        toast({ message: `Export failed: ${message}`, tone: "error" });
         return;
       } finally {
         // Only clear a BUSY state; an error must survive to stay on screen.
@@ -408,11 +417,17 @@ export function SequenceExportButton({
                 clipboard takes an image, and offering "copy SVG" would put
                 markup on it that most apps paste as text. Hidden where the
                 browser cannot do it rather than shown and refused. */}
+            {/* Same label, same icon and the same scale note the C4 exporter
+                shows, so one action does not present itself as two features
+                depending on which diagram is open. It stays a button here
+                rather than a menu row because this panel has no menu — what
+                has to match is the ACTION, not the container. */}
             {copyable ? (
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void run("copy")}
+                title={`Copy the diagram to the clipboard at ${PNG_SCALE_BY_SHARPNESS[sharpness]}× resolution`}
                 className={buttonClasses({ variant: "outline", size: "sm" })}
               >
                 <ClipboardCopy aria-hidden="true" />

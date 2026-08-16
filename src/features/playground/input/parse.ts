@@ -269,6 +269,40 @@ export const JSON_EXTENSION = ".archlab.json";
 /* -------------------------------------------------------------------------- */
 
 /** The example text each route opens with — the routes' only difference. */
+/**
+ * A blank page with the walls marked out — what the "Start from" buttons at the
+ * foot of the source pane replace the pane with.
+ *
+ * NOT THE SEED EXAMPLES. Those are finished documents chosen to show what the
+ * format can do; these are the smallest thing that parses and still says where
+ * the next line goes. A reader who has seen enough and wants to write their
+ * own is stopped by the header they cannot remember, not by a shortage of
+ * examples — `/demo` has six of those.
+ *
+ * Each one is deliberately valid on its own, so the canvas draws something the
+ * moment it lands rather than greeting a new document with a parse error.
+ */
+export const VIEW_STARTER_TEXT: Record<SeedKind, string> = {
+  c4: `archlab 1.0
+title "Your system"
+
+@context ctx-root "Your system"
+  user:person "Customer"
+  app:system "Your system"
+  user -> app : "Uses"
+`,
+  sequence: `archlab 1.0 sequence
+title "Your flow"
+
+@sequence
+  user:actor "Customer"
+  api:participant "Your API"
+
+  user -> api : "Asks for something"
+  api ..> user : "Answers"
+`,
+};
+
 export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
   c4: SEED_MODEL.aftText,
   sequence: SEQUENCE_EXAMPLE,

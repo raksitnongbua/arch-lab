@@ -451,10 +451,24 @@ if (parsed !== null) {
       "awaiting it first spends the user gesture and Safari refuses the write",
     );
   }
-  if (/await\s+renderPngBlob/.test(body)) {
-    fail("copyPngToClipboard awaits the rasterise before writing");
+  /* A fallback MAY await — Firefox rejects the promise form and needs the
+     resolved blob. What must not happen is the FIRST write awaiting, because
+     that is the one still holding Safari's gesture. So the rule is ordering:
+     any `await renderPngBlob` has to sit after a `catch`. */
+  const firstWrite = body.indexOf("navigator.clipboard.write");
+  const firstAwaitedRender = body.indexOf("await renderPngBlob");
+  const catchAt = body.indexOf("} catch");
+  if (firstAwaitedRender !== -1 && firstAwaitedRender < catchAt) {
+    fail(
+      "the first clipboard write awaits the rasterise",
+      "that spends Safari's user gesture — await only in the fallback",
+    );
+  } else if (firstWrite !== -1 && catchAt !== -1 && firstWrite > catchAt) {
+    fail("the promise form is not attempted first");
   } else {
-    ok("nothing is awaited between the gesture and the clipboard write");
+    ok(
+      "the gesture-preserving write is attempted first, awaiting only on retry",
+    );
   }
 
   /* One rasteriser, so the clipboard and the download cannot disagree — the

@@ -67,6 +67,7 @@ import {
   Braces,
   Download,
   Expand,
+  FilePlus2,
   FileText,
   Info,
   Repeat2,
@@ -128,6 +129,7 @@ import {
   sourceTextFor,
   VIEW_SEED_DOCUMENT,
   VIEW_SEED_TEXT,
+  VIEW_STARTER_TEXT,
   type SeedKind,
   type ToggleFormat,
   type ViewDocument,
@@ -689,6 +691,24 @@ export function ViewPlayground({
    * visible in the box, one Undo away in the textarea's own history, and a
    * dialog in front of a formatting button teaches people to dismiss dialogs.
    */
+  /**
+   * Replace the pane with a starter for `kind`.
+   *
+   * Overwrites without a confirmation, deliberately: the textarea's own undo
+   * puts it back, and a dialog in front of "give me a blank one" is the kind
+   * people learn to dismiss unread.
+   */
+  const loadStarter = useCallback(
+    (kind: SeedKind) => {
+      const starter = VIEW_STARTER_TEXT[kind];
+      setPending(null);
+      setText(starter);
+      applyEdit("source", starter);
+      setAnnouncement(`Loaded a ${kind === "c4" ? "C4" : "sequence"} starter.`);
+    },
+    [applyEdit],
+  );
+
   const convertPane = useCallback(
     (to: ToggleFormat) => {
       if (doc.format === to) return;
@@ -1150,6 +1170,46 @@ export function ViewPlayground({
                   keyboard reader needs telling how to leave the field. The
                   authoring guidance moved to the reference page that documents
                   it properly rather than being paraphrased in the furniture. */}
+              {/* STARTERS, at the foot of the pane, one per document kind.
+                  Not the example gallery this page used to carry — that
+                  offered two of six bundled documents and `/demo` lists all of
+                  them properly. This is the empty-page problem instead: a
+                  reader who has read enough and wants to write their own needs
+                  a shape to type into, and retyping a header from memory is
+                  where a first document dies.
+
+                  The CURRENT kind's starter is disabled rather than hidden: a
+                  pair that appears and disappears as you paste is a moving
+                  target, and "you are already writing this kind" is worth
+                  saying. Replacing is undoable with the textarea's own undo,
+                  which is why there is no confirmation in front of it. */}
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">
+                  Start from:
+                </span>
+                {(["c4", "sequence"] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => loadStarter(kind)}
+                    disabled={doc.kind === kind}
+                    title={
+                      doc.kind === kind
+                        ? `The pane already holds a ${kind === "c4" ? "C4" : "sequence"} document`
+                        : `Replace the pane with a ${kind === "c4" ? "C4" : "sequence"} starter`
+                    }
+                    className={buttonClasses({
+                      variant: "ghost",
+                      size: "sm",
+                      className: "disabled:cursor-not-allowed",
+                    })}
+                  >
+                    <FilePlus2 aria-hidden="true" />
+                    {kind === "c4" ? "C4" : "Sequence"}
+                  </button>
+                ))}
+              </div>
+
               <p
                 id={editingHintId}
                 className="shrink-0 text-xs text-muted-foreground"
