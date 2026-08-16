@@ -62,8 +62,9 @@ mutation API — you edit \`.alab\` files yourself.
 ## Pages
 
 - ${origin}/ — what this is, in one screen
-- ${origin}/view/c4 — write a C4 model as text and see it rendered live
-- ${origin}/view/seq — write a sequence diagram and click through it
+- ${origin}/view — the playground: paste or write either kind and see it
+  rendered live. \`?d=seq\` starts from a sequence example, \`?e=<id>\` opens a
+  bundled one (ids are listed on /demo)
 - ${origin}/syntax — the \`.alab\` grammar, every example parser-verified
 - ${origin}/validate — paste a document, get a located verdict
 - ${origin}/demo — finished examples of both kinds

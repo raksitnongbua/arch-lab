@@ -1,63 +1,31 @@
 import type { Metadata } from "next";
 
-import { cookies } from "next/headers";
-
-import { ViewPlayground } from "@/features/playground";
-import {
-  isCollapsedCookie,
-  SOURCE_FOLD_COOKIE,
-} from "@/features/playground/lib/source-fold";
+import { AliasForward } from "@/components/share/alias-forward";
 
 export const metadata: Metadata = {
-  title: "Sequence diagram playground — write it, then explore it",
-  description:
-    "Write .alab sequence text or paste a Mermaid sequenceDiagram and click through the flow message by message. Free, no account, runs in your browser.",
-  alternates: { canonical: "/view/seq" },
+  title: "Sequence diagram playground",
+  // An alias must not compete with the page it forwards to: canonical names
+  // the real playground, and noindex keeps the trampoline out of results.
+  alternates: { canonical: "/view" },
+  robots: { index: false },
 };
 
 /**
- * `/view/seq` — the merged playground (`features/playground`), seeded with
- * the sequence example. THE REAL PAGE, and it used to be the trampoline.
+ * `/view/seq` — a forwarding alias for `/view?d=seq`.
  *
- * WHY THE PAIR FLIPPED. Every sequence share link is minted against this
- * short route, and for a good reason: the document travels in the URL
- * fragment and competes with `MAX_SHARE_URL_LENGTH`, so the five characters
- * `/view/seq` does not spend on the path buy roughly 7–10 more characters of
- * document in every link (deflate-raw's observed ~0.5–0.7 payload ratio).
- * That part was right. What was wrong was making the route people ACTUALLY
- * ARRIVE ON a forward: opening any shared flow meant landing here, reading a
- * holding line, and being replaced into `/view/sequence` — a bounce on the
- * single most common way anyone reaches this app from outside it.
+ * The playground is one route now (the seed is a query param, `?d=`, not a path). This page
+ * stays because a share link is a URL SOMEONE ELSE IS HOLDING: every link
+ * minted against it before the merge must keep opening, and
+ * `check:share-capacity` treats the routes as a compatibility surface.
  *
- * It also quietly undid the sequence social card. A link preview is fetched
- * for the URL as SHARED, and this route had no `opengraph-image`, so every
- * minted sequence link previewed with the root card — "C4 architecture
- * diagrams", the other document kind entirely, which is the exact bug that
- * card was added to fix. The card now lives here, beside the page it
- * describes, and `/view/sequence` re-exports it so the example routes nested
- * under that path keep inheriting a sequence-shaped preview.
+ * IT CANNOT BE A `redirects()` RULE, which is the whole reason it renders a
+ * component instead of being three lines of config: the payload lives in the
+ * URL fragment, the fragment never reaches the server, and a server redirect
+ * would drop the document on the floor. Only a client can carry it across.
  *
- * `/view/sequence` is the alias now and forwards here, so links minted
- * against the long route — every one made before the alias existed — keep
- * working. Like `c4` and `sequence`, `seq` is a STATIC segment shadowing
- * `/view/[modelId]`, so it is a reserved model id, asserted at build time in
- * the `[modelId]` page.
- *
-
- * The rail fold is read from the request cookie and rendered SERVER-SIDE, so
- * the pane is already in the right state in the first byte — see
- * `playground/lib/source-fold.ts` for why the client-only versions of this
- * all flashed. Reading a cookie opts this route out of static rendering,
- * which is the honest price of server-rendering a per-reader preference.
+ * Its `opengraph-image` stays beside it too, so a link already in circulation
+ * keeps the preview card it was minted with.
  */
-export default async function ViewSeqPage(): Promise<React.JSX.Element> {
-  const store = await cookies();
-  return (
-    <ViewPlayground
-      seed="sequence"
-      initialSourceCollapsed={isCollapsedCookie(
-        store.get(SOURCE_FOLD_COOKIE)?.value,
-      )}
-    />
-  );
+export default function ViewSeqPage(): React.JSX.Element {
+  return <AliasForward to="/view?d=seq" label="the playground" />;
 }

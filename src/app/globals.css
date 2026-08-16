@@ -1200,3 +1200,63 @@
     opacity: 0;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* The example index                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Rows arrive in order, staggered off an index the markup carries as `--row`.
+ * The delay is DERIVED rather than written per row, the same arrangement the
+ * sequence viewer uses for its focus stagger: a hand-written delay per item
+ * re-numbers every sibling the moment one is added.
+ *
+ * The global reduced-motion backstop collapses these to 0.01ms, and `both`
+ * means they land on the natural state rather than parked at opacity 0 — so
+ * the page is simply present, with no motion, for anyone who asked for none.
+ */
+@keyframes af-demo-row {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.af-demo-row {
+  animation: af-demo-row 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--row, 0) * 45ms);
+}
+
+/**
+ * The connector. Each row grows one on hover, from nothing to a short rule
+ * that meets the title — the same gesture the diagrams themselves are made of,
+ * which is why it is a line and not an underline or a chevron. It is the one
+ * piece of motion on the page that responds to the reader, so it is the only
+ * one given a colour: the section's own accent, inherited through
+ * `currentColor` so C4 and sequence rows differ without a second rule.
+ */
+.af-demo-tick {
+  width: 0;
+  transition:
+    width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
+  opacity: 0;
+}
+
+.af-demo-row:hover .af-demo-tick,
+.af-demo-row:focus-visible .af-demo-tick {
+  width: 0.75rem;
+  opacity: 1;
+}
+
+/* The kind glyph breathes only while its section is hovered — ambient motion
+   on an index would compete with reading it. */
+@keyframes af-demo-glyph {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.af-demo-kind:hover .af-demo-glyph {
+  animation: af-demo-glyph 1.6s ease-in-out infinite;
+}

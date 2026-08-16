@@ -404,7 +404,7 @@ export function ViewerShell({
               <ShareButton
                 share={share}
                 documentTitle={frozenModel.title}
-                route="/view/c4"
+                route="/view"
                 noun="model"
                 diagram={currentDiagram}
                 rootDiagramId={frozenModel.rootDiagramId}

@@ -84,8 +84,12 @@ registerHooks({
 const loadModule = (relative) =>
   import(pathToFileURL(path.join(ROOT, relative)).href);
 
-const { decodeShareFragment, MAX_SHARE_URL_LENGTH, SHARE_URL_SAFE_LENGTH } =
-  await loadModule("src/features/viewer/share/codec.ts");
+const {
+  decodeShareFragment,
+  normalizeShareFragment,
+  MAX_SHARE_URL_LENGTH,
+  SHARE_URL_SAFE_LENGTH,
+} = await loadModule("src/features/viewer/share/codec.ts");
 const { createShareLink } = await loadModule("src/features/mcp/tools/share.ts");
 
 const readSource = (relative) =>
@@ -182,41 +186,96 @@ await check(
 /* ----------------------------------------------------------------------- */
 
 await check(
-  "both minting sites mint the same short route (/view/seq)",
+  "both minting sites mint the same route, and it carries no seed",
   async () => {
     const wrapper = readSource("src/features/sequence/share/share-button.tsx");
     const mcp = readSource("src/features/mcp/tools/share.ts");
+    /* Bare `/view`. The seeded paths were three routes mounting one
+       component; the seed is `?d=` now and a share link needs none of it,
+       because it carries the document and the reader detects the kind. Two
+       minting sites that can drift, will, so they are asserted together. */
     assert.ok(
-      wrapper.includes('"/view/seq"'),
-      "the Share button wrapper must mint /view/seq",
+      wrapper.includes('SHARE_ROUTE = "/view"'),
+      "the Share button wrapper must mint bare /view",
     );
     assert.ok(
-      mcp.includes("/view/seq#"),
-      "create_share_link must mint /view/seq",
+      mcp.includes("/view#${fragment}"),
+      "create_share_link must mint bare /view",
     );
-    assert.ok(
-      !mcp.includes("/view/sequence#"),
-      "create_share_link must not still mint the long route",
-    );
+    for (const seeded of ["/view/seq#", "/view/sequence#", "/view/c4#"]) {
+      assert.ok(
+        !mcp.includes(seeded),
+        `create_share_link must not still mint ${seeded}`,
+      );
+    }
+  },
+);
+
+await check(
+  "every route a link was ever minted against still delivers its payload",
+  async () => {
+    /* The payload format is one compatibility surface and the ROUTES are the
+       other. Merging the seeded playgrounds into `/view` made three of them
+       forwarding aliases, so this walks the hop each old link now takes —
+       using the shipped `to` and the real `normalizeShareFragment`, not a
+       description of them — and asserts the fragment arrives intact.
+
+       A link is a bookmark someone else is holding: `/view/seq#m=…` was the
+       minted shape for every sequence share, and `/view/sequence#m=…` before
+       that. Both must open forever. */
+    const destinationOf = (file) =>
+      /AliasForward to="([^"]+)"/.exec(readSource(`src/app/view/${file}`))?.[1];
+
+    const payload = FROZEN_SEQ_FRAGMENT;
+    for (const [route, file] of [
+      ["/view/c4", "c4/page.tsx"],
+      ["/view/seq", "seq/page.tsx"],
+      ["/view/sequence", "sequence/page.tsx"],
+    ]) {
+      const to = destinationOf(file);
+      assert.ok(to, `${route} must forward somewhere`);
+      // Exactly what AliasForward does on mount.
+      const body = normalizeShareFragment(`#${payload}`);
+      const landed = `${to}${body === "" ? "" : `#${body}`}`;
+      assert.ok(
+        landed.startsWith("/view"),
+        `${route} must land on the playground, got ${landed}`,
+      );
+      assert.ok(
+        landed.endsWith(`#${payload}`),
+        `${route} must carry the payload across, got ${landed}`,
+      );
+      // and the payload that arrives still decodes to the original document
+      const decoded = await decodeShareFragment(`#${landed.split("#")[1]}`);
+      assert.equal(decoded.status, "ok", `${route} payload failed to decode`);
+      assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
+    }
   },
 );
 
 await check("the minted route is the REAL page, not a trampoline", async () => {
-  /* THE PAIR FLIPPED, and this assertion is the reason to state it here:
-       `/view/seq` is what every minted link carries, so making it a forward
-       put a bounce on the most common way anyone arrives from outside — and
-       left it without an `opengraph-image`, so those links previewed with the
-       root C4 card. The short route is the page now; `/view/sequence`
-       forwards to it for the links minted before the alias existed. */
-  const seq = readSource("src/app/view/seq/page.tsx");
+  /* The lesson this encodes survived the merge intact, only the route
+     changed: whatever links are minted against must be the REAL page and must
+     own a social card. It was learned when `/view/seq` was briefly a forward,
+     which put a bounce on the most common way anyone arrives from outside and
+     left those links previewing with the wrong card. `/view` is that route
+     now; the seeded paths forward to it for links minted before the merge,
+     and keep their own cards so those links keep their previews. */
+  const view = readSource("src/app/view/page.tsx");
   assert.ok(
-    seq.includes("<ViewPlayground"),
-    "src/app/view/seq/page.tsx must mount the merged playground",
+    view.includes("<ViewPlayground"),
+    "src/app/view/page.tsx must mount the playground",
   );
   assert.ok(
-    existsSync(path.join(ROOT, "src/app/view/seq/opengraph-image.tsx")),
-    "the route share links carry must own the sequence social card",
+    existsSync(path.join(ROOT, "src/app/view/opengraph-image.tsx")),
+    "the route share links carry must own a social card",
   );
+  for (const alias of ["c4", "seq"]) {
+    assert.ok(
+      readSource(`src/app/view/${alias}/page.tsx`).includes("AliasForward"),
+      `src/app/view/${alias} must forward, carrying the fragment`,
+    );
+  }
 });
 
 await check(
@@ -227,36 +286,35 @@ await check(
   },
 );
 
-await check(
-  "a link minted on the short route round-trips the document",
-  async () => {
-    const result = await createShareLink(
-      FROZEN_SEQ_TEXT,
-      "auto",
-      undefined,
-      undefined,
-    );
-    assert.notEqual(result.isError, true, textOf(result));
-    const url = textOf(result)
-      .split("\n")
-      .find((line) => line.startsWith("http"));
-    assert.ok(url !== undefined, "no URL in the tool's answer");
-    assert.match(url, /\/view\/seq#m=AF1\./);
-    const decoded = await decodeShareFragment(new URL(url).hash);
-    assert.equal(decoded.status, "ok");
-    assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
-  },
-);
+await check("a minted link round-trips the document", async () => {
+  const result = await createShareLink(
+    FROZEN_SEQ_TEXT,
+    "auto",
+    undefined,
+    undefined,
+  );
+  assert.notEqual(result.isError, true, textOf(result));
+  const url = textOf(result)
+    .split("\n")
+    .find((line) => line.startsWith("http"));
+  assert.ok(url !== undefined, "no URL in the tool's answer");
+  assert.match(url, /\/view#m=AF1\./);
+  const decoded = await decodeShareFragment(new URL(url).hash);
+  assert.equal(decoded.status, "ok");
+  assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
+});
 
-await check(
-  "the alias genuinely shortens every minted sequence URL",
-  async () => {
-    // The whole point of /view/seq. Framed as route-length so the check still
-    // says WHY the alias exists if someone "tidies" it back to the long route.
-    assert.ok("/view/seq".length < "/view/sequence".length);
-    assert.equal("/view/sequence".length - "/view/seq".length, 5);
-  },
-);
+await check("merging the playground shortened every minted URL", async () => {
+  /* `/view/seq` existed to spend 5 fewer characters than `/view/sequence`
+       so the payload got them. Merging the routes goes further: a link needs
+       no seed at all, so the route is `/view` — 4 shorter again, and 9
+       shorter than the long route links used to be minted against. Framed as
+       route length so the check still says WHY if someone reintroduces a
+       seeded path for share links. */
+  assert.ok("/view".length < "/view/seq".length);
+  assert.equal("/view/seq".length - "/view".length, 4);
+  assert.equal("/view/sequence".length - "/view".length, 9);
+});
 
 /* ----------------------------------------------------------------------- */
 /* 3. At the limit, the answer is the .alab file — offered, not just named  */
@@ -398,13 +456,10 @@ await check(
       "src/features/playground/components/view-playground.tsx",
     );
     assert.match(playground, /parseViewSource\(decoded\.aftText\)/);
-    for (const route of [
-      "src/app/view/page.tsx",
-      "src/app/view/c4/page.tsx",
-      /* `/view/sequence` is deliberately absent: it is the ALIAS now and
-         forwards to `/view/seq`, which is the mounted page below. */
-      "src/app/view/seq/page.tsx",
-    ]) {
+    /* ONE route mounts it now. The aliases forward instead, so the thing to
+       assert about them is that they carry the fragment across — which
+       `check:seo` and the trampoline assertion above both cover. */
+    for (const route of ["src/app/view/page.tsx"]) {
       assert.ok(
         readSource(route).includes("<ViewPlayground"),
         `${route} must mount the merged playground`,

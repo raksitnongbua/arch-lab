@@ -1,51 +1,31 @@
 import type { Metadata } from "next";
 
-import { cookies } from "next/headers";
-
-import { ViewPlayground } from "@/features/playground";
-import {
-  isCollapsedCookie,
-  SOURCE_FOLD_COOKIE,
-} from "@/features/playground/lib/source-fold";
+import { AliasForward } from "@/components/share/alias-forward";
 
 export const metadata: Metadata = {
-  title: "Write your own C4 model — live editor",
-  description:
-    "Edit .alab, arch-lab JSON or Mermaid C4 and watch the C4 diagram re-render live. Drill into any box, export as an image. Free, no account, runs in your browser.",
-  alternates: { canonical: "/view/c4" },
+  title: "C4 diagram playground",
+  // An alias must not compete with the page it forwards to: canonical names
+  // the real playground, and noindex keeps the trampoline out of results.
+  alternates: { canonical: "/view" },
+  robots: { index: false },
 };
 
 /**
- * `/view/c4` — the merged playground (`features/playground`), seeded with the
- * C4 example. The component is the SAME one `/view` and `/view/sequence`
- * mount; the seed is the routes' only difference, kept so each route's share
- * links, sitemap entry and OG card keep describing what a visitor first sees.
+ * `/view/c4` — a forwarding alias for `/view`.
  *
- * Share links land in two ways, both live:
- *   - links are minted against this path (`/view/c4#m=…`) by the C4 shell's
- *     Share panel;
- *   - legacy `/view#m=…` links open in place on `/view` itself now — the
- *     playground reads every payload kind, so nothing forwards here any more.
+ * The playground is one route now (the seed is a query param, `?d=`, not a path). This page
+ * stays because a share link is a URL SOMEONE ELSE IS HOLDING: every link
+ * minted against it before the merge must keep opening, and
+ * `check:share-capacity` treats the routes as a compatibility surface.
  *
- * A STATIC segment named `c4` shadows `/view/[modelId]` — Next resolves
- * static segments first — which makes `c4` a reserved model id; the
- * `[modelId]` page asserts that at build time.
+ * IT CANNOT BE A `redirects()` RULE, which is the whole reason it renders a
+ * component instead of being three lines of config: the payload lives in the
+ * URL fragment, the fragment never reaches the server, and a server redirect
+ * would drop the document on the floor. Only a client can carry it across.
  *
-
- * The rail fold is read from the request cookie and rendered SERVER-SIDE, so
- * the pane is already in the right state in the first byte — see
- * `playground/lib/source-fold.ts` for why the client-only versions of this
- * all flashed. Reading a cookie opts this route out of static rendering,
- * which is the honest price of server-rendering a per-reader preference.
+ * Its `opengraph-image` stays beside it too, so a link already in circulation
+ * keeps the preview card it was minted with.
  */
-export default async function ViewC4Page(): Promise<React.JSX.Element> {
-  const store = await cookies();
-  return (
-    <ViewPlayground
-      seed="c4"
-      initialSourceCollapsed={isCollapsedCookie(
-        store.get(SOURCE_FOLD_COOKIE)?.value,
-      )}
-    />
-  );
+export default function ViewC4Page(): React.JSX.Element {
+  return <AliasForward to="/view" label="the playground" />;
 }

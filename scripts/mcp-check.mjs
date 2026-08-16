@@ -800,10 +800,12 @@ check(
     );
     const url = text.split("\n").find((line) => line.startsWith("http"));
     assert.ok(url !== undefined, `no URL in:\n${text}`);
-    // `/view/c4` — the C4 playground's address since `/view` became the
-    // chooser. Legacy `/view#m=…` links are forwarded by the chooser, but new
-    // links must mint against the real page and skip that hop.
-    assert.match(url, /\/view\/c4#m=AF1\./);
+    /* Bare `/view` — the playground is one route, and a share link carries
+       no seed because it carries the document. The seeded paths still forward,
+       so links minted before the merge keep opening; new ones must not spend
+       characters on a hop the payload could have had. */
+    assert.match(url, /\/view#m=AF1\./);
+    assert.doesNotMatch(url, /\/view\/(c4|seq)/);
 
     const decoded = await decodeShareFragment(new URL(url).hash);
     assert.equal(decoded.status, "ok");
@@ -921,10 +923,10 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
 /*
  * The end-to-end path an agent actually walks for a sequence flow: author →
  * validate_sequence → format_sequence (canonical .alab) → create_share_link.
- * The link must land on /view/seq — the short alias that forwards to
- * /view/sequence with the fragment intact (the C4 route would parse-error) — and
- * decode back to the SAME canonical text format_sequence hands out, so the
- * shared flow and the committed file cannot disagree.
+ * The link must land on bare /view — the one playground, which detects the
+ * document kind from the payload, so no route carries a seed — and decode back
+ * to the SAME canonical text format_sequence hands out, so the shared flow and
+ * the committed file cannot disagree.
  */
 check("create_share_link mints a sequence link that decodes back", async () => {
   const canonical = expectOk(formatSequence(VALID_SEQUENCE))
@@ -936,7 +938,8 @@ check("create_share_link mints a sequence link that decodes back", async () => {
   );
   const url = text.split("\n").find((line) => line.startsWith("http"));
   assert.ok(url !== undefined, `no URL in:\n${text}`);
-  assert.match(url, /\/view\/seq#m=AF1\./);
+  assert.match(url, /\/view#m=AF1\./);
+  assert.doesNotMatch(url, /\/view\/(seq|sequence|c4)/);
 
   const decoded = await decodeShareFragment(new URL(url).hash);
   assert.equal(decoded.status, "ok");
@@ -960,7 +963,7 @@ check(
         undefined,
       ),
     );
-    assert.match(text, /\/view\/seq#m=AF1\./);
+    assert.match(text, /\/view#m=AF1\./);
     assert.match(text, /one-way|lossy|dropped/i);
   },
 );

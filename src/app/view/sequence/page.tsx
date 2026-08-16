@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   // An alias must not compete with the page it forwards to: canonical names
   // the real playground, and noindex keeps the trampoline itself out of
   // search results entirely.
-  alternates: { canonical: "/view/seq" },
+  alternates: { canonical: "/view" },
   robots: { index: false },
 };
 
@@ -35,5 +35,5 @@ export const metadata: Metadata = {
  * `opengraph-image`, and the card itself now lives beside the real page.
  */
 export default function ViewSequencePage(): React.JSX.Element {
-  return <AliasForward to="/view/seq" label="the sequence playground" />;
+  return <AliasForward to="/view?d=seq" label="the playground" />;
 }

@@ -31,12 +31,13 @@
  * Exits non-zero on any failure. Run with: pnpm check:view-input
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
+const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
 /* ----------------------------------------------------------------------- */
 /* Module resolution: `@/*` alias + extensionless relative imports -> .ts   */
@@ -262,6 +263,54 @@ for (const [label, text] of [
 }
 
 /* ----------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------- */
+/* `?e=` is one flat namespace over both example registries                 */
+/* ----------------------------------------------------------------------- */
+
+{
+  /* Read from SOURCE, not by importing the services: they pull in
+     `.archlab.json` through import attributes this harness deliberately does
+     not support — the same purity constraint that makes this script catch a
+     barrel import dragging in a `.tsx`. The ids are literals, so reading them
+     is exact. */
+  const idsIn = (file) =>
+    [...read(file).matchAll(/^\s*(?:\{\s*)?id: "([a-z0-9-]+)"/gm)].map(
+      (m) => m[1],
+    );
+
+  const c4 = idsIn("src/features/viewer/service/model-service.ts");
+  const seq = idsIn("src/features/sequence/service/example-service.ts");
+  const clash = c4.filter((id) => seq.includes(id));
+
+  /* `?e=` spans both registries so a reader never has to know which kind an
+     id belongs to. The day the two collide it resolves whichever is looked up
+     first — a bundled example quietly opening as the wrong document. */
+  check(
+    `example ids are unique across both registries (${c4.length} C4 + ${seq.length} sequence)`,
+    clash.length === 0 && c4.length > 0 && seq.length > 0,
+    clash.length > 0
+      ? `both define: ${clash.join(", ")}`
+      : "no ids parsed — has a registry moved?",
+  );
+
+  const resolver = read("src/features/playground/lib/example-param.ts");
+  check(
+    "the resolver tries BOTH registries before giving up",
+    resolver.includes("loadViewerModel") &&
+      resolver.includes("loadSequenceExample"),
+  );
+  check(
+    "an unknown ?e= falls back rather than throwing",
+    /return null;/.test(resolver),
+    "a stale link should still open a working playground",
+  );
+  check(
+    "the route feeds ?e= to the playground server-side",
+    read("src/app/view/page.tsx").includes("exampleTextFor"),
+    "resolving after hydration would show the seed, then replace it",
+  );
+}
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

@@ -199,7 +199,7 @@ export default function Home() {
                 working diagram rather than another choice. */}
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
-                href="/view/sequence"
+                href="/view?d=seq"
                 aria-describedby="cta-note"
                 className={buttonClasses({ size: "lg" })}
               >
@@ -207,7 +207,7 @@ export default function Home() {
                 <ArrowRight aria-hidden="true" />
               </Link>
               <Link
-                href="/view/c4"
+                href="/view"
                 className={buttonClasses({ variant: "outline", size: "lg" })}
               >
                 Build a C4 model
@@ -274,7 +274,10 @@ export default function Home() {
             </dl>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Link href="/view/seq" className={buttonClasses({ size: "md" })}>
+              <Link
+                href="/view?d=seq"
+                className={buttonClasses({ size: "md" })}
+              >
                 Click through a checkout flow
                 <ArrowRight aria-hidden="true" />
               </Link>

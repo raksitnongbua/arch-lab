@@ -108,31 +108,36 @@ for (const [route, file] of ROUTES) {
   check(`${route}: names a canonical`, canonicalOf(file) !== null);
 }
 
+/* The arrow reversed when the three playground routes became one. `/view` is
+   the page; `/view/c4` and `/view/seq` are forwarding aliases that must point
+   AT it, which is the same rule as before — one URL claims the content — with
+   the roles the other way round. */
 check(
-  "/view consolidates into the page it duplicates rather than competing",
-  canonicalOf("src/app/view/page.tsx") === "/view/c4",
-  /* The two mount the same component with the same seed. If `/view` is ever
-     given a seed or a layout of its own, this is the assertion to revisit —
-     deliberately, not by deleting it. */
-  `expected "/view/c4", got ${JSON.stringify(canonicalOf("src/app/view/page.tsx"))}`,
+  "/view claims the playground rather than canonicalising away",
+  canonicalOf("src/app/view/page.tsx") === "/view",
+  `expected "/view", got ${JSON.stringify(canonicalOf("src/app/view/page.tsx"))}`,
 );
-
-check(
-  "the long sequence alias canonicals to the route share links carry",
-  canonicalOf("src/app/view/sequence/page.tsx") === "/view/seq",
-);
+for (const alias of ["c4", "seq", "sequence"]) {
+  check(
+    `/view/${alias} canonicals to the playground it forwards to`,
+    canonicalOf(`src/app/view/${alias}/page.tsx`) === "/view",
+    `got ${JSON.stringify(canonicalOf(`src/app/view/${alias}/page.tsx`))}`,
+  );
+}
 
 {
   const sitemap = read("src/app/sitemap.ts");
   const listed = [...sitemap.matchAll(/^\s*"(\/[^"]*)",/gm)].map((m) => m[1]);
   check(
     "the sitemap lists no route that canonicals elsewhere",
-    !listed.includes("/view") && !listed.includes("/view/sequence"),
+    !listed.includes("/view/c4") &&
+      !listed.includes("/view/seq") &&
+      !listed.includes("/view/sequence"),
     `listed: ${listed.join(", ")}`,
   );
   check(
-    "the sitemap lists the two canonical playgrounds",
-    listed.includes("/view/c4") && listed.includes("/view/seq"),
+    "the sitemap lists the one playground",
+    listed.includes("/view"),
     `listed: ${listed.join(", ")}`,
   );
 }

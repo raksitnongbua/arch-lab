@@ -9,12 +9,10 @@
  * wrapper now only states what is sequence-specific and passes everything
  * else through; `scripts/share-parity-check.mjs` pins this arrangement.
  *
- * WHAT MAKES IT A SEQUENCE LINK is the ROUTE, not the payload: the shared
- * codec compresses arbitrary text, `/view/sequence` hands what it decodes to
- * the sequence parser, `/view/c4` to the C4 one. The
- * playground detects the document kind anyway (a C4 document pasted into the
- * sequence pane is told where to go), so a link that lands on the wrong route
- * explains itself instead of failing.
+ * NOTHING MAKES IT A SEQUENCE LINK, and nothing needs to. The shared codec
+ * compresses arbitrary text and the playground detects the kind from what it
+ * decodes, so both document kinds mint the same URL and there is no wrong
+ * route to land on. That is what let the seeded routes collapse into one.
  *
  * The ONE C4 affordance genuinely absent here is the "opens on the diagram
  * you are viewing" pointer — a sequence document has no sub-diagrams to point
@@ -33,13 +31,15 @@ import { ShareButton } from "@/features/viewer/share/share-button";
 
 /**
  * Where a sequence share link lands: the SHORT alias, not the playground's
- * own address. `/view/seq` forwards to `/view/sequence` with the fragment
- * intact (see `app/view/seq/`), and the five characters it does not spend on
- * the route are five more the payload can — the whole document rides in the
+ * own address. The playground is ONE route now, so a link mints against bare
+ * `/view`: the seed that used to be in the path is a query param, and a share
+ * link needs no seed at all — it carries its own document, and the reader
+ * detects C4 or sequence from the text. Every character the route does not
+ * spend goes to the payload, which competes with the codec's ceiling.
  * URL, budgeted against the codec's hard length ceiling. Links minted
  * against the long route before this alias existed still open unchanged.
  */
-const SHARE_ROUTE = "/view/seq";
+const SHARE_ROUTE = "/view";
 
 export function SequenceShareButton({
   /** The document to pack — the pane's current text, verbatim. */

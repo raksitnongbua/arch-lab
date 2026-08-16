@@ -351,11 +351,9 @@ check(
       /localStorage\s*\.\s*(?:get|set)Item/,
       "localStorage is invisible to the server, which is what caused the flash",
     );
-    for (const route of [
-      "src/app/view/page.tsx",
-      "src/app/view/c4/page.tsx",
-      "src/app/view/seq/page.tsx",
-    ]) {
+    /* ONE route mounts the playground now — `/view/c4` and `/view/seq` are
+       forwarding aliases, and a trampoline has no rail to fold. */
+    for (const route of ["src/app/view/page.tsx"]) {
       const source = read(route);
       assert.match(
         source,
