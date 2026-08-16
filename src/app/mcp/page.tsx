@@ -10,10 +10,22 @@ import { McpGuide } from "@/features/mcp/components/mcp-guide";
 import { documentedOrigin, publicOrigin } from "@/features/mcp/lib/origin";
 import { APP_NAME } from "@/lib/constants";
 
+/*
+ * TITLE AND DESCRIPTION ARE TARGETED, and the target is "MCP server for
+ * architecture diagrams". Both previously opened on the product — "use
+ * arch-lab from your AI agent" — which names the thing only to a reader who
+ * already knows what arch-lab is. Nobody searches for that. The people this
+ * page is for are searching for the CATEGORY, and page one of that search is
+ * currently GitHub READMEs and directory listings, so a page that says plainly
+ * what it is can be read as the first real answer.
+ *
+ * "(beta)" stays in the title. It is the honest status and it belongs where
+ * someone decides whether to depend on this, not only inside the page.
+ */
 export const metadata: Metadata = {
-  title: "MCP server (beta) — use arch-lab from your AI agent",
+  title: "MCP server for architecture diagrams (beta)",
   description:
-    "Connect Claude Code, Cursor or any MCP client and let your agent write C4 and sequence diagrams the real parser has already checked. Hosted, read-only.",
+    "An MCP server for architecture diagrams: let Claude Code, Cursor or any MCP client write C4 and sequence diagrams the real parser has checked. Read-only.",
   alternates: { canonical: "/mcp" },
 };
 
