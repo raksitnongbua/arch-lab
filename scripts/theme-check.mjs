@@ -77,10 +77,34 @@ function contrast(a, b) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/**
+ * A token as linear sRGB, plus its alpha.
+ *
+ * ALPHA IS NOT IGNORED, and that is the whole reason this returns a pair. The
+ * `glass` theme's surfaces are translucent — `oklch(1 0 0 / 0.55)` — so what a
+ * reader sees is the surface composited over whatever is behind it. Measuring
+ * the token alone would report the contrast of a card that does not exist, and
+ * would flatter every translucent palette ever added here.
+ */
 const parseOklch = (value) => {
-  const m = /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(value ?? "");
-  return m === null ? null : oklchToLinear(+m[1], +m[2], +m[3]);
+  const m =
+    /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+))?/.exec(
+      value ?? "",
+    );
+  if (m === null) return null;
+  return {
+    rgb: oklchToLinear(+m[1], +m[2], +m[3]),
+    alpha: m[4] === undefined ? 1 : +m[4],
+  };
 };
+
+/** `over` composited under `colour`, in linear light. */
+const flatten = (colour, over) =>
+  colour.alpha >= 1
+    ? colour.rgb
+    : colour.rgb.map(
+        (c, i) => c * colour.alpha + over.rgb[i] * (1 - colour.alpha),
+      );
 
 /* ----------------------------------------------------------------------- */
 /* The maths reproduces what globals.css already claims                     */
@@ -89,13 +113,14 @@ const parseOklch = (value) => {
 console.log("the conversion agrees with the figures globals.css records");
 
 {
+  const opaque = (v) => parseOklch(v).rgb;
   const dark = contrast(
-    parseOklch("oklch(0.55 0.024 275)"),
-    parseOklch("oklch(0.215 0.02 275)"),
+    opaque("oklch(0.55 0.024 275)"),
+    opaque("oklch(0.215 0.02 275)"),
   );
   const light = contrast(
-    parseOklch("oklch(0.62 0.012 265)"),
-    parseOklch("oklch(1 0 0)"),
+    opaque("oklch(0.62 0.012 265)"),
+    opaque("oklch(1 0 0)"),
   );
   check(
     `dark node-border/node reproduces 3.61:1 (got ${dark.toFixed(2)})`,
@@ -197,7 +222,8 @@ console.log("\nevery dark-family theme is in the dark variant");
        darker than its foreground is the definition that cannot go stale. */
     const bg = parseOklch(tokens.get("--background"));
     const fg = parseOklch(tokens.get("--foreground"));
-    if (bg === null || fg === null || luminance(bg) >= luminance(fg)) continue;
+    if (bg === null || fg === null || luminance(bg.rgb) >= luminance(fg.rgb))
+      continue;
     if (!variant.includes(`.${theme} `)) missingVariant.push(theme);
     if (!colorScheme.includes(`html.${theme}`)) missingScheme.push(theme);
   }
@@ -249,11 +275,15 @@ const PAIRS = [
 for (const [theme, tokens] of palettes) {
   const value = (token) => tokens.get(token) ?? baseline.get(token);
   const failed = [];
+  /* Everything is measured as SEEN: a translucent surface is flattened over
+     the page behind it, and text is flattened over that surface. */
+  const page = parseOklch(value("--background"));
   for (const [fg, bg, min, what] of PAIRS) {
     const a = parseOklch(value(fg));
     const b = parseOklch(value(bg));
-    if (a === null || b === null) continue; // not an oklch value (a color-mix, say)
-    const got = contrast(a, b);
+    if (a === null || b === null || page === null) continue; // a color-mix, say
+    const under = flatten(b, page);
+    const got = contrast(flatten(a, { rgb: under, alpha: 1 }), under);
     if (got < min) {
       failed.push(
         `${what}: ${fg} on ${bg} is ${got.toFixed(2)}:1, needs ${min}:1`,

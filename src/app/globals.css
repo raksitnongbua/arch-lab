@@ -446,6 +446,299 @@
   --seq-lane-5: #9085e9;
 }
 
+/* --- Two more LIGHT themes ----------------------------------------------------
+ * Both start from `:root` rather than `.dark`, and both redefine only what they
+ * change — a light-family theme inheriting the light baseline is inheriting the
+ * right thing, which is why `check:themes` demands a full token set of dark
+ * themes and not of these.
+ *
+ * `paper` takes the glare off. The default light theme is a cool near-white at
+ * L 0.985; this is warmer (hue 85) and a step darker, which is what a page
+ * looks like when you are reading it for an hour rather than glancing at it.
+ *
+ * `glass` is the one theme whose surfaces are TRANSLUCENT — see the `.af-glass`
+ * rule below, which is the other half of it. Its cards carry an alpha channel,
+ * so what a reader actually sees is the card composited over the page behind
+ * it; `check:themes` blends them before measuring contrast, because measuring
+ * the token alone would flatter every one of them.
+ * ---------------------------------------------------------------------------- */
+
+.paper {
+  --radius: 0.625rem;
+
+  --background: oklch(0.965 0.009 85);
+  --foreground: oklch(0.26 0.021 60);
+
+  --card: oklch(0.99 0.005 85);
+  --card-foreground: oklch(0.26 0.021 60);
+
+  --popover: oklch(0.99 0.005 85);
+  --popover-foreground: oklch(0.26 0.021 60);
+
+  --primary: oklch(0.58 0.2 280);
+  --primary-foreground: oklch(0.985 0.005 280);
+
+  --secondary: oklch(0.93 0.012 82);
+  --secondary-foreground: oklch(0.28 0.02 60);
+
+  --muted: oklch(0.93 0.012 82);
+  --muted-foreground: oklch(0.49 0.02 70);
+
+  --accent: oklch(0.72 0.14 195);
+  --accent-foreground: oklch(0.2 0.03 195);
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.985 0.01 27);
+
+  --success: oklch(0.62 0.16 150);
+  --success-foreground: oklch(0.985 0.01 150);
+
+  --warning: oklch(0.75 0.15 75);
+  --warning-foreground: oklch(0.24 0.04 75);
+
+  --border: oklch(0.88 0.014 80);
+  --input: oklch(0.88 0.014 80);
+  --ring: oklch(0.58 0.2 280);
+
+  /* Canvas-specific tokens the future editor will consume. */
+  --canvas: oklch(0.955 0.011 85);
+  --canvas-grid: oklch(0.9 0.014 82);
+  --node: oklch(0.995 0.004 85);
+  --node-foreground: oklch(0.26 0.021 60);
+  /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
+  --node-border: oklch(0.6 0.016 70);
+  /* Secondary text ON node fills (the [Type] line + description). Split off
+     --muted-foreground because the vivid fills below sit ~ΔL 0.04 deeper
+     than the old near-white cards; the shared muted tone slid under 4.5:1
+     there, and darkening --muted-foreground app-wide to fix a node problem
+     would have punished every panel. Measured per fill below. */
+  --node-meta: oklch(0.45 0.022 70);
+
+  /* Per-role node colours (see editor/lib/node-colors.ts for the type→role
+     table and the co-occurrence reasoning). Five roles, four genuinely
+     coloured hue families anchored to the house palette — person on the
+     primary violet, internal on a confident blue, database on the accent
+     teal, queue on its green neighbour (data-at-rest / data-in-flight, one
+     family) — plus a receding near-neutral grey for external, the only
+     colour that MEANS something ("not ours") and therefore the only one
+     kept deliberately quiet. Fills carry real chroma at L≈0.93; text on
+     them switches to --node-meta above for the secondary lines.
+     Ratios below are computed (oklch → sRGB → WCAG relative luminance) by
+     the audit script kept with the palette job, and re-annotated whenever a
+     value moves: name is --node-foreground vs fill, meta is --node-meta vs
+     fill, border is each role's border vs ITS OWN fill; the wash-top triple
+     repeats them against the surface wash's DEEPEST stop (14% border folded
+     into the fill — see .af-node-wash; the shallower 7% grounding stop at
+     the bottom edge is measured by the same script and sits between the
+     flat-fill and wash-top rows on every pair, so wash-top stays the worst
+     case). Thresholds: text ≥4.5:1, border and the border-tinted icon
+     ≥3:1. */
+  /* name 14.36:1, meta 6.05:1, border 4.56:1 (wash-top: 11.95 / 5.04 / 3.79) */
+  --node-person: oklch(0.93 0.036 295);
+  --node-person-border: oklch(0.53 0.16 295);
+  /* name 14.44:1, meta 6.09:1, border 4.46:1 (wash-top: 12.10 / 5.10 / 3.74) */
+  --node-internal: oklch(0.93 0.034 250);
+  --node-internal-border: oklch(0.52 0.13 250);
+  /* name 15.57:1, meta 6.56:1, border 3.20:1 (no wash — external stays matte) */
+  --node-external: oklch(0.945 0.01 82);
+  --node-external-border: oklch(0.6 0.016 70);
+  /* name 14.72:1, meta 6.21:1, border 4.76:1 (wash-top: 12.24 / 5.16 / 3.96) */
+  --node-database: oklch(0.93 0.055 195);
+  --node-database-border: oklch(0.5 0.084 195);
+  /* name 14.98:1, meta 6.31:1, border 4.43:1 (wash-top: 12.54 / 5.29 / 3.71) */
+  --node-queue: oklch(0.935 0.055 150);
+  --node-queue-border: oklch(0.52 0.11 150);
+
+  /* tagColors fills are REBUILT from the author's colour rather than mixed:
+     oklch(from <tag> var(--tag-fill-l) min(c, var(--tag-fill-c)) h) — the
+     author's hue at OUR lightness (node-colors.ts: tagFillCss has the full
+     rationale). These two pins are what guarantee a tag fill lands on the
+     same measured lightness band as the role fills above, whatever hex the
+     author typed. */
+  --tag-fill-l: 0.93;
+  --tag-fill-c: 0.055;
+
+  --edge: oklch(0.6 0.02 265);
+  /* The resting drift that rides ON TOP of a connector. A real token, not an
+     inline color-mix, because the animated GIF export has to resolve the exact
+     same colour from the same place — two spellings of "edge lifted toward
+     primary" would drift apart the first time either is tuned. */
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.58 0.2 280 / 0.18);
+
+  /* Sequence-diagram LANE tokens — one accent per participant column, keyed
+     by document order and cycled past five (layout.ts assigns the slot).
+     CVD/contrast-validated as a set, on the ADJACENT pairlist (lifelines sit
+     in fixed left-to-right order, so neighbours are what readers compare):
+     worst adjacent CVD ΔE 9.2 light / 9.4 dark (≥8), worst adjacent
+     normal-vision ΔE 27.5 light / 19.7 dark (≥15) — all checks pass.
+     THREE THINGS ABOUT THIS LIST ARE LOAD-BEARING; do not tidy them:
+       1. THE ORDER IS NOT ARBITRARY. Three pairs fail if ever adjacent —
+          magenta↔aqua (ΔE 1.6 deutan, dark), violet↔blue (9.8 normal, dark),
+          magenta↔orange (12.9 normal, light) — and this ordering is a path
+          that avoids all three. Reordering the slots breaks the validation.
+       2. YELLOW IS DELIBERATELY ABSENT. --warning amber already paints the
+          notes on this diagram and status colours are reserved; a yellow
+          lane beside amber notes would be ambiguous.
+       3. Light-mode aqua (slot 1) and magenta (slot 4) sit below 3:1 against
+          the light surface. Allowed ONLY under the relief rule — identity is
+          never colour-alone — which this diagram satisfies inherently: a
+          participant's NAME is always rendered inside its header. That is
+          why the contrast WARN is acceptable rather than ignored.
+     The values are the validator's exact hexes; converting them to oklch by
+     hand would drift from what was measured. */
+  --seq-lane-1: #1baf7a;
+  --seq-lane-2: #eb6834;
+  --seq-lane-3: #2a78d6;
+  --seq-lane-4: #e87ba4;
+  --seq-lane-5: #4a3aa7;
+
+  /* The two properties node shapes actually paint with. Each node overrides
+     them inline (node-colors.ts: role token, or the author's tagColors hex);
+     these root defaults only cover node chrome rendered outside a canvas
+     node — and keep such a stray exactly the colour every node used to be. */
+  --node-fill: var(--node);
+  --node-stroke: var(--node-border);
+}
+
+.glass {
+  --radius: 0.625rem;
+
+  --background: oklch(0.955 0.012 255);
+  --foreground: oklch(0.21 0.02 265);
+
+  --card: oklch(1 0 0 / 0.55);
+  --card-foreground: oklch(0.21 0.02 265);
+
+  --popover: oklch(1 0 0 / 0.82);
+  --popover-foreground: oklch(0.21 0.02 265);
+
+  --primary: oklch(0.58 0.2 280);
+  --primary-foreground: oklch(0.985 0.005 280);
+
+  --secondary: oklch(0.93 0.012 260 / 0.6);
+  --secondary-foreground: oklch(0.28 0.02 265);
+
+  --muted: oklch(0.93 0.012 260 / 0.6);
+  --muted-foreground: oklch(0.53 0.02 265);
+
+  --accent: oklch(0.72 0.14 195);
+  --accent-foreground: oklch(0.2 0.03 195);
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.985 0.01 27);
+
+  --success: oklch(0.62 0.16 150);
+  --success-foreground: oklch(0.985 0.01 150);
+
+  --warning: oklch(0.75 0.15 75);
+  --warning-foreground: oklch(0.24 0.04 75);
+
+  --border: oklch(0.62 0.02 265 / 0.28);
+  --input: oklch(0.62 0.02 265 / 0.34);
+  --ring: oklch(0.58 0.2 280);
+
+  /* Canvas-specific tokens the future editor will consume. */
+  --canvas: oklch(0.945 0.014 255);
+  --canvas-grid: oklch(0.87 0.016 255);
+  --node: oklch(1 0 0 / 0.62);
+  --node-foreground: oklch(0.21 0.02 265);
+  /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
+  --node-border: oklch(0.62 0.012 265);
+  /* Secondary text ON node fills (the [Type] line + description). Split off
+     --muted-foreground because the vivid fills below sit ~ΔL 0.04 deeper
+     than the old near-white cards; the shared muted tone slid under 4.5:1
+     there, and darkening --muted-foreground app-wide to fix a node problem
+     would have punished every panel. Measured per fill below. */
+  --node-meta: oklch(0.45 0.025 265);
+
+  /* Per-role node colours (see editor/lib/node-colors.ts for the type→role
+     table and the co-occurrence reasoning). Five roles, four genuinely
+     coloured hue families anchored to the house palette — person on the
+     primary violet, internal on a confident blue, database on the accent
+     teal, queue on its green neighbour (data-at-rest / data-in-flight, one
+     family) — plus a receding near-neutral grey for external, the only
+     colour that MEANS something ("not ours") and therefore the only one
+     kept deliberately quiet. Fills carry real chroma at L≈0.93; text on
+     them switches to --node-meta above for the secondary lines.
+     Ratios below are computed (oklch → sRGB → WCAG relative luminance) by
+     the audit script kept with the palette job, and re-annotated whenever a
+     value moves: name is --node-foreground vs fill, meta is --node-meta vs
+     fill, border is each role's border vs ITS OWN fill; the wash-top triple
+     repeats them against the surface wash's DEEPEST stop (14% border folded
+     into the fill — see .af-node-wash; the shallower 7% grounding stop at
+     the bottom edge is measured by the same script and sits between the
+     flat-fill and wash-top rows on every pair, so wash-top stays the worst
+     case). Thresholds: text ≥4.5:1, border and the border-tinted icon
+     ≥3:1. */
+  /* name 14.36:1, meta 6.05:1, border 4.56:1 (wash-top: 11.95 / 5.04 / 3.79) */
+  --node-person: oklch(0.93 0.036 295);
+  --node-person-border: oklch(0.53 0.16 295);
+  /* name 14.44:1, meta 6.09:1, border 4.46:1 (wash-top: 12.10 / 5.10 / 3.74) */
+  --node-internal: oklch(0.93 0.034 250);
+  --node-internal-border: oklch(0.52 0.13 250);
+  /* name 15.57:1, meta 6.56:1, border 3.20:1 (no wash — external stays matte) */
+  --node-external: oklch(0.96 0.008 260 / 0.6);
+  --node-external-border: oklch(0.62 0.012 265);
+  /* name 14.72:1, meta 6.21:1, border 4.76:1 (wash-top: 12.24 / 5.16 / 3.96) */
+  --node-database: oklch(0.93 0.055 195);
+  --node-database-border: oklch(0.5 0.084 195);
+  /* name 14.98:1, meta 6.31:1, border 4.43:1 (wash-top: 12.54 / 5.29 / 3.71) */
+  --node-queue: oklch(0.935 0.055 150);
+  --node-queue-border: oklch(0.52 0.11 150);
+
+  /* tagColors fills are REBUILT from the author's colour rather than mixed:
+     oklch(from <tag> var(--tag-fill-l) min(c, var(--tag-fill-c)) h) — the
+     author's hue at OUR lightness (node-colors.ts: tagFillCss has the full
+     rationale). These two pins are what guarantee a tag fill lands on the
+     same measured lightness band as the role fills above, whatever hex the
+     author typed. */
+  --tag-fill-l: 0.93;
+  --tag-fill-c: 0.055;
+
+  --edge: oklch(0.6 0.02 265);
+  /* The resting drift that rides ON TOP of a connector. A real token, not an
+     inline color-mix, because the animated GIF export has to resolve the exact
+     same colour from the same place — two spellings of "edge lifted toward
+     primary" would drift apart the first time either is tuned. */
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.58 0.2 280 / 0.18);
+
+  /* Sequence-diagram LANE tokens — one accent per participant column, keyed
+     by document order and cycled past five (layout.ts assigns the slot).
+     CVD/contrast-validated as a set, on the ADJACENT pairlist (lifelines sit
+     in fixed left-to-right order, so neighbours are what readers compare):
+     worst adjacent CVD ΔE 9.2 light / 9.4 dark (≥8), worst adjacent
+     normal-vision ΔE 27.5 light / 19.7 dark (≥15) — all checks pass.
+     THREE THINGS ABOUT THIS LIST ARE LOAD-BEARING; do not tidy them:
+       1. THE ORDER IS NOT ARBITRARY. Three pairs fail if ever adjacent —
+          magenta↔aqua (ΔE 1.6 deutan, dark), violet↔blue (9.8 normal, dark),
+          magenta↔orange (12.9 normal, light) — and this ordering is a path
+          that avoids all three. Reordering the slots breaks the validation.
+       2. YELLOW IS DELIBERATELY ABSENT. --warning amber already paints the
+          notes on this diagram and status colours are reserved; a yellow
+          lane beside amber notes would be ambiguous.
+       3. Light-mode aqua (slot 1) and magenta (slot 4) sit below 3:1 against
+          the light surface. Allowed ONLY under the relief rule — identity is
+          never colour-alone — which this diagram satisfies inherently: a
+          participant's NAME is always rendered inside its header. That is
+          why the contrast WARN is acceptable rather than ignored.
+     The values are the validator's exact hexes; converting them to oklch by
+     hand would drift from what was measured. */
+  --seq-lane-1: #1baf7a;
+  --seq-lane-2: #eb6834;
+  --seq-lane-3: #2a78d6;
+  --seq-lane-4: #e87ba4;
+  --seq-lane-5: #4a3aa7;
+
+  /* The two properties node shapes actually paint with. Each node overrides
+     them inline (node-colors.ts: role token, or the author's tagColors hex);
+     these root defaults only cover node chrome rendered outside a canvas
+     node — and keep such a stray exactly the colour every node used to be. */
+  --node-fill: var(--node);
+  --node-stroke: var(--node-border);
+}
+
 /* --- EXTENSION POINT: adding a third theme ------------------------------------
  * Themes are pure data — a class selector that reassigns the tokens above.
  * To add e.g. "midnight" (OLED black) or "contrast" (high-contrast):
@@ -1259,4 +1552,56 @@
 
 .af-demo-kind:hover .af-demo-glyph {
   animation: af-demo-glyph 1.6s ease-in-out infinite;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Liquid glass: the surface treatment half of the `glass` theme               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A translucent surface is only half of glass — the other half is what happens
+ * to what is BEHIND it. `.af-glass` marks the chrome surfaces that should
+ * refract: cards, popovers, dialogs, the header. The `glass` theme gives them
+ * a backdrop filter; every other theme leaves the class inert.
+ *
+ * SCOPED TO THE THEME, not applied everywhere at `blur(0)`. A backdrop filter
+ * promotes its element to its own compositing layer whether or not the blur is
+ * visible, so an unscoped version would charge five themes for an effect only
+ * the sixth uses — on a page that can hold a hundred node cards.
+ *
+ * MARKED RATHER THAN MATCHED. The obvious shortcut is a selector like
+ * `[class*="bg-card"]`, which reads every element's class string and breaks the
+ * moment a utility is renamed or composed. An explicit class is greppable and
+ * says which surfaces were CHOSEN — the canvas nodes deliberately are not among
+ * them, because a blur behind every node is a compositing layer per node and
+ * the diagram is the thing being read, not the thing being decorated.
+ *
+ * `saturate` rides along with the blur: a plain blur of a pale ground reads as
+ * grey haze, and the small lift in chroma is what makes it read as glass rather
+ * than as a smudge.
+ */
+/* NO HAND-WRITTEN `-webkit-` PREFIX. Lightning CSS adds the prefixes the
+   browserslist targets need, and a manual one written after the standard
+   property is treated as the later declaration of the same thing: the build
+   kept `-webkit-backdrop-filter` and dropped the unprefixed line entirely,
+   which would have left Chrome and Firefox with no blur at all. */
+.glass .af-glass {
+  backdrop-filter: blur(14px) saturate(150%);
+}
+
+/* A hairline of light along the top edge, the way a pane of glass catches it.
+   `inset` so it sits inside the border radius, and additive to whatever shadow
+   the surface already carries. */
+.glass .af-glass {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.5),
+    0 1px 2px oklch(0.2 0.02 265 / 0.06);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  /* No backdrop filter: the translucent tokens would leave text sitting on
+     whatever is behind them. Opaque surfaces are the honest fallback. */
+  .glass .af-glass {
+    background-color: oklch(1 0 0 / 0.94);
+  }
 }

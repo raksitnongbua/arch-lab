@@ -160,7 +160,7 @@ export function Header(): React.JSX.Element {
   return (
     <header
       ref={headerRef}
-      className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl"
+      className="af-glass sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl"
     >
       {/* Full-bleed rather than centred in a max-width container: the editor is
           edge-to-edge (rails flush to both sides), so a contained header left the

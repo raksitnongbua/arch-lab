@@ -138,7 +138,7 @@ export function ZoomMenu({
           aria-label="Zoom level"
           /* Opens UPWARD: the pill is pinned to the bottom-left of a canvas,
              so a downward menu would open off the bottom edge. */
-          className="absolute bottom-full left-0 z-20 mb-1.5 min-w-28 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+          className="af-glass absolute bottom-full left-0 z-20 mb-1.5 min-w-28 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
         >
           {PRESETS.filter(
             (preset) => preset.scale === null || preset.scale <= maxZoom,
