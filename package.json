@@ -1,6 +1,6 @@
 {
   "name": "arch-lab",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Architecture diagrams as plain text — C4 models and UML-style sequence diagrams, written in a small text format and rendered live in the browser.",
   "keywords": [
