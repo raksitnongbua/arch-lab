@@ -738,6 +738,34 @@ check(
     "the avatar disc is not positioned from layout.headerTop",
   );
 
+  /*
+   * PAINT ORDER, and a source assertion for the same reason as the two above:
+   * SVG has no z-index, so document order IS stacking order, and the layout
+   * cannot see it.
+   *
+   * The fragment chips and guard labels were emitted with their boxes, which
+   * are drawn before the lifelines and activation bars. A bar opened at a
+   * fragment's left edge then painted straight through the chip: `rect`
+   * rendered as "r ct", `opt` as "op". Which labels broke depended on where
+   * the author happened to open a bar relative to a fragment, which is why
+   * every bundled example rendered cleanly and this shipped.
+   *
+   * Labels must come AFTER the bars, so they clear the scaffolding they sit
+   * on, and BEFORE the notes, so a note or an arrow crossing them still wins:
+   * a label is a control, but the diagram is the content.
+   */
+  const painted = renderer
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  const bars = painted.indexOf("layout.activations.map(");
+  const chip = painted.indexOf('"af-seq-chip"');
+  const notes = painted.indexOf("layout.notes.map(");
+  check(
+    "fragment labels paint after the activation bars and before the notes",
+    bars !== -1 && chip !== -1 && notes !== -1 && bars < chip && chip < notes,
+    `activations at ${bars}, chip at ${chip}, notes at ${notes} — SVG has no z-index, so this ordering is the only thing keeping a bar off the chip`,
+  );
+
   const bare = layoutSequence(
     parseSequenceText(
       'archlab 1.0 sequence\ntitle "Short"\n\n@sequence\n  a "A"\n  b "B"\n  a -> b : "x"\n',

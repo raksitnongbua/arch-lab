@@ -356,160 +356,52 @@ export function SequenceDiagram({
         })}
       </defs>
 
-      {/* ---- fragments, outermost first (paint order = nesting order) ----
-          The BOX stays decoration (pointer-events-none — a fragment can
+      {/* ---- fragment BOXES, outermost first (paint order = nesting order) --
+          Boxes only. The chips and guard labels that belong to these
+          fragments are painted much further down, after the activation bars
+          — see "fragment labels" below for why they had to be separated.
+
+          The box stays decoration (pointer-events-none — a fragment can
           cover half the diagram, and a giant click target would swallow
-          every message inside it). What IS clickable, precisely: the kind
-          chip (focus the whole fragment) and each branch's guard label
-          (focus that branch) — small, labelled, and exactly where the eye
-          reads "this is the alt / this is the [card accepted] case". */}
-      {layout.fragments.map((fragment) => {
-        /* The chip is sized to its WORD, not to a constant: `alt` and
-           `critical` differ by five characters, and a fixed 34px box that fit
-           the first clipped the second. The guard label then starts after
-           whatever width came out, so the two never overlap. */
-        const chipWidth = Math.max(
-          34,
-          Math.ceil(estimateTextWidth(fragment.kind, SEQ.fragmentFontSize)) +
-            14,
-        );
-        return (
-          <g
-            key={fragment.id}
-            className={cn(
-              "af-seq-dimmable",
-              fragmentDimmed(fragment) && "af-seq-dim",
-            )}
-          >
-            <g className="pointer-events-none">
-              {/* A `rect` is a HIGHLIGHT, so its fill is the author's colour at
-                a wash rather than the neutral scaffolding fill every other
-                fragment gets. The wash opacity is fixed here (not taken from
-                the document) so a tint can never be strong enough to hide the
-                messages it is drawn behind. */}
-              <rect
-                x={fragment.x}
-                y={fragment.y}
-                width={fragment.width}
-                height={fragment.height}
-                rx={8}
-                fill={fragment.tint ?? "var(--canvas)"}
-                fillOpacity={
-                  fragment.tint !== undefined ? TINT_WASH_OPACITY : 0.5
-                }
-                stroke="var(--node-border)"
-                strokeWidth={1}
-              />
-              {fragment.dividers.map((divider, dividerIndex) => (
-                <line
-                  key={`div-${dividerIndex}`}
-                  x1={fragment.x}
-                  y1={divider.y}
-                  x2={fragment.x + fragment.width}
-                  y2={divider.y}
-                  stroke="var(--node-border)"
-                  strokeWidth={1}
-                  strokeDasharray="5 4"
-                />
-              ))}
-            </g>
-
-            {/* Kind chip — clicking it focuses the WHOLE fragment. */}
-            <FragmentControl
-              ariaLabel={`Focus the ${fragment.kind} fragment — every message in ${
-                fragment.branches.length > 1
-                  ? `all ${fragment.branches.length} branches`
-                  : "it"
-              }`}
-              hitX={fragment.x - 2}
-              hitY={fragment.y - 2}
-              hitWidth={chipWidth + 4}
-              hitHeight={22}
-              onFocus={() => onFocusFragment(fragment.id, null)}
-            >
-              <rect
-                className="af-seq-chip"
-                x={fragment.x}
-                y={fragment.y}
-                width={chipWidth}
-                height={18}
-                rx={6}
-                fill="var(--secondary)"
-                stroke="var(--border)"
-              />
-              <text
-                x={fragment.x + chipWidth / 2}
-                y={fragment.y + 13}
-                textAnchor="middle"
-                fontSize={SEQ.fragmentFontSize}
-                fontFamily="var(--font-mono)"
-                fill="var(--secondary-foreground)"
-              >
-                {fragment.kind}
-              </text>
-            </FragmentControl>
-
-            {/* Branch 0's guard label sits beside the chip; branches 1+ label
-              their dividers (dividers[i] pairs with branches[i + 1] — the
-              layout's documented contract). Each guard focuses ITS branch. */}
-            {fragment.label !== undefined ? (
-              <FragmentControl
-                ariaLabel={`Focus the [${fragment.label}] branch of the ${fragment.kind} fragment`}
-                hitX={fragment.x + chipWidth + 4}
-                hitY={fragment.y - 2}
-                hitWidth={
-                  estimateTextWidth(
-                    `[${fragment.label}]`,
-                    SEQ.fragmentFontSize,
-                  ) + 4
-                }
-                hitHeight={22}
-                onFocus={() => onFocusFragment(fragment.id, 0)}
-              >
-                <text
-                  className="af-seq-guard"
-                  x={fragment.x + chipWidth + 6}
-                  y={fragment.y + 13}
-                  fontSize={SEQ.fragmentFontSize}
-                  fontStyle="italic"
-                  fill="var(--muted-foreground)"
-                >
-                  [{fragment.label}]
-                </text>
-              </FragmentControl>
-            ) : null}
-            {fragment.dividers.map((divider, dividerIndex) =>
-              divider.label !== undefined ? (
-                <FragmentControl
-                  key={`guard-${dividerIndex}`}
-                  ariaLabel={`Focus the [${divider.label}] branch of the ${fragment.kind} fragment`}
-                  hitX={fragment.x + 8}
-                  hitY={divider.y - 18}
-                  hitWidth={
-                    estimateTextWidth(
-                      `[${divider.label}]`,
-                      SEQ.fragmentFontSize,
-                    ) + 4
-                  }
-                  hitHeight={18}
-                  onFocus={() => onFocusFragment(fragment.id, dividerIndex + 1)}
-                >
-                  <text
-                    className="af-seq-guard"
-                    x={fragment.x + 10}
-                    y={divider.y - 5}
-                    fontSize={SEQ.fragmentFontSize}
-                    fontStyle="italic"
-                    fill="var(--muted-foreground)"
-                  >
-                    [{divider.label}]
-                  </text>
-                </FragmentControl>
-              ) : null,
-            )}
-          </g>
-        );
-      })}
+          every message inside it). */}
+      {layout.fragments.map((fragment) => (
+        <g
+          key={fragment.id}
+          className={cn(
+            "af-seq-dimmable pointer-events-none",
+            fragmentDimmed(fragment) && "af-seq-dim",
+          )}
+        >
+          {/* A `rect` is a HIGHLIGHT, so its fill is the author's colour at
+              a wash rather than the neutral scaffolding fill every other
+              fragment gets. The wash opacity is fixed here (not taken from
+              the document) so a tint can never be strong enough to hide the
+              messages it is drawn behind. */}
+          <rect
+            x={fragment.x}
+            y={fragment.y}
+            width={fragment.width}
+            height={fragment.height}
+            rx={8}
+            fill={fragment.tint ?? "var(--canvas)"}
+            fillOpacity={fragment.tint !== undefined ? TINT_WASH_OPACITY : 0.5}
+            stroke="var(--node-border)"
+            strokeWidth={1}
+          />
+          {fragment.dividers.map((divider, dividerIndex) => (
+            <line
+              key={`div-${dividerIndex}`}
+              x1={fragment.x}
+              y1={divider.y}
+              x2={fragment.x + fragment.width}
+              y2={divider.y}
+              stroke="var(--node-border)"
+              strokeWidth={1}
+              strokeDasharray="5 4"
+            />
+          ))}
+        </g>
+      ))}
 
       {/* ---- participant boxes: the bracket around a run of lifelines ----
           Drawn BEFORE the header cards so the cards sit on top of the wash,
@@ -642,6 +534,137 @@ export function SequenceDiagram({
           rx={2}
         />
       ))}
+
+      {/* ---- fragment LABELS: chips and guards, over the bars -------------
+          SPLIT FROM THE BOXES ABOVE, and the split is the whole point. SVG
+          has no z-index — paint order is document order — so when these were
+          drawn with their boxes, everything painted afterwards covered them.
+          An activation bar sitting at a fragment's left edge cut the chip in
+          half: `rect` rendered as "r ct", `opt` as "op". A bar is opened by
+          whichever message happens to precede the fragment, so which labels
+          broke depended on the document, which is why this survived the
+          example diagrams.
+
+          Painted after the bars and BEFORE the notes and messages: a label
+          has to clear the scaffolding it sits on, but a note or an arrow
+          passing through is content and still wins. These are also the only
+          clickable parts of a fragment — the chip focuses the whole thing,
+          each guard focuses its branch — so they must be on top to be hit
+          at all, which the boxes' `pointer-events-none` does not give them. */}
+      {layout.fragments.map((fragment) => {
+        /* The chip is sized to its WORD, not to a constant: `alt` and
+           `critical` differ by five characters, and a fixed 34px box that fit
+           the first clipped the second. The guard label then starts after
+           whatever width came out, so the two never overlap. */
+        const chipWidth = Math.max(
+          34,
+          Math.ceil(estimateTextWidth(fragment.kind, SEQ.fragmentFontSize)) +
+            14,
+        );
+        return (
+          <g
+            key={fragment.id}
+            className={cn(
+              "af-seq-dimmable",
+              fragmentDimmed(fragment) && "af-seq-dim",
+            )}
+          >
+            {/* Kind chip — clicking it focuses the WHOLE fragment. */}
+            <FragmentControl
+              ariaLabel={`Focus the ${fragment.kind} fragment — every message in ${
+                fragment.branches.length > 1
+                  ? `all ${fragment.branches.length} branches`
+                  : "it"
+              }`}
+              hitX={fragment.x - 2}
+              hitY={fragment.y - 2}
+              hitWidth={chipWidth + 4}
+              hitHeight={22}
+              onFocus={() => onFocusFragment(fragment.id, null)}
+            >
+              <rect
+                className="af-seq-chip"
+                x={fragment.x}
+                y={fragment.y}
+                width={chipWidth}
+                height={18}
+                rx={6}
+                fill="var(--secondary)"
+                stroke="var(--border)"
+              />
+              <text
+                x={fragment.x + chipWidth / 2}
+                y={fragment.y + 13}
+                textAnchor="middle"
+                fontSize={SEQ.fragmentFontSize}
+                fontFamily="var(--font-mono)"
+                fill="var(--secondary-foreground)"
+              >
+                {fragment.kind}
+              </text>
+            </FragmentControl>
+
+            {/* Branch 0's guard label sits beside the chip; branches 1+ label
+              their dividers (dividers[i] pairs with branches[i + 1] — the
+              layout's documented contract). Each guard focuses ITS branch. */}
+            {fragment.label !== undefined ? (
+              <FragmentControl
+                ariaLabel={`Focus the [${fragment.label}] branch of the ${fragment.kind} fragment`}
+                hitX={fragment.x + chipWidth + 4}
+                hitY={fragment.y - 2}
+                hitWidth={
+                  estimateTextWidth(
+                    `[${fragment.label}]`,
+                    SEQ.fragmentFontSize,
+                  ) + 4
+                }
+                hitHeight={22}
+                onFocus={() => onFocusFragment(fragment.id, 0)}
+              >
+                <text
+                  className="af-seq-guard"
+                  x={fragment.x + chipWidth + 6}
+                  y={fragment.y + 13}
+                  fontSize={SEQ.fragmentFontSize}
+                  fontStyle="italic"
+                  fill="var(--muted-foreground)"
+                >
+                  [{fragment.label}]
+                </text>
+              </FragmentControl>
+            ) : null}
+            {fragment.dividers.map((divider, dividerIndex) =>
+              divider.label !== undefined ? (
+                <FragmentControl
+                  key={`guard-${dividerIndex}`}
+                  ariaLabel={`Focus the [${divider.label}] branch of the ${fragment.kind} fragment`}
+                  hitX={fragment.x + 8}
+                  hitY={divider.y - 18}
+                  hitWidth={
+                    estimateTextWidth(
+                      `[${divider.label}]`,
+                      SEQ.fragmentFontSize,
+                    ) + 4
+                  }
+                  hitHeight={18}
+                  onFocus={() => onFocusFragment(fragment.id, dividerIndex + 1)}
+                >
+                  <text
+                    className="af-seq-guard"
+                    x={fragment.x + 10}
+                    y={divider.y - 5}
+                    fontSize={SEQ.fragmentFontSize}
+                    fontStyle="italic"
+                    fill="var(--muted-foreground)"
+                  >
+                    [{divider.label}]
+                  </text>
+                </FragmentControl>
+              ) : null,
+            )}
+          </g>
+        );
+      })}
 
       {/* ---- notes ---- */}
       {layout.notes.map((note, index) => (
