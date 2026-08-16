@@ -104,8 +104,16 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
         <Badge variant="outline">{MCP_STATUS_LABEL}</Badge>
       </div>
 
+      {/* NAMES THE CATEGORY, not the product. "Use arch-lab from your AI
+          agent" was the heading here, and it identifies the page only to a
+          reader who already knows what arch-lab is — which is nobody arriving
+          from a search or from an agent's answer. The opening sentence below
+          is a DEFINITION for the same reason the landing page's is (there is a
+          check pinning that one): a sentence of the form "X runs a Y, so Z can
+          do W" is the shape a model quotes when asked what this is. Both are
+          load-bearing wording; rewrite them together or not at all. */}
       <h1 className="af-mcp-rise af-mcp-d1 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
-        Use arch-lab from your AI agent
+        An MCP server for architecture diagrams
       </h1>
       <p className="af-mcp-rise af-mcp-d2 mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
         arch-lab runs an{" "}
@@ -118,9 +126,9 @@ export function McpGuide({ origin }: { origin: string }): React.JSX.Element {
           MCP
         </a>{" "}
         server, so Claude Code, Claude Desktop, Cursor and anything else
-        speaking the protocol can read, write and check <Code>.alab</Code>{" "}
-        models. It is hosted — there is nothing to install and no key to
-        configure.
+        speaking the protocol can read, write and check C4 models and sequence
+        diagrams as <Code>.alab</Code> text. It is hosted — there is nothing to
+        install and no key to configure.
       </p>
 
       {/* Above the endpoint, not buried at the bottom: someone about to paste

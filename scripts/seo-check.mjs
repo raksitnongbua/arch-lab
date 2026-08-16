@@ -303,6 +303,20 @@ console.log("\nGEO (what an assistant can reach and quote)");
     /is a browser-based editor/.test(read("src/app/page.tsx")),
     'an assistant asked "what is X" extracts "X is a Y that Z" and paraphrases the rest',
   );
+
+  /* The same rule one level down. /mcp's heading was "Use arch-lab from your
+     AI agent", which identifies the page only to a reader who already knows
+     what arch-lab is — and neither a search result nor an agent's answer has
+     that reader. The heading has to name the CATEGORY. Pinned because it is a
+     targeting decision, and targeting decisions are exactly what gets tidied
+     away later by someone reading it as mere phrasing. */
+  check(
+    "/mcp's heading names the category, not the product",
+    /An MCP server for architecture diagrams/.test(
+      read("src/features/mcp/components/mcp-guide.tsx"),
+    ),
+    "the heading is the first thing both a search result and a cited answer show",
+  );
 }
 
 /* ----------------------------------------------------------------------- */
