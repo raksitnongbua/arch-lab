@@ -210,14 +210,14 @@ export function SequenceExportButton({
   }, [busy]);
 
   const run = useCallback(
-    async (action: ExportAction) => {
+    async (action: ExportAction): Promise<boolean> => {
       const svgNode =
         paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
       if (svgNode === null) {
         const message = "Nothing to export — the diagram is not on screen.";
         setStatus({ kind: "error", message });
         onAnnounce(message);
-        return;
+        return false;
       }
 
       setStatus({ kind: "busy", label: "Preparing…" });
@@ -227,7 +227,7 @@ export function SequenceExportButton({
           const message = "Nothing to export — the diagram has no size yet.";
           setStatus({ kind: "error", message });
           onAnnounce(message);
-          return;
+          return false;
         }
         const stem = fileStem(title);
         if (action === "svg") {
@@ -236,7 +236,7 @@ export function SequenceExportButton({
             `${stem}.svg`,
           );
           onAnnounce("Downloaded the diagram as SVG.");
-          return;
+          return true;
         }
         if (action === "copy") {
           /* Same `rendered` the download path uses, so the clipboard and the
@@ -248,7 +248,7 @@ export function SequenceExportButton({
              action should not report itself two ways. */
           toast({ message: "Copied as PNG — paste it anywhere." });
           setStatus({ kind: "idle" });
-          return;
+          return true;
         }
         if (action === "png") {
           downloadBlob(
@@ -258,7 +258,7 @@ export function SequenceExportButton({
           onAnnounce(
             `Downloaded the diagram as PNG at ${PNG_SCALE_BY_SHARPNESS[sharpness]}× scale.`,
           );
-          return;
+          return true;
         }
 
         // GIF: one loop of the diagram's own idle motion. Synthesised rather
@@ -278,7 +278,7 @@ export function SequenceExportButton({
             "Nothing to animate — this diagram has no moving lines, so a GIF would be copies of the PNG.";
           setStatus({ kind: "error", message });
           onAnnounce(message);
-          return;
+          return false;
         }
         const gif = encodeGif(built.frames, built.width, built.height);
         downloadBlob(
@@ -288,6 +288,7 @@ export function SequenceExportButton({
         onAnnounce(
           `Downloaded a looping GIF — ${built.frames.length} frames of the diagram's running lines.`,
         );
+        return true;
       } catch (error) {
         // Named and SHOWN, not swallowed: rasterising can fail on a browser that
         // refuses to decode the SVG, and a button that silently does nothing is
@@ -300,7 +301,7 @@ export function SequenceExportButton({
            ways depending on which diagram you are looking at is the mismatch,
            not the extra line. */
         toast({ message: `Export failed: ${message}`, tone: "error" });
-        return;
+        return false;
       } finally {
         // Only clear a BUSY state; an error must survive to stay on screen.
         setStatus((current) =>
@@ -309,6 +310,25 @@ export function SequenceExportButton({
       }
     },
     [paneRef, title, onAnnounce, sharpness, smoothness],
+  );
+
+  /**
+   * A row that succeeded has nothing left to say, so the menu gets out of the
+   * way. It was worst on Copy: the clipboard already had the image and the
+   * panel was still sitting over the diagram it had just copied, waiting to be
+   * dismissed by hand. Success is reported by the toast and the live region —
+   * neither of which needs this panel open.
+   *
+   * A FAILURE KEEPS IT OPEN, deliberately: the error renders inside here, and
+   * closing on the way out would take the explanation with it.
+   */
+  const runAndClose = useCallback(
+    async (action: ExportAction): Promise<void> => {
+      const succeeded = await run(action);
+      const node = detailsRef.current;
+      if (succeeded && node !== null) node.open = false;
+    },
+    [run],
   );
 
   return (
@@ -366,7 +386,7 @@ export function SequenceExportButton({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void run("copy")}
+                onClick={() => void runAndClose("copy")}
                 className={MENU_ITEM_CLASSES}
               >
                 <ClipboardCopy aria-hidden="true" className="size-4 shrink-0" />
@@ -381,7 +401,7 @@ export function SequenceExportButton({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run("png")}
+              onClick={() => void runAndClose("png")}
               className={MENU_ITEM_CLASSES}
             >
               <FileImage aria-hidden="true" className="size-4 shrink-0" />
@@ -396,7 +416,7 @@ export function SequenceExportButton({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run("svg")}
+              onClick={() => void runAndClose("svg")}
               className={MENU_ITEM_CLASSES}
             >
               <FileCode2 aria-hidden="true" className="size-4 shrink-0" />
@@ -410,7 +430,7 @@ export function SequenceExportButton({
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run("gif")}
+              onClick={() => void runAndClose("gif")}
               className={MENU_ITEM_CLASSES}
             >
               <Film aria-hidden="true" className="size-4 shrink-0" />
