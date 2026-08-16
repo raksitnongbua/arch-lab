@@ -199,7 +199,7 @@ export default function Home() {
                 working diagram rather than another choice. */}
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <Link
-                href="/view/sequence"
+                href="/view?d=seq"
                 aria-describedby="cta-note"
                 className={buttonClasses({ size: "lg" })}
               >

@@ -80,6 +80,7 @@ export default function DemoPage(): React.JSX.Element {
               title={listing.summary.title}
               description={listing.summary.description}
               row={C4_BASE + row + 1}
+              readOnlyHref={`/view/${listing.summary.id}`}
               meta={[
                 `${listing.summary.diagramCount} diagrams`,
                 `${listing.summary.nodeCount} elements`,
@@ -110,6 +111,7 @@ export default function DemoPage(): React.JSX.Element {
               title={listing.summary.title}
               description={listing.summary.description}
               row={C4_BASE + models.length + row + 2}
+              readOnlyHref={`/view/sequence/${listing.summary.id}`}
               meta={[
                 `${listing.summary.participantCount} participants`,
                 `${listing.summary.messageCount} messages`,
@@ -215,6 +217,7 @@ function ExampleCard({
   description,
   meta,
   row,
+  readOnlyHref,
 }: {
   id: string;
   title: string;
@@ -222,30 +225,54 @@ function ExampleCard({
   meta: string[];
   /** Position in its section — drives the entrance stagger, nothing else. */
   row: number;
+  /** The example's read-only page — see the note on the link below. */
+  readOnlyHref: string;
 }): React.JSX.Element {
   return (
     <li className="af-demo-row" style={{ "--row": row } as React.CSSProperties}>
       {/* The whole row is the link — one target, no separate call to action
           competing with the title above it. */}
-      <Link
-        href={`/view?${VIEW_EXAMPLE_PARAM}=${id}`}
-        className="group flex flex-col gap-1 rounded-md px-2 py-4 transition-colors hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none"
-      >
-        <span className="flex items-center gap-0 text-(--kind)">
-          {/* Grows out of nothing on hover and meets the title — the gesture a
+      {/* The TITLE is the link, not the whole row. It was the row, which is
+          the better target — but a row-wide anchor cannot contain the
+          read-only link beside it, and nesting one anchor in another is
+          invalid HTML that browsers silently unnest. The hover affordance
+          stays on the row through `group`, so it still reads as one target
+          while being two. */}
+      <div className="group flex flex-col gap-1 rounded-md px-2 py-4 transition-colors hover:bg-secondary/40">
+        <Link
+          href={`/view?${VIEW_EXAMPLE_PARAM}=${id}`}
+          className="focus-visible:outline-none"
+        >
+          <span className="flex items-center gap-0 text-(--kind)">
+            {/* Grows out of nothing on hover and meets the title — the gesture a
               diagram is made of, rather than an underline. */}
-          <span aria-hidden="true" className="af-demo-tick h-px bg-current" />
-          <span className="font-medium text-foreground transition-[margin,color] duration-200 group-hover:ml-2 group-hover:text-(--kind)">
-            {title}
+            <span aria-hidden="true" className="af-demo-tick h-px bg-current" />
+            <span className="font-medium text-foreground transition-[margin,color] duration-200 group-hover:ml-2 group-hover:text-(--kind)">
+              {title}
+            </span>
           </span>
-        </span>
+        </Link>
         {description === null ? null : (
           <span className="text-sm text-muted-foreground">{description}</span>
         )}
-        <span className="text-xs text-muted-foreground/80">
-          {meta.join(" · ")}
+        <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground/80">
+          <span>{meta.join(" · ")}</span>
+          {/* The read-only page for this example. It carries its own title,
+              description and social card and is the only CRAWLABLE rendering
+              of the document — the playground renders nothing server-side for
+              a search engine to read. Before this link the six of them were in
+              the sitemap with no inbound link at all, which is the definition
+              of an orphan page. Quiet on purpose: the playground is what a
+              reader wants, and this is for the reader who wants to send
+              someone a diagram rather than an editor. */}
+          <Link
+            href={readOnlyHref}
+            className="underline decoration-dotted underline-offset-2 transition-colors hover:text-foreground"
+          >
+            read-only view
+          </Link>
         </span>
-      </Link>
+      </div>
     </li>
   );
 }

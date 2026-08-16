@@ -76,8 +76,9 @@ keep, and git is the collaboration layer.
   imported, and exported back. Import and export are each lossy in their own
   direction, and the app states exactly what each drops.
 
-Paste any of the five into ${origin}/view/c4 or ${origin}/view/seq and the
-format is detected for you.
+Paste any of the five into ${origin}/view and the format is detected for you —
+one page for both document kinds. \`?d=seq\` chooses which example it starts
+from, and \`?e=<id>\` opens a bundled one.
 
 ## Using it from an AI agent (MCP)
 
