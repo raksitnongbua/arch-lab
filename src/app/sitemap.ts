@@ -6,7 +6,7 @@ import { listViewerModelIds } from "@/features/viewer";
 
 /**
  * Every page a crawler should know about. The static routes are written out
- * by hand — there are eight and they change with the router, not with data —
+ * by hand — there are seven and they change with the router, not with data —
  * while the `/view/[modelId]` entries come from the same registry that feeds
  * `generateStaticParams`, so a bundled example added there appears here
  * without anyone remembering a second list.

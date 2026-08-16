@@ -18,7 +18,7 @@ import { EditorShell } from "@/features/editor";
 export const metadata: Metadata = {
   title: "C4 editor — draw architecture diagrams on a canvas",
   description:
-    "The arch-lab C4 editor: drag, snap, and connect nodes on an interactive canvas, drill from Context down to Code, and save the whole model as one diff-reviewable .alab text file. Local-first — no account, nothing leaves your browser.",
+    "Drag, snap and connect nodes on a canvas, drill from Context down to Code, and save the model as one diff-reviewable .alab file. Local-first.",
   alternates: { canonical: "/editor" },
 };
 
