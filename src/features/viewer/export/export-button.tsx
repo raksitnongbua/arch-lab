@@ -26,8 +26,16 @@
  * outcome ("Exported shopflow-diagrams.zip") is announced politely.
  */
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import {
+  ClipboardCopy,
   ChevronDown,
   Download,
   FileImage,
@@ -43,6 +51,8 @@ import { describeError } from "@/lib/errors";
 
 import {
   archiveEntryName,
+  canCopyPng,
+  copyPngToClipboard,
   downloadBlob,
   downloadPng,
   downloadSvg,
@@ -104,6 +114,11 @@ function ScopeOption({
   );
 }
 
+/* Tiny stores for a browser capability that never changes for the page's
+   life: false on the server, real after hydration, with no setState cascade. */
+const subscribeToNothing = (): (() => void) => () => {};
+const readFalse = (): boolean => false;
+
 export interface ViewerExportButtonProps {
   modelTitle: string;
   /** The diagram currently on screen — what the "This view" scope exports. */
@@ -143,6 +158,15 @@ export function ViewerExportButton({
   );
   const [busy, setBusy] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  /* A browser capability, so it is false on the server and true after
+     hydration — read through useSyncExternalStore rather than an effect, the
+     shape `canEncodeShare` already uses here. The menu is shut until someone
+     opens it, so the item never appears late in front of a reader. */
+  const copyable = useSyncExternalStore(
+    subscribeToNothing,
+    canCopyPng,
+    readFalse,
+  );
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -177,7 +201,7 @@ export function ViewerExportButton({
   }, [open]);
 
   const runExport = useCallback(
-    async (kind: "svg" | "png" | "gif") => {
+    async (kind: "svg" | "png" | "gif" | "copy") => {
       setOpen(false);
       setBusy(true);
       const stem = fileStem(modelTitle);
@@ -194,6 +218,15 @@ export function ViewerExportButton({
         if (scope === "current") {
           const filename = `${stem}-${diagram.level}.${kind}`;
           const rendered = render(diagram);
+          if (kind === "copy") {
+            /* Rendered from the same `render()` as every other kind, so what
+               lands on the clipboard is the file the download would have been.
+               `copyPngToClipboard` is handed the un-awaited blob on purpose —
+               Safari spends the user gesture otherwise. */
+            await copyPngToClipboard(rendered, C4_SHARPNESS[sharpness] * 2);
+            setAnnouncement("Copied the diagram to the clipboard as a PNG.");
+            return;
+          }
           if (kind === "svg") {
             downloadSvg(rendered, filename);
           } else if (kind === "png") {
@@ -344,6 +377,32 @@ export function ViewerExportButton({
               </>
             )}
           </p>
+          {/* COPY comes first, and only for the diagram on screen: an archive
+              has nothing to put on a clipboard. It is the shortest path from
+              "I am looking at this" to "it is in the document I am writing",
+              which is more often what a reader wants than a file in Downloads
+              they then have to find and attach. Hidden, not disabled, where
+              the browser cannot do it — see `canCopyPng`. */}
+          {scope === "current" && copyable ? (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={busy}
+              onClick={() => void runExport("copy")}
+              className={itemClasses}
+            >
+              <ClipboardCopy
+                aria-hidden="true"
+                className="size-4 text-primary"
+              />
+              <span>
+                Copy PNG
+                <span className="block text-xs text-muted-foreground">
+                  To the clipboard, at {PNG_SCALE * C4_SHARPNESS[sharpness]}×
+                </span>
+              </span>
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"

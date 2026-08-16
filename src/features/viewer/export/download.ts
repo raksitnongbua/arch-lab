@@ -141,6 +141,51 @@ export async function renderPngBlob(
   }
 }
 
+/**
+ * Whether this browser can be handed a PNG at all.
+ *
+ * Three things have to be true and only one of them is obvious: the async
+ * clipboard API exists, `ClipboardItem` exists (Firefox shipped
+ * `clipboard.write` before it), and the page is a SECURE CONTEXT —
+ * `navigator.clipboard` is simply undefined on plain http, which is why this
+ * is a capability check rather than a browser check. Read once at the call
+ * site and used to hide the control, so nobody is offered an action that
+ * cannot happen.
+ */
+export function canCopyPng(): boolean {
+  return (
+    typeof ClipboardItem !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.clipboard?.write === "function"
+  );
+}
+
+/**
+ * The rendered diagram on the clipboard as a PNG, ready to paste into a doc,
+ * a ticket or a chat.
+ *
+ * THE BLOB IS PASSED AS A PROMISE, unresolved, and that is not a style choice.
+ * Safari requires `clipboard.write` to be reached synchronously from the user
+ * gesture that started it; rasterising first and writing after would spend the
+ * gesture on the canvas work and land on `NotAllowedError` — a copy that fails
+ * only in Safari, only sometimes, and only for big diagrams. `ClipboardItem`
+ * accepts a promise for exactly this, so the write is registered immediately
+ * and the bytes arrive when they are ready.
+ *
+ * Chrome and Firefox accept the same shape, so there is one path rather than a
+ * fork. If a future engine rejects the promise form it throws synchronously,
+ * which the caller reports like any other export failure — better than a
+ * silent no-op.
+ */
+export async function copyPngToClipboard(
+  rendered: RenderedSvg,
+  scale: number = PNG_SCALE,
+): Promise<void> {
+  await navigator.clipboard.write([
+    new ClipboardItem({ "image/png": renderPngBlob(rendered, scale) }),
+  ]);
+}
+
 export async function downloadPng(
   rendered: RenderedSvg,
   filename: string,

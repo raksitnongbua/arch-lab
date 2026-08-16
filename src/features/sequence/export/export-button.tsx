@@ -23,11 +23,24 @@
  * it cannot pick up a second diagram elsewhere on the page.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Download, TriangleAlert } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import {
+  ChevronDown,
+  ClipboardCopy,
+  Download,
+  TriangleAlert,
+} from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 import {
+  canCopyPng,
+  copyPngToClipboard,
   downloadBlob,
   fileStem,
   renderPngBlob,
@@ -64,6 +77,10 @@ const PNG_SCALE_BY_SHARPNESS: Record<GifSharpness, number> = {
   sharp: 3,
 };
 
+/* Same shape the C4 exporter uses for its capability read. */
+const subscribeToNothing = (): (() => void) => () => {};
+const readFalse = (): boolean => false;
+
 export function SequenceExportButton({
   /** Scopes the lookup: the element containing the diagram to export. */
   paneRef,
@@ -89,6 +106,13 @@ export function SequenceExportButton({
     | { kind: "error"; message: string }
   >({ kind: "idle" });
   const busy = status.kind === "busy";
+  /* A browser capability: false on the server, real after hydration, read
+     without a setState cascade. */
+  const copyable = useSyncExternalStore(
+    subscribeToNothing,
+    canCopyPng,
+    readFalse,
+  );
 
   /*
    * TWO AXES, not one "quality" slider. Sharpness is pixels — whether small
@@ -171,87 +195,99 @@ export function SequenceExportButton({
     };
   }, [busy]);
 
-  const run = useCallback(async () => {
-    const svgNode =
-      paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
-    if (svgNode === null) {
-      const message = "Nothing to export — the diagram is not on screen.";
-      setStatus({ kind: "error", message });
-      onAnnounce(message);
-      return;
-    }
-
-    setStatus({ kind: "busy", label: "Preparing…" });
-    try {
-      const rendered = renderSequenceSvg(svgNode);
-      if (rendered === null) {
-        const message = "Nothing to export — the diagram has no size yet.";
+  const run = useCallback(
+    async (mode: "download" | "copy" = "download") => {
+      const svgNode =
+        paneRef.current?.querySelector<SVGSVGElement>("svg.af-seq-svg") ?? null;
+      if (svgNode === null) {
+        const message = "Nothing to export — the diagram is not on screen.";
         setStatus({ kind: "error", message });
         onAnnounce(message);
         return;
       }
-      const stem = fileStem(title);
-      if (format === "svg") {
-        downloadBlob(
-          new Blob([rendered.svg], { type: "image/svg+xml;charset=utf-8" }),
-          `${stem}.svg`,
+
+      setStatus({ kind: "busy", label: "Preparing…" });
+      try {
+        const rendered = renderSequenceSvg(svgNode);
+        if (rendered === null) {
+          const message = "Nothing to export — the diagram has no size yet.";
+          setStatus({ kind: "error", message });
+          onAnnounce(message);
+          return;
+        }
+        const stem = fileStem(title);
+        if (format === "svg") {
+          downloadBlob(
+            new Blob([rendered.svg], { type: "image/svg+xml;charset=utf-8" }),
+            `${stem}.svg`,
+          );
+          onAnnounce("Downloaded the diagram as SVG.");
+          return;
+        }
+        if (mode === "copy") {
+          /* Same `rendered` the download path uses, so the clipboard and the
+           file cannot disagree. The blob is handed over un-awaited on purpose
+           — Safari spends the user gesture otherwise (see the helper). */
+          await copyPngToClipboard(rendered, PNG_SCALE_BY_SHARPNESS[sharpness]);
+          onAnnounce("Copied the diagram to the clipboard as a PNG.");
+          setStatus({ kind: "idle" });
+          return;
+        }
+        if (format === "png") {
+          downloadBlob(
+            await renderPngBlob(rendered, PNG_SCALE_BY_SHARPNESS[sharpness]),
+            `${stem}.png`,
+          );
+          onAnnounce(
+            `Downloaded the diagram as PNG at ${PNG_SCALE_BY_SHARPNESS[sharpness]}× scale.`,
+          );
+          return;
+        }
+
+        // GIF: one loop of the diagram's own idle motion. Synthesised rather
+        // than screen-recorded, so the file is the same on any machine — see
+        // export/frames.ts.
+        onAnnounce("Building the animation — this takes a moment.");
+        const built = await buildSequenceFrames(
+          svgNode,
+          { sharpness, smoothness },
+          (done, total) => {
+            setStatus({ kind: "busy", label: `Frame ${done} of ${total}…` });
+          },
         );
-        onAnnounce("Downloaded the diagram as SVG.");
-        return;
-      }
-      if (format === "png") {
+        setStatus({ kind: "busy", label: "Encoding…" });
+        if (built === null) {
+          const message =
+            "Nothing to animate — this diagram has no moving lines, so a GIF would be copies of the PNG.";
+          setStatus({ kind: "error", message });
+          onAnnounce(message);
+          return;
+        }
+        const gif = encodeGif(built.frames, built.width, built.height);
         downloadBlob(
-          await renderPngBlob(rendered, PNG_SCALE_BY_SHARPNESS[sharpness]),
-          `${stem}.png`,
+          new Blob([gif as BlobPart], { type: "image/gif" }),
+          `${stem}.gif`,
         );
         onAnnounce(
-          `Downloaded the diagram as PNG at ${PNG_SCALE_BY_SHARPNESS[sharpness]}× scale.`,
+          `Downloaded a looping GIF — ${built.frames.length} frames of the diagram's running lines.`,
         );
-        return;
-      }
-
-      // GIF: one loop of the diagram's own idle motion. Synthesised rather
-      // than screen-recorded, so the file is the same on any machine — see
-      // export/frames.ts.
-      onAnnounce("Building the animation — this takes a moment.");
-      const built = await buildSequenceFrames(
-        svgNode,
-        { sharpness, smoothness },
-        (done, total) => {
-          setStatus({ kind: "busy", label: `Frame ${done} of ${total}…` });
-        },
-      );
-      setStatus({ kind: "busy", label: "Encoding…" });
-      if (built === null) {
-        const message =
-          "Nothing to animate — this diagram has no moving lines, so a GIF would be copies of the PNG.";
+      } catch (error) {
+        // Named and SHOWN, not swallowed: rasterising can fail on a browser that
+        // refuses to decode the SVG, and a button that silently does nothing is
+        // worse than one that says why.
+        const message = describeError(error);
         setStatus({ kind: "error", message });
-        onAnnounce(message);
+        onAnnounce(`Export failed: ${message}.`);
         return;
+      } finally {
+        // Only clear a BUSY state; an error must survive to stay on screen.
+        setStatus((current) =>
+          current.kind === "busy" ? { kind: "idle" } : current,
+        );
       }
-      const gif = encodeGif(built.frames, built.width, built.height);
-      downloadBlob(
-        new Blob([gif as BlobPart], { type: "image/gif" }),
-        `${stem}.gif`,
-      );
-      onAnnounce(
-        `Downloaded a looping GIF — ${built.frames.length} frames of the diagram's running lines.`,
-      );
-    } catch (error) {
-      // Named and SHOWN, not swallowed: rasterising can fail on a browser that
-      // refuses to decode the SVG, and a button that silently does nothing is
-      // worse than one that says why.
-      const message = describeError(error);
-      setStatus({ kind: "error", message });
-      onAnnounce(`Export failed: ${message}.`);
-      return;
-    } finally {
-      // Only clear a BUSY state; an error must survive to stay on screen.
-      setStatus((current) =>
-        current.kind === "busy" ? { kind: "idle" } : current,
-      );
-    }
-  }, [paneRef, title, onAnnounce, sharpness, smoothness, format]);
+    },
+    [paneRef, title, onAnnounce, sharpness, smoothness, format],
+  );
 
   return (
     <div className={cn("relative", className)}>
@@ -358,15 +394,32 @@ export function SequenceExportButton({
                 : "A still of the diagram exactly as it is on screen, folds included."}
           </p>
 
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void run()}
-            className={buttonClasses({ size: "sm" })}
-          >
-            <Download aria-hidden="true" />
-            {busy ? "Working…" : `Download ${format.toUpperCase()}`}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run()}
+              className={buttonClasses({ size: "sm" })}
+            >
+              <Download aria-hidden="true" />
+              {busy ? "Working…" : `Download ${format.toUpperCase()}`}
+            </button>
+            {/* Copy is always a PNG, whatever the format select says: a
+                clipboard takes an image, and offering "copy SVG" would put
+                markup on it that most apps paste as text. Hidden where the
+                browser cannot do it rather than shown and refused. */}
+            {copyable ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void run("copy")}
+                className={buttonClasses({ variant: "outline", size: "sm" })}
+              >
+                <ClipboardCopy aria-hidden="true" />
+                Copy PNG
+              </button>
+            ) : null}
+          </div>
 
           {status.kind === "busy" ? (
             <p className="text-xs text-muted-foreground">{status.label}</p>
