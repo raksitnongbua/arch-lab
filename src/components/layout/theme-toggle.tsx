@@ -1,6 +1,14 @@
 "use client";
 
-import { Check, Contrast, Moon, MoonStar, Sun } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  Contrast,
+  Layers,
+  Moon,
+  MoonStar,
+  Sun,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import {
   useEffect,
@@ -40,7 +48,9 @@ const THEME_META: Record<
   Theme,
   { label: string; hint: string; Icon: typeof Sun }
 > = {
-  light: { label: "Light", hint: "Paper white", Icon: Sun },
+  light: { label: "Light", hint: "Cool white", Icon: Sun },
+  paper: { label: "Paper", hint: "Warm, less glare", Icon: BookOpen },
+  glass: { label: "Liquid glass", hint: "Translucent surfaces", Icon: Layers },
   dark: { label: "Dark", hint: "The default", Icon: Moon },
   midnight: { label: "Midnight", hint: "True black, for OLED", Icon: MoonStar },
   contrast: {
@@ -145,7 +155,7 @@ export function ThemeToggle({ className }: { className?: string }) {
           id={menuId}
           role="menu"
           aria-label="Theme"
-          className="absolute top-full right-0 z-50 mt-1.5 min-w-52 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+          className="af-glass absolute top-full right-0 z-50 mt-1.5 min-w-52 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
         >
           {THEMES.map((name) => {
             const meta = THEME_META[name];

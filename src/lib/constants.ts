@@ -57,7 +57,14 @@ export const APP_DESCRIPTION =
  *
  * The provider and the picker both read this list, so nothing else changes.
  */
-export const THEMES = ["light", "dark", "midnight", "contrast"] as const;
+export const THEMES = [
+  "light",
+  "paper",
+  "glass",
+  "dark",
+  "midnight",
+  "contrast",
+] as const;
 
 export type Theme = (typeof THEMES)[number];
 
