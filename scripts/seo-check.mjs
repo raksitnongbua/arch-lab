@@ -57,9 +57,22 @@ function check(label, ok, detail) {
   if (detail !== undefined) console.error(`    ${detail}`);
 }
 
-/** Route → the file whose `metadata` export describes it. */
+/**
+ * Route → the file whose `metadata` export describes it.
+ *
+ * THIS LIST MUST NAME EVERY ROUTE IN THE SITEMAP. It was incomplete, and the
+ * gap was silent rather than loud: `/editor` and `/demo` were both missing,
+ * so `/editor` shipped a 232-character description — 72 over the budget below
+ * — through a green `pnpm check:seo`. A check that covers some routes reads
+ * exactly like one that covers all of them, which is the worse failure.
+ *
+ * Adding a route to `src/app/sitemap.ts` means adding it here in the same
+ * commit. The `?` assertion at the bottom of section 1 fails if it does not.
+ */
 const ROUTES = [
   ["/ (and the site default)", "src/lib/constants.ts", "APP_DESCRIPTION"],
+  ["/demo", "src/app/demo/page.tsx", null],
+  ["/editor", "src/app/editor/page.tsx", null],
   ["/mcp", "src/app/mcp/page.tsx", null],
   ["/view", "src/app/view/page.tsx", null],
   ["/view/c4", "src/app/view/c4/page.tsx", null],
@@ -89,6 +102,28 @@ for (const [route, file, constantName] of ROUTES) {
     `${route}: ${length} chars`,
     length <= DESCRIPTION_LIMIT,
     `over the ${DESCRIPTION_LIMIT}-character budget — the tail is written for nobody`,
+  );
+}
+
+/* The list above is only as good as its coverage, and coverage is exactly what
+   went wrong: a route can be in the sitemap, be crawled, and never have its
+   description measured. Derive the expectation from the sitemap rather than
+   trusting two hand-written lists to agree. */
+{
+  const staticBlock = /const staticRoutes = \[([\s\S]*?)\n {2}\];/.exec(
+    read("src/app/sitemap.ts"),
+  );
+  const sitemapPaths = [...(staticBlock?.[1] ?? "").matchAll(/"([^"]*)"/g)].map(
+    (m) => (m[1] === "" ? "/" : m[1]),
+  );
+  const measured = new Set(ROUTES.map(([label]) => label.split(" ")[0]));
+  const missing = sitemapPaths.filter((route) => !measured.has(route));
+  check(
+    "every static sitemap route has its description measured",
+    staticBlock !== null && missing.length === 0,
+    staticBlock === null
+      ? "could not find `staticRoutes` in src/app/sitemap.ts — this check went blind"
+      : `in the sitemap, absent from ROUTES: ${missing.join(", ")}`,
   );
 }
 
