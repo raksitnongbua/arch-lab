@@ -5,6 +5,7 @@ import Script from "next/script";
 import { Providers } from "@/app/providers";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
+import { Toaster } from "@/components/ui/toast";
 import { publicOrigin } from "@/features/mcp/lib/origin";
 import {
   SHARE_FORWARD_ATTRIBUTE,
@@ -155,6 +156,14 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }}
         />
         <Providers>
+          {/* ONE Toaster, for the whole app. It lived in `editor-shell.tsx`,
+              which meant `toast()` was a silent no-op on every route except
+              /editor — the store emitted and nothing rendered it. That is not
+              a missing feature but a broken one: the export path reported both
+              success and failure through it and neither ever appeared. The API
+              is global (`toast()` is callable from any handler), so its
+              renderer belongs at the root rather than inside one feature. */}
+          <Toaster />
           <a
             href="#main"
             className="sr-only rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:ring-2 focus:ring-ring"

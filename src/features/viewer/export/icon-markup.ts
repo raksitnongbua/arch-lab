@@ -29,6 +29,8 @@ import type { C4Node } from "@/types";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 import type { IconStyle } from "@/lib/icon-style";
 
+import { positionIconSvg } from "./icon-position";
+
 /**
  * Keyed by STYLE AND SLUG, not slug alone. A slug-only key was the shape
  * before the mono/colour switch existed and is now a parity bug waiting to
@@ -71,9 +73,11 @@ function iconMarkup(
  * they inherit their fill. A COLOURED brand mark carries explicit fills that
  * never reference `currentColor`, so for it the wrapper is inert and the mark
  * keeps its own colours — exactly as on canvas, and as the registry's
- * no-recolour rule requires. The size injection relies on brand components stripping the
- * upstream `width`/`height` (brand.tsx) — a duplicate attribute would be
- * invalid XML and break PNG rasterisation.
+ * no-recolour rule requires. Geometry is REPLACED, not prepended
+ * (`./icon-position.ts`): this used to trust icon components to strip their
+ * own `width`/`height`, and when the generic icons became lucide components
+ * that stopped being true and every export of a board carrying one failed to
+ * rasterise at all.
  */
 export function embeddedIconSvg(
   node: Pick<C4Node, "icon" | "type">,
@@ -83,10 +87,6 @@ export function embeddedIconSvg(
   color: string,
   style: IconStyle,
 ): string {
-  const markup = iconMarkup(node, style);
-  const positioned = markup.replace(
-    /^<svg\s/,
-    `<svg x="${x}" y="${y}" width="${size}" height="${size}" `,
-  );
+  const positioned = positionIconSvg(iconMarkup(node, style), x, y, size);
   return `<g color="${color}">${positioned}</g>`;
 }

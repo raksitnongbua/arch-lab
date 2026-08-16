@@ -422,6 +422,83 @@ if (parsed !== null) {
 
 /* ----------------------------------------------------------------------- */
 
+/* ------------------------------------------------------------------------ */
+/* Copy-to-clipboard: the same bytes, and the gesture kept                   */
+/* ------------------------------------------------------------------------ */
+
+{
+  const { readFileSync } = await import("node:fs");
+  const src = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
+  const download = src("src/features/viewer/export/download.ts");
+
+  /* THE BLOB IS PASSED UNRESOLVED. Safari requires `clipboard.write` to be
+     reached synchronously from the user gesture, so awaiting the rasterise
+     first spends the gesture on canvas work and lands on NotAllowedError —
+     a copy that fails only in Safari, only for diagrams big enough to take a
+     frame, and silently everywhere else. `ClipboardItem` takes a promise for
+     exactly this reason, and an `await` inside that call undoes it. */
+  const body =
+    /export async function copyPngToClipboard\([\s\S]*?\n}/.exec(
+      download,
+    )?.[0] ?? "";
+  if (/"image\/png":\s*renderPngBlob\(/.test(body)) {
+    ok(
+      "the clipboard write is handed the blob as a PROMISE (Safari's gesture)",
+    );
+  } else {
+    fail(
+      "copyPngToClipboard must pass renderPngBlob(...) unresolved",
+      "awaiting it first spends the user gesture and Safari refuses the write",
+    );
+  }
+  /* A fallback MAY await — Firefox rejects the promise form and needs the
+     resolved blob. What must not happen is the FIRST write awaiting, because
+     that is the one still holding Safari's gesture. So the rule is ordering:
+     any `await renderPngBlob` has to sit after a `catch`. */
+  const firstWrite = body.indexOf("navigator.clipboard.write");
+  const firstAwaitedRender = body.indexOf("await renderPngBlob");
+  const catchAt = body.indexOf("} catch");
+  if (firstAwaitedRender !== -1 && firstAwaitedRender < catchAt) {
+    fail(
+      "the first clipboard write awaits the rasterise",
+      "that spends Safari's user gesture — await only in the fallback",
+    );
+  } else if (firstWrite !== -1 && catchAt !== -1 && firstWrite > catchAt) {
+    fail("the promise form is not attempted first");
+  } else {
+    ok(
+      "the gesture-preserving write is attempted first, awaiting only on retry",
+    );
+  }
+
+  /* One rasteriser, so the clipboard and the download cannot disagree — the
+     same argument `renderPngBlob` was split out for. */
+  for (const [label, rel] of [
+    ["C4", "src/features/viewer/export/export-button.tsx"],
+    ["sequence", "src/features/sequence/export/export-button.tsx"],
+  ]) {
+    const button = src(rel);
+    if (
+      button.includes("copyPngToClipboard") &&
+      button.includes("canCopyPng")
+    ) {
+      ok(
+        `the ${label} exporter copies through the shared helper, feature-detected`,
+      );
+    } else {
+      fail(`the ${label} exporter must use copyPngToClipboard + canCopyPng`);
+    }
+    if (/new ClipboardItem/.test(button)) {
+      fail(
+        `the ${label} exporter builds its own ClipboardItem`,
+        "use the helper",
+      );
+    } else {
+      ok(`the ${label} exporter does not reimplement the clipboard write`);
+    }
+  }
+}
+
 if (failures > 0) {
   console.error(`\n${failures} of ${checks} export-archive check(s) FAILED`);
   process.exit(1);
