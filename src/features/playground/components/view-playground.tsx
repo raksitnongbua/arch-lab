@@ -1232,7 +1232,11 @@ export function ViewPlayground({
             doc.kind === "c4" ? (
               <section
                 aria-label="Rendered diagram"
-                className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border shadow-sm max-lg:h-[70svh]"
+                /* `lg:flex-1` — an unprefixed `flex-1` sets `flex-basis: 0%`,
+                   which outranks `height` in a column flex container and left
+                   this pane at its content height on every phone. See the
+                   canvas wrapper in `split-workbench.tsx` for the full story. */
+                className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border shadow-sm max-lg:h-[70svh] lg:flex-1"
               >
                 {/* A slim strip for the rail toggle. The shell below owns its
                     own controls (immersive, export, share, tour) in a strip
@@ -1267,7 +1271,12 @@ export function ViewPlayground({
                 ref={diagramPaneRef}
                 aria-label="Rendered sequence diagram"
                 className={cn(
-                  "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background",
+                  /* `lg:flex-1` for the reason given on the C4 pane above:
+                     `flex-basis: 0%` beats `height` in a column, so the
+                     unprefixed form cancelled `max-lg:h-[70svh]`. Immersive is
+                     unaffected either way — `fixed inset-0` takes it out of
+                     the flow, where flex sizing no longer applies. */
+                  "flex min-h-0 min-w-0 flex-col overflow-hidden bg-background lg:flex-1",
                   isImmersive
                     ? // Immersive: cover the viewport. Site chrome and the
                       // source rail are BEHIND the fixed section, untouched —

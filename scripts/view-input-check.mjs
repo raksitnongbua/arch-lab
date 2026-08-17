@@ -343,6 +343,57 @@ for (const [label, text] of [
   }
 }
 
+/* ----------------------------------------------------------------------- */
+/* The canvas pane keeps its height on a phone                              */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * A source assertion, because the bug is invisible to every other check here:
+ * the reader detected the document, the parser built the model, and the canvas
+ * still rendered as a smudge — or, on iOS Safari, as nothing at all.
+ *
+ * `flex-1` is `flex: 1 1 0%`, and in a COLUMN flex container `flex-basis` is
+ * the main size and outranks `height`. Both canvas panes set
+ * `max-lg:h-[70svh]` on themselves and both also carried an unprefixed
+ * `flex-1`, so below `lg` the height was never used: the pane fell back to its
+ * content height (~250px, at which a wide C4 model fits only at MIN_ZOOM), and
+ * Safari — which resolves the intrinsic contribution of a `flex-basis: 0%`
+ * item to zero — collapsed it further and shipped an empty box.
+ *
+ * The rule: an element that sets a `max-lg:` height must not also grow at that
+ * breakpoint. `lg:flex-1` is fine, and is what both now use.
+ */
+{
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+
+  const panes = [...playground.matchAll(/"([^"]*max-lg:h-\[70svh\][^"]*)"/g)];
+  check(
+    "both canvas panes still claim a viewport-relative height below lg",
+    panes.length === 2,
+    `found ${panes.length} pane class strings carrying max-lg:h-[70svh], expected 2 (C4 and sequence)`,
+  );
+  for (const [, classes] of panes) {
+    check(
+      "a pane that sets a max-lg height does not also grow unprefixed",
+      !/(^|\s)flex-1(\s|$)/.test(classes),
+      `"flex-1" sets flex-basis:0%, which beats height in a column — use lg:flex-1. Offending classes: ${classes}`,
+    );
+  }
+
+  const workbench = read("src/components/ui/split-workbench.tsx")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  check(
+    "the workbench's canvas wrapper only grows at lg, so the pane's own height rules below it",
+    /className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-1"/.test(workbench),
+    "the wrapper grows unprefixed again — it will cancel the pane's max-lg height",
+  );
+}
+
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);
   process.exit(1);

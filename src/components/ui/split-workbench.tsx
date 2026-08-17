@@ -289,7 +289,20 @@ export function SplitWorkbench({
         />
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">{canvas}</div>
+      {/* `lg:flex-1`, NOT `flex-1`. In a column flex container `flex-basis` is
+          the main size and it BEATS `height`, so an unprefixed `flex-1`
+          (`flex: 1 1 0%`) silently cancelled the `max-lg:h-[70svh]` the canvas
+          pane sets on itself below `lg`. The pane then fell back to its content
+          height: ~250px in Chrome, where the C4 diagram fitted at MIN_ZOOM and
+          rendered as a smudge, and near-nothing in iOS Safari, which resolves
+          the intrinsic contribution of a `flex-basis: 0%` item to zero — the
+          diagram pane came up empty on a real phone.
+
+          Above `lg` the row still shares its width by growing, which is what
+          this was for; below it, the pane's own height is the only rule. */}
+      <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-1">
+        {canvas}
+      </div>
     </div>
   );
 }
