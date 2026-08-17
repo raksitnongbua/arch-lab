@@ -5,9 +5,10 @@
  * touching them.
  *
  * ONE PREFERENCE FOR THE WHOLE APP, not one per view. It started in the sequence
- * viewer and the C4 canvas needed the same switch, and two of them would mean a
- * reader who turns motion off in one place is surprised by it in the other —
- * "stop the diagrams moving" is a statement about diagrams, not about a route.
+ * viewer; the C4 canvas needed the same switch, then the flowchart viewer made
+ * it three — and a switch per view would mean a reader who turns motion off in
+ * one place is surprised by it in the others. "Stop the diagrams moving" is a
+ * statement about diagrams, not about a route.
  * The storage key is deliberately unscoped for the same reason. (It was
  * `arch-lab:sequence-idle-motion`; anyone who had set it will find the toggle
  * back at its default once, which is a fair price for not having to set it

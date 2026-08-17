@@ -14,6 +14,12 @@
  */
 
 import type { NodeColorRole } from "@/features/editor/lib/node-colors";
+// Cross-feature on purpose, the inverse of the flowchart exporter's import
+// of this module: FLOW_SHAPE_TOKENS is the ONE shape→token table, and
+// restating the token names here would let the resolved palette drift from
+// what the screen paints.
+import { FLOW_SHAPE_TOKENS } from "@/features/flowchart/lib/shapes";
+import type { FlowchartNodeShape } from "@/types";
 
 /** The subset of semantic tokens the exported diagram paints with. */
 export interface ExportTheme {
@@ -40,6 +46,12 @@ export interface ExportTheme {
    * type differentiation as the canvas.
    */
   nodeRoles: Record<NodeColorRole, { fill: string; border: string }>;
+  /**
+   * Per-shape flowchart fill/border (the `--flow-start`… family), resolved
+   * to concrete sRGB like every other entry — the flowchart export's
+   * counterpart of `nodeRoles`.
+   */
+  flowShapes: Record<FlowchartNodeShape, { fill: string; border: string }>;
 }
 
 const TOKEN_VARS = {
@@ -142,6 +154,15 @@ export function resolveExportTheme(): ExportTheme {
     fill: resolve(ROLE_TOKEN_VARS[key].fill, node),
     border: resolve(ROLE_TOKEN_VARS[key].border, nodeBorder),
   });
+  // Same degradation rule as `role` above. getComputedStyle substitutes the
+  // var() aliases (start/step/io/call point at role tokens), so each shape
+  // arrives as its own concrete pair.
+  const flowShape = (
+    key: FlowchartNodeShape,
+  ): { fill: string; border: string } => ({
+    fill: resolve(FLOW_SHAPE_TOKENS[key].fill, node),
+    border: resolve(FLOW_SHAPE_TOKENS[key].border, nodeBorder),
+  });
 
   return {
     canvas: resolve(TOKEN_VARS.canvas, "#ffffff"),
@@ -167,6 +188,14 @@ export function resolveExportTheme(): ExportTheme {
       external: role("external"),
       database: role("database"),
       queue: role("queue"),
+    },
+    flowShapes: {
+      start: flowShape("start"),
+      end: flowShape("end"),
+      step: flowShape("step"),
+      decision: flowShape("decision"),
+      io: flowShape("io"),
+      call: flowShape("call"),
     },
   };
 }
