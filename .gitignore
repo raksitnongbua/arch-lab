@@ -75,3 +75,6 @@ yarn-error.log*
 # see in a diff. Everything else under .claude/ — worktrees, settings.local.json
 # — stays ignored by the line above.
 !.claude/rules/
+
+# Agent-captured verification screenshots — evidence, not source.
+.claude-screenshots/

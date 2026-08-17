@@ -1,19 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { listFlowchartExamples } from "@/features/flowchart/service/example-service";
 import { VIEW_EXAMPLE_PARAM } from "@/features/playground/lib/example-param";
 import { listSequenceExamples } from "@/features/sequence/service/example-service";
+import { listUseCaseExamples } from "@/features/usecase/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 
 export const metadata: Metadata = {
-  title: "Examples — C4 models and sequence diagrams",
+  title: "Examples — C4 models, sequence diagrams, flowcharts and use cases",
   description:
-    "Bundled example documents of both kinds, each parsed by the real reader. Open one in the playground and edit it as text.",
+    "Bundled example documents of all four kinds, each parsed by the real reader. Open one in the playground and edit it as text.",
   alternates: { canonical: "/demo" },
 };
 
 /**
- * The example index: two lists, one card per bundled document.
+ * The example index: four lists, one card per bundled document.
  *
  * IT WAS A LANDING PAGE and did not need to be. Each card carried a gradient
  * hover wash, an icon tile, a "View-only" badge, four count statistics, a row
@@ -40,6 +42,8 @@ const C4_BASE = 2;
 export default function DemoPage(): React.JSX.Element {
   const models = listViewerModels();
   const sequences = listSequenceExamples();
+  const flowcharts = listFlowchartExamples();
+  const usecases = listUseCaseExamples();
 
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8 sm:py-16">
@@ -53,13 +57,13 @@ export default function DemoPage(): React.JSX.Element {
         className="af-demo-row mt-3 max-w-2xl text-muted-foreground"
         style={{ "--row": 1 } as React.CSSProperties}
       >
-        Real documents, parsed by the same reader the app uses. Open one in the
-        playground and edit it as text.
+        Real documents of all four kinds, parsed by the same reader the app
+        uses. Open one in the playground and edit it as text.
       </p>
 
       {/* `base` continues the cascade across sections rather than restarting
-          it: two lists each counting from zero animate in lockstep, which reads
-          as a glitch rather than an order. */}
+          it: four lists each counting from zero animate in lockstep, which
+          reads as a glitch rather than an order. */}
       <Section
         title="C4 models"
         kind="c4"
@@ -120,6 +124,81 @@ export default function DemoPage(): React.JSX.Element {
           ),
         )}
       </Section>
+
+      <Section
+        title="Flowcharts"
+        kind="flowchart"
+        accent="var(--flow-decision-border)"
+        base={C4_BASE + models.length + sequences.length + 2}
+      >
+        {flowcharts.map((listing, row) =>
+          listing.status === "invalid" ? (
+            <Broken
+              key={listing.id}
+              id={listing.id}
+              message={listing.message}
+            />
+          ) : (
+            <ExampleCard
+              key={listing.summary.id}
+              id={listing.summary.id}
+              title={listing.summary.title}
+              description={listing.summary.description}
+              row={C4_BASE + models.length + sequences.length + row + 3}
+              readOnlyHref={`/view/flowchart/${listing.summary.id}`}
+              meta={[
+                `${listing.summary.nodeCount} steps`,
+                `${listing.summary.edgeCount} arrows`,
+                `${listing.summary.decisionCount} decisions`,
+              ]}
+            />
+          ),
+        )}
+      </Section>
+
+      <Section
+        title="Use cases"
+        kind="usecase"
+        accent="var(--uc-actor-border)"
+        base={
+          C4_BASE + models.length + sequences.length + flowcharts.length + 3
+        }
+      >
+        {usecases.map((listing, row) =>
+          listing.status === "invalid" ? (
+            <Broken
+              key={listing.id}
+              id={listing.id}
+              message={listing.message}
+            />
+          ) : (
+            <ExampleCard
+              key={listing.summary.id}
+              id={listing.summary.id}
+              title={listing.summary.title}
+              description={listing.summary.description}
+              row={
+                C4_BASE +
+                models.length +
+                sequences.length +
+                flowcharts.length +
+                row +
+                4
+              }
+              readOnlyHref={`/view/usecase/${listing.summary.id}`}
+              meta={[
+                `${listing.summary.actorCount} actors`,
+                `${listing.summary.useCaseCount} use cases`,
+                `${listing.summary.boundaryCount} ${
+                  listing.summary.boundaryCount === 1
+                    ? "boundary"
+                    : "boundaries"
+                }`,
+              ]}
+            />
+          ),
+        )}
+      </Section>
     </div>
   );
 }
@@ -130,10 +209,12 @@ export default function DemoPage(): React.JSX.Element {
  * THE GROUPING IS THE POINT of this page — a C4 model and a sequence diagram
  * are different things to look at, and a heading alone made them read as one
  * list with a label in the middle. Each section now carries an accent
- * (`--primary` for C4, `--accent` for sequence) that its rows inherit through
- * `currentColor`, and a glyph drawn from the kind itself: stacked frames for
- * C4's nesting, two lifelines and a message for a sequence. Not icons chosen
- * from a set — the shapes the reader is about to open.
+ * (`--primary` for C4, `--accent` for sequence, and a kind-specific canvas
+ * colour for the other two) that its rows inherit through `currentColor`, and
+ * a glyph drawn from the kind itself: stacked frames for C4's nesting, two
+ * lifelines and a message for a sequence, a rhombus for a flowchart, an actor
+ * against an ellipse for a use case. Not icons chosen from a set — the shapes
+ * the reader is about to open.
  *
  * The tint is applied through `text-(--kind)` on the section, so a row's
  * connector picks it up without either of them naming a colour.
@@ -146,7 +227,7 @@ function Section({
   children,
 }: {
   title: string;
-  kind: "c4" | "sequence";
+  kind: "c4" | "sequence" | "flowchart" | "usecase";
   accent: string;
   /** Where this section sits in the page-wide entrance cascade. */
   base: number;
@@ -159,7 +240,15 @@ function Section({
     >
       <div className="flex items-center gap-2.5">
         <span className="af-demo-glyph text-(--kind)">
-          {kind === "c4" ? <C4Glyph /> : <SequenceGlyph />}
+          {kind === "c4" ? (
+            <C4Glyph />
+          ) : kind === "sequence" ? (
+            <SequenceGlyph />
+          ) : kind === "flowchart" ? (
+            <FlowchartGlyph />
+          ) : (
+            <UseCaseGlyph />
+          )}
         </span>
         <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {title}
@@ -207,6 +296,47 @@ function SequenceGlyph(): React.JSX.Element {
     >
       <path d="M3.4 2v12M12.6 2v12" strokeDasharray="2 2" />
       <path d="M3.4 7.4h9.2M10.6 5.6l2 1.8-2 1.8" />
+    </svg>
+  );
+}
+
+/** A use case: a stick figure beside an ellipse. The pairing is the whole
+ * tell — an actor against the system's edge is what no other kind draws. */
+function UseCaseGlyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    >
+      <circle cx="4.2" cy="3.4" r="1.5" />
+      <path d="M4.2 4.9v3.4M2.2 6.6h4M4.2 8.3l-1.7 3.2M4.2 8.3l1.7 3.2" />
+      <ellipse cx="11.4" cy="8" rx="3.4" ry="2.4" />
+    </svg>
+  );
+}
+
+/** A flowchart: a step, a decision below it, and the branch leaving the
+ * diamond. The rhombus is the whole tell — it is what no other kind draws. */
+function FlowchartGlyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    >
+      <rect x="4.6" y="1.6" width="6.8" height="3.4" rx="0.8" />
+      <path d="M8 5v2.2" />
+      <path d="M8 7.6l3 2.6-3 2.6-3-2.6z" />
+      <path d="M8 12.8v1.6" />
     </svg>
   );
 }

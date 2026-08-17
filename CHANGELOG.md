@@ -5,6 +5,56 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Two new document types. Neither changes an existing document: every `.alab`
+file, share link and route that worked before works unchanged, and the new
+grammars are refused by the old parsers with a message naming the right one.
+
+### Added — flowcharts
+
+- A `flowchart` document type: `archlab 1.0 flowchart`, with terminator, step,
+  decision, io and call shapes, guard-labelled branches, loops, and `group`
+  clusters. Open one at `/view?d=flow`.
+- Mermaid `flowchart` and `graph` import, in all four directions, and Mermaid
+  export. Shapes with no arch-lab counterpart are refused by name rather than
+  silently approximated.
+- Rank-based layout with orthogonal routing: loops return as a hooked arrow
+  beside the column they leave, and a label never sits on a line.
+- An entrance that traces the flow rank by rank, an ambient pulse that retraces
+  it at rest, and GIF export of the trace. Both obey the app-wide idle-motion
+  toggle and `prefers-reduced-motion`.
+- SVG and PNG export, share links, and six shape colours distinct in every
+  theme.
+
+### Added — use-case diagrams
+
+- A `usecase` document type: `archlab 1.0 usecase`, with actors, use cases,
+  a system `boundary`, undirected associations, `«include»` / `«extend»`
+  dependencies and generalizations. Open one at `/view?d=uc`.
+- Mermaid import for the actor/use-case convention — circle actors, stadium use
+  cases, a `subgraph` boundary. A document that is really a flowchart keeps its
+  flowchart reading.
+- Layout that places actors outside the boundary in columns and sizes each
+  ellipse so its label fits the curve.
+- The grammar refuses what the diagram cannot mean: an actor inside the
+  boundary, an actor–actor association, a mixed-kind generalization.
+
+### Added — everywhere
+
+- `validate_flowchart`, `format_flowchart`, `validate_usecase` and
+  `format_usecase` on the MCP server, each reporting the defects a parse cannot
+  see — unguarded decisions, unreachable steps, actors that can do nothing,
+  `include` cycles. `create_share_link` now accepts all four document kinds.
+- Bundled examples of both kinds on `/demo`, with crawlable read-only pages.
+- `Flowchart` and `Use case` starters in the playground's "Start from" row.
+
+### Fixed
+
+- Non-Latin labels could lose a combining mark when a long word was split to
+  wrap. Text now breaks on grapheme clusters, which also fixes Thai labels in
+  C4 and sequence diagrams.
+
 ## [1.0.1] - 2026-08-16
 
 ### Changed
