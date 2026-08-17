@@ -1,0 +1,398 @@
+/* ---------------------------------------------------------------------------
+ * Flowchart viewer motion: THE TRACE.
+ *
+ * THE MODEL — and how it differs from the sequence diagram's, deliberately.
+ * The sequence viewer's opening settle is explicitly NOT a reveal, because a
+ * sequence diagram is a RECORD and completeness is its promise. A flowchart
+ * is the opposite kind of document: it is a PATH, and the one thing a
+ * presenter does with a flowchart is trace it — "you come in here, this
+ * decides, you loop back there". So the entrance here IS a reveal: each rank
+ * of nodes rises in on its beat, each arrow draws source → target out of the
+ * rank it leaves and INTO the rank it points at, and back edges (loops)
+ * fade in whole, last of their local story, wearing the 6 4 dash that says
+ * "back around". Once the trace has run, the complete chart is the resting
+ * state — and, while the app-wide idle-motion toggle allows it, THE PULSE
+ * (the idle block at the end of the gate below) quietly re-walks that path
+ * forever. The trace is motion the reader asked for by opening the page and
+ * is never gated by the toggle; the pulse is idle motion and always is.
+ *
+ * REJECTED ALTERNATIVES, so nobody re-tries them:
+ *   - One whole-drawing settle (the sequence gesture). Correct for a record,
+ *     wrong here: it wastes the one moment the graph's direction could have
+ *     been SHOWN rather than inferred from arrowheads.
+ *   - Per-node stagger in reading order (the C4 entrance). On a flowchart it
+ *     scrambles the story — two branches of a decision would arrive
+ *     left-to-right, implying an order between alternatives that the
+ *     document does not state. Rank order is the only order the layout
+ *     actually promises, so rank is the only stagger unit used.
+ *   - Drawing BACK edges with the dashoffset draw like forward edges. A
+ *     dashoffset draw needs pathLength-normalised dasharray, which destroys
+ *     the 6 4 loop dash — the same reason the sequence diagram fades its
+ *     replies instead of drawing them. A loop must never spend a single
+ *     frame looking like a forward arrow.
+ *
+ * REDUCED MOTION is handled ENTIRELY BY THIS MEDIA QUERY, not by JS: the
+ * trace plays at first paint, before hydration, and a JS-written custom
+ * property arrives too late to suppress a first-paint animation (the same
+ * mechanical argument sequence-motion.css makes for its opening settle).
+ * The one thing the media query CANNOT see is visibility: CSS animation
+ * clocks are wall time and tick while a tab is hidden, so a chart mounted
+ * in a background tab would burn this whole trace unseen. That case is
+ * handled by the VIEWER (flowchart-viewer.tsx, the hidden-mount banner):
+ * mounted hidden → remount at first visibility, restarting these very
+ * rules. Nothing in this file changes for it, and reduced motion still
+ * wins — the remounted subtree sits behind this same gate.
+ * Everything animated lives inside the `no-preference` block below — a
+ * reader who asked for no motion gets the complete, static, fully legible
+ * chart on the very first frame, because the block simply never applies.
+ * That includes the draw's `stroke-dasharray: 1`, which MUST stay inside the
+ * gate: applied without its animation it would leave every solid arrow
+ * parked mid-draw. `check:flowchart-motion` asserts the containment.
+ *
+ * DURATIONS: the `--flow-*` custom properties are never stamped at runtime —
+ * unlike the sequence viewer there is no post-hydration writer, because the
+ * whole trace runs before one could exist — so the FALLBACKS below are what
+ * always runs. Their one source of truth is `FLOWCHART_DURATIONS` in
+ * `../lib/motion.ts`; CSS cannot import TypeScript, so the numbers are
+ * genuinely duplicated and `check:flowchart-motion` pins each fallback to
+ * its constant. `--flow-rank` is the exception: the renderer stamps it as an
+ * INLINE STYLE from the layout's rank, which is server-rendered markup and
+ * therefore present at first paint (inline style props are not JS-written
+ * properties — they arrive with the HTML).
+ *
+ * Only `opacity`, `transform` and `stroke-dashoffset` animate — never a
+ * layout property — same rule as the other two canvases. Keyframes are
+ * from-only wherever the resting state is the target, so `both` fill can
+ * never park an element anywhere but its natural, complete appearance.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Each rank's beat: min() applies the same cap as flowRankDelay() in
+   * lib/motion.ts, so a deep chart compresses instead of trickling. Both
+   * sides of the duplication stay monotone in rank, which is what keeps
+   * "nothing starts before what it flows from" true after the cap bites. */
+  .af-flow-node .af-flow-body {
+    animation: af-flow-enter var(--flow-enter, 200ms) ease-out both;
+    animation-delay: min(
+      calc(var(--flow-rank, 0) * var(--flow-stagger, 140ms)),
+      var(--flow-cap, 980ms)
+    );
+  }
+
+  /* An edge's clock starts `--flow-edge-delay` after its SOURCE rank's beat
+   * (`--flow-rank` on an edge group is the source node's rank, stamped by
+   * the renderer). Declared once on the group; the line, head and label
+   * rules below all read it. */
+  .af-flow-edge {
+    --flow-edge-at: calc(
+      min(
+          calc(var(--flow-rank, 0) * var(--flow-stagger, 140ms)),
+          var(--flow-cap, 980ms)
+        ) +
+        var(--flow-edge-delay, 90ms)
+    );
+  }
+
+  /* Forward (and self-loop) edges DRAW source → target: the line carries
+   * pathLength=1, so one dash unit is the whole polyline and every edge
+   * draws in the same time regardless of span — the sequence focus draw's
+   * technique. After the animation ends, dasharray 1 at offset 0 covers the
+   * whole path and is indistinguishable from a solid line, so the resting
+   * chart is untouched. */
+  .af-flow-edge .af-flow-draw {
+    stroke-dasharray: 1;
+    animation: af-flow-draw-line var(--flow-draw, 220ms) ease-out both;
+    animation-delay: var(--flow-edge-at);
+  }
+
+  /* Back edges (loops) FADE IN WHOLE instead — see the header for why a
+   * dashoffset draw is forbidden on them. Same delay window as a draw, so a
+   * loop still arrives on its source's beat and reads as the story closing. */
+  .af-flow-edge .af-flow-fade {
+    animation: af-flow-fade-in var(--flow-draw, 220ms) ease-out both;
+    animation-delay: var(--flow-edge-at);
+  }
+
+  /* The arrowhead lands just after the line reaches it — the full stop of
+   * each hop. Edge labels share the head's window: a guard belongs to the
+   * finished arrow, not to the half-drawn line under it. */
+  .af-flow-edge .af-flow-head,
+  .af-flow-edge .af-flow-elabel {
+    animation: af-flow-fade-in var(--flow-head, 100ms) ease-out both;
+    animation-delay: calc(var(--flow-edge-at) + var(--flow-head-delay, 140ms));
+  }
+
+  /* ---- idle motion: THE PULSE (the chart at rest) ---------------------------
+   * A faint band of light re-walks the chart's ranks: it enters each forward
+   * edge on the SAME capped beat the trace used (`--flow-edge-at`), one
+   * `--flow-idle-start` later, once per `--flow-idle-period`, forever. A
+   * flowchart's subject is a PATH, so its ambient life is the path being
+   * travelled — the idle echo of the entrance, on the entrance's own rhythm,
+   * which keeps "nothing moves before what it flows from" true while the
+   * chart idles, and repeats identically every cycle (fixed period, fixed
+   * phases — drift-free by construction, not by tuning).
+   *
+   * REJECTED ALTERNATIVES, so nobody re-tries them:
+   *   - Marching the forward lines' dash (React Flow's animated edge, the C4
+   *     async drift). Forward arrows here are SOLID and the 6 4 dash already
+   *     means "loops back" — marching a solid arrow would re-dash it into a
+   *     loop, the exact kind-overwriting bug the sequence viewer documents
+   *     for its sync lines.
+   *   - Marching the BACK edges' own dash (the sequence reply precedent —
+   *     mechanically safe, since the dash is their resting identity).
+   *     Declined on MEANING: a loop edge is the detour, and a chart whose
+   *     only perpetual motion circles its retry loop says "stuck" about a
+   *     system the document never called stuck. The pulse travels the happy
+   *     path; loops hold still.
+   *   - A shimmer or breathing glow on the NODES. Generic — it animates the
+   *     furniture rather than the subject, and at rest reads as a loading
+   *     skeleton, which is precisely the "still parsing?" doubt a finished
+   *     chart must never plant.
+   *
+   * The bands keep the sequence comet's hard-won rule — never a second
+   * LINE'S WORTH of stroke: a blurred glow and a sharp head, each a few
+   * percent of the path (the band paths carry pathLength=1, the draw's own
+   * normalisation), sliding over an untouched line. Their dash period
+   * (band + gap) is LONGER than the path, so most of each cycle the edge is
+   * dark — a pulse, not a belt.
+   *
+   * COLOUR is `--foreground`, and the reason is a shipped defect: the first
+   * cut used the line's own `--edge`, and a band the same colour as the
+   * 1.5-weight line it rides — half a unit wider, 30% glow — changed ZERO
+   * pixels between frames (measured in-browser; the report was "idle
+   * animation does not run" while getAnimations() said `running`). Light
+   * has to be LIGHTER than the thing it travels; `--foreground` is the
+   * theme's own maximum-contrast neutral, audited against every background,
+   * and on light themes it reads as the equally-legible dark bead. It is
+   * still never `--primary`: primary is this view's focus colour, and
+   * resting light wearing it would say "selected" everywhere at once.
+   * `check:flowchart-motion` pins the not-`--edge` rule and the head's
+   * width margin over the line so the invisible pulse cannot ship twice.
+   *
+   * GATED TWICE, and both gates are required:
+   *   - `[data-af-idle="on"]` — the app-wide toggle AND the reader's OS
+   *     preference in one attribute, stamped by the viewer via
+   *     `idleMotionState` (lib/idle-motion.ts). DISPLAY-gated, not merely
+   *     animation-gated: a band frozen by the toggle would be a bright
+   *     stripe parked on every arrow, which is not a resting state.
+   *   - This `no-preference` block — the pure-CSS belt under the JS braces,
+   *     and the reason a reduced-motion reader never sees a band even while
+   *     the server-rendered attribute still says "on".
+   *
+   * `--flow-idle-start` is a CONSTANT past the worst-case trace end (the
+   * relation lives in `check:flowchart-motion`), never a per-chart JS value:
+   * the gate attribute ships in the server markup, so a pulse may legally
+   * begin before hydration, and only a static delay can promise it still
+   * begins after the trace has settled. Linear, because an eased loop reads
+   * as slipping; the delay longhand follows the shorthand so it is not reset.
+   *
+   * `backwards` IS LOAD-BEARING, not tidiness. Without a fill mode, a band is
+   * `display: inline` throughout its delay while the animation has not begun,
+   * so it paints at its own static `stroke-dashoffset: 0` — which puts the lit
+   * run at [0, lit], a stationary stub sitting on the line at the source. That
+   * shipped, and was reported as a gradient "stick" visible on refresh; the
+   * per-edge scatter had made it far worse, since an edge can wait a settle
+   * plus a full period before its first cycle. `backwards` applies the `from`
+   * keyframe during the delay instead, and `from` is each band's own lit
+   * length — an offset that parks the run at [-lit, 0], entirely BEFORE the
+   * path starts, so the band is genuinely absent until it enters. That is the
+   * same property the "travels exactly one dash period" pin already rests on,
+   * which is why no new number appears here.
+   */
+  [data-af-idle="on"] .af-flow-edge .af-flow-pulse {
+    display: inline;
+  }
+
+  [data-af-idle="on"] .af-flow-edge .af-flow-pulse-tail {
+    animation: af-flow-pulse-tail var(--flow-idle-period, 4200ms) linear
+      infinite backwards;
+    animation-delay: calc(
+      var(--flow-edge-at) + var(--flow-idle-start, 1600ms) +
+        var(--flow-jitter, 0ms)
+    );
+  }
+
+  [data-af-idle="on"] .af-flow-edge .af-flow-pulse-glow {
+    animation: af-flow-pulse-glow var(--flow-idle-period, 4200ms) linear
+      infinite backwards;
+    animation-delay: calc(
+      var(--flow-edge-at) + var(--flow-idle-start, 1600ms) +
+        var(--flow-jitter, 0ms)
+    );
+  }
+
+  [data-af-idle="on"] .af-flow-edge .af-flow-pulse-head {
+    animation: af-flow-pulse-head var(--flow-idle-period, 4200ms) linear
+      infinite backwards;
+    animation-delay: calc(
+      var(--flow-edge-at) + var(--flow-idle-start, 1600ms) +
+        var(--flow-jitter, 0ms)
+    );
+  }
+
+  /* ---- the loop march ------------------------------------------------------
+   * A back edge is drawn with the 6 4 loop dash, and a dashed line is exactly
+   * the kind the canvas-wide rule beside `@keyframes af-frame-march`
+   * (globals.css) permits to walk: "only the kind that is already dashed may
+   * march", because a march on a SOLID arrow makes it read as async or a
+   * reply. So the loop borrows that animation by name — the frame focus ring,
+   * the hero's reply arrow and this share one dash pattern at one speed,
+   * rather than this feature keeping a fourth copy of the same walk.
+   *
+   * It replaced the pulse on these edges, not joined it: the pulse is
+   * deliberately absent from back edges (a travelling band circling a retry
+   * loop forever says the system is stuck in it), and a marching dash is the
+   * quieter statement — the line itself moves without a light claiming to be
+   * traffic. Gated on `data-af-idle` because it IS ambient, which is the one
+   * difference from the frame ring, where the same walk is a selection the
+   * reader asked for and can dismiss.
+   */
+  [data-af-idle="on"] .af-flow-edge .af-flow-loop-march {
+    animation: af-frame-march 600ms linear infinite;
+  }
+
+  /* ---- resume: an explicit ON must answer promptly --------------------------
+   * Gating the animation on the attribute means turning the toggle OFF
+   * RETRACTS the rule (the point — a parked band is not a resting state), but
+   * it also means turning it back ON starts the animation over from zero,
+   * `--flow-idle-start` and all. That settle exists to let the ENTRANCE
+   * finish; re-serving it to a reader who just pressed the button left the
+   * chart motionless for 3+ seconds after the click — shipped, and reported
+   * as "idle motion toggle broken", because a control whose effect is
+   * invisible for three seconds is indistinguishable from a dead one.
+   *
+   * So the viewer stamps `data-af-idle-resume` alongside the gate attribute
+   * once the reader has ASKED for idle motion this session (the toggle's own
+   * handler; never at load — the initial settle keeps its reason to wait),
+   * and that state trades the settle for the draw's own length. The delay
+   * still rides `--flow-edge-at`, so the resumed pulse re-walks the ranks in
+   * the same capped, monotone order as always; adding `--flow-draw` (not
+   * zero) means that even a toggle flipped DURING the entrance can never put
+   * idle light on a still-drawing line — each edge gets exactly its draw's
+   * length of rest before the light re-enters. The fallback is the same
+   * pinned `--flow-draw` value the trace uses; no new number exists here.
+   */
+  [data-af-idle="on"][data-af-idle-resume] .af-flow-edge .af-flow-pulse-tail,
+  [data-af-idle="on"][data-af-idle-resume] .af-flow-edge .af-flow-pulse-glow,
+  [data-af-idle="on"][data-af-idle-resume] .af-flow-edge .af-flow-pulse-head {
+    /* NO `--flow-jitter` here, deliberately, and it is the one place the
+       scatter is dropped. The scatter runs to a full idle period, so adding it
+       to a RESUME could leave a reader waiting over four seconds after their
+       own click — which is precisely the "toggle broken" report this override
+       exists to fix. A resumed pulse therefore re-enters in plain rank order
+       and scatters again from its next cycle onward, because the per-cycle
+       phase is the animation's own, not this delay's. */
+    animation-delay: calc(var(--flow-edge-at) + var(--flow-draw, 220ms));
+  }
+}
+
+/* The pulse's resting state is ABSENT, not parked — hidden by default, for
+ * SSR, for the toggle's "off", and for every reduced-motion reader forever
+ * (the `display: inline` that shows it lives inside the gate above). The
+ * static band styling sits out here, inert while hidden, so the gate
+ * contains exactly the things that move. */
+.af-flow-pulse {
+  display: none;
+}
+
+.af-flow-pulse-band {
+  fill: none;
+  /* The theme's maximum-contrast neutral, never --edge (a band the line's
+     own colour ships invisible — the colour essay in the idle block above)
+     and never --primary (resting light must not say "selected"). */
+  stroke: var(--foreground);
+  stroke-linecap: round;
+}
+
+/* The sequence comet's band construction over the same 1.5 line weight. The
+ * duty (band ÷ period) stays under a tenth — the "never a second line's
+ * worth of stroke" rule — and the 2.7-path-lengths gap is the darkness
+ * between pulses. The glow is wider and the head a full unit over the line
+ * because the pulse has to survive `--foreground` at low opacity AND fit
+ * zoom scaling the whole drawing down; the first cut's 4/0.3/2 in the
+ * line's own colour measured as zero changed pixels (the idle block's
+ * colour essay). `check:flowchart-motion` pins duty, gap, the keyframes'
+ * exactly-one-period travel, the not-`--edge` stroke and the head's width
+ * margin. */
+/* The tail: the longest, widest and faintest of the three. It carries almost
+   no ink (0.6 lit x 0.16 opacity) but it is what turns the bead into a comet —
+   the falloff a reader registers as a gradient rather than as a moving dot.
+   Its dash period is 3.0, the same as the other two, so all three travel one
+   period per cycle and the trio can neither drift apart nor wrap visibly. */
+.af-flow-pulse-tail {
+  stroke-width: 9;
+  opacity: 0.16;
+  filter: blur(5px);
+  stroke-dasharray: 0.6 2.4;
+}
+
+.af-flow-pulse-glow {
+  stroke-width: 6;
+  opacity: 0.35;
+  filter: blur(2px);
+  stroke-dasharray: 0.3 2.7;
+}
+
+.af-flow-pulse-head {
+  stroke-width: 2.5;
+  opacity: 0.9;
+  stroke-dasharray: 0.09 2.91;
+}
+
+/* Each band starts at its own dash length — fronts aligned at the source, the
+ * C4/sequence comet's trick — and travels exactly ONE dash period per cycle,
+ * so the wrap is invisible: the loop can neither jerk nor accumulate phase. */
+@keyframes af-flow-pulse-tail {
+  from {
+    stroke-dashoffset: 0.6;
+  }
+  to {
+    stroke-dashoffset: -2.4;
+  }
+}
+
+@keyframes af-flow-pulse-glow {
+  from {
+    stroke-dashoffset: 0.3;
+  }
+  to {
+    stroke-dashoffset: -2.7;
+  }
+}
+
+@keyframes af-flow-pulse-head {
+  from {
+    stroke-dashoffset: 0.09;
+  }
+  to {
+    stroke-dashoffset: -2.91;
+  }
+}
+
+/* From-only: the end state is the element's own natural state, so the trace
+ * can never leave anything parked mid-animation — and the focus dim (an
+ * opacity TRANSITION on the outer group, see flowchart-diagram.tsx) is on a
+ * different element, so the two never fight over one property. */
+@keyframes af-flow-enter {
+  from {
+    opacity: 0;
+    /* Small on purpose — far enough to read as "landing", near enough that
+       a rank never appears to slide out from under the rank above it. */
+    transform: translateY(4px);
+  }
+}
+
+@keyframes af-flow-draw-line {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes af-flow-fade-in {
+  from {
+    opacity: 0;
+  }
+}
