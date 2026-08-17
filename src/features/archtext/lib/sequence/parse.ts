@@ -50,6 +50,8 @@ import { normalizeTint } from "@/lib/tint";
 import { LineCursor } from "../cursor";
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { failAt } from "../errors";
+import { FLOWCHART_HEADER_WORD } from "../flowchart/keywords";
+import { USECASE_HEADER_WORD } from "../usecase/keywords";
 import {
   assemble,
   onceString,
@@ -293,7 +295,11 @@ export function parseSequenceText(source: string): SequenceLabFile {
         failAt(
           wordLoc.line,
           wordLoc.column,
-          `"${word}" is not a document type — expected "archlab ${version} ${SEQUENCE_HEADER_WORD}"`,
+          word === FLOWCHART_HEADER_WORD
+            ? `this is a flowchart ".alab" header — a sequence document must read "archlab ${version} ${SEQUENCE_HEADER_WORD}"`
+            : word === USECASE_HEADER_WORD
+              ? `this is a use-case ".alab" header — a sequence document must read "archlab ${version} ${SEQUENCE_HEADER_WORD}"`
+              : `"${word}" is not a document type — expected "archlab ${version} ${SEQUENCE_HEADER_WORD}"`,
           word,
         );
       }
@@ -1078,14 +1084,16 @@ function parseBoxOpener(
 }
 
 /**
- * The optional `tint=<colour>` tail shared by `box` and `rect`.
+ * The optional `tint=<colour>` tail shared by `box` and `rect` — and,
+ * exported, by the flowchart grammar's `group` line (`../flowchart/parse.ts`):
+ * one attribute spelling across the document types, imported, never copied.
  *
  * Refused rather than ignored when it is not a colour we store: the author
  * typed a value, and silently dropping it means the diagram they get back is
  * not the one they described. (The Mermaid importer makes the opposite call
  * for the same input, deliberately — see `normalizeTint`.)
  */
-function readTintAttribute(
+export function readTintAttribute(
   cursor: LineCursor,
   what: string,
 ): string | undefined {

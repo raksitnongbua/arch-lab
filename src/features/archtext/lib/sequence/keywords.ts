@@ -18,11 +18,13 @@
  *
  *   archlab 1.0            → a C4 document
  *   archlab 1.0 sequence   → a sequence document
+ *   archlab 1.0 flowchart  → a flowchart document (`../flowchart/`)
  *
- * The C4 parser calls `expectEnd` after the version, so it REJECTS the
- * `sequence` word rather than silently reading a sequence file as C4; this
- * parser demands the word, so the two grammars are mutually exclusive from
- * line 1. See `./detect.ts` for the sniffing helper.
+ * The C4 parser calls `expectEnd` after the version, so it REJECTS any
+ * trailing word rather than silently reading another kind as C4; this
+ * parser and the flowchart parser each demand their own word, so the three
+ * grammars are mutually exclusive from line 1. See `./detect.ts` for the
+ * sniffing helper.
  *
  * Imported by `scripts/sequence-check.mjs` through Node's type stripping:
  * keep the syntax erasable and type-only imports as `import type`.
