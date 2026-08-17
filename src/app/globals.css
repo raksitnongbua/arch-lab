@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "../features/editor/styles/canvas-motion.css";
 @import "../features/sequence/styles/sequence-motion.css";
+@import "../features/flowchart/styles/flowchart-motion.css";
+@import "../features/usecase/styles/usecase-motion.css";
 @import "../features/mcp/styles/mcp-motion.css";
 
 /* ---------------------------------------------------------------------------
@@ -124,6 +126,61 @@
   --node-queue: oklch(0.935 0.055 150);
   --node-queue-border: oklch(0.52 0.11 150);
 
+  /* Flowchart SHAPE colours (flowchart/lib/shapes.ts: FLOW_SHAPE_PAINT is
+     the shape→token table; its header carries the family argument). Four of
+     the six shapes RE-USE a role pair above — legal under the same
+     co-occurrence budget the roles spend, because a flowchart never shares
+     a canvas with a C4 diagram: start wears the queue green ("go" — where
+     the flow enters), step the internal blue (the default working shape),
+     io the database teal (data crossing the boundary), call the person
+     violet (a process defined elsewhere — the house primary reads as a
+     named reference). Those four are var() aliases, declared ONCE here in
+     :root: an alias resolves against the active theme's role tokens on its
+     own, so the theme blocks below redefine only the two hues no role
+     holds:
+       - decision → amber, the classic flowchart caution diamond — safe
+         here where the sequence diagram reserved amber for notes, because
+         nothing else on a flowchart canvas wears it;
+       - end → rose, so entry and exit can NEVER read as one terminator
+         colour (the regression that flattened a six-node chart into one
+         violet). Hue 345, not 15: warmer pinks leave sRGB gamut at the
+         fills' L 0.93.
+     Ratios per shape × theme (same thresholds and audit maths as the role
+     tokens above, wash-top worst case included) are MEASURED, not trusted:
+     `pnpm check:flowchart-palette` recomputes every pair and the minimum
+     start↔end colour distance on each run. */
+  /* name 14.20:1, meta 5.97:1, border 4.60:1 (wash-top: 11.84 / 4.97 / 3.83) */
+  --flow-end: oklch(0.93 0.04 345);
+  --flow-end-border: oklch(0.53 0.15 345);
+  /* name 14.41:1, meta 6.05:1, border 4.53:1 (wash-top: 12.14 / 5.10 / 3.82) */
+  --flow-decision: oklch(0.93 0.06 85);
+  --flow-decision-border: oklch(0.52 0.095 80);
+  --flow-start: var(--node-queue);
+  --flow-start-border: var(--node-queue-border);
+  --flow-step: var(--node-internal);
+  --flow-step-border: var(--node-internal-border);
+  --flow-io: var(--node-database);
+  --flow-io-border: var(--node-database-border);
+  --flow-call: var(--node-person);
+  --flow-call-border: var(--node-person-border);
+
+  /* Use-case ELEMENT colours (usecase/lib/shapes.ts: USECASE_KIND_TOKENS is
+     the kind→token table; its header carries the argument). Both kinds are
+     var() aliases of role pairs above, declared ONCE here in :root — the
+     flowchart's start/step/io/call precedent: an alias resolves against the
+     active theme's role tokens on its own, so every theme block below
+     covers these without an edit, and the measured ratios annotated on the
+     role tokens (re-audited by check:themes) cover them too. The pairing is
+     semantic, not thrift: an actor IS the C4 person (the violet a reader
+     already decodes as "a human"), and a use case is the system's own
+     behaviour — the internal blue, the default working element everywhere.
+     `check:usecase-layout` pins these aliases to USECASE_ROLE_BY_KIND so
+     the stylesheet and the exporter cannot name different pairs. */
+  --uc-actor: var(--node-person);
+  --uc-actor-border: var(--node-person-border);
+  --uc-usecase: var(--node-internal);
+  --uc-usecase-border: var(--node-internal-border);
+
   /* tagColors fills are REBUILT from the author's colour rather than mixed:
      oklch(from <tag> var(--tag-fill-l) min(c, var(--tag-fill-c)) h) — the
      author's hue at OUR lightness (node-colors.ts: tagFillCss has the full
@@ -242,6 +299,16 @@
   --node-queue: oklch(0.305 0.055 150);
   --node-queue-border: oklch(0.67 0.11 150);
 
+  /* Flowchart shape colours (the light block carries the design notes; the
+     start/step/io/call aliases live once in :root and resolve to THIS
+     theme's role tokens on their own). */
+  /* name 12.22:1, meta 7.09:1, border 4.47:1 (wash-top: 9.90 / 5.74 / 3.62) */
+  --flow-end: oklch(0.305 0.055 345);
+  --flow-end-border: oklch(0.68 0.13 345);
+  /* name 11.96:1, meta 6.94:1, border 4.61:1 (wash-top: 9.62 / 5.58 / 3.71) */
+  --flow-decision: oklch(0.305 0.055 85);
+  --flow-decision-border: oklch(0.68 0.11 80);
+
   /* Dark pins for the rebuilt tagColors fills (light block explains). */
   --tag-fill-l: 0.305;
   --tag-fill-c: 0.06;
@@ -345,6 +412,16 @@
   --node-queue: oklch(0.275 0.055 150);
   --node-queue-border: oklch(0.67 0.11 150);
 
+  /* Flowchart shape colours (the light block carries the design notes; the
+     start/step/io/call aliases live once in :root and resolve to THIS
+     theme's role tokens on their own). */
+  /* name 13.50:1, meta 7.83:1, border 4.94:1 (wash-top: 10.90 / 6.32 / 3.99) */
+  --flow-end: oklch(0.275 0.055 345);
+  --flow-end-border: oklch(0.68 0.13 345);
+  /* name 13.24:1, meta 7.68:1, border 5.11:1 (wash-top: 10.60 / 6.15 / 4.09) */
+  --flow-decision: oklch(0.275 0.055 85);
+  --flow-decision-border: oklch(0.68 0.11 80);
+
   /* Dark pins for the rebuilt tagColors fills (light block explains). */
   --tag-fill-l: 0.275;
   --tag-fill-c: 0.06;
@@ -427,6 +504,17 @@
   /* name 11.59:1, meta 6.75:1, border 4.57:1 (wash-top: 9.53 / 5.55 / 3.76) */
   --node-queue: oklch(0.2 0.05 150);
   --node-queue-border: oklch(0.87 0.11 150);
+
+  /* Flowchart shape colours (the light block carries the design notes; the
+     start/step/io/call aliases live once in :root and resolve to THIS
+     theme's role tokens on their own). Borders lightened rather than
+     saturated, like every accent in this theme. */
+  /* name 18.34:1, meta 13.60:1, border 11.17:1 (wash-top: 13.68 / 10.14 / 8.33) */
+  --flow-end: oklch(0.2 0.05 345);
+  --flow-end-border: oklch(0.85 0.09 345);
+  /* name 18.13:1, meta 13.44:1, border 12.14:1 (wash-top: 13.13 / 9.74 / 8.79) */
+  --flow-decision: oklch(0.2 0.042 85);
+  --flow-decision-border: oklch(0.87 0.11 80);
 
   /* Dark pins for the rebuilt tagColors fills (light block explains). */
   --tag-fill-l: 0.2;
@@ -548,6 +636,17 @@
   /* name 14.98:1, meta 6.31:1, border 4.43:1 (wash-top: 12.54 / 5.29 / 3.71) */
   --node-queue: oklch(0.935 0.055 150);
   --node-queue-border: oklch(0.52 0.11 150);
+
+  /* Flowchart shape colours (the light block carries the design notes; the
+     start/step/io/call aliases live once in :root and resolve to THIS
+     theme's role tokens on their own). Same values as light — measured
+     against paper's warmer canvas and foreground by the same check. */
+  /* name 12.50:1, meta 5.98:1, border 4.60:1 (wash-top: 10.41 / 4.99 / 3.83) */
+  --flow-end: oklch(0.93 0.04 345);
+  --flow-end-border: oklch(0.53 0.15 345);
+  /* name 12.68:1, meta 6.07:1, border 4.53:1 (wash-top: 10.68 / 5.11 / 3.82) */
+  --flow-decision: oklch(0.93 0.06 85);
+  --flow-decision-border: oklch(0.52 0.095 80);
 
   /* tagColors fills are REBUILT from the author's colour rather than mixed:
      oklch(from <tag> var(--tag-fill-l) min(c, var(--tag-fill-c)) h) — the
@@ -686,6 +785,18 @@
   /* name 14.98:1, meta 6.31:1, border 4.43:1 (wash-top: 12.54 / 5.29 / 3.71) */
   --node-queue: oklch(0.935 0.055 150);
   --node-queue-border: oklch(0.52 0.11 150);
+
+  /* Flowchart shape colours (the light block carries the design notes; the
+     start/step/io/call aliases live once in :root and resolve to THIS
+     theme's role tokens on their own). Opaque like the role fills above —
+     glass keeps its translucency on the panel surfaces, not on diagram
+     nodes. */
+  /* name 14.20:1, meta 5.97:1, border 4.60:1 (wash-top: 11.84 / 4.97 / 3.83) */
+  --flow-end: oklch(0.93 0.04 345);
+  --flow-end-border: oklch(0.53 0.15 345);
+  /* name 14.41:1, meta 6.05:1, border 4.53:1 (wash-top: 12.14 / 5.10 / 3.82) */
+  --flow-decision: oklch(0.93 0.06 85);
+  --flow-decision-border: oklch(0.52 0.095 80);
 
   /* tagColors fills are REBUILT from the author's colour rather than mixed:
      oklch(from <tag> var(--tag-fill-l) min(c, var(--tag-fill-c)) h) — the
@@ -1322,13 +1433,16 @@
  * under 3.5:1 with no visible gain.
  *
  * Box-type nodes take `.af-node-wash` as a background-image over their
- * bg-(--node-fill) backstop. The SVG silhouettes (cylinder, pipe) get the
- * same stops from a per-instance <linearGradient> in node-shapes.tsx —
- * CSS backgrounds cannot follow a path, and a shared gradient id would
- * repaint the wrong node. `.af-node-wash-fill` is the matching paint for
- * small SVG details that must sit ON the washed area (the component glyph's
- * tab rects, which punch through strokes near the top of the card).
- * The exporter (viewer/export/render-svg.ts) mirrors the same four stops.
+ * bg-(--node-fill) backstop. The SVG silhouettes (cylinder, pipe) and the
+ * flowchart's all-SVG shapes get the same stops from a per-instance
+ * <linearGradient> (`components/ui/wash-gradient.tsx`) — CSS backgrounds
+ * cannot follow a path, and a shared gradient id would repaint the wrong
+ * node. `.af-node-wash-fill` is the matching paint for small SVG details
+ * that must sit ON the washed area (the component glyph's tab rects, which
+ * punch through strokes near the top of the card). Both exporters mirror
+ * the same four stops via `src/lib/wash.ts`; CSS cannot import it, so the
+ * percentages and offsets here are genuinely duplicated and
+ * `check:flowchart-palette` pins each one to that module's constants.
  * External cards take NO wash anywhere — matte is their meaning. */
 
 .af-node-wash {

@@ -78,6 +78,8 @@ const ROUTES = [
   ["/view/c4", "src/app/view/c4/page.tsx", null],
   ["/view/seq", "src/app/view/seq/page.tsx", null],
   ["/view/sequence", "src/app/view/sequence/page.tsx", null],
+  ["/view/flow", "src/app/view/flow/page.tsx", null],
+  ["/view/uc", "src/app/view/uc/page.tsx", null],
   ["/validate", "src/app/validate/page.tsx", null],
   ["/syntax", "src/app/syntax/page.tsx", null],
 ];
@@ -152,7 +154,7 @@ check(
   canonicalOf("src/app/view/page.tsx") === "/view",
   `expected "/view", got ${JSON.stringify(canonicalOf("src/app/view/page.tsx"))}`,
 );
-for (const alias of ["c4", "seq", "sequence"]) {
+for (const alias of ["c4", "seq", "sequence", "flow", "uc"]) {
   check(
     `/view/${alias} canonicals to the playground it forwards to`,
     canonicalOf(`src/app/view/${alias}/page.tsx`) === "/view",
@@ -167,7 +169,9 @@ for (const alias of ["c4", "seq", "sequence"]) {
     "the sitemap lists no route that canonicals elsewhere",
     !listed.includes("/view/c4") &&
       !listed.includes("/view/seq") &&
-      !listed.includes("/view/sequence"),
+      !listed.includes("/view/sequence") &&
+      !listed.includes("/view/flow") &&
+      !listed.includes("/view/uc"),
     `listed: ${listed.join(", ")}`,
   );
   check(

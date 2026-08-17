@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * The merged `/view` playground's READER: one pane, five accepted shapes, one
- * rendered document.
+ * The merged `/view` playground's READER: one pane, nine accepted shapes,
+ * one rendered document.
  *
  * This exists because the merge collapsed two pages into one and detection is
  * now the thing standing between a paste and a blank canvas. Nothing else can
@@ -13,10 +13,14 @@
  * What it asserts:
  *
  *   1. every shape the pane advertises is detected as the right KIND — C4
- *      `.alab`, sequence `.alab`, arch-lab JSON, Mermaid C4, Mermaid
- *      `sequenceDiagram`;
- *   2. the bundled seeds for both routes parse (a broken seed would ship a
- *      playground that opens on an error);
+ *      `.alab`, sequence `.alab`, flowchart `.alab`, use-case `.alab`,
+ *      arch-lab JSON, Mermaid C4, Mermaid `sequenceDiagram`, Mermaid
+ *      `flowchart`/`graph`, and a Mermaid flowchart that reads as a USE-CASE
+ *      diagram — including that the use-case reading never steals a genuine
+ *      flowchart, because both readings share one Mermaid header and only
+ *      `detectMermaidUseCase` may pick between them;
+ *   2. the bundled seeds parse (a broken seed would ship a playground that
+ *      opens on an error);
  *   3. a failure keeps its parser's own precision — a located line/column for
  *      the text grammars, a JSON-path for the JSON validator — because the UI
  *      renders a caret quote from exactly those fields;
@@ -70,11 +74,15 @@ registerHooks({
   },
 });
 
-const { parseViewSource, VIEW_SEED_TEXT, VIEW_STARTER_TEXT, describeDocument } =
-  await import(
-    pathToFileURL(path.join(ROOT, "src/features/playground/input/parse.ts"))
-      .href
-  );
+const {
+  parseViewSource,
+  convertedSourceText,
+  VIEW_SEED_TEXT,
+  VIEW_STARTER_TEXT,
+  describeDocument,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/input/parse.ts")).href
+);
 
 /* ----------------------------------------------------------------------- */
 /* Harness                                                                  */
@@ -98,7 +106,7 @@ function check(label, condition, detail) {
 /* 1. Every accepted shape lands on the right canvas                        */
 /* ----------------------------------------------------------------------- */
 
-console.log("one pane, five shapes");
+console.log("one pane, nine shapes");
 
 const MERMAID_C4 = `C4Context
     title Coffee Shop
@@ -119,6 +127,39 @@ const MERMAID_SEQUENCE = `sequenceDiagram
     end
 `;
 
+/* BOTH Mermaid flowchart spellings, because they detect on different first
+   words: `flowchart` (current) and `graph` with the old `;` line endings.
+   The pane advertises "paste Mermaid" without qualifying the era, so a
+   regression that keeps `flowchart` working while `graph` falls back to
+   "unknown format" would pass every other assertion here. */
+const MERMAID_FLOWCHART = `flowchart TD
+    a([Start]) --> b{Valid?}
+    b -->|yes| c[Process]
+    b -->|no| d([Reject])
+    c --> e([Done])
+`;
+const MERMAID_GRAPH = `graph LR;
+    a-->b;
+    b-->c;
+`;
+
+/* The use-case CONVENTION riding the flowchart header: ((circle)) actors,
+   ([stadium]) use cases, a subgraph boundary. This must land on the use-case
+   canvas, and it exercises the fork detection cannot see from any first line
+   — `detectMermaidUseCase` is the only thing separating it from
+   MERMAID_FLOWCHART above, so this fixture failing means every pasted
+   use-case document silently renders as a flowchart again. Declared with the
+   subgraph before any edge because membership is first-mention. */
+const MERMAID_USECASE = `flowchart TD
+    customer((Customer))
+    subgraph shop [Web Shop]
+      order([Place an order])
+      pay([Pay for it])
+    end
+    customer --> order
+    order -.->|include| pay
+`;
+
 /* Derived, never hand-written: the JSON case has to be the JSON this app
    actually emits, or the test proves something about a document nobody
    produces. */
@@ -131,9 +172,19 @@ const C4_JSON =
 for (const [label, text, kind] of [
   ["C4 .alab", VIEW_SEED_TEXT.c4, "c4"],
   ["sequence .alab", VIEW_SEED_TEXT.sequence, "sequence"],
+  ["flowchart .alab", VIEW_SEED_TEXT.flowchart, "flowchart"],
+  ["use-case .alab", VIEW_SEED_TEXT.usecase, "usecase"],
   ["arch-lab JSON", C4_JSON, "c4"],
   ["Mermaid C4", MERMAID_C4, "c4"],
   ["Mermaid sequenceDiagram", MERMAID_SEQUENCE, "sequence"],
+  /* These two rows are one assertion wearing two labels: the SAME header
+     word must land on two different canvases, decided only by what the
+     strict use-case parser accepts. The flowchart row failing as "usecase"
+     is the theft `usecase-mapping.ts` argues cannot happen — a step bracket
+     and a labelled arrow must keep it a flowchart. */
+  ["Mermaid flowchart", MERMAID_FLOWCHART, "flowchart"],
+  ["Mermaid graph (the old spelling)", MERMAID_GRAPH, "flowchart"],
+  ["Mermaid flowchart in the use-case convention", MERMAID_USECASE, "usecase"],
 ]) {
   const result = parseViewSource(text);
   check(
@@ -156,9 +207,9 @@ for (const [label, text, kind] of [
 /* 2. Both route seeds parse                                                */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nthe seeds the three routes open with");
+console.log("\nthe seeds the ?d= values open with");
 
-for (const seed of ["c4", "sequence"]) {
+for (const seed of ["c4", "sequence", "flowchart", "usecase"]) {
   const result = parseViewSource(VIEW_SEED_TEXT[seed]);
   check(
     `the "${seed}" seed parses — the page never opens on an error`,
@@ -186,11 +237,44 @@ title "Broken"
   a -> ghost : "x"
 `;
 const BROKEN_MERMAID_SEQUENCE = "sequenceDiagram\n  A->>B hello\n";
+/* The edge names a node nobody declared — a failure located by the RESOLVE
+   pass, not the line scanner, so it proves resolve errors carry a location
+   too (the caret quote renders from exactly these fields). */
+const BROKEN_FLOWCHART = `archlab 1.0 flowchart
+title "Broken"
+
+@flowchart
+  start s "Start"
+
+  s -> ghost
+`;
+/* A hexagon node — a shape the importer REFUSES by name rather than guesses;
+   the refusal must still be a located parse error, not a crash or a generic
+   "unknown format". (This fixture WAS the circle `((...))`, which is now
+   imported as a terminator — the refusal blocked a real user document whose
+   actors were circles, so it was deliberately dropped; the hexagon keeps the
+   refusal path itself under test.) */
+const BROKEN_MERMAID_FLOWCHART = "flowchart TD\n  a{{Prep}} --> b[Step]\n";
+/* The edge names an element nobody declared — located by the use-case
+   grammar's resolve pass, so this proves the fourth kind's failures carry a
+   line/column too (a use-case typo answered with an unlocated message would
+   leave the caret quote with nothing to point at). */
+const BROKEN_USECASE = `archlab 1.0 usecase
+title "Broken"
+
+@usecase
+  actor a "A"
+
+  a -- ghost
+`;
 
 for (const [label, text] of [
   ["a C4 .alab typo", BROKEN_C4],
   ["a sequence .alab typo", BROKEN_SEQUENCE],
+  ["a flowchart .alab typo", BROKEN_FLOWCHART],
+  ["a use-case .alab typo", BROKEN_USECASE],
   ["a Mermaid sequence typo", BROKEN_MERMAID_SEQUENCE],
+  ["a refused Mermaid flowchart shape", BROKEN_MERMAID_FLOWCHART],
 ]) {
   const result = parseViewSource(text);
   const located =
@@ -254,7 +338,10 @@ for (const [label, text] of [
 for (const [label, text] of [
   ["a recognisable C4 header", BROKEN_C4],
   ["a recognisable sequence header", BROKEN_SEQUENCE],
+  ["a recognisable flowchart header", BROKEN_FLOWCHART],
+  ["a recognisable use-case header", BROKEN_USECASE],
   ["a recognisable Mermaid header", BROKEN_MERMAID_SEQUENCE],
+  ["a recognisable Mermaid flowchart header", BROKEN_MERMAID_FLOWCHART],
 ]) {
   const result = parseViewSource(text);
   check(
@@ -267,7 +354,7 @@ for (const [label, text] of [
 /* ----------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------- */
-/* `?e=` is one flat namespace over both example registries                 */
+/* `?e=` is one flat namespace over all four example registries             */
 /* ----------------------------------------------------------------------- */
 
 {
@@ -283,24 +370,49 @@ for (const [label, text] of [
 
   const c4 = idsIn("src/features/viewer/service/model-service.ts");
   const seq = idsIn("src/features/sequence/service/example-service.ts");
-  const clash = c4.filter((id) => seq.includes(id));
+  const flow = idsIn("src/features/flowchart/service/example-service.ts");
+  const uc = idsIn("src/features/usecase/service/example-service.ts");
 
-  /* `?e=` spans both registries so a reader never has to know which kind an
-     id belongs to. The day the two collide it resolves whichever is looked up
-     first — a bundled example quietly opening as the wrong document. */
+  /* `?e=` spans ALL FOUR registries so a reader never has to know which kind
+     an id belongs to. The day two collide it resolves whichever is looked up
+     first — a bundled example quietly opening as the wrong document. Counted
+     pairwise rather than as a set, so the failure message can name which two
+     registries disagree. */
+  const clashes = [
+    ["C4", "sequence", c4.filter((id) => seq.includes(id))],
+    ["C4", "flowchart", c4.filter((id) => flow.includes(id))],
+    ["C4", "use-case", c4.filter((id) => uc.includes(id))],
+    ["sequence", "flowchart", seq.filter((id) => flow.includes(id))],
+    ["sequence", "use-case", seq.filter((id) => uc.includes(id))],
+    ["flowchart", "use-case", flow.filter((id) => uc.includes(id))],
+  ].filter(([, , shared]) => shared.length > 0);
+
   check(
-    `example ids are unique across both registries (${c4.length} C4 + ${seq.length} sequence)`,
-    clash.length === 0 && c4.length > 0 && seq.length > 0,
-    clash.length > 0
-      ? `both define: ${clash.join(", ")}`
+    `example ids are unique across all four registries (${c4.length} C4 + ` +
+      `${seq.length} sequence + ${flow.length} flowchart + ${uc.length} use-case)`,
+    clashes.length === 0 &&
+      c4.length > 0 &&
+      seq.length > 0 &&
+      flow.length > 0 &&
+      uc.length > 0,
+    clashes.length > 0
+      ? clashes
+          .map(
+            ([a, b, shared]) =>
+              `${a} and ${b} both define: ${shared.join(", ")}`,
+          )
+          .join("; ")
       : "no ids parsed — has a registry moved?",
   );
 
   const resolver = read("src/features/playground/lib/example-param.ts");
   check(
-    "the resolver tries BOTH registries before giving up",
+    "the resolver tries ALL FOUR registries before giving up",
     resolver.includes("loadViewerModel") &&
-      resolver.includes("loadSequenceExample"),
+      resolver.includes("loadSequenceExample") &&
+      resolver.includes("loadFlowchartExample") &&
+      resolver.includes("loadUseCaseExample"),
+    "a registry the resolver never asks is a set of demo cards whose ?e= links all open the default seed",
   );
   check(
     "an unknown ?e= falls back rather than throwing",
@@ -312,6 +424,35 @@ for (const [label, text] of [
     read("src/app/view/page.tsx").includes("exampleTextFor"),
     "resolving after hydration would show the seed, then replace it",
   );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The bundled use-case examples parse                                      */
+/* ----------------------------------------------------------------------- */
+
+{
+  /* The use-case registry can be LOADED here, unlike the C4 one (whose
+     service pulls `.archlab.json` through import attributes this harness
+     does not support) — its whole import graph is pure `.ts`. So its
+     documents are asserted to parse directly: a registered example that
+     stops parsing still SHIPS — as a visible `invalid` card on /demo and a
+     parse-error page on /view/usecase/<id>, by design — but a green suite
+     must not claim every bundled document opens while one renders an error.
+     `pnpm build` cannot catch this; the routes render the failure rather
+     than throwing. */
+  const { listUseCaseExamples } = await import(
+    pathToFileURL(
+      path.join(ROOT, "src/features/usecase/service/example-service.ts"),
+    ).href
+  );
+  console.log("\nthe bundled use-case examples parse");
+  for (const listing of listUseCaseExamples()) {
+    check(
+      `use-case example "${listing.status === "ok" ? listing.summary.id : listing.id}" parses`,
+      listing.status === "ok",
+      listing.status === "ok" ? undefined : listing.message,
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -341,6 +482,91 @@ for (const [label, text] of [
       "a starter is a shape to type into; the seed is a finished document",
     );
   }
+}
+
+/* ----------------------------------------------------------------------- */
+/* The format toggle converts EVERY kind, in BOTH directions                */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The pane's `.alab / Mermaid` control switches by rewriting the text, and
+ * the rewrite is only honest if the rewritten text still PARSES — the
+ * playground re-parses it immediately, and a conversion the reader cannot
+ * re-parse shows an error box and leaves the radio stuck on `.alab`. That is
+ * exactly how the flowchart toggle shipped broken: `serializeMermaidFlowchart`
+ * writes the title as YAML frontmatter, the Mermaid parser reads frontmatter,
+ * but the first-line DETECTORS did not skip it — so the toggle's own output
+ * came back "unknown format" and Mermaid was unclickable on a flowchart
+ * document. This section would have failed on that day for the flowchart row,
+ * and now guards all four kinds symmetrically. The use-case row carries an
+ * extra way to fail that the others cannot: its Mermaid emitter shares the
+ * flowchart header, so its output must ALSO re-pass `detectMermaidUseCase` —
+ * an emitted document the detector declines would come back as a flowchart,
+ * silently changing the document's kind under the toggle.
+ */
+
+console.log("\nthe format toggle round-trips every kind");
+
+for (const kind of ["c4", "sequence", "flowchart", "usecase"]) {
+  const parsed = parseViewSource(VIEW_STARTER_TEXT[kind]);
+  check(
+    `the ${kind} starter parses (precondition for the toggle rows below)`,
+    parsed.status === "ok",
+  );
+  if (parsed.status !== "ok") continue;
+
+  const mermaid = convertedSourceText(parsed.value, "mermaid");
+  const reparsed = parseViewSource(mermaid);
+  check(
+    `converting a ${kind} document to Mermaid yields text the pane re-parses as ${kind}/mermaid — otherwise the Mermaid side of the toggle is a dead button`,
+    reparsed.status === "ok" &&
+      reparsed.value.kind === kind &&
+      reparsed.value.format === "mermaid",
+    reparsed.status === "ok"
+      ? `got ${reparsed.value.kind}/${reparsed.value.format}`
+      : JSON.stringify(reparsed.error).slice(0, 160),
+  );
+  if (reparsed.status !== "ok") continue;
+
+  const back = convertedSourceText(reparsed.value, "alab");
+  const restored = parseViewSource(back);
+  check(
+    `converting the ${kind} Mermaid back to .alab re-parses as ${kind}/alab (or json) — the other direction of the same button`,
+    restored.status === "ok" &&
+      restored.value.kind === kind &&
+      restored.value.format !== "mermaid",
+    restored.status === "ok"
+      ? `got ${restored.value.kind}/${restored.value.format}`
+      : JSON.stringify(restored.error).slice(0, 160),
+  );
+}
+
+{
+  /* The flowchart round trip must also KEEP the document: title (rides the
+     frontmatter the detectors now skip), every node with its shape, every
+     edge with its label. Without this, the toggle could "work" by producing
+     a parseable but different document. */
+  const parsed = parseViewSource(VIEW_STARTER_TEXT.flowchart);
+  const there = parseViewSource(convertedSourceText(parsed.value, "mermaid"));
+  const backAgain =
+    there.status === "ok"
+      ? parseViewSource(convertedSourceText(there.value, "alab"))
+      : there;
+  check(
+    "a flowchart survives .alab → Mermaid → .alab with title, shapes and edge labels intact — the toggle rewrites the spelling, never the model",
+    backAgain.status === "ok" &&
+      backAgain.value.file.metadata.title ===
+        parsed.value.file.metadata.title &&
+      JSON.stringify(
+        backAgain.value.file.nodes.map((n) => [n.id, n.shape, n.label]),
+      ) ===
+        JSON.stringify(
+          parsed.value.file.nodes.map((n) => [n.id, n.shape, n.label]),
+        ) &&
+      JSON.stringify(backAgain.value.file.edges) ===
+        JSON.stringify(parsed.value.file.edges),
+    backAgain.status === "ok" ? undefined : JSON.stringify(backAgain.error),
+  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -374,7 +600,7 @@ for (const [label, text] of [
   check(
     "both canvas panes still claim a viewport-relative height below lg",
     panes.length === 2,
-    `found ${panes.length} pane class strings carrying max-lg:h-[70svh], expected 2 (C4 and sequence)`,
+    `found ${panes.length} pane class strings carrying max-lg:h-[70svh], expected 2 (C4, and the shared sequence/flowchart pane)`,
   );
   for (const [, classes] of panes) {
     check(

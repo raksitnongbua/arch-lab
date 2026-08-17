@@ -190,9 +190,11 @@ title "Layout rules"
 /* -------------------------------------------------------------------------- */
 
 /**
- * `.alab` has two document kinds and they do not mix: a C4 model
- * (`archlab 1.0`) and a sequence diagram (`archlab 1.0 sequence`). The header
- * decides which parser reads the file, and `detectAlabKind` is what picks.
+ * `.alab` document kinds do not mix: a C4 model (`archlab 1.0`), a sequence
+ * diagram (`archlab 1.0 sequence`), a flowchart (`archlab 1.0 flowchart`)
+ * and a use-case diagram (`archlab 1.0 usecase`) — the last two not yet
+ * documented on this page. The header decides which parser reads the file,
+ * and `detectAlabKind` is what picks.
  *
  * These snippets are kept separate from `FULL_SNIPPETS` because the check
  * script must push them through `parseSequenceText`, not `parseArchText` —

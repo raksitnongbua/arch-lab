@@ -66,6 +66,12 @@ const CARDS = [
      architecture diagrams", the other document kind, which is the exact bug
      this card exists to fix. */
   ["src/app/view/seq/opengraph-image.tsx", "/view/seq"],
+  /* The third and fourth document kinds get their cards WITH their routes,
+     not after the first mis-preview — a `/view/flow` or `/view/uc` link
+     previewing as the landing page (or as any other kind) is exactly the
+     failure mode item 1 records. */
+  ["src/app/view/flow/opengraph-image.tsx", "/view/flow"],
+  ["src/app/view/uc/opengraph-image.tsx", "/view/uc"],
 ];
 
 /**
@@ -141,7 +147,11 @@ for (const [file, target, route] of REEXPORTED_CARDS) {
  * Latin-1 covers the copy; the allowlist is the typography this design uses on
  * purpose (middot separators, em dash, ellipsis, arrows in a couple of labels).
  * Anything else is a tofu box waiting to ship. */
-const ALLOWED = new Set(["·", "—", "–", "…", "→", "⇢"]);
+/* «» (U+00AB/U+00BB) pass the Latin-1 test below by codepoint — named here
+   anyway because the use-case card leans on them («include» is that
+   diagram's vocabulary) and a future tightening of this check must not
+   silently turn the card's one term of art into tofu. */
+const ALLOWED = new Set(["·", "—", "–", "…", "→", "⇢", "«", "»"]);
 for (const [file, route] of [
   ...CARDS,
   ...REEXPORTED_CARDS.map(([file, , route]) => [file, route]),

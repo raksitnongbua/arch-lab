@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * THE playground — one page for every document arch-lab can render. Mounted
- * at `/view`, `/view/c4` and `/view/sequence`, which differ ONLY in which
- * example seeds the pane (`/demo` lists them all — this page does not offer
+ * THE playground — one page for every document arch-lab can render, seeded
+ * by `?d=` (`/demo` lists the bundled examples — this page does not offer
  * its own picker); one source rail on the LEFT holds ONE textarea, and
  * every edit is auto-detected and rendered on the RIGHT: `ViewerShell` for a
- * C4 model, `SequenceViewer` for a sequence document. C4 `.alab`, sequence
- * `.alab`, arch-lab JSON, Mermaid C4 and Mermaid `sequenceDiagram` all just
- * work — `input/parse.ts` composes the real readers; nothing is parsed twice
- * or differently here.
+ * C4 model, `SequenceViewer` for a sequence document, `FlowchartViewer` for
+ * a flowchart, `UseCaseViewer` for a use-case diagram. C4 `.alab`, sequence
+ * `.alab`, flowchart `.alab`, use-case `.alab`, arch-lab JSON, Mermaid C4,
+ * Mermaid `sequenceDiagram` and Mermaid `flowchart` / `graph` (in both its
+ * flowchart and use-case readings) all just work — `input/parse.ts` composes
+ * the real readers; nothing is parsed twice or differently here.
  *
  * This file replaced the two separate playgrounds (`viewer-playground.tsx`,
  * `sequence-playground.tsx`) and the `/view` chooser between them. The merge
@@ -27,10 +28,13 @@
  *     the sync, which is what structurally rules out echo loops and mid-edit
  *     reformatting. Canonicalising your OWN pane is the explicit Format
  *     button.
- *   - The format toggle rewrites the pane in place, both kinds now:
+ *   - The format toggle rewrites the pane in place, all four kinds now:
  *     `.alab ⇄ Mermaid` via the real serializers. Both directions exist for
- *     both kinds, so both options always render; a C4 document sitting in the
- *     pane as JSON simply shows neither side checked.
+ *     every kind, so both options always render; a C4 document sitting in the
+ *     pane as JSON simply shows neither side checked. (`check:view-input`
+ *     round-trips the toggle for all four, because the flowchart side
+ *     shipped broken once: the emitter's YAML frontmatter defeated the
+ *     detectors and Mermaid was an unclickable option.)
  *   - Mermaid C4 stopped being an "import" ceremony: the merged pane reads it
  *     like everything else, and the lossy-import caveat moved into the same
  *     disclosure the sequence page already used for its Mermaid caveats.
@@ -93,8 +97,28 @@ import {
   SHARE_PENDING_CLASS,
   ShareOpening,
 } from "@/components/share/share-opening";
-import { serializeSequenceText } from "@/features/archtext";
-import { MERMAID_SEQUENCE_EXPORT_CAVEAT } from "@/features/mermaid";
+import {
+  serializeFlowchartText,
+  serializeSequenceText,
+  serializeUseCaseText,
+} from "@/features/archtext";
+import {
+  MERMAID_FLOWCHART_EXPORT_CAVEAT,
+  MERMAID_SEQUENCE_EXPORT_CAVEAT,
+  MERMAID_USECASE_EXPORT_CAVEAT,
+} from "@/features/mermaid";
+import {
+  FlowchartExportButton,
+  FlowchartShareButton,
+  FlowchartViewer,
+  MERMAID_FLOWCHART_CAVEAT,
+} from "@/features/flowchart";
+import {
+  MERMAID_USECASE_CAVEAT,
+  UseCaseExportButton,
+  UseCaseShareButton,
+  UseCaseViewer,
+} from "@/features/usecase";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SequenceExportButton,
@@ -186,6 +210,24 @@ interface PendingEdit {
 type PaneErrorState =
   | { pane: "source"; error: ViewSourceError }
   | { pane: "json"; error: PaneErrorDetail };
+
+/** How each kind reads mid-sentence ("Loaded a … starter", the starter
+ * buttons' titles) — `usecase` is one word in code and two in prose, so the
+ * raw SeedKind cannot be interpolated. */
+const STARTER_NOUN: Record<SeedKind, string> = {
+  c4: "C4",
+  sequence: "sequence",
+  flowchart: "flowchart",
+  usecase: "use-case",
+};
+
+/** The starter buttons' faces, in the order the row renders them. */
+const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
+  c4: "C4",
+  sequence: "Sequence",
+  flowchart: "Flowchart",
+  usecase: "Use case",
+};
 
 export function ViewPlayground({
   seed,
@@ -291,13 +333,13 @@ export function ViewPlayground({
   const showJson =
     jsonPaneAvailable && (jsonVisible || paneError?.pane === "json");
 
-  /* ---- immersive mode (sequence canvas only) ------------------------------
+  /* ---- immersive mode (sequence, flowchart and use-case canvases) ---------
    * State + ref pair, exactly as viewer-shell.tsx keeps them: the ref exists
    * so the once-registered Escape listener below can read the CURRENT value
    * without re-registering — a re-registered window listener moves to the
-   * back of the listener order, BEHIND the sequence viewer's rung-2 listener,
-   * and the Escape ladder would run bottom-up. The C4 shell brings its own
-   * immersive control, so this pair only ever drives the sequence canvas. */
+   * back of the listener order, BEHIND the viewers' rung-2 listeners, and
+   * the Escape ladder would run bottom-up. The C4 shell brings its own
+   * immersive control, so this pair drives the other three canvases only. */
 
   const [isImmersive, setIsImmersive] = useState(false);
   const immersiveRef = useRef(false);
@@ -325,11 +367,12 @@ export function ViewPlayground({
     };
   }, [isImmersive]);
 
-  // Escape rung 3 — leave immersive mode, only once the sequence viewer has
+  // Escape rung 3 — leave immersive mode, only once the mounted viewer has
   // passed on the event (its rung-2 listener preventDefaults when it clears a
   // focus, and it registered first — child effects run before parent effects
-  // — so it always runs first). Registered once: `setImmersive` is stable and
-  // the current mode is read through the ref.
+  // — so it always runs first; the flowchart viewer keeps the same ladder).
+  // Registered once: `setImmersive` is stable and the current mode is read
+  // through the ref.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -344,9 +387,11 @@ export function ViewPlayground({
 
   // Typing a C4 document while immersive swaps the canvas to the C4 shell,
   // whose own immersive control knows nothing of this state — leave quietly
-  // rather than strand a fixed, invisible section over nothing.
+  // rather than strand a fixed, invisible section over nothing. (A swap
+  // among the sequence, flowchart and use-case canvases keeps the mode: all
+  // three render inside this page's own immersive wrapper.)
   useEffect(() => {
-    if (doc.kind !== "sequence" && immersiveRef.current) setImmersive(false);
+    if (doc.kind === "c4" && immersiveRef.current) setImmersive(false);
   }, [doc.kind, setImmersive]);
 
   /* ---- adopting a successfully parsed document --------------------------- */
@@ -603,7 +648,11 @@ export function ViewPlayground({
         const fragment = await encodeShareFragment(
           doc.kind === "c4"
             ? doc.synced.aftText
-            : serializeSequenceText(doc.file),
+            : doc.kind === "sequence"
+              ? serializeSequenceText(doc.file)
+              : doc.kind === "flowchart"
+                ? serializeFlowchartText(doc.file)
+                : serializeUseCaseText(doc.file),
           doc.kind === "c4" &&
             currentDiagramRef.current !== doc.synced.model.rootDiagramId
             ? currentDiagramRef.current
@@ -685,9 +734,9 @@ export function ViewPlayground({
    * silently converting a stale document would replace the reader's work with
    * something they cannot see the source of.
    *
-   * Going to Mermaid is LOSSY for both kinds (`MERMAID_SEQUENCE_EXPORT_CAVEAT`
-   * / `MERMAID_C4_EXPORT_CAVEAT`), and the announcement says so the moment it
-   * happens. It is not guarded behind a confirmation: the conversion is
+   * Going to Mermaid is LOSSY for every kind (`MERMAID_C4_EXPORT_CAVEAT` /
+   * `MERMAID_SEQUENCE_EXPORT_CAVEAT` / `MERMAID_FLOWCHART_EXPORT_CAVEAT`),
+   * and the announcement says so the moment it happens. It is not guarded behind a confirmation: the conversion is
    * visible in the box, one Undo away in the textarea's own history, and a
    * dialog in front of a formatting button teaches people to dismiss dialogs.
    */
@@ -704,7 +753,7 @@ export function ViewPlayground({
       setPending(null);
       setText(starter);
       applyEdit("source", starter);
-      setAnnouncement(`Loaded a ${kind === "c4" ? "C4" : "sequence"} starter.`);
+      setAnnouncement(`Loaded a ${STARTER_NOUN[kind]} starter.`);
     },
     [applyEdit],
   );
@@ -724,7 +773,11 @@ export function ViewPlayground({
           ? `Converted the pane to Mermaid. ${
               doc.kind === "c4"
                 ? MERMAID_C4_EXPORT_CAVEAT
-                : MERMAID_SEQUENCE_EXPORT_CAVEAT
+                : doc.kind === "sequence"
+                  ? MERMAID_SEQUENCE_EXPORT_CAVEAT
+                  : doc.kind === "flowchart"
+                    ? MERMAID_FLOWCHART_EXPORT_CAVEAT
+                    : MERMAID_USECASE_EXPORT_CAVEAT
             }`
           : "Converted the pane to .alab — nothing is lost in this direction.",
       );
@@ -821,7 +874,7 @@ export function ViewPlayground({
             live editor
           </Badge>
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-            C4 or sequence —{" "}
+            C4, sequence, flowchart or use case —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
             JSON, or Mermaid, auto-detected and rendered live. Nothing leaves
             your browser.{" "}
@@ -887,13 +940,21 @@ export function ViewPlayground({
               <span className="font-medium text-foreground">Coming in:</span>{" "}
               {doc.kind === "c4"
                 ? MERMAID_LOSSY_NOTICE
-                : MERMAID_SEQUENCE_CAVEAT}
+                : doc.kind === "sequence"
+                  ? MERMAID_SEQUENCE_CAVEAT
+                  : doc.kind === "flowchart"
+                    ? MERMAID_FLOWCHART_CAVEAT
+                    : MERMAID_USECASE_CAVEAT}
             </p>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
               <span className="font-medium text-foreground">Going out:</span>{" "}
               {doc.kind === "c4"
                 ? MERMAID_C4_EXPORT_CAVEAT
-                : MERMAID_SEQUENCE_EXPORT_CAVEAT}
+                : doc.kind === "sequence"
+                  ? MERMAID_SEQUENCE_EXPORT_CAVEAT
+                  : doc.kind === "flowchart"
+                    ? MERMAID_FLOWCHART_EXPORT_CAVEAT
+                    : MERMAID_USECASE_EXPORT_CAVEAT}
             </p>
           </details>
         ) : null}
@@ -1187,27 +1248,29 @@ export function ViewPlayground({
                 <span className="text-xs text-muted-foreground">
                   Start from:
                 </span>
-                {(["c4", "sequence"] as const).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    onClick={() => loadStarter(kind)}
-                    disabled={doc.kind === kind}
-                    title={
-                      doc.kind === kind
-                        ? `The pane already holds a ${kind === "c4" ? "C4" : "sequence"} document`
-                        : `Replace the pane with a ${kind === "c4" ? "C4" : "sequence"} starter`
-                    }
-                    className={buttonClasses({
-                      variant: "ghost",
-                      size: "sm",
-                      className: "disabled:cursor-not-allowed",
-                    })}
-                  >
-                    <FilePlus2 aria-hidden="true" />
-                    {kind === "c4" ? "C4" : "Sequence"}
-                  </button>
-                ))}
+                {(["c4", "sequence", "flowchart", "usecase"] as const).map(
+                  (kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => loadStarter(kind)}
+                      disabled={doc.kind === kind}
+                      title={
+                        doc.kind === kind
+                          ? `The pane already holds a ${STARTER_NOUN[kind]} document`
+                          : `Replace the pane with a ${STARTER_NOUN[kind]} starter`
+                      }
+                      className={buttonClasses({
+                        variant: "ghost",
+                        size: "sm",
+                        className: "disabled:cursor-not-allowed",
+                      })}
+                    >
+                      <FilePlus2 aria-hidden="true" />
+                      {STARTER_BUTTON_LABEL[kind]}
+                    </button>
+                  ),
+                )}
               </div>
 
               <p
@@ -1267,9 +1330,21 @@ export function ViewPlayground({
                 />
               </section>
             ) : (
+              /* ONE section for the sequence, flowchart and use-case
+                 canvases: same immersive wrapper, same strip, same rail
+                 toggle — only the viewer and the share/export pair vary by
+                 kind. Splitting it into near-identical sections was rejected:
+                 the immersive plumbing is the part that must not drift
+                 between them. */
               <section
                 ref={diagramPaneRef}
-                aria-label="Rendered sequence diagram"
+                aria-label={
+                  doc.kind === "sequence"
+                    ? "Rendered sequence diagram"
+                    : doc.kind === "flowchart"
+                      ? "Rendered flowchart"
+                      : "Rendered use-case diagram"
+                }
                 className={cn(
                   /* `lg:flex-1` for the reason given on the C4 pane above:
                      `flex-basis: 0%` beats `height` in a column, so the
@@ -1318,7 +1393,7 @@ export function ViewPlayground({
                       exit is one click away, and a menu that opened over a
                       fullscreen diagram would be covering the thing it exports. */}
                   <span className="flex shrink-0 items-center gap-1.5">
-                    {isImmersive ? null : (
+                    {isImmersive ? null : doc.kind === "sequence" ? (
                       <>
                         <SequenceShareButton
                           text={text}
@@ -1328,6 +1403,40 @@ export function ViewPlayground({
                         />
                         <SequenceExportButton
                           paneRef={diagramPaneRef}
+                          title={documentTitle(doc)}
+                          onAnnounce={setAnnouncement}
+                        />
+                      </>
+                    ) : doc.kind === "flowchart" ? (
+                      <>
+                        <FlowchartShareButton
+                          text={text}
+                          title={documentTitle(doc)}
+                          format={doc.format}
+                          onAnnounce={setAnnouncement}
+                        />
+                        {/* Renders from the parsed file, not the live DOM —
+                            which is why no paneRef is passed (the flowchart
+                            exporter's header argues that side). */}
+                        <FlowchartExportButton
+                          file={doc.file}
+                          title={documentTitle(doc)}
+                          onAnnounce={setAnnouncement}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <UseCaseShareButton
+                          text={text}
+                          title={documentTitle(doc)}
+                          format={doc.format}
+                          onAnnounce={setAnnouncement}
+                        />
+                        {/* From the parsed file too — the use-case exporter
+                            shares the flowchart exporter's from-model
+                            argument (its header). */}
+                        <UseCaseExportButton
+                          file={doc.file}
                           title={documentTitle(doc)}
                           onAnnounce={setAnnouncement}
                         />
@@ -1361,11 +1470,20 @@ export function ViewPlayground({
                     </button>
                   </span>
                 </div>
-                <SequenceViewer
-                  file={doc.file}
-                  onAnnounce={setAnnouncement}
-                  extraTourSteps={PLAYGROUND_TOUR_STEPS}
-                />
+                {doc.kind === "sequence" ? (
+                  <SequenceViewer
+                    file={doc.file}
+                    onAnnounce={setAnnouncement}
+                    extraTourSteps={PLAYGROUND_TOUR_STEPS}
+                  />
+                ) : doc.kind === "flowchart" ? (
+                  <FlowchartViewer
+                    file={doc.file}
+                    onAnnounce={setAnnouncement}
+                  />
+                ) : (
+                  <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
+                )}
               </section>
             )
           }

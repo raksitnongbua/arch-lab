@@ -190,6 +190,426 @@ export function OgC4Stack(): React.ReactElement {
 }
 
 /**
+ * A flowchart miniature: a terminator, a step, a decision diamond, and the
+ * two things only a flowchart draws — a guarded branch and a loop back.
+ *
+ * Absolutely-positioned rules and rotated bordered boxes, the same Satori
+ * vocabulary as `OgSequenceMini` and for the same reasons: no marker-ended
+ * paths, no clip-path, arrowheads as two strokes meeting at a rotated
+ * corner. The diamond is a rotated square with its label overlaid
+ * UN-rotated — rotating the text with the box would put the one word on the
+ * card at 45°. Hand-set geometry: an illustration of the view, not a call
+ * into `layoutFlowchart`.
+ */
+export function OgFlowMini(): React.ReactElement {
+  const cx = 190;
+  return (
+    <div
+      style={{ display: "flex", position: "relative", width: 400, height: 430 }}
+    >
+      {/* start terminator */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          position: "absolute",
+          left: cx - 90,
+          top: 0,
+          width: 180,
+          height: 52,
+          borderRadius: 999,
+          border: `1.5px solid ${OG.lanes[0]}`,
+          background: OG.card,
+          fontSize: 18,
+          color: OG.foreground,
+        }}
+      >
+        Order placed
+      </div>
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx - 1,
+          top: 52,
+          width: 2,
+          height: 26,
+          background: OG.border,
+        }}
+      />
+
+      {/* step */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          position: "absolute",
+          left: cx - 100,
+          top: 78,
+          width: 200,
+          height: 56,
+          borderRadius: 12,
+          border: `1.5px solid ${OG.lanes[2]}`,
+          background: OG.card,
+          fontSize: 18,
+          color: OG.foreground,
+        }}
+      >
+        Charge the card
+      </div>
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx - 1,
+          top: 134,
+          width: 2,
+          height: 28,
+          background: OG.border,
+        }}
+      />
+
+      {/* decision: a rotated square, its label overlaid un-rotated */}
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx - 40,
+          top: 178,
+          width: 80,
+          height: 80,
+          borderRadius: 10,
+          border: `1.5px solid ${OG.lanes[1]}`,
+          background: OG.card,
+          transform: "rotate(45deg)",
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          position: "absolute",
+          left: cx - 40,
+          top: 206,
+          width: 80,
+          fontSize: 18,
+          color: OG.foreground,
+        }}
+      >
+        Paid?
+      </div>
+
+      {/* yes branch, arrowhead down into the end terminator */}
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx - 1,
+          top: 276,
+          width: 2,
+          height: 56,
+          background: OG.lanes[0],
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx - 5,
+          top: 322,
+          width: 10,
+          height: 10,
+          borderBottom: `2px solid ${OG.lanes[0]}`,
+          borderRight: `2px solid ${OG.lanes[0]}`,
+          transform: "rotate(45deg)",
+        }}
+      />
+      <span
+        style={{
+          position: "absolute",
+          left: cx + 12,
+          top: 288,
+          fontSize: 16,
+          color: OG.muted,
+        }}
+      >
+        yes
+      </span>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          position: "absolute",
+          left: cx - 80,
+          top: 336,
+          width: 160,
+          height: 52,
+          borderRadius: 999,
+          border: `1.5px solid ${OG.lanes[4]}`,
+          background: OG.card,
+          fontSize: 18,
+          color: OG.foreground,
+        }}
+      >
+        Receipt sent
+      </div>
+
+      {/* retry loop: out of the diamond's right tip, back up into the step —
+          the elbow that says "this is a flowchart" at card size */}
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx + 46,
+          top: 217,
+          width: 330 - (cx + 46),
+          height: 2,
+          background: OG.lanes[1],
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: 329,
+          top: 106,
+          width: 2,
+          height: 112,
+          background: OG.lanes[1],
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx + 102,
+          top: 105,
+          width: 330 - (cx + 102),
+          height: 2,
+          background: OG.lanes[1],
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: cx + 103,
+          top: 101,
+          width: 10,
+          height: 10,
+          borderBottom: `2px solid ${OG.lanes[1]}`,
+          borderLeft: `2px solid ${OG.lanes[1]}`,
+          transform: "rotate(45deg)",
+        }}
+      />
+      <span
+        style={{
+          position: "absolute",
+          left: 340,
+          top: 152,
+          fontSize: 16,
+          color: OG.muted,
+        }}
+      >
+        retry
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A use-case miniature: two stick-free actors (a circle head with a name —
+ * Satori draws no stick figures worth having at this size), a bordered
+ * system boundary titled like the real renderer's, stadium-shaped use cases
+ * inside it, and the three line kinds that make the diagram a use-case
+ * diagram: PLAIN association rules (no arrowhead — a UML association is
+ * undirected, and adding a head here would draw the exact mistake the
+ * importer refuses), a dashed «include» dependency with its arrowhead, and a
+ * generalization from Customer up to Guest.
+ *
+ * Same Satori vocabulary as its three siblings — absolutely-positioned
+ * rules, arrowheads as two border strokes on a rotated box — and hand-set
+ * geometry: an illustration of the view, not a call into `layoutUseCase`.
+ */
+export function OgUseCaseMini(): React.ReactElement {
+  /** [circle-left, circle-top, lane, name] per actor. */
+  const actors: [number, number, number, string][] = [
+    [26, 92, 3, "Guest"],
+    [26, 232, 4, "Customer"],
+  ];
+  /** [top, lane, label] per stadium, all sharing the boundary's column. */
+  const usecases: [number, number, string][] = [
+    [92, 2, "Browse the menu"],
+    [232, 0, "Place an order"],
+    [340, 1, "Pay for it"],
+  ];
+  return (
+    <div
+      style={{ display: "flex", position: "relative", width: 400, height: 430 }}
+    >
+      {/* the system boundary, titled the way the real renderer titles it */}
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: 150,
+          top: 24,
+          width: 240,
+          height: 396,
+          borderRadius: 16,
+          border: `1.5px solid ${OG.border}`,
+        }}
+      />
+      <span
+        style={{
+          position: "absolute",
+          left: 170,
+          top: 40,
+          fontSize: 18,
+          color: OG.muted,
+        }}
+      >
+        Web Shop
+      </span>
+
+      {actors.map(([left, top, lane, name]) => (
+        <div
+          key={name}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            position: "absolute",
+            left,
+            top,
+            width: 90,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              width: 34,
+              height: 34,
+              borderRadius: 999,
+              border: `2px solid ${OG.lanes[lane]}`,
+              background: OG.card,
+            }}
+          />
+          <span style={{ fontSize: 17, color: OG.foreground, marginTop: 6 }}>
+            {name}
+          </span>
+        </div>
+      ))}
+
+      {usecases.map(([top, lane, label]) => (
+        <div
+          key={label}
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            position: "absolute",
+            left: 172,
+            top,
+            width: 196,
+            height: 52,
+            borderRadius: 999,
+            border: `1.5px solid ${OG.lanes[lane]}`,
+            background: OG.card,
+            fontSize: 18,
+            color: OG.foreground,
+          }}
+        >
+          {label}
+        </div>
+      ))}
+
+      {/* associations: plain rules, NO arrowhead — undirected is the point */}
+      {[118, 258].map((y) => (
+        <div
+          key={`assoc-${y}`}
+          style={{
+            display: "flex",
+            position: "absolute",
+            left: 92,
+            top: y - 1,
+            width: 80,
+            height: 2,
+            background: OG.border,
+          }}
+        />
+      ))}
+
+      {/* «include»: a dashed rule from the order down into Pay, with a head */}
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: 269,
+          top: 284,
+          width: 0,
+          height: 50,
+          borderLeft: `2px dashed ${OG.lanes[1]}`,
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: 265,
+          top: 326,
+          width: 10,
+          height: 10,
+          borderBottom: `2px solid ${OG.lanes[1]}`,
+          borderRight: `2px solid ${OG.lanes[1]}`,
+          transform: "rotate(45deg)",
+        }}
+      />
+      <span
+        style={{
+          position: "absolute",
+          left: 284,
+          top: 296,
+          fontSize: 16,
+          color: OG.muted,
+        }}
+      >
+        «include»
+      </span>
+
+      {/* generalization: Customer is-a Guest — the head points at the parent */}
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: 42,
+          top: 150,
+          width: 0,
+          height: 82,
+          borderLeft: `2px solid ${OG.lanes[4]}`,
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: 38,
+          top: 148,
+          width: 10,
+          height: 10,
+          borderTop: `2px solid ${OG.lanes[4]}`,
+          borderLeft: `2px solid ${OG.lanes[4]}`,
+          transform: "rotate(45deg)",
+        }}
+      />
+    </div>
+  );
+}
+
+/**
  * A labelled message: the label over a rule that ends in an arrowhead.
  *
  * The head is not decoration. Without it these read as underlined captions —
