@@ -1,35 +1,59 @@
 /**
  * One reader for the merged playground: any supported text in, one rendered
- * document out. The five shapes the pane accepts — C4 `.alab`, sequence
- * `.alab`, arch-lab JSON, Mermaid C4 and Mermaid `sequenceDiagram` — are all
- * AUTO-DETECTED; the playground renders whichever canvas the text asks for.
+ * document out. The nine shapes the pane accepts — C4 `.alab`, sequence
+ * `.alab`, flowchart `.alab`, use-case `.alab`, arch-lab JSON, Mermaid C4,
+ * Mermaid `sequenceDiagram`, Mermaid `flowchart`/`graph`, and a Mermaid
+ * flowchart that reads as a USE-CASE diagram — are all AUTO-DETECTED; the
+ * playground renders whichever canvas the text asks for.
  *
  * Nothing here parses anything itself. Every branch delegates to a reader a
  * playground already trusted — `parseSequenceInput` (sequence `.alab` and
- * Mermaid sequence), `parsePane` (C4 `.alab` and arch-lab JSON) and
- * `importMermaid` (Mermaid C4) — so the merged page cannot disagree with what
- * either predecessor, or a saved file, means by the same text. The retired
- * convert page composed the same readers the same way
- * (`features/convert/lib/convert.ts`, now only in git history).
+ * Mermaid sequence), `parseFlowchartInput` (both flowchart dialects),
+ * `parseUseCaseInput` (both use-case dialects), `parsePane` (C4 `.alab` and
+ * arch-lab JSON) and `importMermaid` (Mermaid C4) — so the merged page
+ * cannot disagree with what either predecessor, or a saved file, means by
+ * the same text. The retired convert page composed the same readers the same
+ * way (`features/convert/lib/convert.ts`, now only in git history).
  *
  * DETECTION ORDER, and why the sequence reader runs first: its own `detect`
  * already classifies every first line this pane accepts except arch-lab JSON
  * (`archlab 1.0 sequence`, `sequenceDiagram`, and — as its typed
- * `c4-detected` error — both C4 dialects). Re-implementing that here would be
- * a second heuristic to keep in step; instead its verdicts are consumed as
- * routing, and only the one shape it cannot name (JSON, via the viewer's
- * `detectFormat`) is resolved after it. Errors keep each parser's native
- * precision — line/column with the quotable source line, or the validator's
- * JSON-path issues — because the UI renders the same caret quote the rest of
- * the site uses.
+ * `c4-detected` / `flowchart-detected` / `usecase-detected` errors — both C4
+ * dialects, both flowchart dialects and the `.alab` use-case header).
+ * Re-implementing that here would be a second heuristic to keep in step;
+ * instead its verdicts are consumed as routing, and only the one shape it
+ * cannot name (JSON, via the viewer's `detectFormat`) is resolved after it.
+ *
+ * THE ONE FORK INSIDE A VERDICT: Mermaid has no use-case grammar — the
+ * use-case convention rides the flowchart header — so a `flowchart-detected`
+ * verdict covers two canvases, and `detectMermaidUseCase` decides between
+ * them. It is the strict use-case parser itself (true GUARANTEES the parse
+ * succeeds, and a genuine flowchart fails its refusals), so this is not a
+ * second sniff to drift; the fallback is the flowchart importer, exactly
+ * what ran before the use-case canvas existed. Errors keep each parser's
+ * native precision — line/column with the quotable source line, or the
+ * validator's JSON-path issues — because the UI renders the same caret quote
+ * the rest of the site uses.
  */
 
-import type { SequenceLabFile } from "@/types";
+import type {
+  FlowchartLabFile,
+  SequenceLabFile,
+  UseCaseLabFile,
+} from "@/types";
 
-import { ARCHTEXT_EXTENSION, serializeSequenceText } from "@/features/archtext";
 import {
+  ARCHTEXT_EXTENSION,
+  serializeFlowchartText,
+  serializeSequenceText,
+  serializeUseCaseText,
+} from "@/features/archtext";
+import {
+  detectMermaidUseCase,
   serializeMermaidC4,
+  serializeMermaidFlowchart,
   serializeMermaidSequence,
+  serializeMermaidUseCase,
 } from "@/features/mermaid";
 /* PAST THE BARRELS, DELIBERATELY, and the same exception `dry.md` already
    tolerates for `validate/lib/check.ts`: both feature barrels export React
@@ -46,6 +70,20 @@ import {
   type SequenceSourceFormat,
 } from "@/features/sequence/input/parse";
 import { SEQUENCE_EXAMPLE } from "@/features/sequence/input/example";
+import {
+  FLOWCHART_FORMAT_LABEL,
+  parseFlowchartInput,
+  type FlowchartParseErrorDetail,
+  type FlowchartSourceFormat,
+} from "@/features/flowchart/input/parse";
+import { FLOWCHART_EXAMPLE } from "@/features/flowchart/input/example";
+import {
+  parseUseCaseInput,
+  USECASE_FORMAT_LABEL,
+  type UseCaseParseErrorDetail,
+  type UseCaseSourceFormat,
+} from "@/features/usecase/input/parse";
+import { USECASE_EXAMPLE } from "@/features/usecase/input/example";
 import { detectFormat } from "@/features/viewer/input/detect";
 import {
   importMermaid,
@@ -61,8 +99,8 @@ import {
 /* Shapes                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** Which example seeds the pane — the ONLY thing the three routes vary. */
-export type SeedKind = "c4" | "sequence";
+/** Which example seeds the pane — the ONLY thing `?d=` varies. */
+export type SeedKind = "c4" | "sequence" | "flowchart" | "usecase";
 
 /** The languages a C4 document can sit in the pane as. */
 export type C4SourceFormat = "alab" | "json" | "mermaid";
@@ -73,10 +111,16 @@ export const C4_FORMAT_LABEL: Record<C4SourceFormat, string> = {
   mermaid: "Mermaid C4",
 };
 
-/** The last GOOD parse — everything either canvas needs to render. */
+/** The last GOOD parse — everything any of the four canvases needs. */
 export type ViewDocument =
   | { kind: "c4"; format: C4SourceFormat; synced: SyncedModel }
-  | { kind: "sequence"; format: SequenceSourceFormat; file: SequenceLabFile };
+  | { kind: "sequence"; format: SequenceSourceFormat; file: SequenceLabFile }
+  | {
+      kind: "flowchart";
+      format: FlowchartSourceFormat;
+      file: FlowchartLabFile;
+    }
+  | { kind: "usecase"; format: UseCaseSourceFormat; file: UseCaseLabFile };
 
 /**
  * Every way the pane's text can fail, each in its native reader's shape.
@@ -88,6 +132,11 @@ export type ViewSourceError =
   | JsonPaneErrorDetail
   | ({ kind: "mermaid-c4" } & MermaidImportError)
   | SequenceParseErrorDetail
+  // Same `kind: "parse"` shape as the sequence detail, on purpose: the UI's
+  // caret-quote branch renders all of them without caring which grammar
+  // located the failure.
+  | FlowchartParseErrorDetail
+  | UseCaseParseErrorDetail
   | { kind: "unknown-format"; message: string };
 
 export type ViewParseResult =
@@ -121,6 +170,78 @@ export function parseViewSource(text: string): ViewParseResult {
     // The text IS sequence-shaped and failed inside the sequence grammar —
     // located where that parser located it.
     return { status: "error", error: detail };
+  }
+
+  if (detail.kind === "usecase-detected") {
+    // The `.alab` use-case header. Routing, exactly as the other verdicts —
+    // the use-case reader parses with the real grammar.
+    const usecase = parseUseCaseInput(text);
+    if (usecase.status === "ok") {
+      return {
+        status: "ok",
+        value: {
+          kind: "usecase",
+          format: usecase.value.format,
+          file: usecase.value.file,
+        },
+      };
+    }
+    if (usecase.error.kind !== "parse") {
+      // The sequence detector said "usecase" from the same header word the
+      // use-case reader sniffs, so a non-parse failure here is a programming
+      // error (two detectors disagreeing), not an input to explain.
+      throw new Error(
+        `playground: unexpected use-case failure kind "${usecase.error.kind}"`,
+      );
+    }
+    return { status: "error", error: usecase.error };
+  }
+
+  if (detail.kind === "flowchart-detected") {
+    // Either flowchart dialect — or the use-case CONVENTION riding the
+    // Mermaid flowchart header, which is one verdict covering two canvases.
+    // `detectMermaidUseCase` is the fork: it is the strict use-case parser
+    // itself (true guarantees the parse succeeds, and it returns false for
+    // `.alab` flowchart text, whose header it refuses), so a genuine
+    // flowchart cannot be stolen — everything the detector declines keeps
+    // the flowchart reading it always had.
+    if (detectMermaidUseCase(text)) {
+      const usecase = parseUseCaseInput(text);
+      if (usecase.status !== "ok") {
+        // detector-true guarantees the parse — see the reader's header.
+        throw new Error(
+          "playground: detectMermaidUseCase accepted text its parser refused",
+        );
+      }
+      return {
+        status: "ok",
+        value: {
+          kind: "usecase",
+          format: usecase.value.format,
+          file: usecase.value.file,
+        },
+      };
+    }
+    const flow = parseFlowchartInput(text);
+    if (flow.status === "ok") {
+      return {
+        status: "ok",
+        value: {
+          kind: "flowchart",
+          format: flow.value.format,
+          file: flow.value.file,
+        },
+      };
+    }
+    if (flow.error.kind !== "parse") {
+      // The sequence detector said "flowchart" from the same first line the
+      // flowchart reader sniffs, so a non-parse failure here is a programming
+      // error (two detectors disagreeing), not an input to explain.
+      throw new Error(
+        `playground: unexpected flowchart failure kind "${flow.error.kind}"`,
+      );
+    }
+    return { status: "error", error: flow.error };
   }
 
   if (detail.kind === "c4-detected") {
@@ -181,8 +302,8 @@ export function parseViewSource(text: string): ViewParseResult {
       // of first lines that would have worked.
       message:
         text.trim() === ""
-          ? "Nothing to render yet — write .alab text (`archlab 1.0` or `archlab 1.0 sequence`), paste arch-lab JSON, or paste Mermaid (C4 or a sequenceDiagram)."
-          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `{` (arch-lab JSON), a Mermaid C4 header, or `sequenceDiagram`.",
+          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart` or `archlab 1.0 usecase`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, or a flowchart)."
+          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart` or `graph`.",
     },
   };
 }
@@ -203,6 +324,16 @@ export function sourceTextFor(doc: ViewDocument): string {
     return doc.format === "mermaid"
       ? serializeMermaidSequence(doc.file)
       : serializeSequenceText(doc.file);
+  }
+  if (doc.kind === "flowchart") {
+    return doc.format === "mermaid"
+      ? serializeMermaidFlowchart(doc.file)
+      : serializeFlowchartText(doc.file);
+  }
+  if (doc.kind === "usecase") {
+    return doc.format === "mermaid"
+      ? serializeMermaidUseCase(doc.file)
+      : serializeUseCaseText(doc.file);
   }
   switch (doc.format) {
     case "alab":
@@ -226,6 +357,16 @@ export function convertedSourceText(
       ? serializeMermaidSequence(doc.file)
       : serializeSequenceText(doc.file);
   }
+  if (doc.kind === "flowchart") {
+    return to === "mermaid"
+      ? serializeMermaidFlowchart(doc.file)
+      : serializeFlowchartText(doc.file);
+  }
+  if (doc.kind === "usecase") {
+    return to === "mermaid"
+      ? serializeMermaidUseCase(doc.file)
+      : serializeUseCaseText(doc.file);
+  }
   return to === "mermaid"
     ? serializeMermaidC4(doc.synced.file)
     : doc.synced.aftText;
@@ -244,9 +385,16 @@ export const MERMAID_C4_EXPORT_CAVEAT =
 
 /** "a C4 model (arch-lab JSON)" — for parse announcements. */
 export function describeDocument(doc: ViewDocument): string {
-  return doc.kind === "c4"
-    ? `a C4 model (${C4_FORMAT_LABEL[doc.format]})`
-    : `a sequence diagram (${SEQUENCE_FORMAT_LABEL[doc.format]})`;
+  switch (doc.kind) {
+    case "c4":
+      return `a C4 model (${C4_FORMAT_LABEL[doc.format]})`;
+    case "sequence":
+      return `a sequence diagram (${SEQUENCE_FORMAT_LABEL[doc.format]})`;
+    case "flowchart":
+      return `a flowchart (${FLOWCHART_FORMAT_LABEL[doc.format]})`;
+    case "usecase":
+      return `a use-case diagram (${USECASE_FORMAT_LABEL[doc.format]})`;
+  }
 }
 
 /** The document's own title — file stems and the Web Share sheet. */
@@ -301,11 +449,39 @@ title "Your flow"
   user -> api : "Asks for something"
   api ..> user : "Answers"
 `,
+  flowchart: `archlab 1.0 flowchart
+title "Your flowchart"
+
+@flowchart
+  start s "Start"
+  step work "Do the thing"
+  decision ok "Did it work?"
+  end done "Done"
+
+  s -> work
+  work -> ok
+  ok -> done : "yes"
+  ok -> work : "no"
+`,
+  usecase: `archlab 1.0 usecase
+title "Your system"
+
+@usecase
+  actor user "Customer"
+  boundary "Your system"
+    usecase act "Do the thing"
+    usecase pay "Pay for it"
+
+  user -- act
+  act ..> pay : include
+`,
 };
 
 export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
   c4: SEED_MODEL.aftText,
   sequence: SEQUENCE_EXAMPLE,
+  flowchart: FLOWCHART_EXAMPLE,
+  usecase: USECASE_EXAMPLE,
 };
 
 function mustParse(text: string): ViewDocument {
@@ -323,4 +499,6 @@ function mustParse(text: string): ViewDocument {
 export const VIEW_SEED_DOCUMENT: Record<SeedKind, ViewDocument> = {
   c4: { kind: "c4", format: "alab", synced: SEED_MODEL },
   sequence: mustParse(SEQUENCE_EXAMPLE),
+  flowchart: mustParse(FLOWCHART_EXAMPLE),
+  usecase: mustParse(USECASE_EXAMPLE),
 };

@@ -395,13 +395,14 @@ check(
   ),
 );
 
-/* ---- 4. one idle-motion switch, honoured by BOTH viewers ----------------- */
+/* ---- 4. one idle-motion switch, honoured by every viewer ------------------ */
 
 /*
  * The reader's toggle is one preference for the whole app, not one per route:
  * "stop the diagrams moving" is a statement about diagrams. That only holds if
- * both viewers read the same module and gate on the same attribute, so it is
- * asserted across all three files rather than left to convention.
+ * every viewer reads the same module and gates on the same attribute, so the
+ * C4 and sequence sides are asserted here rather than left to convention; the
+ * flowchart viewer's side of the same contract lives in check:flowchart-motion.
  */
 const idleModule = read("src/lib/idle-motion.ts");
 const shell = read("src/features/viewer/components/viewer-shell.tsx");

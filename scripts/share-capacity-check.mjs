@@ -8,9 +8,11 @@
  *   1. **Already-minted links keep opening.** The payload format and the
  *      routes are both compatibility surfaces: a link is a bookmark someone
  *      else is holding. Frozen fragments minted with the real codec (one
- *      legacy-style C4, one long-route sequence) must decode to their exact
- *      original text forever, and the long `/view/sequence` route must keep
- *      existing even though new links mint against `/view/seq`.
+ *      legacy-style C4, one long-route sequence, and a flowchart and a
+ *      use-case diagram each frozen the day its playground shipped) must
+ *      decode to their exact original text
+ *      forever, and the long `/view/sequence` route must keep existing even
+ *      though new links mint against `/view/seq`.
  *
  *   2. **The short route is real, agreed on, and round-trips.** `/view/seq`
  *      exists to spend 5 fewer characters on the route so the payload gets
@@ -151,6 +153,42 @@ title "Frozen flow"
 const FROZEN_SEQ_FRAGMENT =
   "m=AF1.PcoxCgJBDEbhfk7xk95B2ykWQbAWPEEmRA2EmTWOLnh62S1sv_c45OFccch7vPT51iaahg1X0Dn6Vxtu3hdK6fjPABeW0QN0YncNSkAtM8cwsZnbAF01PiZKab2xm1BRQBdr921GzhN4o77SDw";
 
+/* The third document kind, frozen the day its playground shipped: the first
+   flowchart share links ever minted must keep opening under every future
+   codec change, and freezing one NOW is what makes that a decision instead
+   of an accident — the same reasoning as the two fragments above. */
+const FROZEN_FLOW_TEXT = `archlab 1.0 flowchart
+title "Frozen chart"
+
+@flowchart
+  start s "Start"
+  decision ok "Fine?"
+  end done "Done"
+
+  s -> ok
+  ok -> done : "yes"
+  ok -> s : "no"
+`;
+const FROZEN_FLOW_FRAGMENT =
+  "m=AF1.RctBCsIwEIXh_ZziMfuKbl1UF9ILeIKYjDQ0zEAyIPb0JRXs9vvfCzXOJbxwOZ3xLvaJc6hOnr0IeKq2imI3JrofA6B5qI4GfvpegSQxt2wKW8BTVrl1FU1IpgJ-mApTv2IYYQuhL4fxl6_grzT-Y-uixrQB";
+
+/* The fourth document kind, frozen the day its playground shipped — the
+   same decision-not-accident reasoning as the three above: the first
+   use-case share links ever minted must keep opening under every future
+   codec change. */
+const FROZEN_UC_TEXT = `archlab 1.0 usecase
+title "Frozen use case"
+
+@usecase
+  actor user "User"
+  boundary "System"
+    usecase act "Do the thing"
+
+  user -- act
+`;
+const FROZEN_UC_FRAGMENT =
+  "m=AF1.NYxBCsMwDATvesWie0r7gxxCPlD6AMURcSCxQVYO6euLKL7O7I5YyocseD2euJomaUq--6Hg2epXS1AEZqKxLwBJXi2cgT9NjQlY6lVWsRv8vpvrGQy9Gg_wVOFZ4XkvGxPhXxiGsPQD";
+
 await check(
   "a previously-minted C4 fragment still decodes verbatim",
   async () => {
@@ -171,6 +209,24 @@ await check(
 );
 
 await check(
+  "a previously-minted flowchart fragment still decodes verbatim",
+  async () => {
+    const decoded = await decodeShareFragment(`#${FROZEN_FLOW_FRAGMENT}`);
+    assert.equal(decoded.status, "ok");
+    assert.equal(decoded.aftText, FROZEN_FLOW_TEXT);
+  },
+);
+
+await check(
+  "a previously-minted use-case fragment still decodes verbatim",
+  async () => {
+    const decoded = await decodeShareFragment(`#${FROZEN_UC_FRAGMENT}`);
+    assert.equal(decoded.status, "ok");
+    assert.equal(decoded.aftText, FROZEN_UC_TEXT);
+  },
+);
+
+await check(
   "the long routes old links point at still exist as pages",
   async () => {
     // `/view/sequence` is where pre-alias sequence links land, and `/view`
@@ -186,23 +242,47 @@ await check(
 /* ----------------------------------------------------------------------- */
 
 await check(
-  "both minting sites mint the same route, and it carries no seed",
+  "every minting site mints the same route, and it carries no seed",
   async () => {
     const wrapper = readSource("src/features/sequence/share/share-button.tsx");
+    const flowWrapper = readSource(
+      "src/features/flowchart/share/share-button.tsx",
+    );
+    const ucWrapper = readSource("src/features/usecase/share/share-button.tsx");
     const mcp = readSource("src/features/mcp/tools/share.ts");
     /* Bare `/view`. The seeded paths were three routes mounting one
        component; the seed is `?d=` now and a share link needs none of it,
-       because it carries the document and the reader detects the kind. Two
-       minting sites that can drift, will, so they are asserted together. */
+       because it carries the document and the reader detects the kind.
+       Minting sites that can drift, will, so they are asserted together. */
     assert.ok(
       wrapper.includes('SHARE_ROUTE = "/view"'),
-      "the Share button wrapper must mint bare /view",
+      "the sequence Share wrapper must mint bare /view",
+    );
+    /* The flowchart wrapper must NOT mint `/view/flow`: that route is an
+       AliasForward trampoline, and minting against a trampoline is the exact
+       mistake the "REAL page" check below records — a client-side bounce on
+       the most common arrival, previewing with whatever card the alias has. */
+    assert.ok(
+      flowWrapper.includes('SHARE_ROUTE = "/view"'),
+      "the flowchart Share wrapper must mint bare /view",
+    );
+    /* `/view/uc` is an AliasForward trampoline like `/view/flow` — minting
+       against it would put a client-side bounce on every use-case link. */
+    assert.ok(
+      ucWrapper.includes('SHARE_ROUTE = "/view"'),
+      "the use-case Share wrapper must mint bare /view",
     );
     assert.ok(
       mcp.includes("/view#${fragment}"),
       "create_share_link must mint bare /view",
     );
-    for (const seeded of ["/view/seq#", "/view/sequence#", "/view/c4#"]) {
+    for (const seeded of [
+      "/view/seq#",
+      "/view/sequence#",
+      "/view/c4#",
+      "/view/flow#",
+      "/view/uc#",
+    ]) {
       assert.ok(
         !mcp.includes(seeded),
         `create_share_link must not still mint ${seeded}`,
@@ -231,6 +311,10 @@ await check(
       ["/view/c4", "c4/page.tsx"],
       ["/view/seq", "seq/page.tsx"],
       ["/view/sequence", "sequence/page.tsx"],
+      // Each alias joins the same compatibility surface the day it ships:
+      // any link a user ever builds against it must open forever.
+      ["/view/flow", "flow/page.tsx"],
+      ["/view/uc", "uc/page.tsx"],
     ]) {
       const to = destinationOf(file);
       assert.ok(to, `${route} must forward somewhere`);
@@ -270,7 +354,7 @@ await check("the minted route is the REAL page, not a trampoline", async () => {
     existsSync(path.join(ROOT, "src/app/view/opengraph-image.tsx")),
     "the route share links carry must own a social card",
   );
-  for (const alias of ["c4", "seq"]) {
+  for (const alias of ["c4", "seq", "flow", "uc"]) {
     assert.ok(
       readSource(`src/app/view/${alias}/page.tsx`).includes("AliasForward"),
       `src/app/view/${alias} must forward, carrying the fragment`,
@@ -279,10 +363,15 @@ await check("the minted route is the REAL page, not a trampoline", async () => {
 });
 
 await check(
-  '"seq" is a reserved model id (the alias cannot be shadowed)',
+  '"seq", "flow" and "uc" are reserved model ids (the aliases cannot be shadowed)',
   async () => {
+    /* A bundled model registered as "seq", "flow" or "uc" would build fine
+       and silently shadow the static alias route — the build-time throw in
+       [modelId]/page.tsx only fires if the name is in this set. */
     const modelPage = readSource("src/app/view/[modelId]/page.tsx");
     assert.match(modelPage, /RESERVED_MODEL_IDS = new Set\(\[[^\]]*"seq"/);
+    assert.match(modelPage, /RESERVED_MODEL_IDS = new Set\(\[[^\]]*"flow"/);
+    assert.match(modelPage, /RESERVED_MODEL_IDS = new Set\(\[[^\]]*"uc"/);
   },
 );
 

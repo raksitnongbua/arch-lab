@@ -15,7 +15,7 @@ import { seedFromParam, VIEW_SEED_PARAM } from "@/features/playground/lib/seed";
 export const metadata: Metadata = {
   title: "Diagram playground — write it, see it rendered live",
   description:
-    "Write .alab, arch-lab JSON or Mermaid — C4 or sequence, the format is detected and the diagram renders as you type. Runs in your browser.",
+    "Write .alab, arch-lab JSON or Mermaid — C4, sequence, flowchart or use case; the format is detected and the diagram renders live. Runs in your browser.",
   // Self-canonical now. `/view/c4` and `/view/seq` used to be the real pages
   // and this one canonicalised INTO them; they are forwarding aliases now, so
   // the arrow points the other way and only one URL claims the content.

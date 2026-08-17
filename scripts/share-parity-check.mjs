@@ -40,18 +40,22 @@ console.log("share-parity-check");
 
 const SHARED = "src/features/viewer/share/share-button.tsx";
 const WRAPPER = "src/features/sequence/share/share-button.tsx";
+const FLOW_WRAPPER = "src/features/flowchart/share/share-button.tsx";
+const UC_WRAPPER = "src/features/usecase/share/share-button.tsx";
 const C4_SHELL = "src/features/viewer/components/viewer-shell.tsx";
 // The ONE merged playground every /view* route mounts. It shares C4
-// documents through the shell's panel and sequence documents through the
-// wrapper, so both mount points below are inside the same page now.
+// documents through the shell's panel and the other three kinds through
+// their wrappers, so every mount point below is inside the same page now.
 const PLAYGROUND = "src/features/playground/components/view-playground.tsx";
 
 const shared = read(SHARED);
 const wrapper = read(WRAPPER);
+const flowWrapper = read(FLOW_WRAPPER);
+const ucWrapper = read(UC_WRAPPER);
 const c4Shell = read(C4_SHELL);
 const playground = read(PLAYGROUND);
 
-/* --- 1. one implementation, two mount points ------------------------------ */
+/* --- 1. one implementation, four mount points ------------------------------ */
 
 check(
   "the C4 shell mounts the shared ShareButton",
@@ -64,8 +68,26 @@ check(
     wrapper.includes('from "@/features/viewer/share/share-button"'),
 );
 check(
+  "the flowchart wrapper mounts the shared ShareButton (not a fork of it)",
+  flowWrapper.includes("<ShareButton") &&
+    flowWrapper.includes('from "@/features/viewer/share/share-button"'),
+);
+check(
   "the playground mounts the wrapper for sequence documents",
   playground.includes("<SequenceShareButton"),
+);
+check(
+  "the playground mounts the wrapper for flowchart documents",
+  playground.includes("<FlowchartShareButton"),
+);
+check(
+  "the use-case wrapper mounts the shared ShareButton (not a fork of it)",
+  ucWrapper.includes("<ShareButton") &&
+    ucWrapper.includes('from "@/features/viewer/share/share-button"'),
+);
+check(
+  "the playground mounts the wrapper for use-case documents",
+  playground.includes("<UseCaseShareButton"),
 );
 
 /* The wrapper must stay a CONFIGURATION of the shared control, never an
@@ -75,9 +97,11 @@ check(
    why its route is short and names the ceiling the URL competes with, which is
    exactly the comment this codebase wants — and matching the bare word would
    fail it for saying so. Only real use is a second implementation. */
-const wrapperCode = wrapper
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .replace(/(?<!:)\/\/[^\n]*/g, "");
+const stripComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(?<!:)\/\/[^\n]*/g, "");
+const wrapperCode = stripComments(wrapper);
+const flowWrapperCode = stripComments(flowWrapper);
+const ucWrapperCode = stripComments(ucWrapper);
 for (const forbidden of [
   "encodeShareFragment",
   "mintExpiry",
@@ -88,6 +112,14 @@ for (const forbidden of [
   check(
     `the sequence wrapper does not reimplement the panel (no ${forbidden})`,
     !wrapperCode.includes(forbidden),
+  );
+  check(
+    `the flowchart wrapper does not reimplement the panel (no ${forbidden})`,
+    !flowWrapperCode.includes(forbidden),
+  );
+  check(
+    `the use-case wrapper does not reimplement the panel (no ${forbidden})`,
+    !ucWrapperCode.includes(forbidden),
   );
 }
 
@@ -109,6 +141,8 @@ function filesUnder(relative) {
 const featureFiles = [
   ...filesUnder("src/features/viewer"),
   ...filesUnder("src/features/sequence"),
+  ...filesUnder("src/features/flowchart"),
+  ...filesUnder("src/features/usecase"),
   ...filesUnder("src/features/playground"),
 ];
 const shareTriggerFiles = featureFiles.filter((file) => {
@@ -118,7 +152,7 @@ const shareTriggerFiles = featureFiles.filter((file) => {
   );
 });
 check(
-  "exactly one file under viewer/, sequence/ and playground/ renders the Share trigger",
+  "exactly one file under viewer/, sequence/, flowchart/, usecase/ and playground/ renders the Share trigger",
   shareTriggerFiles.length === 1 && shareTriggerFiles[0] === SHARED,
 );
 
@@ -156,8 +190,11 @@ check(
    needs no seed in the URL at all. Two minting sites that can drift, will —
    so they are asserted to agree rather than each asserted separately. */
 check(
-  "both viewers share onto the one playground route",
-  c4Shell.includes('route="/view"') && wrapper.includes('"/view"'),
+  "all four viewers share onto the one playground route",
+  c4Shell.includes('route="/view"') &&
+    wrapper.includes('"/view"') &&
+    flowWrapper.includes('"/view"') &&
+    ucWrapper.includes('"/view"'),
 );
 check(
   // Bare `/view`, not a seeded path: the seed moved to `?d=` and a share link
@@ -168,8 +205,24 @@ check(
   !wrapperCode.includes("/view/seq") && !wrapperCode.includes("?d="),
 );
 check(
+  "the flowchart wrapper mints no seed into the link",
+  !flowWrapperCode.includes("/view/flow") && !flowWrapperCode.includes("?d="),
+);
+check(
+  "the use-case wrapper mints no seed into the link",
+  !ucWrapperCode.includes("/view/uc") && !ucWrapperCode.includes("?d="),
+);
+check(
   "the sequence wrapper omits the diagram pointer (no sub-diagrams to point at)",
   !wrapper.includes("diagram="),
+);
+check(
+  "the flowchart wrapper omits the diagram pointer (no sub-diagrams to point at)",
+  !flowWrapper.includes("diagram="),
+);
+check(
+  "the use-case wrapper omits the diagram pointer (no sub-diagrams to point at)",
+  !ucWrapper.includes("diagram="),
 );
 
 /* --- 4. every route honours the same expiry semantics on OPEN ------------- */
@@ -186,10 +239,12 @@ check(
 /* --- 5. the old duplicate must not resurrect elsewhere -------------------- */
 
 check(
-  "no file under src/features/sequence calls encodeShareFragment (encoding lives in the shared control)",
-  filesUnder("src/features/sequence").every(
-    (file) => !read(file).includes("encodeShareFragment("),
-  ),
+  "no file under src/features/sequence, src/features/flowchart or src/features/usecase calls encodeShareFragment (encoding lives in the shared control)",
+  [
+    ...filesUnder("src/features/sequence"),
+    ...filesUnder("src/features/flowchart"),
+    ...filesUnder("src/features/usecase"),
+  ].every((file) => !read(file).includes("encodeShareFragment(")),
 );
 check(
   "the shared component still exists where both viewers import it from",
