@@ -11,15 +11,14 @@
  * so it is never sent to any server — not even this one, on open — and the
  * link is therefore identical to one a human would have produced by hand.
  *
- * BOTH DOCUMENT KINDS. The codec compresses arbitrary text, so what makes a
- * link a C4 link or a sequence link is the ROUTE it lands on, not the payload
- * (see `sequence/share/share-button.tsx`, which shares the same reasoning): a
- * Both kinds mint against bare `/view`: the playground is one route, and a
- * share link needs no seed in its URL because it carries the document and the
- * reader detects the kind from the text. Detection here is by the first
- * meaningful line —
- * the same sniff the playgrounds use — so an agent that authored a sequence
- * flow gets a working link from the same tool, not a C4 parse error.
+ * EVERY DOCUMENT KIND — C4, sequence, flowchart and use case. The codec compresses
+ * arbitrary text, so nothing in a link says which grammar wrote it; every kind
+ * mints against bare `/view`, because the playground is one route and a share
+ * link needs no seed in its URL — it carries the document, and the reader
+ * detects the kind from the text. Detection here is by the first meaningful
+ * line, the same sniff the playground uses, so an agent that authored a
+ * sequence flow or a flowchart gets a working link from this one tool rather
+ * than a C4 parse error about the wrong grammar.
  *
  * Length is reported in the codec's honest tiers (see the reasoning on the
  * constants in `codec.ts`): under `SHARE_URL_SAFE_LENGTH` the link goes out
@@ -33,8 +32,12 @@
 import {
   parseArchText,
   serializeArchText,
+  serializeFlowchartText,
   serializeSequenceText,
+  serializeUseCaseText,
 } from "@/features/archtext";
+import { MERMAID_FLOWCHART_CAVEAT } from "@/features/flowchart/input/parse";
+import { MERMAID_USECASE_CAVEAT } from "@/features/usecase/input/parse";
 import { MERMAID_SEQUENCE_CAVEAT } from "@/features/sequence/input/parse";
 import type { CheckChoice } from "@/features/validate/lib/check";
 import {
@@ -47,7 +50,6 @@ import {
 } from "@/features/viewer/share/codec";
 import { signExpiry } from "@/features/viewer/share/sign-server";
 import type { ArchLabFile, C4Node } from "@/types";
-import type { SequenceLabFile } from "@/types/sequence";
 
 import { publicOrigin } from "../lib/origin";
 import { readSource } from "../lib/read";
@@ -58,6 +60,8 @@ import {
   textResult,
   type McpTextResult,
 } from "../lib/render";
+import { readFlowchart } from "./flowchart";
+import { readUseCase } from "./usecase";
 import { readSequence } from "./sequence";
 
 /**
@@ -187,7 +191,7 @@ async function scopedOffers(
 
 /**
  * A signed expiry for the given payload text, or the reason there is none.
- * One function for both document kinds: the signature covers a digest of the
+ * One function for every document kind: the signature covers a digest of the
  * TEXT, so the codec — and this — never needs to know which grammar wrote it.
  */
 type MintedExpiry =
@@ -248,20 +252,49 @@ function privacyLine(expiry: ShareExpiry | undefined): string {
 }
 
 /**
- * The sequence half of `create_share_link`. Same codec, same tiers, same
- * privacy — the differences are the route (`/view/sequence`) and that there
- * is no diagram to scope to: a sequence document is one flow, so the oversize
- * refusal offers the canonical text and nothing smaller.
+ * What distinguishes one single-document share from another. Everything else —
+ * codec, tiers, expiry, privacy, the oversize ceiling — is shared, so only the
+ * caller-facing WORDS and the canonical payload live here.
  */
-async function sequenceShareLink(
-  file: SequenceLabFile,
-  sourceFormat: "alab" | "mermaid",
+interface SingleDocumentShare {
+  /** Canonical `.alab` text: deterministic, and the same bytes the matching
+   * `format_*` tool hands out, so a shared document and a committed one agree. */
+  payload: string;
+  title: string;
+  sourceFormat: "alab" | "mermaid";
+  /** How the refusals name the document ("a sequence document", "a flowchart"). */
+  noun: string;
+  /** The tool whose output to send when the runtime cannot build links. */
+  formatTool: string;
+  /** Why there is nothing smaller to scope an oversize link to. */
+  indivisibleBecause: string;
+  /** The one-line "where this opens" note on success. */
+  opensIn: string;
+  /** Named on success when the caller pasted Mermaid, because after this only
+   * the `.alab` form travels. */
+  mermaidCaveat: string;
+}
+
+/**
+ * The non-C4 half of `create_share_link`, shared by the sequence and flowchart
+ * branches. Same codec, same tiers, same privacy as the C4 path — the
+ * differences are that these documents mint against bare `/view` and have no
+ * sub-diagram to scope a smaller link to, so an oversize refusal offers the
+ * canonical text and nothing else.
+ *
+ * ONE function for two kinds rather than two near-identical ones: everything
+ * that differed was a sentence, and a sentence is a parameter (`dry.md`). If a
+ * third kind ever needs genuinely different tiers or a route of its own, that
+ * is the point to split it — not before.
+ */
+async function singleDocumentShareLink(
+  spec: SingleDocumentShare,
   diagramId: string | undefined,
   ttlDays: number | undefined,
 ): Promise<McpTextResult> {
   if (diagramId !== undefined) {
     return errorResult(
-      "`diagram_id` is for C4 models — a sequence document is a single flow " +
+      `\`diagram_id\` is for C4 models — ${spec.noun} is a single document ` +
         "with no diagrams to open at. Omit it.",
     );
   }
@@ -269,14 +302,12 @@ async function sequenceShareLink(
   if (!canEncodeShare()) {
     return errorResult(
       "This server cannot build share links — its JavaScript runtime lacks " +
-        "CompressionStream. Send the canonical .alab sequence text from " +
-        "format_sequence instead.",
+        `CompressionStream. Send the canonical .alab text from ` +
+        `${spec.formatTool} instead.`,
     );
   }
 
-  // Canonical text, like the C4 branch: deterministic, and the same bytes
-  // format_sequence hands out, so a shared flow and a committed one agree.
-  const payload = serializeSequenceText(file);
+  const { payload, sourceFormat } = spec;
 
   const minted = await mintExpiry(payload, ttlDays);
   if (minted.status === "error") return errorResult(minted.message);
@@ -293,15 +324,14 @@ async function sequenceShareLink(
   if (url.length > MAX_SHARE_URL_LENGTH) {
     return errorResult(
       joinSections(
-        `This sequence document does not fit in a share link: the URL would ` +
-          `be ${url.length.toLocaleString("en-US")} characters, over the ` +
+        `This ${spec.noun.replace(/^an? /, "")} does not fit in a share ` +
+          `link: the URL would be ${url.length.toLocaleString("en-US")} ` +
+          `characters, over the ` +
           `${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character ceiling ` +
           `past which enough carrier apps truncate that the link would fail ` +
-          `silently for whoever receives it. A sequence document has no ` +
-          `sub-diagrams to scope a smaller link to.`,
-        "To share it, save the canonical `.alab` sequence text below as a " +
-          "file and send that — the playground at /view/sequence accepts it " +
-          "by paste:",
+          `silently for whoever receives it. ${spec.indivisibleBecause}`,
+        "To share it, save the canonical `.alab` text below as a file and " +
+          "send that — the playground at /view accepts it by paste:",
         fence("", payload),
       ),
     );
@@ -310,20 +340,20 @@ async function sequenceShareLink(
   const withinSafeLength = url.length <= SHARE_URL_SAFE_LENGTH;
   return textResult(
     joinSections(
-      `Share link for ${JSON.stringify(file.metadata.title)} ` +
+      `Share link for ${JSON.stringify(spec.title)} ` +
         `(${url.length.toLocaleString("en-US")} characters — ` +
         (withinSafeLength
           ? `under ${SHARE_URL_SAFE_LENGTH.toLocaleString("en-US")}, safe in essentially any app):`
           : `within the ${MAX_SHARE_URL_LENGTH.toLocaleString("en-US")}-character ceiling):`),
       url,
       withinSafeLength ? null : EMAIL_CAVEAT,
-      "Opens in the sequence playground.",
+      spec.opensIn,
       minted.line ?? null,
       privacyLine(minted.expiry),
       // The link carries the .alab conversion of what was PASTED, so a caller
       // holding Mermaid must hear the loss here — after this, only the .alab
       // form travels.
-      sourceFormat === "mermaid" ? MERMAID_SEQUENCE_CAVEAT : null,
+      sourceFormat === "mermaid" ? spec.mermaidCaveat : null,
     ),
   );
 }
@@ -339,18 +369,81 @@ export async function createShareLink(
   // reading, so honouring a forced C4 `format` here could only produce a
   // misleading parse error. A sequence PARSE error is final — the text is a
   // sequence document, just a broken one — while "c4-detected",
-  // "unknown-format" and "size" all fall through to the C4 reader, which owns
+  // "usecase-detected", "unknown-format" and "size" all fall through to the
+  // C4 reader, which owns
   // those verdicts and their messages.
   const sequence = readSequence(source);
   if (sequence.status === "ok") {
-    return sequenceShareLink(
-      sequence.file,
-      sequence.format,
+    return singleDocumentShareLink(
+      {
+        payload: serializeSequenceText(sequence.file),
+        title: sequence.file.metadata.title,
+        sourceFormat: sequence.format,
+        noun: "a sequence document",
+        formatTool: "format_sequence",
+        indivisibleBecause:
+          "A sequence document has no sub-diagrams to scope a smaller link to.",
+        opensIn: "Opens in the sequence playground.",
+        mermaidCaveat: MERMAID_SEQUENCE_CAVEAT,
+      },
       diagramId,
       ttlDays,
     );
   }
   if (sequence.kind === "parse") return errorResult(sequence.message);
+
+  // Flowcharts, on the same terms and for the same reason the sequence guard
+  // runs first: `archlab 1.0 flowchart` and a Mermaid `flowchart`/`graph`
+  // header can never parse as any C4 reading, so falling through to the C4
+  // reader would answer a share request with a parse error about the wrong
+  // grammar. A flowchart PARSE error is final — the text IS a flowchart, just
+  // a broken one.
+  const flowchart = readFlowchart(source);
+  if (flowchart.status === "ok") {
+    return singleDocumentShareLink(
+      {
+        payload: serializeFlowchartText(flowchart.file),
+        title: flowchart.file.metadata.title,
+        sourceFormat: flowchart.format,
+        noun: "a flowchart",
+        formatTool: "format_flowchart",
+        indivisibleBecause:
+          "A flowchart is one graph, with no sub-diagrams to scope a smaller " +
+          "link to.",
+        opensIn: "Opens in the flowchart playground.",
+        mermaidCaveat: MERMAID_FLOWCHART_CAVEAT,
+      },
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (flowchart.kind === "parse") return errorResult(flowchart.message);
+
+  // Use-case diagrams, on the same terms and for the same reason: an
+  // `archlab 1.0 usecase` header can never parse as any C4 reading, so falling
+  // through would answer a share request with a parse error about the wrong
+  // grammar. A use-case PARSE error is final — the text IS a use-case diagram,
+  // just a broken one.
+  const usecase = readUseCase(source);
+  if (usecase.status === "ok") {
+    return singleDocumentShareLink(
+      {
+        payload: serializeUseCaseText(usecase.file),
+        title: usecase.file.metadata.title,
+        sourceFormat: usecase.format,
+        noun: "a use-case diagram",
+        formatTool: "format_usecase",
+        indivisibleBecause:
+          "A use-case diagram is one picture of a system's edge, with no " +
+          "sub-diagrams to scope a smaller link to.",
+        opensIn: "Opens in the use-case playground.",
+        mermaidCaveat: MERMAID_USECASE_CAVEAT,
+      },
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (usecase.kind === "parse") return errorResult(usecase.message);
 
   const read = readSource(source, format);
   if (read.status === "error") return errorResult(read.message);

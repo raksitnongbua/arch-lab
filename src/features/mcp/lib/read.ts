@@ -54,6 +54,34 @@ export function readSource(source: string, choice: CheckChoice): ReadResult {
   const size = guardSourceSize(source);
   if (!size.ok) return { status: "error", message: size.message };
 
+  const alabKind = detectAlabKind(source);
+
+  // Named here for the same reason as the sequence guard below: without it the
+  // caller gets a C4 line-1 parse error that reads as "your syntax is wrong"
+  // when only the tool choice was.
+  if (alabKind === "flowchart") {
+    return {
+      status: "error",
+      message:
+        "This is a flowchart, not a C4 model — the C4 tools cannot read it. " +
+        "Use `validate_flowchart` and `format_flowchart` for flowchart " +
+        "documents, or `create_share_link`, which accepts every kind.",
+    };
+  }
+
+  // Named here for the same reason as the guards around it: without it the
+  // caller gets a C4 line-1 parse error that reads as "your syntax is wrong"
+  // when only the tool choice was.
+  if (alabKind === "usecase") {
+    return {
+      status: "error",
+      message:
+        "This is a use-case diagram, not a C4 model — the C4 tools cannot " +
+        "read it. Use `validate_usecase` and `format_usecase` for use-case " +
+        "documents, or `create_share_link`, which accepts every kind.",
+    };
+  }
+
   // The misdirection guard `tools/sequence.ts` documents, in reverse: a
   // sequence document fed to a C4 tool used to come back as "INVALID … line 1,
   // column 13", which reads as "your syntax is wrong" when only the tool
@@ -65,7 +93,7 @@ export function readSource(source: string, choice: CheckChoice): ReadResult {
       message:
         "This is a sequence diagram, not a C4 model — the C4 tools cannot " +
         "read it. Use `validate_sequence` and `format_sequence` for sequence " +
-        "documents, or `create_share_link`, which accepts both kinds.",
+        "documents, or `create_share_link`, which accepts every kind.",
     };
   }
 

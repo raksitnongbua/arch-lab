@@ -128,11 +128,32 @@ const SEQUENCE_SOURCE_ARG: McpArgDoc = {
     "meaningful line.",
 };
 
+const FLOWCHART_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The flowchart text: `.alab` flowchart (first line " +
+    "`archlab 1.0 flowchart`) or Mermaid `flowchart` / `graph` code " +
+    `(${MAX_SOURCE_CHARS_TEXT}). The format is detected from the first ` +
+    "meaningful line.",
+};
+
+const USECASE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The use-case diagram text: `.alab` usecase (first line " +
+    "`archlab 1.0 usecase`) or Mermaid using the actor/use-case convention " +
+    `(circle actors, stadium use cases, a subgraph boundary) (${MAX_SOURCE_CHARS_TEXT}). ` +
+    "The format is detected from the first meaningful line.",
+};
+
 /**
- * `create_share_link` reads BOTH document kinds — the codec packs arbitrary
- * text, and the route (`/view/c4` vs `/view/sequence`) is what makes a link a
- * C4 or a sequence one — so its source argument must advertise both input
- * languages where SOURCE_ARG and SEQUENCE_SOURCE_ARG each name only their own.
+ * `create_share_link` reads EVERY document kind — the codec packs arbitrary
+ * text and nothing in a link says which grammar wrote it, so its source
+ * argument must advertise all four input languages where SOURCE_ARG,
+ * SEQUENCE_SOURCE_ARG, FLOWCHART_SOURCE_ARG and USECASE_SOURCE_ARG each name
+ * only their own.
  */
 const SHARE_SOURCE_ARG: McpArgDoc = {
   name: "source",
@@ -140,8 +161,11 @@ const SHARE_SOURCE_ARG: McpArgDoc = {
   description:
     `The document text (${MAX_SOURCE_CHARS_TEXT}). C4 models: .alab, arch-lab ` +
     "JSON, or Mermaid C4. Sequence diagrams: `.alab` sequence (first line " +
-    "`archlab 1.0 sequence`) or Mermaid `sequenceDiagram`. The kind is " +
-    "detected from the first meaningful line.",
+    "`archlab 1.0 sequence`) or Mermaid `sequenceDiagram`. Flowcharts: " +
+    "`.alab` flowchart (first line `archlab 1.0 flowchart`) or Mermaid " +
+    "`flowchart` / `graph`. Use-case diagrams: `.alab` usecase (first line " +
+    "`archlab 1.0 usecase`) or Mermaid in the actor/use-case convention. The " +
+    "kind is detected from the first meaningful line.",
 };
 
 const FORMAT_ARG: McpArgDoc = {
@@ -209,6 +233,68 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "escape with a line and column, and returns the canonical single-line " +
       "form when it is right.",
     args: [SEQUENCE_SOURCE_ARG],
+  },
+  {
+    name: "validate_flowchart",
+    title: "Validate a flowchart",
+    description:
+      "Check whether FLOWCHART text is valid, and if not, exactly where it " +
+      "breaks. Reads `.alab` flowchart documents (first line " +
+      "`archlab 1.0 flowchart`) and pasted Mermaid `flowchart` / `graph` " +
+      "code, reporting the line, column and offending source line on " +
+      "failure. On success it summarises the graph — nodes by shape, how many " +
+      "arrows carry a guard, how many loop back, groups, the rendered pixel " +
+      "size — and audits the three defects a parse cannot see: decisions " +
+      "whose branches are unguarded (a diamond that asks a question and will " +
+      "not say which exit is which), nodes no arrow reaches, and nodes no " +
+      "arrow leaves that are not an `end`. Use this for step-by-step " +
+      "processes; use `validate_model` for C4 structure and " +
+      "`validate_sequence` for message flows over time.",
+    args: [FLOWCHART_SOURCE_ARG],
+  },
+  {
+    name: "format_flowchart",
+    title: "Format a flowchart canonically",
+    description:
+      "Rewrite flowchart text as canonical `.alab` flowchart — the exact " +
+      "bytes arch-lab would write, so diffs stay minimal. Also the way to " +
+      "turn pasted Mermaid `flowchart` / `graph` code into an `.alab` " +
+      "flowchart document, which is a one-way lossy import: the response " +
+      "names what was dropped, including the direction (`LR` and friends are " +
+      "layout, not model) and any node shape with no arch-lab counterpart.",
+    args: [FLOWCHART_SOURCE_ARG],
+  },
+  {
+    name: "validate_usecase",
+    title: "Validate a use-case diagram",
+    description:
+      "Check whether UML USE-CASE text is valid, and if not, exactly where " +
+      "it breaks. Reads `.alab` use-case documents (first line " +
+      "`archlab 1.0 usecase`) and pasted Mermaid written in the actor/" +
+      "use-case convention, reporting the line, column and offending source " +
+      "line on failure. On success it summarises who can do what — actors, " +
+      "use cases, associations, «include»/«extend» dependencies, " +
+      "generalizations, each boundary's contents and the rendered pixel size " +
+      "— then audits the defects a parse cannot see: actors with no " +
+      "association at all, use cases nothing can reach, capabilities sitting " +
+      "outside every boundary, empty boundaries, and include/extend or " +
+      "generalization CYCLES, which UML forbids. Use this for who-may-do-what " +
+      "at a system's edge; use `validate_model` for C4 structure, " +
+      "`validate_sequence` for message flows and `validate_flowchart` for " +
+      "step-by-step processes.",
+    args: [USECASE_SOURCE_ARG],
+  },
+  {
+    name: "format_usecase",
+    title: "Format a use-case diagram canonically",
+    description:
+      "Rewrite use-case text as canonical `.alab` usecase — the exact bytes " +
+      "arch-lab would write, so diffs stay minimal. Also the way to turn " +
+      "pasted Mermaid into an `.alab` use-case document, which is a one-way " +
+      "lossy import: the response names what was dropped, including the " +
+      "arrowheads Mermaid draws on lines that are undirected associations in " +
+      "UML.",
+    args: [USECASE_SOURCE_ARG],
   },
   {
     name: "convert_model",
@@ -403,6 +489,24 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
       "than C4 structure — including the `desc` continuation that keeps a " +
       "message's endpoint and payload off the arrow.",
     tools: toolsNamed("validate_sequence", "format_sequence"),
+  },
+  {
+    id: "flowchart",
+    title: "Flowcharts",
+    blurb:
+      "The same check-and-format loop for step-by-step processes — plus the " +
+      "audit a parse cannot do: decisions whose branches carry no guard, " +
+      "nodes nothing reaches, and flows that stop without ending.",
+    tools: toolsNamed("validate_flowchart", "format_flowchart"),
+  },
+  {
+    id: "usecase",
+    title: "Use-case diagrams",
+    blurb:
+      "The same check-and-format loop for who may do what at a system's " +
+      "edge — plus the audit UML cares about: actors that can do nothing, " +
+      "capabilities nothing reaches, and include/extend cycles.",
+    tools: toolsNamed("validate_usecase", "format_usecase"),
   },
   {
     id: "inspect",

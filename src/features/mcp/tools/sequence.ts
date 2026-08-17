@@ -56,11 +56,12 @@ import {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Renders a typed reader failure as the caller-facing message. Each of the
- * three kinds gets its own shape because they need different next actions: a
- * parse error needs the location and the offending line, a C4 document needs
- * to be told which tool to use instead, and an undetectable one needs to know
- * what a first line must look like.
+ * Renders a typed reader failure as the caller-facing message. Each kind
+ * gets its own shape because they need different next actions: a parse error
+ * needs the location and the offending line, a C4 document needs to be told
+ * which tool to use instead, and the rest ("flowchart-detected",
+ * "usecase-detected", "unknown-format") carry a self-contained message that
+ * says where the document does render or what to try.
  */
 function renderReadError(error: SequenceInputError): string {
   if (error.kind === "parse") {
@@ -92,7 +93,8 @@ export type ReadSequenceResult =
    * The error keeps its KIND, not just its rendered message, because
    * `create_share_link` shares this reader to detect sequence documents:
    * a "parse" error means the text IS a sequence document (and the message
-   * is the caller's answer), while "c4-detected" / "unknown-format" / "size"
+   * is the caller's answer), while "c4-detected" / "flowchart-detected" /
+   * "usecase-detected" / "unknown-format" / "size"
    * mean the C4 reader owns the verdict. Collapsing the kinds into one string
    * would force the share tool to sniff the message text.
    */
