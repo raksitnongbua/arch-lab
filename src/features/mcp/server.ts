@@ -28,7 +28,9 @@ import { syntaxReferenceMarkdown } from "./content/syntax-sections";
 import { convertModel, formatModel } from "./tools/convert";
 import { describeModel } from "./tools/describe";
 import { getExampleModel, listExampleModels } from "./tools/examples";
+import { formatFlowchart, validateFlowchart } from "./tools/flowchart";
 import { formatSequence, validateSequence } from "./tools/sequence";
+import { formatUseCase, validateUseCase } from "./tools/usecase";
 import { createShareLink } from "./tools/share";
 import { getSyntaxReference, SYNTAX_SECTION_IDS } from "./tools/syntax";
 import { validateModel } from "./tools/validate";
@@ -55,12 +57,28 @@ const SEQUENCE_SOURCE_SCHEMA = z
     "Sequence diagram text: .alab sequence, or Mermaid sequenceDiagram.",
   );
 
-/* `create_share_link` accepts both document kinds — see tools/share.ts. */
+const FLOWCHART_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Flowchart text: .alab flowchart, or Mermaid flowchart/graph.",
+  );
+
+const USECASE_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Use-case diagram text: .alab usecase, or Mermaid in the actor/use-case " +
+      "convention.",
+  );
+
+/* `create_share_link` accepts EVERY document kind — see tools/share.ts. */
 const SHARE_SOURCE_SCHEMA = z
   .string()
   .describe(
     "Document text: .alab, arch-lab JSON or Mermaid C4 for C4 models; " +
-      ".alab sequence or Mermaid sequenceDiagram for sequence diagrams.",
+      ".alab sequence or Mermaid sequenceDiagram for sequence diagrams; " +
+      ".alab flowchart or Mermaid flowchart/graph for flowcharts; " +
+      ".alab usecase or Mermaid in the actor/use-case convention for " +
+      "use-case diagrams.",
   );
 
 /**
@@ -151,6 +169,52 @@ export function registerArchLabMcp(server: McpServer): void {
       inputSchema: { source: SEQUENCE_SOURCE_SCHEMA },
     },
     ({ source }) => formatSequence(source),
+  );
+
+  /* ---- flowcharts --------------------------------------------------------- */
+
+  /* A third pair, for the reason the sequence pair exists: a flowchart's
+     summary is a directed graph's — shapes, guards, reachability — and shares
+     no fields with either of the other two. See tools/flowchart.ts. */
+  server.registerTool(
+    "validate_flowchart",
+    {
+      ...config("validate_flowchart"),
+      inputSchema: { source: FLOWCHART_SOURCE_SCHEMA },
+    },
+    ({ source }) => validateFlowchart(source),
+  );
+
+  server.registerTool(
+    "format_flowchart",
+    {
+      ...config("format_flowchart"),
+      inputSchema: { source: FLOWCHART_SOURCE_SCHEMA },
+    },
+    ({ source }) => formatFlowchart(source),
+  );
+
+  /* ---- use-case diagrams --------------------------------------------------- */
+
+  /* A fourth pair, for the reason the sequence and flowchart pairs exist: a
+     use-case summary is actors, boundaries and include/extend structure, and
+     shares no fields with the other three. See tools/usecase.ts. */
+  server.registerTool(
+    "validate_usecase",
+    {
+      ...config("validate_usecase"),
+      inputSchema: { source: USECASE_SOURCE_SCHEMA },
+    },
+    ({ source }) => validateUseCase(source),
+  );
+
+  server.registerTool(
+    "format_usecase",
+    {
+      ...config("format_usecase"),
+      inputSchema: { source: USECASE_SOURCE_SCHEMA },
+    },
+    ({ source }) => formatUseCase(source),
   );
 
   /* ---- convert ----------------------------------------------------------- */
