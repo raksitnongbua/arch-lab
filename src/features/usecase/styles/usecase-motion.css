@@ -1,0 +1,283 @@
+/* ---------------------------------------------------------------------------
+ * Use-case viewer motion: THE REVEAL, then two quiet idle gestures.
+ *
+ * THE MODEL, and how it differs from the flowchart's, deliberately. A
+ * flowchart is a PATH, so its entrance traces the path rank by rank and its
+ * idle pulse re-walks it forever. A use-case diagram has NO flow — nothing
+ * travels along an association — so nothing here may TRAVEL: the entrance
+ * is a composed reveal in the diagram's own reading order, and the idle
+ * gestures move IN PLACE.
+ *
+ * THE REVEAL, four phases:
+ *   1. the ACTORS walk on (the cast), staggered by `--uc-cast` — the
+ *      layout's own vertical placement order, stamped by the renderer as a
+ *      server-rendered inline style. Capped by `--uc-cast-cap` so a large
+ *      cast compresses instead of trickling (the flowchart's rank-cap
+ *      rule, held identically in TS and CSS).
+ *   2. the BOUNDARY settles in — a fade with a gentle scale from 98%, the
+ *      system's edge arriving as one object rather than blinking on.
+ *   3. the USE CASES rise inside it, staggered by `--uc-wave` — their
+ *      COLUMN, capped by `--uc-wave-cap`. A column fill reads as the box
+ *      filling in, never as a ranking: the earlier "no stagger among use
+ *      cases" ruling rejected staggers that imply an order the document
+ *      never states, and a per-column beat states none.
+ *   4. the LINES connect them — associations and generalizations DRAW end
+ *      to end; dependencies FADE in whole, because a dashoffset draw would
+ *      overwrite their identifying «include»/«extend» dash (the same rule
+ *      the flowchart holds for its loop dash); heads, hollow triangles and
+ *      labels land last, on each edge's own clock.
+ * The worst-case total is `usecaseRevealTotalMs()` in `../lib/motion.ts`,
+ * pinned under 1.5s by `check:usecase-motion` — the budget that exists
+ * because the flowchart's first 2180ms clock was rejected as TOO SLOW.
+ *
+ * IDLE MOTION — two gestures, both gated on `[data-af-idle="on"]` (the
+ * app-wide toggle AND the OS preference in one attribute, stamped by the
+ * viewer via `idleMotionState`) AND on this file's reduced-motion gate:
+ *   - THE MARCH. Dependencies walk their own dash, reusing the shared
+ *     `@keyframes af-frame-march` BY NAME (globals.css): the canvas-wide
+ *     rule beside that keyframe says only the kind that is already dashed
+ *     may march, and «include»/«extend» is dashed by identity. The
+ *     dependency dash sums to the march's exact -10px cycle travel, so the
+ *     wrap is seamless (`DEPENDENCY_DASH` in ../lib/shapes.ts carries the
+ *     arithmetic; the check pins it).
+ *   - THE BREATH. Associations carry a soft brightening that swells and
+ *     fades IN PLACE — keyframes animate opacity ONLY, no dashoffset, no
+ *     travel. A travelling band would imply a direction, and a UML
+ *     association is undirected BY TYPE (the same rule that forbids it an
+ *     arrowhead). Painted in `--foreground`, never the line's own `--edge`
+ *     (a band the line's colour changes zero pixels — the flowchart's
+ *     shipped "idle animation does not run" report) and never `--primary`
+ *     (resting light must not say "selected"). Its resting opacity is 0 and
+ *     it is display-withdrawn when off, so it can never park as a frozen
+ *     stripe; each edge's `--uc-breath-phase` (a deterministic stamped
+ *     hash) scatters the swells so the diagram never blinks in lockstep.
+ *   Both start `--uc-idle-start` after the lines' beat — at or past the
+ *   worst-case reveal end (relation pinned) — and an EXPLICIT toggle ON
+ *   answers on the draw's clock instead via `[data-af-idle-resume]`,
+ *   because re-serving the settle to a click shipped, on the flowchart, as
+ *   "idle motion toggle broken".
+ *
+ * REJECTED, so nobody re-adds them:
+ *   - A travelling pulse on associations or generalizations (the
+ *     flowchart's comet). Light travelling a line narrates flow; these
+ *     lines have none, and on an association it would assert a direction
+ *     the model forbids.
+ *   - Marching the ASSOCIATIONS. They are solid, and the canvas-wide rule
+ *     stands: a march on a solid line reads as async or a reply.
+ *   - A shimmer or breathing glow on the NODES. It animates the furniture
+ *     rather than the relationships, and at rest reads as a loading
+ *     skeleton.
+ *
+ * REDUCED MOTION is handled ENTIRELY BY THIS MEDIA QUERY, not by JS: the
+ * reveal plays at first paint, before hydration, and a JS-written custom
+ * property arrives too late to suppress a first-paint animation (the same
+ * mechanical argument flowchart-motion.css makes for its trace). Everything
+ * animated lives inside the `no-preference` block — a reader who asked for
+ * no motion gets the complete, static diagram on the very first frame.
+ * That includes the draw's `stroke-dasharray: 1`, which MUST stay inside
+ * the gate: applied without its animation it would park every solid line
+ * mid-draw. The breath's `display: inline` reveal also lives only inside
+ * the gate, so the OS setting beats a server-rendered "on" attribute.
+ * `check:usecase-motion` asserts all of the containment.
+ *
+ * DURATIONS: the `--uc-*` DURATION properties are never stamped at runtime,
+ * so the FALLBACKS below are what always runs. Their one source of truth is
+ * `USECASE_DURATIONS` in `../lib/motion.ts`; CSS cannot import TypeScript,
+ * so the numbers are genuinely duplicated and `check:usecase-motion` pins
+ * each fallback to its constant. `--uc-cast`, `--uc-wave` and
+ * `--uc-breath-phase` are the exceptions: the renderer stamps them as
+ * INLINE STYLES from the layout/motion library, which is server-rendered
+ * markup and therefore present at first paint — and each STAMP is pinned by
+ * the check, because every fallback here is a working value and a deleted
+ * stamp would otherwise degrade silently (the flowchart's `--flow-jitter`
+ * lesson).
+ *
+ * Only `opacity`, `transform` and `stroke-dashoffset` animate — never a
+ * layout property — and entrance keyframes are from-only, so `both` fill
+ * can never park an element anywhere but its natural, complete appearance.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Phase 1 — the cast walks on, in the layout's own placement order. */
+  .af-uc-actor .af-uc-body {
+    animation: af-uc-enter var(--uc-actor-enter, 220ms) ease-out both;
+    animation-delay: min(
+      calc(var(--uc-cast, 0) * var(--uc-cast-stagger, 60ms)),
+      var(--uc-cast-cap, 120ms)
+    );
+  }
+
+  /* Phase 2 — the boundary settles in after the worst-case walk-on: the
+   * delay is built from the CAP, not the cast count, so phase order holds
+   * for any document. Scale needs a per-element box origin in SVG, hence
+   * transform-box. */
+  .af-uc-boundary {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: af-uc-settle var(--uc-boundary-enter, 200ms) ease-out both;
+    animation-delay: calc(
+      var(--uc-cast-cap, 120ms) + var(--uc-actor-enter, 220ms) +
+        var(--uc-phase-gap, 90ms)
+    );
+  }
+
+  /* Phase 3 — the use cases, column by column (the header's wave
+   * argument), each column one beat after the last, capped. */
+  .af-uc-node .af-uc-body {
+    animation: af-uc-enter var(--uc-node-enter, 200ms) ease-out both;
+    animation-delay: calc(
+      var(--uc-cast-cap, 120ms) + var(--uc-actor-enter, 220ms) +
+        var(--uc-phase-gap, 90ms) + var(--uc-boundary-enter, 200ms) +
+        var(--uc-phase-gap, 90ms) +
+        min(
+          calc(var(--uc-wave, 0) * var(--uc-wave-stagger, 70ms)),
+          var(--uc-wave-cap, 140ms)
+        )
+    );
+  }
+
+  /* Phase 4 — the lines. One clock for every edge (the WORST-CASE wave, so
+   * no line can beat the ellipse it connects), declared once here and read
+   * by the draw, fade, head, label and idle rules below. */
+  .af-uc-edge {
+    --uc-edge-at: calc(
+      var(--uc-cast-cap, 120ms) + var(--uc-actor-enter, 220ms) +
+        var(--uc-phase-gap, 90ms) + var(--uc-boundary-enter, 200ms) +
+        var(--uc-phase-gap, 90ms) + var(--uc-wave-cap, 140ms) +
+        var(--uc-node-enter, 200ms) + var(--uc-phase-gap, 90ms)
+    );
+  }
+
+  /* Solid lines (associations, generalizations) DRAW: pathLength=1 on the
+   * path makes one dash unit the whole line, so every spoke draws in the
+   * same time regardless of span. After the animation, dasharray 1 at
+   * offset 0 is indistinguishable from a solid line. */
+  .af-uc-edge .af-uc-draw {
+    stroke-dasharray: 1;
+    animation: af-uc-draw-line var(--uc-edge-draw, 240ms) ease-out both;
+    animation-delay: var(--uc-edge-at);
+  }
+
+  /* Dashed dependencies FADE IN WHOLE — see the header for why a dashoffset
+   * draw is forbidden on them. The fade is on a wrapping GROUP, not the
+   * dashed path itself, so the idle march below can own the path's
+   * `animation` without the two shorthands evicting each other. */
+  .af-uc-edge .af-uc-fade {
+    animation: af-uc-fade-in var(--uc-edge-draw, 240ms) ease-out both;
+    animation-delay: var(--uc-edge-at);
+  }
+
+  /* Heads, hollow triangles and edge labels arrive after their line — the
+   * mark belongs to the finished line, not the half-drawn one under it. */
+  .af-uc-edge .af-uc-head,
+  .af-uc-edge .af-uc-elabel {
+    animation: af-uc-fade-in var(--uc-head-fade, 90ms) ease-out both;
+    animation-delay: calc(var(--uc-edge-at) + var(--uc-head-delay, 160ms));
+  }
+
+  /* ---- idle: THE MARCH (dependencies walk their own dash) ------------------
+   * The shared keyframes BY NAME — a fourth private copy of the same
+   * six-plus-four walk is how four canvases end up marching at three
+   * different speeds. No fill mode needed: during the delay the path sits
+   * at its natural offset-0 dash, which paints nothing extra. */
+  [data-af-idle="on"] .af-uc-edge .af-uc-march {
+    animation: af-frame-march 600ms linear infinite;
+    animation-delay: calc(var(--uc-edge-at) + var(--uc-idle-start, 1400ms));
+  }
+
+  /* ---- idle: THE BREATH (associations brighten in place) -------------------
+   * Revealed (display) only here, inside BOTH gates — withdrawn, not
+   * parked, everywhere else. The static class below rests at opacity 0, so
+   * even the delayed wait paints nothing (the flowchart's frozen-stub
+   * lesson, made impossible by construction rather than by fill mode). */
+  [data-af-idle="on"] .af-uc-edge .af-uc-breath {
+    display: inline;
+    animation: af-uc-breathe var(--uc-breath-period, 5200ms) ease-in-out
+      infinite;
+    animation-delay: calc(
+      var(--uc-edge-at) + var(--uc-idle-start, 1400ms) +
+        var(--uc-breath-phase, 0ms)
+    );
+  }
+
+  /* ---- resume: an explicit ON must answer promptly --------------------------
+   * Re-applying the gated rules restarts their animations from zero,
+   * `--uc-idle-start` and all — a settle that exists only to let the
+   * ENTRANCE finish, and re-serving it to a click is the flowchart's
+   * shipped "idle motion toggle broken" report. The viewer stamps
+   * `data-af-idle-resume` from the toggle's own handler (never at load),
+   * and this state trades the settle for the draw's own pinned length. NO
+   * `--uc-breath-phase` here, deliberately: the scatter runs to a full
+   * breath period, and adding it to a resume would leave a reader waiting
+   * seconds after their own click. */
+  [data-af-idle="on"][data-af-idle-resume] .af-uc-edge .af-uc-march,
+  [data-af-idle="on"][data-af-idle-resume] .af-uc-edge .af-uc-breath {
+    animation-delay: calc(var(--uc-edge-at) + var(--uc-edge-draw, 240ms));
+  }
+}
+
+/* The breath's resting state is ABSENT, not parked — hidden for SSR, for
+ * the toggle's "off", and for every reduced-motion reader forever (the
+ * `display: inline` that shows it lives inside the gate above). Static
+ * styling sits out here, inert while hidden: `--foreground` because light
+ * must be lighter than the line it brightens (never `--edge` — invisible by
+ * construction; never `--primary` — resting light must not say "selected"),
+ * wide and blurred so the swell reads as a glow AROUND the line, and
+ * opacity 0 so the keyframes own every visible frame. */
+.af-uc-breath {
+  display: none;
+  fill: none;
+  stroke: var(--foreground);
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: blur(3px);
+  opacity: 0;
+}
+
+/* From-only: the end state is the element's own natural state, so the
+ * reveal can never leave anything parked mid-animation — and the focus dim
+ * (an opacity TRANSITION on the outer group, see usecase-diagram.tsx) is on
+ * a different element, so the two never fight over one property. */
+@keyframes af-uc-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* The boundary's settle: a whisper of scale under the fade, so the system's
+ * edge lands as one object. From-only, same guarantee as af-uc-enter. */
+@keyframes af-uc-settle {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes af-uc-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes af-uc-draw-line {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The breath: a swell that starts and ends at nothing, so the loop's wrap
+ * is invisible by construction. Opacity ONLY — no offset, no travel — which
+ * is the non-directional promise the header makes for associations. */
+@keyframes af-uc-breathe {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.16;
+  }
+}
