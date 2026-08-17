@@ -19,6 +19,7 @@
 
 import { useId } from "react";
 
+import { WashGradient } from "@/components/ui/wash-gradient";
 import type { C4NodeType } from "@/types";
 
 /** Wrapper classes per type. Empty ⇒ the silhouette is drawn by the SVG layer. */
@@ -53,43 +54,6 @@ export function hasSvgSilhouette(type: C4NodeType): boolean {
 
 export interface NodeShapeLayerProps {
   type: C4NodeType;
-}
-
-/**
- * The stops of the surface wash, as an SVG gradient the silhouettes can
- * reference — the exact recipe `.af-node-wash` paints on box nodes
- * (globals.css: lit 14% top edge, flat middle band, 7% grounding bottom),
- * rebuilt here because a CSS background cannot follow a cylinder or pipe
- * path. Per-instance id: a shared one would make every node paint with
- * whichever defs mounted first.
- */
-function WashGradient({ id }: { id: string }): React.JSX.Element {
-  return (
-    <defs>
-      <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-        {/* style, not the stop-color attribute: custom properties only
-            resolve through the CSS cascade — `stop-color="var(--x)"` as an
-            attribute value is treated as an invalid colour and paints
-            black. */}
-        <stop
-          offset="0"
-          style={{
-            stopColor:
-              "color-mix(in oklab, var(--node-stroke) 14%, var(--node-fill))",
-          }}
-        />
-        <stop offset="0.55" style={{ stopColor: "var(--node-fill)" }} />
-        <stop offset="0.82" style={{ stopColor: "var(--node-fill)" }} />
-        <stop
-          offset="1"
-          style={{
-            stopColor:
-              "color-mix(in oklab, var(--node-stroke) 7%, var(--node-fill))",
-          }}
-        />
-      </linearGradient>
-    </defs>
-  );
 }
 
 /**

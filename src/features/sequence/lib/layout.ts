@@ -44,7 +44,7 @@ import type {
   SequenceNotePlacement,
   SequenceParticipantKind,
 } from "@/types";
-import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
+import { CHAR_WIDTH_RATIO, wrapText } from "@/lib/text-metrics";
 import { isSelfMessage } from "@/types/sequence";
 
 /* -------------------------------------------------------------------------- */
@@ -462,61 +462,14 @@ function messageLabelWidth(message: SequenceMessage): number {
   return estimateWidth(message.label + tech, SEQ.labelFontSize) + 24;
 }
 
-/**
- * Greedy word wrap to a pixel width, using the same estimator every other
- * measurement here uses.
- *
- * THIS EXISTS BECAUSE THE BOX USED TO LIE. A note's width was capped at
- * `noteMaxWidth` while its text stayed one unbroken `<text>` element, so a
- * 250-character caveat drew a single 1600px line straight through both walls
- * of its own box, out past the viewBox on both sides (the extents are computed
- * from the box, not the text) and off the canvas — the left third and the
- * right third simply clipped away. Worse, the failure got WORSE as a diagram
- * got tidier: column gaps are derived from content, so shortening message
- * labels tightens the columns, shrinks an over-note's span, and spills more
- * text. Wrapping is what makes the box the truth about the text.
- *
- * A word longer than the whole line (a URL, a `filter[...]=...` query string)
- * is HARD-SPLIT rather than allowed to overhang: overhang is the bug this
- * function exists to remove, and a broken URL that stays inside the box is
- * more useful than an intact one that vanishes off the canvas.
+/*
+ * `wrapText` now lives in `@/lib/text-metrics` (its history — the note box
+ * that used to lie about its text — moved with it): the flowchart layout
+ * needed the identical algorithm, and two copies of one wrap is exactly the
+ * drift dry.md forbids. Re-exported so this module's public surface (which
+ * the check script and the renderer read) is unchanged.
  */
-export function wrapText(
-  text: string,
-  maxWidth: number,
-  fontSize: number,
-): string[] {
-  const charWidth = Math.max(1, fontSize * SEQ.charWidthRatio);
-  const perLine = Math.max(1, Math.floor(maxWidth / charWidth));
-  const lines: string[] = [];
-  for (const paragraph of text.split("\n")) {
-    let line = "";
-    const flush = (): void => {
-      lines.push(line);
-      line = "";
-    };
-    for (const word of paragraph.split(/\s+/).filter((w) => w !== "")) {
-      let rest = word;
-      // A word that cannot fit on a line of its own, split at the line width.
-      while (rest.length > perLine) {
-        if (line !== "") flush();
-        lines.push(rest.slice(0, perLine));
-        rest = rest.slice(perLine);
-      }
-      const candidate = line === "" ? rest : `${line} ${rest}`;
-      if (candidate.length <= perLine) line = candidate;
-      else {
-        if (line !== "") flush();
-        line = rest;
-      }
-    }
-    lines.push(line);
-  }
-  // A trailing empty line only happens for text ending in a newline; an empty
-  // note keeps one line so the box still has a height.
-  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-  return lines;
-}
+export { wrapText };
 
 /**
  * The note's wrapped text and the box that holds it. `contentWidth` is the

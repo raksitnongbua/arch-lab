@@ -25,6 +25,11 @@
 
 import { LEVEL_LABEL } from "@/lib/constants";
 import { DEFAULT_ICON_STYLE, type IconStyle } from "@/lib/icon-style";
+// Shared with the flowchart exporter — see `@/lib/svg-markup`.
+import { escapeXml, fmt } from "@/lib/svg-markup";
+// Ditto the surface-wash recipe: one definition of the gradient both
+// exporters bake into their files.
+import { WashRegistry, washTopColor } from "@/lib/wash";
 import { CHAR_WIDTH_RATIO, MONO_CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import type { C4Diagram, C4Edge, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
@@ -73,17 +78,6 @@ const ICON_GAP = 6;
 /* -------------------------------------------------------------------------- */
 /* Small helpers                                                               */
 /* -------------------------------------------------------------------------- */
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-const fmt = (value: number): string => String(Math.round(value * 100) / 100);
 
 function estimateWidth(text: string, fontSize: number, mono = false): number {
   return (
@@ -177,10 +171,10 @@ const clamp = (value: number, min: number, max: number): number =>
 /* The surface wash                                                            */
 /* -------------------------------------------------------------------------- */
 
-/**
- * How much border colour the wash folds into a fill (= CSS .af-node-wash):
- * the lit top edge, and the shallow grounding fold at the bottom. Kept as a
- * pair so a future retune stays one edit next to the CSS it mirrors.
+/*
+ * The recipe (fractions, stops, the concrete-sRGB registry) lives in
+ * `@/lib/wash` — shared with the flowchart exporter, which paints the same
+ * gradient over its own shapes.
  *
  * ANIMATION IS DELIBERATELY FLATTENED HERE. The canvas's motion — the
  * staggered entrance, the hover lift and role-tinted glow, the selection
@@ -190,85 +184,8 @@ const clamp = (value: number, min: number, max: number): number =>
  * touching it. Rejected alternative: SMIL/CSS animation inside the SVG —
  * most rasterisers and design tools ignore it, so it would only make the
  * file's first paint disagree with its own thumbnail. The gradients, which
- * ARE part of the resting frame, export for real via the defs below.
+ * ARE part of the resting frame, export for real via the registry's defs.
  */
-const WASH_STROKE_FRACTION = 0.14;
-const WASH_BOTTOM_FRACTION = 0.07;
-
-/** Parse the exporter's concrete colours: `#rrggbb` or `rgba(r, g, b, a)`. */
-function parseSrgb(color: string): [number, number, number] | null {
-  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim());
-  if (hex !== null) {
-    const value = parseInt(hex[1], 16);
-    return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
-  }
-  const rgba = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(color.trim());
-  if (rgba !== null) {
-    return [Number(rgba[1]), Number(rgba[2]), Number(rgba[3])];
-  }
-  return null;
-}
-
-/**
- * The wash's top-stop colour: 10% stroke folded into the fill. On screen
- * this is `color-mix(in oklab, …)`; here it is a plain sRGB lerp because
- * this module is deliberately DOM-free (see resolveTagPaint's counter-case:
- * THERE the browser must do the work, because an author mix is 100% of the
- * fill — a wrong space would visibly recolour the card. At a 10% fold the
- * two spaces differ by well under one 8-bit channel step, so duplicating
- * the browser's oklab pipeline would buy nothing and cost the module its
- * DOM-freeness). Falls back to the flat fill when a colour fails to parse.
- */
-function washMixColor(fill: string, stroke: string, fraction: number): string {
-  const f = parseSrgb(fill);
-  const s = parseSrgb(stroke);
-  if (f === null || s === null) return fill;
-  const mix = (a: number, b: number): number =>
-    Math.round(a + (b - a) * fraction);
-  const hex = (channel: number): string =>
-    channel.toString(16).padStart(2, "0");
-  return `#${hex(mix(f[0], s[0]))}${hex(mix(f[1], s[1]))}${hex(mix(f[2], s[2]))}`;
-}
-
-/** The wash's deepest (top-edge) stop — also the flat paint for rim/tabs. */
-function washTopColor(fill: string, stroke: string): string {
-  return washMixColor(fill, stroke, WASH_STROKE_FRACTION);
-}
-
-/**
- * One wash gradient per DISTINCT paint pair (not per node — parallel
- * containers share one def), collected while nodes render and emitted into
- * `<defs>`. `objectBoundingBox` units (the SVG default) make a single def
- * correct for every node that references it, wherever it sits.
- */
-class WashRegistry {
-  private readonly idByKey = new Map<string, string>();
-  private readonly defs: string[] = [];
-
-  /** The `url(#…)` fill reference for this paint pair. */
-  ref(fill: string, stroke: string): string {
-    const key = `${fill}|${stroke}`;
-    const existing = this.idByKey.get(key);
-    if (existing !== undefined) return `url(#${existing})`;
-    const id = `af-wash-${this.idByKey.size}`;
-    this.idByKey.set(key, id);
-    // Four stops, mirroring `.af-node-wash` exactly: lit 14% top edge, the
-    // flat middle band the text sits on, and the 7% grounding bottom.
-    this.defs.push(
-      `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
-        `<stop offset="0" stop-color="${washTopColor(fill, stroke)}"/>` +
-        `<stop offset="0.55" stop-color="${fill}"/>` +
-        `<stop offset="0.82" stop-color="${fill}"/>` +
-        `<stop offset="1" stop-color="${washMixColor(fill, stroke, WASH_BOTTOM_FRACTION)}"/>` +
-        `</linearGradient>`,
-    );
-    return `url(#${id})`;
-  }
-
-  markup(): string {
-    return this.defs.join("");
-  }
-}
 
 /* -------------------------------------------------------------------------- */
 /* Node silhouettes                                                            */
