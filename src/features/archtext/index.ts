@@ -23,15 +23,23 @@
  */
 
 /*
- * The feature carries BOTH `.alab` document types — the C4 grammar and the
- * sequence grammar (`./lib/sequence/`). They share the header line, the
- * `!` escape, the cursor, the error type and the token classes, which is
- * why the sequence grammar lives here rather than as a sibling feature:
+ * The feature carries ALL FOUR `.alab` document types — the C4 grammar,
+ * the sequence grammar (`./lib/sequence/`), the flowchart grammar
+ * (`./lib/flowchart/`) and the use-case grammar (`./lib/usecase/`). They
+ * share the header line, the `!` escape, the cursor, the error type and the
+ * token classes, which is why the three newer grammars live here rather
+ * than as sibling features:
  *
  *   - `parseSequenceText` / `serializeSequenceText` — `.alab` sequence
  *     text ⇄ `SequenceLabFile`, lossless both ways, same error contract.
+ *   - `parseFlowchartText` / `serializeFlowchartText` — `.alab` flowchart
+ *     text ⇄ `FlowchartLabFile`, same lossless and error contract.
+ *   - `parseUseCaseText` / `serializeUseCaseText` — `.alab` use-case
+ *     text ⇄ `UseCaseLabFile`, same lossless and error contract.
  *   - `detectAlabKind` — which grammar a source belongs to, from its first
- *     meaningful line ("archlab 1.0" = C4, "archlab 1.0 sequence" = sequence).
+ *     meaningful line ("archlab 1.0" = C4, "archlab 1.0 sequence" =
+ *     sequence, "archlab 1.0 flowchart" = flowchart, "archlab 1.0 usecase"
+ *     = use-case).
  */
 
 export { parseArchText } from "./lib/parse";
@@ -59,3 +67,12 @@ export {
   FRAGMENT_KIND_BY_KEYWORD,
   PARTICIPANT_KIND_BY_KEYWORD,
 } from "./lib/sequence/keywords";
+export { parseFlowchartText } from "./lib/flowchart/parse";
+export { serializeFlowchartText } from "./lib/flowchart/serialize";
+export { NODE_SHAPE_BY_KEYWORD } from "./lib/flowchart/keywords";
+export { parseUseCaseText } from "./lib/usecase/parse";
+export { serializeUseCaseText } from "./lib/usecase/serialize";
+export {
+  DEPENDENCY_STEREOTYPES,
+  ELEMENT_KIND_BY_KEYWORD,
+} from "./lib/usecase/keywords";
