@@ -57,7 +57,7 @@ import type {
   SequenceParticipant,
 } from "@/types";
 
-import { encodeInlineBreaks } from "./text";
+import { encodeInlineBreaks, mermaidSafeId } from "./text";
 
 /** What an EXPORT to Mermaid drops. The mirror of
  * `MERMAID_SEQUENCE_CAVEAT`, which describes the trip the other way. */
@@ -84,17 +84,9 @@ const ARROW_BY_KIND: Readonly<Record<SequenceMessageKind, string>> = {
   reply: "-->>",
 };
 
-/**
- * Mermaid ids may not contain whitespace or the characters its parser uses
- * for structure, and an id that breaks the output is worse than one that is
- * renamed. Substitution rather than quoting because Mermaid has no quoting
- * for participant ids — this is the one place a document's own spelling can
- * change on the way out, so it is deliberate and narrow.
- */
+/** The shared substitution rule (see `mermaidSafeId`); `p_` = participant. */
 function mermaidId(id: string): string {
-  const safe = id.replace(/[^A-Za-z0-9_]/g, "_");
-  /* A leading digit reads as a number to Mermaid's tokenizer. */
-  return /^[0-9]/.test(safe) ? `p_${safe}` : safe;
+  return mermaidSafeId(id, "p_");
 }
 
 /**

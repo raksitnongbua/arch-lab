@@ -21,6 +21,23 @@
  *      levels and stay validator-clean (including synthetic wrappers).
  *   6. A set of malformed inputs each fail with a MermaidParseError naming
  *      a line and column (and the parse is all-or-nothing).
+ *   7. The flowchart dialect: `.alab` → Mermaid → `.alab` round-trips to an
+ *      equal model for every shape and both edge label forms, both header
+ *      words and all five direction tokens parse to the same model
+ *      (direction is layout, not model), subgraphs map to contiguous
+ *      groups, id normalisation is deterministic, and malformed flowcharts
+ *      fail with the right line and column rather than a silently wrong
+ *      model.
+ *   8. The use-case dialect: the user-reported Thai document (verbatim)
+ *      detects and imports as a correct use-case model — two actors, four
+ *      use cases, one boundary labelled with the subgraph's DISPLAY title,
+ *      five associations, Thai byte-identical — and round-trips through
+ *      `.alab`; genuine flowcharts (decisions, steps, labelled edges, no
+ *      circles, chained terminators) are NOT stolen: the detector says
+ *      flowchart and `parseMermaidFlowchart` still owns them; `.alab` →
+ *      Mermaid → `.alab` round-trips all three edge kinds; and
+ *      flowchart-flavoured constructs fail the use-case reading with a
+ *      located error that names the flowchart importer as the way out.
  *
  * Exits non-zero on any failure. Run with: pnpm check:mermaid
  */
@@ -63,8 +80,25 @@ registerHooks({
   },
 });
 
-const { parseMermaidC4, serializeMermaidC4, MermaidParseError } = await import(
+const {
+  parseMermaidC4,
+  serializeMermaidC4,
+  parseMermaidFlowchart,
+  serializeMermaidFlowchart,
+  parseMermaidUseCase,
+  serializeMermaidUseCase,
+  detectMermaidUseCase,
+  MermaidParseError,
+} = await import(
   pathToFileURL(path.join(ROOT, "src/features/mermaid/index.ts")).href
+);
+const {
+  parseFlowchartText,
+  serializeFlowchartText,
+  parseUseCaseText,
+  serializeUseCaseText,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
 const { validateArchLabFile } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/validate.ts")).href
@@ -543,10 +577,10 @@ check(
 
 console.log("malformed inputs");
 
-function expectParseError(label, source, expectFragment) {
+function expectErrorWith(parse, label, source, expectFragment) {
   let result;
   try {
-    result = parseMermaidC4(source);
+    result = parse(source);
   } catch (error) {
     if (!(error instanceof MermaidParseError)) {
       fail(label, `expected MermaidParseError, got: ${error}`);
@@ -576,6 +610,14 @@ function expectParseError(label, source, expectFragment) {
     label,
     `expected a MermaidParseError, but parsing succeeded: ${JSON.stringify(result?.metadata?.title)}`,
   );
+}
+
+function expectParseError(label, source, expectFragment) {
+  expectErrorWith(parseMermaidC4, label, source, expectFragment);
+}
+
+function expectFlowchartError(label, source, expectFragment) {
+  expectErrorWith(parseMermaidFlowchart, label, source, expectFragment);
 }
 
 expectParseError("empty source is refused", "", "expected a diagram type");
@@ -641,6 +683,829 @@ expectParseError(
     threw = error instanceof MermaidParseError;
   }
   check("a broken parse throws and applies nothing (all-or-nothing)", threw);
+}
+
+/* ----------------------------------------------------------------------- */
+/* Flowchart dialect                                                        */
+/* ----------------------------------------------------------------------- */
+
+console.log("flowchart: .alab → Mermaid → .alab round-trip");
+
+/** Where two models first diverge, for a failure a human can act on. */
+function firstDiff(a, b) {
+  const left = JSON.stringify(a, null, 2).split("\n");
+  const right = JSON.stringify(b, null, 2).split("\n");
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    if (left[i] !== right[i])
+      return `first difference at line ${i + 1}:\n    expected: ${left[i]}\n    actual:   ${right[i]}`;
+  }
+  return "";
+}
+
+/* Every shape, both edge label states and a group, inside the survivable
+   subset (no desc/[technology]/#tags — the export caveat names those as
+   dropped, so a fixture carrying them could never come back equal). The
+   timestamps are pinned to the importer's fixed stamp so the whole metadata
+   object can be compared, not skirted. */
+const FLOW_ALAB = `archlab 1.0 flowchart
+title "Order intake"
+created "2026-01-01T00:00:00.000Z"
+updated "2026-01-01T00:00:00.000Z"
+
+@flowchart
+  start s "Order received"
+  step validate "Validate cart"
+  decision ok "Cart valid?"
+  group "Persistence"
+    io save "Write order"
+    call notify "Notify shipping"
+  end done "Done"
+
+  s -> validate
+  validate -> ok
+  ok -> save : "yes"
+  ok -> validate : "no"
+  save -> notify
+  notify -> done
+`;
+
+const flowFile = parseFlowchartText(FLOW_ALAB);
+const flowMermaid = serializeMermaidFlowchart(flowFile);
+const flowBack = parseMermaidFlowchart(flowMermaid);
+
+/* This is the two-table agreement proof: if the emitter's bracket for any
+   shape ever stopped being a bracket the importer maps back to that shape
+   (or the arrow/label spelling drifted), the models could not be equal. */
+check(
+  ".alab → Mermaid → .alab reproduces the model (all six shapes, labelled and unlabelled edges, a group, the title)",
+  JSON.stringify(flowBack) === JSON.stringify(flowFile),
+  firstDiff(flowFile, flowBack),
+);
+check(
+  "flowchart serialize is idempotent over the round-trip (byte-identical Mermaid)",
+  serializeMermaidFlowchart(flowBack) === flowMermaid,
+);
+/* The reimported model must still be a model the .alab serializer accepts
+   and reproduces — otherwise the importer can emit files this app then
+   refuses to save, which is the worst possible import. */
+check(
+  "the reimported model round-trips through .alab text byte-identically",
+  serializeFlowchartText(flowBack) === serializeFlowchartText(flowFile),
+);
+check(
+  "the emitted Mermaid spells each shape with its table bracket and the title as frontmatter",
+  [
+    's(["Order received"])',
+    'validate["Validate cart"]',
+    'ok{"Cart valid?"}',
+    'save[/"Write order"/]',
+    'notify[["Notify shipping"]]',
+    'done(["Done"])',
+    'subgraph sg1 ["Persistence"]',
+    "ok -->|yes| save",
+    'title: "Order intake"',
+  ].every((marker) => flowMermaid.includes(marker)),
+  flowMermaid,
+);
+
+/* --- headers and directions: layout must never leak into the model --- */
+
+check(
+  '"graph" (the older header word) parses to the same model as "flowchart"',
+  JSON.stringify(
+    parseMermaidFlowchart(flowMermaid.replace("flowchart TD", "graph TD")),
+  ) === JSON.stringify(flowBack),
+);
+check(
+  "all five direction tokens parse to the same model — direction is layout, not data, so changing it must not show up in a diff of the model",
+  ["TD", "TB", "BT", "LR", "RL"].every(
+    (direction) =>
+      JSON.stringify(
+        parseMermaidFlowchart(
+          flowMermaid.replace("flowchart TD", `flowchart ${direction}`),
+        ),
+      ) === JSON.stringify(flowBack),
+  ),
+);
+check(
+  "the direction option changes only the header line of the output",
+  serializeMermaidFlowchart(flowFile, { direction: "LR" }) ===
+    flowMermaid.replace("flowchart TD", "flowchart LR"),
+);
+
+/* --- importing hand-written Mermaid forms --- */
+
+console.log("flowchart: Mermaid source forms");
+
+const FLOW_SRC = `flowchart LR
+    a([Start]) --> b[Do thing]
+    b --> c{OK?}
+    c -->|yes| d[/Write/]
+    c -- no --> e[[Retry]]
+    d --- f(Finish)
+    e --> f
+`;
+const srcFile = parseMermaidFlowchart(FLOW_SRC);
+const srcShape = (id) => srcFile.nodes.find((n) => n.id === id)?.shape;
+check(
+  "each bracket form maps to its shape, and both terminator brackets resolve by the arrows (no incoming = start, incoming = end)",
+  srcShape("a") === "start" &&
+    srcShape("b") === "step" &&
+    srcShape("c") === "decision" &&
+    srcShape("d") === "io" &&
+    srcShape("e") === "call" &&
+    srcShape("f") === "end",
+  JSON.stringify(srcFile.nodes),
+);
+check(
+  "both edge label spellings (-->|yes| and -- no -->) land on the edge label",
+  srcFile.edges.find((e) => e.from === "c" && e.to === "d")?.label === "yes" &&
+    srcFile.edges.find((e) => e.from === "c" && e.to === "e")?.label === "no",
+  JSON.stringify(srcFile.edges),
+);
+check(
+  "an undirected --- link imports as a directed edge reading left to right — refusing it would reject half the flowcharts in the wild, and the caveat names the imposed direction",
+  srcFile.edges.some(
+    (e) => e.from === "d" && e.to === "f" && e.label === undefined,
+  ),
+);
+check(
+  "an import always yields a model the .alab flowchart serializer accepts and reproduces",
+  JSON.stringify(parseFlowchartText(serializeFlowchartText(srcFile))) ===
+    JSON.stringify(srcFile),
+);
+
+const chainFile = parseMermaidFlowchart("flowchart TD\n    a --> b --> c\n");
+check(
+  "a chained statement expands to consecutive edges in narration order",
+  JSON.stringify(chainFile.edges) ===
+    JSON.stringify([
+      { from: "a", to: "b" },
+      { from: "b", to: "c" },
+    ]),
+  JSON.stringify(chainFile.edges),
+);
+const fanFile = parseMermaidFlowchart(
+  "flowchart TD\n    a --> b & c\n    x & y --> z\n",
+);
+check(
+  "& lists fan out one edge per pair, in reading order",
+  JSON.stringify(fanFile.edges) ===
+    JSON.stringify([
+      { from: "a", to: "b" },
+      { from: "a", to: "c" },
+      { from: "x", to: "z" },
+      { from: "y", to: "z" },
+    ]),
+  JSON.stringify(fanFile.edges),
+);
+const oldStyle = parseMermaidFlowchart("graph TD;\n    p-->q;\n");
+check(
+  'the old "graph TD;" spelling (trailing semicolons, unspaced arrows) still imports — a huge share of snippets in the wild are written this way',
+  oldStyle.nodes.length === 2 &&
+    JSON.stringify(oldStyle.edges) === JSON.stringify([{ from: "p", to: "q" }]),
+);
+const collapsed = parseMermaidFlowchart(
+  "flowchart TD\n    a -.-> b ==> c --- d\n    a -. later .-> d\n",
+);
+check(
+  "dotted, thick and open links all collapse to the one model edge (the caveat's documented loss), keeping their labels",
+  JSON.stringify(collapsed.edges) ===
+    JSON.stringify([
+      { from: "a", to: "b" },
+      { from: "b", to: "c" },
+      { from: "c", to: "d" },
+      { from: "a", to: "d", label: "later" },
+    ]),
+  JSON.stringify(collapsed.edges),
+);
+
+/* --- ids: deterministic normalisation --- */
+
+const weird = parseMermaidFlowchart(
+  "flowchart TD\n    weird*id[One] --> weird_id[Two]\n",
+);
+check(
+  "an id outside the slug alphabet is renamed and a collision takes a numbered suffix in first-come order — nondeterministic renames would break diffs between two imports of the same file",
+  JSON.stringify(weird.nodes.map((n) => n.id)) ===
+    JSON.stringify(["weird_id", "weird_id_2"]) &&
+    weird.edges[0]?.from === "weird_id" &&
+    weird.edges[0]?.to === "weird_id_2",
+  JSON.stringify(weird.nodes),
+);
+check(
+  "the same input always produces the same ids (two parses are deep-equal)",
+  JSON.stringify(weird) ===
+    JSON.stringify(
+      parseMermaidFlowchart(
+        "flowchart TD\n    weird*id[One] --> weird_id[Two]\n",
+      ),
+    ),
+);
+
+/* --- subgraphs and groups --- */
+
+const grouped = parseMermaidFlowchart(
+  [
+    "flowchart TD",
+    "    x[Outside]",
+    "    subgraph s1 [Inside]",
+    "        m1[M1] --> m2[M2]",
+    "    end",
+    "    x --> m1",
+    "",
+  ].join("\n"),
+);
+check(
+  "a subgraph becomes a group over exactly the nodes it introduces, and a cross-link into it stays just a link",
+  JSON.stringify(grouped.groups) ===
+    JSON.stringify([{ label: "Inside", nodes: ["m1", "m2"] }]) &&
+    grouped.nodes.map((n) => n.id).join(",") === "x,m1,m2",
+  JSON.stringify(grouped.groups),
+);
+const emptyGroup = parseMermaidFlowchart(
+  "flowchart TD\n    subgraph s1 [Empty]\n    end\n    a[A]\n",
+);
+check(
+  "an empty subgraph is dropped, not kept — a bracket over no nodes has no drawing, the same rule the sequence importer applies to an empty box",
+  !("groups" in emptyGroup),
+);
+
+/* --- titles --- */
+
+check(
+  "a source without frontmatter gets the default title",
+  parseMermaidFlowchart("flowchart TD\n    a\n").metadata.title ===
+    "Untitled flowchart",
+);
+const fronted = parseMermaidFlowchart(
+  "---\ntitle: Checkout flow\nconfig: dropped\n---\nflowchart LR\n    a --> b\n",
+);
+check(
+  "a hand-written (unquoted) frontmatter title survives and other frontmatter keys are dropped",
+  fronted.metadata.title === "Checkout flow",
+);
+
+/* --- malformed flowcharts: refused, never silently mis-modelled --- */
+
+console.log("flowchart: malformed inputs");
+
+/* The circle `((...))` was REFUSED here until a real user document arrived
+   drawn entirely with circle actors — a refusal that renders nothing lost to
+   a named approximation that renders the chart. It now imports as a
+   terminator (resolved by the arrows like the other two round brackets); the
+   assertions moved to the "user-reported document" section below. The three
+   refusals that SURVIVE are each pinned, because each mapping candidate
+   would mislead (the reasons live on REFUSED_NODE_FORMS). */
+expectFlowchartError(
+  "a hexagon is refused by name — Mermaid's preparation symbol; mapping it to decision would invent a branch point, mapping it to step erases its meaning",
+  "flowchart TD\n    a{{Hex}}\n",
+  "hexagon",
+);
+expectFlowchartError(
+  "a cylinder is refused by name — a data STORE; io or step would repaint a database as an action",
+  "flowchart TD\n    a[(DB)]\n",
+  "cylinder",
+);
+expectFlowchartError(
+  "an asymmetric flag is refused by name — no arch-lab shape keeps the asymmetry that is its meaning",
+  "flowchart TD\n    a>Flag]\n",
+  "flag",
+);
+expectFlowchartError(
+  "a two-headed arrow is refused — a model edge has one direction, and importing <--> as one arrow would silently delete the other half",
+  "flowchart TD\n    a <--> b\n",
+  "one direction",
+);
+expectFlowchartError(
+  'a single-dash "->" is refused with the fix in the message',
+  "flowchart TD\n    a -> b\n",
+  "two dashes",
+);
+expectFlowchartError(
+  "nested subgraphs are refused — arch-lab groups do not nest",
+  "flowchart TD\n    subgraph s1 [A]\n    subgraph s2 [B]\n    end\n    end\n",
+  "do not nest",
+);
+expectFlowchartError(
+  "an unclosed subgraph is refused, blaming the opener's line",
+  "flowchart TD\n    subgraph s1 [A]\n    a[A]\n",
+  "never closed",
+);
+expectFlowchartError(
+  'an unmatched "end" is refused',
+  "flowchart TD\n    end\n",
+  'unmatched "end"',
+);
+expectFlowchartError(
+  "a sequenceDiagram header is refused — routing it to the wrong parser would produce misleading errors",
+  "sequenceDiagram\n    A->>B: hi\n",
+  "not a flowchart header",
+);
+expectFlowchartError(
+  "empty source is refused",
+  "",
+  'expected "flowchart <direction>"',
+);
+expectFlowchartError(
+  "an unknown direction word is refused",
+  "flowchart XX\n    a --> b\n",
+  "not a flowchart direction",
+);
+expectFlowchartError(
+  "an edge to a subgraph id is refused — auto-declaring a node named after the subgraph would silently split one thing into two",
+  "flowchart TD\n    subgraph s1 [G]\n        a[A]\n    end\n    b[B] --> s1\n",
+  "is a subgraph, not a node",
+);
+expectFlowchartError(
+  "defining a node twice is refused — the second bracket would silently overwrite the first label",
+  "flowchart TD\n    a[One]\n    a[Two]\n",
+  "defined twice",
+);
+expectFlowchartError(
+  "defining an already-used node inside a subgraph is refused — membership is fixed by first mention because groups are contiguous runs of the declaration order",
+  "flowchart TD\n    a --> b\n    subgraph s1 [G]\n        b[Named]\n    end\n",
+  "fixed by first mention",
+);
+expectFlowchartError(
+  "an empty node label is refused — the model requires the text a symbol draws",
+  "flowchart TD\n    a[]\n",
+  "empty label",
+);
+
+/* The caret must land on the offending bracket, not the line start —
+   an editor gutter marker one token off sends the author hunting. */
+{
+  let placed = false;
+  try {
+    parseMermaidFlowchart("flowchart TD\n    a{{Hex}}\n");
+  } catch (error) {
+    placed =
+      error instanceof MermaidParseError &&
+      error.line === 2 &&
+      error.column === 6;
+    if (!placed)
+      fail(
+        "the refused-shape error points at the bracket itself (line 2, column 6)",
+        `got line ${error.line}, column ${error.column}`,
+      );
+  }
+  if (placed)
+    ok(
+      "the refused-shape error points at the bracket itself (line 2, column 6)",
+    );
+}
+
+/* --- the user-reported document, verbatim -------------------------------- */
+
+/*
+ * A real document a user pasted and this importer REFUSED (the circle
+ * actors), kept verbatim as a fixture so the exact failure cannot return.
+ * It concentrates five things no other fixture has together: `((...))`
+ * circle nodes, a subgraph with an id AND a bracketed display title, Thai
+ * (non-Latin, spaceless) labels, NO explicit start terminator (every
+ * terminator's role comes from the arrows), and the LR direction the
+ * importer drops.
+ *
+ * The same text is now ALSO the use-case dialect's happy-path fixture (the
+ * section below): `detectMermaidUseCase` routes it to `parseMermaidUseCase`,
+ * which is the reading the author meant. The assertions HERE call
+ * `parseMermaidFlowchart` directly and pin the FALLBACK reading — the
+ * flowchart importer must keep accepting this document, because a caller
+ * that skips detection (or a user who asks for the flowchart reading) still
+ * lands on it.
+ */
+
+console.log("flowchart: the user-reported Thai use-case document");
+
+const USER_THAI_DOC = `flowchart LR
+    %% กำหนดผู้ใช้งาน (Actors)
+    Customer((ลูกค้า))
+    Admin((ผู้ดูแลระบบ))
+
+    %% กรอบของระบบเรา (System Boundary)
+    subgraph MyService [Food Delivery Service]
+        UC1([ค้นหาร้านอาหาร])
+        UC2([สั่งอาหารและชำระเงิน])
+        UC3([จัดการเมนูอาหาร])
+        UC4([ดูรายงานยอดขาย])
+    end
+
+    Customer --> UC1
+    Customer --> UC2
+
+    Admin --> UC1
+    Admin --> UC3
+    Admin --> UC4
+`;
+
+const thaiDoc = parseMermaidFlowchart(USER_THAI_DOC);
+check(
+  "the user's document parses at all — this exact text was refused wholesale when circles sat on the refusal list",
+  thaiDoc.nodes.length === 6 && thaiDoc.edges.length === 5,
+  JSON.stringify(thaiDoc.nodes.map((n) => n.id)),
+);
+check(
+  "circle actors with no incoming arrows import as start terminators — the document has no explicit start, so the arrows are the only signal and they must be enough",
+  thaiDoc.nodes.find((n) => n.id === "Customer")?.shape === "start" &&
+    thaiDoc.nodes.find((n) => n.id === "Admin")?.shape === "start",
+  JSON.stringify(thaiDoc.nodes.map((n) => [n.id, n.shape])),
+);
+check(
+  "the stadium use-cases (all with incoming arrows) resolve as end terminators",
+  ["UC1", "UC2", "UC3", "UC4"].every(
+    (id) => thaiDoc.nodes.find((n) => n.id === id)?.shape === "end",
+  ),
+);
+check(
+  "the subgraph's bracketed DISPLAY title becomes the group label — labelling the group with the id would put `MyService` on screen where the author wrote `Food Delivery Service`",
+  JSON.stringify(thaiDoc.groups) ===
+    JSON.stringify([
+      { label: "Food Delivery Service", nodes: ["UC1", "UC2", "UC3", "UC4"] },
+    ]),
+  JSON.stringify(thaiDoc.groups),
+);
+check(
+  "Thai labels survive import byte-for-byte — a codec that mangles non-Latin text fails silently for every reader who cannot proofread it",
+  thaiDoc.nodes.find((n) => n.id === "Customer")?.label === "ลูกค้า" &&
+    thaiDoc.nodes.find((n) => n.id === "UC2")?.label === "สั่งอาหารและชำระเงิน",
+);
+check(
+  "the user's document round-trips to .alab and back model-equal — import must yield a file this app can save and reopen",
+  JSON.stringify(parseFlowchartText(serializeFlowchartText(thaiDoc))) ===
+    JSON.stringify(thaiDoc),
+);
+check(
+  "the LR direction parses and is dropped — the model is identical under TD, so layout cannot leak into the file",
+  JSON.stringify(
+    parseMermaidFlowchart(
+      USER_THAI_DOC.replace("flowchart LR", "flowchart TD"),
+    ),
+  ) === JSON.stringify(thaiDoc),
+);
+
+/* ----------------------------------------------------------------------- */
+/* Use-case dialect                                                         */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * Mermaid has no use-case diagram — `parseMermaidUseCase` reads the
+ * flowchart CONVENTION for one (circles = actors, stadiums = use cases,
+ * subgraph = system boundary), and `detectMermaidUseCase` decides which
+ * reading a flowchart-headed paste gets. The two failure modes this section
+ * exists to prevent pull in opposite directions: a use-case document
+ * silently mis-modelled as a flow (the bug the dialect fixes), and a
+ * genuine flowchart silently stolen by the heuristic (the bug the dialect
+ * must not introduce). Both are pinned below.
+ */
+
+console.log("usecase: the user's document gets the use-case reading");
+
+check(
+  "the user's Thai document DETECTS as a use-case diagram — this is the document that was silently mis-modelled as a flowchart (actors became starts, use cases became ends), the concrete bug the dialect exists to fix",
+  detectMermaidUseCase(USER_THAI_DOC) === true,
+);
+
+const thaiUC = parseMermaidUseCase(USER_THAI_DOC);
+check(
+  "two circle actors and four stadium use cases, in declaration order — the shapes carry the kinds, so a swap here is the original mis-modelling back again",
+  JSON.stringify(thaiUC.elements.map((e) => [e.id, e.kind])) ===
+    JSON.stringify([
+      ["Customer", "actor"],
+      ["Admin", "actor"],
+      ["UC1", "usecase"],
+      ["UC2", "usecase"],
+      ["UC3", "usecase"],
+      ["UC4", "usecase"],
+    ]),
+  JSON.stringify(thaiUC.elements),
+);
+check(
+  "one boundary labelled with the subgraph's DISPLAY title over the four use cases — labelling it with the id would put `MyService` on screen where the author wrote `Food Delivery Service`",
+  JSON.stringify(thaiUC.boundaries) ===
+    JSON.stringify([
+      {
+        label: "Food Delivery Service",
+        usecases: ["UC1", "UC2", "UC3", "UC4"],
+      },
+    ]),
+  JSON.stringify(thaiUC.boundaries),
+);
+check(
+  "five associations in narration order, arrowheads dropped (a UML association is undirected — the caveat's named loss) and none invented",
+  JSON.stringify(thaiUC.edges) ===
+    JSON.stringify(
+      [
+        ["Customer", "UC1"],
+        ["Customer", "UC2"],
+        ["Admin", "UC1"],
+        ["Admin", "UC3"],
+        ["Admin", "UC4"],
+      ].map(([from, to]) => ({ kind: "association", from, to })),
+    ),
+  JSON.stringify(thaiUC.edges),
+);
+check(
+  "Thai labels survive byte-for-byte — a codec that mangles non-Latin text fails silently for every reader who cannot proofread it",
+  thaiUC.elements.find((e) => e.id === "Customer")?.label === "ลูกค้า" &&
+    thaiUC.elements.find((e) => e.id === "Admin")?.label === "ผู้ดูแลระบบ" &&
+    thaiUC.elements.find((e) => e.id === "UC2")?.label ===
+      "สั่งอาหารและชำระเงิน",
+);
+check(
+  "the imported model round-trips through .alab text losslessly — import must yield a file this app can save and reopen",
+  JSON.stringify(parseUseCaseText(serializeUseCaseText(thaiUC))) ===
+    JSON.stringify(thaiUC),
+  firstDiff(thaiUC, parseUseCaseText(serializeUseCaseText(thaiUC))),
+);
+check(
+  "the imported model round-trips through the use-case dialect's OWN emitter — the two-table agreement proof for this dialect",
+  JSON.stringify(parseMermaidUseCase(serializeMermaidUseCase(thaiUC))) ===
+    JSON.stringify(thaiUC),
+  firstDiff(thaiUC, parseMermaidUseCase(serializeMermaidUseCase(thaiUC))),
+);
+check(
+  '"graph" and every direction token parse to the same use-case model — the header word and layout must not leak into the model, same contract as the flowchart dialect',
+  JSON.stringify(
+    parseMermaidUseCase(USER_THAI_DOC.replace("flowchart LR", "graph LR")),
+  ) === JSON.stringify(thaiUC) &&
+    ["TD", "TB", "BT", "LR", "RL"].every(
+      (direction) =>
+        JSON.stringify(
+          parseMermaidUseCase(
+            USER_THAI_DOC.replace("flowchart LR", `flowchart ${direction}`),
+          ),
+        ) === JSON.stringify(thaiUC),
+    ),
+);
+
+/* --- a genuine flowchart is NEVER stolen --------------------------------- */
+
+console.log("usecase: genuine flowcharts are not stolen");
+
+/** Pins BOTH verdicts on one source: the detector says flowchart, and the
+ * flowchart importer still accepts it — a detector that said "no" while the
+ * flowchart parser also refused would strand the document entirely. */
+function checkNotStolen(label, source) {
+  let flowchartParses = false;
+  try {
+    parseMermaidFlowchart(source);
+    flowchartParses = true;
+  } catch {
+    /* asserted below */
+  }
+  check(
+    label,
+    detectMermaidUseCase(source) === false && flowchartParses,
+    `detect=${detectMermaidUseCase(source)}, flowchartParses=${flowchartParses}`,
+  );
+}
+
+checkNotStolen(
+  "a flowchart with a decision, labelled branches and every shape (the reference FLOW_SRC) stays a flowchart — stealing it would render a control flow as participants, the dialect's own bug mirrored",
+  FLOW_SRC,
+);
+checkNotStolen(
+  "circles + a subgraph are NOT enough when a step node appears — one flowchart-only shape is a stronger signal than any count of circles",
+  [
+    "flowchart TD",
+    "    a((poll))",
+    "    subgraph s [loop]",
+    "        b([wait])",
+    "    end",
+    "    a --> b",
+    "    c[log it]",
+    "",
+  ].join("\n"),
+);
+checkNotStolen(
+  "circles + a subgraph are NOT enough when an edge carries a branch label — labelled directed edges are the signature of a flow, and the use-case reading only knows the closed |generalizes| word",
+  [
+    "flowchart TD",
+    "    a((poll))",
+    "    subgraph s [loop]",
+    "        b([wait])",
+    "    end",
+    "    a -->|retry| b",
+    "",
+  ].join("\n"),
+);
+checkNotStolen(
+  "no subgraph, no theft — without a system boundary the document does not read as a use-case diagram, however many circles it draws",
+  "flowchart TD\n    a((idle)) --> b([done])\n",
+);
+checkNotStolen(
+  "no circle, no theft — a subgraph of stadiums with an outside stadium is a flowchart with terminators, not actors against a system",
+  [
+    "flowchart TD",
+    "    a([start])",
+    "    subgraph s [work]",
+    "        b([mid])",
+    "    end",
+    "    a --> b",
+    "",
+  ].join("\n"),
+);
+checkNotStolen(
+  "chained round nodes are NOT stolen — a flowchart FLOWS, so its steps point at each other, and under the use-case reading a stadium-to-stadium plain arrow is an illegal use-case-to-use-case association; this is the rule that keeps terminator-only flowcharts safe",
+  [
+    "flowchart TD",
+    "    a((go))",
+    "    subgraph s [pipeline]",
+    "        b([fetch])",
+    "        c([store])",
+    "    end",
+    "    a --> b",
+    "    b --> c",
+    "",
+  ].join("\n"),
+);
+check(
+  "garbage detects as NOT a use-case diagram instead of throwing — the detector is a router, and a router that throws strands the paste before any parser can name the real problem",
+  detectMermaidUseCase("") === false &&
+    detectMermaidUseCase("sequenceDiagram\n    A->>B: hi\n") === false,
+);
+
+/* --- .alab → Mermaid → .alab: all three edge kinds ----------------------- */
+
+console.log("usecase: .alab → Mermaid → .alab round-trip");
+
+/* All three edge kinds, both association label states, a boundary and an
+   element outside it, inside the survivable subset (no desc/[technology]/
+   #tags/tint — the export caveat names those as dropped). Timestamps pinned
+   to the importer's fixed stamp so the whole metadata object compares. */
+const USECASE_ALAB = `archlab 1.0 usecase
+title "Food delivery"
+created "2026-01-01T00:00:00.000Z"
+updated "2026-01-01T00:00:00.000Z"
+
+@usecase
+  actor customer "Customer"
+  actor admin "Administrator"
+  boundary "Delivery"
+    usecase search "Find restaurants"
+    usecase order "Order and pay"
+    usecase pay "Take payment"
+  usecase report "Read the reports"
+
+  customer -- search
+  customer -- order : "as guest"
+  order ..> pay : include
+  report ..> order : extend
+  admin --|> customer
+  admin -- report
+`;
+
+const ucFile = parseUseCaseText(USECASE_ALAB);
+const ucMermaid = serializeMermaidUseCase(ucFile);
+const ucBack = parseMermaidUseCase(ucMermaid);
+
+/* The two-table agreement proof: if the emitter's bracket for a kind ever
+   stopped being a bracket the importer maps back to that kind (or an edge
+   spelling drifted off the closed vocabulary), the models could not be
+   equal. */
+check(
+  ".alab → Mermaid → .alab reproduces the model (both kinds, all three edge kinds, labelled and unlabelled associations, a boundary and a free use case)",
+  JSON.stringify(ucBack) === JSON.stringify(ucFile),
+  firstDiff(ucFile, ucBack),
+);
+check(
+  "use-case serialize is idempotent over the round-trip (byte-identical Mermaid)",
+  serializeMermaidUseCase(ucBack) === ucMermaid,
+);
+check(
+  "the reimported model round-trips through .alab text byte-identically — otherwise the importer can emit files this app then refuses to save",
+  serializeUseCaseText(ucBack) === serializeUseCaseText(ucFile),
+);
+check(
+  "the emitted Mermaid spells each kind and edge with its table form: circle actors, stadium use cases, a subgraph boundary, --- associations, |include|/|extend| on dashed arrows, |generalizes| on a solid one, the title as frontmatter",
+  [
+    'customer(("Customer"))',
+    'subgraph sg1 ["Delivery"]',
+    'search(["Find restaurants"])',
+    'report(["Read the reports"])',
+    "customer --- search",
+    "customer ---|as guest| order",
+    "order -.->|include| pay",
+    "report -.->|extend| order",
+    "admin -->|generalizes| customer",
+    'title: "Food delivery"',
+  ].every((marker) => ucMermaid.includes(marker)),
+  ucMermaid,
+);
+check(
+  "the emitter's own output passes the detector — an export the importer would route back to the flowchart reading would flip kind on a save/reopen cycle",
+  detectMermaidUseCase(ucMermaid) === true,
+);
+
+/* --- source forms and ids ------------------------------------------------ */
+
+console.log("usecase: source forms");
+
+check(
+  "a round (single-paren) node imports as a use case, like the stadium — real documents use the two interchangeably for the ellipse",
+  parseMermaidUseCase(
+    "flowchart LR\n    a((A)) --> b(Do thing)\n",
+  ).elements.find((e) => e.id === "b")?.kind === "usecase",
+);
+check(
+  "a subgraph with no bracketed title labels the boundary with its name — the fallback when there is no display title to prefer",
+  JSON.stringify(
+    parseMermaidUseCase(
+      "flowchart LR\n    a((A))\n    subgraph Backoffice\n        b([B])\n    end\n    a --> b\n",
+    ).boundaries,
+  ) === JSON.stringify([{ label: "Backoffice", usecases: ["b"] }]),
+);
+check(
+  "a source without frontmatter gets the default title, and a frontmatter title survives",
+  parseMermaidUseCase(USER_THAI_DOC).metadata.title ===
+    "Untitled use-case diagram" &&
+    parseMermaidUseCase(`---\ntitle: Deliveries\n---\n${USER_THAI_DOC}`)
+      .metadata.title === "Deliveries",
+);
+{
+  const weirdSrc =
+    "flowchart LR\n    weird*id((A)) --> weird_id([B])\n    subgraph s [S]\n        weird_id2([C])\n    end\n    weird*id --> weird_id2\n";
+  const weirdUC = parseMermaidUseCase(weirdSrc);
+  check(
+    "ids outside the slug alphabet are renamed deterministically with first-come collision suffixes — the flowchart importer's exact rule, so the two readings of one document cannot rename differently",
+    JSON.stringify(weirdUC.elements.map((e) => e.id)) ===
+      JSON.stringify(["weird_id", "weird_id_2", "weird_id2"]) &&
+      JSON.stringify(weirdUC) === JSON.stringify(parseMermaidUseCase(weirdSrc)),
+    JSON.stringify(weirdUC.elements),
+  );
+}
+
+/* --- malformed and flowchart-flavoured inputs: located, teaching errors --- */
+
+console.log("usecase: refused inputs");
+
+function expectUseCaseError(label, source, expectFragment) {
+  expectErrorWith(parseMermaidUseCase, label, source, expectFragment);
+}
+
+expectUseCaseError(
+  "a bare dashed arrow is refused — without |include|/|extend| it is ambiguous in exactly the way the use-case model exists to avoid",
+  "flowchart LR\n    a((A))\n    subgraph s [S]\n        b([B])\n    end\n    b -.-> b\n",
+  "stereotype",
+);
+expectUseCaseError(
+  "a labelled solid arrow outside |generalizes| is refused and the error names the flowchart importer — absorbing it would steal the branch label that marks a genuine flowchart",
+  "flowchart LR\n    a((A)) -->|uses| b([B])\n",
+  "import this document as a flowchart",
+);
+expectUseCaseError(
+  "a flowchart-only shape (a {decision}) is refused by name with the flowchart importer as the way out",
+  "flowchart LR\n    a((A)) --> b{OK?}\n",
+  "flowchart shape",
+);
+expectUseCaseError(
+  "an actor declared inside a subgraph is refused — the subgraph IS the system boundary in this reading, and an actor stands outside it",
+  "flowchart LR\n    subgraph s [S]\n        a((A))\n    end\n",
+  "stands outside",
+);
+expectUseCaseError(
+  "an association between two actors is refused — same-kind pairs are a different statement wearing the wrong line, the .alab parser's rule applied at the Mermaid gate",
+  "flowchart LR\n    a((A)) --> b((B))\n",
+  "cannot join two actors",
+);
+expectUseCaseError(
+  "an «include» whose endpoint is an actor is refused — an actor cannot include or extend behaviour",
+  "flowchart LR\n    a((A)) -.->|include| b([B])\n",
+  "cannot include or extend",
+);
+expectUseCaseError(
+  "a generalization across kinds is refused — it joins two elements of the same kind",
+  "flowchart LR\n    a((A)) -->|generalizes| b([B])\n",
+  "same kind",
+);
+expectUseCaseError(
+  "a thick link is refused as a flowchart spelling rather than silently absorbed",
+  "flowchart LR\n    a((A)) ==> b([B])\n",
+  "flowchart spelling",
+);
+
+/* The caret must land on the offending bracket, not the line start — the
+   same editor-gutter contract the flowchart dialect pins. */
+{
+  let placed = false;
+  try {
+    parseMermaidUseCase("flowchart LR\n    a{Choice}\n");
+  } catch (error) {
+    placed =
+      error instanceof MermaidParseError &&
+      error.line === 2 &&
+      error.column === 6;
+    if (!placed)
+      fail(
+        "the refused-shape error points at the bracket itself (line 2, column 6)",
+        `got line ${error.line}, column ${error.column}`,
+      );
+  }
+  if (placed)
+    ok(
+      "the refused-shape error points at the bracket itself (line 2, column 6)",
+    );
 }
 
 /* ----------------------------------------------------------------------- */
