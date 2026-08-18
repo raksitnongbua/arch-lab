@@ -519,6 +519,22 @@ check("the header does not re-blacken the field it now sits over", () => {
     /maskImage: "linear-gradient\(to bottom, black \d+%, transparent 100%\)"/,
     "the header's blur is not masked, so it stops dead at the bottom edge",
   );
+  /* The blur is the legibility device, not the tint. The tint thinned to /45
+     at the midline (2026-08) on the strength of the blur averaging busy canvas
+     content — /view can scroll an accent-coloured node straight under the nav,
+     where raw content measures 3.6:1 against `--foreground` in `dark`. That
+     only holds while the blur's solid stop clears the text band, which ends at
+     ~66% of the 64px row: a mask that releases the blur earlier (the old 45%
+     did) puts raw canvas behind the second half of the nav text. */
+  const blurStop = Number(
+    /maskImage: "linear-gradient\(to bottom, black (\d+)%/.exec(header)?.[1],
+  );
+  assert.ok(
+    Number.isFinite(blurStop) && blurStop >= 60,
+    `the blur mask releases at ${blurStop}% — before the nav text band ends ` +
+      `(~66% of the row), so busy canvas content shows raw behind the text ` +
+      `the thinned tint no longer covers`,
+  );
   /* The HEADER'S OWN className only. Comments in the file discuss the border
      that was removed, and the mobile dropdown below the header legitimately has
      one — it is a popover over content, not a rule across the field. */

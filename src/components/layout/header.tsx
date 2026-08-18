@@ -179,25 +179,45 @@ export function Header(): React.JSX.Element {
           a negative z-index child paints before the backgrounds of in-flow
           descendants, which would put these two layers over the nav's own active
           pill — and a negative z-index escaping its intended stacking context is
-          the bug that hid this site's entire page backdrop. */}
+          the bug that hid this site's entire page backdrop.
+
+          THE BLUR, NOT THE TINT, IS THE LEGIBILITY DEVICE. When the tint came
+          down to /45 at the midline (below), the busy-canvas case — /view can
+          scroll an accent-coloured node directly under the nav — fell under
+          4.5:1 against raw content in the dark themes, and it was under it
+          before the change too: at the old /60 midline, `--foreground` over an
+          accent node measured 3.6:1 in `dark`. What actually keeps that case
+          readable is the blur averaging the node into its card and canvas, so
+          the mask's solid stop sits at 70% — past the text band, which ends at
+          ~66% of the 64px row — rather than releasing the blur at 45% halfway
+          through the text. `check:dot-grid` pins the ≥60% floor. `saturate`
+          rides along for the same reason it does on `.af-glass` (globals.css):
+          a plain blur of the ground reads as grey haze, and the chroma lift is
+          what makes the thinned bar read as glass rather than a smudge. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 backdrop-blur-xl"
+        className="pointer-events-none absolute inset-0 backdrop-blur-xl backdrop-saturate-150"
         style={{
-          maskImage: "linear-gradient(to bottom, black 45%, transparent 100%)",
+          maskImage: "linear-gradient(to bottom, black 70%, transparent 100%)",
           WebkitMaskImage:
-            "linear-gradient(to bottom, black 45%, transparent 100%)",
+            "linear-gradient(to bottom, black 70%, transparent 100%)",
         }}
       />
       <div
         aria-hidden="true"
-        /* Fades from 95% rather than 100%: with the page's dot field now running
-           behind the header, a fully opaque top edge is a black strip across the
-           lattice — the one thing this whole arrangement exists to remove. The
-           midpoint came down with it. Text stays legible by a wide margin: the
-           nav sits on `--foreground`, which is ~14:1 against this ground even
-           where it is thinnest. */
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/95 via-background/60 to-transparent"
+        /* 80 → 45 → transparent, down from 95/60: with the page's dot field
+           running behind the header, every point of opacity here is lattice
+           erased, and at /95 the top of the row still read as a bar sitting ON
+           the field. The floor is measured, not felt: over every surface the
+           header actually crosses — page `--background`, `--canvas`, node
+           `--card` — `--foreground` nav text composited through this ground
+           stays ≥ 10:1 in all seven themes (worst: pastel over canvas, 10.1:1
+           at the text band's thinnest alpha; scripts/lib/oklch.mjs maths).
+           The alpha is nearly irrelevant over those surfaces because the tint
+           is background-coloured over the background; what the thinning DOES
+           cost is the busy-canvas case, which the blur layer above carries —
+           see its comment before nudging either number independently. */
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/80 via-background/45 to-transparent"
       />
 
       {/* Full-bleed rather than centred in a max-width container: the editor is
