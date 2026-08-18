@@ -78,6 +78,36 @@ export interface ShapeGeometry {
  * The outline for one node. The layout owns every number here — this only
  * turns a box into the classic symbol drawn inside it.
  */
+/** How far a focus ring sits outside the shape it marks — the use-case
+ * canvas's `FOCUS_RING_PAD` sibling, kept per-feature because the two
+ * canvases' shapes have different visual weight and will be tuned apart. */
+export const FLOW_FOCUS_RING_PAD = 5;
+
+/**
+ * The focus ring's outline, FOLLOWING THE SHAPE. A CSS `outline` boxes the
+ * bounding box, so a focused stadium, diamond or parallelogram wore a
+ * rectangle — reported on the use-case canvas as "on focus border should be
+ * shaped, not square", and true here for the same reason.
+ *
+ * Built by asking `shapeGeometry` for the SAME shape at a padded box, so the
+ * ring can never disagree with the outline it marks: one shape function, two
+ * callers. A polygon padded by its bounding box does not offset perfectly
+ * uniformly (a diamond's edges move in a little), which is a visual nicety
+ * nobody can see at a 5px ring and not worth a second geometry routine.
+ */
+export function focusRingGeometry(
+  node: Pick<LaidFlowNode, "shape" | "x" | "y" | "width" | "height">,
+): ShapeGeometry & { box: { x: number; y: number; width: number; height: number } } {
+  const pad = FLOW_FOCUS_RING_PAD;
+  const box = {
+    x: node.x - pad,
+    y: node.y - pad,
+    width: node.width + pad * 2,
+    height: node.height + pad * 2,
+  };
+  return { ...shapeGeometry({ shape: node.shape, ...box }), box };
+}
+
 export function shapeGeometry(
   node: Pick<LaidFlowNode, "shape" | "x" | "y" | "width" | "height">,
 ): ShapeGeometry {
