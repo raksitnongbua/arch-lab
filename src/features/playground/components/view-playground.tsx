@@ -221,6 +221,23 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   usecase: "use-case",
 };
 
+/**
+ * What each starter is FOR, in one line a newcomer can act on.
+ *
+ * The row used to be four bare nouns — "C4 · Sequence · Flowchart · Use case" —
+ * which names the four grammars to someone who already knows all four and tells
+ * everyone else nothing. A reader who does not know which they want cannot pick
+ * from a list of labels; they can pick from a list of jobs. Each line names the
+ * QUESTION the diagram answers rather than the shapes it draws, because the
+ * shapes are what you see once you have already chosen.
+ */
+const STARTER_BLURB: Record<SeedKind, string> = {
+  c4: "Systems and the lines between them, drillable level by level",
+  sequence: "Who calls whom, in order, over time",
+  flowchart: "Steps, decisions and the loops back",
+  usecase: "Who can do what at the system's edge",
+};
+
 /** The starter buttons' faces, in the order the row renders them. */
 const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
   c4: "C4",
@@ -1244,8 +1261,12 @@ export function ViewPlayground({
                   target, and "you are already writing this kind" is worth
                   saying. Replacing is undoable with the textarea's own undo,
                   which is why there is no confirmation in front of it. */}
-              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">
+              {/* `items-start` and no `shrink-0`: each starter is now two
+                  stacked lines, so the row must be allowed to wrap and the
+                  "Start from:" label must sit against the top of the first
+                  line rather than the middle of a two-line control. */}
+              <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                <span className="mt-2 text-xs text-muted-foreground">
                   Start from:
                 </span>
                 {(["c4", "sequence", "flowchart", "usecase"] as const).map(
@@ -1263,11 +1284,24 @@ export function ViewPlayground({
                       className={buttonClasses({
                         variant: "ghost",
                         size: "sm",
-                        className: "disabled:cursor-not-allowed",
+                        className:
+                          "h-auto items-start gap-2 py-1.5 text-left disabled:cursor-not-allowed",
                       })}
                     >
-                      <FilePlus2 aria-hidden="true" />
-                      {STARTER_BUTTON_LABEL[kind]}
+                      <FilePlus2
+                        aria-hidden="true"
+                        className="mt-0.5 shrink-0"
+                      />
+                      <span className="flex flex-col">
+                        <span>{STARTER_BUTTON_LABEL[kind]}</span>
+                        {/* The explanation is part of the CONTROL, not a
+                            tooltip: a tooltip is invisible to the reader who
+                            has not already hovered the thing they were unsure
+                            about, which is exactly this reader. */}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {STARTER_BLURB[kind]}
+                        </span>
+                      </span>
                     </button>
                   ),
                 )}
