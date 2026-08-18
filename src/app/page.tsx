@@ -660,11 +660,32 @@ function TalkThroughPreview({
  * Decorative background: a faint canvas grid plus two soft colour washes.
  * Purely presentational, fixed behind content, ignored by assistive tech.
  */
+/**
+ * The home page's ground: a masked blueprint grid, two soft glows, and — the
+ * gimmick — a few faint connectors that DRAW THEMSELVES behind the headline.
+ *
+ * The wires are the product's own gesture at page scale. A flowchart edge draws
+ * by `stroke-dashoffset` over `pathLength=1` and its idle pulse rides the same
+ * path; the CTA's mark does both in 16 pixels; this does them across the hero.
+ * Nothing here is a new visual idea, which is the point — the background is the
+ * product quietly demonstrating itself rather than decoration borrowed from
+ * somewhere else.
+ *
+ * RESTRAINT IS THE WHOLE DESIGN. Every layer sits under 0.12 opacity, the
+ * periods run 14–30s, and the wires are masked away before they reach the text
+ * column, because this sits BEHIND a headline that has to be readable and beside
+ * a running gradient in that headline. A backdrop competing with the words in
+ * front of it is worse than a flat colour. Only `opacity`, `transform` and
+ * `stroke-dashoffset` animate, so a permanent loop costs no layout.
+ *
+ * Reduced motion keeps every layer exactly where it rests: the grid, the glows
+ * and the finished wires. The page is complete without a frame of it.
+ */
 function Backdrop() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 -z-10"
+      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
     >
       <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.07] via-transparent to-transparent" />
       <div
@@ -679,8 +700,37 @@ function Backdrop() {
             "radial-gradient(ellipse 80% 55% at 50% 0%, black 20%, transparent 75%)",
         }}
       />
-      <div className="absolute -top-32 -right-24 size-[28rem] rounded-full bg-accent/10 blur-[120px]" />
-      <div className="absolute -top-24 -left-32 size-[26rem] rounded-full bg-primary/10 blur-[120px]" />
+
+      {/* The wires: three routed connectors and a node at each turn, drawing in
+          sequence and then resting. Orthogonal elbows rather than curves,
+          because that is how this app routes an edge — a swooping bezier here
+          would be a shape the product never draws. */}
+      <svg
+        className="af-backdrop-wires absolute inset-0 size-full"
+        viewBox="0 0 1200 520"
+        preserveAspectRatio="xMidYMin slice"
+        fill="none"
+        stroke="currentColor"
+      >
+        <g className="text-primary">
+          <path className="af-wire af-wire-1" d="M 60 470 V 300 H 300 V 150" pathLength={1} />
+          <path className="af-wire-spark af-wire-spark-1" d="M 60 470 V 300 H 300 V 150" pathLength={1} />
+          <circle className="af-wire-node af-wire-node-1" cx="300" cy="150" r="4" />
+        </g>
+        <g className="text-accent">
+          <path className="af-wire af-wire-2" d="M 1140 60 H 900 V 250 H 720" pathLength={1} />
+          <path className="af-wire-spark af-wire-spark-2" d="M 1140 60 H 900 V 250 H 720" pathLength={1} />
+          <circle className="af-wire-node af-wire-node-2" cx="720" cy="250" r="4" />
+        </g>
+        <g className="text-primary">
+          <path className="af-wire af-wire-3" d="M 980 500 V 390 H 1150" pathLength={1} />
+          <circle className="af-wire-node af-wire-node-3" cx="1150" cy="390" r="4" />
+        </g>
+      </svg>
+
+      <div className="af-backdrop-glow af-backdrop-glow-a absolute -top-32 -right-24 size-[28rem] rounded-full bg-accent/10 blur-[120px]" />
+      <div className="af-backdrop-glow af-backdrop-glow-b absolute -top-24 -left-32 size-[26rem] rounded-full bg-primary/10 blur-[120px]" />
     </div>
   );
 }
+
