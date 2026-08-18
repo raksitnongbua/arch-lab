@@ -3,8 +3,8 @@ import { ImageResponse } from "next/og";
 import {
   OG_CONTENT_TYPE,
   OG_SIZE,
-  OgC4Stack,
   OgCard,
+  OgKindMix,
 } from "@/features/marketing/og/card";
 import { APP_NAME } from "@/lib/constants";
 
@@ -23,6 +23,15 @@ import { APP_NAME } from "@/lib/constants";
  * than one URL later, the way back is to mint against the aliases again — not
  * to add a query param, which no crawler will vary an image on.
  *
+ * WHAT THAT LOSS COST, AND THE HALF OF IT THAT WAS FIXABLE. The copy admitted
+ * the card cannot know the kind; the ARTWORK did not — it drew a three-node C4
+ * stack, and the eyebrow named two kinds of four. So a shared flowchart or
+ * use-case diagram previewed as an advert for C4, which is precisely the bug
+ * the per-kind cards were built to end, arriving back through the one route
+ * that inherited all of them. It now draws `OgKindMix` and names all four:
+ * "more than one kind of diagram lives here" is a claim one image CAN make
+ * truthfully, where "this is a C4 model" cannot.
+ *
  * Frame, palette and Satori rules: `features/marketing/og/card.tsx`.
  */
 
@@ -33,11 +42,11 @@ export const contentType = OG_CONTENT_TYPE;
 export default function OpenGraphImage() {
   return new ImageResponse(
     <OgCard
-      eyebrow="C4 · SEQUENCE · .alab, JSON and Mermaid"
+      eyebrow="C4 · SEQUENCE · FLOWCHART · USE CASE"
       headline="Write the diagram"
       headlineTail="as text."
-      footer="Detected as you type · nothing leaves the browser"
-      art={<OgC4Stack />}
+      footer=".alab, JSON or Mermaid · never uploaded"
+      art={<OgKindMix />}
     />,
     size,
   );

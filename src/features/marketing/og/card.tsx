@@ -213,6 +213,103 @@ export function OgC4Stack(): React.ReactElement {
 }
 
 /**
+ * The KIND-AGNOSTIC illustration: a C4 container pair over a two-message
+ * exchange.
+ *
+ * It exists because two routes have to speak for all four document kinds at
+ * once — the site root, and `/view`, which is the single playground every share
+ * link is minted against. A card can carry one image, so neither can show "the"
+ * diagram; what they can show is that there is more than one kind of diagram
+ * here, without becoming a collage. Four full miniatures competing for the same
+ * 400px would be unreadable at 1200x630; two fragments read instantly. The
+ * FOOTER names all four instead — a strip of text scales to a fourth entry
+ * where artwork does not.
+ *
+ * IT IS SHARED RATHER THAN COPIED because the two cards had drifted already:
+ * `/view` was previewing a three-node C4 stack, so a use-case or flowchart link
+ * — the exact failure the per-kind cards were built to fix — previewed as an
+ * advert for C4.
+ */
+export function OgKindMix(): React.ReactElement {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <OgNode name="Web App" tech="Next.js · SSR" />
+        <OgConnector height={24} />
+        <OgNode name="Orders DB" tech="PostgreSQL" />
+      </div>
+
+      {/* A two-message exchange — the sequence half, at a glance. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <OgMessage label="Place the order" colour={OG.lanes[2]} />
+        <OgMessage label="charge.succeeded" colour={OG.lanes[0]} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The MCP illustration: a client, the endpoint it connects to, and three of the
+ * tools it gets — each with the verdict the real parser hands back.
+ *
+ * `/mcp` had no card of its own, so every link to it previewed with the root
+ * card: "Architecture diagrams that survive review", over a C4 stack. That is
+ * the wrong promise for the one page whose subject is not a diagram at all —
+ * someone shares `/mcp` to say "your agent can drive this", and the preview said
+ * nothing about agents. This draws the connection instead of a diagram.
+ *
+ * A WORD, NOT A TICK, for the verdict column. A check mark (U+2713) is outside
+ * Latin-1 and no font is fetched, so it would ship as a tofu box — the failure
+ * `og-cards-check` exists to catch, and that check reads this file's PROSE too,
+ * so the glyph cannot even be named here. "valid" in the queue green says the
+ * same thing and is legible at feed size, where a 12px glyph is not.
+ *
+ * THE ROWS ARE A PARAMETER, not literals in this file. Nothing in
+ * `features/marketing` may know what the MCP server registers — `catalog.ts`
+ * says so in as many words, and it is where the card's three are resolved and
+ * paired with their outcome word (`MCP_CARD_TOOLS`). Three rows is what the
+ * frame has room for; a fourth would set the type below feed-legible size.
+ */
+export function OgMcpMini({
+  tools,
+}: {
+  tools: readonly { name: string; result: string }[];
+}): React.ReactElement {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: 400 }}>
+      <OgNode name="Claude Code" tech="any MCP client" width={400} />
+      <OgConnector height={24} />
+      <OgNode name="/api/mcp" tech="stateless · read-only" width={400} />
+      <OgConnector height={24} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {tools.map((tool) => (
+          <div
+            key={tool.name}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: 400,
+              padding: "12px 20px",
+              borderRadius: 10,
+              border: `1.5px solid ${OG.border}`,
+              background: OG.card,
+            }}
+          >
+            <span style={{ fontSize: 21, color: OG.foreground }}>
+              {tool.name}
+            </span>
+            <span style={{ fontSize: 18, color: OG.lanes[0] }}>
+              {tool.result}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * A flowchart miniature: a terminator, a step, a decision diamond, and the
  * two things only a flowchart draws — a guarded branch and a loop back.
  *

@@ -73,6 +73,13 @@ const CARDS = [
      failure mode item 1 records. */
   ["src/app/view/flow/opengraph-image.tsx", "/view/flow"],
   ["src/app/view/uc/opengraph-image.tsx", "/view/uc"],
+  /* `/mcp` is not a document kind and gets a card anyway, because "no card"
+     is not neutral — Next serves the ROOT one, so every link to the connect
+     guide previewed as "Architecture diagrams that survive review" over a C4
+     stack. The page's readers are shopping for an MCP server; the preview was
+     answering a different question. Listed here so the card cannot quietly
+     disappear in a refactor and take the same silence back with it. */
+  ["src/app/mcp/opengraph-image.tsx", "/mcp"],
 ];
 
 /**
