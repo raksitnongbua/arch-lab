@@ -95,7 +95,7 @@ const { layoutUseCase, UC } = await import(
 const { USECASE_KIND_TOKENS, USECASE_ROLE_BY_KIND } = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/shapes.ts")).href
 );
-const { USECASE_DURATIONS } = await import(
+const { USECASE_DURATIONS, usecaseFirstLightMs } = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/motion.ts")).href
 );
 const { renderUseCaseSvg } = await import(
@@ -1015,6 +1015,37 @@ const VAR_TO_KEY = Object.fromEntries(
           Number(out[2]) === lit - period
         );
       })(),
+    );
+    /* PERCEPTIBILITY, as floors rather than as a hope. The first drift ran with
+       every mechanism correct — gate stamped, classes emitted, keyframes
+       linear — and was reported as "no animation", because a 0.12 lit run at
+       0.16 opacity under a 3px blur changes almost no pixels, and the scatter
+       could delay first light by 6.6s. The flowchart shipped the same defect
+       twice. Brightness at a given zoom is only observable in a browser, but
+       these three floors are what a Node check CAN hold, and each one is the
+       specific number that was too low. */
+    check(
+      "the drift's lit run covers at least a quarter of the path — a sliver crossing a long association is a flicker nobody registers as movement",
+      (() => {
+        const dash = motionCss.match(
+          /\.af-uc-breath\s*\{[^}]*stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/,
+        );
+        return dash !== null && Number(dash[1]) >= 0.25;
+      })(),
+    );
+    check(
+      "the drift paints at 0.4 opacity or more — 0.16 over a blur measured as visually nothing on the flowchart, and shipped as 'idle motion does not run'",
+      (() => {
+        const gated = motionCss.match(
+          /\[data-af-idle="on"\] \.af-uc-edge \.af-uc-breath\s*\{([^}]*)\}/,
+        );
+        const op = gated === null ? null : gated[1].match(/opacity:\s*([\d.]+)/);
+        return op !== null && Number(op[1]) >= 0.4;
+      })(),
+    );
+    check(
+      "no association waits longer than 3.5s for its first drift — past that a reader has looked away, and 'ambient' has become 'broken' (the shipped wait was 6.6s)",
+      usecaseFirstLightMs() <= 3500,
     );
     check(
       "the drift declares the `backwards` fill — without it a waiting band paints its static dash on the line for the whole delay, which is the flowchart's 'gradient stick on refresh' report",
