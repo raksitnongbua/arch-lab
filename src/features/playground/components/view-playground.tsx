@@ -73,6 +73,7 @@ import {
   Expand,
   FilePlus2,
   FileText,
+  HelpCircle,
   Info,
   Repeat2,
   Shrink,
@@ -324,6 +325,11 @@ export function ViewPlayground({
   // form, not a second thing to learn. Revealed by an explicit click, and
   // never hidden while it is the pane reporting an error.
   const [jsonVisible, setJsonVisible] = useState(false);
+  /* Off by default: the starter blurbs are for the reader who does not know
+     which kind they want, and a returning reader who does should not pay a
+     paragraph under the editor for it. Session state, not a cookie — the
+     question "which one?" is asked once, not remembered forever. */
+  const [startersExplained, setStartersExplained] = useState(false);
 
   /** The left rail's fold. The toggle lives in the canvas column's own strip,
    * because a control that vanishes with the thing it hides cannot restore it.
@@ -1266,7 +1272,12 @@ export function ViewPlayground({
                   "Start from:" label must sit against the top of the first
                   line rather than the middle of a two-line control. */}
               <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                <span className="mt-2 text-xs text-muted-foreground">
+                <span
+                  className={cn(
+                    "text-xs text-muted-foreground",
+                    startersExplained && "mt-2",
+                  )}
+                >
                   Start from:
                 </span>
                 {(["c4", "sequence", "flowchart", "usecase"] as const).map(
@@ -1294,17 +1305,50 @@ export function ViewPlayground({
                       />
                       <span className="flex flex-col">
                         <span>{STARTER_BUTTON_LABEL[kind]}</span>
-                        {/* The explanation is part of the CONTROL, not a
-                            tooltip: a tooltip is invisible to the reader who
-                            has not already hovered the thing they were unsure
-                            about, which is exactly this reader. */}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {STARTER_BLURB[kind]}
-                        </span>
+                        {/* HIDDEN BY DEFAULT. The explanation is part of the
+                            control rather than a tooltip — a tooltip is
+                            invisible to the reader who has not already hovered
+                            the thing they were unsure about — but four
+                            two-line controls is a paragraph sitting under an
+                            editor for everyone who already knows which kind
+                            they want, which is most returning readers. So it
+                            is a disclosure: off until asked for, and then
+                            attached to the button it describes. */}
+                        {startersExplained ? (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {STARTER_BLURB[kind]}
+                          </span>
+                        ) : null}
                       </span>
                     </button>
                   ),
                 )}
+                {/* Names what it reveals rather than saying "more": a reader
+                    deciding whether to press it needs to know it explains the
+                    four things beside it, not that something unspecified will
+                    appear. `aria-expanded` carries the state for anyone who
+                    cannot see the lines arrive. */}
+                <button
+                  type="button"
+                  onClick={() => setStartersExplained((value) => !value)}
+                  aria-expanded={startersExplained}
+                  title={
+                    startersExplained
+                      ? "Hide what each starter is for"
+                      : "Show what each starter is for"
+                  }
+                  className={buttonClasses({
+                    variant: "ghost",
+                    size: "sm",
+                    className: cn(
+                      "text-muted-foreground",
+                      startersExplained && "mt-0",
+                    ),
+                  })}
+                >
+                  <HelpCircle aria-hidden="true" />
+                  {startersExplained ? "Hide" : "Which one?"}
+                </button>
               </div>
 
               <p

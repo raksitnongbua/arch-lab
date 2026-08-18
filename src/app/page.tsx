@@ -219,8 +219,8 @@ export default function Home() {
                   className: "af-cta-live group gap-2.5",
                 })}
               >
-                <span className="sr-only">Open a live diagram</span>
                 <LiveDiagramMark />
+                Open a live diagram
                 <ArrowRight
                   aria-hidden="true"
                   className="transition-transform duration-200 group-hover:translate-x-1"

@@ -327,12 +327,30 @@ function NavEntry({
   );
 }
 
-/** Three nested squares — the C4 drill-down, at logo scale. */
+/**
+ * Three nested squares — the C4 drill-down, at logo scale.
+ *
+ * IT BREATHES THE DRILL-DOWN. The three rings are already the product's central
+ * idea (context → container → component), so the idle gesture is that idea in
+ * motion: each ring brightens in turn, outermost inwards, which is the order a
+ * reader drills. Nothing moves or resizes — opacity only, on three elements
+ * that are already there — so the mark never nudges the header's layout, and a
+ * logo that shifted by a pixel every few seconds beside navigation would be
+ * far worse than a still one.
+ *
+ * Slow and shallow on purpose (`af-mark-*` in globals.css): this runs on every
+ * page, forever, in the reader's peripheral vision. It is a heartbeat, not a
+ * greeting — hover is where the mark answers, and there the whole thing lifts
+ * to full strength at once.
+ *
+ * Reduced motion leaves all three rings at their resting opacities, which is
+ * the mark as it has always been drawn.
+ */
 function Mark() {
   return (
     <span
       aria-hidden="true"
-      className="relative grid size-8 place-items-center rounded-lg border border-border bg-card text-primary transition-colors group-hover:border-primary/40"
+      className="af-mark relative grid size-8 place-items-center rounded-lg border border-border bg-card text-primary transition-colors group-hover:border-primary/40"
     >
       <svg
         viewBox="0 0 24 24"
@@ -342,9 +360,32 @@ function Mark() {
         strokeLinejoin="round"
         className="size-4.5"
       >
-        <rect x="3" y="3" width="18" height="18" rx="3" opacity="0.45" />
-        <rect x="7" y="7" width="10" height="10" rx="2" opacity="0.75" />
-        <rect x="10.5" y="10.5" width="3" height="3" rx="1" />
+        <rect
+          className="af-mark-ring af-mark-ring-1"
+          x="3"
+          y="3"
+          width="18"
+          height="18"
+          rx="3"
+          opacity="0.45"
+        />
+        <rect
+          className="af-mark-ring af-mark-ring-2"
+          x="7"
+          y="7"
+          width="10"
+          height="10"
+          rx="2"
+          opacity="0.75"
+        />
+        <rect
+          className="af-mark-ring af-mark-ring-3"
+          x="10.5"
+          y="10.5"
+          width="3"
+          height="3"
+          rx="1"
+        />
       </svg>
     </span>
   );

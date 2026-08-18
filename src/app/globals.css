@@ -1858,3 +1858,109 @@
     opacity: 0;
   }
 }
+
+/* ---- the header's own two gestures -------------------------------------------
+ * Both live here rather than in a feature stylesheet because the header is
+ * chrome: it is on every route, so its motion budget is the whole app's.
+ *
+ * THE MARK BREATHES THE DRILL-DOWN. The three nested rings already ARE the
+ * product's central idea (context → container → component), so the idle gesture
+ * is that idea in motion: each ring brightens in turn, outermost inwards, the
+ * order a reader drills. OPACITY ONLY — nothing moves or resizes, so the logo
+ * can never nudge the navigation beside it, and a mark that shifted by a pixel
+ * every few seconds next to a menu would be far worse than a still one.
+ *
+ * Slow (5.6s) and shallow (a fifth of a step, never to full) because this runs
+ * on every page forever, in peripheral vision. It is a heartbeat, not a
+ * greeting. Each ring's own resting opacity is its baseline, so the animation
+ * lifts from what the mark already looked like rather than replacing it — which
+ * is why the three keyframes carry different values.
+ *
+ * HOVER OVERRIDES THE LOOP. Hovering the logo takes all three rings to full at
+ * once: the drill-down assembled, as a single answer to the pointer. The loop is
+ * paused rather than restarted, so leaving the hover resumes mid-breath instead
+ * of snapping back to the top.
+ *
+ * THE THEME TOGGLE TURNS. A wrapper rotates on hover — the control reads as
+ * something you twist, which is what picking a theme feels like — while the sun
+ * and moon keep cross-fading inside it on the `dark:` variant, untouched. A
+ * transition, not a loop: this one answers the pointer and is otherwise still,
+ * because two perpetual loops in one header is a fairground.
+ *
+ * Reduced motion: no loop, no turn. Both controls rest exactly as they are
+ * drawn, which is the state they were designed in.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .af-mark .af-mark-ring {
+    animation: 5600ms ease-in-out infinite;
+  }
+
+  .af-mark .af-mark-ring-1 {
+    animation-name: af-mark-ring-1;
+  }
+
+  .af-mark .af-mark-ring-2 {
+    animation-name: af-mark-ring-2;
+    animation-delay: 420ms;
+  }
+
+  .af-mark .af-mark-ring-3 {
+    animation-name: af-mark-ring-3;
+    animation-delay: 840ms;
+  }
+
+  /* Paused, not cancelled: leaving the hover resumes mid-breath rather than
+     snapping to the top of the loop. */
+  .group:hover .af-mark .af-mark-ring {
+    animation-play-state: paused;
+  }
+
+  .af-theme-dial {
+    transition: rotate 300ms ease-out;
+  }
+
+  .af-theme-toggle:hover .af-theme-dial {
+    rotate: 18deg;
+  }
+
+  .af-theme-toggle:active .af-theme-dial {
+    rotate: -12deg;
+  }
+}
+
+/* Hover assembles the drill-down: all three rings at full, at once. Outside the
+ * reduced-motion gate deliberately — it is a state change, not an ambient
+ * gesture, so a reader who wants no ambient motion still gets the affordance. */
+.group:hover .af-mark .af-mark-ring {
+  opacity: 1;
+}
+
+@keyframes af-mark-ring-1 {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.68;
+  }
+}
+
+@keyframes af-mark-ring-2 {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes af-mark-ring-3 {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
