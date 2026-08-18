@@ -78,6 +78,7 @@ import {
   dependencyHeadPath,
   generalizationTrianglePath,
   polylinePath,
+  focusRing,
   UC_FOCUS_STROKE,
   UC_HIT_STROKE,
   UC_STROKE,
@@ -350,9 +351,12 @@ function HitRect({
 }): React.JSX.Element {
   // The bounding box is the target, not the outline: an ellipse's corners
   // and the air between a figure's legs are exactly where a pointer aims.
+  // The RING it reveals is shaped, though — see `focusRing`.
+  const ring = focusRing(element);
   return (
-    <rect
-      className="af-uc-hit cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+    <>
+      <rect
+      className="af-uc-hit cursor-pointer focus-visible:outline-none"
       x={element.x}
       y={element.y}
       width={element.width}
@@ -366,7 +370,33 @@ function HitRect({
         onFocus();
       }}
       onKeyDown={onKeyDown}
-    />
+      />
+      {/* The focus ring, FOLLOWING THE SHAPE — a bigger ellipse for a use
+          case, a capsule for an actor. It sits AFTER the hit target because
+          CSS reveals it with a sibling combinator, and it is inert to the
+          pointer so it can never steal the click from the target it marks.
+          See `focusRing` for why a CSS outline could not do this. */}
+      {ring.kind === "ellipse" ? (
+        <ellipse
+          aria-hidden="true"
+          className="af-uc-ring pointer-events-none"
+          cx={ring.cx}
+          cy={ring.cy}
+          rx={ring.rx}
+          ry={ring.ry}
+        />
+      ) : (
+        <rect
+          aria-hidden="true"
+          className="af-uc-ring pointer-events-none"
+          x={ring.x}
+          y={ring.y}
+          width={ring.width}
+          height={ring.height}
+          rx={ring.rx}
+        />
+      )}
+    </>
   );
 }
 
@@ -638,19 +668,30 @@ function Edge({
           ? { strokeDasharray: DEPENDENCY_DASH }
           : { pathLength: 1 })}
       />
-      {/* The idle breath's track — an association only. It SWELLS IN PLACE
-          (opacity, never dashoffset): a band travelling along the line would
-          imply a direction, and a UML association is undirected, which is the
-          whole reason this type exists rather than reusing the flowchart.
+      {/* The idle drift's tracks — an association only, and TWO of them:
+          identical bands travelling opposite ways at one constant speed, so
+          the pair has no net direction. That is what lets an undirected
+          association carry travelling light at all; a single band would state a
+          direction the relationship does not have. An in-place opacity swell
+          came first and read as a blink rather than as motion.
           Rendered before the label so a multiplicity stays legible through the
           glow; display-gated to nothing unless idle motion is on, so SSR and
           reduced motion never paint it. */}
       {edge.kind === "association" ? (
-        <path
-          aria-hidden="true"
-          className="af-uc-breath pointer-events-none"
-          d={d}
-        />
+        <>
+          <path
+            aria-hidden="true"
+            className="af-uc-breath af-uc-drift-out pointer-events-none"
+            d={d}
+            pathLength={1}
+          />
+          <path
+            aria-hidden="true"
+            className="af-uc-breath af-uc-drift-back pointer-events-none"
+            d={d}
+            pathLength={1}
+          />
+        </>
       ) : null}
       {edge.kind === "dependency" ? (
         <path
@@ -714,7 +755,7 @@ function Edge({
           testing only — a filled hit path over an open polyline would claim
           the whole area the line encloses. */}
       <path
-        className="af-uc-hit cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+        className="af-uc-hit cursor-pointer focus-visible:outline-none"
         d={d}
         fill="none"
         stroke="transparent"
@@ -728,6 +769,16 @@ function Edge({
           onFocus();
         }}
         onKeyDown={onKeyDown}
+      />
+      {/* The edge's focus ring is a HALO ALONG THE LINE, not a box round its
+          bounding box — an edge's shape is its path, and a diagonal
+          association's bounding box is a rectangle covering half the diagram.
+          After the hit target, for the sibling reveal; inert to the pointer. */}
+      <path
+        aria-hidden="true"
+        className="af-uc-ring pointer-events-none"
+        d={d}
+        fill="none"
       />
     </g>
   );

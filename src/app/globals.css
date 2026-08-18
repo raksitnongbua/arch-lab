@@ -2184,3 +2184,55 @@
     scale: 1.15;
   }
 }
+/* ---- shaped focus rings on the diagram canvases -----------------------------
+ * A CSS `outline` boxes the BOUNDING BOX, always. On canvases whose entire
+ * vocabulary is shapes that reads as a rendering fault rather than as focus: a
+ * focused ellipse wore a rectangle, a focused stick figure wore one too, and a
+ * focused diagonal association wore a rectangle covering half the diagram.
+ * Reported as "on focus border should be shaped, not square".
+ *
+ * So the ring is a real SVG shape emitted BESIDE the hit target — a bigger
+ * ellipse, a capsule, the node's own padded outline, or a halo along an edge's
+ * own path — revealed by a sibling combinator when the target takes
+ * focus-visible. The targets themselves set `outline: none`; the check scripts
+ * pin that no `focus-visible:outline-*` utility comes back.
+ *
+ * `--ring` is the app's focus colour everywhere else, so a focused diagram
+ * element matches a focused button. Never the role palette: focus is a state,
+ * not a kind.
+ */
+/* The native ring must die in a REAL rule, not via a `focus-visible:outline-none`
+ * utility. `@layer base { * { @apply outline-ring/50 } }` gives every element an
+ * outline COLOUR, so the browser's own focus indicator paints in --ring — which
+ * is the violet box that survived the first attempt at this fix, sitting exactly
+ * on the hit rect's bounds. The sequence canvas already did it this way
+ * (`.af-seq-hit:focus-visible { outline: none }` in sequence-motion.css, with
+ * the same "outline does not follow an SVG shape" note), and that precedent is
+ * the one to copy. */
+/* `:focus`, not only `:focus-visible`. CLICKING an SVG element that carries a
+ * tabindex gives it :focus WITHOUT :focus-visible, and Chrome still paints
+ * `outline: auto` for that — which is the rounded box that survived killing the
+ * outline on :focus-visible alone. The RING stays keyboard-only below, because a
+ * click already gets the app's own focused styling and does not need a second
+ * indicator. (The sequence canvas only ever needed :focus-visible; its hits are
+ * on <g> wrappers rather than shapes with tabindex, so it never saw this.) */
+.af-uc-hit:focus,
+.af-uc-hit:focus-visible,
+.af-flow-hit:focus,
+.af-flow-hit:focus-visible {
+  outline: none;
+}
+
+.af-uc-ring,
+.af-flow-ring {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 2;
+  /* Absent, not transparent, so it can never take a click or a hit test. */
+  opacity: 0;
+}
+
+.af-uc-hit:focus-visible ~ .af-uc-ring,
+.af-flow-hit:focus-visible ~ .af-flow-ring {
+  opacity: 1;
+}

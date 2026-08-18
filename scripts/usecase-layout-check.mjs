@@ -95,7 +95,7 @@ const { layoutUseCase, UC } = await import(
 const { USECASE_KIND_TOKENS, USECASE_ROLE_BY_KIND } = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/shapes.ts")).href
 );
-const { USECASE_DURATIONS } = await import(
+const { USECASE_DURATIONS, usecaseFirstLightMs } = await import(
   pathToFileURL(path.join(ROOT, "src/features/usecase/lib/motion.ts")).href
 );
 const { renderUseCaseSvg } = await import(
@@ -891,10 +891,15 @@ const VAR_TO_KEY = Object.fromEntries(
       /edge\.kind === "dependency" && "af-uc-march"/.test(diagramSrc),
     );
     check(
-      "the diagram renders an af-uc-breath track for ASSOCIATIONS only — dependencies march instead, and a second gesture on one edge would be two stories at once",
-      /edge\.kind === "association" \? \(\s*<path[\s\S]{0,200}af-uc-breath/.test(
+      "the diagram renders drift tracks for ASSOCIATIONS only — dependencies march instead, and two gestures on one edge would be two stories at once",
+      /edge\.kind === "association" \? \([\s\S]{0,400}af-uc-drift-out[\s\S]{0,300}af-uc-drift-back/.test(
         diagramSrc,
       ),
+    );
+    check(
+      "both drift tracks carry pathLength=1 — without it the dash fractions are user units, a sliver on a long association and a blanket on a short one",
+      (diagramSrc.match(/af-uc-drift-(?:out|back) pointer-events-none"\s*\n?\s*d=\{d\}\s*\n?\s*pathLength=\{1\}/g) ?? [])
+        .length === 2,
     );
     check(
       "the diagram STAMPS --uc-breath-phase from usecaseBreathPhase — the CSS fallback is 0ms, so a missing stamp silently flattens the scatter into every association swelling in unison, with every CSS assertion still green (the flowchart shipped exactly this)",
@@ -963,16 +968,88 @@ const VAR_TO_KEY = Object.fromEntries(
       /animation:\s*af-frame-march\s/.test(motionCss) &&
         !/@keyframes af-uc-[a-z-]*march/.test(motionCss),
     );
+    /* DIRECTION-NEUTRALITY, by symmetry rather than by stillness. The first cut
+       forbade stroke-dashoffset outright — a band travelling along an undirected
+       association would state a direction it does not have — and got an in-place
+       opacity swell that read as a blink rather than as motion. The gesture now
+       travels, and stays neutral because the two bands are EXACT MIRRORS: equal
+       speed, opposite ways, no net direction. Pinned as the mirror property,
+       because a lone drift, or two drifts at different speeds, is a direction
+       again. */
     check(
-      "the association's ambient gesture animates opacity/width, never stroke-dashoffset — a band travelling ALONG an association would imply a direction, and a UML association is undirected; it swells in place instead",
+      "the two drift keyframes are exact mirrors of each other — a lone band, or an unequal pair, states a direction an undirected association does not have",
       (() => {
-        const breathe = motionCss.match(
-          /@keyframes af-uc-breathe\s*\{([\s\S]*?)\n\}/,
-        );
+        const range = (name) => {
+          const m = motionCss.match(
+            new RegExp(
+              `@keyframes ${name}\\s*\\{\\s*from\\s*\\{\\s*stroke-dashoffset:\\s*(-?[\\d.]+)\\s*;\\s*\\}\\s*to\\s*\\{\\s*stroke-dashoffset:\\s*(-?[\\d.]+)\\s*;`,
+            ),
+          );
+          return m === null ? null : [Number(m[1]), Number(m[2])];
+        };
+        const out = range("af-uc-drift-out");
+        const back = range("af-uc-drift-back");
         return (
-          breathe !== null && !/stroke-dashoffset/.test(breathe[1])
+          out !== null &&
+          back !== null &&
+          out[0] === back[1] &&
+          out[1] === back[0]
         );
       })(),
+    );
+    check(
+      "the drift is STEADY: linear timing and exactly one dash period per cycle, so it holds one speed and its wrap is invisible — an eased loop reads as slipping and any other span parks the band somewhere new at each wrap",
+      (() => {
+        const dash = motionCss.match(
+          /\.af-uc-breath\s*\{[^}]*stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/,
+        );
+        const out = motionCss.match(
+          /@keyframes af-uc-drift-out\s*\{\s*from\s*\{\s*stroke-dashoffset:\s*([\d.]+)\s*;\s*\}\s*to\s*\{\s*stroke-dashoffset:\s*(-?[\d.]+)\s*;/,
+        );
+        if (dash === null || out === null) return false;
+        const lit = Number(dash[1]);
+        const period = lit + Number(dash[2]);
+        return (
+          /animation-timing-function:\s*linear/.test(motionCss) &&
+          Number(out[1]) === lit &&
+          Number(out[2]) === lit - period
+        );
+      })(),
+    );
+    /* PERCEPTIBILITY, as floors rather than as a hope. The first drift ran with
+       every mechanism correct — gate stamped, classes emitted, keyframes
+       linear — and was reported as "no animation", because a 0.12 lit run at
+       0.16 opacity under a 3px blur changes almost no pixels, and the scatter
+       could delay first light by 6.6s. The flowchart shipped the same defect
+       twice. Brightness at a given zoom is only observable in a browser, but
+       these three floors are what a Node check CAN hold, and each one is the
+       specific number that was too low. */
+    check(
+      "the drift's lit run covers at least a quarter of the path — a sliver crossing a long association is a flicker nobody registers as movement",
+      (() => {
+        const dash = motionCss.match(
+          /\.af-uc-breath\s*\{[^}]*stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/,
+        );
+        return dash !== null && Number(dash[1]) >= 0.25;
+      })(),
+    );
+    check(
+      "the drift paints at 0.4 opacity or more — 0.16 over a blur measured as visually nothing on the flowchart, and shipped as 'idle motion does not run'",
+      (() => {
+        const gated = motionCss.match(
+          /\[data-af-idle="on"\] \.af-uc-edge \.af-uc-breath\s*\{([^}]*)\}/,
+        );
+        const op = gated === null ? null : gated[1].match(/opacity:\s*([\d.]+)/);
+        return op !== null && Number(op[1]) >= 0.4;
+      })(),
+    );
+    check(
+      "no association waits longer than 3.5s for its first drift — past that a reader has looked away, and 'ambient' has become 'broken' (the shipped wait was 6.6s)",
+      usecaseFirstLightMs() <= 3500,
+    );
+    check(
+      "the drift declares the `backwards` fill — without it a waiting band paints its static dash on the line for the whole delay, which is the flowchart's 'gradient stick on refresh' report",
+      /animation-fill-mode:\s*backwards/.test(motionCss),
     );
     check(
       "an explicit toggle-ON answers promptly via [data-af-idle-resume] for EVERY idle class — re-serving the entrance settle to a click shipped on the flowchart as 'idle motion toggle broken', because a control whose effect is invisible for seconds is indistinguishable from a dead one",
@@ -1014,6 +1091,55 @@ for (const [kind, tokens] of Object.entries(USECASE_KIND_TOKENS)) {
 }
 
 /* ----------------------------------------------------------------------- */
+
+/* ---- shaped focus rings ---------------------------------------------------- */
+
+/* A CSS `outline` boxes the BOUNDING BOX, always — so a focused ellipse,
+   stadium, diamond or diagonal edge wore a RECTANGLE. Shipped on both canvases
+   and reported as "on focus border should be shaped, not square". The fix is a
+   real SVG ring beside the hit target, revealed by a sibling combinator; these
+   pin both halves, because either alone lets the box back. */
+{
+  const focusSrc = readFileSync(
+    path.join(ROOT, "src/features/usecase/components/usecase-diagram.tsx"),
+    "utf8",
+  );
+  const globals = readFileSync(path.join(ROOT, "src/app/globals.css"), "utf8");
+  check(
+    "no focus-visible:outline-* utility survives on an interactive shape — that utility is what drew the rectangle, and it reads as a rendering fault on a canvas made of shapes",
+    !/focus-visible:outline-(?!none)/.test(focusSrc),
+  );
+  /* Pinned as a REAL CSS rule, not as a utility class in the markup. The
+     utility was there and the violet box still shipped: `@layer base` gives
+     every element an outline colour, so the browser's native focus indicator
+     paints in --ring, and a utility that did not take effect looked exactly
+     like a fix. The sequence canvas's rule is the precedent. */
+  check(
+    "a real CSS rule kills the native outline on PLAIN :focus, not only :focus-visible — clicking an SVG element with a tabindex gives it :focus alone, and Chrome still paints outline: auto for that, which is the rounded box that survived the first two attempts at this fix",
+    new RegExp("\\." + "af-uc-hit" + ":focus[,\\s][^{]*\\{[^}]*outline:\\s*none").test(
+      globals,
+    ),
+  );
+  check(
+    "every interactive element also carries outline-none in the markup — belt and braces, and it documents the intent at the call site",
+    (focusSrc.match(/af-uc-hit cursor-pointer focus-visible:outline-none/g) ?? [])
+      .length >= 2,
+  );
+  check(
+    "a shaped .af-uc-ring is emitted for BOTH a node/element and an edge — an edge's ring must follow its path, since a diagonal line's bounding box is a rectangle across half the diagram",
+    (focusSrc.match(/af-uc-ring/g) ?? []).length >= 2,
+  );
+  check(
+    "the ring is revealed by a :focus-visible SIBLING rule and rests at opacity 0 — absent rather than transparent, so it can never take a click or a hit test",
+    /\.af-uc-ring[^{]*\{[^}]*opacity:\s*0/.test(globals) &&
+      new RegExp("\\.af-uc-hit:focus-visible ~ \\.af-uc-ring").test(globals),
+  );
+  check(
+    "the ring paints --ring, the app's focus colour, never a role token — focus is a state, so a focused diagram element must match a focused button",
+    /\.af-uc-ring[\s\S]{0,200}stroke:\s*var\(--ring\)/.test(globals),
+  );
+}
+
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

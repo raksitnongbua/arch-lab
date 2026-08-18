@@ -100,7 +100,7 @@ export const USECASE_DURATIONS = {
    * never a per-document JS value: the idle gate ships in server markup, so
    * ambient motion may legally begin before hydration, and only a static
    * delay can promise it still begins after the reveal has settled. */
-  idleStart: 1400,
+  idleStart: 700,
   /** One breath cycle — slow enough to read as ambience, not as blinking. */
   breathPeriod: 5200,
 } as const;
@@ -146,5 +146,24 @@ export function usecaseRevealTotalMs(): number {
  */
 export function usecaseBreathPhase(index: number): number {
   const hashed = Math.imul(index + 1, 2654435761) >>> 0;
-  return hashed % USECASE_DURATIONS.breathPeriod;
+  /* Capped at HALF the period, not the whole one. Scattering across the full
+     period meant an edge could wait the settle plus a complete cycle before its
+     first light — measured at 6.6s, which is indistinguishable from "there is
+     no animation" to anyone who glances at the page, and it was reported as
+     exactly that. Half still de-synchronises the lines; it just bounds the
+     wait. `usecaseFirstLightMs` is the number the check pins. */
+  return hashed % Math.round(USECASE_DURATIONS.breathPeriod / 2);
+}
+
+/**
+ * The longest any association waits before its first drift — the settle plus
+ * the worst scatter. Pinned by `check:usecase-layout` against a budget, because
+ * "ambient" stops being ambient and becomes "broken" once a reader has looked
+ * away before anything moved.
+ */
+export function usecaseFirstLightMs(): number {
+  return (
+    USECASE_DURATIONS.idleStart +
+    Math.round(USECASE_DURATIONS.breathPeriod / 2)
+  );
 }

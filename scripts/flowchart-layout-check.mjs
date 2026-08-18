@@ -39,7 +39,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:flowchart-layout
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -884,6 +884,55 @@ check(
 );
 
 /* ----------------------------------------------------------------------- */
+
+/* ---- shaped focus rings ---------------------------------------------------- */
+
+/* A CSS `outline` boxes the BOUNDING BOX, always — so a focused ellipse,
+   stadium, diamond or diagonal edge wore a RECTANGLE. Shipped on both canvases
+   and reported as "on focus border should be shaped, not square". The fix is a
+   real SVG ring beside the hit target, revealed by a sibling combinator; these
+   pin both halves, because either alone lets the box back. */
+{
+  const focusSrc = readFileSync(
+    path.join(ROOT, "src/features/flowchart/components/flowchart-diagram.tsx"),
+    "utf8",
+  );
+  const globals = readFileSync(path.join(ROOT, "src/app/globals.css"), "utf8");
+  check(
+    "no focus-visible:outline-* utility survives on an interactive shape — that utility is what drew the rectangle, and it reads as a rendering fault on a canvas made of shapes",
+    !/focus-visible:outline-(?!none)/.test(focusSrc),
+  );
+  /* Pinned as a REAL CSS rule, not as a utility class in the markup. The
+     utility was there and the violet box still shipped: `@layer base` gives
+     every element an outline colour, so the browser's native focus indicator
+     paints in --ring, and a utility that did not take effect looked exactly
+     like a fix. The sequence canvas's rule is the precedent. */
+  check(
+    "a real CSS rule kills the native outline on PLAIN :focus, not only :focus-visible — clicking an SVG element with a tabindex gives it :focus alone, and Chrome still paints outline: auto for that, which is the rounded box that survived the first two attempts at this fix",
+    new RegExp("\\." + "af-flow-hit" + ":focus[,\\s][^{]*\\{[^}]*outline:\\s*none").test(
+      globals,
+    ),
+  );
+  check(
+    "every interactive element also carries outline-none in the markup — belt and braces, and it documents the intent at the call site",
+    (focusSrc.match(/af-flow-hit cursor-pointer focus-visible:outline-none/g) ?? [])
+      .length >= 2,
+  );
+  check(
+    "a shaped .af-flow-ring is emitted for BOTH a node/element and an edge — an edge's ring must follow its path, since a diagonal line's bounding box is a rectangle across half the diagram",
+    (focusSrc.match(/af-flow-ring/g) ?? []).length >= 2,
+  );
+  check(
+    "the ring is revealed by a :focus-visible SIBLING rule and rests at opacity 0 — absent rather than transparent, so it can never take a click or a hit test",
+    /\.af-flow-ring[^{]*\{[^}]*opacity:\s*0/.test(globals) &&
+      new RegExp("\\.af-flow-hit:focus-visible ~ \\.af-flow-ring").test(globals),
+  );
+  check(
+    "the ring paints --ring, the app's focus colour, never a role token — focus is a state, so a focused diagram element must match a focused button",
+    /\.af-flow-ring[\s\S]{0,200}stroke:\s*var\(--ring\)/.test(globals),
+  );
+}
+
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);
