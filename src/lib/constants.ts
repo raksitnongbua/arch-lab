@@ -35,8 +35,15 @@ export const EDITOR_ENABLED: boolean = true;
  * What survives leads with what the thing does and names the two features
  * people arrive for.
  */
+/* NAMES EVERY DOCUMENT KIND, and that is the reason it is right up against the
+   160-character budget the search snippet allows. This one string is the meta
+   description on every route that does not set its own, the OG description, and
+   the sentence an assistant asked "what is arch-lab" is most likely to quote —
+   so a kind missing from here is a kind the product supports and nothing
+   outside the app ever says it supports. "No account." was the phrase that gave
+   way to make room; the pages that need it say it in their own copy. */
 export const APP_DESCRIPTION =
-  "Beautiful, zoomable C4 and sequence diagrams written as plain text and rendered live in your browser. An AI agent can author them over MCP. No account.";
+  "Beautiful, zoomable C4, sequence, flowchart and use-case diagrams written as plain text, rendered live in your browser. An AI agent can author them over MCP.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

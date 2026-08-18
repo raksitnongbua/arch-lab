@@ -48,6 +48,25 @@ grammars are refused by the old parsers with a message naming the right one.
   `include` cycles. `create_share_link` now accepts all four document kinds.
 - Bundled examples of both kinds on `/demo`, with crawlable read-only pages.
 - `Flowchart` and `Use case` starters in the playground's "Start from" row.
+- A home page section naming each of the four notations, every one linking to a
+  worked example in the playground.
+
+### Changed
+
+- The home page's hero cycles through all four document kinds instead of two,
+  each drawn as a real miniature of its own notation.
+- The site described itself as a C4-and-sequence tool everywhere it is quoted —
+  page titles, meta descriptions, the social card, `/llms.txt` and the
+  structured data. All of them now name all four kinds, so a search result and
+  an assistant's answer list what the product actually draws.
+
+### Removed
+
+- The home page's "A diagram you can talk through" section. Presentation is
+  still the selling point; the hero above it now animates four real diagrams and
+  the headline already said it, so the section argued a settled point across
+  half a screen while the page never once said in prose which kinds it draws.
+  That sentence is what took its place.
 
 ### Fixed
 

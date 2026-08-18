@@ -38,12 +38,15 @@ export default function OpenGraphImage() {
       eyebrow=".alab — plain text on disk"
       headline="Architecture diagrams"
       headlineTail="that survive review."
-      footer={`${APP_NAME} · C4 and sequence · no cloud`}
+      footer={`${APP_NAME} · C4 · sequence · flowchart · use case`}
       art={
         /* One node from each kind's illustration, stacked: the card has to
-             say "two document kinds" without becoming a collage, so it shows
-             a C4 container over a message exchange rather than two full
-             miniatures competing for the same 400px. */
+             say "more than one document kind" without becoming a collage, so it
+             shows a C4 container over a message exchange rather than four full
+             miniatures competing for the same 400px. The FOOTER names all four
+             instead — a strip of text scales to a fourth entry where artwork
+             does not, and at OG size a fourth miniature would be unreadable
+             anyway. */
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <OgNode name="Web App" tech="Next.js · SSR" />

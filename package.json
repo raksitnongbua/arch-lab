@@ -71,6 +71,7 @@
     "check:icon-embed": "node scripts/icon-embed-check.mjs",
     "check:icon-contrast": "node scripts/icon-contrast-check.mjs",
     "check:icon-style": "node scripts/icon-style-check.mjs",
+    "check:hero": "node scripts/hero-check.mjs",
     "check:themes": "node scripts/theme-check.mjs",
     "check:og-cards": "node scripts/og-cards-check.mjs",
     "build:skill": "node scripts/build-skill.mjs",

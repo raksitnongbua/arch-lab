@@ -25,7 +25,7 @@ import { APP_NAME } from "@/lib/constants";
 export const metadata: Metadata = {
   title: "MCP server for architecture diagrams (beta)",
   description:
-    "An MCP server for architecture diagrams: let Claude Code, Cursor or any MCP client write C4 and sequence diagrams the real parser has checked. Read-only.",
+    "An MCP server for architecture diagrams: let Claude Code, Cursor or any client write C4, sequence, flowchart and use-case diagrams the real parser has checked.",
   alternates: { canonical: "/mcp" },
 };
 
@@ -73,7 +73,8 @@ function mcpJsonLd(origin: string): string {
     softwareVersion: MCP_STATUS_LABEL,
     description:
       "A Model Context Protocol server that lets an AI agent read, validate " +
-      "and convert arch-lab C4 and sequence documents against the real parser.",
+      "and convert arch-lab C4, sequence, flowchart and use-case documents " +
+      "against the real parser.",
     featureList: MCP_TOOLS.map((tool) => tool.name),
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     isAccessibleForFree: true,

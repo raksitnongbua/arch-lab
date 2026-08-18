@@ -15,30 +15,36 @@ const PostgresqlIcon = ICONS["postgresql"].byStyle.mono;
 const RedisIcon = ICONS["redis"].byStyle.mono;
 
 /**
- * Decorative hero visual: one card that ALTERNATES between the two document
- * kinds this product reads — a miniature Container-level C4 diagram drawn with
- * the editor's real stack icons, and a miniature sequence flow — stacked over
- * two ghost "sheets" that hint at the levels beneath (the Context→Container
- * drill-down). The `C4 / Sequence` labels in its header say which is showing,
- * and the header's LEFT side swaps with them: a level breadcrumb over the C4
- * panel, the flow's own title over the sequence one — a sequence document has
- * no levels, so a breadcrumb left standing over it would be the header
- * asserting something the format cannot express.
+ * Decorative hero visual: one card that CYCLES THROUGH ALL FOUR document kinds
+ * this product reads — a Container-level C4 diagram drawn with the editor's real
+ * stack icons, a sequence flow, a flowchart, and a use-case diagram — stacked
+ * over two ghost "sheets" that hint at the levels beneath (the Context→Container
+ * drill-down). The kind strip in its header says which is showing, and the
+ * header's LEFT side swaps with it: a level breadcrumb over the C4 panel, each
+ * other document's own subtitle over its own panel — only a C4 model has levels,
+ * so a breadcrumb left standing over a flowchart would be the header asserting
+ * something that format cannot express.
  *
- * WHY IT ALTERNATES rather than showing one: the banner is the first thing a
- * reader sees, and a single C4 diagram made the sequence viewer look like a
- * footnote to a C4 product. Naming both kinds in the header without ever
- * showing the second was worse — a switch that never switched.
+ * WHY IT CYCLES rather than showing one: the banner is the first thing a reader
+ * sees, and a single C4 diagram made the other three viewers look like footnotes
+ * to a C4 product. Naming the kinds in the header without ever showing them
+ * would be worse — a switch that never switches. It began as two kinds for
+ * exactly this reason, and grew to four as the flowchart and use-case types
+ * shipped; a kind that exists in the product and not here is the same bug
+ * again.
  *
- * The swap is pure CSS: both panels occupy the same fixed 350×336 box,
- * absolutely positioned, cross-fading on one shared keyframe with the sequence
- * side offset half a cycle (`af-hero-kind` / `af-hero-kind-alt` in
- * globals.css). No timer, no client state, so this stays a SERVER component.
+ * The swap is pure CSS: all four panels occupy the same fixed 350×336 box,
+ * absolutely positioned, cycling on one shared keyframe with each panel after
+ * the first offset by whole quarter-cycles (`af-hero-kind` plus
+ * `af-hero-kind-2/-3/-4` in globals.css). No timer, no client state, so this
+ * stays a SERVER component.
  *
  * Each panel assembles itself on load — sheets settle, boxes land one at a
- * time, connectors draw toward their arrowheads — and the C4 panel then keeps a
- * slow current running along its edges, so the arrows read as traffic rather
- * than decoration. The motion is pure CSS (see the "Hero diagram motion" block
+ * time, connectors draw toward their arrowheads — and then keeps something
+ * moving: the C4 panel runs a slow current along its edges, the other three a
+ * travelling band along theirs, so the arrows read as traffic rather than
+ * decoration. Every panel keeps moving because a still one beside a live one
+ * looks like a screenshot of the product rather than the product. The motion is pure CSS (see the "Hero diagram motion" block
  * in globals.css); this file only owns the choreography, as `animationDelay`
  * values on the elements themselves, so the running order can be read top to
  * bottom here. That keeps the component a server component — no client
@@ -71,6 +77,58 @@ const BEAT = {
 function delay(ms: number): CSSProperties {
   return { animationDelay: `${ms}ms` };
 }
+
+/**
+ * A panel's entrance, for shapes drawn as SVG rather than as HTML boxes.
+ *
+ * `af-hero-node` scales as well as translating, and a CSS `scale()` on an SVG
+ * element takes the SVG's own origin — (0, 0), the panel's top-left corner —
+ * so every shape would swing in from the corner instead of settling in place.
+ * `transform-box: fill-box` re-bases it on the shape's own bounding box, which
+ * is what makes one class serve both the C4 panel's divs and the three SVG
+ * panels' rects.
+ */
+function riseAt(ms: number): CSSProperties {
+  return {
+    animationDelay: `${ms}ms`,
+    transformBox: "fill-box",
+    transformOrigin: "center",
+  };
+}
+
+/**
+ * The four kinds, in cycle order, each paired with the phase class that puts it
+ * at its own quarter of the swap. THE FIRST HAS NO CLASS on purpose: it runs the
+ * bare `af-hero-kind` clock at zero offset, and inventing an `af-hero-kind-1`
+ * that sets `animation-delay: 0s` would be a class whose only job is to restate
+ * the default — and one more place for the set to fall out of step with
+ * globals.css.
+ *
+ * This list is the header strip. The PANELS are written out longhand in the
+ * markup below rather than mapped from it, because each one is a different
+ * component with different artwork; the shared thing is the order, and the order
+ * is here.
+ */
+const KINDS: readonly { name: string; phase: string }[] = [
+  { name: "C4", phase: "" },
+  { name: "Sequence", phase: "af-hero-kind-2" },
+  { name: "Flowchart", phase: "af-hero-kind-3" },
+  { name: "Use case", phase: "af-hero-kind-4" },
+];
+
+/**
+ * What the header says on its left for the three kinds that have no C4 levels:
+ * the document's own name, and the one count that tells you its size. The C4
+ * breadcrumb is written out in the markup instead of living here, because it is
+ * not a name and a count — it is two altitudes and a separator, and flattening it
+ * into this shape would lose the lit `L2 Container` pill that says which level
+ * the diagram below is actually drawn at.
+ */
+const SUBTITLES: readonly { name: string; meta: string; phase: string }[] = [
+  { name: "Place an order", meta: "4 participants", phase: "af-hero-kind-2" },
+  { name: "Order fulfilment", meta: "6 steps", phase: "af-hero-kind-3" },
+  { name: "Food delivery", meta: "2 actors", phase: "af-hero-kind-4" },
+];
 
 export function HeroDiagram({ className }: { className?: string }) {
   return (
@@ -150,73 +208,101 @@ export function HeroDiagram({ className }: { className?: string }) {
                 L2 Container
               </span>
             </p>
-            {/* The sequence half names the FLOW, because that is what a
-                sequence document has where a C4 model has a level — its title
-                is the one thing the real viewer stamps above the lifelines. */}
-            {/* NO INLINE `delay()` ON THIS ELEMENT, and that is load-bearing:
-                `af-hero-kind-alt` is nothing but an `animation-delay: -8.5s`,
-                the half-cycle offset that makes this the OTHER side of the
-                swap. An inline `animationDelay` wins over the class, so a
-                staged entrance here silently put both halves on the same
-                phase and printed the C4 breadcrumb and the flow title over
-                each other. The children carry the entrance instead — they
-                have no swap clock of their own to overwrite. */}
-            <p className="af-hero-kind af-hero-kind-alt col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 font-mono text-[10px]">
-              <span
-                style={delay(BEAT.header)}
-                className="af-hero-fade truncate text-muted-foreground"
+            {/* The other three name the DOCUMENT, because that is what they
+                have where a C4 model has a level: a sequence flow's title, a
+                flowchart's name, a use-case system's boundary. Each is the one
+                thing the real viewer stamps above that kind of diagram. */}
+            {/* NO INLINE `delay()` ON THESE ELEMENTS, and that is load-bearing:
+                `af-hero-kind-2/-3/-4` are nothing but an `animation-delay`,
+                the quarter-cycle offset that puts each one at its own point in
+                the cycle. An inline `animationDelay` wins over the class, so a
+                staged entrance here silently put two halves on the same phase
+                and printed the C4 breadcrumb and the flow title over each
+                other. That shipped once. The children carry the entrance
+                instead — they have no swap clock of their own to overwrite,
+                and `check:hero` now fails if this file grows one back. */}
+            {SUBTITLES.map((subtitle) => (
+              <p
+                key={subtitle.name}
+                className={cn(
+                  "af-hero-kind col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 font-mono text-[10px]",
+                  subtitle.phase,
+                )}
               >
-                Place an order
-              </span>
-              <span
-                style={delay(BEAT.header + 60)}
-                className="af-hero-fade shrink-0 text-muted-foreground/50"
-              >
-                ·
-              </span>
-              <span
-                style={delay(BEAT.header + 120)}
-                className="af-hero-fade shrink-0 text-muted-foreground/70"
-              >
-                4 participants
-              </span>
-            </p>
+                <span
+                  style={delay(BEAT.header)}
+                  className="af-hero-fade truncate text-muted-foreground"
+                >
+                  {subtitle.name}
+                </span>
+                <span
+                  style={delay(BEAT.header + 60)}
+                  className="af-hero-fade shrink-0 text-muted-foreground/50"
+                >
+                  ·
+                </span>
+                <span
+                  style={delay(BEAT.header + 120)}
+                  className="af-hero-fade shrink-0 text-muted-foreground/70"
+                >
+                  {subtitle.meta}
+                </span>
+              </p>
+            ))}
           </div>
-          {/* The document KINDS, and which one is on screen. These are not
-              decoration and not a control: the card ALTERNATES between a C4
-              diagram and a sequence flow, and each label lights while its panel
-              is showing. They used to sit here as a static pair — which read as
-              a switch that never switched, and rightly got called out.
+          {/* The document KINDS, and which one is on screen. Not decoration and
+              not a control: the card cycles through four diagrams, and this says
+              how many there are and where in the set you are.
 
-              Each label is layered: a muted base that is always there, with the
-              lit copy on top running the same swap keyframe as its panel. That
-              keeps the two in lockstep by construction and needs no colour
-              keyframes.
+              IT WAS FOUR NAMED PILLS, one per kind, greyed until its turn —
+              which is the honest design and does not fit. Four names in a
+              10px mono strip is ~206px, and the breadcrumb beside it wants
+              ~160px inside a 384px card: the two collided. Widening the card
+              to fit a legend would be letting the label set the size of the
+              artwork.
 
-              THE PILL'S PADDING LIVES ON THE WRAPPER, not as a negative margin
-              on the overlay. The lit copy used to be `absolute inset-0` pulled
-              out with `-mx-1.5`, which made it 6px wider than its slot on each
-              side — exactly the `gap-1.5` between the two labels. So whenever
-              one lit up, its pill closed the gap and sat flush against the
-              other word. Padding the wrapper instead means the pill is the
-              size of the box it is in, the gap is real space between two
-              padded boxes, and the two can never touch however the words
-              change length. */}
+              So the SET became dots and the NAME became singular. Four dots
+              answers "how many kinds" in 28px, the lit one answers "which",
+              and the name spells that one out. Every lit element runs the same
+              swap keyframe as its own panel, so dot, name and diagram cannot
+              disagree — there are no colour keyframes and nothing to
+              synchronise by hand.
+
+              The names share ONE GRID CELL, so the strip is as wide as the
+              longest of them and never resizes mid-cycle. `visibility: hidden`
+              still occupies its grid area, which is exactly why that is the
+              property the swap uses. */}
           <p
             style={delay(BEAT.header + 180)}
             className="af-hero-fade flex shrink-0 items-center gap-2 font-mono text-[10px]"
           >
-            <span className="relative rounded px-1.5 py-0.5">
-              <span className="text-muted-foreground/60">C4</span>
-              <span className="af-hero-kind absolute inset-0 rounded bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
-                C4
-              </span>
+            <span className="flex items-center gap-1">
+              {KINDS.map((kind) => (
+                <span
+                  key={kind.name}
+                  className="relative grid size-1.5 place-items-center rounded-full bg-muted-foreground/30"
+                >
+                  <span
+                    className={cn(
+                      "af-hero-kind absolute inset-0 rounded-full bg-primary",
+                      kind.phase,
+                    )}
+                  />
+                </span>
+              ))}
             </span>
-            <span className="relative rounded px-1.5 py-0.5">
-              <span className="text-muted-foreground/60">Sequence</span>
-              <span className="af-hero-kind af-hero-kind-alt absolute inset-0 rounded bg-accent/15 px-1.5 py-0.5 font-medium text-accent">
-                Sequence
-              </span>
+            <span className="grid">
+              {KINDS.map((kind) => (
+                <span
+                  key={kind.name}
+                  className={cn(
+                    "af-hero-kind col-start-1 row-start-1 text-right font-medium text-primary",
+                    kind.phase,
+                  )}
+                >
+                  {kind.name}
+                </span>
+              ))}
             </span>
           </p>
         </div>
@@ -273,9 +359,15 @@ export function HeroDiagram({ className }: { className?: string }) {
             />
           </div>
 
-          {/* The other kind, same box, offset half a cycle. */}
-          <div className="af-hero-kind af-hero-kind-alt absolute inset-0">
+          {/* The other three kinds, same box, each offset whole quarters. */}
+          <div className="af-hero-kind af-hero-kind-2 absolute inset-0">
             <SequencePanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-3 absolute inset-0">
+            <FlowchartPanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-4 absolute inset-0">
+            <UseCasePanel />
           </div>
         </div>
       </div>
@@ -408,7 +500,7 @@ function SequencePanel() {
                   style={delay(
                     SEQ_BEAT.steps + index * SEQ_BEAT.stepGap + BEAT.drawMs,
                   )}
-                  className="af-hero-seq-flow"
+                  className="af-hero-trace"
                   d={`M ${from} ${step.y} L ${tip} ${step.y}`}
                   pathLength={100}
                   stroke={`var(--seq-lane-${step.from + 1})`}
@@ -465,6 +557,570 @@ function SequencePanel() {
         );
       })}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The flowchart panel                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The card's third face: a miniature flowchart, in the same fixed 350×336 space
+ * as the panels either side of it.
+ *
+ * SIX NODES, and the count is the point: it is the smallest chart that shows all
+ * of what makes this a flowchart rather than a box-and-arrow drawing — both
+ * terminators, a guarded decision that actually branches, a symbol on each of the
+ * two branches, the branches rejoining, and a loop hooking back up the flank. Cut
+ * any one of those and it stops being recognisable as the notation; add a rank
+ * and the labels stop fitting at this size.
+ *
+ * The SILHOUETTES are drawn here rather than imported from
+ * `features/flowchart/lib/shapes.ts`, which is a deliberate exception to the rule
+ * the icons follow. That module's geometry is driven by the real layout engine —
+ * measured text, computed ranks, orthogonal routing — and none of that exists on
+ * a marketing page with six hardcoded positions. What is shared is the thing
+ * that would actually be wrong if it drifted: the COLOURS, every one a
+ * `--flow-*` token, so a theme that repaints the product repaints the hero and
+ * `check:flowchart-palette` still governs the contrast.
+ */
+
+type MiniFlowShape = "start" | "end" | "step" | "decision" | "io" | "call";
+
+const FLOW_NODES: readonly {
+  id: string;
+  shape: MiniFlowShape;
+  label: string;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+}[] = [
+  {
+    id: "placed",
+    shape: "start",
+    label: "Order placed",
+    cx: 140,
+    cy: 24,
+    w: 122,
+    h: 32,
+  },
+  {
+    id: "validate",
+    shape: "step",
+    label: "Validate cart",
+    cx: 140,
+    cy: 88,
+    w: 128,
+    h: 36,
+  },
+  {
+    id: "stock",
+    shape: "decision",
+    label: "In stock?",
+    cx: 140,
+    cy: 154,
+    w: 132,
+    h: 56,
+  },
+  {
+    id: "reserve",
+    shape: "io",
+    label: "Reserve items",
+    cx: 76,
+    cy: 232,
+    w: 128,
+    h: 36,
+  },
+  {
+    id: "backorder",
+    shape: "call",
+    label: "Back-order",
+    cx: 250,
+    cy: 232,
+    w: 120,
+    h: 36,
+  },
+  {
+    id: "confirmed",
+    shape: "end",
+    label: "Confirmed",
+    cx: 140,
+    cy: 306,
+    w: 122,
+    h: 32,
+  },
+];
+
+/**
+ * The connectors, orthogonal with rounded corners, exactly as the real renderer
+ * routes them. `trace` marks the HAPPY PATH — the four edges the ambient band
+ * retraces once everything has arrived, which is the same choice the real
+ * viewer's idle pulse makes: the resting motion follows the route the chart is
+ * about, not every line on it. Running a band down all seven would light the
+ * failure branch and the retry loop as busily as the path that succeeds.
+ *
+ * `head` is absent on the second edge into the end terminator: both arrive at the
+ * same point, so two arrowheads would be two copies of one triangle.
+ */
+const FLOW_EDGES: readonly {
+  id: string;
+  d: string;
+  head?: { x: number; y: number; dir: "down" | "left" };
+  trace?: true;
+}[] = [
+  {
+    id: "placed-validate",
+    d: "M 140 40 V 70",
+    head: { x: 140, y: 70, dir: "down" },
+    trace: true,
+  },
+  {
+    id: "validate-stock",
+    d: "M 140 106 V 126",
+    head: { x: 140, y: 126, dir: "down" },
+    trace: true,
+  },
+  {
+    id: "stock-reserve",
+    d: "M 140 182 V 192 Q 140 200 132 200 H 84 Q 76 200 76 208 V 214",
+    head: { x: 76, y: 214, dir: "down" },
+    trace: true,
+  },
+  {
+    id: "stock-backorder",
+    d: "M 206 154 H 242 Q 250 154 250 162 V 214",
+    head: { x: 250, y: 214, dir: "down" },
+  },
+  {
+    id: "reserve-confirmed",
+    d: "M 76 250 V 274 Q 76 282 84 282 H 132 Q 140 282 140 290",
+    head: { x: 140, y: 290, dir: "down" },
+    trace: true,
+  },
+  {
+    id: "backorder-confirmed",
+    d: "M 250 250 V 274 Q 250 282 242 282 H 148 Q 140 282 140 290",
+  },
+  {
+    id: "backorder-validate",
+    d: "M 310 232 H 322 Q 330 232 330 224 V 96 Q 330 88 322 88 H 204",
+    head: { x: 204, y: 88, dir: "left" },
+  },
+];
+
+/** Guard labels, beside the segment each one governs — never on top of it. */
+const FLOW_GUARDS: readonly { label: string; x: number; y: number }[] = [
+  { label: "yes", x: 108, y: 193 },
+  { label: "no", x: 224, y: 147 },
+  { label: "retry", x: 272, y: 81 },
+];
+
+/** Beats for the flowchart panel, mirroring BEAT's shape. */
+const FLOW_BEAT = {
+  nodes: 420,
+  nodeGap: 80,
+  edges: 540,
+  edgeGap: 80,
+  trace: 1900,
+  traceGap: 170,
+} as const;
+
+/** One node's silhouette — the classic symbol, in its shape's own colours. */
+function MiniFlowShapeOutline({
+  node,
+  delayMs,
+}: {
+  node: (typeof FLOW_NODES)[number];
+  delayMs: number;
+}) {
+  const { cx, cy, w, h, shape } = node;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  const fill = `var(--flow-${shape})`;
+  const stroke = `var(--flow-${shape}-border)`;
+  const common = {
+    className: "af-hero-node",
+    style: riseAt(delayMs),
+    fill,
+    stroke,
+    strokeWidth: 1.25,
+  };
+
+  if (shape === "decision") {
+    return (
+      <path
+        {...common}
+        d={`M ${cx} ${y} L ${x + w} ${cy} L ${cx} ${y + h} L ${x} ${cy} Z`}
+      />
+    );
+  }
+
+  if (shape === "io") {
+    // The parallelogram's slant, in user units. Matched to the real symbol's
+    // proportions rather than picked: a shallower one stops reading as input.
+    const slant = 11;
+    return (
+      <path
+        {...common}
+        d={`M ${x + slant} ${y} H ${x + w} L ${x + w - slant} ${y + h} H ${x} Z`}
+      />
+    );
+  }
+
+  return (
+    <>
+      <rect
+        {...common}
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        // A terminator is a stadium — fully round ends. Everything else keeps
+        // the product's own 8px box corner.
+        rx={shape === "start" || shape === "end" ? h / 2 : 8}
+      />
+      {/* `call`'s double-struck rails: the one shape whose meaning ("defined
+          elsewhere") lives in a marking rather than in an outline. */}
+      {shape === "call" ? (
+        <path
+          className="af-hero-node"
+          style={riseAt(delayMs)}
+          d={`M ${x + 6} ${y} V ${y + h} M ${x + w - 6} ${y} V ${y + h}`}
+          stroke={stroke}
+          strokeWidth={1.25}
+          fill="none"
+        />
+      ) : null}
+    </>
+  );
+}
+
+function FlowchartPanel() {
+  return (
+    <svg
+      viewBox="0 0 350 336"
+      fill="none"
+      className="absolute inset-0 h-full w-full"
+    >
+      {/* Connectors UNDER the symbols, so a line that stops a hair inside a
+          node's outline is hidden by it rather than crossing into the label. */}
+      <g stroke="var(--edge)" strokeWidth={1.4} strokeLinecap="round">
+        {FLOW_EDGES.map((edge, index) => (
+          <path
+            key={edge.id}
+            className="af-hero-edge"
+            style={delay(FLOW_BEAT.edges + index * FLOW_BEAT.edgeGap)}
+            d={edge.d}
+            pathLength={1}
+          />
+        ))}
+      </g>
+
+      {FLOW_EDGES.map((edge, index) =>
+        edge.head === undefined ? null : (
+          <path
+            key={edge.id}
+            className="af-hero-fade"
+            style={delay(
+              FLOW_BEAT.edges + index * FLOW_BEAT.edgeGap + BEAT.drawMs,
+            )}
+            d={
+              edge.head.dir === "down"
+                ? `M ${edge.head.x} ${edge.head.y} l -4 -7 h 8 Z`
+                : `M ${edge.head.x} ${edge.head.y} l 7 -4 v 8 Z`
+            }
+            fill="var(--edge)"
+          />
+        ),
+      )}
+
+      {/* The ambient band, over the finished line. `pathLength=100` makes the
+          9/91 dash a percentage, so one keyframe fits every span however the
+          route bends — the same trick the sequence panel's calls use. */}
+      {FLOW_EDGES.filter((edge) => edge.trace).map((edge, index) => (
+        <path
+          key={edge.id}
+          className="af-hero-trace"
+          style={delay(FLOW_BEAT.trace + index * FLOW_BEAT.traceGap)}
+          d={edge.d}
+          pathLength={100}
+          stroke="var(--primary)"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+        />
+      ))}
+
+      {FLOW_NODES.map((node, index) => {
+        const delayMs = FLOW_BEAT.nodes + index * FLOW_BEAT.nodeGap;
+        return (
+          <g key={node.id}>
+            <MiniFlowShapeOutline node={node} delayMs={delayMs} />
+            {/* `--node-foreground`, not `--foreground`: this text sits ON a role
+                fill, and that is the token whose contrast against those fills is
+                the measured one. */}
+            <text
+              className="af-hero-fade font-medium"
+              style={delay(delayMs + 120)}
+              x={node.cx}
+              y={node.cy}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={11}
+              fill="var(--node-foreground)"
+            >
+              {node.label}
+            </text>
+          </g>
+        );
+      })}
+
+      {FLOW_GUARDS.map((guard, index) => (
+        <text
+          key={guard.label}
+          className="af-hero-fade font-mono"
+          style={delay(FLOW_BEAT.edges + BEAT.drawMs + index * 120)}
+          x={guard.x}
+          y={guard.y}
+          textAnchor="middle"
+          fontSize={9}
+          fill="var(--muted-foreground)"
+        >
+          {guard.label}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The use-case panel                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The card's fourth face: a miniature use-case diagram, same fixed 350×336 box.
+ *
+ * The three things this notation means and no other kind can say, all present:
+ * actors OUTSIDE a system boundary, use cases INSIDE it, and an `«include»`
+ * between two cases. The boundary is why the actors sit in a column on the left
+ * with nothing drawn around them — "outside" is the whole statement, and a
+ * use-case document that cannot express it is a labelled ellipse chart.
+ *
+ * Associations are UNDIRECTED, so they carry no arrowhead; the `«include»`
+ * carries an open one and draws dashed. That split is the notation's, not a
+ * shorthand: a solid head on an association would claim a direction the format
+ * has no way to record.
+ */
+const UC_CASES: readonly { id: string; label: string; cy: number }[] = [
+  { id: "browse", label: "Browse menu", cy: 88 },
+  { id: "order", label: "Place order", cy: 148 },
+  { id: "pay", label: "Pay by card", cy: 208 },
+  { id: "track", label: "Track order", cy: 268 },
+];
+
+const UC_ACTORS: readonly { id: string; name: string; cy: number }[] = [
+  { id: "customer", name: "Customer", cy: 112 },
+  { id: "courier", name: "Courier", cy: 250 },
+];
+
+/**
+ * Associations, each landing on its ellipse's LEFT EXTREME and arriving
+ * horizontally. Solving the real line-to-ellipse intersection would be the
+ * honest geometry and is not worth it at six hardcoded positions: a curve that
+ * flattens into the extreme point touches the outline exactly, at every
+ * rendering, with no arithmetic to get wrong.
+ */
+const UC_LINKS: readonly { id: string; d: string }[] = [
+  { id: "customer-browse", d: "M 56 106 C 100 100 108 88 139 88" },
+  { id: "customer-order", d: "M 56 120 C 104 134 110 148 139 148" },
+  { id: "courier-track", d: "M 56 254 C 100 260 112 268 139 268" },
+];
+
+/** Beats for the use-case panel, mirroring BEAT's shape. */
+const UC_BEAT = {
+  boundary: 400,
+  actors: 480,
+  actorGap: 90,
+  cases: 560,
+  caseGap: 85,
+  links: 900,
+  linkGap: 110,
+  include: 1240,
+  trace: 1900,
+  traceGap: 240,
+} as const;
+
+/** The classic stick actor, centred on `cy` with its name beneath. */
+function MiniActor({
+  actor,
+  delayMs,
+}: {
+  actor: (typeof UC_ACTORS)[number];
+  delayMs: number;
+}) {
+  const { cy } = actor;
+  return (
+    <g>
+      <g
+        className="af-hero-node"
+        style={riseAt(delayMs)}
+        stroke="var(--uc-actor-border)"
+        strokeWidth={1.4}
+        strokeLinecap="round"
+      >
+        <circle cx={40} cy={cy - 17} r={6} fill="var(--uc-actor)" />
+        <path
+          d={`M 40 ${cy - 11} V ${cy + 7} M 29 ${cy - 4} H 51 M 40 ${cy + 7} L 31 ${cy + 20} M 40 ${cy + 7} L 49 ${cy + 20}`}
+          fill="none"
+        />
+      </g>
+      <text
+        className="af-hero-fade font-mono"
+        style={delay(delayMs + 140)}
+        x={40}
+        y={cy + 33}
+        textAnchor="middle"
+        fontSize={9}
+        fill="var(--muted-foreground)"
+      >
+        {actor.name}
+      </text>
+    </g>
+  );
+}
+
+function UseCasePanel() {
+  return (
+    <svg
+      viewBox="0 0 350 336"
+      fill="none"
+      className="absolute inset-0 h-full w-full"
+    >
+      {/* The system boundary. Drawn first and filled with the canvas colour, so
+          the cases inside sit on the system rather than on the card. */}
+      <rect
+        className="af-hero-node"
+        style={riseAt(UC_BEAT.boundary)}
+        x={96}
+        y={20}
+        width={242}
+        height={296}
+        rx={16}
+        fill="var(--canvas)"
+        stroke="var(--border)"
+        strokeWidth={1.25}
+      />
+      <text
+        className="af-hero-fade font-mono"
+        style={delay(UC_BEAT.boundary + 140)}
+        x={110}
+        y={41}
+        fontSize={10}
+        fill="var(--muted-foreground)"
+      >
+        Food Delivery
+      </text>
+
+      <g stroke="var(--edge)" strokeWidth={1.4} strokeLinecap="round">
+        {UC_LINKS.map((link, index) => (
+          <path
+            key={link.id}
+            className="af-hero-edge"
+            style={delay(UC_BEAT.links + index * UC_BEAT.linkGap)}
+            d={link.d}
+            pathLength={1}
+          />
+        ))}
+      </g>
+
+      {/* Associations keep a band running once drawn — the same reason the
+          sequence panel's calls do. A use-case diagram has no motion of its own
+          to borrow, and a perfectly still panel between three moving ones reads
+          as the card having stopped. */}
+      {UC_LINKS.map((link, index) => (
+        <path
+          key={link.id}
+          className="af-hero-trace"
+          style={delay(UC_BEAT.trace + index * UC_BEAT.traceGap)}
+          d={link.d}
+          pathLength={100}
+          stroke="var(--primary)"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+        />
+      ))}
+
+      {UC_CASES.map((useCase, index) => {
+        const delayMs = UC_BEAT.cases + index * UC_BEAT.caseGap;
+        return (
+          <g key={useCase.id}>
+            <ellipse
+              className="af-hero-node"
+              style={riseAt(delayMs)}
+              cx={217}
+              cy={useCase.cy}
+              rx={78}
+              ry={24}
+              fill="var(--uc-usecase)"
+              stroke="var(--uc-usecase-border)"
+              strokeWidth={1.25}
+            />
+            <text
+              className="af-hero-fade font-medium"
+              style={delay(delayMs + 120)}
+              x={217}
+              y={useCase.cy}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={11}
+              fill="var(--node-foreground)"
+            >
+              {useCase.label}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* `«include»` — dashed, open-headed, and between the two ADJACENT cases,
+          which is the only reason it can be a short straight line: a dependency
+          between rows two apart would have to route around the one between them
+          and would stop reading as a relationship at this size. */}
+      <path
+        className="af-hero-fade"
+        style={delay(UC_BEAT.include)}
+        d="M 217 172 V 179"
+        stroke="var(--edge)"
+        strokeWidth={1.4}
+        strokeDasharray="4 3"
+      />
+      <path
+        className="af-hero-fade"
+        style={delay(UC_BEAT.include + 120)}
+        d="M 217 184 l -4 -6 M 217 184 l 4 -6"
+        stroke="var(--edge)"
+        strokeWidth={1.2}
+        strokeLinecap="round"
+        fill="none"
+      />
+      <text
+        className="af-hero-fade font-mono"
+        style={delay(UC_BEAT.include + 200)}
+        x={228}
+        y={181}
+        fontSize={9}
+        fill="var(--muted-foreground)"
+      >
+        «include»
+      </text>
+
+      {UC_ACTORS.map((actor, index) => (
+        <MiniActor
+          key={actor.id}
+          actor={actor}
+          delayMs={UC_BEAT.actors + index * UC_BEAT.actorGap}
+        />
+      ))}
+    </svg>
   );
 }
 

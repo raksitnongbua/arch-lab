@@ -27,8 +27,14 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+/* The title has to name the CATEGORY someone searches for, and there are now
+   four of them — which will not fit in the ~60 characters a result shows. So it
+   names the two people search by name ("C4 diagram tool", "sequence diagram as
+   text") and then the general word that covers all four, rather than truncating
+   a list of four mid-way. The full set is named in the page copy and in the
+   structured data, where there is room for it. */
 const DEFAULT_TITLE = EDITOR_ENABLED
-  ? `${APP_NAME} — C4 and sequence diagram editor`
+  ? `${APP_NAME} — C4, sequence and flowchart editor`
   : `${APP_NAME} — C4 and sequence diagrams as text`;
 
 export const metadata: Metadata = {
