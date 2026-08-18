@@ -53,6 +53,11 @@ grammars are refused by the old parsers with a message naming the right one.
 
 ### Changed
 
+- The dark theme — the default — is a dark grey (`#22242a`) rather than a
+  near-black with a violet cast. The canvas, node fills, borders and edges were
+  re-solved around the new ground, so every measured contrast pair still clears
+  its minimum, and the social card matches the page a click lands on. Brand
+  colour is unchanged.
 - The home page's hero cycles through all four document kinds instead of two,
   each drawn as a real miniature of its own notation.
 - The site described itself as a C4-and-sequence tool everywhere it is quoted —

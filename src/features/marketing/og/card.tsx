@@ -24,13 +24,21 @@
  * (`enableSystem={false}`), so the card matches the page a click lands on.
  */
 
-/* Dark-theme tokens, sRGB approximations of the oklch() values. */
+/* Dark-theme tokens, and no longer approximations: every hex below is the EXACT
+   sRGB conversion of the token it names in `globals.css`.
+   They used to be hand-lifted well above their tokens — `#1b1b23` where
+   `--background` converted to `#0b0d13` — because a card that renders near-black
+   in a social feed looks broken rather than dark, and the old ground was a
+   near-black. The dark theme's ground is now #22242a, a real dark grey, so the
+   lift has nothing left to compensate for and the approximation is gone with it.
+   That matters beyond tidiness: an approximation is a second set of values to
+   re-eyeball every time the theme moves, and this is the second time it moved. */
 export const OG = {
-  background: "#1b1b23",
-  card: "#232330",
-  border: "#3c3c4d",
-  foreground: "#f2f2f8",
-  muted: "#a3a3b5",
+  background: "#22242a",
+  card: "#2d2f35",
+  border: "#45484e",
+  foreground: "#f0f2f5",
+  muted: "#a2a4ac",
   primary: "#9d8cff",
   accent: "#4fd6e4",
   /** The sequence lanes, verbatim from `--seq-lane-*` (already hex there). */

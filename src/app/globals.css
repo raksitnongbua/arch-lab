@@ -233,25 +233,66 @@
   --node-stroke: var(--node-border);
 }
 
-/* --- Theme: dark (the intentional default) ------------------------------- */
+/* --- Theme: dark (the intentional default) -------------------------------
+   DARK GREY at #22242a, which is `oklch(0.261 0.0116 271)` — the exact colour
+   this ground was asked for, converted rather than eyeballed, and it round-trips
+   back to that hex.
+   IT WAS #0b0d13, a near-black at L 0.16. Same hue family, a tenth of a
+   lightness step lower and a shade more chroma; what changed is that the ground
+   is now recognisably GREY rather than reading as black. Everything neutral in
+   this block sits at chroma 0.0116 and hue 271, taken from the anchor, so the
+   ramp has one tint rather than a drift of three.
+
+   THE RAMP LIFTED, THE INK DID NOT, and that tension is the whole design of
+   what follows. Ink is already at L 0.96 with nowhere to go, so a ground that
+   rises by 0.10 spends contrast that cannot be earned back. Every offset from
+   the anchor is therefore the one the audited ramp already had — canvas −0.061,
+   card +0.045, secondary +0.10, border +0.14 — except where a pair would have
+   fallen through its floor:
+
+     - THE NODE FILLS ROSE ONLY +0.03, not the ground's +0.10. Lifting them in
+       step put `--node-meta` at 4.0:1 over the wash's top stop, under the 4.5:1
+       a technology line needs, and the node title at 6.7:1 under its 7:1. A
+       coloured fill is legible before it is separated from the surface, so the
+       fills stayed low and their borders brightened instead.
+     - THE CANVAS IS FURTHER BELOW THE CHROME than it used to be — 0.061 rather
+       than 0.025 — which follows from the above rather than being chosen. The
+       diagram well now reads as clearly inset instead of nearly flush. That is
+       the one visible consequence of the new ground, and it is the right way
+       round: a canvas that tracked the chrome all the way up would have taken
+       the node fills with it.
+     - `--node-border` and every role border rose ~0.02 to hold ≥3:1 against
+       their own lifted fills.
+
+   Brand colour is UNTOUCHED: `--primary`, `--accent`, `--ring`, `--selection`,
+   the five sequence lanes. `--primary` measures 4.99:1 on the new ground against
+   a 3:1 minimum, so nothing forced a change, and a ground swap is not a reason
+   to move the one colour people recognise the product by.
+
+   THE RATIOS BELOW WERE ALL RE-MEASURED for this ramp, including the wash's top
+   stop, by the same oklch → linear-sRGB maths `scripts/lib/oklch.mjs` gives
+   `pnpm check:themes`. They sit within ~0.06 of the figures the original audit
+   recorded for the same untouched pairs, which is the reproduction error between
+   that script and this one — read them as accurate to a tenth, not to the second
+   decimal. `check:themes` re-measures the pairs it owns on every run. */
 .dark {
-  --background: oklch(0.16 0.014 275);
-  --foreground: oklch(0.96 0.006 275);
+  --background: oklch(0.261 0.0116 271);
+  --foreground: oklch(0.96 0.005 271);
 
-  --card: oklch(0.205 0.018 275);
-  --card-foreground: oklch(0.96 0.006 275);
+  --card: oklch(0.306 0.0116 271);
+  --card-foreground: oklch(0.96 0.005 271);
 
-  --popover: oklch(0.205 0.018 275);
-  --popover-foreground: oklch(0.96 0.006 275);
+  --popover: oklch(0.306 0.0116 271);
+  --popover-foreground: oklch(0.96 0.005 271);
 
   --primary: oklch(0.68 0.19 285);
   --primary-foreground: oklch(0.16 0.03 285);
 
-  --secondary: oklch(0.26 0.02 275);
-  --secondary-foreground: oklch(0.94 0.006 275);
+  --secondary: oklch(0.361 0.0116 271);
+  --secondary-foreground: oklch(0.94 0.005 271);
 
-  --muted: oklch(0.26 0.02 275);
-  --muted-foreground: oklch(0.7 0.018 275);
+  --muted: oklch(0.361 0.0116 271);
+  --muted-foreground: oklch(0.72 0.012 271);
 
   --accent: oklch(0.78 0.13 195);
   --accent-foreground: oklch(0.18 0.03 195);
@@ -265,55 +306,62 @@
   --warning: oklch(0.82 0.15 80);
   --warning-foreground: oklch(0.2 0.04 80);
 
-  --border: oklch(0.3 0.02 275);
-  --input: oklch(0.3 0.02 275);
+  --border: oklch(0.401 0.0116 271);
+  --input: oklch(0.401 0.0116 271);
   --ring: oklch(0.68 0.19 285);
 
-  --canvas: oklch(0.135 0.014 275);
-  --canvas-grid: oklch(0.245 0.018 275);
-  --node: oklch(0.215 0.02 275);
-  --node-foreground: oklch(0.96 0.006 275);
-  /* ≥3:1 against --node (measured 3.61:1; was L 0.33 at 1.43:1). */
-  --node-border: oklch(0.55 0.024 275);
+  /* The diagram well, deliberately below the chrome — see the header on why the
+     gap widened rather than tracking the ground up. */
+  --canvas: oklch(0.2 0.0116 271);
+  --canvas-grid: oklch(0.31 0.0116 271);
+  --node: oklch(0.245 0.0116 271);
+  --node-foreground: oklch(0.96 0.005 271);
+  /* ≥3:1 against --node (measured 3.74:1; L 0.55 on the lifted fill was 2.9). */
+  --node-border: oklch(0.575 0.016 271);
   /* Secondary text on node fills (light block has the design notes). */
-  --node-meta: oklch(0.79 0.02 275);
+  --node-meta: oklch(0.79 0.012 271);
 
   /* Dark counterparts of the per-role node colours (light block has the
-     design notes). Fills carry real chroma at L≈0.30; borders brighten to
-     L≈0.66 so each card reads as a lit, coloured object on the dark canvas.
-     Ratios (audit script): name is --node-foreground vs fill, meta is
-     --node-meta vs fill, border vs its own fill. */
-  /* name 11.93:1, meta 6.95:1, border 4.46:1 (wash-top: 9.82 / 5.72 / 3.67) */
-  --node-person: oklch(0.31 0.07 295);
-  --node-person-border: oklch(0.68 0.14 295);
-  /* name 11.82:1, meta 6.88:1, border 4.48:1 (wash-top: 9.78 / 5.70 / 3.71) */
-  --node-internal: oklch(0.305 0.06 250);
-  --node-internal-border: oklch(0.67 0.12 250);
-  /* name 14.80:1, meta 8.62:1, border 3.44:1 (no wash — external stays matte) */
-  --node-external: oklch(0.235 0.012 265);
-  --node-external-border: oklch(0.55 0.024 275);
-  /* name 11.78:1, meta 6.86:1, border 4.50:1 (wash-top: 9.73 / 5.67 / 3.72) */
-  --node-database: oklch(0.3 0.055 195);
-  --node-database-border: oklch(0.66 0.11 195);
-  /* name 11.59:1, meta 6.75:1, border 4.57:1 (wash-top: 9.53 / 5.55 / 3.76) */
-  --node-queue: oklch(0.305 0.055 150);
-  --node-queue-border: oklch(0.67 0.11 150);
+     design notes). Fills carry real chroma at L≈0.33; borders brighten to
+     L≈0.69 so each card reads as a lit, coloured object on the dark canvas.
+     Ratios: name is --node-foreground vs fill, meta is --node-meta vs fill,
+     border vs its own fill; wash-top is the same three against the gradient's
+     deepest stop, which is the worst case for text. */
+  /* name 10.94:1, meta 6.32:1, border 4.31:1 (wash-top: 8.79 / 5.08 / 3.47) */
+  --node-person: oklch(0.335 0.072 295);
+  --node-person-border: oklch(0.695 0.145 295);
+  /* name 10.90:1, meta 6.29:1, border 4.37:1 (wash-top: 8.72 / 5.04 / 3.49) */
+  --node-internal: oklch(0.33 0.062 250);
+  --node-internal-border: oklch(0.685 0.125 250);
+  /* name 13.66:1, meta 7.89:1, border 3.52:1 (no wash — external stays matte) */
+  --node-external: oklch(0.265 0.0116 271);
+  --node-external-border: oklch(0.575 0.016 271);
+  /* name 10.79:1, meta 6.23:1, border 4.33:1 (wash-top: 8.63 / 4.99 / 3.46) */
+  --node-database: oklch(0.325 0.058 195);
+  --node-database-border: oklch(0.675 0.115 195);
+  /* name 10.59:1, meta 6.12:1, border 4.42:1 (wash-top: 8.44 / 4.87 / 3.52) */
+  --node-queue: oklch(0.33 0.058 150);
+  --node-queue-border: oklch(0.685 0.115 150);
 
   /* Flowchart shape colours (the light block carries the design notes; the
      start/step/io/call aliases live once in :root and resolve to THIS
      theme's role tokens on their own). */
-  /* name 12.22:1, meta 7.09:1, border 4.47:1 (wash-top: 9.90 / 5.74 / 3.62) */
-  --flow-end: oklch(0.305 0.055 345);
-  --flow-end-border: oklch(0.68 0.13 345);
-  /* name 11.96:1, meta 6.94:1, border 4.61:1 (wash-top: 9.62 / 5.58 / 3.71) */
-  --flow-decision: oklch(0.305 0.055 85);
-  --flow-decision-border: oklch(0.68 0.11 80);
+  /* name 11.19:1, meta 6.46:1, border 4.30:1 (wash-top: 9.04 / 5.22 / 3.48) */
+  --flow-end: oklch(0.33 0.058 345);
+  --flow-end-border: oklch(0.695 0.135 345);
+  /* name 10.90:1, meta 6.30:1, border 4.43:1 (wash-top: 8.70 / 5.03 / 3.53) */
+  --flow-decision: oklch(0.33 0.058 85);
+  --flow-decision-border: oklch(0.695 0.115 80);
 
-  /* Dark pins for the rebuilt tagColors fills (light block explains). */
-  --tag-fill-l: 0.305;
+  /* Dark pins for the rebuilt tagColors fills (light block explains). Lifted
+     with the role fills, so an author's own colour lands in the same band the
+     built-in roles occupy rather than a tenth of a step below them. */
+  --tag-fill-l: 0.33;
   --tag-fill-c: 0.06;
 
-  --edge: oklch(0.62 0.02 275);
+  /* Brightened with the canvas it is drawn on: 5.47:1 against --canvas, where
+     L 0.62 on the lifted well measured 4.6. */
+  --edge: oklch(0.645 0.0116 271);
   --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.68 0.19 285 / 0.24);
 
