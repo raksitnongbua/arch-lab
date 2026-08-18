@@ -11,6 +11,11 @@ export function Footer() {
           <span className="font-mono">{APP_NAME}</span> — local-first
           architecture documentation. C4 today; more diagram types planned.
         </p>
+        {/* The FAQ lives here rather than in the header, and that is a
+            deliberate placement: the header row has already run out of viewport
+            once (see the note in `header.tsx`), and a reader who wants an
+            objection answered is either at the bottom of a page or looking for
+            the small print — which is where a footer already is. */}
         <p>
           Saves as plain text you can read. Diff it, review it, commit it.{" "}
           <Link
@@ -18,6 +23,13 @@ export function Footer() {
             className="font-medium text-foreground hover:underline"
           >
             <span className="font-mono">.alab</span> syntax reference
+          </Link>
+          {" · "}
+          <Link
+            href="/faq"
+            className="font-medium text-foreground hover:underline"
+          >
+            FAQ
           </Link>
         </p>
       </div>

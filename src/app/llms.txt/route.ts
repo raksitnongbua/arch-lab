@@ -70,6 +70,8 @@ mutation API — you edit \`.alab\` files yourself.
 - ${origin}/syntax — the \`.alab\` grammar, every example parser-verified
 - ${origin}/validate — paste a document, get a located verdict
 - ${origin}/demo — finished examples of both kinds
+- ${origin}/faq — what this is, what it exports, what leaves the browser, and
+  what an agent may do over MCP, as short self-contained answers
 `;
 
   return new Response(body, {

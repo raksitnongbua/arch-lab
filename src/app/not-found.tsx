@@ -88,14 +88,21 @@ export default function NotFound() {
           >
             syntax reference
           </Link>{" "}
-          documents the text format, and{" "}
+          documents the text format,{" "}
           <Link
             href="/mcp"
             className="font-medium text-primary hover:underline"
           >
             /mcp
           </Link>{" "}
-          covers using {APP_NAME} from an AI agent.
+          covers using {APP_NAME} from an AI agent, and the{" "}
+          <Link
+            href="/faq"
+            className="font-medium text-primary hover:underline"
+          >
+            FAQ
+          </Link>{" "}
+          answers what it is and what it does with your file.
         </p>
       </div>
     </div>

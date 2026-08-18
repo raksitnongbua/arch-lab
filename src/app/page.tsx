@@ -348,8 +348,23 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Decorative mini C4 diagram — desktop only, hidden from AT. */}
-          <HeroDiagram className="hidden lg:block" />
+          {/* The hero visual, and it is no longer desktop-only. It used to be
+              `hidden lg:block`, which meant a phone got a headline, a sentence
+              and a button on an empty ground — the one thing the hero is for,
+              missing on the viewport most first-time readers arrive with.
+
+              Below `lg` it sits UNDER the copy rather than beside it, which is
+              the right order on a narrow screen: the promise and the button stay
+              at the top of the fold, and the diagram is what a reader meets on
+              the first scroll. `af-hero-fit` shrinks the fixed-size card to fit
+              the gutters — see the note on that class in globals.css for why it
+              uses `zoom` and not a transform.
+
+              Still `aria-hidden` inside the component, on every viewport: the
+              copy above states everything it depicts. */}
+          <div className="mt-14 flex justify-center lg:mt-0 lg:block">
+            <HeroDiagram className="af-hero-fit" />
+          </div>
         </div>
       </section>
 
@@ -419,7 +434,26 @@ export default function Home() {
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-          <div>
+          {/* `min-w-0` IS LOAD-BEARING, and without it this section overflowed
+              the viewport on a phone — the heading, the paragraph and both
+              buttons all clipped, not just the snippet.
+
+              The cause is the install command below. A grid item's automatic
+              minimum size is its CONTENT's minimum, so the item refused to
+              shrink narrower than one unbreakable ~90-character line, the
+              single-column track grew to match, and `w-full` on the section
+              resolved against something wider than the screen. The
+              `overflow-x-auto` inside `CopySnippet` cannot save this: it scrolls
+              the line once the block has a width to scroll within, and this item
+              never gave it one.
+              `/mcp` already knew — every wrapper around a `CopySnippet` over
+              there carries `min-w-0` (`mcp-guide.tsx`). This was the one call
+              site that did not.
+
+              The `lg:` track above is `minmax(0,1fr)` for the same reason, which
+              is why the bug only ever showed below `lg`: the explicit 0 minimum
+              did this job on desktop and there was nothing doing it on a phone. */}
+          <div className="min-w-0">
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary">
                 <Bot aria-hidden="true" className="size-5" />
@@ -542,6 +576,47 @@ export default function Home() {
                   </Link>
                 </>
               ) : null}
+            </p>
+          </div>
+
+          {/* THE SAME OFFER AS THE HERO, at the end of the page. A reader who
+              scrolled the whole way is the most convinced reader this page has,
+              and until now the last thing they met was a paragraph about file
+              format and three text links — so the one action the page is asking
+              for was three screens behind them.
+
+              Deliberately the SAME destination and the same words as the hero
+              button, not a second, weaker offer. A different CTA down here would
+              re-open the choice the hero exists to close; repeating it just
+              means the answer is in reach wherever somebody stopped reading.
+
+              The FAQ sits beside it as the outlet for the other kind of reader
+              who reaches the bottom: not convinced, and holding a specific
+              objection the page never addressed. */}
+          <div className="mt-12 flex flex-col items-start gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center">
+            <Link
+              href="/view?d=seq"
+              className={buttonClasses({
+                size: "lg",
+                className: "group gap-2.5",
+              })}
+            >
+              Open a live diagram
+              <ArrowRight
+                aria-hidden="true"
+                className="transition-transform duration-200 group-hover:translate-x-1"
+              />
+            </Link>
+            <p className="text-sm text-muted-foreground">
+              Still deciding?{" "}
+              <Link
+                href="/faq"
+                className="font-medium text-primary hover:underline"
+              >
+                The FAQ
+              </Link>{" "}
+              answers what leaves your browser, what it exports, and how it
+              compares to Mermaid.
             </p>
           </div>
         </div>

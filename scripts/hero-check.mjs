@@ -284,6 +284,48 @@ check("the new panels paint from theme tokens only", () => {
   }
 });
 
+/* The card is shown on phones now, and it is still a fixed 384px wide — so the
+   only thing keeping it inside a narrow viewport is the zoom factor in
+   `.af-hero-fit`. Those two numbers were chosen against each other and live in
+   different files, which is exactly the pairing that drifts: widening the card
+   to `w-[28rem]` is a one-token edit that looks local and silently pushes the
+   hero back off the side of a phone. Relational rather than pinned, so either
+   number may move as long as the result still fits. */
+check("the fitted card clears the gutters on the narrowest phone", () => {
+  const REM = 16;
+  /** iPhone SE / 13 mini, the smallest width still worth supporting. */
+  const NARROWEST_VIEWPORT = 375;
+  /** `px-5` on the hero section, both sides. */
+  const GUTTERS = 2 * 20;
+
+  const width = /af-hero-card relative w-(\d+)/.exec(hero);
+  assert.ok(width !== null, "could not find the hero card's width class");
+  const cardPx = (Number(width[1]) / 4) * REM;
+
+  const rule = /\.af-hero-fit\s*\{\s*zoom:\s*([\d.]+);/.exec(globals);
+  assert.ok(rule !== null, ".af-hero-fit does not set a zoom factor");
+  const fitted = cardPx * Number(rule[1]);
+
+  assert.ok(
+    fitted + GUTTERS <= NARROWEST_VIEWPORT,
+    `the card fits to ${fitted}px and needs ${fitted + GUTTERS}px of viewport, ` +
+      `over the ${NARROWEST_VIEWPORT}px budget — lower the zoom or narrow the card`,
+  );
+});
+
+/* `zoom` is load-bearing and reads like a stylistic choice, which is how it gets
+   "modernised" into a transform. A transform does not affect layout, so the card
+   would paint smaller and still reserve its full box, leaving a band of dead
+   space under the hero that nobody would connect back to this edit. */
+check("the fit scales the layout box, not just the paint", () => {
+  const block = /\.af-hero-fit\s*\{([^}]*)\}/.exec(globals);
+  assert.ok(block !== null, ".af-hero-fit is gone");
+  assert.ok(
+    !/transform|scale\(/.test(block[1]),
+    "a transform leaves the card's layout box at full size — use zoom",
+  );
+});
+
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
