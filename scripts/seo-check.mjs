@@ -82,6 +82,7 @@ const ROUTES = [
   ["/view/uc", "src/app/view/uc/page.tsx", null],
   ["/validate", "src/app/validate/page.tsx", null],
   ["/syntax", "src/app/syntax/page.tsx", null],
+  ["/faq", "src/app/faq/page.tsx", null],
 ];
 
 /* ----------------------------------------------------------------------- */
@@ -205,6 +206,10 @@ console.log("\nstructured data");
     home.includes('"@type": "WebSite"') &&
       home.includes('"@type": "SoftwareApplication"'),
   );
+  /* THE RULE IS MISAPPLICATION, not the type. `/faq` below is an actual FAQ
+     and marks itself up as one; these two are a landing page and a connect
+     guide, and calling either an FAQPage was a claim the content did not
+     support. HowTo is a flat no — it was deprecated in 2023. */
   for (const [file, route] of [
     ["src/app/page.tsx", "/"],
     ["src/app/mcp/page.tsx", "/mcp"],
@@ -213,9 +218,28 @@ console.log("\nstructured data");
     check(
       `${route}: no deprecated or misapplied schema type`,
       !source.includes('"HowTo"') && !source.includes('"FAQPage"'),
-      "HowTo was deprecated in 2023; FAQPage is for government and health sites",
+      "HowTo was deprecated in 2023; FAQPage belongs on a page that IS an FAQ",
     );
   }
+
+  const faq = read("src/app/faq/page.tsx");
+  check(
+    "/faq carries FAQPage markup for the questions it answers",
+    faq.includes("application/ld+json") && faq.includes('"@type": "FAQPage"'),
+  );
+  /* The one that matters. The visible answers and the serialised ones are the
+     same strings or they are two answers to one question, and the stale half is
+     always the half that gets quoted back at you. */
+  check(
+    "/faq's questions are serialised from the entries it renders",
+    /mainEntity:\s*FAQ_ENTRIES\.map/.test(faq),
+    "a second copy of thirteen answers is thirteen chances to disagree with itself",
+  );
+  check(
+    "/faq's answers carry no markup",
+    !/answer:\s*\n?\s*"[^"]*</.test(read("src/features/marketing/faq.ts")),
+    "the same string is rendered AND serialised into JSON-LD — tags poison the second",
+  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -295,6 +319,10 @@ console.log("\nGEO (what an assistant can reach and quote)");
     ["/", "src/app/page.tsx"],
     ["/mcp", "src/app/mcp/page.tsx"],
     ["/syntax", "src/app/syntax/page.tsx"],
+    /* The most quotable page on the site: short, self-contained answers with
+       the question restated in each one. Rendering it on the client would hide
+       exactly the passages an assistant would otherwise cite. */
+    ["/faq", "src/app/faq/page.tsx"],
   ]) {
     check(
       `${route} is server-rendered (AI crawlers do not run JS)`,

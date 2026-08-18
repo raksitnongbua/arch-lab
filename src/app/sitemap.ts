@@ -33,6 +33,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
        enumerate — it changes the starting text, not the page. */
     "/view",
     "/mcp",
+    "/faq",
   ];
 
   // All FOUR example registries, so a new example is in the sitemap the moment
