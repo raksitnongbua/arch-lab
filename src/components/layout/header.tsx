@@ -160,7 +160,18 @@ export function Header(): React.JSX.Element {
   return (
     <header
       ref={headerRef}
-      className="af-glass sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl"
+      /* 60% OPAQUE, DOWN FROM 80, so the page's own ground reads through the row
+         rather than the header sitting on it as a separate bar. The blur is what
+         makes that affordable: `backdrop-blur-xl` averages whatever is behind it,
+         so text contrast barely moves even where the header crosses a diagram
+         canvas on `/view` — and the header renders on every route, so that case
+         governs how far this can go. The bottom border softened with it, for the
+         same reason: at 60% a hard rule is the loudest thing in the row.
+         NOTE for the home page specifically: the dot field starts BELOW this
+         header, because the header is in normal flow and the page begins after
+         it. Transparency blends the seam; it does not put dots behind the row.
+         That would need the header to overlay the page. */
+      className="af-glass sticky top-0 z-40 border-b border-border/40 bg-background/60 backdrop-blur-xl"
     >
       {/* Full-bleed rather than centred in a max-width container: the editor is
           edge-to-edge (rails flush to both sides), so a contained header left the

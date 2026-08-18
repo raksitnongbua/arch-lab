@@ -16,6 +16,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { DotGrid } from "@/features/marketing/dot-grid";
+import { DotGridStudioGate } from "@/features/marketing/dot-grid-studio-gate";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
 import { LiveDiagramMark } from "@/features/marketing/live-diagram-mark";
 import { McpFlow } from "@/features/marketing/mcp-flow";
@@ -250,6 +251,14 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: homeJsonLd() }}
       />
       <Backdrop />
+
+      {/* The dot field's tuning panel, and it costs a visitor nothing: this
+          renders null unless the URL carries `?dots`, and the panel itself is a
+          dynamic import behind that check. Open http://localhost:3000/?dots — or
+          the same on the deployed site — to tune the field, then paste what the
+          copy button gives you into `dot-grid-config.ts`. Nothing it changes is
+          persisted; it is a way to choose values, not a setting. */}
+      <DotGridStudioGate />
 
       {/* ---------------------------------------------------------------- hero */}
       <section className="mx-auto w-full max-w-6xl px-5 pt-14 pb-12 sm:px-8 sm:pt-20 sm:pb-16">

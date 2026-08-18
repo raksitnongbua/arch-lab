@@ -40,8 +40,27 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
 
 const source = read("src/features/marketing/dot-grid.tsx");
+/* The VALUES moved out of the component when the studio panel arrived — they are
+   a store's defaults now, not parameter defaults. This check followed them
+   rather than being loosened: what it measures is the shipped configuration,
+   wherever that lives. */
+const config = read("src/features/marketing/dot-grid-config.ts");
+const studio = read("src/features/marketing/dot-grid-studio.tsx");
+const gate = read("src/features/marketing/dot-grid-studio-gate.tsx");
 const page = read("src/app/page.tsx");
 const globals = read("src/app/globals.css");
+
+/**
+ * `text` with comments removed.
+ *
+ * Every assertion below that forbids a token — a hex literal, `localStorage`,
+ * `useSearchParams` — has to run on CODE, because the files DOCUMENT why those
+ * things are absent and a check that cannot tell a citation from a use forces the
+ * documentation to go vague in order to pass. That happened three times while
+ * these rules were being written, which is why it is a function.
+ */
+const codeOf = (text) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 let assertions = 0;
 let failures = 0;
@@ -66,10 +85,8 @@ check("the dots are painted from tokens, with no colour literal", () => {
      COMMENTS ARE STRIPPED FIRST, because the file's header quotes that upstream
      default in order to explain why it is gone — and a check that cannot tell a
      cited value from a used one forces the documentation to go vague to pass. */
-  const code = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "");
-  const literals = code.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
+  const literals =
+    codeOf(source + config + studio).match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
   /* The rejection sentinel is a literal by necessity — it has to be a colour no
      theme could produce, so that `fillStyle` still reading it back means the
      browser refused the token. It is never painted. It also must not be
@@ -83,15 +100,24 @@ check("the dots are painted from tokens, with no colour literal", () => {
   );
   const offenders = literals.filter((hex) => !allowed.has(hex));
   assert.deepEqual(offenders, [], `colour literals: ${offenders.join(", ")}`);
-  assert.match(
-    source,
-    /baseVar = "--[\w-]+"/,
-    "the base colour is not a custom-property name",
+  for (const key of ["baseVar", "activeVar"]) {
+    assert.match(
+      config,
+      new RegExp(`${key}: "--[\\w-]+"`),
+      `${key} is not a custom-property name`,
+    );
+  }
+  /* The panel offers a LIST OF TOKENS rather than a colour input, for the same
+     reason: a hex chosen while looking at one theme is wrong in the other six.
+     A `type="color"` here would be the upstream customiser's control, and it
+     would quietly make the field theme-blind again. */
+  assert.ok(
+    !/type="color"/.test(studio),
+    "the studio offers a colour picker — it must offer DOT_GRID_TOKENS instead",
   );
-  assert.match(
-    source,
-    /activeVar = "--[\w-]+"/,
-    "the active colour is not a custom-property name",
+  assert.ok(
+    /DOT_GRID_TOKENS.map/.test(studio),
+    "the studio does not build its colour choices from DOT_GRID_TOKENS",
   );
 });
 
@@ -398,7 +424,7 @@ check("every theme in THEMES is measured here", () => {
 });
 
 check("a dot is visible on every theme's ground", () => {
-  const base = /baseVar = "(--[\w-]+)"/.exec(source)?.[1];
+  const base = /baseVar: "(--[\w-]+)"/.exec(config)?.[1];
   assert.notEqual(base, undefined, "cannot find the base colour token");
 
   /* The alphas are on the WRAPPER in page.tsx, not in the component, so this has
@@ -435,8 +461,8 @@ check("a dot is visible on every theme's ground", () => {
 });
 
 check("a dot puts enough ink in its cell to be worth the contrast", () => {
-  const dotSize = Number(/dotSize = ([\d.]+),/.exec(source)?.[1]);
-  const gap = Number(/gap = ([\d.]+),/.exec(source)?.[1]);
+  const dotSize = Number(/dotSize: ([\d.]+),/.exec(config)?.[1]);
+  const gap = Number(/gap: ([\d.]+),/.exec(config)?.[1]);
   assert.ok(
     Number.isFinite(dotSize) && Number.isFinite(gap),
     "cannot read dotSize and gap",
@@ -457,6 +483,57 @@ check("a dot puts enough ink in its cell to be worth the contrast", () => {
     28,
     `pitch is ${pitch}px; the backdrop's line grid is 56px and the two must ` +
       `stay harmonic — take the change out of \`gap\`, not the pitch`,
+  );
+});
+
+/* ---- 9. the studio stays a tool ----------------------------------------- */
+
+check("the studio costs a visitor nothing", () => {
+  /* Two properties, and both are load-bearing. If the panel were a static import
+     its code would ship in the home page's bundle for everyone; if it were not
+     gated it would render for everyone. A decorative background's tuning panel
+     must not be either. */
+  assert.match(
+    gate,
+    /dynamic\(\s*\(\) => import\("\.\/dot-grid-studio"\)/,
+    "the panel is not a dynamic import, so its code ships to every visitor",
+  );
+  assert.match(
+    gate,
+    /\{ ssr: false \}/,
+    "the panel is server-rendered, which defeats the point of the gate",
+  );
+  assert.match(
+    gate,
+    /new URLSearchParams\(window\.location\.search\)\.has\("dots"\)/,
+    "the gate does not read `?dots` from the URL",
+  );
+  /* `useSearchParams` would opt the whole route out of static rendering to
+     support a panel almost nobody opens. */
+  assert.ok(
+    !/useSearchParams/.test(codeOf(gate + page)),
+    "`useSearchParams` on this route makes `/` dynamic for every visitor",
+  );
+});
+
+check("nothing the studio changes is persisted", () => {
+  /* The panel is a way to FIND values; the way one is KEPT is the copy button and
+     an edit to `dot-grid-config.ts`. A localStorage write here would turn a
+     developer tool into a user setting for a background nobody wants to
+     configure — and then into a migration when the shape changes. */
+  for (const [label, text] of [
+    ["the studio", codeOf(studio)],
+    ["the config store", codeOf(config)],
+  ]) {
+    assert.ok(
+      !/localStorage|sessionStorage|document\.cookie/.test(text),
+      `${label} persists its state; the defaults in source are the design`,
+    );
+  }
+  assert.match(
+    studio,
+    /dotGridAsSource/,
+    "the studio has no way to emit the values it found, so tuning cannot be kept",
   );
 });
 

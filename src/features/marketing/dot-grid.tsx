@@ -57,6 +57,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIdleMotion, useReducedMotion } from "@/lib/idle-motion";
 import { cn } from "@/lib/utils";
 
+import { useDotGridConfig, type DotGridConfig } from "./dot-grid-config";
+
 gsap.registerPlugin(InertiaPlugin);
 
 interface Dot {
@@ -74,31 +76,8 @@ interface Rgb {
   b: number;
 }
 
-export interface DotGridProps {
-  /** Diameter of one dot, in CSS pixels. */
-  dotSize?: number;
-  /** Centre-to-centre spacing, in CSS pixels. Must match the static field. */
-  gap?: number;
-  /** Custom property painting a dot at rest. */
-  baseVar?: string;
-  /** Custom property painting a dot under the pointer. */
-  activeVar?: string;
-  /** Radius within which dots take colour and can be thrown. */
-  proximity?: number;
-  /** Pointer speed, px/s, above which a sweep throws dots. */
-  speedTrigger?: number;
-  /** Radius of a click's shockwave. */
-  shockRadius?: number;
-  /** How hard a click pushes, before falloff. */
-  shockStrength?: number;
-  /** Ceiling on the speed fed to the inertia tween. */
-  maxSpeed?: number;
-  /** Inertia drag — higher settles sooner. See RESISTANCE below. */
-  resistance?: number;
-  /** Seconds for a thrown dot to ease back home. */
-  returnDuration?: number;
-  className?: string;
-}
+/** Every tunable is optional and overrides the store. */
+export type DotGridProps = Partial<DotGridConfig> & { className?: string };
 
 /**
  * How long the pointer sampler is allowed to run, in ms.
@@ -181,38 +160,26 @@ function resolveToRgb(element: Element, property: string): Rgb | null {
   return { r, g, b };
 }
 
-export function DotGrid({
-  /* 3px, not 2. A dot's whole presence is its INK, and at a 28px pitch a 2px dot
-     covers 0.40% of its cell — the field was correctly wired, correctly masked,
-     and could not be seen. 3px is 0.90%, which more than doubles it for one
-     pixel of radius. Going further starts to read as a polka dot rather than as
-     a lattice. */
-  dotSize = 3,
-  /* Chosen so `dotSize + gap` stays 28 — exactly half the backdrop's 56px line
-     grid. The harmonic is the point (see the backdrop's own note), so a change
-     to `dotSize` has to come out of the gap, never out of the pitch. */
-  gap = 25,
-  /* `--node-border`, and this is the second half of the same fix: `--border`
-     CANNOT be seen on the dark ground at any opacity. It measures 1.63:1 against
-     it at full strength, and the field ran at half — 1.32:1, under the threshold
-     of noticing. `--node-border` reaches 1.98:1 at 0.35 and 3.81:1 at full, so
-     there is room to be quiet on purpose rather than by accident. It is also the
-     right token by meaning: an outline drawn on a canvas, which is what a
-     lattice mark is. */
-  baseVar = "--node-border",
-  activeVar = "--primary",
-  proximity = 130,
-  speedTrigger = 100,
-  shockRadius = 220,
-  shockStrength = 4,
-  maxSpeed = 5000,
-  resistance = 180,
-  /* Slower than upstream's 1.5. The return is the part a reader actually
-     watches — the throw is over in a fifth of a second — and on `elastic.out` a
-     longer settle reads as weight rather than as lag. */
-  returnDuration = 2.2,
-  className,
-}: DotGridProps) {
+export function DotGrid({ className, ...overrides }: DotGridProps) {
+  /* THE VALUES LIVE IN `dot-grid-config.ts`, with the reasoning for each. They
+     were parameter defaults here until the studio panel needed to change them at
+     runtime, from outside a server component's render — and a set of parameter
+     defaults plus a store would have been two sources for one number. Props are
+     kept as an override so this stays reusable and testable without the store. */
+  const stored = useDotGridConfig();
+  const {
+    dotSize,
+    gap,
+    baseVar,
+    activeVar,
+    proximity,
+    speedTrigger,
+    shockRadius,
+    shockStrength,
+    maxSpeed,
+    resistance,
+    returnDuration,
+  } = { ...stored, ...overrides };
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dotsRef = useRef<Dot[]>([]);
