@@ -233,25 +233,77 @@
   --node-stroke: var(--node-border);
 }
 
-/* --- Theme: dark (the intentional default) ------------------------------- */
+/* --- Theme: dark (the intentional default) -------------------------------
+   DARK GREY at #1c1e24, which is `oklch(0.235 0.0116 271)`.
+   THE ANCHOR IS #22242a — `oklch(0.261 0.0116 271)`, the colour this ground was
+   given as a swatch, converted rather than eyeballed and round-tripping back to
+   that hex. It is not the value below because the swatch came back a shade
+   light: every neutral in this block then moved down 0.026, which is 10% of that
+   anchor's perceptual lightness. Doing it as ONE step applied to the whole ramp
+   is what keeps the offsets in the paragraph below intact — darkening the
+   background alone would have closed the gap to the card by more than half.
+   IT WAS #0b0d13, a near-black at L 0.16. Same hue family, three quarters of a
+   tenth of a lightness step lower and a shade more chroma; what changed is that
+   the ground is now recognisably GREY rather than reading as black. Everything
+   neutral in this block sits at chroma 0.0116 and hue 271, taken from the anchor,
+   so the ramp has one tint rather than a drift of three.
+
+   THE RAMP LIFTED, THE INK DID NOT, and that tension is the whole design of
+   what follows. Ink is already at L 0.96 with nowhere to go, so a ground that
+   rises by 0.075 spends contrast that cannot be earned back. Every offset from
+   the ground is therefore the one the audited ramp already had — canvas −0.061,
+   card +0.045, secondary +0.10, border +0.14 — except where a pair would have
+   fallen through its floor:
+
+     - THE NODE FILLS ROSE ONLY +0.025, not the ground's +0.075. Lifting them in
+       step put `--node-meta` at 4.0:1 over the wash's top stop, under the 4.5:1
+       a technology line needs, and the node title at 6.7:1 under its 7:1. A
+       coloured fill is legible before it is separated from the surface, so the
+       fills stayed low and their borders brightened instead.
+     - THE CANVAS IS FURTHER BELOW THE CHROME than it used to be — 0.061 rather
+       than 0.025 — which follows from the above rather than being chosen. The
+       diagram well now reads as clearly inset instead of nearly flush. That is
+       the one visible consequence of the new ground, and it is the right way
+       round: a canvas that tracked the chrome all the way up would have taken
+       the node fills with it.
+     - `--node-border` and every role border rose ~0.02 to hold ≥3:1 against
+       their own lifted fills.
+
+   Brand colour is UNTOUCHED: `--primary`, `--accent`, `--ring`, `--selection`,
+   the five sequence lanes. `--primary` measures 5.36:1 on the new ground against
+   a 3:1 minimum, so nothing forced a change, and a ground swap is not a reason
+   to move the one colour people recognise the product by.
+
+   THE COLOURED FILLS DID NOT MOVE with the 10% step, and that is deliberate:
+   they are content rather than ground, and every pair they are measured in got
+   BETTER as the canvas dropped away beneath them. Their separation from the
+   canvas is back to 0.16, near the 0.17 the near-black ramp had — so the step
+   down recovered most of what the lighter ground had cost them.
+
+   THE RATIOS BELOW WERE ALL RE-MEASURED for this ramp, including the wash's top
+   stop, by the same oklch → linear-sRGB maths `scripts/lib/oklch.mjs` gives
+   `pnpm check:themes`. They sit within ~0.06 of the figures the original audit
+   recorded for the same untouched pairs, which is the reproduction error between
+   that script and this one — read them as accurate to a tenth, not to the second
+   decimal. `check:themes` re-measures the pairs it owns on every run. */
 .dark {
-  --background: oklch(0.16 0.014 275);
-  --foreground: oklch(0.96 0.006 275);
+  --background: oklch(0.235 0.0116 271);
+  --foreground: oklch(0.96 0.005 271);
 
-  --card: oklch(0.205 0.018 275);
-  --card-foreground: oklch(0.96 0.006 275);
+  --card: oklch(0.28 0.0116 271);
+  --card-foreground: oklch(0.96 0.005 271);
 
-  --popover: oklch(0.205 0.018 275);
-  --popover-foreground: oklch(0.96 0.006 275);
+  --popover: oklch(0.28 0.0116 271);
+  --popover-foreground: oklch(0.96 0.005 271);
 
   --primary: oklch(0.68 0.19 285);
   --primary-foreground: oklch(0.16 0.03 285);
 
-  --secondary: oklch(0.26 0.02 275);
-  --secondary-foreground: oklch(0.94 0.006 275);
+  --secondary: oklch(0.335 0.0116 271);
+  --secondary-foreground: oklch(0.94 0.005 271);
 
-  --muted: oklch(0.26 0.02 275);
-  --muted-foreground: oklch(0.7 0.018 275);
+  --muted: oklch(0.335 0.0116 271);
+  --muted-foreground: oklch(0.72 0.012 271);
 
   --accent: oklch(0.78 0.13 195);
   --accent-foreground: oklch(0.18 0.03 195);
@@ -265,55 +317,62 @@
   --warning: oklch(0.82 0.15 80);
   --warning-foreground: oklch(0.2 0.04 80);
 
-  --border: oklch(0.3 0.02 275);
-  --input: oklch(0.3 0.02 275);
+  --border: oklch(0.375 0.0116 271);
+  --input: oklch(0.375 0.0116 271);
   --ring: oklch(0.68 0.19 285);
 
-  --canvas: oklch(0.135 0.014 275);
-  --canvas-grid: oklch(0.245 0.018 275);
-  --node: oklch(0.215 0.02 275);
-  --node-foreground: oklch(0.96 0.006 275);
-  /* ≥3:1 against --node (measured 3.61:1; was L 0.33 at 1.43:1). */
-  --node-border: oklch(0.55 0.024 275);
+  /* The diagram well, deliberately below the chrome — see the header on why the
+     gap widened rather than tracking the ground up. */
+  --canvas: oklch(0.174 0.0116 271);
+  --canvas-grid: oklch(0.284 0.0116 271);
+  --node: oklch(0.219 0.0116 271);
+  --node-foreground: oklch(0.96 0.005 271);
+  /* ≥3:1 against --node (measured 3.99:1; L 0.55 on the lifted fill was 2.9). */
+  --node-border: oklch(0.575 0.016 271);
   /* Secondary text on node fills (light block has the design notes). */
-  --node-meta: oklch(0.79 0.02 275);
+  --node-meta: oklch(0.79 0.012 271);
 
   /* Dark counterparts of the per-role node colours (light block has the
-     design notes). Fills carry real chroma at L≈0.30; borders brighten to
-     L≈0.66 so each card reads as a lit, coloured object on the dark canvas.
-     Ratios (audit script): name is --node-foreground vs fill, meta is
-     --node-meta vs fill, border vs its own fill. */
-  /* name 11.93:1, meta 6.95:1, border 4.46:1 (wash-top: 9.82 / 5.72 / 3.67) */
-  --node-person: oklch(0.31 0.07 295);
-  --node-person-border: oklch(0.68 0.14 295);
-  /* name 11.82:1, meta 6.88:1, border 4.48:1 (wash-top: 9.78 / 5.70 / 3.71) */
-  --node-internal: oklch(0.305 0.06 250);
-  --node-internal-border: oklch(0.67 0.12 250);
-  /* name 14.80:1, meta 8.62:1, border 3.44:1 (no wash — external stays matte) */
-  --node-external: oklch(0.235 0.012 265);
-  --node-external-border: oklch(0.55 0.024 275);
-  /* name 11.78:1, meta 6.86:1, border 4.50:1 (wash-top: 9.73 / 5.67 / 3.72) */
-  --node-database: oklch(0.3 0.055 195);
-  --node-database-border: oklch(0.66 0.11 195);
-  /* name 11.59:1, meta 6.75:1, border 4.57:1 (wash-top: 9.53 / 5.55 / 3.76) */
-  --node-queue: oklch(0.305 0.055 150);
-  --node-queue-border: oklch(0.67 0.11 150);
+     design notes). Fills carry real chroma at L≈0.33; borders brighten to
+     L≈0.69 so each card reads as a lit, coloured object on the dark canvas.
+     Ratios: name is --node-foreground vs fill, meta is --node-meta vs fill,
+     border vs its own fill; wash-top is the same three against the gradient's
+     deepest stop, which is the worst case for text. */
+  /* name 10.94:1, meta 6.32:1, border 4.31:1 (wash-top: 8.79 / 5.08 / 3.47) */
+  --node-person: oklch(0.335 0.072 295);
+  --node-person-border: oklch(0.695 0.145 295);
+  /* name 10.90:1, meta 6.29:1, border 4.37:1 (wash-top: 8.72 / 5.04 / 3.49) */
+  --node-internal: oklch(0.33 0.062 250);
+  --node-internal-border: oklch(0.685 0.125 250);
+  /* name 14.69:1, meta 8.48:1, border 3.78:1 (no wash — external stays matte) */
+  --node-external: oklch(0.239 0.0116 271);
+  --node-external-border: oklch(0.575 0.016 271);
+  /* name 10.79:1, meta 6.23:1, border 4.33:1 (wash-top: 8.63 / 4.99 / 3.46) */
+  --node-database: oklch(0.325 0.058 195);
+  --node-database-border: oklch(0.675 0.115 195);
+  /* name 10.59:1, meta 6.12:1, border 4.42:1 (wash-top: 8.44 / 4.87 / 3.52) */
+  --node-queue: oklch(0.33 0.058 150);
+  --node-queue-border: oklch(0.685 0.115 150);
 
   /* Flowchart shape colours (the light block carries the design notes; the
      start/step/io/call aliases live once in :root and resolve to THIS
      theme's role tokens on their own). */
-  /* name 12.22:1, meta 7.09:1, border 4.47:1 (wash-top: 9.90 / 5.74 / 3.62) */
-  --flow-end: oklch(0.305 0.055 345);
-  --flow-end-border: oklch(0.68 0.13 345);
-  /* name 11.96:1, meta 6.94:1, border 4.61:1 (wash-top: 9.62 / 5.58 / 3.71) */
-  --flow-decision: oklch(0.305 0.055 85);
-  --flow-decision-border: oklch(0.68 0.11 80);
+  /* name 11.19:1, meta 6.46:1, border 4.30:1 (wash-top: 9.04 / 5.22 / 3.48) */
+  --flow-end: oklch(0.33 0.058 345);
+  --flow-end-border: oklch(0.695 0.135 345);
+  /* name 10.90:1, meta 6.30:1, border 4.43:1 (wash-top: 8.70 / 5.03 / 3.53) */
+  --flow-decision: oklch(0.33 0.058 85);
+  --flow-decision-border: oklch(0.695 0.115 80);
 
-  /* Dark pins for the rebuilt tagColors fills (light block explains). */
-  --tag-fill-l: 0.305;
+  /* Dark pins for the rebuilt tagColors fills (light block explains). Lifted
+     with the role fills, so an author's own colour lands in the same band the
+     built-in roles occupy rather than a tenth of a step below them. */
+  --tag-fill-l: 0.33;
   --tag-fill-c: 0.06;
 
-  --edge: oklch(0.62 0.02 275);
+  /* Brightened with the canvas it is drawn on: 5.75:1 against --canvas, where
+     L 0.62 on the lifted well measured 4.6. */
+  --edge: oklch(0.645 0.0116 271);
   --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.68 0.19 285 / 0.24);
 
@@ -552,16 +611,22 @@
  * ---------------------------------------------------------------------------- */
 
 .paper {
-  --radius: 0.625rem;
+  /* Tighter than every other theme: paper has cut edges, not rounded ones, and
+     a 10px corner on a "document" reads as a card pretending to be a page. */
+  --radius: 0.25rem;
 
-  --background: oklch(0.965 0.009 85);
-  --foreground: oklch(0.26 0.021 60);
+  /* Cream stock rather than warm white — a shade further from the screen and
+     closer to the paper it is named after. */
+  --background: oklch(0.955 0.014 88);
+  /* Ink, not black: a warm dark brown is what print actually leaves on stock,
+     and it is what stops a cream ground reading as a filter over a dark theme. */
+  --foreground: oklch(0.245 0.024 55);
 
-  --card: oklch(0.99 0.005 85);
-  --card-foreground: oklch(0.26 0.021 60);
+  --card: oklch(0.982 0.008 88);
+  --card-foreground: oklch(0.245 0.024 55);
 
-  --popover: oklch(0.99 0.005 85);
-  --popover-foreground: oklch(0.26 0.021 60);
+  --popover: oklch(0.982 0.008 88);
+  --popover-foreground: oklch(0.245 0.024 55);
 
   --primary: oklch(0.58 0.2 280);
   --primary-foreground: oklch(0.985 0.005 280);
@@ -584,13 +649,15 @@
   --warning: oklch(0.75 0.15 75);
   --warning-foreground: oklch(0.24 0.04 75);
 
-  --border: oklch(0.88 0.014 80);
-  --input: oklch(0.88 0.014 80);
+  /* A RULE, not a panel edge: darker than any other light theme's border, because
+     on a document a line is drawn deliberately rather than implied by a shadow. */
+  --border: oklch(0.845 0.016 80);
+  --input: oklch(0.845 0.016 80);
   --ring: oklch(0.58 0.2 280);
 
   /* Canvas-specific tokens the future editor will consume. */
-  --canvas: oklch(0.955 0.011 85);
-  --canvas-grid: oklch(0.9 0.014 82);
+  --canvas: oklch(0.945 0.015 88);
+  --canvas-grid: oklch(0.885 0.016 84);
   --node: oklch(0.995 0.004 85);
   --node-foreground: oklch(0.26 0.021 60);
   /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
@@ -848,6 +915,183 @@
      node — and keep such a stray exactly the colour every node used to be. */
   --node-fill: var(--node);
   --node-stroke: var(--node-border);
+}
+
+/*
+ * PASTEL — the mid-tone theme, and the only one that is deliberately colourful
+ * in its GROUND rather than only in its accents.
+ *
+ * It sits between light and dark on purpose: the ground is a dusk lavender at
+ * L 0.88, which is neither the near-white of `light` / `paper` nor the
+ * near-black of `dark` / `midnight`. Somebody who finds white glaring and black
+ * stark had no option here until now — `paper` only warms the white.
+ *
+ * LIGHT-FAMILY, and that is a real decision rather than a coin toss: the text is
+ * dark, so every `dark:` utility in the app must take its LIGHT branch. The name
+ * therefore stays OUT of the `dark` custom-variant and the `color-scheme: dark`
+ * rule at the bottom of this file — adding it to either would flip a few hundred
+ * utilities under a theme whose text is nearly black.
+ *
+ * Derived from `.paper` by transform rather than hand-typed, so that no token
+ * could be forgotten: surfaces dropped toward the dusk ground and pulled toward
+ * the lavender hue, accents given more chroma than any other light theme
+ * carries, text left dark. Two pairs came back under their minimum from that
+ * transform and were corrected by hand — `--muted-foreground` (4.10:1 on the
+ * new, darker ground) and the external node's outline (2.64:1 on its own fill);
+ * both are noted at their declarations.
+ *
+ * Every ratio is MEASURED by `pnpm check:themes`, which is why none is annotated
+ * here. `.paper`'s comments record numbers for `.paper`'s values; repeating them
+ * under different colours would be a lie, and the check is the honest record.
+ */
+.pastel {
+  --radius: 0.625rem;
+
+  /* THE 50:50 GRADIENT. The two halves of this theme are a blue and a pink, and
+     the ground is where they actually meet — `--background` is the midpoint they
+     average to, and `--pastel-wash` paints the diagonal between them. Kept as a
+     token rather than inlined so the one rule that applies it (below the theme
+     blocks) does not hard-code either hue.
+
+     Every other token stays a FLAT colour on purpose: a gradient behind a card,
+     a menu or a diagram canvas would slide under its own text as the element
+     moved, and every contrast ratio this theme is measured at would be a range
+     rather than a number. The gradient is the page, not the furniture. */
+  --pastel-wash: linear-gradient(
+    135deg,
+    oklch(0.885 0.045 264) 0%,
+    oklch(0.895 0.02 302) 48%,
+    oklch(0.885 0.045 344) 100%
+  );
+  --background: oklch(0.88 0.025 302);
+  --foreground: oklch(0.275 0.03 302);
+  --card: oklch(0.905 0.021 302);
+  --card-foreground: oklch(0.275 0.03 302);
+  --popover: oklch(0.905 0.021 302);
+  --popover-foreground: oklch(0.275 0.03 302);
+  --primary: oklch(0.58 0.224 280);
+  --primary-foreground: oklch(0.9 0.021 297);
+  --secondary: oklch(0.855 0.032 302);
+  --secondary-foreground: oklch(0.295 0.029 302);
+  --muted: oklch(0.855 0.032 302);
+  /* Darkened from the transform's 0.505, which measured 4.10:1 on this
+     theme's darker ground — secondary text has to clear 4.5:1. */
+  --muted-foreground: oklch(0.462 0.029 302);
+  --accent: oklch(0.72 0.15 342);
+  --accent-foreground: oklch(0.215 0.041 342);
+  --destructive: oklch(0.58 0.23 302);
+  --destructive-foreground: oklch(0.9 0.026 302);
+  --success: oklch(0.62 0.179 150);
+  --success-foreground: oklch(0.9 0.026 278);
+  --warning: oklch(0.75 0.168 75);
+  --warning-foreground: oklch(0.255 0.054 302);
+  --border: oklch(0.82 0.032 302);
+  --input: oklch(0.82 0.032 302);
+  --ring: oklch(0.58 0.224 280);
+  --canvas: oklch(0.87 0.026 302);
+  --canvas-grid: oklch(0.825 0.036 302);
+  --node: oklch(0.91 0.02 302);
+  --node-foreground: oklch(0.275 0.03 302);
+  --node-border: oklch(0.6 0.018 70);
+  /* Darkened from the transform's L 0.465. This theme's role fills sit ~ΔL 0.07
+     deeper than the light themes' near-white cards, and secondary text on a
+     card's own surface WASH (the deepest stop, ~14% of the border folded in) is
+     the worst case of the lot — it measured 3.76:1 there. L 0.42 clears 4.5:1
+     against every fill and every wash top, measured by check:flowchart-palette
+     across all six shapes. */
+  --node-meta: oklch(0.42 0.032 302);
+  --node-person: oklch(0.855 0.055 297);
+  --node-person-border: oklch(0.53 0.179 295);
+  --node-internal: oklch(0.855 0.055 268);
+  --node-internal-border: oklch(0.52 0.146 250);
+  --node-external: oklch(0.87 0.029 302);
+  /* Darkened from the transform's L 0.600, which measured 2.64:1 against its
+     own fill — an outline has to clear 3:1 or the card has no edge. External is
+     the one role kept deliberately quiet, so its fill sits close to the surface
+     and there is less room here than any other role has; L 0.53 measures
+     3.54:1, which leaves margin without making "not ours" shout. */
+  --node-external-border: oklch(0.53 0.02 70);
+  --node-database: oklch(0.855 0.055 232);
+  --node-database-border: oklch(0.5 0.094 195);
+  --node-queue: oklch(0.86 0.055 203);
+  /* Nudged down from the transform's L 0.520: the queue green is what the
+     flowchart's `start` terminator paints with, and its border measured 2.98:1
+     on the wash top — two hundredths under the 3:1 an outline needs. */
+  --node-queue-border: oklch(0.495 0.126 150);
+  /* The flowchart's two OWN hues keep their own identities: every shape colour
+     has to stay distinguishable from every other (check:flowchart-palette
+     measures the OKLab distance), and folding them onto this theme's midpoint
+     hue collapsed end, decision and call onto one colour. `end` takes the pink
+     half of the pair, which suits a terminator; `decision` keeps the amber it
+     has in every theme, because nothing else on the canvas is warm and that is
+     what makes a diamond findable. */
+  --flow-end: oklch(0.855 0.055 344);
+  --flow-end-border: oklch(0.53 0.168 344);
+  --flow-decision: oklch(0.855 0.055 80);
+  --flow-decision-border: oklch(0.52 0.106 80);
+  --tag-fill-l: 0.93;
+  --tag-fill-c: 0.055;
+  --edge: oklch(0.6 0.022 265);
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.58 0.224 280 / 0.18);
+  --seq-lane-1: #1baf7a;
+  --seq-lane-2: #eb6834;
+  --seq-lane-3: #2a78d6;
+  --seq-lane-4: #e87ba4;
+  --seq-lane-5: #4a3aa7;
+  --node-fill: var(--node);
+  --node-stroke: var(--node-border);
+}
+
+/* The pastel theme's ground is the only gradient in the app.
+ *
+ * On `html`, not `body`: `html` is what carries `background-color` for the
+ * pre-hydration paint above, so putting the wash on the same element keeps one
+ * owner of the page's ground instead of two that can disagree during load. The
+ * `background-color` stays underneath as the fallback — it is the midpoint the
+ * two hues average to, so a browser that ignores the image still gets the theme
+ * rather than white.
+ *
+ * `fixed` so the diagonal belongs to the VIEWPORT rather than to the document:
+ * scrolling a long page through a moving gradient makes the text look like it is
+ * sliding across a lens, and every card would cross a different tint on the way
+ * past. Fixed means the wash sits still and the content moves over it.
+ */
+.pastel {
+  background-image: var(--pastel-wash);
+  background-attachment: fixed;
+}
+
+/* The paper theme's stock.
+ *
+ * Two hairline gradients crossing at right angles, 3px apart, at under 2%
+ * contrast: laid paper, which is a woven grain rather than the random noise a
+ * texture image would give. Gradients because an image would be a network
+ * request and a cache entry for something a reader is not supposed to notice —
+ * if you can SEE the weave rather than just feel the page is not a screen, it is
+ * too strong.
+ *
+ * On `html` and `fixed`, for the reasons the pastel wash documents: one owner of
+ * the page's ground, and a texture that belongs to the viewport rather than
+ * sliding under the text as the page scrolls.
+ *
+ * The tokens do the rest of the work — cream stock, ink-brown text, drawn rules
+ * and a 4px radius — because a document is mostly about what colour the paper is
+ * and how deliberately its lines are drawn, not about texture.
+ */
+.paper {
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      oklch(0.86 0.02 80 / 0.055) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      oklch(0.86 0.02 80 / 0.045) 0 1px,
+      transparent 1px 3px
+    );
+  background-attachment: fixed;
 }
 
 /* --- EXTENSION POINT: adding a third theme ------------------------------------
@@ -1223,13 +1467,19 @@
   animation: af-hero-fade 260ms ease-out both;
 }
 
-/* ---- the hero sequence panel's running lines -----------------------------------
- * The hero's sequence half borrows the viewer's own idle motion, and the SPLIT is
- * the part worth keeping: a reply marches its dash, a call carries a short
- * travelling band over an unbroken stroke. Never the other way round — a dash on
- * a solid arrow makes it read as async or a reply, so only the kind that is
- * already dashed may march. The viewer's stylesheet documents the same rule at
- * length; this is the hero-sized copy of it.
+/* ---- the hero's running lines ---------------------------------------------------
+ * The hero borrows the viewer's own idle motion, and the SPLIT is the part worth
+ * keeping: a reply marches its dash, everything solid carries a short travelling
+ * band over an unbroken stroke. Never the other way round — a dash on a solid
+ * arrow makes it read as async or a reply, so only the kind that is already
+ * dashed may march. The viewer's stylesheet documents the same rule at length;
+ * this is the hero-sized copy of it.
+ *
+ * `af-hero-trace` was `af-hero-seq-flow` while the sequence panel was the only
+ * thing that had lines to keep alive. The flowchart and use-case panels want the
+ * identical effect on their connectors, and a per-panel copy of one dash
+ * animation is how three panels end up moving at three speeds for no reason —
+ * so the name lost the `seq` and the rule stayed exactly one rule.
  *
  * These were briefly shared with a second illustration on the landing page, which
  * is why the names once said "strip". That one was removed as a duplicate of what
@@ -1246,7 +1496,7 @@
   }
 }
 
-@keyframes af-hero-seq-flow {
+@keyframes af-hero-trace {
   from {
     stroke-dashoffset: 9;
   }
@@ -1267,18 +1517,18 @@
     af-hero-seq-march 1800ms linear infinite both;
 }
 
-.af-hero-seq-flow {
+.af-hero-trace {
   /* 9 lit of 100 — the same low duty the viewer's comet head uses, which is what
      keeps a travelling highlight from reading as a second line. */
   stroke-dasharray: 9 91;
-  animation: af-hero-seq-flow 2600ms linear infinite both;
+  animation: af-hero-trace 2600ms linear infinite both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   /* Parked COMPLETE: the travelling band goes away entirely rather than freezing
      as a bright stub on every call — a stopped highlight is not a resting
      state. */
-  .af-hero-seq-flow {
+  .af-hero-trace {
     animation: none;
     opacity: 0;
   }
@@ -1329,30 +1579,37 @@
 }
 
 /* ---- the hero's KIND SWAP ------------------------------------------------------
- * The card shows both document kinds by alternating between them: a C4 container
- * diagram, then a sequence flow, indefinitely. The `C4 / Sequence` labels in its
- * header are not decoration — they say which one is on screen, and they light in
- * step with it.
+ * The card shows every document kind this product reads by cycling through them:
+ * a C4 container diagram, a sequence flow, a flowchart, a use-case diagram, then
+ * round again. The kind strip in its header is not decoration and not a control —
+ * the dots say how many kinds there are and which one of them is on screen, and
+ * the name beside them says which.
  *
- * ONE keyframe drives everything. The two panels and the two header labels all
- * run it; the sequence side simply starts a half-cycle early via a negative
- * delay, so the pair can never drift out of sync the way two hand-tuned
- * animations would. `visibility` is in the keyframes alongside opacity because
- * it animates discretely: the off panel becomes `hidden` at the midpoint, which
- * takes it out of painting entirely rather than leaving an invisible diagram
- * being composited forever.
+ * ONE keyframe drives everything, and every panel plus every header label runs
+ * it; the only thing separating the four is a NEGATIVE DELAY of one, two or
+ * three quarter-cycles. That is the whole reason there is one keyframe rather
+ * than four: four hand-tuned animations drift, and four panels drifting means
+ * two diagrams on screen at once. `visibility` is in the keyframes alongside
+ * opacity because it animates discretely — an off panel becomes `hidden` for
+ * its whole three-quarters rather than being composited invisibly forever.
  *
- * Fully out before the other comes in — the fade windows do not overlap — since
+ * THE SLOT IS A QUARTER, and 26s is chosen from the other end: a panel needs
+ * about 2s to assemble itself, so a 6.5s slot leaves ~4.5s of settled diagram
+ * to actually read. Lengthening the slot to the 8.5s the two-kind version used
+ * would have put the fourth kind 25s after page load, which is longer than
+ * anyone looks at a hero.
+ *
+ * Fully out before the next comes in — the fade windows do not overlap — since
  * two diagrams half-visible at once reads as a rendering fault rather than a
  * transition. */
 @keyframes af-hero-swap {
   0%,
-  44% {
+  21.7% {
     opacity: 1;
     visibility: visible;
   }
-  49%,
-  95% {
+  25%,
+  96.7% {
     opacity: 0;
     visibility: hidden;
   }
@@ -1363,20 +1620,29 @@
 }
 
 .af-hero-kind {
-  animation: af-hero-swap 17s ease-in-out infinite;
+  animation: af-hero-swap 26s ease-in-out infinite;
 }
 
-/* The half-cycle offset. Negative, so the sequence side is already mid-cycle on
-   the first frame instead of the card sitting on a blank panel for 8 seconds.
-   THE WHOLE CLASS IS THIS ONE DECLARATION, which makes it fragile in a
-   specific way worth naming: an inline `animation-delay` on the same element
-   overrides it, and the element then runs in PHASE with its counterpart
-   instead of opposite it — both halves visible at once, printed over each
-   other. That shipped once, on the header's flow title, because the element
-   was also given a staged entrance. Put entrance delays on the CHILDREN of an
-   `-alt` element, never on the element itself. */
-.af-hero-kind-alt {
-  animation-delay: -8.5s;
+/* The quarter-cycle offsets. Negative, so kinds two to four are already mid-cycle
+   on the first frame instead of the card sitting on a blank panel until its turn
+   comes round.
+   EACH CLASS IS ONE DECLARATION, which makes them fragile in a specific way
+   worth naming: an inline `animation-delay` on the same element overrides it,
+   and the element then runs in PHASE with the first kind instead of after it —
+   both panels visible at once, printed over each other. That shipped once, on
+   the header's flow title, because the element was also given a staged
+   entrance. Put entrance delays on the CHILDREN of a phase element, never on
+   the element itself. `check:hero` asserts exactly this. */
+.af-hero-kind-2 {
+  animation-delay: -6.5s;
+}
+
+.af-hero-kind-3 {
+  animation-delay: -13s;
+}
+
+.af-hero-kind-4 {
+  animation-delay: -19.5s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1393,9 +1659,9 @@
     opacity: 0;
   }
 
-  /* The swap PARKS on the C4 panel rather than cycling. Both halves need
-     stating: without the second rule the sequence panel keeps its from-frame
-     and the two diagrams stack on top of each other. Parking on a real,
+  /* The swap PARKS on the C4 panel rather than cycling. The other three need
+     stating separately: without the second rule they keep their from-frame and
+     all four diagrams stack on top of each other. Parking on one real,
      complete diagram is the meaningful frame here — which is the whole
      reduced-motion rule in this codebase, not merely "slower". */
   .af-hero-kind {
@@ -1404,7 +1670,9 @@
     visibility: visible;
   }
 
-  .af-hero-kind-alt {
+  .af-hero-kind-2,
+  .af-hero-kind-3,
+  .af-hero-kind-4 {
     animation: none;
     opacity: 0;
     visibility: hidden;
@@ -1539,75 +1807,6 @@
   display: flex;
 }
 
-/* ---------------------------------------------------------------------------
-   Landing: the "talk through" preview.
-
-   The section it belongs to claims a sequence diagram RESPONDS to you — click
-   a message and it redraws itself while the rest recedes. That claim was
-   illustrated with a still, which is the weakest possible evidence for it: a
-   picture of a response is not a response. So the preview performs the claim
-   on a loop, with focus moving between its three messages exactly as it moves
-   when a reader clicks them in the real viewer.
-
-   It is AMBIENT, unlike the hero's one-shot assembly next door, and that is
-   the same distinction `af-frame-march` records: this is not an entrance, it
-   is the resting behaviour of the thing being described.
-
-   Each message is drawn TWICE — a resting copy in `--edge` that never
-   animates, and a lit copy in `--primary` that draws itself, holds, and fades.
-   Two copies rather than animating `stroke` between two colours: the resting
-   line must stay put while the lit one draws over it, which one element cannot
-   do, and interpolating a token-valued stroke is not a thing CSS can be relied
-   on for anyway.
-
-   `pathLength="1"` on the lit lines is what lets one keyframe draw arrows of
-   different lengths: the dash geometry is normalised, so `stroke-dashoffset:
-   1 → 0` is "undrawn → drawn" whatever the real span. Without it every arrow
-   would need its own length hard-coded here, which is exactly the kind of
-   duplicated magic number that goes stale when the drawing is nudged.
-
-   Only `opacity` and `stroke-dashoffset` animate — no layout, no colour
-   interpolation — so the loop stays off the layout path.
-   --------------------------------------------------------------------------- */
-
-@keyframes af-talk-focus {
-  /* One THIRD of the cycle per message, staggered by negative delays in the
-     markup, so exactly one is lit at any moment and the hand-off is seamless.
-     The draw takes the first ~4% (≈360ms of a 9s cycle) — near enough the
-     viewer's own focus draw to read as the same gesture. */
-  0% {
-    opacity: 0;
-    stroke-dashoffset: 1;
-  }
-  4% {
-    opacity: 1;
-    stroke-dashoffset: 0;
-  }
-  28% {
-    opacity: 1;
-    stroke-dashoffset: 0;
-  }
-  33%,
-  100% {
-    opacity: 0;
-    stroke-dashoffset: 0;
-  }
-}
-
-.af-talk-focus {
-  animation: af-talk-focus 9s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .af-talk-focus {
-    /* Parked on the RESTING state of the real viewer, which is every message
-       drawn and none of them spotlighted — not on an arbitrary frame of the
-       loop. The reader loses the demonstration and keeps a true picture. */
-    animation: none;
-    opacity: 0;
-  }
-}
-
 /* -------------------------------------------------------------------------- */
 /* The example index                                                           */
 /* -------------------------------------------------------------------------- */
@@ -1720,6 +1919,271 @@
   }
 }
 
+/* ---- the hero's icon-led primary call to action -----------------------------
+ * The label moved to `sr-only`, so the FACE of this control is a miniature C4
+ * diagram that draws itself (`LiveDiagramMark`). A play triangle was here
+ * first and said "media" rather than "diagram", which is the one thing the
+ * button opens.
+ *
+ * The gestures are BORROWED, not invented: the edge draws by stroke-dashoffset
+ * over pathLength=1 exactly as a flowchart edge does in its entrance trace, and
+ * the spark is the idle pulse's travelling band, one dash period per cycle so
+ * its wrap is invisible. A reader who has watched a real diagram load has seen
+ * both before.
+ *
+ * ONE loop, 2800ms, in four beats: the nodes arrive, the edge draws, the spark
+ * runs it, the mark rests. The rest matters — a mark that never stops is a
+ * spinner, and a spinner on a call to action reads as "waiting", the opposite
+ * of the invitation intended. Hovering shortens the loop to 1500ms, so the mark
+ * answers the pointer without changing what it does.
+ *
+ * Everything animated here is `opacity`, `scale` or `stroke-dashoffset`:
+ * compositor-only, so a permanent loop in the hero costs no layout. It shares a
+ * viewport with the running headline gradient, hence the long period and the
+ * held rest — two competing loops at the same tempo is a fairground.
+ *
+ * Reduced motion leaves the mark COMPLETE and still: both nodes, the whole
+ * edge, no spark. The control is finished without the animation, which is the
+ * test every ambient gesture in this app has to pass.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .af-cta-live .af-cta-node,
+  .af-cta-live .af-cta-edge,
+  .af-cta-live .af-cta-spark {
+    animation-duration: 2800ms;
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+  }
+
+  .af-cta-live:hover .af-cta-node,
+  .af-cta-live:hover .af-cta-edge,
+  .af-cta-live:hover .af-cta-spark {
+    animation-duration: 1500ms;
+  }
+
+  .af-cta-live .af-cta-node-a {
+    animation-name: af-cta-node-a;
+  }
+
+  .af-cta-live .af-cta-node-b {
+    animation-name: af-cta-node-b;
+  }
+
+  .af-cta-live .af-cta-edge {
+    animation-name: af-cta-edge-draw;
+  }
+
+  .af-cta-live .af-cta-spark {
+    animation-name: af-cta-spark-run;
+    /* Linear alone among the four: a spark that eases is a spark that slips. */
+    animation-timing-function: linear;
+  }
+}
+
+/* The spark's resting state is ABSENT, not parked — hidden by default, so it
+ * never paints for a reduced-motion reader and never sits frozen on the line
+ * before its beat (the frozen-stub defect the flowchart shipped once). */
+.af-cta-spark {
+  display: none;
+  stroke-width: 2.2;
+  stroke-dasharray: 0.22 0.78;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-cta-live .af-cta-spark {
+    display: inline;
+  }
+}
+
+/* Nodes arrive first and settle: 0 to full inside the first fifth of the loop,
+ * B a beat behind A, because the pair reads as "this one, then that one" and
+ * that IS the relationship the edge is about to draw. */
+@keyframes af-cta-node-a {
+  0% {
+    opacity: 0;
+    scale: 0.7;
+  }
+  14%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes af-cta-node-b {
+  0%,
+  10% {
+    opacity: 0;
+    scale: 0.7;
+  }
+  26%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+/* The edge draws once both ends exist, then stays whole for the rest of the
+ * loop — an edge that un-draws would claim the relationship stopped existing. */
+@keyframes af-cta-edge-draw {
+  0%,
+  22% {
+    stroke-dashoffset: 1;
+  }
+  46%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The spark runs exactly one dash period, and only after the line it rides is
+ * complete — light on a half-drawn edge is two stories at once. */
+@keyframes af-cta-spark-run {
+  0%,
+  46% {
+    stroke-dashoffset: 0.22;
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  84% {
+    stroke-dashoffset: -0.78;
+    opacity: 1;
+  }
+  88%,
+  100% {
+    stroke-dashoffset: -0.78;
+    opacity: 0;
+  }
+}
+
+/* ---- the header's own two gestures -------------------------------------------
+ * Both live here rather than in a feature stylesheet because the header is
+ * chrome: it is on every route, so its motion budget is the whole app's.
+ *
+ * THE MARK BREATHES THE DRILL-DOWN. The three nested rings already ARE the
+ * product's central idea (context → container → component), so the idle gesture
+ * is that idea in motion: each ring brightens in turn, outermost inwards, the
+ * order a reader drills. OPACITY ONLY — nothing moves or resizes, so the logo
+ * can never nudge the navigation beside it, and a mark that shifted by a pixel
+ * every few seconds next to a menu would be far worse than a still one.
+ *
+ * Paced at 4s, and the lift is a REAL one. The first cut moved each ring by
+ * about a fifth of a step and was reported as not looping at all — a loop
+ * nobody can see is not a loop, the same lesson the diagram canvases learned
+ * three times over. Each ring now travels from clearly dim to full and back,
+ * and the innermost one also scales a little: a transform, so it still costs no
+ * layout and the logo still cannot nudge the navigation beside it.
+ *
+ * Each ring's own resting opacity is its floor, so the animation lifts from what
+ * the mark already looked like rather than replacing it — which is why the three
+ * keyframes carry different values.
+ *
+ * HOVER OVERRIDES THE LOOP. Hovering the logo takes all three rings to full at
+ * once: the drill-down assembled, as a single answer to the pointer. The loop is
+ * paused rather than restarted, so leaving the hover resumes mid-breath instead
+ * of snapping back to the top.
+ *
+ * THE THEME TOGGLE TURNS. A wrapper rotates on hover — the control reads as
+ * something you twist, which is what picking a theme feels like — while the sun
+ * and moon keep cross-fading inside it on the `dark:` variant, untouched. A
+ * transition, not a loop: this one answers the pointer and is otherwise still,
+ * because two perpetual loops in one header is a fairground.
+ *
+ * Reduced motion: no loop, no turn. Both controls rest exactly as they are
+ * drawn, which is the state they were designed in.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  /* LONGHANDS, not the `animation` shorthand. A nameless shorthand —
+     `animation: 4000ms ease-in-out infinite`, with the name supplied by the
+     per-ring rules below — is legal CSS and Lightning CSS normalises it to
+     `animation: none`, which silently drops the duration. The rings then had a
+     name and no duration and never moved: shipped, and reported as "why is the
+     icon still static". Every other loop in this file already uses longhands
+     for the same reason; this one was the odd case out. */
+  .af-mark .af-mark-ring {
+    animation-duration: 4000ms;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    /* Scale from the mark's centre, not the viewBox origin, or the innermost
+       ring would swing instead of breathe. */
+    transform-origin: center;
+  }
+
+  .af-mark .af-mark-ring-1 {
+    animation-name: af-mark-ring-1;
+  }
+
+  .af-mark .af-mark-ring-2 {
+    animation-name: af-mark-ring-2;
+    animation-delay: 320ms;
+  }
+
+  .af-mark .af-mark-ring-3 {
+    animation-name: af-mark-ring-3;
+    animation-delay: 640ms;
+  }
+
+  /* Paused, not cancelled: leaving the hover resumes mid-breath rather than
+     snapping to the top of the loop. */
+  .group:hover .af-mark .af-mark-ring {
+    animation-play-state: paused;
+  }
+
+  .af-theme-dial {
+    transition: rotate 300ms ease-out;
+  }
+
+  .af-theme-toggle:hover .af-theme-dial {
+    rotate: 18deg;
+  }
+
+  .af-theme-toggle:active .af-theme-dial {
+    rotate: -12deg;
+  }
+}
+
+/* Hover assembles the drill-down: all three rings at full, at once. Outside the
+ * reduced-motion gate deliberately — it is a state change, not an ambient
+ * gesture, so a reader who wants no ambient motion still gets the affordance. */
+.group:hover .af-mark .af-mark-ring {
+  opacity: 1;
+}
+
+@keyframes af-mark-ring-1 {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
+@keyframes af-mark-ring-2 {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
+/* The innermost ring is the component — the deepest level, and the one the
+   drill-down arrives at — so it gets the scale as well as the lift. */
+@keyframes af-mark-ring-3 {
+  0%,
+  100% {
+    opacity: 0.5;
+    scale: 0.9;
+  }
+  45% {
+    opacity: 1;
+    scale: 1.15;
+  }
+}
 /* ---- shaped focus rings on the diagram canvases -----------------------------
  * A CSS `outline` boxes the BOUNDING BOX, always. On canvases whose entire
  * vocabulary is shapes that reads as a rendering fault rather than as focus: a
@@ -1772,4 +2236,3 @@
 .af-flow-hit:focus-visible ~ .af-flow-ring {
   opacity: 1;
 }
-

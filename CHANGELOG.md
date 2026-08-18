@@ -42,12 +42,56 @@ grammars are refused by the old parsers with a message naming the right one.
 
 ### Added — everywhere
 
+- Line numbers on `/validate`'s source pane, which had been left out when
+  `/view` and `/syntax` got them — on the one page whose whole output is "line 12,
+  column 4".
+- A 404 page. It leads with the bundled examples rather than the home page,
+  because most 404s here are a link to a diagram id that has been renamed.
+
 - `validate_flowchart`, `format_flowchart`, `validate_usecase` and
   `format_usecase` on the MCP server, each reporting the defects a parse cannot
   see — unguarded decisions, unreachable steps, actors that can do nothing,
   `include` cycles. `create_share_link` now accepts all four document kinds.
 - Bundled examples of both kinds on `/demo`, with crawlable read-only pages.
 - `Flowchart` and `Use case` starters in the playground's "Start from" row.
+- A home page section naming each of the four notations, every one linking to a
+  worked example in the playground.
+
+### Changed
+
+- The dark theme — the default — is a dark grey (`#1c1e24`) rather than a
+  near-black with a violet cast. The canvas, node fills, borders and edges were
+  re-solved around the new ground, so every measured contrast pair still clears
+  its minimum, and the social card matches the page a click lands on. Brand
+  colour is unchanged.
+- **The default theme is now High contrast**, not Dark. It separates by outline
+  rather than by fill, so the first thing a visitor sees is the most legible
+  arrangement the app draws. Every other theme, Dark included, is one click away
+  in the picker.
+- The social share image and the phone's browser-chrome colour follow the default
+  theme rather than being hand-maintained beside it.
+- The navbar's background fades out downward instead of being a flat tint that
+  ends at a rule, so the row reads as part of the page rather than a bar sitting
+  on it.
+- The home page's background is a field of dots that reacts to the pointer —
+  dots take the accent colour near the cursor, scatter with inertia under a fast
+  sweep, and ripple away from a click. It holds still for anyone who has reduced
+  motion set or the idle-motion toggle off, and the resting field is what a
+  no-JS reader gets.
+- The home page's hero cycles through all four document kinds instead of two,
+  each drawn as a real miniature of its own notation.
+- The site described itself as a C4-and-sequence tool everywhere it is quoted —
+  page titles, meta descriptions, the social card, `/llms.txt` and the
+  structured data. All of them now name all four kinds, so a search result and
+  an assistant's answer list what the product actually draws.
+
+### Removed
+
+- The home page's "A diagram you can talk through" section. Presentation is
+  still the selling point; the hero above it now animates four real diagrams and
+  the headline already said it, so the section argued a settled point across
+  half a screen while the page never once said in prose which kinds it draws.
+  That sentence is what took its place.
 
 ### Fixed
 

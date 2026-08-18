@@ -35,8 +35,15 @@ export const EDITOR_ENABLED: boolean = true;
  * What survives leads with what the thing does and names the two features
  * people arrive for.
  */
+/* NAMES EVERY DOCUMENT KIND, and that is the reason it is right up against the
+   160-character budget the search snippet allows. This one string is the meta
+   description on every route that does not set its own, the OG description, and
+   the sentence an assistant asked "what is arch-lab" is most likely to quote —
+   so a kind missing from here is a kind the product supports and nothing
+   outside the app ever says it supports. "No account." was the phrase that gave
+   way to make room; the pages that need it say it in their own copy. */
 export const APP_DESCRIPTION =
-  "Write C4 and sequence diagrams as plain text, watch them render live in your browser, and let an AI agent author them over MCP. No account, nothing uploaded.";
+  "Beautiful, zoomable C4, sequence, flowchart and use-case diagrams written as plain text, rendered live in your browser. An AI agent can author them over MCP.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */
@@ -60,6 +67,7 @@ export const APP_DESCRIPTION =
 export const THEMES = [
   "light",
   "paper",
+  "pastel",
   "glass",
   "dark",
   "midnight",
@@ -68,8 +76,26 @@ export const THEMES = [
 
 export type Theme = (typeof THEMES)[number];
 
-/** Dark is a deliberate product decision, not an OS preference. */
-export const DEFAULT_THEME: Theme = "dark";
+/**
+ * The theme a first-time visitor gets. A product decision, not an OS preference
+ * — see `enableSystem={false}` in `app/providers.tsx`.
+ *
+ * HIGH CONTRAST, not `dark`. `contrast` separates by OUTLINE rather than by
+ * fill: its ground is `oklch(0.05 0 0)` and its cards sit 0.07 above that, so
+ * what tells one node from another is a `--border` at L 0.72 rather than a
+ * lighter surface. Defaulting to it means the first thing anyone sees is the
+ * most legible arrangement the app can draw.
+ *
+ * THE TRADE, recorded because it is easy to reverse by accident: `dark` is the
+ * theme whose palette is tuned — the dark-grey ground at #1c1e24, the role fills
+ * lifted 0.03 with brightened borders, the wash measured against its own
+ * top stop — and none of that is what a visitor now sees first. `contrast` is
+ * deliberately starker than beautiful. If this moves back, move the picker's
+ * "The default" hint in `theme-toggle.tsx` and the OG palette in
+ * `marketing/og/card.tsx` with it: both are derived from whatever this says, by
+ * hand, and `check:og-cards` only pins the lane colours.
+ */
+export const DEFAULT_THEME: Theme = "contrast";
 
 /** localStorage key next-themes persists the choice under. */
 export const THEME_STORAGE_KEY = "arch-lab-theme";

@@ -38,10 +38,11 @@ export function GET(): Response {
 
 > ${APP_DESCRIPTION}
 
-${APP_NAME} reads and writes two kinds of architecture document as plain text:
-C4 models and sequence diagrams. The text format is \`.alab\`; arch-lab JSON and
-Mermaid (C4 and sequenceDiagram) are also accepted and converted. Everything
-runs in the browser — there is no account, and nothing is uploaded.
+${APP_NAME} reads and writes four kinds of architecture document as plain text:
+C4 models, UML-style sequence diagrams, flowcharts and use-case diagrams. The
+text format is \`.alab\`; arch-lab JSON and Mermaid (\`C4Context\`,
+\`sequenceDiagram\`, \`flowchart\`/\`graph\`) are also accepted and converted.
+Everything runs in the browser — there is no account, and nothing is uploaded.
 
 ## For agents
 
@@ -51,7 +52,8 @@ runs in the browser — there is no account, and nothing is uploaded.
 - The grammar, with every example verified against the real parser: ${origin}/syntax
 
 Use the server for the two things a file editor cannot do alone: get the exact
-grammar, and get the real parser's verdict on something you wrote. There is no
+grammar, and get the real parser's verdict on something you wrote — there is a
+validate and a format tool for each of the four document kinds. There is no
 mutation API — you edit \`.alab\` files yourself.
 
 ## Full reference

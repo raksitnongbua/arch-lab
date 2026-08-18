@@ -160,13 +160,72 @@ export function Header(): React.JSX.Element {
   return (
     <header
       ref={headerRef}
-      className="af-glass sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl"
+      /* NO BACKGROUND AND NO BORDER ON THE HEADER ITSELF — both live in the
+         fading layer below, and that is the point.
+         It was a flat `bg-background/80` with a `border-b`, then `/60`, and
+         a uniform tint plus a hard rule is exactly what made the row read as a
+         separate bar sitting ON the page rather than as part of it: the tint ends
+         somewhere, and wherever it ends there is an edge. Fading the ground out
+         downward removes the edge instead of softening it — the row is opaque
+         where the text is and gone by the time it meets the page. */
+      className="af-glass sticky top-0 z-40"
     >
+      {/* THE FADING GROUND, in two layers because a tint and a blur have to fade
+          separately. The gradient fades the COLOUR; the mask fades the BLUR, and
+          without it the blur would stop dead at the header's bottom edge and put
+          back the seam the gradient just removed.
+          Both are `absolute` with the default z-index and come FIRST in DOM
+          order, so the content below paints over them. Deliberately not `-z-10`:
+          a negative z-index child paints before the backgrounds of in-flow
+          descendants, which would put these two layers over the nav's own active
+          pill — and a negative z-index escaping its intended stacking context is
+          the bug that hid this site's entire page backdrop.
+
+          THE BLUR, NOT THE TINT, IS THE LEGIBILITY DEVICE. When the tint came
+          down to /45 at the midline (below), the busy-canvas case — /view can
+          scroll an accent-coloured node directly under the nav — fell under
+          4.5:1 against raw content in the dark themes, and it was under it
+          before the change too: at the old /60 midline, `--foreground` over an
+          accent node measured 3.6:1 in `dark`. What actually keeps that case
+          readable is the blur averaging the node into its card and canvas, so
+          the mask's solid stop sits at 70% — past the text band, which ends at
+          ~66% of the 64px row — rather than releasing the blur at 45% halfway
+          through the text. `check:dot-grid` pins the ≥60% floor. `saturate`
+          rides along for the same reason it does on `.af-glass` (globals.css):
+          a plain blur of the ground reads as grey haze, and the chroma lift is
+          what makes the thinned bar read as glass rather than a smudge. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 backdrop-blur-xl backdrop-saturate-150"
+        style={{
+          maskImage: "linear-gradient(to bottom, black 70%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, black 70%, transparent 100%)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        /* 80 → 45 → transparent, down from 95/60: with the page's dot field
+           running behind the header, every point of opacity here is lattice
+           erased, and at /95 the top of the row still read as a bar sitting ON
+           the field. The floor is measured, not felt: over every surface the
+           header actually crosses — page `--background`, `--canvas`, node
+           `--card` — `--foreground` nav text composited through this ground
+           stays ≥ 10:1 in all seven themes (worst: pastel over canvas, 10.1:1
+           at the text band's thinnest alpha; scripts/lib/oklch.mjs maths).
+           The alpha is nearly irrelevant over those surfaces because the tint
+           is background-coloured over the background; what the thinning DOES
+           cost is the busy-canvas case, which the blur layer above carries —
+           see its comment before nudging either number independently. */
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/80 via-background/45 to-transparent"
+      />
+
       {/* Full-bleed rather than centred in a max-width container: the editor is
           edge-to-edge (rails flush to both sides), so a contained header left the
           chrome visibly inset from the app below it. Padding is kept close to the
-          editor header's own so the two read as one continuous surface. */}
-      <div className="flex h-16 w-full items-center justify-between gap-3 px-3 sm:gap-4 sm:px-6">
+          editor header's own so the two read as one continuous surface.
+          `relative` so it sits above the two ground layers. */}
+      <div className="relative flex h-16 w-full items-center justify-between gap-3 px-3 sm:gap-4 sm:px-6">
         <Link
           href="/"
           className={cn(
@@ -327,12 +386,30 @@ function NavEntry({
   );
 }
 
-/** Three nested squares — the C4 drill-down, at logo scale. */
+/**
+ * Three nested squares — the C4 drill-down, at logo scale.
+ *
+ * IT BREATHES THE DRILL-DOWN. The three rings are already the product's central
+ * idea (context → container → component), so the idle gesture is that idea in
+ * motion: each ring brightens in turn, outermost inwards, which is the order a
+ * reader drills. Nothing moves or resizes — opacity only, on three elements
+ * that are already there — so the mark never nudges the header's layout, and a
+ * logo that shifted by a pixel every few seconds beside navigation would be
+ * far worse than a still one.
+ *
+ * Slow and shallow on purpose (`af-mark-*` in globals.css): this runs on every
+ * page, forever, in the reader's peripheral vision. It is a heartbeat, not a
+ * greeting — hover is where the mark answers, and there the whole thing lifts
+ * to full strength at once.
+ *
+ * Reduced motion leaves all three rings at their resting opacities, which is
+ * the mark as it has always been drawn.
+ */
 function Mark() {
   return (
     <span
       aria-hidden="true"
-      className="relative grid size-8 place-items-center rounded-lg border border-border bg-card text-primary transition-colors group-hover:border-primary/40"
+      className="af-mark relative grid size-8 place-items-center rounded-lg border border-border bg-card text-primary transition-colors group-hover:border-primary/40"
     >
       <svg
         viewBox="0 0 24 24"
@@ -342,9 +419,32 @@ function Mark() {
         strokeLinejoin="round"
         className="size-4.5"
       >
-        <rect x="3" y="3" width="18" height="18" rx="3" opacity="0.45" />
-        <rect x="7" y="7" width="10" height="10" rx="2" opacity="0.75" />
-        <rect x="10.5" y="10.5" width="3" height="3" rx="1" />
+        <rect
+          className="af-mark-ring af-mark-ring-1"
+          x="3"
+          y="3"
+          width="18"
+          height="18"
+          rx="3"
+          opacity="0.45"
+        />
+        <rect
+          className="af-mark-ring af-mark-ring-2"
+          x="7"
+          y="7"
+          width="10"
+          height="10"
+          rx="2"
+          opacity="0.75"
+        />
+        <rect
+          className="af-mark-ring af-mark-ring-3"
+          x="10.5"
+          y="10.5"
+          width="3"
+          height="3"
+          rx="1"
+        />
       </svg>
     </span>
   );

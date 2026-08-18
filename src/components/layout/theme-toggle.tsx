@@ -7,6 +7,7 @@ import {
   Layers,
   Moon,
   MoonStar,
+  Palette,
   Sun,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -49,13 +50,20 @@ const THEME_META: Record<
   { label: string; hint: string; Icon: typeof Sun }
 > = {
   light: { label: "Light", hint: "Cool white", Icon: Sun },
-  paper: { label: "Paper", hint: "Warm, less glare", Icon: BookOpen },
+  paper: { label: "Paper", hint: "Like a printed document", Icon: BookOpen },
+  pastel: {
+    label: "Pastel",
+    hint: "Colourful, between the two",
+    Icon: Palette,
+  },
   glass: { label: "Liquid glass", hint: "Translucent surfaces", Icon: Layers },
-  dark: { label: "Dark", hint: "The default", Icon: Moon },
+  dark: { label: "Dark", hint: "Tuned dark grey", Icon: Moon },
   midnight: { label: "Midnight", hint: "True black, for OLED", Icon: MoonStar },
   contrast: {
     label: "High contrast",
-    hint: "Stronger outlines",
+    /* Names what it IS as well as that it is the default: "The default" alone
+       told a reader which row they would land on and nothing about why. */
+    hint: "The default · stronger outlines",
     Icon: Contrast,
   },
 };
@@ -129,7 +137,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         aria-label={label}
         title={label}
         className={cn(
-          "relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground backdrop-blur",
+          "af-theme-toggle relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground backdrop-blur",
           "transition-colors duration-200 hover:border-foreground/25 hover:bg-card hover:text-foreground",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
         )}
@@ -140,14 +148,25 @@ export function ThemeToggle({ className }: { className?: string }) {
             contrast) all carry `.dark`-adjacent grounds, so the moon is right
             for every one of them — the specific theme is named in the menu,
             which is where the distinction matters. */}
-        <Sun
+        {/* A WRAPPER carries the hover gesture, not the icons themselves: they
+            already animate `rotate` for the `dark:` cross-fade, and a second
+            rotation on the same property would fight it mid-transition. The
+            dial turns as a whole — the control reads as something you twist,
+            which is what choosing a theme feels like — while the two icons keep
+            swapping inside it, untouched. */}
+        <span
           aria-hidden="true"
-          className="absolute size-4 scale-100 rotate-0 opacity-100 transition-all duration-300 dark:scale-50 dark:-rotate-90 dark:opacity-0"
-        />
-        <Moon
-          aria-hidden="true"
-          className="absolute size-4 scale-50 rotate-90 opacity-0 transition-all duration-300 dark:scale-100 dark:rotate-0 dark:opacity-100"
-        />
+          className="af-theme-dial relative grid size-4 place-items-center"
+        >
+          <Sun
+            aria-hidden="true"
+            className="absolute size-4 scale-100 rotate-0 opacity-100 transition-all duration-300 dark:scale-50 dark:-rotate-90 dark:opacity-0"
+          />
+          <Moon
+            aria-hidden="true"
+            className="absolute size-4 scale-50 rotate-90 opacity-0 transition-all duration-300 dark:scale-100 dark:rotate-0 dark:opacity-100"
+          />
+        </span>
       </button>
 
       {open ? (

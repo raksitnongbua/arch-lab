@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HandoffLink } from "@/components/share/handoff-link";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { NumberedTextarea } from "@/components/ui/numbered-textarea";
 import { cn } from "@/lib/utils";
 
 import {
@@ -139,15 +139,26 @@ function SourcePane({
         </div>
       </div>
 
-      <Textarea
+      {/* NUMBERED, and on this page more than on any other. `/view` and
+          `/syntax` gained a gutter first and this pane was left with a plain
+          textarea, which had it backwards: the whole product of this page is a
+          verdict that says "line 12, column 4", and until now a reader holding
+          that verdict had to count rows to find line 12. The one surface whose
+          output is line numbers was the one surface whose input had none.
+
+          `spellCheck` and the type scale are NOT passed: the component owns both,
+          because its two columns only stay aligned while they share one line
+          height. `resize-y` stays on the wrapper rather than the textarea — the
+          wrapper is what has a height here, and it can be dragged because it
+          clips its overflow. */}
+      <NumberedTextarea
         id="validate-source"
         value={source}
         onChange={(event) => onSourceChange(event.target.value)}
-        spellCheck={false}
         placeholder={
           'archlab 1.0\ntitle "My System"\n\n@context d-ctx "Context"\n  me:person "Customer"'
         }
-        className="mt-3 h-[26rem] resize-y font-mono text-xs leading-relaxed"
+        className="mt-3 h-[26rem] resize-y"
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -61,10 +61,11 @@ Source: ${origin} · Index: ${origin}/llms.txt
 ## What ${APP_NAME} is
 
 ${APP_NAME} is a browser-based tool for writing software architecture diagrams
-as plain text. It reads two kinds of document — C4 models (context, container,
-component and code levels) and UML-style sequence diagrams — and renders both
-live. Nothing is uploaded and no account is required: a document is a file you
-keep, and git is the collaboration layer.
+as plain text. It reads four kinds of document — C4 models (context, container,
+component and code levels), UML-style sequence diagrams, flowcharts, and
+use-case diagrams — and renders every one of them live. Nothing is uploaded and
+no account is required: a document is a file you keep, and git is the
+collaboration layer.
 
 ## Formats it reads
 
@@ -72,13 +73,15 @@ keep, and git is the collaboration layer.
   and lossless in both directions against the JSON form. The grammar is below.
 - \`.archlab.json\` — the same C4 model as JSON, for tools that would rather not
   implement a grammar. Converts losslessly to and from \`.alab\`.
-- Mermaid \`C4Context\`/\`C4Container\`/\`C4Component\` and \`sequenceDiagram\` —
+- Mermaid \`C4Context\`/\`C4Container\`/\`C4Component\`, \`sequenceDiagram\`, and
+  \`flowchart\`/\`graph\` (which also carries the actor-and-use-case convention) —
   imported, and exported back. Import and export are each lossy in their own
-  direction, and the app states exactly what each drops.
+  direction, and the app states exactly what each drops. A Mermaid shape with no
+  arch-lab counterpart is refused by name rather than approximated.
 
-Paste any of the five into ${origin}/view and the format is detected for you —
-one page for both document kinds. \`?d=seq\` chooses which example it starts
-from, and \`?e=<id>\` opens a bundled one.
+Paste any of them into ${origin}/view and the format is detected for you — one
+page for all four document kinds. \`?d=\` chooses which example it starts from
+(\`c4\`, \`seq\`, \`flow\`, \`uc\`), and \`?e=<id>\` opens a bundled one.
 
 ## Using it from an AI agent (MCP)
 

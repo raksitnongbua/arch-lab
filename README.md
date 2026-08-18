@@ -141,6 +141,14 @@ Icons for things with no logo — a database, a queue, a person — come from
 [lucide](https://lucide.dev), which also draws the application's interface, so
 a diagram and the chrome around it share one visual language.
 
+The home page's interactive dot field is adapted from
+[React Bits](https://reactbits.dev)' `DotGrid` (MIT). The physics are upstream's;
+the colour, the motion preferences, the frame budget and the event scoping were
+reworked to this codebase's rules, and `pnpm check:dot-grid` asserts each of
+those so re-pasting the upstream file cannot quietly undo them. Motion is by
+[gsap](https://gsap.com) with its InertiaPlugin, under the
+[standard licence](https://gsap.com/standard-license).
+
 ## Licence
 
 [MIT](LICENSE) © 2026 Raksit Nongbua

@@ -27,8 +27,14 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+/* The title has to name the CATEGORY someone searches for, and there are now
+   four of them — which will not fit in the ~60 characters a result shows. So it
+   names the two people search by name ("C4 diagram tool", "sequence diagram as
+   text") and then the general word that covers all four, rather than truncating
+   a list of four mid-way. The full set is named in the page copy and in the
+   structured data, where there is room for it. */
 const DEFAULT_TITLE = EDITOR_ENABLED
-  ? `${APP_NAME} — C4 and sequence diagram editor`
+  ? `${APP_NAME} — C4, sequence and flowchart editor`
   : `${APP_NAME} — C4 and sequence diagrams as text`;
 
 export const metadata: Metadata = {
@@ -43,19 +49,39 @@ export const metadata: Metadata = {
   },
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
-  // The phrases people actually type — including the spaced "arch lab",
-  // which the hyphenated name alone would never match.
+  /*
+   * The phrases people actually type — including the spaced "arch lab", which
+   * the hyphenated name alone would never match.
+   *
+   * A CAVEAT worth keeping honest: Google has ignored `<meta name="keywords">`
+   * since 2009, so nothing in this array ranks anything by itself. It is kept
+   * because some non-Google engines and internal site searches still read it,
+   * and because writing the list is how the vocabulary gets agreed. The words
+   * that actually rank are the ones in the title, the description and the H1 —
+   * which is why "beautiful" and "zoomable" were added THERE too
+   * (APP_DESCRIPTION, and the hero copy in app/page.tsx) rather than only here.
+   */
   keywords: [
     "arch lab",
     "arch-lab",
     "C4 model",
     "C4 diagram",
     "C4 architecture diagram",
+    // The two qualities people search for once they know the category exists:
+    // they are not looking for "a C4 tool", they are looking for one whose
+    // output is presentable and explorable.
+    "beautiful C4 diagram",
+    "zoomable C4 diagram",
+    "interactive C4 diagram",
+    "C4 diagram you can zoom",
+    "drill-down C4 diagram",
+    "presentation-ready architecture diagram",
     "architecture diagram as code",
     "diagram as code",
     "software architecture diagram",
     ".alab",
     "C4 editor",
+    "C4 diagram viewer",
     "local-first",
   ],
   authors: [{ name: APP_NAME }],
@@ -80,11 +106,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Single value on purpose: the app is dark by default regardless of the OS
+  // Single value on purpose: the app has ONE default theme regardless of the OS
   // preference (enableSystem={false}), so keying this off prefers-color-scheme
-  // would paint light browser chrome around a dark page. sRGB approximation of
-  // the dark `--background` token.
-  themeColor: "#1b1b23",
+  // would paint light browser chrome around a dark page.
+  // Pure black because that is what `.contrast`'s `--background` — the default
+  // since this commit — converts to exactly: `oklch(0.05 0 0)` falls below the
+  // sRGB transfer function's linear segment. It reads as a deliberate choice on
+  // a phone rather than as a missing value, which is the risk with #000 here.
+  themeColor: "#000000",
 };
 
 /**

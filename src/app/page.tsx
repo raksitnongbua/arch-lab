@@ -3,7 +3,11 @@ import {
   Bot,
   FileText,
   GitBranch,
+  Layers,
+  MessagesSquare,
   MousePointerClick,
+  Users,
+  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
@@ -11,7 +15,10 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { DotGrid } from "@/features/marketing/dot-grid";
+import { DotGridStudioGate } from "@/features/marketing/dot-grid-studio-gate";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
+import { LiveDiagramMark } from "@/features/marketing/live-diagram-mark";
 import { McpFlow } from "@/features/marketing/mcp-flow";
 import {
   CONNECT_RECIPES,
@@ -45,10 +52,17 @@ export const metadata: Metadata = {
  *      deliberately: the chooser asks a question ("C4 or sequence?") that a
  *      newcomer has no basis to answer, while the sequence playground opens
  *      seeded with a working flow they can click immediately.
- *   2. WHY THIS AND NOT DRAW.IO — the two things nothing else here does:
- *      diagrams you can PRESENT (click a message, drill a level, go
- *      immersive) and an AGENT that writes them for you over MCP. One section
- *      each, both ending in a link that does the thing.
+ *   2. WHAT IT DRAWS and WHO CAN WRITE IT — the four notations, one link
+ *      each into the playground, then the MCP server that lets an agent author
+ *      any of them. Both sections end in a link that does the thing.
+ *
+ *      This used to be a PRESENTATION section instead of the notations one: a
+ *      half-page animated sequence preview with three gesture rows (click,
+ *      double-click, immersive). It went because the argument was already made
+ *      twice above it — the headline says "present" and the hero animates four
+ *      real diagrams, one of them drilling — while the page never once said in
+ *      prose which kinds it draws. Presentation is still the product's selling
+ *      point; it is just not something this page has to argue three times.
  *   3. WHAT DO I DO WITH IT — three steps, then the format and the footer.
  *
  * WHAT WAS CUT, so nobody restores it by reflex: the "coming soon" cards for
@@ -92,6 +106,72 @@ const STEPS: readonly Step[] = [
   },
 ];
 
+/**
+ * The four notations, in the order the docs and the playground list them.
+ *
+ * A FOUR-CARD GRID OF DIAGRAM KINDS USED TO BE THE FIRST THING ON THIS PAGE
+ * and was deliberately cut — read the note above before restoring it by
+ * reflex, because the reason it was cut no longer holds and that matters. It
+ * was cut because two of the four were "coming soon": a newcomer cannot act on
+ * a roadmap, and two dashed placeholder cards were a third of the fold. All
+ * four are now shipped, in real use, and each one opens in the playground from
+ * here. A card that opens a working diagram is not the card that got cut.
+ *
+ * It is also the page's answer to a question no other section asks for it. A
+ * reader arriving from a search for "sequence diagram as text" or an assistant
+ * asked "does arch-lab do flowcharts" needs the kinds NAMED, in prose, on the
+ * page that ranks — and until this existed the only place that said "flowchart"
+ * was a menu item inside the playground, which neither a crawler nor a model
+ * summarising the site will ever see. The `body` lines carry the notation's own
+ * vocabulary (lifelines, guards, «include») for the same reason: those are the
+ * words somebody searches with.
+ *
+ * `href` seeds the ONE playground rather than pointing at four routes. The
+ * `?d=` values are the short aliases `playground/lib/seed.ts` accepts.
+ */
+const KINDS: readonly {
+  icon: LucideIcon;
+  name: string;
+  /* What this kind is called in a LIST of capabilities, which is not its
+     heading: the headings are singular ("Sequence diagram") because each one
+     labels one card, and appending "diagrams" to those to build the structured
+     data produced "Sequence diagram diagrams" — caught by reading the served
+     JSON-LD rather than the source. Two spellings of one name, in one table, is
+     still one place to change. */
+  feature: string;
+  body: string;
+  href: string;
+}[] = [
+  {
+    icon: Layers,
+    name: "C4 model",
+    feature: "C4 models",
+    body: "Context, container and component levels in one file — zoom in and drill from a box into what it contains.",
+    href: "/view?d=c4",
+  },
+  {
+    icon: MessagesSquare,
+    name: "Sequence diagram",
+    feature: "Sequence diagrams",
+    body: "Lifelines, activation, loops and alt fragments — clickable message by message, with the payload beside each one.",
+    href: "/view?d=seq",
+  },
+  {
+    icon: Workflow,
+    name: "Flowchart",
+    feature: "Flowcharts",
+    body: "Terminators, guarded decisions, io and call symbols, and loops that hook back — traced end to end as it draws.",
+    href: "/view?d=flow",
+  },
+  {
+    icon: Users,
+    name: "Use case",
+    feature: "Use case diagrams",
+    body: "Actors outside a system boundary, associations into it, and «include» or «extend» between cases.",
+    href: "/view?d=uc",
+  },
+];
+
 /** The Claude Code recipe, read from the same catalogue `/mcp` renders, so the
  * command on the landing page cannot drift from the one that works. */
 const CLAUDE_CODE_RECIPE = CONNECT_RECIPES.find(
@@ -125,6 +205,16 @@ function homeJsonLd(): string {
         description: APP_DESCRIPTION,
         applicationCategory: "DeveloperApplication",
         operatingSystem: "Web browser",
+        /* DERIVED FROM KINDS, never typed out beside it. This is the machine
+           half of the section that names the four notations, and the failure
+           mode of a hand-written copy is the worst kind: a fifth kind ships,
+           the page shows it, the structured data keeps claiming four, and an
+           assistant answering "what can arch-lab draw" reads the stale half. */
+        featureList: [
+          ...KINDS.map((kind) => kind.feature),
+          "Mermaid import and export",
+          `MCP server for AI agents (${MCP_TOOLS.length} read-only tools)`,
+        ],
         offers: {
           "@type": "Offer",
           price: "0",
@@ -143,12 +233,32 @@ export default function Home() {
   const endpoint = mcpEndpointUrl(publicOrigin());
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
+    /* `isolate` IS LOAD-BEARING, and its absence is why nothing in the backdrop
+       below has ever been visible — not the dots, not the line grid, not the
+       glows, not the wash.
+       The backdrop sits at `-z-10`. Without a stacking context here, the nearest
+       one is the ROOT element, and the CSS painting order inside a stacking
+       context puts negative-z-index descendants (step 3) BEFORE the backgrounds
+       of in-flow descendants (step 4) — and `body` carries `bg-background`, an
+       opaque fill. So the whole backdrop was painted and then covered by the
+       body's own background on every frame.
+       `isolation: isolate` makes this element the stacking context, so `-z-10` is
+       resolved inside it: above this element's background, below every section,
+       and entirely above `body`. `check:dot-grid` asserts it. */
+    <div className="relative isolate flex flex-1 flex-col overflow-hidden">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: homeJsonLd() }}
       />
       <Backdrop />
+
+      {/* The dot field's tuning panel, and it costs a visitor nothing: this
+          renders null unless the URL carries `?dots`, and the panel itself is a
+          dynamic import behind that check. Open http://localhost:3000/?dots — or
+          the same on the deployed site — to tune the field, then paste what the
+          copy button gives you into `dot-grid-config.ts`. Nothing it changes is
+          persisted; it is a way to choose values, not a setting. */}
+      <DotGridStudioGate />
 
       {/* ---------------------------------------------------------------- hero */}
       <section className="mx-auto w-full max-w-6xl px-5 pt-14 pb-12 sm:px-8 sm:pt-20 sm:pb-16">
@@ -186,31 +296,51 @@ export default function Home() {
               </span>{" "}
               is a browser-based editor for architecture diagrams written as
               plain text. Describe a system in a few lines and it draws it — a
-              C4 model you can drill into, or a sequence flow you can click
-              through message by message. Your AI agent can write that text for
-              you.
+              beautiful, zoomable C4 model you can drill into level by level, a
+              sequence flow you can click through message by message, a
+              flowchart, or a use-case diagram. Your AI agent can write that
+              text for you, over MCP.
             </p>
 
-            {/* ONE primary destination. The old hero offered three buttons and
-                a badge, and the first of them went to a gallery — a newcomer
-                had to pick between "demo", "sequence diagrams" and "editor
-                preview" before seeing anything at all. `/view/sequence` opens
-                already seeded with a flow, so the first click ends in a
-                working diagram rather than another choice. */}
+            {/* ONE primary destination, and now ACTUALLY one. The old hero
+                offered three buttons and a badge, and a newcomer had to pick
+                between "demo", "sequence diagrams" and "editor preview" before
+                seeing anything at all. Trimming to two did not finish the job:
+                "Build a C4 model" sat beside "Open a live diagram" pointing at
+                the SAME playground, asking a reader who has never seen the
+                product to choose between reading one and building one — a
+                choice they cannot make yet, and the second button was the
+                weaker offer besides, since building starts from a blank
+                intention while opening starts from a working diagram. The
+                playground's own "Sample diagrams" menu is where picking a kind
+                belongs, once someone is actually in it. */}
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              {/* ICON-LED, not word-led. The label is still here for anyone
+                  who cannot see the icon — `sr-only` text, which is what gives
+                  the link its accessible name — but sighted readers get a
+                  play mark that pulses and an arrow that runs, because a
+                  button that MOVES says "this does something now" faster than
+                  four words say it.
+
+                  The words are not merely deleted, though: the note beside
+                  this link ("Opens with a worked example") is the visible
+                  explanation, and it is why an icon-only face is affordable
+                  here at all. An icon alone next to nothing would be a riddle;
+                  `aria-describedby` already tied the two together. */}
               <Link
                 href="/view?d=seq"
                 aria-describedby="cta-note"
-                className={buttonClasses({ size: "lg" })}
+                className={buttonClasses({
+                  size: "lg",
+                  className: "af-cta-live group gap-2.5",
+                })}
               >
+                <LiveDiagramMark />
                 Open a live diagram
-                <ArrowRight aria-hidden="true" />
-              </Link>
-              <Link
-                href="/view"
-                className={buttonClasses({ variant: "outline", size: "lg" })}
-              >
-                Build a C4 model
+                <ArrowRight
+                  aria-hidden="true"
+                  className="transition-transform duration-200 group-hover:translate-x-1"
+                />
               </Link>
               <p id="cta-note" className="text-sm text-muted-foreground">
                 Opens with a worked example — nothing to set up.
@@ -223,99 +353,67 @@ export default function Home() {
         </div>
       </section>
 
-      {/* --------------------------------------------------- killer feature 1 */}
+      {/* ------------------------------------------------------ what it draws */}
+      {/* MINIMAL BY REQUEST, and this is what replaced the section that was
+          here: "A diagram you can talk through", a half-page figure with an
+          animated sequence preview and three gesture rows. It sold presentation
+          well and it sold it TWICE — the hero above already animates four real
+          diagrams and the headline already says "present" — so what it actually
+          cost was the first screen after the fold, on a page whose own doc
+          comment says a newcomer should reach "what do I do with it" fast.
+
+          What the page did NOT have anywhere was the plain sentence "it draws
+          these four kinds". That is the thing a search result and an assistant
+          summary both need, so the space went to saying it once, in prose, with
+          a link per kind. */}
       <section
-        aria-labelledby="present-heading"
+        aria-labelledby="kinds-heading"
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-14">
-          <div>
-            {/* An eyebrow that says WHAT KIND of claim follows, not a label
-                repeating the heading. The section's argument is a comparison
-                — most tools hand you a picture — so the eyebrow makes the
-                comparison and the heading makes the promise. */}
-            <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-              Not a picture
-            </p>
-            <h2
-              id="present-heading"
-              className="mt-2 text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
-            >
-              A diagram you can talk through
-            </h2>
-            <p className="mt-4 max-w-xl leading-relaxed text-muted-foreground">
-              Every element answers a gesture, so the diagram keeps up with the
-              conversation instead of sitting behind it.
-            </p>
+        <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
+          Four notations
+        </p>
+        <h2
+          id="kinds-heading"
+          className="mt-2 text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
+        >
+          One text format, four kinds of diagram
+        </h2>
+        <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+          The same editor, viewer, share link and export for all of them — and
+          Mermaid pastes straight into any of the four.
+        </p>
 
-            {/* GESTURES, each labelled with the input that performs it. The
-                mono keycap is the product's own voice for something the tool
-                understands — its hint bars already read "← → move between
-                messages". Every key is a WORD, not a glyph: `⛶` said
-                "immersive" in two characters and would have rendered as a
-                tofu box wherever the font lacks U+26F6, and "immersive" is
-                the button's own label anyway. Deliberately NOT numbered:
-                these are three independent things you can do, and 01/02/03
-                would assert an order that does not exist. */}
-            <dl className="mt-7 flex flex-col divide-y divide-border/60 border-y border-border/60">
-              <Gesture keys="click" title="Spotlight one message">
-                Its arrow redraws itself and holds while the rest recede — with
-                the endpoint, payload and failure modes beside it.
-              </Gesture>
-              <Gesture keys="double-click" title="Open the level beneath">
-                Drill from a C4 box into what it contains, and follow the
-                breadcrumb back out. One model, told at whatever depth the
-                question needs.
-              </Gesture>
-              <Gesture keys="immersive" title="Take the whole screen">
-                Immersive for the room you are presenting to. Export any view as
-                SVG, PNG, or an animated GIF for the doc nobody opens live.
-              </Gesture>
-            </dl>
-
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Link
-                href="/view?d=seq"
-                className={buttonClasses({ size: "md" })}
-              >
-                Click through a checkout flow
-                <ArrowRight aria-hidden="true" />
-              </Link>
-              <Link
-                href="/view/shopflow"
-                className={buttonClasses({ variant: "outline", size: "md" })}
-              >
-                Drill a C4 model
-              </Link>
-            </div>
-          </div>
-
-          {/* THE SIGNATURE. Everything else in this section is quiet so that
-              this can be the one loud thing: a miniature of the real viewer,
-              on the real canvas surface, doing the thing the copy describes.
-              It sits in a panel that borrows `--canvas` and the backdrop's
-              grid, so it reads as the product rather than as an illustration
-              of it. */}
-          <figure className="relative overflow-hidden rounded-2xl border border-border bg-[var(--canvas)] shadow-xl shadow-primary/5">
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 opacity-60"
-              style={{
-                backgroundImage:
-                  "linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px)",
-                backgroundSize: "28px 28px",
-              }}
-            />
-            <TalkThroughPreview className="relative w-full" />
-            <figcaption className="relative flex items-center gap-2 border-t border-border/60 bg-card/70 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
-              <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-              Focus moves message by message — the same draw a click gives you.
-            </figcaption>
-          </figure>
-        </div>
+        <ul className="mt-9 grid grid-cols-1 gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+          {KINDS.map((kind) => {
+            const Icon = kind.icon;
+            return (
+              <li key={kind.name}>
+                {/* The WHOLE card is the link, so the target is the size of the
+                    thing you are looking at rather than three words at the
+                    bottom of it. `group` lets the icon answer the hover. */}
+                <Link href={kind.href} className="group flex flex-col gap-2.5">
+                  <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary transition-colors group-hover:border-primary/40 group-hover:bg-primary/10">
+                    <Icon aria-hidden="true" className="size-5" />
+                  </span>
+                  <span className="flex items-center gap-1.5 text-base font-medium text-foreground">
+                    {kind.name}
+                    <ArrowRight
+                      aria-hidden="true"
+                      className="size-3.5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary"
+                    />
+                  </span>
+                  <span className="text-sm leading-relaxed text-muted-foreground">
+                    {kind.body}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
-      {/* --------------------------------------------------- killer feature 2 */}
+      {/* ------------------------------------------------------- agents + MCP */}
       <section
         aria-labelledby="agent-heading"
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
@@ -338,8 +436,8 @@ export default function Home() {
               The format is plain text, so an AI agent can write it — and the
               MCP server gives it the two things it cannot guess: the exact
               grammar, and the real parser&apos;s verdict on what it just wrote.{" "}
-              {MCP_TOOLS.length} read-only tools, over both document kinds.
-              Nothing here can change your files.
+              {MCP_TOOLS.length} read-only tools, over all {KINDS.length}{" "}
+              document kinds. Nothing here can change your files.
             </p>
 
             {CLAUDE_CODE_RECIPE === undefined ? null : (
@@ -457,194 +555,31 @@ export default function Home() {
 /* -------------------------------------------------------------------------- */
 
 /**
- * One gesture and what it does. A `<dl>` row rather than a bullet: the input
- * and its result are a term and its definition, which is what the markup now
- * says as well as what the layout shows.
- */
-function Gesture({
-  keys,
-  title,
-  children,
-}: {
-  keys: string;
-  title: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 py-4">
-      <dt className="col-start-1 row-span-2">
-        <span className="inline-flex min-w-16 items-center justify-center rounded-md border border-border bg-card px-2 py-1 font-mono text-[11px] whitespace-nowrap text-muted-foreground shadow-sm">
-          {keys}
-        </span>
-      </dt>
-      <dd className="col-start-2 text-sm font-medium text-foreground">
-        {title}
-      </dd>
-      <dd className="col-start-2 text-sm leading-relaxed text-muted-foreground">
-        {children}
-      </dd>
-    </div>
-  );
-}
-
-/**
- * A miniature of the sequence viewer, RUNNING: three lifelines, three
- * messages, and the focus moving between them the way it moves when a reader
- * clicks — the lit arrow draws itself, holds, and hands over.
+ * The page's ground: a wash, a line grid, a dot field over it, and two still
+ * glows. Decorative in full — `aria-hidden`, `pointer-events-none`, `-z-10` —
+ * and every layer is a CSS background rather than an element or an image, so the
+ * whole thing costs one paint and no requests.
  *
- * The section's whole argument is that these diagrams respond, and the still
- * that used to sit here was evidence against it as much as for it. The loop
- * is CSS (`af-talk-focus` in globals.css, which carries the mechanics and the
- * reduced-motion behaviour), so this stays a server component with no
- * hydration cost and no client state to get wrong.
+ * NOTHING HERE MOVES ON ITS OWN, which is a narrower claim than the one this
+ * comment used to make and the distinction is the whole rule. An animated wire
+ * layer lived here and was removed: it moved unprompted, behind a headline,
+ * where it either could not be seen at all or would have had to shout to be —
+ * and two rounds of raising its opacity to chase visibility was the signal to
+ * stop rather than to keep going.
+ * The dot field is not that. It is inert until a pointer arrives, it never
+ * loops, and its resting frame is exactly what a reader who wants no motion is
+ * shown — so it can be quiet enough to sit behind words and still be felt when
+ * someone reaches for it. Responding is not competing.
  *
- * `aria-hidden`, and the copy beside it does not depend on it: everything the
- * animation demonstrates is stated in the gesture list, and the two buttons
- * are how a reader acts on it. A decorative loop that a screen reader had to
- * sit through would be a worse version of the same claim.
- *
- * Hand-drawn rather than the real renderer, for the reason the C4 hero is:
- * the real one needs a parsed document, a layout pass and a client component
- * — a lot of machinery to ship on a landing page for something nobody can
- * interact with. It borrows the viewer's own lane tokens and its dashed-reply
- * convention, so it cannot drift into a vocabulary the product does not have.
- */
-function TalkThroughPreview({
-  className,
-}: {
-  className?: string;
-}): React.JSX.Element {
-  /** Lifelines: x centre and the lane token each card is drawn in. */
-  const columns = [
-    { x: 74, label: "Customer" },
-    { x: 214, label: "Order API" },
-    { x: 354, label: "Payments" },
-  ];
-
-  /**
-   * The three messages, in the order the focus visits them. `delay` is
-   * NEGATIVE so all three share one 9s clock and start already staggered —
-   * with positive delays the first pass would run empty for two thirds of a
-   * cycle before settling.
-   */
-  const messages = [
-    { from: 74, to: 214, y: 132, label: "Place the order", reply: false },
-    { from: 214, to: 354, y: 176, label: "Authorise card", reply: false },
-    { from: 354, to: 214, y: 220, label: "requires_capture", reply: true },
-  ];
-
-  return (
-    <svg
-      aria-hidden="true"
-      role="presentation"
-      viewBox="0 0 428 268"
-      className={className}
-    >
-      {columns.map((column, index) => (
-        <g key={column.label}>
-          <rect
-            x={column.x - 54}
-            y={28}
-            width={108}
-            height={34}
-            rx={8}
-            fill="var(--node)"
-            stroke={`var(--seq-lane-${index + 1})`}
-            strokeWidth={1.5}
-          />
-          <text
-            x={column.x}
-            y={49}
-            textAnchor="middle"
-            fontSize={11}
-            fontWeight={600}
-            fill="var(--node-foreground)"
-          >
-            {column.label}
-          </text>
-          <line
-            x1={column.x}
-            y1={62}
-            x2={column.x}
-            y2={244}
-            stroke="var(--edge)"
-            strokeWidth={1}
-            strokeDasharray="4 4"
-            opacity={0.55}
-          />
-        </g>
-      ))}
-
-      {messages.map((message, index) => {
-        const head = message.from < message.to ? -7 : 7;
-        return (
-          <g key={message.label}>
-            {/* Resting: always drawn, never animated. A sequence diagram is a
-                record of what happened, so nothing here is ever absent — the
-                focus only changes what is EMPHASISED. */}
-            <line
-              x1={message.from}
-              y1={message.y}
-              x2={message.to}
-              y2={message.y}
-              stroke="var(--edge)"
-              strokeWidth={1.5}
-              strokeDasharray={message.reply ? "5 4" : undefined}
-              opacity={0.5}
-            />
-            <path
-              d={`M${message.to} ${message.y} l${head} -4 v8 z`}
-              fill="var(--edge)"
-              opacity={0.5}
-            />
-
-            {/* Lit: draws itself, holds, hands over. `pathLength` normalises
-                the dash geometry so one keyframe fits arrows of any span. */}
-            <g
-              className="af-talk-focus"
-              style={{ animationDelay: `${index * -3}s` }}
-            >
-              <line
-                x1={message.from}
-                y1={message.y}
-                x2={message.to}
-                y2={message.y}
-                pathLength={1}
-                strokeDasharray={1}
-                stroke="var(--primary)"
-                strokeWidth={2}
-              />
-              <path
-                d={`M${message.to} ${message.y} l${head} -4 v8 z`}
-                fill="var(--primary)"
-              />
-              <text
-                x={(message.from + message.to) / 2}
-                y={message.y - 8}
-                textAnchor="middle"
-                fontSize={10}
-                fontFamily="var(--font-mono)"
-                fill="var(--primary)"
-              >
-                {message.label}
-              </text>
-            </g>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-/**
- * Decorative background: a faint canvas grid plus two soft colour washes.
- * Purely presentational, fixed behind content, ignored by assistive tech.
+ * Every layer's fade is masked in ABSOLUTE units, never percentages: this
+ * element is `inset-0` of the page, which is thousands of pixels tall, so a
+ * percentage is measured against a box nobody can see the bottom of.
  */
 function Backdrop() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 -z-10"
+      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
     >
       <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.07] via-transparent to-transparent" />
       <div
@@ -659,6 +594,80 @@ function Backdrop() {
             "radial-gradient(ellipse 80% 55% at 50% 0%, black 20%, transparent 75%)",
         }}
       />
+
+      {/* THE DOT FIELD. Pitched at exactly half the line grid's 56px, so every
+          dot lands either on a grid intersection or on the midpoint of a line
+          and the two patterns read as one surface — at an unrelated pitch they
+          beat against each other and the backdrop looks like a rendering fault.
+
+          IT REACTS TO THE POINTER, which is the one exception to "nothing here
+          moves" above, and it earns the exception the way the hero card does: it
+          responds rather than performs. Nothing happens until a hand arrives,
+          nothing loops, and the resting frame is the same field of dots a reader
+          who wants no motion gets. That is the opposite of the wire layer that
+          was removed — that one moved on its own, unprompted, behind words.
+
+          PAINTED IN `--node-border`, and the first two attempts at this are
+          worth recording because both were invisible and both measured "fine"
+          against the wrong reference. `--canvas-grid` — what the lines above use
+          — tops out at 1.16:1 on the dark ground, since the ground moved up to
+          meet it. `--border` tops out at 1.63:1 and was running at half, so
+          1.32:1. Neither can be seen, and the reason the numbers looked
+          acceptable is that they were compared to the LINE GRID, which measures
+          1.08:1 and cannot be seen either. A reference has to be something you
+          can actually point at.
+          `--node-border` measures 1.98:1 composited on the dark ground and
+          1.86:1 on the light one. Quiet, and present. THE LESSON, since this is
+          the third time in this file's history: ink is area × contrast, and a
+          dot at a 28px pitch has almost no area — 0.90% of its cell — so it
+          needs contrast a line never would.
+
+          `fixed`, NOT `absolute`, and that is the difference between the navbar
+          being part of the page and being a black bar on top of it. The header is
+          in normal flow, so the page — and anything positioned inside it — begins
+          BELOW the header: an absolute layer here started at y=64 and the row
+          above it had nothing in it to see. Sampling a screenshot of that state
+          found 25,800 non-black pixels immediately below the header and exactly
+          zero inside it.
+          Fixed positioning resolves against the viewport instead, so this one
+          layer starts at y=0 and runs behind the header, which the header's own
+          fading ground then reveals. It is not clipped by the page root's
+          `overflow-hidden` (a fixed element's containing block is the viewport,
+          so an ancestor's overflow does not apply) and `isolation: isolate` does
+          not capture it either — only transform, filter and friends do that.
+          WHAT IT COSTS: the field no longer scrolls away, so it reads as a
+          permanent texture at the top of the viewport rather than as hero
+          decoration. That is the right trade with a STICKY header — the two stay
+          together at every scroll position, which is the whole point — and the
+          fade below keeps it out of the way of everything else.
+
+          BOUNDED IN PIXELS, both the height and the fade, so the layer builds one
+          viewport of dots rather than one per lattice point of a page thousands
+          of pixels tall — each of which would be a `ctx.fill()` every frame. */}
+      <div
+        className="fixed inset-x-0 top-0 h-[820px] opacity-[0.65] dark:opacity-[0.35]"
+        style={{
+          /* A VERTICAL FADE, not the ellipse this started as, and the reason is
+             that an ellipse made the measured contrast a lie. `check:dot-grid`
+             asserts what a dot measures against its ground; an elliptical mask
+             then multiplies that by an alpha which falls off in TWO axes, so at
+             the left margin — 750px off centre — the real figure was a fifth of
+             the asserted one. A number you cannot trust at the edges is worse
+             than no number.
+             Fading only downward keeps every dot in the band at full strength, so
+             the asserted contrast is the contrast on screen. The band ends at
+             700px rather than the 760 it had while this layer scrolled: a fixed
+             field is on screen at every scroll position, so it has to be out of
+             the way by mid-viewport instead of merely by the end of the hero. */
+          maskImage:
+            "linear-gradient(to bottom, black 0px, black 380px, transparent 700px)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, black 0px, black 380px, transparent 700px)",
+        }}
+      >
+        <DotGrid className="h-full w-full" />
+      </div>
+
       <div className="absolute -top-32 -right-24 size-[28rem] rounded-full bg-accent/10 blur-[120px]" />
       <div className="absolute -top-24 -left-32 size-[26rem] rounded-full bg-primary/10 blur-[120px]" />
     </div>

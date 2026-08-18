@@ -16,6 +16,7 @@ import Link from "next/link";
 
 import { buttonClasses } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
+import { lineCount } from "@/lib/source-text";
 import {
   canEncodeShare,
   encodeShareFragment,
@@ -53,11 +54,39 @@ export function CodeBlock({
             <CopyButton text={code} label={`Copy the ${label} example`} />
           </div>
         </div>
+        {/* LINE NUMBERS, as a grid rather than as text in the copyable flow.
+            The gutter is a separate column of <span>s, `aria-hidden` and
+            `select-none`, so "1 2 3" can never end up in a paste — the whole
+            point of the Copy button beside it is that what you paste parses.
+            (A CSS ::before counter would do the same, and would also be
+            unselectable, but it cannot be scrolled independently of the code,
+            which is what keeps the numbers put when a long line scrolls
+            sideways.)
+
+            THE COUNT COMES FROM `lineCount`, shared with the editable gutter
+            in `ui/numbered-textarea.tsx`. Both had their own copy of the same
+            expression, and this one had drifted: it dropped the trailing newline
+            but not the floor of 1, so it was one keystroke away from the empty
+            snippet that renders no number at all. Two surfaces, two copies, one
+            of them already wrong — which is the case `lib/source-text.ts` exists
+            for.
+            What is deliberately NOT shared is the type scale and the muted step:
+            the rows only have to line up WITHIN a surface, so an editable pane
+            and a read-only snippet agreeing on `text-xs` is coincidence, not
+            coupling, and unifying it would invent a constraint. */}
         <pre
           tabIndex={0}
-          className="overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="grid grid-cols-[auto_1fr] gap-x-3 overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          <code>{code}</code>
+          <span
+            aria-hidden="true"
+            className="grid shrink-0 justify-items-end text-muted-foreground/50 tabular-nums select-none"
+          >
+            {Array.from({ length: lineCount(code) }, (_, index) => (
+              <span key={index}>{index + 1}</span>
+            ))}
+          </span>
+          <code className="min-w-0">{code}</code>
         </pre>
       </div>
     </figure>
