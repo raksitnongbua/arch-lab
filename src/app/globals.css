@@ -1896,8 +1896,17 @@
  * drawn, which is the state they were designed in.
  */
 @media (prefers-reduced-motion: no-preference) {
+  /* LONGHANDS, not the `animation` shorthand. A nameless shorthand —
+     `animation: 4000ms ease-in-out infinite`, with the name supplied by the
+     per-ring rules below — is legal CSS and Lightning CSS normalises it to
+     `animation: none`, which silently drops the duration. The rings then had a
+     name and no duration and never moved: shipped, and reported as "why is the
+     icon still static". Every other loop in this file already uses longhands
+     for the same reason; this one was the odd case out. */
   .af-mark .af-mark-ring {
-    animation: 4000ms ease-in-out infinite;
+    animation-duration: 4000ms;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
     /* Scale from the mark's centre, not the viewBox origin, or the innermost
        ring would swing instead of breathe. */
     transform-origin: center;
