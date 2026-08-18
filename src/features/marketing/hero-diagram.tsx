@@ -996,8 +996,18 @@ function UseCasePanel() {
       fill="none"
       className="absolute inset-0 h-full w-full"
     >
-      {/* The system boundary. Drawn first and filled with the canvas colour, so
-          the cases inside sit on the system rather than on the card. */}
+      {/* The system boundary. Drawn first and washed with the canvas colour, so
+          the cases inside sit on the system rather than on the card.
+          A WASH, NOT A FILL, and the opacity is the point. It used to paint
+          `--canvas` opaque, which is fine on the light themes where card and
+          canvas are a few percent apart — but the default theme is `.contrast`,
+          where the card is L 0.12 and the canvas is L 0.05. Opaque, that drew a
+          near-black slab across two thirds of the card: the strongest edge in
+          the whole hero belonged to a rectangle that is meant to be CONTEXT,
+          and the actors outside it read as if they had fallen off the diagram.
+          0.45 is not a taste value — it is the same wash
+          `usecase-diagram.tsx` gives an untinted boundary, so the hero and the
+          real renderer state "inside the system" with one voice. */}
       <rect
         className="af-hero-node"
         style={riseAt(UC_BEAT.boundary)}
@@ -1007,6 +1017,7 @@ function UseCasePanel() {
         height={296}
         rx={16}
         fill="var(--canvas)"
+        fillOpacity={0.45}
         stroke="var(--border)"
         strokeWidth={1.25}
       />

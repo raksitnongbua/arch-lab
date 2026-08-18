@@ -466,6 +466,28 @@ function toolsNamed(...names: readonly string[]): readonly McpToolDoc[] {
 }
 
 /**
+ * The three tools `/mcp`'s social card draws, each with the one word its call
+ * comes back with.
+ *
+ * WHICH THREE, AND WHY THESE. The card has room for three rows and the reader
+ * has one second, so they show the three VERBS rather than the three most-used
+ * tools — check a document, write one, hand a human the link. A card listing
+ * three validators would say the server does one thing.
+ *
+ * THE OUTCOME WORD IS PAIRED HERE, not chosen by the drawing, because it has to
+ * be true of the specific tool beside it: `create_share_link` does not answer
+ * "valid", and a card that says it does is a lie told to everyone who sees the
+ * link preview. Names resolve through `toolsNamed` for the same reason the
+ * groups do — a rename fails the build instead of advertising a tool nobody can
+ * call.
+ */
+export const MCP_CARD_TOOLS: readonly { name: string; result: string }[] = [
+  { name: "validate_model", result: "valid" },
+  { name: "format_sequence", result: "formatted" },
+  { name: "create_share_link", result: "shared" },
+].map(({ name, result }) => ({ name: toolsNamed(name)[0].name, result }));
+
+/**
  * How the `/mcp` page presents the tools. Ten equal cards read as a wall; a
  * reader deciding whether to connect needs the jobs, not the alphabet. The
  * grouping lives HERE rather than in the component because the component is

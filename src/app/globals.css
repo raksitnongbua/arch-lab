@@ -1867,6 +1867,32 @@
   animation: af-demo-glyph 1.6s ease-in-out infinite;
 }
 
+/**
+ * REDUCED MOTION PARKS THE WHOLE INDEX, and this block was missing rather than
+ * considered. Every other animated surface in this file has one; the examples
+ * index shipped without, so a reader who has asked the OS for stillness got
+ * twenty rows sliding up under a staggered delay.
+ *
+ * It matters more here than on a decorative panel: the last row of a cascade at
+ * 45ms a slot arrives most of a second after the first, and until it arrives it
+ * is transparent and moving — so the reader is asked to aim at a target that is
+ * not there yet. `animation: none` (rather than a zeroed duration) leaves the
+ * rows in their natural, opaque, final state from the first paint, because
+ * `af-demo-row`'s keyframes only declare a `from`.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .af-demo-row,
+  .af-demo-kind:hover .af-demo-glyph {
+    animation: none;
+  }
+
+  /* The hover tick is a response to the reader rather than ambient motion, so
+     it stays — but it arrives at once instead of growing. */
+  .af-demo-tick {
+    transition: none;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Liquid glass: the surface treatment half of the `glass` theme               */
 /* -------------------------------------------------------------------------- */

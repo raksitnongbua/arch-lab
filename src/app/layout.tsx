@@ -27,15 +27,27 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-/* The title has to name the CATEGORY someone searches for, and there are now
-   four of them — which will not fit in the ~60 characters a result shows. So it
-   names the two people search by name ("C4 diagram tool", "sequence diagram as
-   text") and then the general word that covers all four, rather than truncating
-   a list of four mid-way. The full set is named in the page copy and in the
-   structured data, where there is room for it. */
+/* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and four document
+   kinds will not fit in them. So it names the two categories people search by
+   name ("C4 diagram tool", "sequence diagram as text") and then a general
+   phrase that covers all four, rather than truncating a list of four mid-way.
+   The full set is named in APP_DESCRIPTION, in the page copy and in the
+   structured data, where there is room for it.
+
+   IT ALSO HAS TO SELL, which the previous wording did not. "C4, sequence and
+   flowchart editor" was three of four kinds and a category noun — a true
+   sentence that gives a reader no reason to prefer this over the twenty other
+   results saying the same thing. The one word that does is the one the project
+   is actually about (see `.claude/rules/purpose.md`: presentation is the
+   product), and it is a phrase people already type — "beautiful C4 diagram"
+   has been in `keywords` below for exactly that reason, while being absent from
+   the one field that ranks. Now it leads.
+
+   Both variants stay under the budget: 51 and 53 characters. Measure any
+   replacement before shipping it. */
 const DEFAULT_TITLE = EDITOR_ENABLED
-  ? `${APP_NAME} — C4, sequence and flowchart editor`
-  : `${APP_NAME} — C4 and sequence diagrams as text`;
+  ? `${APP_NAME} — beautiful C4 and sequence diagram editor`
+  : `${APP_NAME} — beautiful C4 and sequence diagrams as text`;
 
 export const metadata: Metadata = {
   // The same resolution order share links use (env override → Vercel

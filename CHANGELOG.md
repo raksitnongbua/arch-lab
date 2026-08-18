@@ -84,6 +84,24 @@ grammars are refused by the old parsers with a message naming the right one.
   page titles, meta descriptions, the social card, `/llms.txt` and the
   structured data. All of them now name all four kinds, so a search result and
   an assistant's answer list what the product actually draws.
+- The page title leads with what the project is for rather than a feature list:
+  "beautiful C4 and sequence diagram editor" in place of "C4, sequence and
+  flowchart editor". Still under the ~60 characters a search result shows, and
+  all four kinds are still named in the description and the structured data.
+- `/mcp` has a social card of its own — the client, the endpoint and three tool
+  calls with the verdict each comes back with. Links to the connect guide used
+  to preview with the landing page's card, which advertised diagrams to readers
+  looking for a server.
+- The `/view` card names all four document kinds and no longer draws a C4 stack.
+  Every share link previews through this one route, so a shared flowchart or
+  use-case diagram was previewing as an advert for C4.
+- `/demo` rows are clickable end to end. The whole row opens the example in the
+  playground, says so in words, and the read-only page beside it is a padded
+  target rather than a line of 12px text.
+- `/demo`'s four kind headings are real headings, each with the one line that
+  says what the kind is for — the same sentence the playground's starter
+  buttons use. Long example descriptions are clamped to two lines so the index
+  stays scannable.
 
 ### Removed
 
@@ -95,6 +113,16 @@ grammars are refused by the old parsers with a message naming the right one.
 
 ### Fixed
 
+- `/demo` invited a click across the whole row and only the title was a link,
+  so clicking an example's description, its counts or the space beside its name
+  did nothing.
+- `/demo` ignored `prefers-reduced-motion`: its rows slid up under a staggered
+  delay for everyone. They now appear at rest for anyone who has asked the OS
+  for stillness.
+- The home page's use-case miniature drew its system boundary as a near-black
+  slab on the Dark theme, so the loudest edge on the card belonged to the one
+  shape that is meant to be background. The boundary is now the same soft wash
+  the real use-case renderer gives it.
 - Non-Latin labels could lose a combining mark when a long word was split to
   wrap. Text now breaks on grapheme clusters, which also fixes Thai labels in
   C4 and sequence diagrams.
