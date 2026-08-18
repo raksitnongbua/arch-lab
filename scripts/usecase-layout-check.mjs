@@ -1015,6 +1015,44 @@ for (const [kind, tokens] of Object.entries(USECASE_KIND_TOKENS)) {
 
 /* ----------------------------------------------------------------------- */
 
+/* ---- shaped focus rings ---------------------------------------------------- */
+
+/* A CSS `outline` boxes the BOUNDING BOX, always — so a focused ellipse,
+   stadium, diamond or diagonal edge wore a RECTANGLE. Shipped on both canvases
+   and reported as "on focus border should be shaped, not square". The fix is a
+   real SVG ring beside the hit target, revealed by a sibling combinator; these
+   pin both halves, because either alone lets the box back. */
+{
+  const focusSrc = readFileSync(
+    path.join(ROOT, "src/features/usecase/components/usecase-diagram.tsx"),
+    "utf8",
+  );
+  const globals = readFileSync(path.join(ROOT, "src/app/globals.css"), "utf8");
+  check(
+    "no focus-visible:outline-* utility survives on an interactive shape — that utility is what drew the rectangle, and it reads as a rendering fault on a canvas made of shapes",
+    !/focus-visible:outline-(?!none)/.test(focusSrc),
+  );
+  check(
+    "every interactive element suppresses the native outline explicitly — without outline-none the browser draws its own box over the shaped ring",
+    (focusSrc.match(/af-uc-hit cursor-pointer focus-visible:outline-none/g) ?? [])
+      .length >= 2,
+  );
+  check(
+    "a shaped .af-uc-ring is emitted for BOTH a node/element and an edge — an edge's ring must follow its path, since a diagonal line's bounding box is a rectangle across half the diagram",
+    (focusSrc.match(/af-uc-ring/g) ?? []).length >= 2,
+  );
+  check(
+    "the ring is revealed by a :focus-visible SIBLING rule and rests at opacity 0 — absent rather than transparent, so it can never take a click or a hit test",
+    /\.af-uc-ring[^{]*\{[^}]*opacity:\s*0/.test(globals) &&
+      new RegExp("\\.af-uc-hit:focus-visible ~ \\.af-uc-ring").test(globals),
+  );
+  check(
+    "the ring paints --ring, the app's focus colour, never a role token — focus is a state, so a focused diagram element must match a focused button",
+    /\.af-uc-ring[\s\S]{0,200}stroke:\s*var\(--ring\)/.test(globals),
+  );
+}
+
+
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);
   process.exit(1);

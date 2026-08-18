@@ -1719,3 +1719,35 @@
     background-color: oklch(1 0 0 / 0.94);
   }
 }
+
+/* ---- shaped focus rings on the diagram canvases -----------------------------
+ * A CSS `outline` boxes the BOUNDING BOX, always. On canvases whose entire
+ * vocabulary is shapes that reads as a rendering fault rather than as focus: a
+ * focused ellipse wore a rectangle, a focused stick figure wore one too, and a
+ * focused diagonal association wore a rectangle covering half the diagram.
+ * Reported as "on focus border should be shaped, not square".
+ *
+ * So the ring is a real SVG shape emitted BESIDE the hit target — a bigger
+ * ellipse, a capsule, the node's own padded outline, or a halo along an edge's
+ * own path — revealed by a sibling combinator when the target takes
+ * focus-visible. The targets themselves set `outline: none`; the check scripts
+ * pin that no `focus-visible:outline-*` utility comes back.
+ *
+ * `--ring` is the app's focus colour everywhere else, so a focused diagram
+ * element matches a focused button. Never the role palette: focus is a state,
+ * not a kind.
+ */
+.af-uc-ring,
+.af-flow-ring {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 2;
+  /* Absent, not transparent, so it can never take a click or a hit test. */
+  opacity: 0;
+}
+
+.af-uc-hit:focus-visible ~ .af-uc-ring,
+.af-flow-hit:focus-visible ~ .af-flow-ring {
+  opacity: 1;
+}
+

@@ -13,7 +13,12 @@ import { arrowheadPathAt } from "@/lib/arrowhead";
 import { fmt } from "@/lib/svg-markup";
 import type { UseCaseElementKind } from "@/types";
 
-import type { LaidUseCaseActor, LaidUseCaseEdge, UCPoint } from "./layout";
+import type {
+  LaidUseCaseActor,
+  LaidUseCaseEdge,
+  LaidUseCaseElement,
+  UCPoint,
+} from "./layout";
 import { UC } from "./layout";
 
 /**
@@ -97,6 +102,53 @@ export const DEPENDENCY_DASH = "6 4";
 
 /** A straight polyline as a path (use-case lines are straight spokes —
  * no rounding, unlike the flowchart's orthogonal corners). */
+/**
+ * How far a focus ring sits outside the shape it marks. Big enough to read as
+ * a ring rather than a doubled outline, small enough that two neighbouring
+ * ellipses' rings do not touch.
+ */
+export const FOCUS_RING_PAD = 5;
+
+/**
+ * The focus ring's own geometry — which FOLLOWS THE SHAPE.
+ *
+ * A CSS `outline` was here first and drew a rectangle: `outline` boxes the
+ * bounding box, always, so a focused ellipse wore a rectangle and a focused
+ * stick figure wore one too. On a canvas whose whole vocabulary is shapes,
+ * that reads as a rendering fault rather than as focus, which is what the user
+ * reported.
+ *
+ * An ellipse's ring is a bigger ellipse. An ACTOR's is a capsule — a stick
+ * figure has no outline to trace, and a fully-rounded box is both the honest
+ * shape for "this region" and the friendlier one beside the round heads.
+ */
+export type FocusRing =
+  | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number }
+  | { kind: "rect"; x: number; y: number; width: number; height: number; rx: number };
+
+export function focusRing(element: LaidUseCaseElement): FocusRing {
+  const pad = FOCUS_RING_PAD;
+  if (element.kind === "usecase") {
+    return {
+      kind: "ellipse",
+      cx: element.cx,
+      cy: element.cy,
+      rx: element.rx + pad,
+      ry: element.ry + pad,
+    };
+  }
+  const height = element.height + pad * 2;
+  return {
+    kind: "rect",
+    x: element.x - pad,
+    y: element.y - pad,
+    width: element.width + pad * 2,
+    height,
+    // Fully rounded: a capsule, not a rounded rectangle.
+    rx: height / 2,
+  };
+}
+
 export function polylinePath(points: readonly UCPoint[]): string {
   if (points.length === 0) return "";
   return points
