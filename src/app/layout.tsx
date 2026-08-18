@@ -43,19 +43,39 @@ export const metadata: Metadata = {
   },
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
-  // The phrases people actually type — including the spaced "arch lab",
-  // which the hyphenated name alone would never match.
+  /*
+   * The phrases people actually type — including the spaced "arch lab", which
+   * the hyphenated name alone would never match.
+   *
+   * A CAVEAT worth keeping honest: Google has ignored `<meta name="keywords">`
+   * since 2009, so nothing in this array ranks anything by itself. It is kept
+   * because some non-Google engines and internal site searches still read it,
+   * and because writing the list is how the vocabulary gets agreed. The words
+   * that actually rank are the ones in the title, the description and the H1 —
+   * which is why "beautiful" and "zoomable" were added THERE too
+   * (APP_DESCRIPTION, and the hero copy in app/page.tsx) rather than only here.
+   */
   keywords: [
     "arch lab",
     "arch-lab",
     "C4 model",
     "C4 diagram",
     "C4 architecture diagram",
+    // The two qualities people search for once they know the category exists:
+    // they are not looking for "a C4 tool", they are looking for one whose
+    // output is presentable and explorable.
+    "beautiful C4 diagram",
+    "zoomable C4 diagram",
+    "interactive C4 diagram",
+    "C4 diagram you can zoom",
+    "drill-down C4 diagram",
+    "presentation-ready architecture diagram",
     "architecture diagram as code",
     "diagram as code",
     "software architecture diagram",
     ".alab",
     "C4 editor",
+    "C4 diagram viewer",
     "local-first",
   ],
   authors: [{ name: APP_NAME }],

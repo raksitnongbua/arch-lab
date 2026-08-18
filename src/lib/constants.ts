@@ -36,7 +36,7 @@ export const EDITOR_ENABLED: boolean = true;
  * people arrive for.
  */
 export const APP_DESCRIPTION =
-  "Write C4 and sequence diagrams as plain text, watch them render live in your browser, and let an AI agent author them over MCP. No account, nothing uploaded.";
+  "Beautiful, zoomable C4 and sequence diagrams written as plain text and rendered live in your browser. An AI agent can author them over MCP. No account.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

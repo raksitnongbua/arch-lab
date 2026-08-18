@@ -4,6 +4,7 @@ import {
   FileText,
   GitBranch,
   MousePointerClick,
+  Play,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
@@ -186,9 +187,9 @@ export default function Home() {
               </span>{" "}
               is a browser-based editor for architecture diagrams written as
               plain text. Describe a system in a few lines and it draws it — a
-              C4 model you can drill into, or a sequence flow you can click
-              through message by message. Your AI agent can write that text for
-              you.
+              beautiful, zoomable C4 model you can drill into level by level, or
+              a sequence flow you can click through message by message. Your AI
+              agent can write that text for you.
             </p>
 
             {/* ONE primary destination. The old hero offered three buttons and
@@ -198,13 +199,32 @@ export default function Home() {
                 already seeded with a flow, so the first click ends in a
                 working diagram rather than another choice. */}
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              {/* ICON-LED, not word-led. The label is still here for anyone
+                  who cannot see the icon — `sr-only` text, which is what gives
+                  the link its accessible name — but sighted readers get a
+                  play mark that pulses and an arrow that runs, because a
+                  button that MOVES says "this does something now" faster than
+                  four words say it.
+
+                  The words are not merely deleted, though: the note beside
+                  this link ("Opens with a worked example") is the visible
+                  explanation, and it is why an icon-only face is affordable
+                  here at all. An icon alone next to nothing would be a riddle;
+                  `aria-describedby` already tied the two together. */}
               <Link
                 href="/view?d=seq"
                 aria-describedby="cta-note"
-                className={buttonClasses({ size: "lg" })}
+                className={buttonClasses({
+                  size: "lg",
+                  className: "af-cta-live group gap-2.5",
+                })}
               >
-                Open a live diagram
-                <ArrowRight aria-hidden="true" />
+                <span className="sr-only">Open a live diagram</span>
+                <Play aria-hidden="true" className="af-cta-live-mark" />
+                <ArrowRight
+                  aria-hidden="true"
+                  className="transition-transform duration-200 group-hover:translate-x-1"
+                />
               </Link>
               <Link
                 href="/view"
