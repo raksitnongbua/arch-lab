@@ -1038,8 +1038,8 @@ for (const [kind, tokens] of Object.entries(USECASE_KIND_TOKENS)) {
      paints in --ring, and a utility that did not take effect looked exactly
      like a fix. The sequence canvas's rule is the precedent. */
   check(
-    "a real CSS rule kills the native outline on the hit target — the base layer paints every element's outline in --ring, so without this the browser's own box survives on top of the shaped ring",
-    new RegExp("\\." + "af-uc-hit" + ":focus-visible[^{]*\\{[^}]*outline:\\s*none").test(
+    "a real CSS rule kills the native outline on PLAIN :focus, not only :focus-visible — clicking an SVG element with a tabindex gives it :focus alone, and Chrome still paints outline: auto for that, which is the rounded box that survived the first two attempts at this fix",
+    new RegExp("\\." + "af-uc-hit" + ":focus[,\\s][^{]*\\{[^}]*outline:\\s*none").test(
       globals,
     ),
   );
