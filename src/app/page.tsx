@@ -705,10 +705,21 @@ function Backdrop() {
           sequence and then resting. Orthogonal elbows rather than curves,
           because that is how this app routes an edge — a swooping bezier here
           would be a shape the product never draws. */}
+      {/* Pinned to the HERO's box, not the page's. This layer's parent is
+          `absolute inset-0` of a container that spans every section — several
+          thousand pixels tall — and the first cut used `size-full` with
+          `slice`, so the viewBox scaled ~9x to cover that height and threw the
+          wires clean off the viewport. Nothing was visible and nothing was
+          broken, which is the worst combination.
+
+          `preserveAspectRatio="none"` on purpose: these are abstract wires, so
+          stretching them to whatever the hero's aspect ratio happens to be is
+          fine, and it keeps the coordinates in the markup meaning exactly where
+          they land. */}
       <svg
-        className="af-backdrop-wires absolute inset-0 size-full"
+        className="af-backdrop-wires absolute inset-x-0 top-0 h-[min(46rem,88vh)] w-full"
         viewBox="0 0 1200 520"
-        preserveAspectRatio="xMidYMin slice"
+        preserveAspectRatio="none"
         fill="none"
         stroke="currentColor"
       >

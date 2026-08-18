@@ -2167,14 +2167,18 @@
 }
 
 .af-wire {
-  stroke-width: 1.25;
-  opacity: 0.1;
+  stroke-width: 1.5;
+  /* Raised from 0.1, which was invisible on a light ground — the same
+     "mechanically running, visually nothing" failure the diagram canvases hit
+     three times. Still low enough to sit under the headline without competing:
+     these are wires you notice on the second look, not the first. */
+  opacity: 0.18;
 }
 
 .af-wire-node {
   fill: currentColor;
   stroke: none;
-  opacity: 0.12;
+  opacity: 0.24;
 }
 
 /* The spark's resting state is ABSENT, not parked: `display: none` here, shown
@@ -2182,9 +2186,9 @@
  * frozen partway along a wire. */
 .af-wire-spark {
   display: none;
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-dasharray: 0.06 0.94;
-  opacity: 0.14;
+  opacity: 0.32;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -2257,12 +2261,12 @@
     opacity: 0;
   }
   4% {
-    opacity: 0.1;
+    opacity: 0.18;
   }
   18%,
   92% {
     stroke-dashoffset: 0;
-    opacity: 0.1;
+    opacity: 0.18;
   }
   100% {
     stroke-dashoffset: 0;
@@ -2279,7 +2283,7 @@
   }
   22%,
   92% {
-    opacity: 0.12;
+    opacity: 0.24;
     scale: 1;
   }
   100% {
@@ -2296,11 +2300,11 @@
     opacity: 0;
   }
   34% {
-    opacity: 0.14;
+    opacity: 0.32;
   }
   62% {
     stroke-dashoffset: -0.94;
-    opacity: 0.14;
+    opacity: 0.32;
   }
   66%,
   100% {
