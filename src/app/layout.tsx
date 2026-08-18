@@ -106,11 +106,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Single value on purpose: the app is dark by default regardless of the OS
+  // Single value on purpose: the app has ONE default theme regardless of the OS
   // preference (enableSystem={false}), so keying this off prefers-color-scheme
-  // would paint light browser chrome around a dark page. sRGB approximation of
-  // the dark `--background` token.
-  themeColor: "#1b1b23",
+  // would paint light browser chrome around a dark page.
+  // Pure black because that is what `.contrast`'s `--background` — the default
+  // since this commit — converts to exactly: `oklch(0.05 0 0)` falls below the
+  // sRGB transfer function's linear segment. It reads as a deliberate choice on
+  // a phone rather than as a missing value, which is the risk with #000 here.
+  themeColor: "#000000",
 };
 
 /**

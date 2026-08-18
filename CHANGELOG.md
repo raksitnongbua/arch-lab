@@ -64,6 +64,12 @@ grammars are refused by the old parsers with a message naming the right one.
   re-solved around the new ground, so every measured contrast pair still clears
   its minimum, and the social card matches the page a click lands on. Brand
   colour is unchanged.
+- **The default theme is now High contrast**, not Dark. It separates by outline
+  rather than by fill, so the first thing a visitor sees is the most legible
+  arrangement the app draws. Every other theme, Dark included, is one click away
+  in the picker.
+- The social share image and the phone's browser-chrome colour follow the default
+  theme rather than being hand-maintained beside it.
 - The navbar's background fades out downward instead of being a flat tint that
   ends at a rule, so the row reads as part of the page rather than a bar sitting
   on it.

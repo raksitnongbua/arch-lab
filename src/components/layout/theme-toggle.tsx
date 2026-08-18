@@ -51,13 +51,19 @@ const THEME_META: Record<
 > = {
   light: { label: "Light", hint: "Cool white", Icon: Sun },
   paper: { label: "Paper", hint: "Like a printed document", Icon: BookOpen },
-  pastel: { label: "Pastel", hint: "Colourful, between the two", Icon: Palette },
+  pastel: {
+    label: "Pastel",
+    hint: "Colourful, between the two",
+    Icon: Palette,
+  },
   glass: { label: "Liquid glass", hint: "Translucent surfaces", Icon: Layers },
-  dark: { label: "Dark", hint: "The default", Icon: Moon },
+  dark: { label: "Dark", hint: "Tuned dark grey", Icon: Moon },
   midnight: { label: "Midnight", hint: "True black, for OLED", Icon: MoonStar },
   contrast: {
     label: "High contrast",
-    hint: "Stronger outlines",
+    /* Names what it IS as well as that it is the default: "The default" alone
+       told a reader which row they would land on and nothing about why. */
+    hint: "The default · stronger outlines",
     Icon: Contrast,
   },
 };

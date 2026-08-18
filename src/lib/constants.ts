@@ -76,8 +76,26 @@ export const THEMES = [
 
 export type Theme = (typeof THEMES)[number];
 
-/** Dark is a deliberate product decision, not an OS preference. */
-export const DEFAULT_THEME: Theme = "dark";
+/**
+ * The theme a first-time visitor gets. A product decision, not an OS preference
+ * — see `enableSystem={false}` in `app/providers.tsx`.
+ *
+ * HIGH CONTRAST, not `dark`. `contrast` separates by OUTLINE rather than by
+ * fill: its ground is `oklch(0.05 0 0)` and its cards sit 0.07 above that, so
+ * what tells one node from another is a `--border` at L 0.72 rather than a
+ * lighter surface. Defaulting to it means the first thing anyone sees is the
+ * most legible arrangement the app can draw.
+ *
+ * THE TRADE, recorded because it is easy to reverse by accident: `dark` is the
+ * theme whose palette is tuned — the dark-grey ground at #1c1e24, the role fills
+ * lifted 0.03 with brightened borders, the wash measured against its own
+ * top stop — and none of that is what a visitor now sees first. `contrast` is
+ * deliberately starker than beautiful. If this moves back, move the picker's
+ * "The default" hint in `theme-toggle.tsx` and the OG palette in
+ * `marketing/og/card.tsx` with it: both are derived from whatever this says, by
+ * hand, and `check:og-cards` only pins the lane colours.
+ */
+export const DEFAULT_THEME: Theme = "contrast";
 
 /** localStorage key next-themes persists the choice under. */
 export const THEME_STORAGE_KEY = "arch-lab-theme";

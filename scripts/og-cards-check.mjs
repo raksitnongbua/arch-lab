@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { oklchToLinear } from "./lib/oklch.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
@@ -184,6 +185,111 @@ for (const [file, route] of [...CARDS, [FRAME, "the shared frame"]]) {
     !code(file).includes("oklch("),
   );
 }
+
+/**
+ * `oklch(...)` as `#rrggbb`, the way a browser would paint it.
+ *
+ * Satori cannot parse `oklch()`, which is the whole reason the card carries hex
+ * at all — so the conversion has to happen somewhere, and doing it here means the
+ * hexes in the card are checked against the tokens rather than trusted.
+ */
+function tokenHex(value) {
+  const m = /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(value ?? "");
+  if (m === null) return null;
+  return (
+    "#" +
+    oklchToLinear(+m[1], +m[2], +m[3])
+      .map((v) =>
+        Math.round(
+          255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055),
+        )
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")
+  );
+}
+
+/** Which `OG` key mirrors which token. */
+const OG_TOKENS = {
+  background: "--background",
+  card: "--card",
+  border: "--border",
+  foreground: "--foreground",
+  muted: "--muted-foreground",
+  primary: "--primary",
+  accent: "--accent",
+  grid: "--canvas-grid",
+};
+
+check(
+  "the card's palette is the DEFAULT theme's, converted exactly",
+  (() => {
+    /* THE COUPLING THIS PINS IS HAND-MAINTAINED AND WAS SILENT. The card exists
+       to look like the page a click lands on, so its palette has to be the
+       default theme's — and until this assertion the two were joined by nothing
+       but a comment. The default has now moved twice (dark's ground was retuned,
+       then the default became `contrast`) and each time the card had to be
+       re-derived by hand; the first time, nothing would have complained if it had
+       not been.
+       Derived from `DEFAULT_THEME` rather than from a theme name typed here, so
+       moving the default is one edit and this follows it. */
+    const constants = read("src/lib/constants.ts");
+    const theme = /DEFAULT_THEME: Theme = "([\w-]+)"/.exec(constants)?.[1];
+    if (theme === undefined) return false;
+    const selector = theme === "light" ? ":root" : `\\.${theme}`;
+    const css = read("src/app/globals.css");
+    const block = new RegExp(`^${selector} \\{([\\s\\S]*?)\\n\\}`, "m").exec(
+      css,
+    );
+    if (block === null) return false;
+
+    const frame = read(FRAME);
+    const mismatched = [];
+    for (const [key, token] of Object.entries(OG_TOKENS)) {
+      const declared =
+        new RegExp(`^  ${token}: ([^;]+);`, "m").exec(block[1]) ??
+        new RegExp(`^  ${token}: ([^;]+);`, "m").exec(
+          /^:root \{([\s\S]*?)\n\}/m.exec(css)?.[1] ?? "",
+        );
+      const want = tokenHex(declared?.[1]);
+      const got = new RegExp(`${key}: "(#[0-9a-fA-F]{6})"`).exec(frame)?.[1];
+      if (want === null || got === undefined || want !== got.toLowerCase()) {
+        mismatched.push(
+          `${key}: card has ${got}, ${token} converts to ${want}`,
+        );
+      }
+    }
+    if (mismatched.length > 0)
+      console.error("    " + mismatched.join("\n    "));
+    return mismatched.length === 0;
+  })(),
+  "every OG neutral and accent must be the exact conversion of the same token in DEFAULT_THEME's block",
+);
+
+check(
+  "the browser-chrome colour is the same ground",
+  (() => {
+    /* `themeColor` paints the phone's own chrome around the page. A value left
+       behind by a theme change is a coloured bar around a differently-coloured
+       page, which is more noticeable on a phone than anything else on this list. */
+    const constants = read("src/lib/constants.ts");
+    const theme = /DEFAULT_THEME: Theme = "([\w-]+)"/.exec(constants)?.[1];
+    const selector = theme === "light" ? ":root" : `\\.${theme}`;
+    const css = read("src/app/globals.css");
+    const block = new RegExp(`^${selector} \\{([\\s\\S]*?)\\n\\}`, "m").exec(
+      css,
+    );
+    const want = tokenHex(
+      new RegExp("^  --background: ([^;]+);", "m").exec(block?.[1] ?? "")?.[1],
+    );
+    const got = /themeColor: "(#[0-9a-fA-F]{6})"/.exec(
+      read("src/app/layout.tsx"),
+    )?.[1];
+    return want !== null && got !== undefined && want === got.toLowerCase();
+  })(),
+  "layout.tsx's themeColor must be DEFAULT_THEME's --background, converted",
+);
 
 check(
   "the frame keeps the lane colours in step with the stylesheet",

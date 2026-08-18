@@ -20,28 +20,43 @@
  *   - no external font or image is fetched — the cards are built at deploy
  *     time and must not depend on a network.
  *
- * The palette follows the dark theme because the app is dark by default
- * (`enableSystem={false}`), so the card matches the page a click lands on.
+ * The palette follows the HIGH CONTRAST theme, because that is what
+ * `DEFAULT_THEME` now is (`enableSystem={false}`, so it is what everyone lands
+ * on) and the card's whole job is to look like the page behind the link.
  */
 
-/* Dark-theme tokens, and no longer approximations: every hex below is the EXACT
-   sRGB conversion of the token it names in `globals.css`.
-   They used to be hand-lifted well above their tokens — `#1b1b23` where
-   `--background` converted to `#0b0d13` — because a card that renders near-black
-   in a social feed looks broken rather than dark, and the old ground was a
-   near-black. The dark theme's ground is now #22242a, a real dark grey, so the
-   lift has nothing left to compensate for and the approximation is gone with it.
-   (`#22242a` here briefly; the ground took a 10% step down after that.)
-   That matters beyond tidiness: an approximation is a second set of values to
-   re-eyeball every time the theme moves, and this is the second time it moved. */
+/* `.contrast` tokens, exactly converted — no hand-lifting, which this file did
+   for years and no longer needs to.
+   THE GROUND IS #000000 AND THE CARD IS #060606, and that is not a conversion
+   bug: `.contrast` puts its ground at `oklch(0.05 0 0)` and its cards 0.07 above
+   it, and sRGB has no room to show a 0.07 step that close to black. In the app it
+   does not need to — the theme separates by OUTLINE, not by fill, which is what
+   "high contrast" means there. So on this card the node boxes read as bright
+   `#a2a4ab` rules on black with white type inside, exactly as they do on the
+   page, and the fill step being invisible costs nothing.
+   The old hand-lift existed because a near-black card "looks broken rather than
+   dark" in a feed. That risk is real and this palette does not fully escape it:
+   sampling the rendered PNG, 77% of it is pure black and only 2.8% of pixels
+   carry bright ink. What keeps it from reading as a blank rectangle is the grid
+   below at 12.8% and the white headline — not a lot. If it ever needs to be
+   louder in a feed, the honest lever is `grid`, which costs nothing anywhere
+   else, rather than lifting the ground away from the theme it is meant to
+   mirror. */
 export const OG = {
-  background: "#1c1e24",
-  card: "#27292f",
-  border: "#3f4147",
-  foreground: "#f0f2f5",
-  muted: "#a2a4ac",
-  primary: "#9d8cff",
-  accent: "#4fd6e4",
+  background: "#000000",
+  card: "#060606",
+  border: "#a2a4ab",
+  foreground: "#ffffff",
+  muted: "#d7d7d7",
+  primary: "#baafff",
+  accent: "#53f2f2",
+  /* The grid, and it is IN this table because it was not: the lines were a
+     hardcoded `#26262f` — a leftover from a theme two changes ago — and they are
+     12.8% of the rendered image's pixels, more than every bright element on the
+     card put together. Nothing complained, because the assertion that pins this
+     palette to the theme's tokens only knew about the seven keys that were
+     already here. Sampling the actual PNG is what found it. */
+  grid: "#2e2e2e",
   /** The sequence lanes, verbatim from `--seq-lane-*` (already hex there). */
   lanes: ["#1baf7a", "#eb6834", "#2a78d6", "#e87ba4", "#4a3aa7"],
 } as const;
@@ -83,8 +98,7 @@ export function OgCard({
         padding: "72px 80px",
         background: OG.background,
         // The landing page's grid, so the card and the page read as one thing.
-        backgroundImage:
-          "linear-gradient(to right, #26262f 1px, transparent 1px), linear-gradient(to bottom, #26262f 1px, transparent 1px)",
+        backgroundImage: `linear-gradient(to right, ${OG.grid} 1px, transparent 1px), linear-gradient(to bottom, ${OG.grid} 1px, transparent 1px)`,
         backgroundSize: "56px 56px",
         fontFamily: "sans-serif",
       }}
