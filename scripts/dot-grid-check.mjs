@@ -237,17 +237,25 @@ check("the canvas and the CSS tile share one pitch", () => {
 
 check("the home page renders it", () => {
   assert.ok(page.includes("<DotGrid "), "<DotGrid /> is imported but not used");
-  /* A percentage height here would build a dot for every lattice point of the
-     whole document — the backdrop is `inset-0` of a page thousands of pixels
-     tall — and each one costs a fill per frame. */
+  /* `fixed`, and this one is worth an assertion of its own: with `absolute` the
+     layer starts BELOW the header — the header is in normal flow, so the page
+     begins after it — and the navbar row has nothing behind it but the flat
+     ground. That shipped, and a screenshot of it had 25,800 non-black pixels
+     immediately below the header and exactly zero inside it. Fixed positioning
+     resolves against the viewport, so the field runs behind the header and the
+     header's fading ground has something to reveal. */
+  assert.ok(
+    /className="fixed inset-x-0 top-0 h-\[\d+px\]/.test(page),
+    "the dot layer is not `fixed` — an `absolute` layer starts below the header " +
+      "and leaves the navbar a flat bar with no field behind it",
+  );
+  /* A percentage height would build a dot for every lattice point of the
+     viewport's full height regardless of the fade, and each one costs a fill per
+     frame. */
   assert.match(
     page,
-    /h-\[\d+px\][^>]*>\s*\n?\s*<DotGrid|<DotGrid[\s\S]{0,200}?\/>/,
+    /h-\[\d+px\][^>]*>[\s\S]{0,400}?<DotGrid/,
     "the dot grid is not inside a pixel-bounded box",
-  );
-  assert.ok(
-    /className="absolute inset-x-0 top-0 h-\[\d+px\]/.test(page),
-    "the layer holding the dot grid has no absolute pixel height",
   );
 });
 
@@ -443,7 +451,7 @@ check("a dot is visible on every theme's ground", () => {
      to read both files — and that split is the reason a measurement here is
      worth having: neither file alone shows what the reader sees. */
   const layer =
-    /className="absolute inset-x-0 top-0 h-\[\d+px\] opacity-\[([\d.]+)\] dark:opacity-\[([\d.]+)\]"/.exec(
+    /className="fixed inset-x-0 top-0 h-\[\d+px\] opacity-\[([\d.]+)\] dark:opacity-\[([\d.]+)\]"/.exec(
       page,
     );
   assert.notEqual(layer, null, "cannot find the dot layer's opacities");
@@ -492,6 +500,44 @@ check("a dot is at least one pixel, so the contrast above is honest", () => {
     28,
     `pitch is ${dotSize + gap}px; the backdrop's line grid is 56px and the two ` +
       `must stay harmonic — take the change out of \`gap\`, not the pitch`,
+  );
+});
+
+check("the header does not re-blacken the field it now sits over", () => {
+  const header = read("src/components/layout/header.tsx");
+  /* The header's ground fades downward in two layers — a gradient for the colour
+     and a mask for the blur. Both halves are needed: a gradient with an unmasked
+     blur puts the seam straight back at the header's bottom edge. */
+  assert.match(
+    header,
+    /bg-gradient-to-b from-background\/\d+ via-background\/\d+ to-transparent/,
+    "the header's ground is a flat tint again — a uniform tint ends somewhere, " +
+      "and wherever it ends there is an edge across the field behind it",
+  );
+  assert.match(
+    header,
+    /maskImage: "linear-gradient\(to bottom, black \d+%, transparent 100%\)"/,
+    "the header's blur is not masked, so it stops dead at the bottom edge",
+  );
+  /* The HEADER'S OWN className only. Comments in the file discuss the border
+     that was removed, and the mobile dropdown below the header legitimately has
+     one — it is a popover over content, not a rule across the field. */
+  const headerClass = /<header\b[\s\S]*?className="([^"]*)"/.exec(
+    codeOf(header),
+  );
+  assert.notEqual(headerClass, null, "cannot read the header's className");
+  assert.ok(
+    !/border-b/.test(headerClass[1]),
+    `the header has a bottom border again ("${headerClass[1]}"); the fade ` +
+      `replaced it, and a rule across a dot field is the hard edge this was ` +
+      `meant to remove`,
+  );
+  /* Opaque at the top would be a black strip across the lattice. */
+  const top = Number(/from-background\/(\d+)/.exec(header)?.[1]);
+  assert.ok(
+    Number.isFinite(top) && top <= 95,
+    `the header's ground starts at ${top}% — at 100% the top of the row is a ` +
+      `solid band over the field`,
   );
 });
 

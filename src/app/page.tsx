@@ -622,14 +622,30 @@ function Backdrop() {
           dot at a 28px pitch has almost no area — 0.90% of its cell — so it
           needs contrast a line never would.
 
-          BOUNDED IN PIXELS, both the height and the fade. This layer's parent is
-          `inset-0` of the whole PAGE, thousands of pixels tall, so a percentage
-          height would build a dot for every lattice point of the entire document
-          — tens of thousands of them, each one a `ctx.fill()` per frame — and a
-          percentage mask would be an ellipse nobody can see the bottom of. The
-          same mistake once scaled an entire backdrop illustration off screen. */}
+          `fixed`, NOT `absolute`, and that is the difference between the navbar
+          being part of the page and being a black bar on top of it. The header is
+          in normal flow, so the page — and anything positioned inside it — begins
+          BELOW the header: an absolute layer here started at y=64 and the row
+          above it had nothing in it to see. Sampling a screenshot of that state
+          found 25,800 non-black pixels immediately below the header and exactly
+          zero inside it.
+          Fixed positioning resolves against the viewport instead, so this one
+          layer starts at y=0 and runs behind the header, which the header's own
+          fading ground then reveals. It is not clipped by the page root's
+          `overflow-hidden` (a fixed element's containing block is the viewport,
+          so an ancestor's overflow does not apply) and `isolation: isolate` does
+          not capture it either — only transform, filter and friends do that.
+          WHAT IT COSTS: the field no longer scrolls away, so it reads as a
+          permanent texture at the top of the viewport rather than as hero
+          decoration. That is the right trade with a STICKY header — the two stay
+          together at every scroll position, which is the whole point — and the
+          fade below keeps it out of the way of everything else.
+
+          BOUNDED IN PIXELS, both the height and the fade, so the layer builds one
+          viewport of dots rather than one per lattice point of a page thousands
+          of pixels tall — each of which would be a `ctx.fill()` every frame. */}
       <div
-        className="absolute inset-x-0 top-0 h-[820px] opacity-[0.65] dark:opacity-[0.35]"
+        className="fixed inset-x-0 top-0 h-[820px] opacity-[0.65] dark:opacity-[0.35]"
         style={{
           /* A VERTICAL FADE, not the ellipse this started as, and the reason is
              that an ellipse made the measured contrast a lie. `check:dot-grid`
@@ -638,15 +654,15 @@ function Backdrop() {
              the left margin — 750px off centre — the real figure was a fifth of
              the asserted one. A number you cannot trust at the edges is worse
              than no number.
-             Fading only downward keeps every dot in the band at full strength,
-             so the asserted contrast is the contrast on screen, and the fade
-             still does its job: the field is gone before the section below it.
-             Pixels, not percentages — this layer's parent is `inset-0` of a page
-             thousands of pixels tall. */
+             Fading only downward keeps every dot in the band at full strength, so
+             the asserted contrast is the contrast on screen. The band ends at
+             700px rather than the 760 it had while this layer scrolled: a fixed
+             field is on screen at every scroll position, so it has to be out of
+             the way by mid-viewport instead of merely by the end of the hero. */
           maskImage:
-            "linear-gradient(to bottom, black 0px, black 430px, transparent 760px)",
+            "linear-gradient(to bottom, black 0px, black 380px, transparent 700px)",
           WebkitMaskImage:
-            "linear-gradient(to bottom, black 0px, black 430px, transparent 760px)",
+            "linear-gradient(to bottom, black 0px, black 380px, transparent 700px)",
         }}
       >
         <DotGrid className="h-full w-full" />

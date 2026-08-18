@@ -191,7 +191,13 @@ export function Header(): React.JSX.Element {
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background via-background/75 to-transparent"
+        /* Fades from 95% rather than 100%: with the page's dot field now running
+           behind the header, a fully opaque top edge is a black strip across the
+           lattice — the one thing this whole arrangement exists to remove. The
+           midpoint came down with it. Text stays legible by a wide margin: the
+           nav sits on `--foreground`, which is ~14:1 against this ground even
+           where it is thinnest. */
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/95 via-background/60 to-transparent"
       />
 
       {/* Full-bleed rather than centred in a max-width container: the editor is
