@@ -192,12 +192,32 @@
    * lesson, made impossible by construction rather than by fill mode). */
   [data-af-idle="on"] .af-uc-edge .af-uc-breath {
     display: inline;
-    animation: af-uc-breathe var(--uc-breath-period, 5200ms) ease-in-out
-      infinite;
+    opacity: 0.16;
+    animation-duration: var(--uc-breath-period, 5200ms);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    /* `backwards` so the delay paints NOTHING: `from` parks the lit run before
+       the path starts, the flowchart's frozen-stub lesson applied here before
+       it could be reported a second time. */
+    animation-fill-mode: backwards;
     animation-delay: calc(
       var(--uc-edge-at) + var(--uc-idle-start, 1400ms) +
         var(--uc-breath-phase, 0ms)
     );
+  }
+
+  /* The two halves of one direction-neutral gesture: identical bands drifting
+     OPPOSITE ways at the same constant speed. Neither is a direction, because
+     the pair has no net one — which is what lets an UNDIRECTED association
+     carry travelling light at all. A single band was rejected for exactly that
+     reason, and an in-place opacity swell was tried first: it read as a blink
+     rather than as motion, which is the "stable line animation" this replaces. */
+  [data-af-idle="on"] .af-uc-edge .af-uc-drift-out {
+    animation-name: af-uc-drift-out;
+  }
+
+  [data-af-idle="on"] .af-uc-edge .af-uc-drift-back {
+    animation-name: af-uc-drift-back;
   }
 
   /* ---- resume: an explicit ON must answer promptly --------------------------
@@ -232,6 +252,11 @@
   stroke-linecap: round;
   filter: blur(3px);
   opacity: 0;
+  /* Fractions of THIS path (the markup sets pathLength=1), so one dash pattern
+     is the same proportion of a short association and a long one. Period 3.0
+     with a 0.12 lit run: a gap wider than the whole path, so the line is dark
+     between passes and the gesture stays a drift rather than a belt. */
+  stroke-dasharray: 0.12 2.88;
 }
 
 /* From-only: the end state is the element's own natural state, so the
@@ -272,12 +297,24 @@
 /* The breath: a swell that starts and ends at nothing, so the loop's wrap
  * is invisible by construction. Opacity ONLY — no offset, no travel — which
  * is the non-directional promise the header makes for associations. */
-@keyframes af-uc-breathe {
-  0%,
-  100% {
-    opacity: 0;
+/* One dash period per cycle, so the wrap is invisible and the loop can neither
+   jerk nor accumulate phase. `from` equals the lit length, which parks the run
+   entirely BEFORE the path during the delay — that plus `backwards` is what
+   keeps a waiting band absent rather than frozen on the line. */
+@keyframes af-uc-drift-out {
+  from {
+    stroke-dashoffset: 0.12;
   }
-  50% {
-    opacity: 0.16;
+  to {
+    stroke-dashoffset: -2.88;
+  }
+}
+
+@keyframes af-uc-drift-back {
+  from {
+    stroke-dashoffset: -2.88;
+  }
+  to {
+    stroke-dashoffset: 0.12;
   }
 }

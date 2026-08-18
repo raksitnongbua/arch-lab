@@ -891,10 +891,15 @@ const VAR_TO_KEY = Object.fromEntries(
       /edge\.kind === "dependency" && "af-uc-march"/.test(diagramSrc),
     );
     check(
-      "the diagram renders an af-uc-breath track for ASSOCIATIONS only — dependencies march instead, and a second gesture on one edge would be two stories at once",
-      /edge\.kind === "association" \? \(\s*<path[\s\S]{0,200}af-uc-breath/.test(
+      "the diagram renders drift tracks for ASSOCIATIONS only — dependencies march instead, and two gestures on one edge would be two stories at once",
+      /edge\.kind === "association" \? \([\s\S]{0,400}af-uc-drift-out[\s\S]{0,300}af-uc-drift-back/.test(
         diagramSrc,
       ),
+    );
+    check(
+      "both drift tracks carry pathLength=1 — without it the dash fractions are user units, a sliver on a long association and a blanket on a short one",
+      (diagramSrc.match(/af-uc-drift-(?:out|back) pointer-events-none"\s*\n?\s*d=\{d\}\s*\n?\s*pathLength=\{1\}/g) ?? [])
+        .length === 2,
     );
     check(
       "the diagram STAMPS --uc-breath-phase from usecaseBreathPhase — the CSS fallback is 0ms, so a missing stamp silently flattens the scatter into every association swelling in unison, with every CSS assertion still green (the flowchart shipped exactly this)",
@@ -963,16 +968,57 @@ const VAR_TO_KEY = Object.fromEntries(
       /animation:\s*af-frame-march\s/.test(motionCss) &&
         !/@keyframes af-uc-[a-z-]*march/.test(motionCss),
     );
+    /* DIRECTION-NEUTRALITY, by symmetry rather than by stillness. The first cut
+       forbade stroke-dashoffset outright — a band travelling along an undirected
+       association would state a direction it does not have — and got an in-place
+       opacity swell that read as a blink rather than as motion. The gesture now
+       travels, and stays neutral because the two bands are EXACT MIRRORS: equal
+       speed, opposite ways, no net direction. Pinned as the mirror property,
+       because a lone drift, or two drifts at different speeds, is a direction
+       again. */
     check(
-      "the association's ambient gesture animates opacity/width, never stroke-dashoffset — a band travelling ALONG an association would imply a direction, and a UML association is undirected; it swells in place instead",
+      "the two drift keyframes are exact mirrors of each other — a lone band, or an unequal pair, states a direction an undirected association does not have",
       (() => {
-        const breathe = motionCss.match(
-          /@keyframes af-uc-breathe\s*\{([\s\S]*?)\n\}/,
-        );
+        const range = (name) => {
+          const m = motionCss.match(
+            new RegExp(
+              `@keyframes ${name}\\s*\\{\\s*from\\s*\\{\\s*stroke-dashoffset:\\s*(-?[\\d.]+)\\s*;\\s*\\}\\s*to\\s*\\{\\s*stroke-dashoffset:\\s*(-?[\\d.]+)\\s*;`,
+            ),
+          );
+          return m === null ? null : [Number(m[1]), Number(m[2])];
+        };
+        const out = range("af-uc-drift-out");
+        const back = range("af-uc-drift-back");
         return (
-          breathe !== null && !/stroke-dashoffset/.test(breathe[1])
+          out !== null &&
+          back !== null &&
+          out[0] === back[1] &&
+          out[1] === back[0]
         );
       })(),
+    );
+    check(
+      "the drift is STEADY: linear timing and exactly one dash period per cycle, so it holds one speed and its wrap is invisible — an eased loop reads as slipping and any other span parks the band somewhere new at each wrap",
+      (() => {
+        const dash = motionCss.match(
+          /\.af-uc-breath\s*\{[^}]*stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/,
+        );
+        const out = motionCss.match(
+          /@keyframes af-uc-drift-out\s*\{\s*from\s*\{\s*stroke-dashoffset:\s*([\d.]+)\s*;\s*\}\s*to\s*\{\s*stroke-dashoffset:\s*(-?[\d.]+)\s*;/,
+        );
+        if (dash === null || out === null) return false;
+        const lit = Number(dash[1]);
+        const period = lit + Number(dash[2]);
+        return (
+          /animation-timing-function:\s*linear/.test(motionCss) &&
+          Number(out[1]) === lit &&
+          Number(out[2]) === lit - period
+        );
+      })(),
+    );
+    check(
+      "the drift declares the `backwards` fill — without it a waiting band paints its static dash on the line for the whole delay, which is the flowchart's 'gradient stick on refresh' report",
+      /animation-fill-mode:\s*backwards/.test(motionCss),
     );
     check(
       "an explicit toggle-ON answers promptly via [data-af-idle-resume] for EVERY idle class — re-serving the entrance settle to a click shipped on the flowchart as 'idle motion toggle broken', because a control whose effect is invisible for seconds is indistinguishable from a dead one",
