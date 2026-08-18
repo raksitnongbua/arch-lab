@@ -73,7 +73,7 @@ import {
   Expand,
   FilePlus2,
   FileText,
-  HelpCircle,
+  ChevronDown,
   Info,
   Repeat2,
   Shrink,
@@ -325,11 +325,10 @@ export function ViewPlayground({
   // form, not a second thing to learn. Revealed by an explicit click, and
   // never hidden while it is the pane reporting an error.
   const [jsonVisible, setJsonVisible] = useState(false);
-  /* Off by default: the starter blurbs are for the reader who does not know
-     which kind they want, and a returning reader who does should not pay a
-     paragraph under the editor for it. Session state, not a cookie — the
-     question "which one?" is asked once, not remembered forever. */
-  const [startersExplained, setStartersExplained] = useState(false);
+  /* The sample-diagram menu. Closed by default and session-only: choosing a
+     starter is a one-off, so nothing here is worth remembering across loads. */
+  const [startersOpen, setStartersOpen] = useState(false);
+  const startersMenuId = useId();
 
   /** The left rail's fold. The toggle lives in the canvas column's own strip,
    * because a control that vanishes with the thing it hides cannot restore it.
@@ -1267,88 +1266,95 @@ export function ViewPlayground({
                   target, and "you are already writing this kind" is worth
                   saying. Replacing is undoable with the textarea's own undo,
                   which is why there is no confirmation in front of it. */}
-              {/* `items-start` and no `shrink-0`: each starter is now two
-                  stacked lines, so the row must be allowed to wrap and the
-                  "Start from:" label must sit against the top of the first
-                  line rather than the middle of a two-line control. */}
-              <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                <span
-                  className={cn(
-                    "text-xs text-muted-foreground",
-                    startersExplained && "mt-2",
-                  )}
-                >
-                  Start from:
-                </span>
-                {(["c4", "sequence", "flowchart", "usecase"] as const).map(
-                  (kind) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      onClick={() => loadStarter(kind)}
-                      disabled={doc.kind === kind}
-                      title={
-                        doc.kind === kind
-                          ? `The pane already holds a ${STARTER_NOUN[kind]} document`
-                          : `Replace the pane with a ${STARTER_NOUN[kind]} starter`
-                      }
-                      className={buttonClasses({
-                        variant: "ghost",
-                        size: "sm",
-                        className:
-                          "h-auto items-start gap-2 py-1.5 text-left disabled:cursor-not-allowed",
-                      })}
-                    >
-                      <FilePlus2
-                        aria-hidden="true"
-                        className="mt-0.5 shrink-0"
-                      />
-                      <span className="flex flex-col">
-                        <span>{STARTER_BUTTON_LABEL[kind]}</span>
-                        {/* HIDDEN BY DEFAULT. The explanation is part of the
-                            control rather than a tooltip — a tooltip is
-                            invisible to the reader who has not already hovered
-                            the thing they were unsure about — but four
-                            two-line controls is a paragraph sitting under an
-                            editor for everyone who already knows which kind
-                            they want, which is most returning readers. So it
-                            is a disclosure: off until asked for, and then
-                            attached to the button it describes. */}
-                        {startersExplained ? (
-                          <span className="text-xs font-normal text-muted-foreground">
-                            {STARTER_BLURB[kind]}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  ),
-                )}
-                {/* Names what it reveals rather than saying "more": a reader
-                    deciding whether to press it needs to know it explains the
-                    four things beside it, not that something unspecified will
-                    appear. `aria-expanded` carries the state for anyone who
-                    cannot see the lines arrive. */}
+              {/* ONE control that OPENS A LIST, not four controls in a row.
+                  Four labels plus a disclosure was five things competing for a
+                  strip of toolbar, and the four only mean something to a reader
+                  who already knows all four grammars. A single named button
+                  behind which the choices live — with each one's job written
+                  beside it — is the pattern Mermaid's editor uses for the same
+                  problem, and it is the right one: the toolbar states that
+                  samples exist, the menu answers which. */}
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setStartersExplained((value) => !value)}
-                  aria-expanded={startersExplained}
-                  title={
-                    startersExplained
-                      ? "Hide what each starter is for"
-                      : "Show what each starter is for"
-                  }
+                  onClick={() => setStartersOpen((value) => !value)}
+                  aria-expanded={startersOpen}
+                  aria-haspopup="menu"
+                  aria-controls={startersOpen ? startersMenuId : undefined}
+                  title="Replace the pane with a sample diagram"
                   className={buttonClasses({
                     variant: "ghost",
                     size: "sm",
-                    className: cn(
-                      "text-muted-foreground",
-                      startersExplained && "mt-0",
-                    ),
+                    className: "gap-2",
                   })}
                 >
-                  <HelpCircle aria-hidden="true" />
-                  {startersExplained ? "Hide" : "Which one?"}
+                  <FilePlus2 aria-hidden="true" />
+                  Sample diagrams
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={cn(
+                      "transition-transform duration-200",
+                      startersOpen && "rotate-180",
+                    )}
+                  />
                 </button>
+
+                {startersOpen ? (
+                  <div
+                    id={startersMenuId}
+                    role="menu"
+                    aria-label="Sample diagrams"
+                    /* Opens UPWARD: this toolbar sits at the bottom of the
+                       source pane, so a downward menu would open off-screen. */
+                    className="af-glass absolute bottom-full left-0 z-50 mb-1.5 min-w-72 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+                  >
+                    {(["c4", "sequence", "flowchart", "usecase"] as const).map(
+                      (kind) => {
+                        const isCurrent = doc.kind === kind;
+                        return (
+                          <button
+                            key={kind}
+                            type="button"
+                            role="menuitem"
+                            disabled={isCurrent}
+                            onClick={() => {
+                              loadStarter(kind);
+                              setStartersOpen(false);
+                            }}
+                            title={
+                              isCurrent
+                                ? `The pane already holds a ${STARTER_NOUN[kind]} document`
+                                : `Replace the pane with a ${STARTER_NOUN[kind]} starter`
+                            }
+                            className={cn(
+                              "flex w-full items-start gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
+                              "disabled:cursor-not-allowed disabled:opacity-50",
+                            )}
+                          >
+                            <FilePlus2
+                              aria-hidden="true"
+                              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                            />
+                            <span className="flex min-w-0 flex-col">
+                              <span className="text-xs font-medium text-foreground">
+                                {STARTER_BUTTON_LABEL[kind]}
+                                {isCurrent ? " — open now" : ""}
+                              </span>
+                              {/* The job each diagram does. In a MENU it costs
+                                  nothing: a reader who opened this list is
+                                  exactly the one asking "which of these?", so
+                                  the answer belongs here rather than folded
+                                  behind a second control. */}
+                              <span className="text-[11px] leading-tight text-muted-foreground">
+                                {STARTER_BLURB[kind]}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               <p

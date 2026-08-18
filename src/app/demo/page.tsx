@@ -36,10 +36,38 @@ export const metadata: Metadata = {
  * A BROKEN EXAMPLE STAYS VISIBLE. A bundled document that fails to parse is a
  * bug in this repo, and hiding it behind a filter is how it stays one.
  */
-/** The heading and the intro take the first two slots of the entrance cascade. */
-const C4_BASE = 2;
+/** How many of a kind's examples the page SHOWS. See the note in DemoPage. */
+const SHOWCASES_PER_KIND = 2;
+
+/** The valid listings past the showcased two, as `{ id, title }` for AlsoLinks. */
+function overflowOf(
+  listings: { status: string; summary?: { id: string; title: string } }[],
+): { id: string; title: string }[] {
+  return listings
+    .slice(SHOWCASES_PER_KIND)
+    .flatMap((listing) =>
+      listing.status === "ok" && listing.summary !== undefined
+        ? [{ id: listing.summary.id, title: listing.summary.title }]
+        : [],
+    );
+}
+
+/** The heading, the intro and the jump bar take the first three cascade slots. */
+const C4_BASE = 3;
 
 export default function DemoPage(): React.JSX.Element {
+  /*
+   * TWO SHOWCASES PER KIND on the page, not every registered example.
+   *
+   * The index had grown to eleven cards across four sections, which is a
+   * catalogue rather than an overview: a reader arriving here is deciding
+   * whether the product draws the kind of diagram they have in mind, and the
+   * third example of a kind cannot change that answer. Two shows the range;
+   * the rest are still LINKED, as a compact line under each section, because
+   * every one has a crawlable read-only page in the sitemap and dropping the
+   * link would orphan it — which is the exact bug the read-only links were
+   * added to fix.
+   */
   const models = listViewerModels();
   const sequences = listSequenceExamples();
   const flowcharts = listFlowchartExamples();
@@ -61,6 +89,35 @@ export default function DemoPage(): React.JSX.Element {
         uses. Open one in the playground and edit it as text.
       </p>
 
+      {/* A JUMP BAR, sticky under the header. Four sections of two cards is
+          short enough to scroll and long enough that "where is the flowchart
+          one" is a real question; four links answer it without the reader
+          hunting. Plain anchors, so they work before hydration and survive
+          being copied. `backdrop-blur` rather than a solid ground, because it
+          passes over cards as it sticks. */}
+      <nav
+        aria-label="Jump to a document kind"
+        className="af-demo-row sticky top-16 z-20 -mx-2 mt-8 flex flex-wrap gap-1 rounded-lg border border-border/60 bg-background/80 px-2 py-1.5 backdrop-blur"
+        style={{ "--row": 2 } as React.CSSProperties}
+      >
+        {(
+          [
+            ["c4", "C4 models"],
+            ["sequence", "Sequence diagrams"],
+            ["flowchart", "Flowcharts"],
+            ["usecase", "Use cases"],
+          ] as const
+        ).map(([anchor, label]) => (
+          <a
+            key={anchor}
+            href={`#${anchor}`}
+            className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+
       {/* `base` continues the cascade across sections rather than restarting
           it: four lists each counting from zero animate in lockstep, which
           reads as a glitch rather than an order. */}
@@ -70,7 +127,7 @@ export default function DemoPage(): React.JSX.Element {
         accent="var(--primary)"
         base={C4_BASE}
       >
-        {models.map((listing, row) =>
+        {models.slice(0, SHOWCASES_PER_KIND).map((listing, row) =>
           listing.status === "invalid" ? (
             <Broken
               key={listing.id}
@@ -93,6 +150,10 @@ export default function DemoPage(): React.JSX.Element {
             />
           ),
         )}
+        <AlsoLinks
+          items={overflowOf(models)}
+          hrefFor={(id) => `/view/${id}`}
+        />
       </Section>
 
       <Section
@@ -101,7 +162,7 @@ export default function DemoPage(): React.JSX.Element {
         accent="var(--accent)"
         base={C4_BASE + models.length + 1}
       >
-        {sequences.map((listing, row) =>
+        {sequences.slice(0, SHOWCASES_PER_KIND).map((listing, row) =>
           listing.status === "invalid" ? (
             <Broken
               key={listing.id}
@@ -123,6 +184,10 @@ export default function DemoPage(): React.JSX.Element {
             />
           ),
         )}
+        <AlsoLinks
+          items={overflowOf(sequences)}
+          hrefFor={(id) => `/view/sequence/${id}`}
+        />
       </Section>
 
       <Section
@@ -131,7 +196,7 @@ export default function DemoPage(): React.JSX.Element {
         accent="var(--flow-decision-border)"
         base={C4_BASE + models.length + sequences.length + 2}
       >
-        {flowcharts.map((listing, row) =>
+        {flowcharts.slice(0, SHOWCASES_PER_KIND).map((listing, row) =>
           listing.status === "invalid" ? (
             <Broken
               key={listing.id}
@@ -154,6 +219,10 @@ export default function DemoPage(): React.JSX.Element {
             />
           ),
         )}
+        <AlsoLinks
+          items={overflowOf(flowcharts)}
+          hrefFor={(id) => `/view/flowchart/${id}`}
+        />
       </Section>
 
       <Section
@@ -164,7 +233,7 @@ export default function DemoPage(): React.JSX.Element {
           C4_BASE + models.length + sequences.length + flowcharts.length + 3
         }
       >
-        {usecases.map((listing, row) =>
+        {usecases.slice(0, SHOWCASES_PER_KIND).map((listing, row) =>
           listing.status === "invalid" ? (
             <Broken
               key={listing.id}
@@ -198,6 +267,10 @@ export default function DemoPage(): React.JSX.Element {
             />
           ),
         )}
+        <AlsoLinks
+          items={overflowOf(usecases)}
+          hrefFor={(id) => `/view/usecase/${id}`}
+        />
       </Section>
     </div>
   );
@@ -235,7 +308,10 @@ function Section({
 }): React.JSX.Element {
   return (
     <section
-      className="af-demo-kind af-demo-row mt-12"
+      /* The anchor the sticky jump bar targets. `scroll-mt` clears the bar
+         itself, or the heading lands underneath it. */
+      id={kind}
+      className="af-demo-kind af-demo-row mt-12 scroll-mt-24"
       style={{ "--kind": accent, "--row": base } as React.CSSProperties}
     >
       <div className="flex items-center gap-2.5">
@@ -403,6 +479,40 @@ function ExampleCard({
           </Link>
         </span>
       </div>
+    </li>
+  );
+}
+
+/**
+ * The examples this page does not showcase, as one compact line of links.
+ *
+ * Not a "show more" toggle: every one of these has a crawlable read-only page
+ * listed in the sitemap, and a link a crawler cannot follow until JavaScript
+ * runs is the orphan-page problem the read-only links exist to solve. Plain
+ * anchors, always in the markup, quietly styled.
+ */
+function AlsoLinks({
+  items,
+  hrefFor,
+}: {
+  items: { id: string; title: string }[];
+  hrefFor: (id: string) => string;
+}): React.JSX.Element | null {
+  if (items.length === 0) return null;
+  return (
+    <li className="px-2 pt-3 text-xs text-muted-foreground">
+      Also:{" "}
+      {items.map((item, index) => (
+        <span key={item.id}>
+          {index > 0 ? ", " : ""}
+          <Link
+            href={hrefFor(item.id)}
+            className="underline decoration-dotted underline-offset-2 transition-colors hover:text-foreground"
+          >
+            {item.title}
+          </Link>
+        </span>
+      ))}
     </li>
   );
 }

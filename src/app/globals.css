@@ -1870,11 +1870,16 @@
  * can never nudge the navigation beside it, and a mark that shifted by a pixel
  * every few seconds next to a menu would be far worse than a still one.
  *
- * Slow (5.6s) and shallow (a fifth of a step, never to full) because this runs
- * on every page forever, in peripheral vision. It is a heartbeat, not a
- * greeting. Each ring's own resting opacity is its baseline, so the animation
- * lifts from what the mark already looked like rather than replacing it — which
- * is why the three keyframes carry different values.
+ * Paced at 4s, and the lift is a REAL one. The first cut moved each ring by
+ * about a fifth of a step and was reported as not looping at all — a loop
+ * nobody can see is not a loop, the same lesson the diagram canvases learned
+ * three times over. Each ring now travels from clearly dim to full and back,
+ * and the innermost one also scales a little: a transform, so it still costs no
+ * layout and the logo still cannot nudge the navigation beside it.
+ *
+ * Each ring's own resting opacity is its floor, so the animation lifts from what
+ * the mark already looked like rather than replacing it — which is why the three
+ * keyframes carry different values.
  *
  * HOVER OVERRIDES THE LOOP. Hovering the logo takes all three rings to full at
  * once: the drill-down assembled, as a single answer to the pointer. The loop is
@@ -1892,7 +1897,10 @@
  */
 @media (prefers-reduced-motion: no-preference) {
   .af-mark .af-mark-ring {
-    animation: 5600ms ease-in-out infinite;
+    animation: 4000ms ease-in-out infinite;
+    /* Scale from the mark's centre, not the viewBox origin, or the innermost
+       ring would swing instead of breathe. */
+    transform-origin: center;
   }
 
   .af-mark .af-mark-ring-1 {
@@ -1901,12 +1909,12 @@
 
   .af-mark .af-mark-ring-2 {
     animation-name: af-mark-ring-2;
-    animation-delay: 420ms;
+    animation-delay: 320ms;
   }
 
   .af-mark .af-mark-ring-3 {
     animation-name: af-mark-ring-3;
-    animation-delay: 840ms;
+    animation-delay: 640ms;
   }
 
   /* Paused, not cancelled: leaving the hover resumes mid-breath rather than
@@ -1938,29 +1946,33 @@
 @keyframes af-mark-ring-1 {
   0%,
   100% {
-    opacity: 0.45;
+    opacity: 0.28;
   }
-  50% {
-    opacity: 0.68;
+  45% {
+    opacity: 1;
   }
 }
 
 @keyframes af-mark-ring-2 {
   0%,
   100% {
-    opacity: 0.75;
+    opacity: 0.42;
   }
-  50% {
-    opacity: 0.95;
+  45% {
+    opacity: 1;
   }
 }
 
+/* The innermost ring is the component — the deepest level, and the one the
+   drill-down arrives at — so it gets the scale as well as the lift. */
 @keyframes af-mark-ring-3 {
   0%,
   100% {
-    opacity: 1;
+    opacity: 0.5;
+    scale: 0.9;
   }
-  50% {
-    opacity: 0.72;
+  45% {
+    opacity: 1;
+    scale: 1.15;
   }
 }

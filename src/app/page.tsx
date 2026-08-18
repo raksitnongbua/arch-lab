@@ -192,12 +192,18 @@ export default function Home() {
               agent can write that text for you.
             </p>
 
-            {/* ONE primary destination. The old hero offered three buttons and
-                a badge, and the first of them went to a gallery — a newcomer
-                had to pick between "demo", "sequence diagrams" and "editor
-                preview" before seeing anything at all. `/view/sequence` opens
-                already seeded with a flow, so the first click ends in a
-                working diagram rather than another choice. */}
+            {/* ONE primary destination, and now ACTUALLY one. The old hero
+                offered three buttons and a badge, and a newcomer had to pick
+                between "demo", "sequence diagrams" and "editor preview" before
+                seeing anything at all. Trimming to two did not finish the job:
+                "Build a C4 model" sat beside "Open a live diagram" pointing at
+                the SAME playground, asking a reader who has never seen the
+                product to choose between reading one and building one — a
+                choice they cannot make yet, and the second button was the
+                weaker offer besides, since building starts from a blank
+                intention while opening starts from a working diagram. The
+                playground's own "Sample diagrams" menu is where picking a kind
+                belongs, once someone is actually in it. */}
             <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               {/* ICON-LED, not word-led. The label is still here for anyone
                   who cannot see the icon — `sr-only` text, which is what gives
@@ -225,12 +231,6 @@ export default function Home() {
                   aria-hidden="true"
                   className="transition-transform duration-200 group-hover:translate-x-1"
                 />
-              </Link>
-              <Link
-                href="/view"
-                className={buttonClasses({ variant: "outline", size: "lg" })}
-              >
-                Build a C4 model
               </Link>
               <p id="cta-note" className="text-sm text-muted-foreground">
                 Opens with a worked example — nothing to set up.
