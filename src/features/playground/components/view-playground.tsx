@@ -161,6 +161,7 @@ import {
   type ViewDocument,
   type ViewSourceError,
 } from "../input/parse";
+import { KIND_BLURB } from "../lib/kind-copy";
 import { useSourceCollapsed } from "../lib/use-source-fold";
 
 /**
@@ -221,23 +222,6 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   sequence: "sequence",
   flowchart: "flowchart",
   usecase: "use-case",
-};
-
-/**
- * What each starter is FOR, in one line a newcomer can act on.
- *
- * The row used to be four bare nouns — "C4 · Sequence · Flowchart · Use case" —
- * which names the four grammars to someone who already knows all four and tells
- * everyone else nothing. A reader who does not know which they want cannot pick
- * from a list of labels; they can pick from a list of jobs. Each line names the
- * QUESTION the diagram answers rather than the shapes it draws, because the
- * shapes are what you see once you have already chosen.
- */
-const STARTER_BLURB: Record<SeedKind, string> = {
-  c4: "Systems and the lines between them, drillable level by level",
-  sequence: "Who calls whom, in order, over time",
-  flowchart: "Steps, decisions and the loops back",
-  usecase: "Who can do what at the system's edge",
 };
 
 /** The starter buttons' faces, in the order the row renders them. */
@@ -1349,7 +1333,7 @@ export function ViewPlayground({
                                   the answer belongs here rather than folded
                                   behind a second control. */}
                               <span className="text-[11px] leading-tight text-muted-foreground">
-                                {STARTER_BLURB[kind]}
+                                {KIND_BLURB[kind]}
                               </span>
                             </span>
                           </button>
