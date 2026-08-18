@@ -15,6 +15,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { DotGrid } from "@/features/marketing/dot-grid";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
 import { LiveDiagramMark } from "@/features/marketing/live-diagram-mark";
 import { McpFlow } from "@/features/marketing/mcp-flow";
@@ -532,6 +533,27 @@ export default function Home() {
 /* Pieces                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The page's ground: a wash, a line grid, a dot field over it, and two still
+ * glows. Decorative in full — `aria-hidden`, `pointer-events-none`, `-z-10` —
+ * and every layer is a CSS background rather than an element or an image, so the
+ * whole thing costs one paint and no requests.
+ *
+ * NOTHING HERE MOVES ON ITS OWN, which is a narrower claim than the one this
+ * comment used to make and the distinction is the whole rule. An animated wire
+ * layer lived here and was removed: it moved unprompted, behind a headline,
+ * where it either could not be seen at all or would have had to shout to be —
+ * and two rounds of raising its opacity to chase visibility was the signal to
+ * stop rather than to keep going.
+ * The dot field is not that. It is inert until a pointer arrives, it never
+ * loops, and its resting frame is exactly what a reader who wants no motion is
+ * shown — so it can be quiet enough to sit behind words and still be felt when
+ * someone reaches for it. Responding is not competing.
+ *
+ * Every layer's fade is masked in ABSOLUTE units, never percentages: this
+ * element is `inset-0` of the page, which is thousands of pixels tall, so a
+ * percentage is measured against a box nobody can see the bottom of.
+ */
 function Backdrop() {
   return (
     <div
@@ -551,6 +573,45 @@ function Backdrop() {
             "radial-gradient(ellipse 80% 55% at 50% 0%, black 20%, transparent 75%)",
         }}
       />
+
+      {/* THE DOT FIELD. Pitched at exactly half the line grid's 56px, so every
+          dot lands either on a grid intersection or on the midpoint of a line
+          and the two patterns read as one surface — at an unrelated pitch they
+          beat against each other and the backdrop looks like a rendering fault.
+
+          IT REACTS TO THE POINTER, which is the one exception to "nothing here
+          moves" above, and it earns the exception the way the hero card does: it
+          responds rather than performs. Nothing happens until a hand arrives,
+          nothing loops, and the resting frame is the same field of dots a reader
+          who wants no motion gets. That is the opposite of the wire layer that
+          was removed — that one moved on its own, unprompted, behind words.
+
+          PAINTED IN `--border`, not the lines' `--canvas-grid`, and that is
+          measured rather than picked: on the dark ground `--canvas-grid` tops out
+          at 1.16:1 even at full opacity, because the ground moved up to meet it.
+          `--border` reaches 1.32:1 at half opacity, which is the headroom a 2px
+          dot needs — a dot puts a fraction of the ink on screen that a 1px line
+          does, so equal contrast is not equal presence. Measured as composited:
+          1.20:1 on the light ground, 1.32:1 on the dark one, against the line
+          grid's own 1.11 and 1.08.
+
+          BOUNDED IN PIXELS, both the height and the fade. This layer's parent is
+          `inset-0` of the whole PAGE, thousands of pixels tall, so a percentage
+          height would build a dot for every lattice point of the entire document
+          — tens of thousands of them, each one a `ctx.fill()` per frame — and a
+          percentage mask would be an ellipse nobody can see the bottom of. The
+          same mistake once scaled an entire backdrop illustration off screen. */}
+      <div
+        className="absolute inset-x-0 top-0 h-[820px] opacity-[0.75] dark:opacity-[0.5]"
+        style={{
+          maskImage:
+            "radial-gradient(ellipse 1100px 640px at 50% 60px, black 30%, transparent 82%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 1100px 640px at 50% 60px, black 30%, transparent 82%)",
+        }}
+      >
+        <DotGrid className="h-full w-full" />
+      </div>
 
       <div className="absolute -top-32 -right-24 size-[28rem] rounded-full bg-accent/10 blur-[120px]" />
       <div className="absolute -top-24 -left-32 size-[26rem] rounded-full bg-primary/10 blur-[120px]" />

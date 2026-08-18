@@ -58,6 +58,11 @@ grammars are refused by the old parsers with a message naming the right one.
   re-solved around the new ground, so every measured contrast pair still clears
   its minimum, and the social card matches the page a click lands on. Brand
   colour is unchanged.
+- The home page's background is a field of dots that reacts to the pointer —
+  dots take the accent colour near the cursor, scatter with inertia under a fast
+  sweep, and ripple away from a click. It holds still for anyone who has reduced
+  motion set or the idle-motion toggle off, and the resting field is what a
+  no-JS reader gets.
 - The home page's hero cycles through all four document kinds instead of two,
   each drawn as a real miniature of its own notation.
 - The site described itself as a C4-and-sequence tool everywhere it is quoted —
