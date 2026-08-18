@@ -74,6 +74,7 @@ import { FLOW } from "../lib/layout";
 import { flowPulsePhase } from "../lib/motion";
 import {
   arrowHeadPath,
+  focusRingGeometry,
   FLOW_SHAPE_TOKENS,
   roundedPolylinePath,
   shapeGeometry,
@@ -435,7 +436,7 @@ function Node({
           are exactly where a pointer aims for it, and a boundary-accurate
           target there is precision nobody asked for. */}
       <rect
-        className="af-flow-hit cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+        className="af-flow-hit cursor-pointer focus-visible:outline-none"
         x={node.x}
         y={node.y}
         width={node.width}
@@ -450,6 +451,30 @@ function Node({
         }}
         onKeyDown={onKeyDown}
       />
+      {/* The focus ring, FOLLOWING THE SHAPE — the node's own outline at a
+          padded box, from the one shape function that draws the node itself.
+          After the hit target for the sibling reveal, inert to the pointer.
+          See `focusRingGeometry` for why a CSS outline could not do this. */}
+      {(() => {
+        const ring = focusRingGeometry(node);
+        return ring.path !== undefined ? (
+          <path
+            aria-hidden="true"
+            className="af-flow-ring pointer-events-none"
+            d={ring.path}
+          />
+        ) : (
+          <rect
+            aria-hidden="true"
+            className="af-flow-ring pointer-events-none"
+            x={ring.box.x}
+            y={ring.box.y}
+            width={ring.box.width}
+            height={ring.box.height}
+            rx={ring.rect?.rx ?? 0}
+          />
+        );
+      })()}
     </g>
   );
 }
@@ -611,7 +636,7 @@ function Edge({
           testing only — a filled hit path over an open polyline would claim
           the whole area the line encloses. */}
       <path
-        className="af-flow-hit cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+        className="af-flow-hit cursor-pointer focus-visible:outline-none"
         d={d}
         fill="none"
         stroke="transparent"
