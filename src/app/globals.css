@@ -850,6 +850,108 @@
   --node-stroke: var(--node-border);
 }
 
+/*
+ * PASTEL — the mid-tone theme, and the only one that is deliberately colourful
+ * in its GROUND rather than only in its accents.
+ *
+ * It sits between light and dark on purpose: the ground is a dusk lavender at
+ * L 0.88, which is neither the near-white of `light` / `paper` nor the
+ * near-black of `dark` / `midnight`. Somebody who finds white glaring and black
+ * stark had no option here until now — `paper` only warms the white.
+ *
+ * LIGHT-FAMILY, and that is a real decision rather than a coin toss: the text is
+ * dark, so every `dark:` utility in the app must take its LIGHT branch. The name
+ * therefore stays OUT of the `dark` custom-variant and the `color-scheme: dark`
+ * rule at the bottom of this file — adding it to either would flip a few hundred
+ * utilities under a theme whose text is nearly black.
+ *
+ * Derived from `.paper` by transform rather than hand-typed, so that no token
+ * could be forgotten: surfaces dropped toward the dusk ground and pulled toward
+ * the lavender hue, accents given more chroma than any other light theme
+ * carries, text left dark. Two pairs came back under their minimum from that
+ * transform and were corrected by hand — `--muted-foreground` (4.10:1 on the
+ * new, darker ground) and the external node's outline (2.64:1 on its own fill);
+ * both are noted at their declarations.
+ *
+ * Every ratio is MEASURED by `pnpm check:themes`, which is why none is annotated
+ * here. `.paper`'s comments record numbers for `.paper`'s values; repeating them
+ * under different colours would be a lie, and the check is the honest record.
+ */
+.pastel {
+  --radius: 0.625rem;
+  --background: oklch(0.880 0.025 322);
+  --foreground: oklch(0.275 0.030 36);
+  --card: oklch(0.905 0.021 322);
+  --card-foreground: oklch(0.275 0.030 36);
+  --popover: oklch(0.905 0.021 322);
+  --popover-foreground: oklch(0.275 0.030 36);
+  --primary: oklch(0.580 0.224 280);
+  --primary-foreground: oklch(0.900 0.021 297);
+  --secondary: oklch(0.855 0.032 32);
+  --secondary-foreground: oklch(0.295 0.029 36);
+  --muted: oklch(0.855 0.032 32);
+  /* Darkened from the transform's 0.505, which measured 4.10:1 on this
+     theme's darker ground — secondary text has to clear 4.5:1. */
+  --muted-foreground: oklch(0.462 0.029 44);
+  --accent: oklch(0.720 0.157 195);
+  --accent-foreground: oklch(0.215 0.041 216);
+  --destructive: oklch(0.580 0.230 27);
+  --destructive-foreground: oklch(0.900 0.026 313);
+  --success: oklch(0.620 0.179 150);
+  --success-foreground: oklch(0.900 0.026 278);
+  --warning: oklch(0.750 0.168 75);
+  --warning-foreground: oklch(0.255 0.054 48);
+  --border: oklch(0.820 0.032 38);
+  --input: oklch(0.820 0.032 38);
+  --ring: oklch(0.580 0.224 280);
+  --canvas: oklch(0.870 0.026 322);
+  --canvas-grid: oklch(0.825 0.036 32);
+  --node: oklch(0.910 0.020 322);
+  --node-foreground: oklch(0.275 0.030 36);
+  --node-border: oklch(0.600 0.018 70);
+  /* Darkened from the transform's L 0.465. This theme's role fills sit ~ΔL 0.07
+     deeper than the light themes' near-white cards, and secondary text on a
+     card's own surface WASH (the deepest stop, ~14% of the border folded in) is
+     the worst case of the lot — it measured 3.76:1 there. L 0.42 clears 4.5:1
+     against every fill and every wash top, measured by check:flowchart-palette
+     across all six shapes. */
+  --node-meta: oklch(0.420 0.032 44);
+  --node-person: oklch(0.855 0.055 297);
+  --node-person-border: oklch(0.530 0.179 295);
+  --node-internal: oklch(0.855 0.055 268);
+  --node-internal-border: oklch(0.520 0.146 250);
+  --node-external: oklch(0.870 0.029 32);
+  /* Darkened from the transform's L 0.600, which measured 2.64:1 against its
+     own fill — an outline has to clear 3:1 or the card has no edge. External is
+     the one role kept deliberately quiet, so its fill sits close to the surface
+     and there is less room here than any other role has; L 0.53 measures
+     3.54:1, which leaves margin without making "not ours" shout. */
+  --node-external-border: oklch(0.530 0.020 70);
+  --node-database: oklch(0.855 0.055 232);
+  --node-database-border: oklch(0.500 0.094 195);
+  --node-queue: oklch(0.860 0.055 203);
+  /* Nudged down from the transform's L 0.520: the queue green is what the
+     flowchart's `start` terminator paints with, and its border measured 2.98:1
+     on the wash top — two hundredths under the 3:1 an outline needs. */
+  --node-queue-border: oklch(0.495 0.126 150);
+  --flow-end: oklch(0.855 0.055 329);
+  --flow-end-border: oklch(0.530 0.168 345);
+  --flow-decision: oklch(0.855 0.055 34);
+  --flow-decision-border: oklch(0.520 0.106 80);
+  --tag-fill-l: 0.93;
+  --tag-fill-c: 0.055;
+  --edge: oklch(0.600 0.022 265);
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.580 0.224 280 / 0.18);
+  --seq-lane-1: #1baf7a;
+  --seq-lane-2: #eb6834;
+  --seq-lane-3: #2a78d6;
+  --seq-lane-4: #e87ba4;
+  --seq-lane-5: #4a3aa7;
+  --node-fill: var(--node);
+  --node-stroke: var(--node-border);
+}
+
 /* --- EXTENSION POINT: adding a third theme ------------------------------------
  * Themes are pure data — a class selector that reassigns the tokens above.
  * To add e.g. "midnight" (OLED black) or "contrast" (high-contrast):

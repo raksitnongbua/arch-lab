@@ -7,6 +7,7 @@ import {
   Layers,
   Moon,
   MoonStar,
+  Palette,
   Sun,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -50,6 +51,7 @@ const THEME_META: Record<
 > = {
   light: { label: "Light", hint: "Cool white", Icon: Sun },
   paper: { label: "Paper", hint: "Warm, less glare", Icon: BookOpen },
+  pastel: { label: "Pastel", hint: "Colourful, between the two", Icon: Palette },
   glass: { label: "Liquid glass", hint: "Translucent surfaces", Icon: Layers },
   dark: { label: "Dark", hint: "The default", Icon: Moon },
   midnight: { label: "Midnight", hint: "True black, for OLED", Icon: MoonStar },

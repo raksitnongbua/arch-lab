@@ -60,6 +60,7 @@ export const APP_DESCRIPTION =
 export const THEMES = [
   "light",
   "paper",
+  "pastel",
   "glass",
   "dark",
   "midnight",
