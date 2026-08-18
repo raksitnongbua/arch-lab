@@ -232,7 +232,19 @@ export default function Home() {
   const endpoint = mcpEndpointUrl(publicOrigin());
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
+    /* `isolate` IS LOAD-BEARING, and its absence is why nothing in the backdrop
+       below has ever been visible — not the dots, not the line grid, not the
+       glows, not the wash.
+       The backdrop sits at `-z-10`. Without a stacking context here, the nearest
+       one is the ROOT element, and the CSS painting order inside a stacking
+       context puts negative-z-index descendants (step 3) BEFORE the backgrounds
+       of in-flow descendants (step 4) — and `body` carries `bg-background`, an
+       opaque fill. So the whole backdrop was painted and then covered by the
+       body's own background on every frame.
+       `isolation: isolate` makes this element the stacking context, so `-z-10` is
+       resolved inside it: above this element's background, below every section,
+       and entirely above `body`. `check:dot-grid` asserts it. */
+    <div className="relative isolate flex flex-1 flex-col overflow-hidden">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: homeJsonLd() }}

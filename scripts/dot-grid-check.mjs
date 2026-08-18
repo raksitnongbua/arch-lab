@@ -227,6 +227,42 @@ check("the home page renders it", () => {
 
 /* ---- 8. THE ONE THAT MATTERS: a dot you can actually see ---------------- */
 
+check("the backdrop's negative z-index is contained", () => {
+  /* THE ONE THAT MATTERS MOST, and it was found by sampling a screenshot rather
+     than by any rule here: the dot field was correct, measured, wired, served —
+     and painted underneath `body`'s opaque `bg-background` on every frame.
+     The backdrop sits at `-z-10`. CSS painting order inside a stacking context
+     puts negative-z-index descendants BEFORE the backgrounds of in-flow
+     descendants, so without a stacking context on the backdrop's own parent the
+     nearest one is the root element — and `body`'s background then covers the
+     entire backdrop. Nothing about that is visible in the markup, the styles or
+     any of the twelve assertions above it. */
+  assert.match(
+    page,
+    /<div className="relative isolate flex flex-1 flex-col overflow-hidden">/,
+    "the page root is not an `isolate` stacking context, so the backdrop's " +
+      "`-z-10` resolves against the root element and `body`'s background paints " +
+      "over every layer in it",
+  );
+  assert.ok(
+    /className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"/.test(
+      page,
+    ),
+    "the backdrop no longer carries `-z-10` — if that is deliberate, this " +
+      "assertion and the `isolate` above it need rewriting together, because " +
+      "without a negative z-index the backdrop paints OVER the page's text",
+  );
+  /* `body` is the layer that was covering it. Named here so that removing the
+     opaque body background — which would also fix the symptom — cannot silently
+     leave a rule behind that no longer describes anything. */
+  assert.match(
+    read("src/app/globals.css"),
+    /body \{\n\s*@apply bg-background/,
+    "`body` no longer paints an opaque background; the isolate above is then " +
+      "belt and braces rather than the fix, and this comment should say so",
+  );
+});
+
 check("the static field is hidden only by evidence of real dots", () => {
   /* THIS IS THE OTHER HALF OF THE SHIPPED BUG. The first version hid the static
      field the moment the two colour tokens resolved, and then a refused colour
