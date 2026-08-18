@@ -1719,3 +1719,33 @@
     background-color: oklch(1 0 0 / 0.94);
   }
 }
+
+/* ---- the hero's icon-led primary call to action -----------------------------
+ * The label moved to `sr-only`, so the FACE of this control is a play mark and
+ * an arrow. A still icon with no words would read as decoration, so the mark
+ * carries a slow, small pulse: it is the thing that says "this is live" now
+ * that no word does.
+ *
+ * Deliberately quiet — 2.4s, scale only, no colour change — because it sits in
+ * a hero beside a running headline gradient, and two competing loops in one
+ * viewport is a fairground. Scale is compositor-only, so it costs no layout.
+ *
+ * Reduced motion stops the loop and leaves the mark at its resting size: the
+ * control is complete without the animation, which is the test every ambient
+ * gesture in this app has to pass.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .af-cta-live .af-cta-live-mark {
+    animation: af-cta-live-pulse 2400ms ease-in-out infinite;
+  }
+}
+
+@keyframes af-cta-live-pulse {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.18;
+  }
+}
