@@ -55,8 +55,21 @@ const RedisIcon = ICONS["redis"].byStyle.mono;
  *
  * Purely presentational — everything it depicts (levels, drill-down, JSON on
  * disk) is stated in the page copy — so the whole thing is `aria-hidden`.
- * It is fixed-size (24rem card) and only rendered at `lg:` and up; ghost
- * layers offset up/left only, so it can never introduce horizontal overflow.
+ *
+ * FIXED-SIZE, AND THAT IS NOT AN OVERSIGHT: a 24rem card over a 350×336
+ * coordinate space with hand-placed nodes. The three SVG panels would scale on
+ * their own, but the C4 panel is HTML boxes at absolute pixel offsets, so making
+ * this fluid means rebuilding the one panel the other three were drawn to match.
+ *
+ * It is no longer `lg:`-only, though. Hiding it below `lg` left every phone with
+ * a headline and a button on an empty ground, so the landing page now renders it
+ * on all viewports and fits it with `.af-hero-fit` (globals.css), which zooms
+ * the whole card to 0.85 under `sm`. Two things that used to be free are now the
+ * caller's job: the card can exceed a 320px viewport, and the ghost layers still
+ * offset up and LEFT, so on a centred narrow layout a few pixels of sheet fall
+ * outside the column. Both are clipped by the page root's `overflow-hidden`
+ * rather than widening the document — which is what that `overflow-hidden`
+ * exists for, but it is now load-bearing for this component and was not before.
  */
 
 /** One beat of the assembly, in ms — everything below is expressed in these. */

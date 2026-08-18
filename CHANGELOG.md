@@ -56,6 +56,17 @@ grammars are refused by the old parsers with a message naming the right one.
 - `Flowchart` and `Use case` starters in the playground's "Start from" row.
 - A home page section naming each of the four notations, every one linking to a
   worked example in the playground.
+- The hero diagram now appears on phones and tablets, under the headline and
+  button rather than beside them. It was desktop-only, so every narrow viewport
+  opened on a headline and a button with nothing to look at.
+- A second "Open a live diagram" button at the foot of the home page, so the
+  page's one action is in reach for a reader who scrolled all the way through.
+- An `/faq` page answering the questions the site had nowhere to answer: how
+  text diagrams compare to Mermaid, what leaves your browser, everything a
+  document exports to, how a share link works with nothing stored, and what an
+  agent is allowed to do over MCP. Linked from the footer and the 404, listed in
+  `/llms.txt`, and marked up as `FAQPage` so an assistant can quote a single
+  answer.
 
 ### Changed
 
@@ -113,6 +124,10 @@ grammars are refused by the old parsers with a message naming the right one.
 
 ### Fixed
 
+- The home page's MCP section ran off the side of a phone screen — the heading,
+  the paragraph and both buttons clipped, not just the install command. The
+  command is one unbreakable line and it was widening the whole section instead
+  of scrolling inside its own block.
 - `/demo` invited a click across the whole row and only the title was a link,
   so clicking an example's description, its counts or the space beside its name
   did nothing.

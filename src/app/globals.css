@@ -1409,6 +1409,41 @@
   }
 }
 
+/* Fitting the fixed-size card onto a phone.
+
+   The hero card is `w-96` — 384px — and every panel inside it is drawn in a
+   fixed 350×336 coordinate space with hand-placed nodes. That is deliberate and
+   should stay: three of the four panels are SVG and would scale on their own,
+   but the C4 panel is HTML boxes at absolute pixel offsets, so "make it
+   responsive" would mean rebuilding the one panel the other three were designed
+   to match. The card was simply hidden below `lg` instead, which left every
+   phone reading a headline and a button on an empty ground — no hero visual at
+   all on the viewport most first-time readers arrive with.
+
+   `zoom` RATHER THAN `transform: scale()`, and the difference is the whole
+   reason this is a stylesheet rule instead of a utility class. A transform does
+   not affect layout: the card would paint smaller and still reserve its full
+   384×~420 box, leaving a band of dead space under the hero that would then
+   need compensating with a negative margin nobody could derive. `zoom` scales
+   the layout box with the paint, so the space below closes on its own and the
+   staged entrances — all of which animate `transform` — compose with it
+   normally.
+
+   0.85 puts the card at 326px, which clears the 20px `px-5` gutters from 366px
+   of viewport up: every phone in current use except the 320px iPhone SE 1, where
+   the page root's `overflow-hidden` clips it rather than letting it widen the
+   document. Above `sm` the content column is at least 576px wide and the card
+   fits unchanged, so the rule stops there. */
+.af-hero-fit {
+  zoom: 0.85;
+}
+
+@media (min-width: 40rem) {
+  .af-hero-fit {
+    zoom: 1;
+  }
+}
+
 .af-hero-sheet {
   animation: af-hero-sheet 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
