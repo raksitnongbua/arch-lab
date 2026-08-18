@@ -27,10 +27,13 @@
 
 import { useCallback, useMemo, useRef, type Ref } from "react";
 
+import { lineCount } from "@/lib/source-text";
 import { cn } from "@/lib/utils";
 
-export interface NumberedTextareaProps
-  extends Omit<React.ComponentPropsWithoutRef<"textarea">, "wrap" | "ref"> {
+export interface NumberedTextareaProps extends Omit<
+  React.ComponentPropsWithoutRef<"textarea">,
+  "wrap" | "ref"
+> {
   /** The text — read here as well as passed through, to count the lines. */
   value: string;
   /** Forwarded to the real textarea, for callers that focus or measure it. */
@@ -52,13 +55,9 @@ export function NumberedTextarea({
 }: NumberedTextareaProps): React.JSX.Element {
   const gutterRef = useRef<HTMLDivElement | null>(null);
 
-  /* A trailing newline is normal in a document and would otherwise number an
-     empty final row, so it is dropped before counting — and never below 1, so
-     an empty pane still shows a line 1 to type on. */
-  const count = useMemo(
-    () => Math.max(1, value.replace(/\n$/, "").split("\n").length),
-    [value],
-  );
+  /* The trailing-newline rule lives in `lineCount`, because `/syntax` draws a
+     gutter too and the two were each carrying a private copy of the expression. */
+  const count = useMemo(() => lineCount(value), [value]);
 
   const syncGutter = useCallback(
     (event: React.UIEvent<HTMLTextAreaElement>) => {
@@ -82,7 +81,7 @@ export function NumberedTextarea({
         ref={gutterRef}
         aria-hidden="true"
         className={cn(
-          "shrink-0 overflow-hidden border-r border-border/60 bg-secondary/30 pr-2 pl-3 text-right tabular-nums text-muted-foreground/60 select-none",
+          "shrink-0 overflow-hidden border-r border-border/60 bg-secondary/30 pr-2 pl-3 text-right text-muted-foreground/60 tabular-nums select-none",
           TYPE,
           PAD_Y,
         )}

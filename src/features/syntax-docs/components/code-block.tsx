@@ -16,6 +16,7 @@ import Link from "next/link";
 
 import { buttonClasses } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
+import { lineCount } from "@/lib/source-text";
 import {
   canEncodeShare,
   encodeShareFragment,
@@ -62,17 +63,26 @@ export function CodeBlock({
             which is what keeps the numbers put when a long line scrolls
             sideways.)
 
-            Trailing newline dropped before splitting: a snippet that ends in
-            one is normal and would otherwise number an empty last row. */}
+            THE COUNT COMES FROM `lineCount`, shared with the editable gutter
+            in `ui/numbered-textarea.tsx`. Both had their own copy of the same
+            expression, and this one had drifted: it dropped the trailing newline
+            but not the floor of 1, so it was one keystroke away from the empty
+            snippet that renders no number at all. Two surfaces, two copies, one
+            of them already wrong — which is the case `lib/source-text.ts` exists
+            for.
+            What is deliberately NOT shared is the type scale and the muted step:
+            the rows only have to line up WITHIN a surface, so an editable pane
+            and a read-only snippet agreeing on `text-xs` is coincidence, not
+            coupling, and unifying it would invent a constraint. */}
         <pre
           tabIndex={0}
           className="grid grid-cols-[auto_1fr] gap-x-3 overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <span
             aria-hidden="true"
-            className="grid shrink-0 justify-items-end tabular-nums text-muted-foreground/50 select-none"
+            className="grid shrink-0 justify-items-end text-muted-foreground/50 tabular-nums select-none"
           >
-            {code.replace(/\n$/, "").split("\n").map((_, index) => (
+            {Array.from({ length: lineCount(code) }, (_, index) => (
               <span key={index}>{index + 1}</span>
             ))}
           </span>

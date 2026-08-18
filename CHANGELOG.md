@@ -42,6 +42,9 @@ grammars are refused by the old parsers with a message naming the right one.
 
 ### Added — everywhere
 
+- Line numbers on `/validate`'s source pane, which had been left out when
+  `/view` and `/syntax` got them — on the one page whose whole output is "line 12,
+  column 4".
 - A 404 page. It leads with the bundled examples rather than the home page,
   because most 404s here are a link to a diagram id that has been renamed.
 
