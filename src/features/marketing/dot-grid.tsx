@@ -175,9 +175,24 @@ function resolveToRgb(
 }
 
 export function DotGrid({
-  dotSize = 2,
-  gap = 26,
-  baseVar = "--border",
+  /* 3px, not 2. A dot's whole presence is its INK, and at a 28px pitch a 2px dot
+     covers 0.40% of its cell — the field was correctly wired, correctly masked,
+     and could not be seen. 3px is 0.90%, which more than doubles it for one
+     pixel of radius. Going further starts to read as a polka dot rather than as
+     a lattice. */
+  dotSize = 3,
+  /* Chosen so `dotSize + gap` stays 28 — exactly half the backdrop's 56px line
+     grid. The harmonic is the point (see the backdrop's own note), so a change
+     to `dotSize` has to come out of the gap, never out of the pitch. */
+  gap = 25,
+  /* `--node-border`, and this is the second half of the same fix: `--border`
+     CANNOT be seen on the dark ground at any opacity. It measures 1.63:1 against
+     it at full strength, and the field ran at half — 1.32:1, under the threshold
+     of noticing. `--node-border` reaches 1.98:1 at 0.35 and 3.81:1 at full, so
+     there is room to be quiet on purpose rather than by accident. It is also the
+     right token by meaning: an outline drawn on a canvas, which is what a
+     lattice mark is. */
+  baseVar = "--node-border",
   activeVar = "--primary",
   proximity = 130,
   speedTrigger = 100,

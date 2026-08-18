@@ -586,14 +586,20 @@ function Backdrop() {
           who wants no motion gets. That is the opposite of the wire layer that
           was removed — that one moved on its own, unprompted, behind words.
 
-          PAINTED IN `--border`, not the lines' `--canvas-grid`, and that is
-          measured rather than picked: on the dark ground `--canvas-grid` tops out
-          at 1.16:1 even at full opacity, because the ground moved up to meet it.
-          `--border` reaches 1.32:1 at half opacity, which is the headroom a 2px
-          dot needs — a dot puts a fraction of the ink on screen that a 1px line
-          does, so equal contrast is not equal presence. Measured as composited:
-          1.20:1 on the light ground, 1.32:1 on the dark one, against the line
-          grid's own 1.11 and 1.08.
+          PAINTED IN `--node-border`, and the first two attempts at this are
+          worth recording because both were invisible and both measured "fine"
+          against the wrong reference. `--canvas-grid` — what the lines above use
+          — tops out at 1.16:1 on the dark ground, since the ground moved up to
+          meet it. `--border` tops out at 1.63:1 and was running at half, so
+          1.32:1. Neither can be seen, and the reason the numbers looked
+          acceptable is that they were compared to the LINE GRID, which measures
+          1.08:1 and cannot be seen either. A reference has to be something you
+          can actually point at.
+          `--node-border` measures 1.98:1 composited on the dark ground and
+          1.86:1 on the light one. Quiet, and present. THE LESSON, since this is
+          the third time in this file's history: ink is area × contrast, and a
+          dot at a 28px pitch has almost no area — 0.90% of its cell — so it
+          needs contrast a line never would.
 
           BOUNDED IN PIXELS, both the height and the fade. This layer's parent is
           `inset-0` of the whole PAGE, thousands of pixels tall, so a percentage
@@ -602,12 +608,15 @@ function Backdrop() {
           percentage mask would be an ellipse nobody can see the bottom of. The
           same mistake once scaled an entire backdrop illustration off screen. */}
       <div
-        className="absolute inset-x-0 top-0 h-[820px] opacity-[0.75] dark:opacity-[0.5]"
+        className="absolute inset-x-0 top-0 h-[820px] opacity-[0.65] dark:opacity-[0.35]"
         style={{
+          /* `black 38%` rather than 30%: the fully-opaque core reaches 243px down
+             instead of 192px, which is roughly where the headline sits. The
+             field was fading before it had been established. */
           maskImage:
-            "radial-gradient(ellipse 1100px 640px at 50% 60px, black 30%, transparent 82%)",
+            "radial-gradient(ellipse 1100px 660px at 50% 60px, black 38%, transparent 88%)",
           WebkitMaskImage:
-            "radial-gradient(ellipse 1100px 640px at 50% 60px, black 30%, transparent 82%)",
+            "radial-gradient(ellipse 1100px 660px at 50% 60px, black 38%, transparent 88%)",
         }}
       >
         <DotGrid className="h-full w-full" />
