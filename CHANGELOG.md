@@ -53,7 +53,7 @@ grammars are refused by the old parsers with a message naming the right one.
 
 ### Changed
 
-- The dark theme — the default — is a dark grey (`#22242a`) rather than a
+- The dark theme — the default — is a dark grey (`#1c1e24`) rather than a
   near-black with a violet cast. The canvas, node fills, borders and edges were
   re-solved around the new ground, so every measured contrast pair still clears
   its minimum, and the social card matches the page a click lands on. Brand

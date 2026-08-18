@@ -31,12 +31,13 @@
    in a social feed looks broken rather than dark, and the old ground was a
    near-black. The dark theme's ground is now #22242a, a real dark grey, so the
    lift has nothing left to compensate for and the approximation is gone with it.
+   (`#22242a` here briefly; the ground took a 10% step down after that.)
    That matters beyond tidiness: an approximation is a second set of values to
    re-eyeball every time the theme moves, and this is the second time it moved. */
 export const OG = {
-  background: "#22242a",
-  card: "#2d2f35",
-  border: "#45484e",
+  background: "#1c1e24",
+  card: "#27292f",
+  border: "#3f4147",
   foreground: "#f0f2f5",
   muted: "#a2a4ac",
   primary: "#9d8cff",

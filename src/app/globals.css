@@ -234,23 +234,28 @@
 }
 
 /* --- Theme: dark (the intentional default) -------------------------------
-   DARK GREY at #22242a, which is `oklch(0.261 0.0116 271)` — the exact colour
-   this ground was asked for, converted rather than eyeballed, and it round-trips
-   back to that hex.
-   IT WAS #0b0d13, a near-black at L 0.16. Same hue family, a tenth of a
-   lightness step lower and a shade more chroma; what changed is that the ground
-   is now recognisably GREY rather than reading as black. Everything neutral in
-   this block sits at chroma 0.0116 and hue 271, taken from the anchor, so the
-   ramp has one tint rather than a drift of three.
+   DARK GREY at #1c1e24, which is `oklch(0.235 0.0116 271)`.
+   THE ANCHOR IS #22242a — `oklch(0.261 0.0116 271)`, the colour this ground was
+   given as a swatch, converted rather than eyeballed and round-tripping back to
+   that hex. It is not the value below because the swatch came back a shade
+   light: every neutral in this block then moved down 0.026, which is 10% of that
+   anchor's perceptual lightness. Doing it as ONE step applied to the whole ramp
+   is what keeps the offsets in the paragraph below intact — darkening the
+   background alone would have closed the gap to the card by more than half.
+   IT WAS #0b0d13, a near-black at L 0.16. Same hue family, three quarters of a
+   tenth of a lightness step lower and a shade more chroma; what changed is that
+   the ground is now recognisably GREY rather than reading as black. Everything
+   neutral in this block sits at chroma 0.0116 and hue 271, taken from the anchor,
+   so the ramp has one tint rather than a drift of three.
 
    THE RAMP LIFTED, THE INK DID NOT, and that tension is the whole design of
    what follows. Ink is already at L 0.96 with nowhere to go, so a ground that
-   rises by 0.10 spends contrast that cannot be earned back. Every offset from
-   the anchor is therefore the one the audited ramp already had — canvas −0.061,
+   rises by 0.075 spends contrast that cannot be earned back. Every offset from
+   the ground is therefore the one the audited ramp already had — canvas −0.061,
    card +0.045, secondary +0.10, border +0.14 — except where a pair would have
    fallen through its floor:
 
-     - THE NODE FILLS ROSE ONLY +0.03, not the ground's +0.10. Lifting them in
+     - THE NODE FILLS ROSE ONLY +0.025, not the ground's +0.075. Lifting them in
        step put `--node-meta` at 4.0:1 over the wash's top stop, under the 4.5:1
        a technology line needs, and the node title at 6.7:1 under its 7:1. A
        coloured fill is legible before it is separated from the surface, so the
@@ -265,9 +270,15 @@
        their own lifted fills.
 
    Brand colour is UNTOUCHED: `--primary`, `--accent`, `--ring`, `--selection`,
-   the five sequence lanes. `--primary` measures 4.99:1 on the new ground against
+   the five sequence lanes. `--primary` measures 5.36:1 on the new ground against
    a 3:1 minimum, so nothing forced a change, and a ground swap is not a reason
    to move the one colour people recognise the product by.
+
+   THE COLOURED FILLS DID NOT MOVE with the 10% step, and that is deliberate:
+   they are content rather than ground, and every pair they are measured in got
+   BETTER as the canvas dropped away beneath them. Their separation from the
+   canvas is back to 0.16, near the 0.17 the near-black ramp had — so the step
+   down recovered most of what the lighter ground had cost them.
 
    THE RATIOS BELOW WERE ALL RE-MEASURED for this ramp, including the wash's top
    stop, by the same oklch → linear-sRGB maths `scripts/lib/oklch.mjs` gives
@@ -276,22 +287,22 @@
    that script and this one — read them as accurate to a tenth, not to the second
    decimal. `check:themes` re-measures the pairs it owns on every run. */
 .dark {
-  --background: oklch(0.261 0.0116 271);
+  --background: oklch(0.235 0.0116 271);
   --foreground: oklch(0.96 0.005 271);
 
-  --card: oklch(0.306 0.0116 271);
+  --card: oklch(0.28 0.0116 271);
   --card-foreground: oklch(0.96 0.005 271);
 
-  --popover: oklch(0.306 0.0116 271);
+  --popover: oklch(0.28 0.0116 271);
   --popover-foreground: oklch(0.96 0.005 271);
 
   --primary: oklch(0.68 0.19 285);
   --primary-foreground: oklch(0.16 0.03 285);
 
-  --secondary: oklch(0.361 0.0116 271);
+  --secondary: oklch(0.335 0.0116 271);
   --secondary-foreground: oklch(0.94 0.005 271);
 
-  --muted: oklch(0.361 0.0116 271);
+  --muted: oklch(0.335 0.0116 271);
   --muted-foreground: oklch(0.72 0.012 271);
 
   --accent: oklch(0.78 0.13 195);
@@ -306,17 +317,17 @@
   --warning: oklch(0.82 0.15 80);
   --warning-foreground: oklch(0.2 0.04 80);
 
-  --border: oklch(0.401 0.0116 271);
-  --input: oklch(0.401 0.0116 271);
+  --border: oklch(0.375 0.0116 271);
+  --input: oklch(0.375 0.0116 271);
   --ring: oklch(0.68 0.19 285);
 
   /* The diagram well, deliberately below the chrome — see the header on why the
      gap widened rather than tracking the ground up. */
-  --canvas: oklch(0.2 0.0116 271);
-  --canvas-grid: oklch(0.31 0.0116 271);
-  --node: oklch(0.245 0.0116 271);
+  --canvas: oklch(0.174 0.0116 271);
+  --canvas-grid: oklch(0.284 0.0116 271);
+  --node: oklch(0.219 0.0116 271);
   --node-foreground: oklch(0.96 0.005 271);
-  /* ≥3:1 against --node (measured 3.74:1; L 0.55 on the lifted fill was 2.9). */
+  /* ≥3:1 against --node (measured 3.99:1; L 0.55 on the lifted fill was 2.9). */
   --node-border: oklch(0.575 0.016 271);
   /* Secondary text on node fills (light block has the design notes). */
   --node-meta: oklch(0.79 0.012 271);
@@ -333,8 +344,8 @@
   /* name 10.90:1, meta 6.29:1, border 4.37:1 (wash-top: 8.72 / 5.04 / 3.49) */
   --node-internal: oklch(0.33 0.062 250);
   --node-internal-border: oklch(0.685 0.125 250);
-  /* name 13.66:1, meta 7.89:1, border 3.52:1 (no wash — external stays matte) */
-  --node-external: oklch(0.265 0.0116 271);
+  /* name 14.69:1, meta 8.48:1, border 3.78:1 (no wash — external stays matte) */
+  --node-external: oklch(0.239 0.0116 271);
   --node-external-border: oklch(0.575 0.016 271);
   /* name 10.79:1, meta 6.23:1, border 4.33:1 (wash-top: 8.63 / 4.99 / 3.46) */
   --node-database: oklch(0.325 0.058 195);
@@ -359,7 +370,7 @@
   --tag-fill-l: 0.33;
   --tag-fill-c: 0.06;
 
-  /* Brightened with the canvas it is drawn on: 5.47:1 against --canvas, where
+  /* Brightened with the canvas it is drawn on: 5.75:1 against --canvas, where
      L 0.62 on the lifted well measured 4.6. */
   --edge: oklch(0.645 0.0116 271);
   --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
