@@ -135,43 +135,50 @@ const SAMPLE_MS = 24;
 
 /**
  * A CSS colour — any notation the browser parses, oklch included — as an rgb
- * triple, resolved BY the browser rather than by arithmetic here.
+ * triple, by PAINTING IT AND READING THE PIXEL BACK.
  *
- * The trick is that a canvas context normalises `fillStyle`: assign it any
- * parseable colour and read it back, and you get `#rrggbb`. So the oklch tokens
- * in `globals.css` convert without this file knowing what oklch is, which is the
- * only reason a themed canvas is not a second colour pipeline to keep in step
- * with `scripts/lib/oklch.mjs`.
+ * THE FIRST VERSION PARSED `ctx.fillStyle`'s readback as hex, and it shipped a
+ * field of invisible dots. Two things were wrong with it, and both are worth
+ * keeping written down because both look fine in review:
  *
- * Returns null when the browser refuses the value — then the caller leaves the
- * static CSS field in place, since a canvas that cannot read the theme would
- * paint the wrong colour rather than no colour.
+ *   - `fillStyle` does NOT normalise to hex. Per CSS Color 4 serialisation a
+ *     modern colour function round-trips as itself, so `oklch(…)` reads back as
+ *     `oklch(…)`, not `#rrggbb`. Only legacy sRGB colours become hex.
+ *   - The rejection sentinel was `#000000`, which is a VALID colour. So when a
+ *     browser refused the token, `fillStyle` was left holding the sentinel, the
+ *     hex branch parsed it happily, and the caller got pure black — dots painted
+ *     black, on a black ground, with the static field hidden behind them.
+ *     "Returns null on failure" was never reachable.
+ *
+ * Painting a pixel and reading it removes the whole question: whatever notation
+ * the browser accepts, the bytes are the bytes. The sentinel is still here but is
+ * now a colour no theme uses, and it is checked for EQUALITY rather than for
+ * shape — that is what actually detects a refusal.
+ *
+ * Returns null when the browser will not paint the value. The caller leaves the
+ * static CSS field in place then, which is the honest degradation: CSS can render
+ * these tokens even where a canvas cannot, so the dots stay and only the
+ * interaction is lost.
  */
-function resolveToRgb(
-  ctx: CanvasRenderingContext2D,
-  element: Element,
-  property: string,
-): Rgb | null {
+function resolveToRgb(element: Element, property: string): Rgb | null {
   const value = getComputedStyle(element).getPropertyValue(property).trim();
   if (value === "") return null;
 
-  // A sentinel the browser cannot produce, so "unchanged" means "rejected".
-  ctx.fillStyle = "#000000";
-  ctx.fillStyle = value;
-  const normalised = ctx.fillStyle;
-  if (typeof normalised !== "string" || !normalised.startsWith("#"))
-    return null;
+  const probe = document.createElement("canvas");
+  probe.width = 1;
+  probe.height = 1;
+  const ctx = probe.getContext("2d", { willReadFrequently: true });
+  if (ctx === null) return null;
 
-  const hex =
-    normalised.length === 4
-      ? `#${normalised[1]}${normalised[1]}${normalised[2]}${normalised[2]}${normalised[3]}${normalised[3]}`
-      : normalised;
-  if (hex.length < 7) return null;
-  return {
-    r: parseInt(hex.slice(1, 3), 16),
-    g: parseInt(hex.slice(3, 5), 16),
-    b: parseInt(hex.slice(5, 7), 16),
-  };
+  const SENTINEL = "#010203";
+  ctx.fillStyle = SENTINEL;
+  ctx.fillStyle = value;
+  if (ctx.fillStyle === SENTINEL) return null;
+
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+  if (a === 0) return null;
+  return { r, g, b };
 }
 
 export function DotGrid({
@@ -220,8 +227,21 @@ export function DotGrid({
   const paletteRef = useRef<{ base: Rgb; active: Rgb } | null>(null);
   /** Bumped when the theme changes, to re-resolve the two tokens. */
   const [themeEpoch, setThemeEpoch] = useState(0);
-  /** False until the canvas has read the theme and drawn once. */
-  const [painting, setPainting] = useState(false);
+  /** True once both tokens have resolved — the canvas may start drawing. */
+  const [paletteReady, setPaletteReady] = useState(false);
+  /**
+   * True once the canvas has actually PUT DOTS ON SCREEN, and the only thing
+   * that hides the static field.
+   *
+   * These are two states rather than one because the bug this file shipped was
+   * precisely the gap between them: the old single flag meant "the palette
+   * resolved", and it hid the static field on that basis alone. Anything that
+   * went wrong afterwards — a rejected colour, an empty dot list, a canvas
+   * measured at zero — left a blank layer over a hidden field, which is the one
+   * outcome worse than either half failing. Now the field is only hidden by
+   * evidence that something replaced it.
+   */
+  const [painted, setPainted] = useState(false);
 
   const reducedMotion = useReducedMotion();
   const idleMotion = useIdleMotion();
@@ -292,19 +312,19 @@ export function DotGrid({
   useEffect(() => {
     if (!animated) return;
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d") ?? null;
-    if (canvas === null || ctx === null) return;
+    if (canvas === null) return;
 
-    const base = resolveToRgb(ctx, canvas, baseVar);
-    const active = resolveToRgb(ctx, canvas, activeVar);
+    const base = resolveToRgb(canvas, baseVar);
+    const active = resolveToRgb(canvas, activeVar);
     if (base === null || active === null) {
       // Leave the static field showing rather than painting a guess.
       paletteRef.current = null;
-      setPainting(false);
+      setPaletteReady(false);
+      setPainted(false);
       return;
     }
     paletteRef.current = { base, active };
-    setPainting(true);
+    setPaletteReady(true);
   }, [activeVar, animated, baseVar, themeEpoch]);
 
   useEffect(() => {
@@ -345,7 +365,7 @@ export function DotGrid({
   const wakeRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    if (!animated || !painting || circlePath === null) return;
+    if (!animated || !paletteReady || circlePath === null) return;
 
     let frame = 0;
     let running = false;
@@ -365,6 +385,7 @@ export function DotGrid({
 
       const pointer = pointerRef.current;
       let moving = false;
+      let drew = 0;
 
       for (const dot of dotsRef.current) {
         const dx = dot.cx - pointer.x;
@@ -389,7 +410,14 @@ export function DotGrid({
         ctx.fillStyle = fill;
         ctx.fill(circlePath);
         ctx.restore();
+        drew += 1;
       }
+
+      /* The hand-off, and it happens HERE rather than when the palette resolved:
+         the static field is only allowed to disappear once this loop has put
+         real dots somewhere. An empty `dotsRef` — a canvas measured at zero, a
+         resize that has not landed yet — leaves the field alone. */
+      if (drew > 0) setPainted(true);
 
       /* PARKED, not cleared: the last frame stays on the canvas, and that frame
          is a complete grid of dots at rest — the same picture the static field
@@ -419,12 +447,12 @@ export function DotGrid({
       running = false;
       wakeRef.current = () => {};
     };
-  }, [animated, circlePath, painting, proximity]);
+  }, [animated, circlePath, paletteReady, proximity]);
 
   /* ---- the pointer ------------------------------------------------------- */
 
   useEffect(() => {
-    if (!animated || !painting) return;
+    if (!animated || !painted) return;
 
     /** Throws one dot, on whichever impulse asked. */
     const push = (dot: Dot, pushX: number, pushY: number) => {
@@ -540,13 +568,13 @@ export function DotGrid({
   }, [
     animated,
     maxSpeed,
-    painting,
     proximity,
     resistance,
     returnDuration,
     shockRadius,
     shockStrength,
     speedTrigger,
+    painted,
   ]);
 
   return (
@@ -560,7 +588,7 @@ export function DotGrid({
           and put a frame up — see note 3. */}
       <div
         className="absolute inset-0"
-        style={{ ...tile, opacity: painting ? 0 : undefined }}
+        style={{ ...tile, opacity: painted ? 0 : undefined }}
       />
       {animated ? (
         <canvas

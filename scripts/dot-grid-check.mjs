@@ -70,7 +70,17 @@ check("the dots are painted from tokens, with no colour literal", () => {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
   const literals = code.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
-  const allowed = new Set(["#000000"]); // the fillStyle-rejection sentinel
+  /* The rejection sentinel is a literal by necessity — it has to be a colour no
+     theme could produce, so that `fillStyle` still reading it back means the
+     browser refused the token. It is never painted. It also must not be
+     `#000000`, which is what the first version used and is exactly why a refused
+     token turned into black dots on a black ground. */
+  const allowed = new Set(["#010203"]);
+  assert.ok(
+    !source.includes('SENTINEL = "#000000"'),
+    "the rejection sentinel is pure black — a valid colour, so a refused token " +
+      "reads back as a paintable value and the dots come out black",
+  );
   const offenders = literals.filter((hex) => !allowed.has(hex));
   assert.deepEqual(offenders, [], `colour literals: ${offenders.join(", ")}`);
   assert.match(
@@ -217,6 +227,51 @@ check("the home page renders it", () => {
 
 /* ---- 8. THE ONE THAT MATTERS: a dot you can actually see ---------------- */
 
+check("the static field is hidden only by evidence of real dots", () => {
+  /* THIS IS THE OTHER HALF OF THE SHIPPED BUG. The first version hid the static
+     field the moment the two colour tokens resolved, and then a refused colour
+     left a blank canvas over a hidden field — the one outcome worse than either
+     half failing on its own. Whatever flag drops the field must be set INSIDE
+     the draw loop, after it has counted dots it actually painted. */
+  const gate = /opacity: (\w+) \? 0 : undefined/.exec(source);
+  assert.notEqual(gate, null, "the static field's opacity is not gated at all");
+  const setter = `set${gate[1][0].toUpperCase()}${gate[1].slice(1)}`;
+  assert.ok(
+    new RegExp(`if \\(drew > 0\\) ${setter}\\(true\\)`).test(source),
+    `\`${gate[1]}\` is not set from a painted-dot count — it must be ` +
+      `\`if (drew > 0) ${setter}(true)\` inside the loop, or the field can be ` +
+      `hidden before anything replaces it`,
+  );
+  assert.ok(
+    !new RegExp(`${setter}\\(true\\);?\\n\\s*\\}, \\[`).test(source),
+    `${setter} is called at the end of an effect rather than from the loop`,
+  );
+});
+
+check("the mask does not quietly undo the measurement below", () => {
+  /* An elliptical mask multiplies every measured ratio by an alpha that falls
+     off in two axes, so a dot 750px off centre was a fifth of what the numbers
+     below assert. A vertical fade leaves every dot in the band at full strength,
+     which is what makes those numbers describe the screen. */
+  /* Scoped to the DOT layer. Searching the whole file found the line grid's own
+     elliptical mask first and reported it as this one — the backdrop has several
+     masked layers and only this layer's mask bears on the numbers below. */
+  const layerAt = page.indexOf("h-[820px] opacity-");
+  assert.notEqual(layerAt, -1, "cannot find the dot layer");
+  const mask = /maskImage:\s*\n?\s*"([^"]+)"/.exec(page.slice(layerAt));
+  assert.notEqual(mask, null, "the dot layer has no mask");
+  assert.ok(
+    mask[1].startsWith("linear-gradient(to bottom,"),
+    `the mask is "${mask[1]}" — a radial or elliptical fade makes the measured ` +
+      `contrast true only at the centre`,
+  );
+  assert.ok(
+    !/\d%/.test(mask[1]),
+    `the mask uses percentages ("${mask[1]}") — this layer's parent is the whole ` +
+      `page, so a percentage is measured against a box nobody sees the bottom of`,
+  );
+});
+
 /**
  * The value of a token inside a theme's block, or from `:root` if the theme does
  * not override it — the same fallback the cascade performs.
@@ -258,6 +313,54 @@ const MIN_DOT_CONTRAST = 1.5;
  */
 const MIN_INK_SHARE = 0.008;
 
+/**
+ * Every theme, and which alpha applies to it.
+ *
+ * DERIVED FROM `THEMES`, not typed out, and that is the whole point of this
+ * list: the first version of this check measured `:root` and `.dark` only. The
+ * field was reported invisible on `midnight` — a theme it had never looked at,
+ * whose ground is pure black and whose `--node-border` is its own value. Two
+ * themes checked out of seven is five themes unchecked.
+ *
+ * The alpha comes from the `dark:` variant, which `globals.css` defines as
+ * `.dark, .midnight, .contrast` — so those three take the second opacity and
+ * the rest take the first. That mapping is asserted below rather than assumed,
+ * because a theme added to the variant and not to this list would be measured
+ * against the wrong alpha and pass while being invisible.
+ */
+const THEME_BLOCKS = (() => {
+  const list = /export const THEMES = \[([\s\S]*?)\] as const;/.exec(
+    read("src/lib/constants.ts"),
+  );
+  assert.notEqual(list, null, "cannot read THEMES from lib/constants.ts");
+  const variant = /@custom-variant dark \(&:is\(([^)]*)\)\)/.exec(globals);
+  assert.notEqual(variant, null, "cannot read the dark custom-variant");
+  const darkFamily = new Set(
+    [...variant[1].matchAll(/\.([\w-]+)/g)].map((m) => m[1]),
+  );
+  return [...list[1].matchAll(/"([\w-]+)"/g)].map((m) => ({
+    name: m[1],
+    /* `light` is the bare `:root` block — it is the default palette rather than
+       a class, which is why it alone has no selector of its own. */
+    selector: m[1] === "light" ? ":root" : `.${m[1]}`,
+    dark: darkFamily.has(m[1]),
+  }));
+})();
+
+check("every theme in THEMES is measured here", () => {
+  assert.ok(
+    THEME_BLOCKS.length >= 7,
+    `only ${THEME_BLOCKS.length} theme(s) found — the list did not parse`,
+  );
+  const darkNames = THEME_BLOCKS.filter((t) => t.dark).map((t) => t.name);
+  assert.deepEqual(
+    darkNames.sort(),
+    ["contrast", "dark", "midnight"],
+    `the dark family is ${darkNames.join(", ")} — if that changed, the alpha ` +
+      `each theme is measured with changed too`,
+  );
+});
+
 check("a dot is visible on every theme's ground", () => {
   const base = /baseVar = "(--[\w-]+)"/.exec(source)?.[1];
   assert.notEqual(base, undefined, "cannot find the base colour token");
@@ -271,10 +374,8 @@ check("a dot is visible on every theme's ground", () => {
     );
   assert.notEqual(layer, null, "cannot find the dot layer's opacities");
 
-  for (const [selector, label, alpha] of [
-    [":root", "light", Number(layer[1])],
-    [".dark", "dark", Number(layer[2])],
-  ]) {
+  for (const { name: label, selector, dark } of THEME_BLOCKS) {
+    const alpha = Number(dark ? layer[2] : layer[1]);
     const dot = parseOklch(tokenIn(selector, base));
     const ground = parseOklch(tokenIn(selector, "--background"));
     assert.notEqual(dot, null, `${label}: ${base} is not an oklch value`);

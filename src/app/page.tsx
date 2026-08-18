@@ -610,13 +610,22 @@ function Backdrop() {
       <div
         className="absolute inset-x-0 top-0 h-[820px] opacity-[0.65] dark:opacity-[0.35]"
         style={{
-          /* `black 38%` rather than 30%: the fully-opaque core reaches 243px down
-             instead of 192px, which is roughly where the headline sits. The
-             field was fading before it had been established. */
+          /* A VERTICAL FADE, not the ellipse this started as, and the reason is
+             that an ellipse made the measured contrast a lie. `check:dot-grid`
+             asserts what a dot measures against its ground; an elliptical mask
+             then multiplies that by an alpha which falls off in TWO axes, so at
+             the left margin — 750px off centre — the real figure was a fifth of
+             the asserted one. A number you cannot trust at the edges is worse
+             than no number.
+             Fading only downward keeps every dot in the band at full strength,
+             so the asserted contrast is the contrast on screen, and the fade
+             still does its job: the field is gone before the section below it.
+             Pixels, not percentages — this layer's parent is `inset-0` of a page
+             thousands of pixels tall. */
           maskImage:
-            "radial-gradient(ellipse 1100px 660px at 50% 60px, black 38%, transparent 88%)",
+            "linear-gradient(to bottom, black 0px, black 430px, transparent 760px)",
           WebkitMaskImage:
-            "radial-gradient(ellipse 1100px 660px at 50% 60px, black 38%, transparent 88%)",
+            "linear-gradient(to bottom, black 0px, black 430px, transparent 760px)",
         }}
       >
         <DotGrid className="h-full w-full" />
