@@ -1032,8 +1032,19 @@ for (const [kind, tokens] of Object.entries(USECASE_KIND_TOKENS)) {
     "no focus-visible:outline-* utility survives on an interactive shape — that utility is what drew the rectangle, and it reads as a rendering fault on a canvas made of shapes",
     !/focus-visible:outline-(?!none)/.test(focusSrc),
   );
+  /* Pinned as a REAL CSS rule, not as a utility class in the markup. The
+     utility was there and the violet box still shipped: `@layer base` gives
+     every element an outline colour, so the browser's native focus indicator
+     paints in --ring, and a utility that did not take effect looked exactly
+     like a fix. The sequence canvas's rule is the precedent. */
   check(
-    "every interactive element suppresses the native outline explicitly — without outline-none the browser draws its own box over the shaped ring",
+    "a real CSS rule kills the native outline on the hit target — the base layer paints every element's outline in --ring, so without this the browser's own box survives on top of the shaped ring",
+    new RegExp("\\." + "af-uc-hit" + ":focus-visible[^{]*\\{[^}]*outline:\\s*none").test(
+      globals,
+    ),
+  );
+  check(
+    "every interactive element also carries outline-none in the markup — belt and braces, and it documents the intent at the call site",
     (focusSrc.match(/af-uc-hit cursor-pointer focus-visible:outline-none/g) ?? [])
       .length >= 2,
   );

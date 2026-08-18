@@ -1737,6 +1737,19 @@
  * element matches a focused button. Never the role palette: focus is a state,
  * not a kind.
  */
+/* The native ring must die in a REAL rule, not via a `focus-visible:outline-none`
+ * utility. `@layer base { * { @apply outline-ring/50 } }` gives every element an
+ * outline COLOUR, so the browser's own focus indicator paints in --ring — which
+ * is the violet box that survived the first attempt at this fix, sitting exactly
+ * on the hit rect's bounds. The sequence canvas already did it this way
+ * (`.af-seq-hit:focus-visible { outline: none }` in sequence-motion.css, with
+ * the same "outline does not follow an SVG shape" note), and that precedent is
+ * the one to copy. */
+.af-uc-hit:focus-visible,
+.af-flow-hit:focus-visible {
+  outline: none;
+}
+
 .af-uc-ring,
 .af-flow-ring {
   fill: none;
