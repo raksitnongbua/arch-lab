@@ -661,25 +661,15 @@ function TalkThroughPreview({
  * Purely presentational, fixed behind content, ignored by assistive tech.
  */
 /**
- * The home page's ground: a masked blueprint grid, two soft glows, and — the
- * gimmick — a few faint connectors that DRAW THEMSELVES behind the headline.
+ * The home page's ground: a masked blueprint grid and two soft glows, both
+ * STILL.
  *
- * The wires are the product's own gesture at page scale. A flowchart edge draws
- * by `stroke-dashoffset` over `pathLength=1` and its idle pulse rides the same
- * path; the CTA's mark does both in 16 pixels; this does them across the hero.
- * Nothing here is a new visual idea, which is the point — the background is the
- * product quietly demonstrating itself rather than decoration borrowed from
- * somewhere else.
- *
- * RESTRAINT IS THE WHOLE DESIGN. Every layer sits under 0.12 opacity, the
- * periods run 14–30s, and the wires are masked away before they reach the text
- * column, because this sits BEHIND a headline that has to be readable and beside
- * a running gradient in that headline. A backdrop competing with the words in
- * front of it is worse than a flat colour. Only `opacity`, `transform` and
- * `stroke-dashoffset` animate, so a permanent loop costs no layout.
- *
- * Reduced motion keeps every layer exactly where it rests: the grid, the glows
- * and the finished wires. The page is complete without a frame of it.
+ * Self-drawing connectors were tried here and removed. They were the product's
+ * own gesture at page scale, which sounded right, but behind a headline they
+ * either could not be seen at all or would have had to shout to be — and a
+ * backdrop that competes with the words in front of it is worse than a flat
+ * colour. The page's own sections already demonstrate the diagrams; the ground
+ * does not need to.
  */
 function Backdrop() {
   return (
@@ -701,46 +691,9 @@ function Backdrop() {
         }}
       />
 
-      {/* The wires: three routed connectors and a node at each turn, drawing in
-          sequence and then resting. Orthogonal elbows rather than curves,
-          because that is how this app routes an edge — a swooping bezier here
-          would be a shape the product never draws. */}
-      {/* Pinned to the HERO's box, not the page's. This layer's parent is
-          `absolute inset-0` of a container that spans every section — several
-          thousand pixels tall — and the first cut used `size-full` with
-          `slice`, so the viewBox scaled ~9x to cover that height and threw the
-          wires clean off the viewport. Nothing was visible and nothing was
-          broken, which is the worst combination.
 
-          `preserveAspectRatio="none"` on purpose: these are abstract wires, so
-          stretching them to whatever the hero's aspect ratio happens to be is
-          fine, and it keeps the coordinates in the markup meaning exactly where
-          they land. */}
-      <svg
-        className="af-backdrop-wires absolute inset-x-0 top-0 h-[min(46rem,88vh)] w-full"
-        viewBox="0 0 1200 520"
-        preserveAspectRatio="none"
-        fill="none"
-        stroke="currentColor"
-      >
-        <g className="text-primary">
-          <path className="af-wire af-wire-1" d="M 60 470 V 300 H 300 V 150" pathLength={1} />
-          <path className="af-wire-spark af-wire-spark-1" d="M 60 470 V 300 H 300 V 150" pathLength={1} />
-          <circle className="af-wire-node af-wire-node-1" cx="300" cy="150" r="4" />
-        </g>
-        <g className="text-accent">
-          <path className="af-wire af-wire-2" d="M 1140 60 H 900 V 250 H 720" pathLength={1} />
-          <path className="af-wire-spark af-wire-spark-2" d="M 1140 60 H 900 V 250 H 720" pathLength={1} />
-          <circle className="af-wire-node af-wire-node-2" cx="720" cy="250" r="4" />
-        </g>
-        <g className="text-primary">
-          <path className="af-wire af-wire-3" d="M 980 500 V 390 H 1150" pathLength={1} />
-          <circle className="af-wire-node af-wire-node-3" cx="1150" cy="390" r="4" />
-        </g>
-      </svg>
-
-      <div className="af-backdrop-glow af-backdrop-glow-a absolute -top-32 -right-24 size-[28rem] rounded-full bg-accent/10 blur-[120px]" />
-      <div className="af-backdrop-glow af-backdrop-glow-b absolute -top-24 -left-32 size-[26rem] rounded-full bg-primary/10 blur-[120px]" />
+      <div className="absolute -top-32 -right-24 size-[28rem] rounded-full bg-accent/10 blur-[120px]" />
+      <div className="absolute -top-24 -left-32 size-[26rem] rounded-full bg-primary/10 blur-[120px]" />
     </div>
   );
 }

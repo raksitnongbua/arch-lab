@@ -50,7 +50,7 @@ const THEME_META: Record<
   { label: string; hint: string; Icon: typeof Sun }
 > = {
   light: { label: "Light", hint: "Cool white", Icon: Sun },
-  paper: { label: "Paper", hint: "Warm, less glare", Icon: BookOpen },
+  paper: { label: "Paper", hint: "Like a printed document", Icon: BookOpen },
   pastel: { label: "Pastel", hint: "Colourful, between the two", Icon: Palette },
   glass: { label: "Liquid glass", hint: "Translucent surfaces", Icon: Layers },
   dark: { label: "Dark", hint: "The default", Icon: Moon },

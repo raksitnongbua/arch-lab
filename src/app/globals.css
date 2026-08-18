@@ -552,16 +552,22 @@
  * ---------------------------------------------------------------------------- */
 
 .paper {
-  --radius: 0.625rem;
+  /* Tighter than every other theme: paper has cut edges, not rounded ones, and
+     a 10px corner on a "document" reads as a card pretending to be a page. */
+  --radius: 0.25rem;
 
-  --background: oklch(0.965 0.009 85);
-  --foreground: oklch(0.26 0.021 60);
+  /* Cream stock rather than warm white — a shade further from the screen and
+     closer to the paper it is named after. */
+  --background: oklch(0.955 0.014 88);
+  /* Ink, not black: a warm dark brown is what print actually leaves on stock,
+     and it is what stops a cream ground reading as a filter over a dark theme. */
+  --foreground: oklch(0.245 0.024 55);
 
-  --card: oklch(0.99 0.005 85);
-  --card-foreground: oklch(0.26 0.021 60);
+  --card: oklch(0.982 0.008 88);
+  --card-foreground: oklch(0.245 0.024 55);
 
-  --popover: oklch(0.99 0.005 85);
-  --popover-foreground: oklch(0.26 0.021 60);
+  --popover: oklch(0.982 0.008 88);
+  --popover-foreground: oklch(0.245 0.024 55);
 
   --primary: oklch(0.58 0.2 280);
   --primary-foreground: oklch(0.985 0.005 280);
@@ -584,13 +590,15 @@
   --warning: oklch(0.75 0.15 75);
   --warning-foreground: oklch(0.24 0.04 75);
 
-  --border: oklch(0.88 0.014 80);
-  --input: oklch(0.88 0.014 80);
+  /* A RULE, not a panel edge: darker than any other light theme's border, because
+     on a document a line is drawn deliberately rather than implied by a shadow. */
+  --border: oklch(0.845 0.016 80);
+  --input: oklch(0.845 0.016 80);
   --ring: oklch(0.58 0.2 280);
 
   /* Canvas-specific tokens the future editor will consume. */
-  --canvas: oklch(0.955 0.011 85);
-  --canvas-grid: oklch(0.9 0.014 82);
+  --canvas: oklch(0.945 0.015 88);
+  --canvas-grid: oklch(0.885 0.016 84);
   --node: oklch(0.995 0.004 85);
   --node-foreground: oklch(0.26 0.021 60);
   /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
@@ -992,6 +1000,38 @@
  */
 .pastel {
   background-image: var(--pastel-wash);
+  background-attachment: fixed;
+}
+
+/* The paper theme's stock.
+ *
+ * Two hairline gradients crossing at right angles, 3px apart, at under 2%
+ * contrast: laid paper, which is a woven grain rather than the random noise a
+ * texture image would give. Gradients because an image would be a network
+ * request and a cache entry for something a reader is not supposed to notice —
+ * if you can SEE the weave rather than just feel the page is not a screen, it is
+ * too strong.
+ *
+ * On `html` and `fixed`, for the reasons the pastel wash documents: one owner of
+ * the page's ground, and a texture that belongs to the viewport rather than
+ * sliding under the text as the page scrolls.
+ *
+ * The tokens do the rest of the work — cream stock, ink-brown text, drawn rules
+ * and a 4px radius — because a document is mostly about what colour the paper is
+ * and how deliberately its lines are drawn, not about texture.
+ */
+.paper {
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      oklch(0.86 0.02 80 / 0.055) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      oklch(0.86 0.02 80 / 0.045) 0 1px,
+      transparent 1px 3px
+    );
   background-attachment: fixed;
 }
 
@@ -2128,211 +2168,5 @@
   45% {
     opacity: 1;
     scale: 1.15;
-  }
-}
-
-/* ---- the home page's backdrop ------------------------------------------------
- * A masked blueprint grid and two soft glows were already here; this adds the
- * gimmick — faint connectors that DRAW THEMSELVES behind the headline, which is
- * the product's own gesture at page scale rather than borrowed decoration.
- *
- * RESTRAINT IS THE DESIGN, and these numbers are the design: nothing exceeds
- * 0.12 opacity, the periods run 14-30s, and the wires are masked away from the
- * middle of the viewport where the headline sits. This layer competes with a
- * running gradient in that headline and with text that has to stay readable, so
- * a louder backdrop would be worse than a flat colour.
- *
- * LONGHAND animation properties throughout. A nameless `animation` shorthand is
- * legal CSS that Lightning CSS normalises to `animation: none`, silently
- * dropping the duration — that shipped once already, as a header logo that
- * never moved.
- *
- * Only opacity, transform and stroke-dashoffset animate, so a permanent loop on
- * every home-page visit costs no layout. Reduced motion leaves every layer at
- * rest: the grid, the glows, and the wires FINISHED rather than mid-draw.
- */
-.af-backdrop-wires {
-  /* Cleared from the text column: the wires live at the edges, and the mask is
-     what guarantees it at every viewport rather than by luck of the paths. */
-  mask-image: radial-gradient(
-    ellipse 46% 62% at 50% 42%,
-    transparent 55%,
-    black 100%
-  );
-  -webkit-mask-image: radial-gradient(
-    ellipse 46% 62% at 50% 42%,
-    transparent 55%,
-    black 100%
-  );
-}
-
-.af-wire {
-  stroke-width: 1.5;
-  /* Raised from 0.1, which was invisible on a light ground — the same
-     "mechanically running, visually nothing" failure the diagram canvases hit
-     three times. Still low enough to sit under the headline without competing:
-     these are wires you notice on the second look, not the first. */
-  opacity: 0.18;
-}
-
-.af-wire-node {
-  fill: currentColor;
-  stroke: none;
-  opacity: 0.24;
-}
-
-/* The spark's resting state is ABSENT, not parked: `display: none` here, shown
- * only inside the motion gate, so a reduced-motion reader never gets a dash
- * frozen partway along a wire. */
-.af-wire-spark {
-  display: none;
-  stroke-width: 2.5;
-  stroke-dasharray: 0.06 0.94;
-  opacity: 0.32;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .af-wire {
-    stroke-dasharray: 1;
-    animation-duration: 22s;
-    animation-timing-function: ease-in-out;
-    animation-iteration-count: infinite;
-    animation-name: af-wire-draw;
-  }
-
-  .af-wire-2 {
-    animation-delay: 2.4s;
-  }
-
-  .af-wire-3 {
-    animation-delay: 5.2s;
-  }
-
-  .af-wire-node {
-    animation-duration: 22s;
-    animation-timing-function: ease-out;
-    animation-iteration-count: infinite;
-    animation-name: af-wire-node-in;
-  }
-
-  .af-wire-node-2 {
-    animation-delay: 2.4s;
-  }
-
-  .af-wire-node-3 {
-    animation-delay: 5.2s;
-  }
-
-  .af-wire-spark {
-    display: inline;
-    animation-duration: 22s;
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
-    animation-name: af-wire-spark-run;
-  }
-
-  .af-wire-spark-2 {
-    animation-delay: 2.4s;
-  }
-
-  /* The glows drift and breathe in OPPOSITE phase, so the pair never brightens
-     together — two lights pulsing in unison reads as a flashing page. */
-  .af-backdrop-glow {
-    animation-duration: 30s;
-    animation-timing-function: ease-in-out;
-    animation-iteration-count: infinite;
-  }
-
-  .af-backdrop-glow-a {
-    animation-name: af-backdrop-drift-a;
-  }
-
-  .af-backdrop-glow-b {
-    animation-name: af-backdrop-drift-b;
-    animation-delay: -15s;
-  }
-}
-
-/* Draw, hold, and leave the wire WHOLE for most of the loop: a connector that
-   un-draws would claim the relationship stopped existing. */
-@keyframes af-wire-draw {
-  0% {
-    stroke-dashoffset: 1;
-    opacity: 0;
-  }
-  4% {
-    opacity: 0.18;
-  }
-  18%,
-  92% {
-    stroke-dashoffset: 0;
-    opacity: 0.18;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 0;
-  }
-}
-
-/* The node lands as its wire arrives at it, not before. */
-@keyframes af-wire-node-in {
-  0%,
-  16% {
-    opacity: 0;
-    scale: 0.4;
-  }
-  22%,
-  92% {
-    opacity: 0.24;
-    scale: 1;
-  }
-  100% {
-    opacity: 0;
-    scale: 1;
-  }
-}
-
-/* One trip along a finished wire, once per loop, well after the draw. */
-@keyframes af-wire-spark-run {
-  0%,
-  30% {
-    stroke-dashoffset: 0.06;
-    opacity: 0;
-  }
-  34% {
-    opacity: 0.32;
-  }
-  62% {
-    stroke-dashoffset: -0.94;
-    opacity: 0.32;
-  }
-  66%,
-  100% {
-    stroke-dashoffset: -0.94;
-    opacity: 0;
-  }
-}
-
-@keyframes af-backdrop-drift-a {
-  0%,
-  100% {
-    translate: 0 0;
-    opacity: 1;
-  }
-  50% {
-    translate: -3rem 1.5rem;
-    opacity: 0.6;
-  }
-}
-
-@keyframes af-backdrop-drift-b {
-  0%,
-  100% {
-    translate: 0 0;
-    opacity: 0.7;
-  }
-  50% {
-    translate: 2.5rem 2rem;
-    opacity: 1;
   }
 }
