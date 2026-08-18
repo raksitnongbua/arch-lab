@@ -102,17 +102,27 @@ export default function DemoPage(): React.JSX.Element {
       >
         {(
           [
-            ["c4", "C4 models"],
-            ["sequence", "Sequence diagrams"],
-            ["flowchart", "Flowcharts"],
-            ["usecase", "Use cases"],
+            ["c4", "C4 models", C4Glyph, "var(--primary)"],
+            ["sequence", "Sequence diagrams", SequenceGlyph, "var(--accent)"],
+            ["flowchart", "Flowcharts", FlowchartGlyph, "var(--flow-decision-border)"],
+            ["usecase", "Use cases", UseCaseGlyph, "var(--uc-actor-border)"],
           ] as const
-        ).map(([anchor, label]) => (
+        ).map(([anchor, label, Glyph, accent]) => (
           <a
             key={anchor}
             href={`#${anchor}`}
-            className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            /* Each link wears its OWN section's glyph and accent — the same
+               pair that heads the section it jumps to, so the bar is a legend
+               as much as a nav. Four words alone made the reader match label to
+               heading; the mark does that matching for them. The tint only
+               arrives on hover, because four coloured icons sitting at rest
+               would compete with the cards they sit above. */
+            style={{ "--kind": accent } as React.CSSProperties}
+            className="group/jump flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
+            <span className="text-muted-foreground/70 transition-colors group-hover/jump:text-(--kind)">
+              <Glyph />
+            </span>
             {label}
           </a>
         ))}

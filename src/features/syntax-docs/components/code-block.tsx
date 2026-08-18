@@ -53,11 +53,30 @@ export function CodeBlock({
             <CopyButton text={code} label={`Copy the ${label} example`} />
           </div>
         </div>
+        {/* LINE NUMBERS, as a grid rather than as text in the copyable flow.
+            The gutter is a separate column of <span>s, `aria-hidden` and
+            `select-none`, so "1 2 3" can never end up in a paste — the whole
+            point of the Copy button beside it is that what you paste parses.
+            (A CSS ::before counter would do the same, and would also be
+            unselectable, but it cannot be scrolled independently of the code,
+            which is what keeps the numbers put when a long line scrolls
+            sideways.)
+
+            Trailing newline dropped before splitting: a snippet that ends in
+            one is normal and would otherwise number an empty last row. */}
         <pre
           tabIndex={0}
-          className="overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="grid grid-cols-[auto_1fr] gap-x-3 overflow-x-auto px-4 py-3 font-mono text-xs leading-relaxed text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          <code>{code}</code>
+          <span
+            aria-hidden="true"
+            className="grid shrink-0 justify-items-end tabular-nums text-muted-foreground/50 select-none"
+          >
+            {code.replace(/\n$/, "").split("\n").map((_, index) => (
+              <span key={index}>{index + 1}</span>
+            ))}
+          </span>
+          <code className="min-w-0">{code}</code>
         </pre>
       </div>
     </figure>

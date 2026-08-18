@@ -85,6 +85,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClasses, Button } from "@/components/ui/button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { CopyButton } from "@/components/ui/copy-button";
+import { NumberedTextarea } from "@/components/ui/numbered-textarea";
 import {
   SourceRailToggle,
   SplitWorkbench,
@@ -1136,7 +1137,7 @@ export function ViewPlayground({
                   </div>
                 </div>
 
-                <textarea
+                <NumberedTextarea
                   id={sourcePaneId}
                   value={text}
                   onChange={(event) =>
@@ -1145,15 +1146,17 @@ export function ViewPlayground({
                   onKeyDown={(event) => handleEditorKeyDown(event, "source")}
                   aria-describedby={editingHintId}
                   aria-invalid={paneError?.pane === "source"}
-                  spellCheck={false}
                   /* `rows` is the MOBILE size only: stacked, the page
                      scrolls and a fixed height is right. On `lg` the pane
                      flexes instead (see the rail's note) and `resize-none`
                      goes with it — a drag handle fighting a flex height lets
                      the editor push the hint off the bottom. */
                   rows={14}
+                  /* The WRAPPER takes the sizing now — the gutter and the text
+                     are two columns inside it, so a height on the textarea
+                     alone would leave the numbers a different length. */
                   className={cn(
-                    "w-full min-w-0 rounded-lg border bg-card px-3 py-2.5 font-mono text-xs leading-relaxed text-foreground shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-lg:resize-y lg:min-h-0 lg:flex-1 lg:resize-none",
+                    "w-full lg:min-h-0 lg:flex-1",
                     paneError?.pane === "source"
                       ? "border-destructive/60"
                       : "border-border",
