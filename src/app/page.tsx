@@ -4,7 +4,6 @@ import {
   FileText,
   GitBranch,
   MousePointerClick,
-  Play,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
@@ -13,6 +12,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { HeroDiagram } from "@/features/marketing/hero-diagram";
+import { LiveDiagramMark } from "@/features/marketing/live-diagram-mark";
 import { McpFlow } from "@/features/marketing/mcp-flow";
 import {
   CONNECT_RECIPES,
@@ -220,7 +220,7 @@ export default function Home() {
                 })}
               >
                 <span className="sr-only">Open a live diagram</span>
-                <Play aria-hidden="true" className="af-cta-live-mark" />
+                <LiveDiagramMark />
                 <ArrowRight
                   aria-hidden="true"
                   className="transition-transform duration-200 group-hover:translate-x-1"

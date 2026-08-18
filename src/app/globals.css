@@ -1721,31 +1721,140 @@
 }
 
 /* ---- the hero's icon-led primary call to action -----------------------------
- * The label moved to `sr-only`, so the FACE of this control is a play mark and
- * an arrow. A still icon with no words would read as decoration, so the mark
- * carries a slow, small pulse: it is the thing that says "this is live" now
- * that no word does.
+ * The label moved to `sr-only`, so the FACE of this control is a miniature C4
+ * diagram that draws itself (`LiveDiagramMark`). A play triangle was here
+ * first and said "media" rather than "diagram", which is the one thing the
+ * button opens.
  *
- * Deliberately quiet — 2.4s, scale only, no colour change — because it sits in
- * a hero beside a running headline gradient, and two competing loops in one
- * viewport is a fairground. Scale is compositor-only, so it costs no layout.
+ * The gestures are BORROWED, not invented: the edge draws by stroke-dashoffset
+ * over pathLength=1 exactly as a flowchart edge does in its entrance trace, and
+ * the spark is the idle pulse's travelling band, one dash period per cycle so
+ * its wrap is invisible. A reader who has watched a real diagram load has seen
+ * both before.
  *
- * Reduced motion stops the loop and leaves the mark at its resting size: the
- * control is complete without the animation, which is the test every ambient
- * gesture in this app has to pass.
+ * ONE loop, 2800ms, in four beats: the nodes arrive, the edge draws, the spark
+ * runs it, the mark rests. The rest matters — a mark that never stops is a
+ * spinner, and a spinner on a call to action reads as "waiting", the opposite
+ * of the invitation intended. Hovering shortens the loop to 1500ms, so the mark
+ * answers the pointer without changing what it does.
+ *
+ * Everything animated here is `opacity`, `scale` or `stroke-dashoffset`:
+ * compositor-only, so a permanent loop in the hero costs no layout. It shares a
+ * viewport with the running headline gradient, hence the long period and the
+ * held rest — two competing loops at the same tempo is a fairground.
+ *
+ * Reduced motion leaves the mark COMPLETE and still: both nodes, the whole
+ * edge, no spark. The control is finished without the animation, which is the
+ * test every ambient gesture in this app has to pass.
  */
 @media (prefers-reduced-motion: no-preference) {
-  .af-cta-live .af-cta-live-mark {
-    animation: af-cta-live-pulse 2400ms ease-in-out infinite;
+  .af-cta-live .af-cta-node,
+  .af-cta-live .af-cta-edge,
+  .af-cta-live .af-cta-spark {
+    animation-duration: 2800ms;
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+  }
+
+  .af-cta-live:hover .af-cta-node,
+  .af-cta-live:hover .af-cta-edge,
+  .af-cta-live:hover .af-cta-spark {
+    animation-duration: 1500ms;
+  }
+
+  .af-cta-live .af-cta-node-a {
+    animation-name: af-cta-node-a;
+  }
+
+  .af-cta-live .af-cta-node-b {
+    animation-name: af-cta-node-b;
+  }
+
+  .af-cta-live .af-cta-edge {
+    animation-name: af-cta-edge-draw;
+  }
+
+  .af-cta-live .af-cta-spark {
+    animation-name: af-cta-spark-run;
+    /* Linear alone among the four: a spark that eases is a spark that slips. */
+    animation-timing-function: linear;
   }
 }
 
-@keyframes af-cta-live-pulse {
-  0%,
+/* The spark's resting state is ABSENT, not parked — hidden by default, so it
+ * never paints for a reduced-motion reader and never sits frozen on the line
+ * before its beat (the frozen-stub defect the flowchart shipped once). */
+.af-cta-spark {
+  display: none;
+  stroke-width: 2.2;
+  stroke-dasharray: 0.22 0.78;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-cta-live .af-cta-spark {
+    display: inline;
+  }
+}
+
+/* Nodes arrive first and settle: 0 to full inside the first fifth of the loop,
+ * B a beat behind A, because the pair reads as "this one, then that one" and
+ * that IS the relationship the edge is about to draw. */
+@keyframes af-cta-node-a {
+  0% {
+    opacity: 0;
+    scale: 0.7;
+  }
+  14%,
   100% {
+    opacity: 1;
     scale: 1;
   }
+}
+
+@keyframes af-cta-node-b {
+  0%,
+  10% {
+    opacity: 0;
+    scale: 0.7;
+  }
+  26%,
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+/* The edge draws once both ends exist, then stays whole for the rest of the
+ * loop — an edge that un-draws would claim the relationship stopped existing. */
+@keyframes af-cta-edge-draw {
+  0%,
+  22% {
+    stroke-dashoffset: 1;
+  }
+  46%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The spark runs exactly one dash period, and only after the line it rides is
+ * complete — light on a half-drawn edge is two stories at once. */
+@keyframes af-cta-spark-run {
+  0%,
+  46% {
+    stroke-dashoffset: 0.22;
+    opacity: 0;
+  }
   50% {
-    scale: 1.18;
+    opacity: 1;
+  }
+  84% {
+    stroke-dashoffset: -0.78;
+    opacity: 1;
+  }
+  88%,
+  100% {
+    stroke-dashoffset: -0.78;
+    opacity: 0;
   }
 }
