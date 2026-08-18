@@ -182,7 +182,7 @@
    * at its natural offset-0 dash, which paints nothing extra. */
   [data-af-idle="on"] .af-uc-edge .af-uc-march {
     animation: af-frame-march 600ms linear infinite;
-    animation-delay: calc(var(--uc-edge-at) + var(--uc-idle-start, 1400ms));
+    animation-delay: calc(var(--uc-edge-at) + var(--uc-idle-start, 700ms));
   }
 
   /* ---- idle: THE BREATH (associations brighten in place) -------------------
@@ -192,7 +192,7 @@
    * lesson, made impossible by construction rather than by fill mode). */
   [data-af-idle="on"] .af-uc-edge .af-uc-breath {
     display: inline;
-    opacity: 0.16;
+    opacity: 0.5;
     animation-duration: var(--uc-breath-period, 5200ms);
     animation-timing-function: linear;
     animation-iteration-count: infinite;
@@ -201,7 +201,7 @@
        it could be reported a second time. */
     animation-fill-mode: backwards;
     animation-delay: calc(
-      var(--uc-edge-at) + var(--uc-idle-start, 1400ms) +
+      var(--uc-edge-at) + var(--uc-idle-start, 700ms) +
         var(--uc-breath-phase, 0ms)
     );
   }
@@ -250,13 +250,17 @@
   stroke: var(--foreground);
   stroke-width: 4;
   stroke-linecap: round;
-  filter: blur(3px);
+  filter: blur(2px);
   opacity: 0;
   /* Fractions of THIS path (the markup sets pathLength=1), so one dash pattern
-     is the same proportion of a short association and a long one. Period 3.0
-     with a 0.12 lit run: a gap wider than the whole path, so the line is dark
-     between passes and the gesture stays a drift rather than a belt. */
-  stroke-dasharray: 0.12 2.88;
+     is the same proportion of a short association and a long one. Period 2.0
+     with a 0.35 lit run: still a gap wider than the whole path, so the line is
+     dark between passes and the gesture stays a drift rather than a belt.
+     The first cut was 0.12 lit at 0.16 opacity under a 3px blur — mechanically
+     running and visually nothing, reported as "no animation". A band nobody can
+     see is not motion; these three numbers are what make it one, and the check
+     pins floors under each. */
+  stroke-dasharray: 0.35 1.65;
 }
 
 /* From-only: the end state is the element's own natural state, so the
@@ -303,18 +307,18 @@
    keeps a waiting band absent rather than frozen on the line. */
 @keyframes af-uc-drift-out {
   from {
-    stroke-dashoffset: 0.12;
+    stroke-dashoffset: 0.35;
   }
   to {
-    stroke-dashoffset: -2.88;
+    stroke-dashoffset: -1.65;
   }
 }
 
 @keyframes af-uc-drift-back {
   from {
-    stroke-dashoffset: -2.88;
+    stroke-dashoffset: -1.65;
   }
   to {
-    stroke-dashoffset: 0.12;
+    stroke-dashoffset: 0.35;
   }
 }
