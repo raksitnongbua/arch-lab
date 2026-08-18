@@ -52,17 +52,21 @@ export interface DotGridConfig {
 }
 
 export const DOT_GRID_DEFAULTS: DotGridConfig = {
-  /* 3px, not 2. A dot's whole presence is its INK, and at a 28px pitch a 2px dot
-     covers 0.40% of its cell — the field was correctly wired, correctly masked,
-     and still could not be seen. 3px is 0.90%, which more than doubles it for one
-     pixel of radius. Further starts to read as a polka dot rather than a
-     lattice. */
-  dotSize: 3,
+  /* 1px — a PINPOINT lattice, chosen at the studio against the real page.
+     It was 3px, on the theory that a dot needs ink before contrast can matter,
+     and that theory came out of a period when the field was invisible for a
+     reason that had nothing to do with either: the whole backdrop was painting
+     underneath `body`'s opaque background. Once it actually rendered, 3px read as
+     a polka dot and 1px read as paper. Trust the eye over the derivation — the
+     derivation was calibrated on contaminated evidence. What still holds is the
+     CONTRAST floor `check:dot-grid` measures; at 1px the field survives on
+     ~2:1 against its ground, and that is the number to protect. */
+  dotSize: 1,
   /* Chosen so `dotSize + gap` stays 28 — exactly half the backdrop's 56px line
      grid, so the two lattices coincide instead of beating against each other.
      `check:dot-grid` asserts the pitch, so a change to `dotSize` comes out of
      this, never out of the pitch. */
-  gap: 25,
+  gap: 27,
   /* `--node-border`, not `--border`, and this is measured: `--border` cannot be
      seen on the dark ground at ANY opacity — 1.63:1 against it at full strength,
      and the field ran at half. `--node-border` reaches 1.98:1 at the layer's 0.35
@@ -71,20 +75,24 @@ export const DOT_GRID_DEFAULTS: DotGridConfig = {
      lattice mark is. */
   baseVar: "--node-border",
   activeVar: "--primary",
-  proximity: 130,
+  /* 90, tightened from 130. The lit halo around the pointer reads as a
+     deliberate pool of light rather than a general brightening of the corner of
+     the page — and at 1px the dots inside it are subtle enough that a wide pool
+     had nothing much to show. */
+  proximity: 90,
   speedTrigger: 100,
-  shockRadius: 220,
+  shockRadius: 170,
   shockStrength: 4,
-  maxSpeed: 5000,
+  maxSpeed: 4500,
   /* 180, not upstream's 750, and measured rather than taste — the velocity table
      is in `dot-grid.tsx` beside the tween that consumes it. At 750 a sweep moves
      a dot about five pixels, under a fifth of the pitch and invisible behind a
      headline; at 180 it moves about half a pitch. */
   resistance: 180,
-  /* Slower than upstream's 1.5. The return is the part anyone actually watches —
-     the throw is over in a fifth of a second — and on `elastic.out` a longer
-     settle reads as weight rather than as lag. */
-  returnDuration: 2.2,
+  /* 1.6s. Still slower than the throw, which is over in a fifth of a second, so
+     the return is the part anyone actually watches — but 2.2 let the elastic
+     overshoot linger long enough to look like lag rather than weight. */
+  returnDuration: 1.6,
 };
 
 /**

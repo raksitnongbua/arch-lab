@@ -160,24 +160,46 @@ export function Header(): React.JSX.Element {
   return (
     <header
       ref={headerRef}
-      /* 60% OPAQUE, DOWN FROM 80, so the page's own ground reads through the row
-         rather than the header sitting on it as a separate bar. The blur is what
-         makes that affordable: `backdrop-blur-xl` averages whatever is behind it,
-         so text contrast barely moves even where the header crosses a diagram
-         canvas on `/view` — and the header renders on every route, so that case
-         governs how far this can go. The bottom border softened with it, for the
-         same reason: at 60% a hard rule is the loudest thing in the row.
-         NOTE for the home page specifically: the dot field starts BELOW this
-         header, because the header is in normal flow and the page begins after
-         it. Transparency blends the seam; it does not put dots behind the row.
-         That would need the header to overlay the page. */
-      className="af-glass sticky top-0 z-40 border-b border-border/40 bg-background/60 backdrop-blur-xl"
+      /* NO BACKGROUND AND NO BORDER ON THE HEADER ITSELF — both live in the
+         fading layer below, and that is the point.
+         It was a flat `bg-background/80` with a `border-b`, then `/60`, and
+         a uniform tint plus a hard rule is exactly what made the row read as a
+         separate bar sitting ON the page rather than as part of it: the tint ends
+         somewhere, and wherever it ends there is an edge. Fading the ground out
+         downward removes the edge instead of softening it — the row is opaque
+         where the text is and gone by the time it meets the page. */
+      className="af-glass sticky top-0 z-40"
     >
+      {/* THE FADING GROUND, in two layers because a tint and a blur have to fade
+          separately. The gradient fades the COLOUR; the mask fades the BLUR, and
+          without it the blur would stop dead at the header's bottom edge and put
+          back the seam the gradient just removed.
+          Both are `absolute` with the default z-index and come FIRST in DOM
+          order, so the content below paints over them. Deliberately not `-z-10`:
+          a negative z-index child paints before the backgrounds of in-flow
+          descendants, which would put these two layers over the nav's own active
+          pill — and a negative z-index escaping its intended stacking context is
+          the bug that hid this site's entire page backdrop. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 backdrop-blur-xl"
+        style={{
+          maskImage: "linear-gradient(to bottom, black 45%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, black 45%, transparent 100%)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background via-background/75 to-transparent"
+      />
+
       {/* Full-bleed rather than centred in a max-width container: the editor is
           edge-to-edge (rails flush to both sides), so a contained header left the
           chrome visibly inset from the app below it. Padding is kept close to the
-          editor header's own so the two read as one continuous surface. */}
-      <div className="flex h-16 w-full items-center justify-between gap-3 px-3 sm:gap-4 sm:px-6">
+          editor header's own so the two read as one continuous surface.
+          `relative` so it sits above the two ground layers. */}
+      <div className="relative flex h-16 w-full items-center justify-between gap-3 px-3 sm:gap-4 sm:px-6">
         <Link
           href="/"
           className={cn(

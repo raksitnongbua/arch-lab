@@ -368,12 +368,24 @@ function tokenIn(selector, token) {
 const MIN_DOT_CONTRAST = 1.5;
 
 /**
- * And the other half, because contrast alone was never the whole story: a dot
- * has to put enough INK on screen for its contrast to matter. 0.8% of its own
- * cell is just under the 0.90% a 3px dot on a 28px pitch covers, and well above
- * the 0.40% of the 2px dot that could not be seen at any colour.
+ * The smallest dot whose measured contrast still describes what is on screen.
+ *
+ * THIS REPLACED AN AREA FLOOR, and the reason is worth keeping because the floor
+ * was wrong for an instructive reason. It required a dot to cover 0.8% of its
+ * cell, derived from a 2px dot at 1.32:1 that "could not be seen" — except that
+ * dot could not be seen because the entire backdrop was painting underneath
+ * `body`'s opaque background. Every observation the floor was calibrated on came
+ * from that period, so the floor was measuring a bug rather than a perceptual
+ * limit. Once the layer actually rendered, a 1px lattice read better than a 3px
+ * one, and the shipped design is 1px.
+ *
+ * What survives is a narrower rule that does NOT depend on that evidence: below
+ * one CSS pixel a dot is anti-aliased into a fraction of its own colour, so the
+ * contrast the assertion above measures would overstate what reaches the screen.
+ * At 1px and up the two agree, and visibility is governed by contrast alone —
+ * which is the assertion to protect.
  */
-const MIN_INK_SHARE = 0.008;
+const MIN_DOT_SIZE = 1;
 
 /**
  * Every theme, and which alpha applies to it.
@@ -460,29 +472,26 @@ check("a dot is visible on every theme's ground", () => {
   }
 });
 
-check("a dot puts enough ink in its cell to be worth the contrast", () => {
+check("a dot is at least one pixel, so the contrast above is honest", () => {
   const dotSize = Number(/dotSize: ([\d.]+),/.exec(config)?.[1]);
   const gap = Number(/gap: ([\d.]+),/.exec(config)?.[1]);
   assert.ok(
     Number.isFinite(dotSize) && Number.isFinite(gap),
     "cannot read dotSize and gap",
   );
-  const pitch = dotSize + gap;
-  const share = (Math.PI * (dotSize / 2) ** 2) / (pitch * pitch);
   assert.ok(
-    share >= MIN_INK_SHARE,
-    `a ${dotSize}px dot on a ${pitch}px pitch covers ` +
-      `${(share * 100).toFixed(2)}% of its cell, under the ` +
-      `${(MIN_INK_SHARE * 100).toFixed(1)}% floor — contrast cannot rescue a ` +
-      `dot that is barely there`,
+    dotSize >= MIN_DOT_SIZE,
+    `a ${dotSize}px dot is sub-pixel — it will be anti-aliased into a fraction ` +
+      `of its colour, so the contrast measured above is not what reaches the ` +
+      `screen`,
   );
   /* The pitch is half the backdrop's line grid, so the two lattices coincide.
      Growing the dot has to come out of the gap. */
   assert.equal(
-    pitch,
+    dotSize + gap,
     28,
-    `pitch is ${pitch}px; the backdrop's line grid is 56px and the two must ` +
-      `stay harmonic — take the change out of \`gap\`, not the pitch`,
+    `pitch is ${dotSize + gap}px; the backdrop's line grid is 56px and the two ` +
+      `must stay harmonic — take the change out of \`gap\`, not the pitch`,
   );
 });
 

@@ -42,6 +42,9 @@ grammars are refused by the old parsers with a message naming the right one.
 
 ### Added — everywhere
 
+- A 404 page. It leads with the bundled examples rather than the home page,
+  because most 404s here are a link to a diagram id that has been renamed.
+
 - `validate_flowchart`, `format_flowchart`, `validate_usecase` and
   `format_usecase` on the MCP server, each reporting the defects a parse cannot
   see — unguarded decisions, unreachable steps, actors that can do nothing,
@@ -58,8 +61,9 @@ grammars are refused by the old parsers with a message naming the right one.
   re-solved around the new ground, so every measured contrast pair still clears
   its minimum, and the social card matches the page a click lands on. Brand
   colour is unchanged.
-- The navbar is more translucent (60% rather than 80%), so the page's own ground
-  reads through the row instead of the header sitting on it as a separate bar.
+- The navbar's background fades out downward instead of being a flat tint that
+  ends at a rule, so the row reads as part of the page rather than a bar sitting
+  on it.
 - The home page's background is a field of dots that reacts to the pointer —
   dots take the accent colour near the cursor, scatter with inertia under a fast
   sweep, and ripple away from a click. It holds still for anyone who has reduced
