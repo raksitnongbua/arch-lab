@@ -46,21 +46,21 @@ import type { DictColumn, LaidDictField } from "../lib/layout";
  * than a colour, and are the only two that read as outlines.
  */
 const FLAG_PAINT: Readonly<
-  Record<string, { fill: string; text: string; outline?: boolean }>
+  Record<string, { mark: string; solid?: boolean; text?: string }>
 > = {
-  required: { fill: "var(--primary)", text: "var(--primary-foreground)" },
-  unique: { fill: "var(--accent)", text: "var(--accent-foreground)" },
-  derived: {
-    fill: "var(--muted)",
-    text: "var(--muted-foreground)",
-    outline: true,
+  required: { mark: "var(--primary)" },
+  unique: { mark: "var(--accent)" },
+  derived: { mark: "var(--node-meta)" },
+  /* THE ONE SOLID BADGE. Its fill and its foreground are a pair the theme
+     already guarantees against each other, and it is solid because the
+     consequence of missing a `pii` is legal rather than a bug — this is the
+     one thing on the canvas allowed to shout. */
+  pii: {
+    mark: "var(--destructive)",
+    solid: true,
+    text: "var(--destructive-foreground)",
   },
-  pii: { fill: "var(--destructive)", text: "var(--destructive-foreground)" },
-  deprecated: {
-    fill: "var(--muted)",
-    text: "var(--muted-foreground)",
-    outline: true,
-  },
+  deprecated: { mark: "var(--node-meta)" },
 };
 
 /* `BADGE` is imported from the layout, not declared here: the column width is
@@ -82,17 +82,22 @@ function Row({
   const baseline = field.y + DICT.lineHeight * 1.15;
   return (
     <g className="af-dict-row">
-      {/* Zebra striping, because a wide row with a wrapped cell in the middle
-          is exactly where an eye loses its line. Drawn as a low-opacity fill
-          so every theme gets it from its own palette. */}
+      {/* A HAIRLINE BETWEEN ROWS, not a zebra fill. A wide row with a wrapped
+          cell in the middle is exactly where an eye loses its line, so rows
+          need separating — but the default theme separates by OUTLINE rather
+          than by fill (`purpose.md`), and a 3.5%-opacity stripe there is
+          either invisible or a smudge. A rule is the device the theme itself
+          uses, works identically in all six, and does not depend on
+          alternating parity to be legible. */}
       {striped ? (
-        <rect
-          x={columnX.name}
-          y={field.y}
-          width={columnX.source + columnWidth.source - columnX.name}
-          height={field.height}
-          fill="var(--node-foreground)"
-          opacity={0.035}
+        <line
+          x1={columnX.name}
+          y1={field.y}
+          x2={columnX.source + columnWidth.source}
+          y2={field.y}
+          stroke="var(--node-border)"
+          strokeWidth={1}
+          opacity={0.55}
         />
       ) : null}
 
@@ -121,12 +126,18 @@ function Row({
                       width={width}
                       height={BADGE.height}
                       rx={BADGE.radius}
-                      fill={paint.fill}
-                      opacity={paint.outline === true ? 0.5 : 1}
-                      stroke={
-                        paint.outline === true ? "var(--node-border)" : "none"
-                      }
-                      strokeWidth={paint.outline === true ? 1 : 0}
+                      /* OUTLINED, NOT FILLED, for every badge but `pii`. The
+                         default theme is High contrast, which separates by
+                         OUTLINE rather than by fill (`purpose.md`), so a
+                         tinted pill is the wrong device there — it reads as a
+                         smudge where a ruled shape reads as a token. The
+                         outline also fixes the contrast honestly: the label
+                         sits on the CANVAS, against which each of these colour
+                         tokens is already measured, instead of on a wash of
+                         its own colour. */
+                      fill={paint.solid === true ? paint.mark : "none"}
+                      stroke={paint.mark}
+                      strokeWidth={1.3}
                     />
                     <text
                       x={left + width / 2}
@@ -136,7 +147,7 @@ function Row({
                       fontSize={BADGE.size}
                       fontWeight={700}
                       letterSpacing={0.2}
-                      fill={paint.text}
+                      fill={paint.text ?? paint.mark}
                     >
                       {flag}
                     </text>
@@ -291,7 +302,9 @@ export function DictDiagram({
               field={field}
               columnX={layout.columnX}
               columnWidth={layout.columnWidth}
-              striped={index % 2 === 1}
+              /* Every row but the first gets a rule ABOVE it, so the run is
+                 separated without a line hanging under the last one. */
+              striped={index > 0}
             />
           ))}
         </g>

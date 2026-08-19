@@ -163,6 +163,46 @@ console.log("badges fit the column the layout reserved for them");
   );
 }
 
+console.log("badge paint survives the high-contrast theme");
+
+{
+  /* THE DEFAULT THEME IS HIGH CONTRAST, and it separates by OUTLINE rather
+     than by fill (`purpose.md`). Two contrast failures shipped on this canvas
+     before these assertions existed:
+
+       1. Every badge was drawn as its colour at 16% opacity with the SAME
+          colour as its text. Text and background differing only in alpha
+          cannot reach a usable ratio at any alpha — on the dark themes
+          `required` came out grey on grey.
+       2. The row separator was a 3.5%-opacity fill, which on a theme that
+          separates by outline is either invisible or a smudge.
+
+     Neither is measurable from here without a rasteriser, so what is asserted
+     is the SHAPE that made them possible: a badge must not paint its label in
+     the same token as a filled background behind it, and the row separator
+     must be a rule rather than a wash. */
+  const diagram = read("src/features/dict/components/dict-diagram.tsx");
+
+  check(
+    "no badge paints its label on a wash of its own colour",
+    !/opacity=\{[^}]*\}[\s\S]{0,400}?fill=\{paint\.(mark|fill)\}/.test(
+      diagram,
+    ) && !/fill=\{paint\.fill\}[\s\S]{0,300}?opacity=\{0?\.\d/.test(diagram),
+    "a tinted fill under same-coloured text cannot reach a usable contrast ratio",
+  );
+  check(
+    "badges are outlined, and only the loud one is solid",
+    /stroke=\{paint\.mark\}/.test(diagram) &&
+      /paint\.solid === true/.test(diagram),
+    "the default theme separates by outline — a tinted pill reads as a smudge there",
+  );
+  check(
+    "rows are separated by a rule, not by a low-opacity fill",
+    !/fill="var\(--node-foreground\)"[\s\S]{0,120}opacity=\{0\.0/.test(diagram),
+    "a 3.5% stripe is invisible on the theme that separates by outline",
+  );
+}
+
 console.log("rows hold their own content");
 
 {
