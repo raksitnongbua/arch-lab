@@ -1071,23 +1071,37 @@ export function ViewPlayground({
                     >
                       {(["alab", "mermaid"] as const).map((format) => {
                         const current = doc.format === format;
+                        /* MERMAID HAS NO DICTIONARY NOTATION, so the option
+                           cannot act on this document — clicking it had
+                           nothing to convert to. Disabled and titled with the
+                           reason rather than hidden: a control that vanishes
+                           for one kind reads as a bug in the page, where a
+                           disabled one that says why reads as an answer. */
+                        const unsupported =
+                          format === "mermaid" && doc.kind === "dict";
                         return (
                           <button
                             key={format}
                             type="button"
                             role="radio"
                             aria-checked={current}
+                            aria-disabled={unsupported}
+                            disabled={unsupported}
                             onClick={() => convertPane(format)}
                             title={
-                              current
-                                ? `The pane is ${format === "alab" ? ".alab" : "Mermaid"}`
-                                : `Rewrite the pane as ${format === "alab" ? ".alab" : "Mermaid"}`
+                              unsupported
+                                ? "Mermaid has no data-dictionary notation, so there is nothing to convert to"
+                                : current
+                                  ? `The pane is ${format === "alab" ? ".alab" : "Mermaid"}`
+                                  : `Rewrite the pane as ${format === "alab" ? ".alab" : "Mermaid"}`
                             }
                             className={cn(
                               "rounded-md px-2 py-0.5 font-mono text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                              current
-                                ? "bg-secondary font-medium text-foreground"
-                                : "text-muted-foreground hover:text-foreground",
+                              unsupported
+                                ? "cursor-not-allowed text-muted-foreground/40"
+                                : current
+                                  ? "bg-secondary font-medium text-foreground"
+                                  : "text-muted-foreground hover:text-foreground",
                             )}
                           >
                             {format === "alab" ? ".alab" : "Mermaid"}

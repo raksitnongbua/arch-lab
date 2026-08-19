@@ -165,7 +165,7 @@ export function SvgExportButton({
           role="menu"
           /* Downward, like the Share panel beside it: this toolbar sits above
              the canvas mid-page, and opening upward would cover the diagram. */
-          className="absolute right-0 z-30 mt-1.5 w-64 rounded-xl border border-border bg-background p-1.5 shadow-lg"
+          className="absolute right-0 z-30 mt-1.5 w-72 rounded-xl border border-border bg-background p-1.5 shadow-lg"
         >
           {canCopy ? (
             <button
@@ -240,7 +240,19 @@ export function SvgExportButton({
               the scale is a property of the export, not a different export. */}
           <div className="mt-1 border-t border-border/60 px-2.5 pt-2 pb-1">
             <p className="text-xs text-muted-foreground">PNG sharpness</p>
-            <div className="mt-1.5 flex gap-1">
+            {/* A SEGMENTED CONTROL, not three `buttonClasses` buttons. Those
+                carry the toolbar's own padding and a minimum height, so three
+                of them overflowed a 16rem panel and clipped "Sharp" off its
+                right edge — a control sized for a toolbar does not fit inside
+                a menu. These are sized for the row they sit in: `min-w-0` and
+                `flex-1` so they share the width evenly and shrink rather than
+                spill, which is the same automatic-minimum rule that bit the
+                home page's MCP section. */}
+            <div
+              role="group"
+              aria-label="PNG sharpness"
+              className="mt-1.5 flex gap-1 rounded-lg border border-border/70 p-0.5"
+            >
               {(Object.keys(PNG_SCALE_BY_SHARPNESS) as Sharpness[]).map(
                 (key) => (
                   <button
@@ -248,11 +260,11 @@ export function SvgExportButton({
                     type="button"
                     aria-pressed={sharpness === key}
                     onClick={() => setSharpness(key)}
-                    className={buttonClasses({
-                      variant: sharpness === key ? "primary" : "outline",
-                      size: "sm",
-                      className: "flex-1 justify-center capitalize",
-                    })}
+                    className={`min-w-0 flex-1 truncate rounded-md px-2 py-1 text-xs capitalize transition-colors ${
+                      sharpness === key
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
                   >
                     {key}
                   </button>
