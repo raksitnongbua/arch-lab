@@ -6,50 +6,89 @@
  * ONE COMPONENT FOR TWO KINDS, where the four older exporters are four
  * near-identical files. It is shared rather than copied because everything
  * that differs between ER and a dictionary is already a parameter: the render
- * function, the noun and the file stem. Nothing else about "turn this drawing
- * into a PNG" is kind-specific, and `dry.md` names a fifth copy of a block
- * that already exists four times as the expensive kind of duplication.
+ * function, the noun and the file stem.
  *
- * NO GIF ROW, deliberately, and not as an omission to "complete" later.
- * Neither of these canvases has a loop worth encoding — the dictionary's only
- * motion is its first-paint reveal, and ER's ambient pulse and focus current
- * are reading aids for someone watching the page. A GIF of either would be a
- * heavier copy of the PNG.
+ * ITS MENU IS THE ESTABLISHED ONE, not a new one. The first cut of this button
+ * invented its own shape — three separate PNG rows, no clipboard, its own
+ * labels — so the two new kinds exported differently from the four old ones
+ * for no reason a reader could see. The rows, the hints, the sharpness axis
+ * and its three keys are now the same as `usecase/export/export-button.tsx`:
+ * Copy PNG, Download PNG, Download SVG, with one sharpness selector governing
+ * both PNG rows so "Sharp" means one thing across the product.
+ *
+ * The one deliberate difference is the MISSING GIF ROW, and it is the same
+ * omission the use-case exporter documents: neither of these canvases has a
+ * loop worth encoding — the dictionary's only motion is its first-paint
+ * reveal, and ER's pulse and focus current are reading aids for someone
+ * watching the page — so a GIF would be a heavier copy of the PNG.
  *
  * THE THEME IS RESOLVED AT CLICK TIME, not at mount: a reader who switches
- * theme and then exports must get the diagram they are looking at, and a
- * palette captured on mount would hand them the previous one.
+ * theme and then exports must get the diagram they are looking at.
  *
  * OUTCOMES ARE VISIBLE as well as announced, for the reason the sequence
- * exporter documents: for a sighted user, a slow export, a refusal and a crash
+ * exporter documents: for a sighted user a slow export, a refusal and a crash
  * must not all look like the button doing nothing.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Download, FileCode2, FileImage } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  ChevronDown,
+  ClipboardCopy,
+  Download,
+  FileCode2,
+  FileImage,
+  TriangleAlert,
+} from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
-import { MENU_ITEM_CLASSES } from "@/components/ui/menu-item";
+import {
+  MENU_ITEM_CLASSES,
+  MENU_ITEM_HINT_CLASSES,
+} from "@/components/ui/menu-item";
+/* Cross-feature on purpose, the same imports the flowchart and sequence
+   exporters lean on: one file-naming rule, one download helper, one clipboard
+   path (whose Safari-gesture handling must not be re-derived), one theme
+   resolution. */
+import {
+  canCopyPng,
+  copyPngToClipboard,
+  downloadBlob,
+  fileStem,
+} from "@/features/viewer/export/download";
 import { resolveExportTheme } from "@/features/viewer/export/theme";
 import type { ExportTheme } from "@/features/viewer/export/theme";
-import { downloadBlob, svgToPngBlob } from "@/lib/svg-export";
-import type { RenderedSvg } from "@/lib/svg-export";
-import { slugify } from "@/lib/slug";
+import { downloadSvg, renderPngBlob } from "@/features/viewer/export/download";
+import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 export interface SvgExportButtonProps {
   /** Renders the document with a palette resolved at click time. */
   render: (theme: ExportTheme) => RenderedSvg;
-  /** Names the downloaded file. */
   title: string;
   /** "ER diagram", "data dictionary" — for the announcements. */
   noun: string;
   onAnnounce: (message: string) => void;
 }
 
-/** PNG scales offered. 2x is the default because a diagram dropped into a
- * deck is almost always viewed denser than the display it was exported from;
- * 1x exists for someone placing it at a known size, 3x for print. */
-const SCALES = [1, 2, 3] as const;
+/**
+ * PNG scale per sharpness — 1x is the diagram's own pixel size.
+ *
+ * The same three keys and multipliers the C4, sequence, flowchart and use-case
+ * exporters each declare, so "Sharp" means one thing across the product. Those
+ * four hold their own copies; unifying all six is the follow-up that goes with
+ * it, and is not attempted here because rewriting four working exporters to
+ * land two is how a feature becomes a regression.
+ */
+const PNG_SCALE_BY_SHARPNESS = {
+  compact: 1,
+  standard: 2,
+  sharp: 3,
+} as const;
+
+type Sharpness = keyof typeof PNG_SCALE_BY_SHARPNESS;
+
+/* Same shape the other exporters use for their capability read. */
+const subscribeToNothing = (): (() => void) => () => {};
+const readFalse = (): boolean => false;
 
 export function SvgExportButton({
   render,
@@ -58,9 +97,18 @@ export function SvgExportButton({
   onAnnounce,
 }: SvgExportButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sharpness, setSharpness] = useState<Sharpness>("standard");
   const root = useRef<HTMLDivElement>(null);
+
+  /* Read through the store so the server render and the first client render
+     agree — `canCopyPng()` per render would make the button flicker. */
+  const canCopy = useSyncExternalStore(
+    subscribeToNothing,
+    canCopyPng,
+    readFalse,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -78,17 +126,13 @@ export function SvgExportButton({
     };
   }, [open]);
 
-  const stem = slugify(title, "diagram");
+  const scale = PNG_SCALE_BY_SHARPNESS[sharpness];
 
-  const run = async (
-    label: string,
-    work: () => Promise<void>,
-  ): Promise<void> => {
-    setBusy(label);
+  const run = async (work: () => Promise<string>): Promise<void> => {
+    setBusy(true);
     setError(null);
     try {
-      await work();
-      onAnnounce(`${noun} exported as ${label}.`);
+      onAnnounce(await work());
       setOpen(false);
     } catch (caught) {
       const message =
@@ -96,25 +140,11 @@ export function SvgExportButton({
       setError(message);
       onAnnounce(`Export failed: ${message}`);
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
 
-  const exportSvg = (): Promise<void> =>
-    run("SVG", async () => {
-      const rendered = render(resolveExportTheme());
-      downloadBlob(
-        new Blob([rendered.svg], { type: "image/svg+xml" }),
-        `${stem}.svg`,
-      );
-    });
-
-  const exportPng = (scale: number): Promise<void> =>
-    run(`PNG ${scale}x`, async () => {
-      const rendered = render(resolveExportTheme());
-      const blob = await svgToPngBlob(rendered, scale);
-      downloadBlob(blob, `${stem}${scale === 1 ? "" : `@${scale}x`}.png`);
-    });
+  const stem = fileStem(title);
 
   return (
     <div ref={root} className="relative">
@@ -135,36 +165,110 @@ export function SvgExportButton({
           role="menu"
           /* Downward, like the Share panel beside it: this toolbar sits above
              the canvas mid-page, and opening upward would cover the diagram. */
-          className="absolute right-0 z-30 mt-1.5 w-56 rounded-xl border border-border bg-background p-1.5 shadow-lg"
+          className="absolute right-0 z-30 mt-1.5 w-64 rounded-xl border border-border bg-background p-1.5 shadow-lg"
         >
+          {canCopy ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={MENU_ITEM_CLASSES}
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await copyPngToClipboard(render(resolveExportTheme()), scale);
+                  return "Copied as PNG — paste it anywhere.";
+                })
+              }
+            >
+              <ClipboardCopy aria-hidden="true" className="size-4 shrink-0" />
+              <span>
+                Copy PNG
+                <span className={MENU_ITEM_HINT_CLASSES}>
+                  Paste it straight into a doc or a chat
+                </span>
+              </span>
+            </button>
+          ) : null}
+
           <button
             type="button"
             role="menuitem"
             className={MENU_ITEM_CLASSES}
-            disabled={busy !== null}
-            onClick={() => void exportSvg()}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const blob = await renderPngBlob(
+                  render(resolveExportTheme()),
+                  scale,
+                );
+                downloadBlob(blob, `${stem}.png`);
+                return `Downloaded the ${noun} as PNG at ${scale}× scale.`;
+              })
+            }
           >
-            <FileCode2 aria-hidden="true" className="size-4 opacity-70" />
-            SVG — sharp at any size
+            <FileImage aria-hidden="true" className="size-4 shrink-0" />
+            <span>
+              Download PNG
+              <span className={MENU_ITEM_HINT_CLASSES}>
+                Raster — {scale}× the diagram&apos;s own size
+              </span>
+            </span>
           </button>
-          {SCALES.map((scale) => (
-            <button
-              key={scale}
-              type="button"
-              role="menuitem"
-              className={MENU_ITEM_CLASSES}
-              disabled={busy !== null}
-              onClick={() => void exportPng(scale)}
-            >
-              <FileImage aria-hidden="true" className="size-4 opacity-70" />
-              PNG {scale}×{scale === 2 ? " — for a deck or a doc" : ""}
-            </button>
-          ))}
-          {busy !== null || error !== null ? (
+
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU_ITEM_CLASSES}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                downloadSvg(render(resolveExportTheme()), `${stem}.svg`);
+                return `Downloaded the ${noun} as SVG.`;
+              })
+            }
+          >
+            <FileCode2 aria-hidden="true" className="size-4 shrink-0" />
+            <span>
+              Download SVG
+              <span className={MENU_ITEM_HINT_CLASSES}>
+                Vector — sharp at any size
+              </span>
+            </span>
+          </button>
+
+          {/* One sharpness axis governing both PNG rows, not a row per scale:
+              the scale is a property of the export, not a different export. */}
+          <div className="mt-1 border-t border-border/60 px-2.5 pt-2 pb-1">
+            <p className="text-xs text-muted-foreground">PNG sharpness</p>
+            <div className="mt-1.5 flex gap-1">
+              {(Object.keys(PNG_SCALE_BY_SHARPNESS) as Sharpness[]).map(
+                (key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={sharpness === key}
+                    onClick={() => setSharpness(key)}
+                    className={buttonClasses({
+                      variant: sharpness === key ? "primary" : "outline",
+                      size: "sm",
+                      className: "flex-1 justify-center capitalize",
+                    })}
+                  >
+                    {key}
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+
+          {busy || error !== null ? (
             <p
-              className={`mt-1 px-2.5 py-1.5 text-xs ${error === null ? "text-muted-foreground" : "text-destructive"}`}
+              className={`mt-1 flex items-start gap-1.5 px-2.5 py-1.5 text-xs ${error === null ? "text-muted-foreground" : "text-destructive"}`}
             >
-              {error ?? `Rendering ${busy}…`}
+              {error !== null ? (
+                <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5" />
+              ) : null}
+              {error ?? "Preparing…"}
             </p>
           ) : null}
         </div>

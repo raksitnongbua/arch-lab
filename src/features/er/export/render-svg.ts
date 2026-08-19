@@ -19,7 +19,7 @@
 import type { ErLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
-import type { RenderedSvg } from "@/lib/svg-export";
+import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 import { ER, layoutEr } from "../lib/layout";
 import type { LaidErEnd } from "../lib/layout";

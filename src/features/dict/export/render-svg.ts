@@ -21,7 +21,7 @@
 import type { DictLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
-import type { RenderedSvg } from "@/lib/svg-export";
+import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 import { BADGE, COLUMN_LABEL, DICT, layoutDict } from "../lib/layout";
 import type { DictColumn } from "../lib/layout";
