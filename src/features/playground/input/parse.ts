@@ -37,6 +37,7 @@
  */
 
 import type {
+  ErLabFile,
   FlowchartLabFile,
   SequenceLabFile,
   UseCaseLabFile,
@@ -47,6 +48,7 @@ import {
   serializeFlowchartText,
   serializeSequenceText,
   serializeUseCaseText,
+  serializeErText,
 } from "@/features/archtext";
 import {
   detectMermaidUseCase,
@@ -54,6 +56,7 @@ import {
   serializeMermaidFlowchart,
   serializeMermaidSequence,
   serializeMermaidUseCase,
+  serializeMermaidEr,
 } from "@/features/mermaid";
 /* PAST THE BARRELS, DELIBERATELY, and the same exception `dry.md` already
    tolerates for `validate/lib/check.ts`: both feature barrels export React
@@ -84,6 +87,13 @@ import {
   type UseCaseSourceFormat,
 } from "@/features/usecase/input/parse";
 import { USECASE_EXAMPLE } from "@/features/usecase/input/example";
+import {
+  ER_FORMAT_LABEL,
+  parseErInput,
+  type ErParseErrorDetail,
+  type ErSourceFormat,
+} from "@/features/er/input/parse";
+import { ER_EXAMPLE } from "@/features/er/input/example";
 import { detectFormat } from "@/features/viewer/input/detect";
 import {
   importMermaid,
@@ -100,7 +110,7 @@ import {
 /* -------------------------------------------------------------------------- */
 
 /** Which example seeds the pane — the ONLY thing `?d=` varies. */
-export type SeedKind = "c4" | "sequence" | "flowchart" | "usecase";
+export type SeedKind = "c4" | "sequence" | "flowchart" | "usecase" | "er";
 
 /** The languages a C4 document can sit in the pane as. */
 export type C4SourceFormat = "alab" | "json" | "mermaid";
@@ -120,7 +130,8 @@ export type ViewDocument =
       format: FlowchartSourceFormat;
       file: FlowchartLabFile;
     }
-  | { kind: "usecase"; format: UseCaseSourceFormat; file: UseCaseLabFile };
+  | { kind: "usecase"; format: UseCaseSourceFormat; file: UseCaseLabFile }
+  | { kind: "er"; format: ErSourceFormat; file: ErLabFile };
 
 /**
  * Every way the pane's text can fail, each in its native reader's shape.
@@ -137,6 +148,7 @@ export type ViewSourceError =
   // located the failure.
   | FlowchartParseErrorDetail
   | UseCaseParseErrorDetail
+  | ErParseErrorDetail
   | { kind: "unknown-format"; message: string };
 
 export type ViewParseResult =
@@ -153,6 +165,28 @@ export type ToggleFormat = "alab" | "mermaid";
 /* -------------------------------------------------------------------------- */
 
 export function parseViewSource(text: string): ViewParseResult {
+  /* ER GOES FIRST, and it is the only kind that may. The other three arrive
+     as typed verdicts from the sequence detector because their headers are
+     things that detector already has to recognise; ER's two dialects each
+     have an EXACT header no other reader here claims (`archlab 1.0 er` and
+     `erDiagram`), so testing them costs two string comparisons and cannot
+     steal a document from another canvas. Teaching the sequence detector a
+     fifth header would have bought nothing and given it one more grammar to
+     stay in step with. */
+  const er = parseErInput(text);
+  if (er.status === "ok") {
+    return {
+      status: "ok",
+      value: { kind: "er", format: er.value.format, file: er.value.file },
+    };
+  }
+  if (er.error.kind === "parse") {
+    /* Detected as ER and failed INSIDE an ER grammar — located where that
+       parser located it. Anything else means "not ER at all", which is not an
+       error yet: the readers below still get their turn. */
+    return { status: "error", error: er.error };
+  }
+
   const sequence = parseSequenceInput(text);
   if (sequence.status === "ok") {
     return {
@@ -302,8 +336,8 @@ export function parseViewSource(text: string): ViewParseResult {
       // of first lines that would have worked.
       message:
         text.trim() === ""
-          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart` or `archlab 1.0 usecase`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, or a flowchart)."
-          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart` or `graph`.",
+          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase` or `archlab 1.0 er`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, a flowchart, or an erDiagram)."
+          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart`, `graph` or `erDiagram`.",
     },
   };
 }
@@ -334,6 +368,11 @@ export function sourceTextFor(doc: ViewDocument): string {
     return doc.format === "mermaid"
       ? serializeMermaidUseCase(doc.file)
       : serializeUseCaseText(doc.file);
+  }
+  if (doc.kind === "er") {
+    return doc.format === "mermaid"
+      ? serializeMermaidEr(doc.file)
+      : serializeErText(doc.file);
   }
   switch (doc.format) {
     case "alab":
@@ -367,6 +406,11 @@ export function convertedSourceText(
       ? serializeMermaidUseCase(doc.file)
       : serializeUseCaseText(doc.file);
   }
+  if (doc.kind === "er") {
+    return to === "mermaid"
+      ? serializeMermaidEr(doc.file)
+      : serializeErText(doc.file);
+  }
   return to === "mermaid"
     ? serializeMermaidC4(doc.synced.file)
     : doc.synced.aftText;
@@ -394,6 +438,8 @@ export function describeDocument(doc: ViewDocument): string {
       return `a flowchart (${FLOWCHART_FORMAT_LABEL[doc.format]})`;
     case "usecase":
       return `a use-case diagram (${USECASE_FORMAT_LABEL[doc.format]})`;
+    case "er":
+      return `an ER diagram (${ER_FORMAT_LABEL[doc.format]})`;
   }
 }
 
@@ -475,6 +521,19 @@ title "Your system"
   user -- act
   act ..> pay : include
 `,
+  er: `archlab 1.0 er
+title "Your schema"
+
+@er
+  entity customer "Customer"
+    attr id uuid pk
+    attr email string uk
+  entity order "Order"
+    attr id uuid pk
+    attr customer_id uuid fk
+
+  customer ||--o{ order : places
+`,
 };
 
 export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
@@ -482,6 +541,7 @@ export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
   sequence: SEQUENCE_EXAMPLE,
   flowchart: FLOWCHART_EXAMPLE,
   usecase: USECASE_EXAMPLE,
+  er: ER_EXAMPLE,
 };
 
 function mustParse(text: string): ViewDocument {
@@ -501,4 +561,5 @@ export const VIEW_SEED_DOCUMENT: Record<SeedKind, ViewDocument> = {
   sequence: mustParse(SEQUENCE_EXAMPLE),
   flowchart: mustParse(FLOWCHART_EXAMPLE),
   usecase: mustParse(USECASE_EXAMPLE),
+  er: mustParse(ER_EXAMPLE),
 };

@@ -103,6 +103,7 @@ import {
   serializeFlowchartText,
   serializeSequenceText,
   serializeUseCaseText,
+  serializeErText,
 } from "@/features/archtext";
 import {
   MERMAID_FLOWCHART_EXPORT_CAVEAT,
@@ -121,6 +122,7 @@ import {
   UseCaseShareButton,
   UseCaseViewer,
 } from "@/features/usecase";
+import { ErViewer } from "@/features/er";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SequenceExportButton,
@@ -222,6 +224,7 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   sequence: "sequence",
   flowchart: "flowchart",
   usecase: "use-case",
+  er: "ER",
 };
 
 /** The starter buttons' faces, in the order the row renders them. */
@@ -230,6 +233,7 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
   sequence: "Sequence",
   flowchart: "Flowchart",
   usecase: "Use case",
+  er: "ER",
 };
 
 export function ViewPlayground({
@@ -659,7 +663,9 @@ export function ViewPlayground({
               ? serializeSequenceText(doc.file)
               : doc.kind === "flowchart"
                 ? serializeFlowchartText(doc.file)
-                : serializeUseCaseText(doc.file),
+                : doc.kind === "usecase"
+                  ? serializeUseCaseText(doc.file)
+                  : serializeErText(doc.file),
           doc.kind === "c4" &&
             currentDiagramRef.current !== doc.synced.model.rootDiagramId
             ? currentDiagramRef.current
@@ -1295,51 +1301,51 @@ export function ViewPlayground({
                        source pane, so a downward menu would open off-screen. */
                     className="af-glass absolute bottom-full left-0 z-50 mb-1.5 min-w-72 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
                   >
-                    {(["c4", "sequence", "flowchart", "usecase"] as const).map(
-                      (kind) => {
-                        const isCurrent = doc.kind === kind;
-                        return (
-                          <button
-                            key={kind}
-                            type="button"
-                            role="menuitem"
-                            disabled={isCurrent}
-                            onClick={() => {
-                              loadStarter(kind);
-                              setStartersOpen(false);
-                            }}
-                            title={
-                              isCurrent
-                                ? `The pane already holds a ${STARTER_NOUN[kind]} document`
-                                : `Replace the pane with a ${STARTER_NOUN[kind]} starter`
-                            }
-                            className={cn(
-                              "flex w-full items-start gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
-                              "disabled:cursor-not-allowed disabled:opacity-50",
-                            )}
-                          >
-                            <FilePlus2
-                              aria-hidden="true"
-                              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                            />
-                            <span className="flex min-w-0 flex-col">
-                              <span className="text-xs font-medium text-foreground">
-                                {STARTER_BUTTON_LABEL[kind]}
-                                {isCurrent ? " — open now" : ""}
-                              </span>
-                              {/* The job each diagram does. In a MENU it costs
+                    {(
+                      ["c4", "sequence", "flowchart", "usecase", "er"] as const
+                    ).map((kind) => {
+                      const isCurrent = doc.kind === kind;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          role="menuitem"
+                          disabled={isCurrent}
+                          onClick={() => {
+                            loadStarter(kind);
+                            setStartersOpen(false);
+                          }}
+                          title={
+                            isCurrent
+                              ? `The pane already holds a ${STARTER_NOUN[kind]} document`
+                              : `Replace the pane with a ${STARTER_NOUN[kind]} starter`
+                          }
+                          className={cn(
+                            "flex w-full items-start gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
+                            "disabled:cursor-not-allowed disabled:opacity-50",
+                          )}
+                        >
+                          <FilePlus2
+                            aria-hidden="true"
+                            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                          />
+                          <span className="flex min-w-0 flex-col">
+                            <span className="text-xs font-medium text-foreground">
+                              {STARTER_BUTTON_LABEL[kind]}
+                              {isCurrent ? " — open now" : ""}
+                            </span>
+                            {/* The job each diagram does. In a MENU it costs
                                   nothing: a reader who opened this list is
                                   exactly the one asking "which of these?", so
                                   the answer belongs here rather than folded
                                   behind a second control. */}
-                              <span className="text-[11px] leading-tight text-muted-foreground">
-                                {KIND_BLURB[kind]}
-                              </span>
+                            <span className="text-[11px] leading-tight text-muted-foreground">
+                              {KIND_BLURB[kind]}
                             </span>
-                          </button>
-                        );
-                      },
-                    )}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -1495,7 +1501,7 @@ export function ViewPlayground({
                           onAnnounce={setAnnouncement}
                         />
                       </>
-                    ) : (
+                    ) : doc.kind === "usecase" ? (
                       <>
                         <UseCaseShareButton
                           text={text}
@@ -1512,7 +1518,7 @@ export function ViewPlayground({
                           onAnnounce={setAnnouncement}
                         />
                       </>
-                    )}
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setImmersive(!isImmersive)}
@@ -1552,8 +1558,10 @@ export function ViewPlayground({
                     file={doc.file}
                     onAnnounce={setAnnouncement}
                   />
-                ) : (
+                ) : doc.kind === "usecase" ? (
                   <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
+                ) : (
+                  <ErViewer file={doc.file} onAnnounce={setAnnouncement} />
                 )}
               </section>
             )

@@ -1,0 +1,138 @@
+/* ---------------------------------------------------------------------------
+ * ER viewer motion: THE REVEAL, then one quiet idle gesture.
+ *
+ * THE MODEL, and how it differs from its four siblings. A flowchart is a
+ * PATH, so its entrance traces the path and its idle pulse re-walks it. A
+ * use-case diagram has no flow, so nothing there travels. An ER diagram is a
+ * third case: it has DIRECTION but no traffic. A foreign key points
+ * somewhere — that is why the layout puts parents on the left — but nothing
+ * moves along the line, so the reveal may follow the direction while the
+ * resting gesture must not travel.
+ *
+ * THE REVEAL, two phases:
+ *   1. the ENTITIES rise, staggered by `--er-wave` — the entity's COLUMN,
+ *      which is its dependency depth, stamped by the renderer as a
+ *      server-rendered inline style. So the schema assembles parents-first,
+ *      which is the order the geometry already drew: the stagger states no
+ *      ranking the document does not. Capped by `--er-wave-cap` so a wide
+ *      schema compresses instead of trickling (the flowchart's rank-cap
+ *      rule, held identically in TS and here).
+ *   2. the CONNECTORS arrive, on each edge's own clock (`--er-edge`).
+ *      Identifying lines DRAW end to end with a dashoffset; non-identifying
+ *      ones FADE in whole, because they are already dashed and a dashoffset
+ *      draw would overwrite the dash that carries their meaning. That is the
+ *      same rule the flowchart holds for its loop dash and the use-case
+ *      canvas for its «include»/«extend» dependencies.
+ *
+ * THE IDLE GESTURE: the dashed, non-identifying lines MARCH their own dash,
+ * and nothing else moves. The canvas-wide rule beside `@keyframes
+ * af-frame-march` in globals.css is that only a line which is ALREADY dashed
+ * may march — marching a solid line means giving it a dasharray, and a solid
+ * ER line that becomes dashed has changed what it says about identity.
+ *
+ * OPT OUT TWICE, and neither is optional:
+ *   - `prefers-reduced-motion: no-preference` gates every animation here.
+ *     The reveal plays at FIRST PAINT, before any hook has run, so this
+ *     media query is the only thing that can suppress it — a JS-written
+ *     custom property arrives too late.
+ *   - `[data-idle-motion="off"]` stops the ambient march, the app-wide
+ *     toggle every canvas honours.
+ * The resting state — no animation at all — is what a no-JS reader gets, and
+ * it is a complete diagram.
+ *
+ * The durations here are the one definition; `check:er-motion` reads them
+ * and asserts the worst-case reveal stays inside its budget.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --er-entity-rise: 320ms;
+  --er-entity-beat: 60ms;
+  --er-edge-draw: 260ms;
+  --er-edge-beat: 40ms;
+  --er-march: 1100ms;
+}
+
+/* The resting state: everything visible, nothing moving. Anything below only
+   ever overrides this inside the reduced-motion media query, which is what
+   makes stillness the default rather than a fallback. */
+.af-er-entity,
+.af-er-edge {
+  opacity: 1;
+}
+
+.af-er-edge-line {
+  stroke-dashoffset: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-er-entity {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: af-er-rise var(--er-entity-rise) ease-out forwards;
+    animation-delay: calc(
+      min(var(--er-wave, 0), var(--er-wave-cap, 6)) * var(--er-entity-beat)
+    );
+  }
+
+  /* Edges land after the boxes they join — the worst-case entity delay plus
+     the rise, so a line never draws to a box that has not arrived. */
+  .af-er-edge {
+    opacity: 0;
+    animation: af-er-fade var(--er-edge-draw) ease-out forwards;
+    animation-delay: calc(
+      var(--er-wave-cap, 6) * var(--er-entity-beat) + var(--er-entity-rise) +
+        var(--er-edge, 0) * var(--er-edge-beat)
+    );
+  }
+
+  /* An identifying line DRAWS. The dasharray here is the animation's, not
+     the notation's — the line is solid, so borrowing the dash for the draw
+     costs nothing and is removed by the time it rests. */
+  .af-er-edge:not(.af-er-edge-dashed) .af-er-edge-line {
+    stroke-dasharray: 1400;
+    stroke-dashoffset: 1400;
+    animation: af-er-draw var(--er-edge-draw) ease-out forwards;
+    animation-delay: inherit;
+  }
+
+  @keyframes af-er-rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes af-er-fade {
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes af-er-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* The one ambient gesture. Only the already-dashed kind marches. */
+  .af-er-edge-dashed .af-er-edge-line {
+    animation:
+      af-er-fade var(--er-edge-draw) ease-out forwards,
+      af-er-march var(--er-march) linear infinite;
+  }
+
+  [data-idle-motion="off"] .af-er-edge-dashed .af-er-edge-line {
+    animation: af-er-fade var(--er-edge-draw) ease-out forwards;
+  }
+
+  @keyframes af-er-march {
+    to {
+      stroke-dashoffset: -22;
+    }
+  }
+}

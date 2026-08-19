@@ -35,9 +35,11 @@ import {
   serializeFlowchartText,
   serializeSequenceText,
   serializeUseCaseText,
+  serializeErText,
 } from "@/features/archtext";
 import { MERMAID_FLOWCHART_CAVEAT } from "@/features/flowchart/input/parse";
 import { MERMAID_USECASE_CAVEAT } from "@/features/usecase/input/parse";
+import { MERMAID_ER_CAVEAT } from "@/features/er/input/parse";
 import { MERMAID_SEQUENCE_CAVEAT } from "@/features/sequence/input/parse";
 import type { CheckChoice } from "@/features/validate/lib/check";
 import {
@@ -62,6 +64,7 @@ import {
 } from "../lib/render";
 import { readFlowchart } from "./flowchart";
 import { readUseCase } from "./usecase";
+import { readEr } from "./er";
 import { readSequence } from "./sequence";
 
 /**
@@ -444,6 +447,31 @@ export async function createShareLink(
     );
   }
   if (usecase.kind === "parse") return errorResult(usecase.message);
+
+  // ER diagrams, on the same terms and for the same reason as the three
+  // above. Both ER dialects have a real header, so a text that reads as one
+  // can never be a C4 reading, and falling through would answer a share
+  // request with a parse error about the wrong grammar.
+  const er = readEr(source);
+  if (er.status === "ok") {
+    return singleDocumentShareLink(
+      {
+        payload: serializeErText(er.file),
+        title: er.file.metadata.title,
+        sourceFormat: er.format,
+        noun: "an ER diagram",
+        formatTool: "format_er",
+        indivisibleBecause:
+          "An ER diagram is one picture of a schema, with no sub-diagrams " +
+          "to scope a smaller link to.",
+        opensIn: "Opens in the ER playground.",
+        mermaidCaveat: MERMAID_ER_CAVEAT,
+      },
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (er.kind === "parse") return errorResult(er.message);
 
   const read = readSource(source, format);
   if (read.status === "error") return errorResult(read.message);

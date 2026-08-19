@@ -3,6 +3,7 @@
 @import "../features/sequence/styles/sequence-motion.css";
 @import "../features/flowchart/styles/flowchart-motion.css";
 @import "../features/usecase/styles/usecase-motion.css";
+@import "../features/er/styles/er-motion.css";
 @import "../features/mcp/styles/mcp-motion.css";
 
 /* ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import {
   Layers,
   MessagesSquare,
   MousePointerClick,
+  Table2,
   Users,
   Workflow,
 } from "lucide-react";
@@ -107,26 +108,26 @@ const STEPS: readonly Step[] = [
 ];
 
 /**
- * The four notations, in the order the docs and the playground list them.
+ * The five notations, in the order the docs and the playground list them.
  *
  * A FOUR-CARD GRID OF DIAGRAM KINDS USED TO BE THE FIRST THING ON THIS PAGE
  * and was deliberately cut — read the note above before restoring it by
  * reflex, because the reason it was cut no longer holds and that matters. It
  * was cut because two of the four were "coming soon": a newcomer cannot act on
  * a roadmap, and two dashed placeholder cards were a third of the fold. All
- * four are now shipped, in real use, and each one opens in the playground from
+ * five are now shipped, in real use, and each one opens in the playground from
  * here. A card that opens a working diagram is not the card that got cut.
  *
  * It is also the page's answer to a question no other section asks for it. A
  * reader arriving from a search for "sequence diagram as text" or an assistant
- * asked "does arch-lab do flowcharts" needs the kinds NAMED, in prose, on the
+ * asked "does arch-lab do ER diagrams" needs the kinds NAMED, in prose, on the
  * page that ranks — and until this existed the only place that said "flowchart"
  * was a menu item inside the playground, which neither a crawler nor a model
  * summarising the site will ever see. The `body` lines carry the notation's own
  * vocabulary (lifelines, guards, «include») for the same reason: those are the
  * words somebody searches with.
  *
- * `href` seeds the ONE playground rather than pointing at four routes. The
+ * `href` seeds the ONE playground rather than pointing at five routes. The
  * `?d=` values are the short aliases `playground/lib/seed.ts` accepts.
  */
 const KINDS: readonly {
@@ -169,6 +170,13 @@ const KINDS: readonly {
     feature: "Use case diagrams",
     body: "Actors outside a system boundary, associations into it, and «include» or «extend» between cases.",
     href: "/view?d=uc",
+  },
+  {
+    icon: Table2,
+    name: "ER diagram",
+    feature: "Entity-relationship diagrams",
+    body: "Tables with their columns, primary and foreign keys, and crow's-foot cardinality on every relationship.",
+    href: "/view?d=er",
   },
 ];
 
@@ -386,20 +394,24 @@ export default function Home() {
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
         <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-          Four notations
+          Five notations
         </p>
         <h2
           id="kinds-heading"
           className="mt-2 text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
         >
-          One text format, four kinds of diagram
+          One text format, five kinds of diagram
         </h2>
         <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
           The same editor, viewer, share link and export for all of them — and
-          Mermaid pastes straight into any of the four.
+          Mermaid pastes straight into any of the five.
         </p>
 
-        <ul className="mt-9 grid grid-cols-1 gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Three columns at `lg`, not five: five cards across put each one
+            under 200px on a 1024px viewport, which clips the two-word names
+            and leaves the body text three words to a line. Two rows of a
+            readable width beat one row of unreadable ones. */}
+        <ul className="mt-9 grid grid-cols-1 gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
           {KINDS.map((kind) => {
             const Icon = kind.icon;
             return (
