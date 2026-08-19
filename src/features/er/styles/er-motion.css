@@ -239,18 +239,44 @@
   cursor: pointer;
 }
 
-/* A hovered line brightens along its whole length, so the hit area — which is
-   18px wide and invisible — is discoverable: without this the pointer changes
-   over an empty-looking strip and nothing says why. */
-.af-er-edge[role="button"]:hover .af-er-edge-line {
-  stroke: var(--edge-drift);
-  stroke-width: 2.5;
+/* HOVER DOES NOT RESTYLE THE LINE EITHER. It used to recolour the stroke to
+   `--edge-drift` and thicken it to 2.5px, which is the same "a new border
+   appeared" the lit state was asked to stop doing — and it was the one people
+   actually SAW, because a pointer resting anywhere near a connector triggers
+   it. The component's lit state was fixed first and this was missed, which is
+   why the band survived that change.
+
+   The hit area still has to be discoverable — it is 18px wide and invisible,
+   so without any feedback the cursor changes over an empty-looking strip and
+   nothing says why. So hovering lights the PULSE instead: the mark that is
+   already travelling the line gets the glow and the accent, and the line
+   underneath it is untouched. Motion is the signal here as everywhere else on
+   this canvas. */
+@media (prefers-reduced-motion: no-preference) {
+  .af-er-edge[role="button"]:hover .af-er-edge-pulse {
+    stroke: var(--primary);
+    stroke-width: 4;
+    filter: url(#af-er-glow);
+  }
+}
+
+/* With motion suppressed there is no pulse to light, so the hit area needs a
+   static tell — the one place a stroke change is the only option left. Kept
+   deliberately narrow: reduced-motion only. */
+@media (prefers-reduced-motion: reduce) {
+  .af-er-edge[role="button"]:hover .af-er-edge-line {
+    stroke: var(--edge-drift);
+  }
 }
 
 .af-er-edge[role="button"]:focus-visible {
   outline: none;
 }
 
+/* KEYBOARD focus keeps its ring, and this is the one exception on the canvas.
+   A keyboard user has no pointer and no hover, so removing it would leave them
+   with no way to know where they are — an accessibility affordance, not a
+   reading aid, and the two are not interchangeable. */
 .af-er-edge[role="button"]:focus-visible .af-er-edge-line {
   stroke: var(--primary);
   stroke-width: 2.5;

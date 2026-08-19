@@ -255,6 +255,31 @@ console.log("the notation survives the motion");
     !/(stroke|strokeWidth|fill|opacity)=\{[^}]*state === "lit"/.test(diagram),
     "a lit-state paint expression is a border by another name — the signal is the animation",
   );
+  /* THE STROKE-CHANGE HUNT, in the STYLESHEET this time. The component's lit
+     state was cleaned first and the CSS `:hover` rule was missed — and hover
+     was the one people actually saw, because a pointer resting anywhere near a
+     connector triggers it. So both layers are asserted now. */
+  const hoverRules = [...css.matchAll(/:hover[^{]*\{([^}]*)\}/g)]
+    .map((match) => match[1])
+    .join("\n");
+  check(
+    "hovering a connector does not restyle the line it is over",
+    !/\.af-er-edge\[role="button"\]:hover \.af-er-edge-line\s*\{[^}]*stroke-width/.test(
+      css,
+    ),
+    "a hover that thickens the stroke is a border by another name — light the pulse instead",
+  );
+  check(
+    "hover feedback rides the pulse, which is the animated mark",
+    /:hover \.af-er-edge-pulse/.test(css),
+    "the 18px hit strip is invisible; something must say it is there",
+  );
+  check(
+    "reduced motion still gets a hover tell, since it has no pulse to light",
+    /prefers-reduced-motion: reduce[\s\S]*?:hover \.af-er-edge-line/.test(css),
+    "with the pulse suppressed the hit area would give no feedback at all",
+  );
+
   check(
     "focusing a line never dashes it — the lit treatment is a glow, not a restyle",
     !/stroke-dasharray/.test(litRules),
