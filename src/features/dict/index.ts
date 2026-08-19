@@ -47,3 +47,4 @@ export type {
   LaidDictSection,
 } from "./lib/layout";
 export { DictShareButton } from "./share/share-button";
+export { renderDictSvg } from "./export/render-svg";

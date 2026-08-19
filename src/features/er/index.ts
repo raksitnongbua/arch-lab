@@ -47,3 +47,4 @@ export type {
   LaidErRelationship,
 } from "./lib/layout";
 export { ErShareButton } from "./share/share-button";
+export { renderErSvg } from "./export/render-svg";

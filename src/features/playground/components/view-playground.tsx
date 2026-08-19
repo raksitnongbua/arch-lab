@@ -83,6 +83,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses, Button } from "@/components/ui/button";
+import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberedTextarea } from "@/components/ui/numbered-textarea";
@@ -123,8 +124,8 @@ import {
   UseCaseShareButton,
   UseCaseViewer,
 } from "@/features/usecase";
-import { ErShareButton, ErViewer } from "@/features/er";
-import { DictShareButton, DictViewer } from "@/features/dict";
+import { ErShareButton, ErViewer, renderErSvg } from "@/features/er";
+import { DictShareButton, DictViewer, renderDictSvg } from "@/features/dict";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SequenceExportButton,
@@ -1532,23 +1533,38 @@ export function ViewPlayground({
                         />
                       </>
                     ) : doc.kind === "er" ? (
-                      /* Share only, for now: the export pair needs a
-                         from-model SVG renderer per kind (the exporters never
-                         clone the live DOM, so a canvas cannot be exported by
-                         reading it), and that is not written yet. Sharing
-                         needs none of it — the codec packs the TEXT. */
-                      <ErShareButton
-                        text={text}
-                        title={documentTitle(doc)}
-                        format={doc.format}
-                        onAnnounce={setAnnouncement}
-                      />
+                      <>
+                        <ErShareButton
+                          text={text}
+                          title={documentTitle(doc)}
+                          format={doc.format}
+                          onAnnounce={setAnnouncement}
+                        />
+                        {/* From the parsed FILE, not a paneRef: these
+                            exporters render from the model, so they work
+                            mid-focus and with the focus dimming excluded by
+                            construction — the export renderer never had it. */}
+                        <SvgExportButton
+                          render={(theme) => renderErSvg(doc.file, theme)}
+                          title={documentTitle(doc)}
+                          noun="ER diagram"
+                          onAnnounce={setAnnouncement}
+                        />
+                      </>
                     ) : doc.kind === "dict" ? (
-                      <DictShareButton
-                        text={text}
-                        title={documentTitle(doc)}
-                        onAnnounce={setAnnouncement}
-                      />
+                      <>
+                        <DictShareButton
+                          text={text}
+                          title={documentTitle(doc)}
+                          onAnnounce={setAnnouncement}
+                        />
+                        <SvgExportButton
+                          render={(theme) => renderDictSvg(doc.file, theme)}
+                          title={documentTitle(doc)}
+                          noun="data dictionary"
+                          onAnnounce={setAnnouncement}
+                        />
+                      </>
                     ) : null}
                     <button
                       type="button"
