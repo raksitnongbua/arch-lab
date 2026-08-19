@@ -59,6 +59,38 @@ export const DICT = {
   minDescription: 220,
 } as const;
 
+/**
+ * Badge geometry, owned HERE and imported by the canvas rather than declared
+ * in both.
+ *
+ * THE BUG THIS SHAPE PREVENTS: the flags column was sized from the flag names
+ * joined with spaces, while the canvas drew rounded badges with 7px of padding
+ * each — so a three-flag field needed 147px in a 138px column and the last
+ * badge hung outside it. A space is not a badge, and approximating one with
+ * the other under-measures by exactly the padding. The column is measured with
+ * `badgeRunWidth` now, which is the same arithmetic the canvas draws.
+ */
+export const BADGE = {
+  height: 15,
+  radius: 7.5,
+  padX: 7,
+  gap: 5,
+  size: 9,
+  /** Character-width ratio of the badge's bold, slightly tracked label. */
+  ratio: 0.62,
+} as const;
+
+/** The exact width a run of badges occupies — what the canvas draws and what
+ * the column must therefore hold. */
+export function badgeRunWidth(flags: readonly string[]): number {
+  if (flags.length === 0) return 0;
+  return flags.reduce(
+    (sum, flag) =>
+      sum + flag.length * BADGE.size * BADGE.ratio + BADGE.padX * 2 + BADGE.gap,
+    -BADGE.gap,
+  );
+}
+
 /** The five columns, in reading order. `flex` columns share what is left after
  * the measured ones; today only the description flexes. */
 const COLUMNS = ["name", "type", "flags", "description", "source"] as const;
@@ -76,7 +108,16 @@ export const COLUMN_LABEL: Readonly<Record<DictColumn, string>> = {
 const textWidth = (text: string, size: number): number =>
   text.length * size * CHAR_WIDTH_RATIO;
 
-/** Flags as drawn on a row, e.g. `required unique`. */
+/**
+ * Flags as drawn on a row, e.g. `required unique`.
+ *
+ * MEASURED AS ONE HORIZONTAL LINE, because that is how the canvas draws them.
+ * The two disagreed once — the canvas stacked them vertically while this
+ * measured a single line — and the result was a badge drawn into the row
+ * below. The joined string is a deliberate approximation of the badge run: it
+ * over-measures slightly (badge padding is wider than a space), which is the
+ * safe direction for a column width.
+ */
 const flagsText = (field: DictField): string => (field.flags ?? []).join(" ");
 
 /**
@@ -185,11 +226,14 @@ export function layoutDict(file: DictLabFile): DictLayout {
     COLUMN_LABEL.type,
     72,
   );
-  const flagsWidth = measure(
-    every.map((field) => flagsText(field)),
-    COLUMN_LABEL.flags,
-    64,
-  );
+  /* Measured as BADGES, not as text — see `BADGE`'s essay. */
+  const flagsWidth =
+    Math.max(
+      64,
+      textWidth(COLUMN_LABEL.flags, DICT.headerSize),
+      ...every.map((field) => badgeRunWidth(field.flags ?? [])),
+    ) +
+    DICT.padX * 2;
   const sourceWidth = measure(
     every.flatMap((field) =>
       field.source === undefined ? [] : [field.source],

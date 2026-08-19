@@ -12,7 +12,7 @@
  * Run with: pnpm check:dict-layout
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -47,7 +47,7 @@ registerHooks({
 const { parseDictText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutDict, DICT, wrapToWidth } = await import(
+const { layoutDict, DICT, wrapToWidth, badgeRunWidth } = await import(
   pathToFileURL(path.join(ROOT, "src/features/dict/lib/layout.ts")).href
 );
 const { DICT_EXAMPLE } = await import(
@@ -70,6 +70,7 @@ const check = (label, condition, detail) => {
   if (detail) console.error(`    ${detail}`);
 };
 
+const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 const width = (text, size) => text.length * size * CHAR_WIDTH_RATIO;
 const layout = layoutDict(parseDictText(DICT_EXAMPLE));
 const ORDER = ["name", "type", "flags", "description", "source"];
@@ -111,6 +112,54 @@ console.log("cells fit their columns");
     "no cell starts inside the next column",
     overlapping.length === 0,
     overlapping.join(", "),
+  );
+}
+
+console.log("badges fit the column the layout reserved for them");
+
+{
+  /* THE BUG THIS EXISTS FOR: the canvas stacked flag badges VERTICALLY while
+     `lib/layout.ts` measured them as one space-joined horizontal line — so a
+     two-flag field drew a badge into the row below it and a three-flag field
+     into the row below that. Nothing caught it, because each half was
+     self-consistent; only the PAIR was wrong.
+
+     So this recomputes the badge run with the renderer's own geometry (read
+     from the component, not restated) and asserts it fits the column the
+     layout sized. If either side changes shape alone, this fails. */
+  const diagram = read("src/features/dict/components/dict-diagram.tsx");
+  check(
+    "the canvas imports its badge geometry from the layout, not its own copy",
+    /import \{[^}]*\bBADGE\b/.test(diagram),
+    "two copies of the badge padding is how a run came to need 147px in a 138px column",
+  );
+  check(
+    "badges are drawn on ONE line, not stacked into the next row",
+    !/index \* 1[0-9]/.test(diagram),
+    "a per-index vertical offset is how the badges escaped their row",
+  );
+
+  const tooWide = [];
+  for (const section of layout.sections) {
+    for (const field of section.fields) {
+      if (field.flags.length === 0) continue;
+      const drawn = badgeRunWidth(field.flags);
+      if (drawn > layout.columnWidth.flags - DICT.padX * 2 + 0.5) {
+        tooWide.push(
+          `${field.name} (${field.flags.join(" ")}) needs ${Math.round(drawn)}px`,
+        );
+      }
+    }
+  }
+  check(
+    `every badge run fits its column (${layout.columnWidth.flags - DICT.padX * 2}px available)`,
+    tooWide.length === 0,
+    tooWide.join(", "),
+  );
+  check(
+    "the example carries a multi-flag field, so the run is actually exercised",
+    layout.sections.some((s) => s.fields.some((f) => f.flags.length >= 2)),
+    "no field has two flags — this whole section would pass vacuously",
   );
 }
 

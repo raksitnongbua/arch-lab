@@ -27,17 +27,45 @@
 
 import type { DictLabFile } from "@/types";
 
-import { COLUMN_LABEL, DICT, layoutDict } from "../lib/layout";
+import { BADGE, COLUMN_LABEL, DICT, layoutDict } from "../lib/layout";
 import type { DictColumn, LaidDictField } from "../lib/layout";
 
-/** Which token paints each flag. `pii` is the loud one — see the header. */
-const FLAG_PAINT: Readonly<Record<string, { fill: string; text: string }>> = {
+/**
+ * Which token paints each flag.
+ *
+ * SOLID FILLS WITH THEIR OWN FOREGROUND, not a tinted wash. The first cut drew
+ * every badge as its colour at 16% opacity with the SAME colour as the text,
+ * which is a contrast failure by construction — text and background differing
+ * only in alpha can never reach a usable ratio, and on the dark themes the
+ * `required` badge came out as grey-on-grey. Each entry now pairs a fill with
+ * the foreground token that theme already guarantees against it, which is the
+ * pairing `check:themes` measures for every other surface.
+ *
+ * `derived` and `deprecated` are deliberately the QUIET pair — they say
+ * "handle with care", not "look here" — so they take the muted surface rather
+ * than a colour, and are the only two that read as outlines.
+ */
+const FLAG_PAINT: Readonly<
+  Record<string, { fill: string; text: string; outline?: boolean }>
+> = {
   required: { fill: "var(--primary)", text: "var(--primary-foreground)" },
   unique: { fill: "var(--accent)", text: "var(--accent-foreground)" },
-  derived: { fill: "var(--muted)", text: "var(--muted-foreground)" },
-  pii: { fill: "var(--destructive)", text: "var(--primary-foreground)" },
-  deprecated: { fill: "var(--muted)", text: "var(--muted-foreground)" },
+  derived: {
+    fill: "var(--muted)",
+    text: "var(--muted-foreground)",
+    outline: true,
+  },
+  pii: { fill: "var(--destructive)", text: "var(--destructive-foreground)" },
+  deprecated: {
+    fill: "var(--muted)",
+    text: "var(--muted-foreground)",
+    outline: true,
+  },
 };
+
+/* `BADGE` is imported from the layout, not declared here: the column width is
+   measured from the same numbers this draws with, which is the only thing that
+   keeps a badge run inside the column reserved for it. */
 
 function Row({
   field,
@@ -70,30 +98,45 @@ function Row({
 
       {field.cells.map((cell) => {
         if (cell.column === "flags") {
+          /* HORIZONTAL, not stacked. THE BUG THIS FIXES: the badges were drawn
+             one under another while `lib/layout.ts` measured them as a single
+             space-joined line — so a two-flag field drew a badge into the row
+             below it, and a three-flag field into the row below that. The
+             renderer and the measurement have to agree about the shape, and
+             the measurement is the one the column width comes from. */
+          let x = cell.x;
           return (
             <g key={cell.column}>
-              {field.flags.map((flag, index) => {
+              {field.flags.map((flag) => {
                 const paint = FLAG_PAINT[flag] ?? FLAG_PAINT.derived;
-                const width = flag.length * 5.6 + 12;
+                const width =
+                  flag.length * BADGE.size * BADGE.ratio + BADGE.padX * 2;
+                const left = x;
+                x += width + BADGE.gap;
                 return (
                   <g key={flag}>
                     <rect
-                      x={cell.x}
-                      y={field.y + 6 + index * 17}
+                      x={left}
+                      y={field.y + (DICT.lineHeight * 1.15 - BADGE.height / 2)}
                       width={width}
-                      height={14}
-                      rx={7}
+                      height={BADGE.height}
+                      rx={BADGE.radius}
                       fill={paint.fill}
-                      opacity={flag === "pii" ? 0.9 : 0.16}
+                      opacity={paint.outline === true ? 0.5 : 1}
+                      stroke={
+                        paint.outline === true ? "var(--node-border)" : "none"
+                      }
+                      strokeWidth={paint.outline === true ? 1 : 0}
                     />
                     <text
-                      x={cell.x + width / 2}
-                      y={field.y + 13 + index * 17}
+                      x={left + width / 2}
+                      y={field.y + DICT.lineHeight * 1.15}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      fontSize={9}
-                      fontWeight={650}
-                      fill={flag === "pii" ? paint.text : paint.fill}
+                      fontSize={BADGE.size}
+                      fontWeight={700}
+                      letterSpacing={0.2}
+                      fill={paint.text}
                     >
                       {flag}
                     </text>
@@ -176,6 +219,13 @@ export function DictDiagram({
       className={["af-dict-canvas", className].filter(Boolean).join(" ")}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       width="100%"
+      /* CAPPED AT ITS OWN WIDTH. `width="100%"` on an SVG scales the whole
+         drawing to its container, and a dictionary in a wide pane was being
+         blown up ~1.9x — 12.5px type rendering at 24px, which reads as a
+         slide rather than a reference table. Every other canvas here is a
+         DIAGRAM and gains from filling the space; this one is a page of text
+         and gains from staying at its designed size. */
+      style={{ maxWidth: `${layout.width}px` }}
       role="img"
       aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections`}
     >

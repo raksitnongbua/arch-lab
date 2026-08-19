@@ -32,7 +32,14 @@ export {
   type ParsedDict,
 } from "./input/parse";
 export { DICT_EXAMPLE } from "./input/example";
-export { COLUMN_LABEL, DICT, layoutDict, wrapToWidth } from "./lib/layout";
+export {
+  BADGE,
+  badgeRunWidth,
+  COLUMN_LABEL,
+  DICT,
+  layoutDict,
+  wrapToWidth,
+} from "./lib/layout";
 export type {
   DictColumn,
   DictLayout,
