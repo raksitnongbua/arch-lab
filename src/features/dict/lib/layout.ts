@@ -26,7 +26,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import type { DictField, DictLabFile, DictSection } from "@/types";
+import type { DictField, DictLabFile } from "@/types";
 
 import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 
