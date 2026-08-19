@@ -21,6 +21,8 @@ import type { ErLabFile } from "@/types";
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
+import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
+
 import { ER, layoutEr } from "../lib/layout";
 import type { LaidErEnd } from "../lib/layout";
 
@@ -101,13 +103,23 @@ export function renderErSvg(file: ErLabFile, theme: ExportTheme): RenderedSvg {
     push(endGlyph(relationship.toEnd, theme.edge));
     if (relationship.label !== undefined) {
       const label = relationship.label;
+      /* The same plate the canvas draws — node surface, node border,
+         node-foreground text. Sized with the shared character ratio, not a
+         hand-tuned multiplier, so the exported label cannot overhang a plate
+         the screen's does not. */
+      const plate = Math.max(
+        34,
+        label.length * ER.rowSize * CHAR_WIDTH_RATIO + 18,
+      );
       push(
-        `<rect x="${relationship.labelX - label.length * 3.4 - 7}" y="${relationship.labelY - 9.5}" ` +
-          `width="${label.length * 6.8 + 14}" height="19" rx="9.5" fill="${theme.canvas}"/>`,
+        `<rect x="${relationship.labelX - plate / 2}" y="${relationship.labelY - 11}" ` +
+          `width="${plate}" height="22" rx="11" fill="${theme.node}" ` +
+          `stroke="${theme.nodeBorder}" stroke-width="1"/>`,
       );
       push(
         `<text x="${relationship.labelX}" y="${relationship.labelY}" text-anchor="middle" ` +
-          `dominant-baseline="central" font-size="11.5" fill="${theme.mutedForeground}">${esc(label)}</text>`,
+          `dominant-baseline="central" font-size="12" font-weight="500" ` +
+          `fill="${theme.nodeForeground}">${esc(label)}</text>`,
       );
     }
   }

@@ -47,6 +47,8 @@ import type {
   LaidErEntity,
   LaidErRelationship,
 } from "../lib/layout";
+import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
+
 import { ER, layoutEr } from "../lib/layout";
 import type { ErLabFile } from "@/types";
 
@@ -74,6 +76,17 @@ export type ErFocus =
  * wide schema compresses instead of trickling in. The flowchart's rank-cap
  * rule, held here in TS and in the stylesheet's `--er-wave-cap`. */
 const WAVE_CAP = 6;
+
+/**
+ * The plate a relationship label sits on, wide enough for the text.
+ *
+ * Measured with the SAME character ratio the layout measures every other
+ * string with, rather than a hand-tuned multiplier: the previous
+ * `length * 6.8 + 14` was a guess that ran narrow on a long verb, so
+ * "ships to" overhung its own plate on both sides.
+ */
+const labelWidth = (label: string): number =>
+  Math.max(34, label.length * ER.rowSize * CHAR_WIDTH_RATIO + 18);
 
 /** A rectangle rounded on its TOP corners only — the header band, which has
  * to follow the box's own radius above and sit flush on the rule below. */
@@ -423,25 +436,35 @@ function Relationship({
       <EndGlyph end={relationship.toEnd} stroke={stroke} />
       {relationship.label !== undefined ? (
         <g className="af-er-edge-label">
-          {/* A plate the canvas colour, so the verb sits ON the diagram
-              rather than having a line drawn through it. */}
+          {/* A PLATE ON THE NODE SURFACE, outlined, not a bare canvas-coloured
+              patch. Three things made the verb hard to read: it was painted in
+              `--muted-foreground`, which is the token for text that should
+              RECEDE and this text is the only thing naming what a line means;
+              the plate was the canvas colour, so on a canvas with a dot grid
+              or a gradient the label sat on whatever happened to be behind it;
+              and 11.5px with no outline left it competing with the line it
+              covers. It is now the node surface with the node's own border —
+              the same pair every box on this canvas uses, so it reads as a
+              label belonging to the diagram — and the text is
+              `--node-foreground`, which that surface is measured against. */}
           <rect
-            x={relationship.labelX - relationship.label.length * 3.4 - 7}
-            y={relationship.labelY - 9.5}
-            width={relationship.label.length * 6.8 + 14}
-            height={19}
-            rx={9.5}
-            fill="var(--canvas)"
+            x={relationship.labelX - labelWidth(relationship.label) / 2}
+            y={relationship.labelY - 11}
+            width={labelWidth(relationship.label)}
+            height={22}
+            rx={11}
+            fill="var(--node)"
+            stroke={state === "lit" ? "var(--primary)" : "var(--node-border)"}
+            strokeWidth={1}
           />
           <text
             x={relationship.labelX}
             y={relationship.labelY}
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize={11.5}
-            fill={
-              state === "lit" ? "var(--primary)" : "var(--muted-foreground)"
-            }
+            fontSize={12}
+            fontWeight={500}
+            fill={state === "lit" ? "var(--primary)" : "var(--node-foreground)"}
           >
             {relationship.label}
           </text>
