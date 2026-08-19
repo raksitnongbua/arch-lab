@@ -235,13 +235,13 @@ export function DictDiagram({
       className={["af-dict-canvas", className].filter(Boolean).join(" ")}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       width="100%"
-      /* CAPPED AT ITS OWN WIDTH. `width="100%"` on an SVG scales the whole
-         drawing to its container, and a dictionary in a wide pane was being
-         blown up ~1.9x — 12.5px type rendering at 24px, which reads as a
-         slide rather than a reference table. Every other canvas here is a
-         DIAGRAM and gains from filling the space; this one is a page of text
-         and gains from staying at its designed size. */
-      style={{ maxWidth: `${layout.width}px` }}
+      /* NO `maxWidth` HERE ANY MORE. It was capping the drawing at its own
+         designed width, which was right when the viewer had no camera — a
+         dictionary blown up to fill a wide pane reads as a slide rather than
+         a reference table. The viewer now sizes its wrapper from the camera's
+         scale, so the cap would fight it: zooming in would widen the wrapper
+         and the SVG would refuse to follow. Fit is the default, which
+         preserves the behaviour the cap was protecting. */
       role="img"
       aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections`}
     >

@@ -110,7 +110,7 @@ function riseAt(ms: number): CSSProperties {
 }
 
 /**
- * The five kinds, in cycle order, each paired with the phase class that puts it
+ * The six kinds, in cycle order, each paired with the phase class that puts it
  * at its own quarter of the swap. THE FIRST HAS NO CLASS on purpose: it runs the
  * bare `af-hero-kind` clock at zero offset, and inventing an `af-hero-kind-1`
  * that sets `animation-delay: 0s` would be a class whose only job is to restate
@@ -128,6 +128,7 @@ const KINDS: readonly { name: string; phase: string }[] = [
   { name: "Flowchart", phase: "af-hero-kind-3" },
   { name: "Use case", phase: "af-hero-kind-4" },
   { name: "ER", phase: "af-hero-kind-5" },
+  { name: "Dictionary", phase: "af-hero-kind-6" },
 ];
 
 /**
@@ -143,6 +144,7 @@ const SUBTITLES: readonly { name: string; meta: string; phase: string }[] = [
   { name: "Order fulfilment", meta: "6 steps", phase: "af-hero-kind-3" },
   { name: "Food delivery", meta: "2 actors", phase: "af-hero-kind-4" },
   { name: "Shop orders", meta: "3 tables", phase: "af-hero-kind-5" },
+  { name: "Customer API", meta: "4 fields", phase: "af-hero-kind-6" },
 ];
 
 export function HeroDiagram({ className }: { className?: string }) {
@@ -386,6 +388,9 @@ export function HeroDiagram({ className }: { className?: string }) {
           </div>
           <div className="af-hero-kind af-hero-kind-5 absolute inset-0">
             <ErPanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-6 absolute inset-0">
+            <DictPanel />
           </div>
         </div>
       </div>
@@ -1034,6 +1039,174 @@ function MiniActor({
  * the wrong scale. The tradeoff is the one the other panels already accept —
  * this is artwork ABOUT the renderer, and `check:hero` pins the pairing.
  */
+/* -------------------------------------------------------------------------- */
+/* The data dictionary panel                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Four documented fields — the smallest drawing that is recognisably a
+ * DICTIONARY rather than a table of anything.
+ *
+ * What earns its slot: the column HEADINGS (a dictionary is read by column,
+ * and without them this is just rows), a wrapped MEANING (the column that
+ * makes it a dictionary rather than a schema dump), and the flag BADGES
+ * outlined exactly as the real canvas outlines them — including the one solid
+ * `pii`, which is the only mark on that canvas allowed to shout.
+ *
+ * Hand-drawn at fixed coordinates like its five siblings rather than driven
+ * through `layoutDict`: the panel is 320px wide and the real layout solves for
+ * a 940px page, so feeding it a document would produce a correct table at the
+ * wrong scale.
+ */
+function DictPanel() {
+  const COLS = { name: 12, type: 96, rules: 150, meaning: 214 };
+  const rows = [
+    { name: "id", type: "uuid", flags: ["required"], meaning: "Never reused" },
+    { name: "email", type: "string", flags: ["pii"], meaning: "Lowercased" },
+    { name: "name", type: "string", flags: [], meaning: "Free text" },
+    { name: "ltv", type: "numeric", flags: ["derived"], meaning: "Nightly" },
+  ];
+  const badge = (flag: string) => {
+    const solid = flag === "pii";
+    const mark =
+      flag === "required"
+        ? "var(--primary)"
+        : solid
+          ? "var(--destructive)"
+          : "var(--node-meta)";
+    return { solid, mark };
+  };
+
+  return (
+    <svg viewBox="0 0 320 240" className="h-full w-full" aria-hidden="true">
+      <rect
+        x="4"
+        y="34"
+        width="312"
+        height="184"
+        rx="8"
+        fill="var(--node)"
+        stroke="var(--node-border)"
+      />
+      <text
+        x="8"
+        y="22"
+        dominantBaseline="central"
+        fontSize="12"
+        fontWeight="650"
+        fill="var(--foreground)"
+      >
+        Customer
+      </text>
+      {(["name", "type", "rules", "meaning"] as const).map((key) => (
+        <text
+          key={key}
+          x={COLS[key]}
+          y="48"
+          dominantBaseline="central"
+          fontSize="7"
+          fontWeight="600"
+          letterSpacing="0.5"
+          fill="var(--muted-foreground)"
+        >
+          {key === "name"
+            ? "FIELD"
+            : key === "rules"
+              ? "RULES"
+              : key === "type"
+                ? "TYPE"
+                : "MEANING"}
+        </text>
+      ))}
+      <line
+        x1="4"
+        y1="58"
+        x2="316"
+        y2="58"
+        stroke="var(--node-border)"
+        strokeWidth="1"
+      />
+      {rows.map((row, index) => {
+        const y = 76 + index * 36;
+        return (
+          <g key={row.name}>
+            {index > 0 ? (
+              <line
+                x1="4"
+                y1={y - 18}
+                x2="316"
+                y2={y - 18}
+                stroke="var(--node-border)"
+                strokeWidth="1"
+                opacity="0.5"
+              />
+            ) : null}
+            <text
+              x={COLS.name}
+              y={y}
+              dominantBaseline="central"
+              fontSize="8.5"
+              fontWeight="600"
+              fill="var(--node-foreground)"
+            >
+              {row.name}
+            </text>
+            <text
+              x={COLS.type}
+              y={y}
+              dominantBaseline="central"
+              fontSize="8"
+              fill="var(--node-meta)"
+            >
+              {row.type}
+            </text>
+            {row.flags.map((flag) => {
+              const paint = badge(flag);
+              const width = flag.length * 4.6 + 10;
+              return (
+                <g key={flag}>
+                  <rect
+                    x={COLS.rules}
+                    y={y - 6}
+                    width={width}
+                    height="12"
+                    rx="6"
+                    fill={paint.solid ? paint.mark : "none"}
+                    stroke={paint.mark}
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={COLS.rules + width / 2}
+                    y={y}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize="6.5"
+                    fontWeight="700"
+                    fill={
+                      paint.solid ? "var(--destructive-foreground)" : paint.mark
+                    }
+                  >
+                    {flag}
+                  </text>
+                </g>
+              );
+            })}
+            <text
+              x={COLS.meaning}
+              y={y}
+              dominantBaseline="central"
+              fontSize="8"
+              fill="var(--node-foreground)"
+            >
+              {row.meaning}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function ErPanel() {
   /* THE TABLE RECTS ARE DATA, and the connectors are DERIVED from them.
      THE BUG THIS FIXES: the paths and the crow's feet were hand-written

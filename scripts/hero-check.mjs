@@ -51,6 +51,7 @@ const KINDS = [
   { name: "Flowchart", phase: "af-hero-kind-3" },
   { name: "Use case", phase: "af-hero-kind-4" },
   { name: "ER", phase: "af-hero-kind-5" },
+  { name: "Dictionary", phase: "af-hero-kind-6" },
 ];
 
 let assertions = 0;

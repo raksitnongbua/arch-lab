@@ -16,10 +16,21 @@
  * reference document a search engine cannot read is a reference nobody finds.
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type { DictLabFile } from "@/types";
 
+import { Scan, ZoomIn, ZoomOut } from "lucide-react";
+
+import { ZoomMenu } from "@/components/ui/zoom-menu";
+import {
+  ZOOM_BUTTON_CLASSES,
+  ZOOM_IN_TITLE,
+  ZOOM_OUT_TITLE,
+  ZOOM_PILL_CLASSES,
+} from "@/components/ui/zoom-pill";
+import { useCanvasZoom, ZOOM_MAX } from "@/components/ui/use-canvas-zoom";
+import { layoutDict } from "../lib/layout";
 import { DictDiagram } from "./dict-diagram";
 
 export interface DictViewerProps {
@@ -43,9 +54,65 @@ export function DictViewer({
     );
   }, [sections.length, fields, onAnnounce]);
 
+  const size = useMemo(() => layoutDict(file), [file]);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const camera = useCanvasZoom({
+    paneRef,
+    contentWidth: size.width,
+    contentHeight: size.height,
+    onAnnounce,
+  });
+
   return (
-    <div className="h-full w-full overflow-auto p-4">
-      <DictDiagram file={file} className="mx-auto max-w-full" />
+    <div className="relative h-full w-full">
+      <div ref={paneRef} className="h-full w-full overflow-auto p-4">
+        <div style={{ width: size.width * camera.scale }}>
+          <DictDiagram file={file} className="block" />
+        </div>
+      </div>
+      {/* The house zoom pill — the same control, classes and gesture hints
+          every other canvas mounts, so 400% and the pinch behave identically
+          across the product. */}
+      <div className="pointer-events-auto absolute right-3 bottom-3 z-20">
+        <div className={ZOOM_PILL_CLASSES}>
+          <button
+            type="button"
+            onClick={camera.zoomOut}
+            title={ZOOM_OUT_TITLE}
+            aria-label="Zoom out"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <ZoomOut aria-hidden="true" className="size-4" />
+          </button>
+          <ZoomMenu
+            percent={camera.percent}
+            isFit={camera.isFit}
+            maxZoom={ZOOM_MAX}
+            onFit={camera.fit}
+            onZoomTo={camera.zoomTo}
+            title="Zoom level"
+            keyboardHint=""
+          />
+          <button
+            type="button"
+            onClick={camera.zoomIn}
+            title={ZOOM_IN_TITLE}
+            aria-label="Zoom in"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <ZoomIn aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={camera.fit}
+            title="Fit the whole diagram"
+            aria-label="Fit to view"
+            className={ZOOM_BUTTON_CLASSES}
+          >
+            <Scan aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
