@@ -27,5 +27,6 @@ export function seedFromParam(value: string | string[] | undefined): SeedKind {
   if (first === "flow" || first === "flowchart") return "flowchart";
   if (first === "uc" || first === "usecase") return "usecase";
   if (first === "er" || first === "erd") return "er";
+  if (first === "dict" || first === "dictionary") return "dict";
   return "c4";
 }

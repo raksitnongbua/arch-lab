@@ -1,0 +1,54 @@
+/* ---------------------------------------------------------------------------
+ * Dictionary viewer motion: a reveal, and nothing else.
+ *
+ * THE MODEL, and why it is the quietest of the six. Every other canvas has an
+ * ambient gesture because every other canvas draws CONNECTIONS, and a
+ * connector is a thing motion can honestly describe. A dictionary draws no
+ * connections at all — it is a reference document, read the way a table is
+ * read — so an ambient animation here would be motion applied to a page of
+ * text, which is a distraction rather than life. The standing "connectors are
+ * always animated" rule is satisfied vacuously: there are no connectors.
+ *
+ * THE REVEAL: sections rise in document order, staggered by `--dict-wave` and
+ * capped so a long dictionary compresses instead of trickling. Stamped as a
+ * server-rendered inline style, because a first-paint animation cannot wait
+ * for JavaScript.
+ *
+ * OPT OUT TWICE: the media query gates the reveal, and there is no infinite
+ * animation for the idle toggle to stop — which is why no
+ * `[data-idle-motion="off"]` rule appears here. The resting state is the whole
+ * dictionary, which is what a no-JS reader gets.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --dict-section-rise: 300ms;
+  --dict-section-beat: 70ms;
+  --dict-wave-cap: 5;
+}
+
+.af-dict-section {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-dict-section {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: af-dict-rise var(--dict-section-rise) ease-out forwards;
+    animation-delay: calc(
+      min(var(--dict-wave, 0), var(--dict-wave-cap)) * var(--dict-section-beat)
+    );
+  }
+
+  @keyframes af-dict-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

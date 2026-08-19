@@ -104,6 +104,7 @@ import {
   serializeSequenceText,
   serializeUseCaseText,
   serializeErText,
+  serializeDictText,
 } from "@/features/archtext";
 import {
   MERMAID_FLOWCHART_EXPORT_CAVEAT,
@@ -123,6 +124,7 @@ import {
   UseCaseViewer,
 } from "@/features/usecase";
 import { ErViewer } from "@/features/er";
+import { DictViewer } from "@/features/dict";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SequenceExportButton,
@@ -225,6 +227,7 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   flowchart: "flowchart",
   usecase: "use-case",
   er: "ER",
+  dict: "data dictionary",
 };
 
 /** The starter buttons' faces, in the order the row renders them. */
@@ -234,6 +237,7 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
   flowchart: "Flowchart",
   usecase: "Use case",
   er: "ER",
+  dict: "Dictionary",
 };
 
 export function ViewPlayground({
@@ -665,7 +669,9 @@ export function ViewPlayground({
                 ? serializeFlowchartText(doc.file)
                 : doc.kind === "usecase"
                   ? serializeUseCaseText(doc.file)
-                  : serializeErText(doc.file),
+                  : doc.kind === "er"
+                    ? serializeErText(doc.file)
+                    : serializeDictText(doc.file),
           doc.kind === "c4" &&
             currentDiagramRef.current !== doc.synced.model.rootDiagramId
             ? currentDiagramRef.current
@@ -887,7 +893,7 @@ export function ViewPlayground({
             live editor
           </Badge>
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-            C4, sequence, flowchart, use case or ER —{" "}
+            C4, sequence, flowchart, use case, ER or dictionary —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
             JSON, or Mermaid, auto-detected and rendered live. Nothing leaves
             your browser.{" "}
@@ -1302,7 +1308,14 @@ export function ViewPlayground({
                     className="af-glass absolute bottom-full left-0 z-50 mb-1.5 min-w-72 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
                   >
                     {(
-                      ["c4", "sequence", "flowchart", "usecase", "er"] as const
+                      [
+                        "c4",
+                        "sequence",
+                        "flowchart",
+                        "usecase",
+                        "er",
+                        "dict",
+                      ] as const
                     ).map((kind) => {
                       const isCurrent = doc.kind === kind;
                       return (
@@ -1560,8 +1573,10 @@ export function ViewPlayground({
                   />
                 ) : doc.kind === "usecase" ? (
                   <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
-                ) : (
+                ) : doc.kind === "er" ? (
                   <ErViewer file={doc.file} onAnnounce={setAnnouncement} />
+                ) : (
+                  <DictViewer file={doc.file} onAnnounce={setAnnouncement} />
                 )}
               </section>
             )

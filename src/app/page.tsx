@@ -7,6 +7,7 @@ import {
   MessagesSquare,
   MousePointerClick,
   Table2,
+  TableProperties,
   Users,
   Workflow,
 } from "lucide-react";
@@ -108,14 +109,14 @@ const STEPS: readonly Step[] = [
 ];
 
 /**
- * The five notations, in the order the docs and the playground list them.
+ * The six notations, in the order the docs and the playground list them.
  *
  * A FOUR-CARD GRID OF DIAGRAM KINDS USED TO BE THE FIRST THING ON THIS PAGE
  * and was deliberately cut — read the note above before restoring it by
  * reflex, because the reason it was cut no longer holds and that matters. It
  * was cut because two of the four were "coming soon": a newcomer cannot act on
  * a roadmap, and two dashed placeholder cards were a third of the fold. All
- * five are now shipped, in real use, and each one opens in the playground from
+ * six are now shipped, in real use, and each one opens in the playground from
  * here. A card that opens a working diagram is not the card that got cut.
  *
  * It is also the page's answer to a question no other section asks for it. A
@@ -177,6 +178,13 @@ const KINDS: readonly {
     feature: "Entity-relationship diagrams",
     body: "Tables with their columns, primary and foreign keys, and crow's-foot cardinality on every relationship.",
     href: "/view?d=er",
+  },
+  {
+    icon: TableProperties,
+    name: "Data dictionary",
+    feature: "Data dictionaries",
+    body: "Every field with what it means, where its value comes from, which values are legal, and whether it is personal data.",
+    href: "/view?d=dict",
   },
 ];
 
@@ -394,17 +402,17 @@ export default function Home() {
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
         <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-          Five notations
+          Six notations
         </p>
         <h2
           id="kinds-heading"
           className="mt-2 text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
         >
-          One text format, five kinds of diagram
+          One text format, six kinds of document
         </h2>
         <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
           The same editor, viewer, share link and export for all of them — and
-          Mermaid pastes straight into any of the five.
+          Mermaid pastes into five of the six — it has no dictionary notation.
         </p>
 
         {/* Three columns at `lg`, not five: five cards across put each one

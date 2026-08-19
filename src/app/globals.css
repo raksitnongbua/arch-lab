@@ -4,6 +4,7 @@
 @import "../features/flowchart/styles/flowchart-motion.css";
 @import "../features/usecase/styles/usecase-motion.css";
 @import "../features/er/styles/er-motion.css";
+@import "../features/dict/styles/dict-motion.css";
 @import "../features/mcp/styles/mcp-motion.css";
 
 /* ---------------------------------------------------------------------------

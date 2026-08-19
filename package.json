@@ -48,6 +48,8 @@
     "check:er": "node scripts/er-check.mjs",
     "check:er-layout": "node scripts/er-layout-check.mjs",
     "check:er-motion": "node scripts/er-motion-check.mjs",
+    "check:dict": "node scripts/dict-check.mjs",
+    "check:dict-layout": "node scripts/dict-layout-check.mjs",
     "check:sequence-layout": "node scripts/sequence-layout-check.mjs",
     "check:sequence-motion": "node scripts/sequence-motion-check.mjs",
     "check:sequence-collapse": "node scripts/sequence-collapse-check.mjs",

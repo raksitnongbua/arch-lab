@@ -32,6 +32,7 @@ import { formatFlowchart, validateFlowchart } from "./tools/flowchart";
 import { formatSequence, validateSequence } from "./tools/sequence";
 import { formatUseCase, validateUseCase } from "./tools/usecase";
 import { formatEr, validateEr } from "./tools/er";
+import { formatDict, validateDict } from "./tools/dict";
 import { createShareLink } from "./tools/share";
 import { getSyntaxReference, SYNTAX_SECTION_IDS } from "./tools/syntax";
 import { validateModel } from "./tools/validate";
@@ -73,6 +74,13 @@ const ER_SOURCE_SCHEMA = z
   .string()
   .describe("ER diagram text: .alab er, or Mermaid erDiagram.");
 
+const DICT_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Data dictionary text: .alab dict. There is no Mermaid dialect — Mermaid " +
+      "has no dictionary notation.",
+  );
+
 /* `create_share_link` accepts EVERY document kind — see tools/share.ts. */
 const SHARE_SOURCE_SCHEMA = z
   .string()
@@ -81,7 +89,8 @@ const SHARE_SOURCE_SCHEMA = z
       ".alab sequence or Mermaid sequenceDiagram for sequence diagrams; " +
       ".alab flowchart or Mermaid flowchart/graph for flowcharts; " +
       ".alab usecase or Mermaid in the actor/use-case convention for " +
-      "use-case diagrams; .alab er or Mermaid erDiagram for ER diagrams.",
+      "use-case diagrams; .alab er or Mermaid erDiagram for ER diagrams; " +
+      ".alab dict for data dictionaries.",
   );
 
 /**
@@ -241,6 +250,23 @@ export function registerArchLabMcp(server: McpServer): void {
       inputSchema: { source: ER_SOURCE_SCHEMA },
     },
     ({ source }) => formatEr(source),
+  );
+
+  /* ---- data dictionaries -------------------------------------------------- */
+
+  /* A sixth pair. A dictionary's summary is coverage — how many fields are
+     actually documented — which is not a fact any other tool here reports.
+     See tools/dict.ts. */
+  server.registerTool(
+    "validate_dict",
+    { ...config("validate_dict"), inputSchema: { source: DICT_SOURCE_SCHEMA } },
+    ({ source }) => validateDict(source),
+  );
+
+  server.registerTool(
+    "format_dict",
+    { ...config("format_dict"), inputSchema: { source: DICT_SOURCE_SCHEMA } },
+    ({ source }) => formatDict(source),
   );
 
   /* ---- convert ----------------------------------------------------------- */

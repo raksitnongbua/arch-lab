@@ -165,9 +165,7 @@ type ParsedFlowchartExample = Exclude<
  * both read the same source in one request. */
 const cache = new Map<string, ParsedFlowchartExample>();
 
-function parseSource(
-  source: FlowchartExampleSource,
-): ParsedFlowchartExample {
+function parseSource(source: FlowchartExampleSource): ParsedFlowchartExample {
   const cached = cache.get(source.id);
   if (cached !== undefined) return cached;
 

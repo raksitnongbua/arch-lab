@@ -39,11 +39,11 @@ mutation applied to it this sprint. Other tickets import **only** from
 
 ## Files
 
-| File           | Purpose                                                                                                                     |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `store.ts`     | The store: `EditorState` + `EditorActions` per                                                             |
-| `history.ts`   | Snapshot ring buffer, coalescing, `transact()`                                                                              |
+| File           | Purpose                                                                                                               |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `store.ts`     | The store: `EditorState` + `EditorActions` per                                                                        |
+| `history.ts`   | Snapshot ring buffer, coalescing, `transact()`                                                                        |
 | `model.ts`     | Pure helpers: slugs/id de-collision, delete cascade, child-diagram back-pointers, grid/size normalisation, boot model |
-| `selectors.ts` | The pure selectors (`selectActiveDiagram`, `selectBreadcrumb`, …), memoized on object identity                              |
-| `errors.ts`    | `InvalidNodeTypeError`, `MaxDepthError`, `CrossDiagramEdgeError`                                                            |
-| `index.ts`     | The barrel — the only import path for other tickets                                                                         |
+| `selectors.ts` | The pure selectors (`selectActiveDiagram`, `selectBreadcrumb`, …), memoized on object identity                        |
+| `errors.ts`    | `InvalidNodeTypeError`, `MaxDepthError`, `CrossDiagramEdgeError`                                                      |
+| `index.ts`     | The barrel — the only import path for other tickets                                                                   |

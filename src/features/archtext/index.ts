@@ -23,7 +23,7 @@
  */
 
 /*
- * The feature carries ALL FIVE `.alab` document types — the C4 grammar,
+ * The feature carries ALL SIX `.alab` document types — the C4 grammar,
  * the sequence grammar (`./lib/sequence/`), the flowchart grammar
  * (`./lib/flowchart/`), the use-case grammar (`./lib/usecase/`) and the ER
  * grammar (`./lib/er/`). They share the header line, the `!` escape, the
@@ -38,10 +38,13 @@
  *     text ⇄ `UseCaseLabFile`, same lossless and error contract.
  *   - `parseErText` / `serializeErText` — `.alab` ER text ⇄ `ErLabFile`,
  *     same lossless and error contract.
+ *   - `parseDictText` / `serializeDictText` — `.alab` dictionary text ⇄
+ *     `DictLabFile`, same lossless and error contract.
  *   - `detectAlabKind` — which grammar a source belongs to, from its first
  *     meaningful line ("archlab 1.0" = C4, "archlab 1.0 sequence" =
  *     sequence, "archlab 1.0 flowchart" = flowchart, "archlab 1.0 usecase"
- *     = use-case, "archlab 1.0 er" = ER).
+ *     = use-case, "archlab 1.0 er" = ER,
+ *     "archlab 1.0 dict" = data dictionary).
  */
 
 export { parseArchText } from "./lib/parse";
@@ -86,3 +89,6 @@ export {
   LEFT_CARDINALITY,
   RIGHT_CARDINALITY,
 } from "./lib/er/keywords";
+export { parseDictText } from "./lib/dict/parse";
+export { serializeDictText } from "./lib/dict/serialize";
+export { DICT_HEADER_WORD, FIELD_FLAGS } from "./lib/dict/keywords";

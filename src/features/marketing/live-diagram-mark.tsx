@@ -34,15 +34,25 @@ export function LiveDiagramMark(): React.JSX.Element {
     >
       {/* The two nodes: a system and the container it drills into — the same
           nested-rectangle shorthand the demo index's C4 glyph uses. */}
-      <rect className="af-cta-node af-cta-node-a" x="0.9" y="1.4" width="6.4" height="5" rx="1.6" />
-      <rect className="af-cta-node af-cta-node-b" x="8.7" y="9.6" width="6.4" height="5" rx="1.6" />
+      <rect
+        className="af-cta-node af-cta-node-a"
+        x="0.9"
+        y="1.4"
+        width="6.4"
+        height="5"
+        rx="1.6"
+      />
+      <rect
+        className="af-cta-node af-cta-node-b"
+        x="8.7"
+        y="9.6"
+        width="6.4"
+        height="5"
+        rx="1.6"
+      />
       {/* The relationship, drawn as an elbow so it reads as routed rather than
           as a diagonal scratch — the orthogonal routing the real canvases use. */}
-      <path
-        className="af-cta-edge"
-        d="M 4.1 6.4 V 12.1 H 8.7"
-        pathLength={1}
-      />
+      <path className="af-cta-edge" d="M 4.1 6.4 V 12.1 H 8.7" pathLength={1} />
       {/* The spark rides the SAME path, so it can never drift off the line it
           is meant to be travelling. */}
       <path

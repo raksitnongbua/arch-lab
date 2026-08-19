@@ -316,8 +316,7 @@ function Node({
     tagColors,
   );
   const tokens = FLOW_SHAPE_TOKENS[node.shape];
-  const fill =
-    tagColor !== null ? tagFillCss(tagColor) : `var(${tokens.fill})`;
+  const fill = tagColor !== null ? tagFillCss(tagColor) : `var(${tokens.fill})`;
   const stroke = tagColor ?? `var(${tokens.border})`;
   const geometry = shapeGeometry(node);
   // The surface wash (the C4 canvas's polish layer): a per-instance gradient

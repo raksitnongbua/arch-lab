@@ -184,10 +184,7 @@ function renderEdges(file: FlowchartLabFile): string {
   return fence("", rows.join("\n"));
 }
 
-function renderSummary(
-  file: FlowchartLabFile,
-  audit: FlowchartAudit,
-): string {
+function renderSummary(file: FlowchartLabFile, audit: FlowchartAudit): string {
   const byShape = new Map<string, number>();
   for (const node of file.nodes) {
     byShape.set(node.shape, (byShape.get(node.shape) ?? 0) + 1);

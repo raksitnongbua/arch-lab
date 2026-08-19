@@ -124,7 +124,14 @@ export const FOCUS_RING_PAD = 5;
  */
 export type FocusRing =
   | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number }
-  | { kind: "rect"; x: number; y: number; width: number; height: number; rx: number };
+  | {
+      kind: "rect";
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rx: number;
+    };
 
 export function focusRing(element: LaidUseCaseElement): FocusRing {
   const pad = FOCUS_RING_PAD;

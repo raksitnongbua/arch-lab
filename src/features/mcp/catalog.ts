@@ -158,6 +158,15 @@ const ER_SOURCE_ARG: McpArgDoc = {
     "header, so nothing here is guessed.",
 };
 
+const DICT_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The data dictionary text: `.alab` dict (first line `archlab 1.0 dict`) " +
+    `(${MAX_SOURCE_CHARS_TEXT}). There is no Mermaid dialect for this kind — ` +
+    "Mermaid has no dictionary notation, so none was invented.",
+};
+
 /**
  * `create_share_link` reads EVERY document kind — the codec packs arbitrary
  * text and nothing in a link says which grammar wrote it, so its source
@@ -176,7 +185,8 @@ const SHARE_SOURCE_ARG: McpArgDoc = {
     "`flowchart` / `graph`. Use-case diagrams: `.alab` usecase (first line " +
     "`archlab 1.0 usecase`) or Mermaid in the actor/use-case convention. " +
     "ER diagrams: `.alab` er (first line `archlab 1.0 er`) or Mermaid " +
-    "`erDiagram`. The kind is detected from the first meaningful line.",
+    "`erDiagram`. Data dictionaries: `.alab` dict (first line " +
+    "`archlab 1.0 dict`). The kind is detected from the first meaningful line.",
 };
 
 const FORMAT_ARG: McpArgDoc = {
@@ -336,6 +346,29 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "key roles and comment all survive. Only metadata is dropped, and the " +
       "response says which.",
     args: [ER_SOURCE_ARG],
+  },
+  {
+    name: "validate_dict",
+    title: "Validate a data dictionary",
+    description:
+      "Parse a data dictionary and report what a reviewer would: the " +
+      "sections, how many fields each holds, and — the headline number — how " +
+      "many of those fields actually carry a description. Then the coverage " +
+      "audit: fields with no meaning given (a name and a type and no " +
+      "description is a schema dump, not a dictionary), fields with no " +
+      "`source`, fields marked deprecated without saying what replaces them, " +
+      "and an enumeration of every field flagged `pii`. Reads `.alab` dict " +
+      "documents (first line `archlab 1.0 dict`).",
+    args: [DICT_SOURCE_ARG],
+  },
+  {
+    name: "format_dict",
+    title: "Format a data dictionary canonically",
+    description:
+      "Rewrite dictionary text as canonical `.alab` dict — the exact bytes " +
+      "arch-lab would write, so diffs stay minimal. There is no Mermaid " +
+      "import for this kind: Mermaid has no dictionary notation.",
+    args: [DICT_SOURCE_ARG],
   },
   {
     name: "convert_model",
@@ -580,6 +613,15 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
       "reference, tables with no primary key, and tables joined to nothing. " +
       "The one kind whose Mermaid conversion is two-way and total.",
     tools: toolsNamed("validate_er", "format_er"),
+  },
+  {
+    id: "dict",
+    title: "Data dictionaries",
+    blurb:
+      "The same check-and-format loop for what a field MEANS and where its " +
+      "value comes from — plus the number no other tool here reports: how " +
+      "many of your fields are actually documented.",
+    tools: toolsNamed("validate_dict", "format_dict"),
   },
   {
     id: "inspect",
