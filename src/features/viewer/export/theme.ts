@@ -36,6 +36,17 @@ export interface ExportTheme {
   edgeDrift: string;
   /** `--primary`, for the resting comet's head and halo in an animated export. */
   primary: string;
+  /**
+   * `--accent`, and the `--destructive` pair. Added for the dictionary
+   * exporter's flag badges, which are the first export surface to paint with
+   * either: `unique` is drawn in the accent and `pii` is the one solid badge,
+   * whose fill and label are a pair the theme already guarantees against each
+   * other. Resolved here rather than approximated at the call site, so an
+   * exported dictionary carries the same badge colours the reader saw.
+   */
+  accent: string;
+  destructive: string;
+  destructiveForeground: string;
   mutedForeground: string;
   /** Secondary text ON node fills — `--node-meta`, not the panel muted. */
   nodeMeta: string;
@@ -65,6 +76,9 @@ const TOKEN_VARS = {
   mutedForeground: "--muted-foreground",
   nodeMeta: "--node-meta",
   foreground: "--foreground",
+  accent: "--accent",
+  destructive: "--destructive",
+  destructiveForeground: "--destructive-foreground",
 } as const;
 
 const ROLE_TOKEN_VARS: Record<NodeColorRole, { fill: string; border: string }> =
@@ -173,6 +187,12 @@ export function resolveExportTheme(): ExportTheme {
     // Falls back to the plain edge ink: an export that cannot resolve the mix
     // shows the drift in the connector's own colour, never a stray literal.
     primary: resolve(TOKEN_VARS.primary, "#4f46e5"),
+    accent: resolve(TOKEN_VARS.accent, "#22b8cf"),
+    destructive: resolve(TOKEN_VARS.destructive, "#e5484d"),
+    destructiveForeground: resolve(
+      TOKEN_VARS.destructiveForeground,
+      "#ffffff",
+    ),
     edgeDrift: resolveExpression(
       TOKEN_VARS.edgeDrift,
       resolve(TOKEN_VARS.edge, "#7d828f"),

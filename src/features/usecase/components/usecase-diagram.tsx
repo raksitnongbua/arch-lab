@@ -356,20 +356,20 @@ function HitRect({
   return (
     <>
       <rect
-      className="af-uc-hit cursor-pointer focus-visible:outline-none"
-      x={element.x}
-      y={element.y}
-      width={element.width}
-      height={element.height}
-      fill="transparent"
-      role="button"
-      tabIndex={0}
-      aria-label={ariaLabel}
-      onClick={(event) => {
-        event.stopPropagation();
-        onFocus();
-      }}
-      onKeyDown={onKeyDown}
+        className="af-uc-hit cursor-pointer focus-visible:outline-none"
+        x={element.x}
+        y={element.y}
+        width={element.width}
+        height={element.height}
+        fill="transparent"
+        role="button"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        onClick={(event) => {
+          event.stopPropagation();
+          onFocus();
+        }}
+        onKeyDown={onKeyDown}
       />
       {/* The focus ring, FOLLOWING THE SHAPE — a bigger ellipse for a use
           case, a capsule for an actor. It sits AFTER the hit target because

@@ -88,6 +88,9 @@ const {
   parseMermaidUseCase,
   serializeMermaidUseCase,
   detectMermaidUseCase,
+  parseMermaidEr,
+  serializeMermaidEr,
+  detectMermaidEr,
   MermaidParseError,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/mermaid/index.ts")).href
@@ -97,6 +100,8 @@ const {
   serializeFlowchartText,
   parseUseCaseText,
   serializeUseCaseText,
+  parseErText,
+  serializeErText,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
@@ -1506,6 +1511,202 @@ expectUseCaseError(
     ok(
       "the refused-shape error points at the bracket itself (line 2, column 6)",
     );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Mermaid erDiagram <-> .alab er                                          */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The ER dialect is the only one here whose conversion is TWO-WAY AND TOTAL
+ * over the diagram's substance, because Mermaid has a real `erDiagram` rather
+ * than a convention someone writes in a flowchart. These assertions exist to
+ * keep that claim true — every one of them is a way "total" could quietly
+ * become "lossy" without anyone noticing:
+ *
+ *   - a composite key losing half of itself (`PK,FK` read as `PK`) — a real
+ *     bug this suite caught, and the reason `keys` is an array at all;
+ *   - a column type Mermaid's own parser cannot hold (`numeric(10,2)`) being
+ *     emitted verbatim, which produces an export that looks fine until
+ *     something tries to render it;
+ *   - an unlabelled relationship coming back labelled `""`, because Mermaid
+ *     requires a label where `.alab` makes it optional.
+ */
+
+console.log("\nmermaid erDiagram <-> .alab er");
+
+const ER_ALAB = `archlab 1.0 er
+title "Order database"
+
+@er
+  entity customer "Customer"
+    attr id uuid pk
+    attr email string uk
+      desc "Login identity"
+  entity order_line "Order line"
+    attr id uuid pk
+    attr order_id uuid pk fk
+    attr tags text[]
+  entity audit "Audit"
+
+  customer ||--o{ order_line : places
+  order_line }o..|| audit
+`;
+
+{
+  const model = parseErText(ER_ALAB);
+  const mermaid = serializeMermaidEr(model);
+
+  check(
+    "an exported erDiagram is detected as one",
+    detectMermaidEr(mermaid),
+    mermaid,
+  );
+  check(
+    "a use-case reading is not offered for an erDiagram",
+    !detectMermaidUseCase(mermaid),
+    "detectMermaidUseCase claimed an erDiagram",
+  );
+
+  const back = parseMermaidEr(mermaid);
+  const backText = serializeErText(back);
+
+  /* The metadata line is the documented loss (Mermaid carries no created /
+     updated), so the comparison is against the same document re-stamped —
+     everything BELOW the header must survive exactly. */
+  const body = (text) => text.slice(text.indexOf("@er"));
+  check(
+    "every entity, column, key role and relationship survives the trip out and back",
+    body(backText) === body(ER_ALAB),
+    firstDiff(body(ER_ALAB), body(backText)),
+  );
+
+  const composite = back.entities
+    .find((e) => e.id === "order_line")
+    .attributes.find((a) => a.name === "order_id");
+  check(
+    "a composite key keeps BOTH roles through Mermaid (`PK,FK`, not `PK`)",
+    JSON.stringify(composite.keys) === '["pk","fk"]',
+    `got ${JSON.stringify(composite.keys)}`,
+  );
+
+  const unlabelled = back.relationships.find((r) => r.to === "audit");
+  check(
+    'an unlabelled relationship comes back unlabelled, not labelled ""',
+    unlabelled.label === undefined,
+    `got ${JSON.stringify(unlabelled.label)}`,
+  );
+
+  check(
+    "a column description rides Mermaid's comment slot",
+    back.entities.find((e) => e.id === "customer").attributes[1].description ===
+      "Login identity",
+    JSON.stringify(back.entities.find((e) => e.id === "customer").attributes),
+  );
+
+  check(
+    "an array type survives Mermaid's `[]`",
+    back.entities.find((e) => e.id === "order_line").attributes[2].type ===
+      "text[]",
+    mermaid,
+  );
+}
+
+{
+  /* Mermaid's attribute grammar is alphanumerics and `[]` only. A SQL type
+     it cannot spell must be SUBSTITUTED, not emitted verbatim — an export
+     Mermaid refuses to render is worse than a visibly approximated one. */
+  const model = parseErText(
+    `archlab 1.0 er\ntitle "T"\n\n@er\n  entity a "A"\n    attr total numeric(10,2)\n`,
+  );
+  const mermaid = serializeMermaidEr(model);
+  check(
+    "a SQL type Mermaid cannot hold is substituted, not emitted verbatim",
+    !mermaid.includes("numeric(10,2)") && mermaid.includes("numeric_10_2"),
+    mermaid,
+  );
+  check(
+    "the substituted export still parses as Mermaid",
+    (() => {
+      try {
+        parseMermaidEr(mermaid);
+        return true;
+      } catch (error) {
+        return error.message;
+      }
+    })() === true,
+    "the emitter wrote a document its own importer refuses",
+  );
+}
+
+{
+  /* Hand-written Mermaid, in the spelling a person actually types: bare
+     entity names, no alias, a lowercase key role. */
+  const HAND = `erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    CUSTOMER {
+        string name PK
+        string email
+    }
+`;
+  const model = parseMermaidEr(HAND);
+  check(
+    "hand-written Mermaid imports in first-mention order",
+    model.entities.map((e) => e.id).join(",") === "CUSTOMER,ORDER",
+    model.entities.map((e) => e.id).join(","),
+  );
+  check(
+    "an entity mentioned before its block still gets its columns",
+    model.entities[0].attributes.length === 2,
+    JSON.stringify(model.entities[0]),
+  );
+  check(
+    "an entity that never gets a block carries no columns",
+    model.entities[1].attributes === undefined,
+    JSON.stringify(model.entities[1]),
+  );
+}
+
+for (const [what, source, pattern] of [
+  [
+    "a cardinality glyph outside the vocabulary",
+    "erDiagram\n  A ||--xx B : r\n",
+    /cardinality/i,
+  ],
+  [
+    "a key role outside PK/FK/UK",
+    "erDiagram\n  A {\n    string id PRIMARY\n  }\n",
+    /key role/i,
+  ],
+  [
+    "a second block for one entity",
+    "erDiagram\n  A {\n    string id\n  }\n  A {\n    string x\n  }\n",
+    /already has a block/i,
+  ],
+  [
+    "a duplicate column",
+    "erDiagram\n  A {\n    string id\n    uuid id\n  }\n",
+    /duplicate column/i,
+  ],
+  [
+    "a relationship with no label, which Mermaid requires",
+    "erDiagram\n  A ||--o{ B\n",
+    /label/i,
+  ],
+]) {
+  let error = null;
+  try {
+    parseMermaidEr(source);
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    `${what} is refused by name`,
+    error !== null &&
+      error instanceof MermaidParseError &&
+      pattern.test(error.message),
+    error === null ? "it parsed" : error.message,
+  );
 }
 
 /* ----------------------------------------------------------------------- */

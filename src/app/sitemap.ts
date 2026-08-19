@@ -4,6 +4,8 @@ import { publicOrigin } from "@/features/mcp/lib/origin";
 import { listFlowchartExampleIds } from "@/features/flowchart/service/example-service";
 import { listSequenceExampleIds } from "@/features/sequence/service/example-service";
 import { listUseCaseExampleIds } from "@/features/usecase/service/example-service";
+import { listErExampleIds } from "@/features/er/service/example-service";
+import { listDictExampleIds } from "@/features/dict/service/example-service";
 import { listViewerModelIds } from "@/features/viewer";
 
 /**
@@ -36,7 +38,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/faq",
   ];
 
-  // All FOUR example registries, so a new example is in the sitemap the moment
+  // All SIX example registries, so a new example is in the sitemap the moment
   // it is registered — the same reason the model routes are derived rather than
   // typed out above.
   const modelRoutes = listViewerModelIds().map((id) => `/view/${id}`);
@@ -46,6 +48,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const flowchartRoutes = listFlowchartExampleIds().map(
     (id) => `/view/flowchart/${id}`,
   );
+  const erRoutes = listErExampleIds().map((id) => `/view/er/${id}`);
+  const dictRoutes = listDictExampleIds().map((id) => `/view/dict/${id}`);
   const usecaseRoutes = listUseCaseExampleIds().map(
     (id) => `/view/usecase/${id}`,
   );
@@ -56,6 +60,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...sequenceRoutes,
     ...flowchartRoutes,
     ...usecaseRoutes,
+    ...erRoutes,
+    ...dictRoutes,
   ].map((path) => ({
     url: `${origin}${path === "" ? "/" : path}`,
     // The homepage is the page search should surface first; everything else

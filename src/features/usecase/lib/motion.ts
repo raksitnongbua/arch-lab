@@ -131,9 +131,7 @@ export function usecaseEdgeAtMs(): number {
  */
 export function usecaseRevealTotalMs(): number {
   const d = USECASE_DURATIONS;
-  return (
-    usecaseEdgeAtMs() + Math.max(d.edgeDraw, d.headDelay + d.headFade)
-  );
+  return usecaseEdgeAtMs() + Math.max(d.edgeDraw, d.headDelay + d.headFade);
 }
 
 /**
@@ -163,7 +161,6 @@ export function usecaseBreathPhase(index: number): number {
  */
 export function usecaseFirstLightMs(): number {
   return (
-    USECASE_DURATIONS.idleStart +
-    Math.round(USECASE_DURATIONS.breathPeriod / 2)
+    USECASE_DURATIONS.idleStart + Math.round(USECASE_DURATIONS.breathPeriod / 2)
   );
 }

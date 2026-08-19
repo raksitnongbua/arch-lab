@@ -76,3 +76,49 @@ deploy.
   `.gitignore` covers dotless `env` variants specifically because
   `node scripts/gen-share-keys.mjs > env` is one missing dot from `.env` and
   `git add -A` would have staged it. Do not weaken those lines.
+
+## Why changes here keep going wrong, and the four habits that prevent it
+
+Written after a run of avoidable defects on one branch. Every one shipped
+green: the build passed, the checks passed, and the bug was visible to the
+person who opened the page. They share four causes, and each has a cheap
+habit that would have caught it.
+
+**1. Writing a helper instead of finding the one that exists.** A second PNG
+rasteriser, a second `downloadBlob`, a second `RenderedSvg` type — all written
+from scratch next to working versions in `features/viewer/export/download`.
+`dry.md` already says to search first; the failure mode is not disagreeing with
+that rule, it is *not remembering to apply it while mid-flow*.
+→ **Before writing any function, grep the repo for its BODY, not its name.**
+Two minutes, every time, no exceptions for "this is obviously new".
+
+**2. Inventing a variant of a component that already has an agreed shape.** An
+export menu with three PNG rows and no Copy row, beside four exporters that all
+use one sharpness axis and a Copy row. Nothing was broken; it was just
+*different*, which a user reads as a bug.
+→ **When adding the Nth of something, open the (N-1)th and match it.** Deviate
+only where the new case genuinely differs, and say so in a comment.
+
+**3. Verifying by reasoning instead of by measuring.** A hero connector that
+started in mid-air, key badges rendered onto the row above, badge runs 9px
+wider than their column — all "checked" by reading the code.
+→ **If it has coordinates, compute them in a scratch script and assert the
+relationship** (inside, left-of, non-overlapping). If a check cannot fail,
+break the code deliberately and watch it fail before trusting it.
+
+**4. Two halves of one thing, each self-consistent, that disagree.** This is
+the most expensive class here and it caused most of the list: the canvas
+stacked badges while the layout measured them in a row; the resolver knew four
+registries while six existed; a class list lost a space so CSS matched nothing.
+Each half was correct alone.
+→ **When two modules must agree, make one derive from the other** — import the
+table, read the directory, compute from the shared constant. Where they truly
+cannot share (CSS cannot import TS), a `check:*` script must pin the pair, and
+that check must be written from the FILESYSTEM or the DATA, never from a
+hand-listed set of names. A hardcoded list cannot notice the thing it has never
+heard of; three checks in this repo passed for exactly that reason while the
+feature under them was broken.
+
+**And one about reporting.** A step is done when a user can see it, not when it
+typechecks. Say which parts are unstarted, by name, every time — the failure is
+never claiming too much, it is going quiet about what is missing.

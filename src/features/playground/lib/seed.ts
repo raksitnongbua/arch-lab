@@ -16,14 +16,17 @@ import type { SeedKind } from "../input/parse";
 export const VIEW_SEED_PARAM = "d";
 
 /** `?d=seq`/`?d=sequence` seed the sequence example, `?d=flow`/`?d=flowchart`
- * the flowchart one, `?d=uc`/`?d=usecase` the use-case one; anything else
- * seeds C4. Both spellings per kind because the short one is what gets
- * minted (`/view/seq`, `/view/flow`, `/view/uc` forward to it) and the long
- * one is what gets typed from memory. */
+ * the flowchart one, `?d=uc`/`?d=usecase` the use-case one, `?d=er`/`?d=erd`
+ * the ER one; anything else seeds C4. Both spellings per kind because the
+ * short one is what gets minted (`/view/seq`, `/view/flow`, `/view/uc`,
+ * `/view/er` forward to it) and the long one is what gets typed from
+ * memory. */
 export function seedFromParam(value: string | string[] | undefined): SeedKind {
   const first = Array.isArray(value) ? value[0] : value;
   if (first === "seq" || first === "sequence") return "sequence";
   if (first === "flow" || first === "flowchart") return "flowchart";
   if (first === "uc" || first === "usecase") return "usecase";
+  if (first === "er" || first === "erd") return "er";
+  if (first === "dict" || first === "dictionary") return "dict";
   return "c4";
 }

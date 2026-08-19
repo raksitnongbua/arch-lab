@@ -40,11 +40,61 @@ grammars are refused by the old parsers with a message naming the right one.
 - The grammar refuses what the diagram cannot mean: an actor inside the
   boundary, an actor–actor association, a mixed-kind generalization.
 
+### Added — ER diagrams
+
+- An `er` document type: `archlab 1.0 er`, with entities carrying their columns
+  (name, type, and `pk` / `fk` / `uk` key roles), and crow's-foot cardinality at
+  both ends of every relationship. Open one at `/view?d=er`.
+- **Two-way, total Mermaid conversion** — the only kind with one. Mermaid has a
+  real `erDiagram`, so both cardinalities, the solid/dashed line and every
+  column with its type, key roles and comment survive in both directions. Only
+  metadata is dropped, and a SQL type Mermaid cannot spell is substituted rather
+  than emitted verbatim.
+- Layout in columns by dependency depth: parents left, the tables that exist
+  only because something else does on the right. Cycles are ordinary in a
+  schema, so two tables referencing each other simply share a column.
+- Click a table to see what it joins, or a relationship to read its cardinality
+  in words — "exactly one customer places zero or more orders" — with the
+  solid/dashed distinction spelled out. Clicking the canvas clears it.
+- `validate_er` and `format_er` on the MCP server, reporting what a parse
+  cannot see: foreign-key columns with no relationship line saying what they
+  reference, tables with no primary key, tables joined to nothing, self-joins.
+- Share links, SVG and PNG export, two bundled examples on `/demo`, and a fifth
+  panel in the home page's hero.
+
+### Added — data dictionaries
+
+- A `dict` document type: `archlab 1.0 dict`, with `section` blocks of `field`
+  lines carrying a type, the flags `required` / `unique` / `derived` / `pii` /
+  `deprecated`, and — the point of the document — what each field MEANS, where
+  its value comes from, which values are legal, and an example. Open one at
+  `/view?d=dict`.
+- It renders as a table, not a diagram: columns sized from their widest cell,
+  meanings wrapped rather than truncated, and one shared column grid across
+  every section so the document reads as one table with headings in it.
+- Mermaid has no dictionary notation, so there is no converter and none was
+  invented. The format toggle says so rather than offering an option that
+  cannot act.
+- `validate_dict` and `format_dict` on the MCP server. Its audit is a COVERAGE
+  report rather than a defect list — a dictionary cannot be wrong the way a
+  flowchart can, only incomplete — so it leads with how many fields carry a
+  description, then names the undescribed and unsourced ones, deprecated fields
+  with no replacement named, and every field flagged `pii`.
+- Share links, SVG and PNG export, and two bundled examples on `/demo`,
+  including an event envelope — no tables, no cardinality — which is the case
+  that makes a dictionary a different document from an ER diagram.
+
 ### Added — everywhere
 
 - Line numbers on `/validate`'s source pane, which had been left out when
   `/view` and `/syntax` got them — on the one page whose whole output is "line 12,
   column 4".
+- The ER and dictionary canvases zoom, and drag to pan, with the same pill,
+  the same clamps and the same pinch gesture every other canvas has.
+- The home page's hero cycles all six notations.
+- Export is one menu across every kind now: Copy PNG, Download PNG and
+  Download SVG, with a single sharpness axis, so the two new kinds do not
+  export differently from the four older ones.
 - A 404 page. It leads with the bundled examples rather than the home page,
   because most 404s here are a link to a diagram id that has been renamed.
 

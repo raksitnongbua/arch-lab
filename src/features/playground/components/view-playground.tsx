@@ -83,6 +83,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses, Button } from "@/components/ui/button";
+import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberedTextarea } from "@/components/ui/numbered-textarea";
@@ -103,6 +104,8 @@ import {
   serializeFlowchartText,
   serializeSequenceText,
   serializeUseCaseText,
+  serializeErText,
+  serializeDictText,
 } from "@/features/archtext";
 import {
   MERMAID_FLOWCHART_EXPORT_CAVEAT,
@@ -121,6 +124,8 @@ import {
   UseCaseShareButton,
   UseCaseViewer,
 } from "@/features/usecase";
+import { ErShareButton, ErViewer, renderErSvg } from "@/features/er";
+import { DictShareButton, DictViewer, renderDictSvg } from "@/features/dict";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SequenceExportButton,
@@ -222,6 +227,8 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   sequence: "sequence",
   flowchart: "flowchart",
   usecase: "use-case",
+  er: "ER",
+  dict: "data dictionary",
 };
 
 /** The starter buttons' faces, in the order the row renders them. */
@@ -230,6 +237,8 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
   sequence: "Sequence",
   flowchart: "Flowchart",
   usecase: "Use case",
+  er: "ER",
+  dict: "Dictionary",
 };
 
 export function ViewPlayground({
@@ -659,7 +668,11 @@ export function ViewPlayground({
               ? serializeSequenceText(doc.file)
               : doc.kind === "flowchart"
                 ? serializeFlowchartText(doc.file)
-                : serializeUseCaseText(doc.file),
+                : doc.kind === "usecase"
+                  ? serializeUseCaseText(doc.file)
+                  : doc.kind === "er"
+                    ? serializeErText(doc.file)
+                    : serializeDictText(doc.file),
           doc.kind === "c4" &&
             currentDiagramRef.current !== doc.synced.model.rootDiagramId
             ? currentDiagramRef.current
@@ -881,7 +894,7 @@ export function ViewPlayground({
             live editor
           </Badge>
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-            C4, sequence, flowchart or use case —{" "}
+            C4, sequence, flowchart, use case, ER or dictionary —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
             JSON, or Mermaid, auto-detected and rendered live. Nothing leaves
             your browser.{" "}
@@ -1058,23 +1071,37 @@ export function ViewPlayground({
                     >
                       {(["alab", "mermaid"] as const).map((format) => {
                         const current = doc.format === format;
+                        /* MERMAID HAS NO DICTIONARY NOTATION, so the option
+                           cannot act on this document — clicking it had
+                           nothing to convert to. Disabled and titled with the
+                           reason rather than hidden: a control that vanishes
+                           for one kind reads as a bug in the page, where a
+                           disabled one that says why reads as an answer. */
+                        const unsupported =
+                          format === "mermaid" && doc.kind === "dict";
                         return (
                           <button
                             key={format}
                             type="button"
                             role="radio"
                             aria-checked={current}
+                            aria-disabled={unsupported}
+                            disabled={unsupported}
                             onClick={() => convertPane(format)}
                             title={
-                              current
-                                ? `The pane is ${format === "alab" ? ".alab" : "Mermaid"}`
-                                : `Rewrite the pane as ${format === "alab" ? ".alab" : "Mermaid"}`
+                              unsupported
+                                ? "Mermaid has no data-dictionary notation, so there is nothing to convert to"
+                                : current
+                                  ? `The pane is ${format === "alab" ? ".alab" : "Mermaid"}`
+                                  : `Rewrite the pane as ${format === "alab" ? ".alab" : "Mermaid"}`
                             }
                             className={cn(
                               "rounded-md px-2 py-0.5 font-mono text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                              current
-                                ? "bg-secondary font-medium text-foreground"
-                                : "text-muted-foreground hover:text-foreground",
+                              unsupported
+                                ? "cursor-not-allowed text-muted-foreground/40"
+                                : current
+                                  ? "bg-secondary font-medium text-foreground"
+                                  : "text-muted-foreground hover:text-foreground",
                             )}
                           >
                             {format === "alab" ? ".alab" : "Mermaid"}
@@ -1295,51 +1322,58 @@ export function ViewPlayground({
                        source pane, so a downward menu would open off-screen. */
                     className="af-glass absolute bottom-full left-0 z-50 mb-1.5 min-w-72 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
                   >
-                    {(["c4", "sequence", "flowchart", "usecase"] as const).map(
-                      (kind) => {
-                        const isCurrent = doc.kind === kind;
-                        return (
-                          <button
-                            key={kind}
-                            type="button"
-                            role="menuitem"
-                            disabled={isCurrent}
-                            onClick={() => {
-                              loadStarter(kind);
-                              setStartersOpen(false);
-                            }}
-                            title={
-                              isCurrent
-                                ? `The pane already holds a ${STARTER_NOUN[kind]} document`
-                                : `Replace the pane with a ${STARTER_NOUN[kind]} starter`
-                            }
-                            className={cn(
-                              "flex w-full items-start gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
-                              "disabled:cursor-not-allowed disabled:opacity-50",
-                            )}
-                          >
-                            <FilePlus2
-                              aria-hidden="true"
-                              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                            />
-                            <span className="flex min-w-0 flex-col">
-                              <span className="text-xs font-medium text-foreground">
-                                {STARTER_BUTTON_LABEL[kind]}
-                                {isCurrent ? " — open now" : ""}
-                              </span>
-                              {/* The job each diagram does. In a MENU it costs
+                    {(
+                      [
+                        "c4",
+                        "sequence",
+                        "flowchart",
+                        "usecase",
+                        "er",
+                        "dict",
+                      ] as const
+                    ).map((kind) => {
+                      const isCurrent = doc.kind === kind;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          role="menuitem"
+                          disabled={isCurrent}
+                          onClick={() => {
+                            loadStarter(kind);
+                            setStartersOpen(false);
+                          }}
+                          title={
+                            isCurrent
+                              ? `The pane already holds a ${STARTER_NOUN[kind]} document`
+                              : `Replace the pane with a ${STARTER_NOUN[kind]} starter`
+                          }
+                          className={cn(
+                            "flex w-full items-start gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
+                            "disabled:cursor-not-allowed disabled:opacity-50",
+                          )}
+                        >
+                          <FilePlus2
+                            aria-hidden="true"
+                            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                          />
+                          <span className="flex min-w-0 flex-col">
+                            <span className="text-xs font-medium text-foreground">
+                              {STARTER_BUTTON_LABEL[kind]}
+                              {isCurrent ? " — open now" : ""}
+                            </span>
+                            {/* The job each diagram does. In a MENU it costs
                                   nothing: a reader who opened this list is
                                   exactly the one asking "which of these?", so
                                   the answer belongs here rather than folded
                                   behind a second control. */}
-                              <span className="text-[11px] leading-tight text-muted-foreground">
-                                {KIND_BLURB[kind]}
-                              </span>
+                            <span className="text-[11px] leading-tight text-muted-foreground">
+                              {KIND_BLURB[kind]}
                             </span>
-                          </button>
-                        );
-                      },
-                    )}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -1495,7 +1529,7 @@ export function ViewPlayground({
                           onAnnounce={setAnnouncement}
                         />
                       </>
-                    ) : (
+                    ) : doc.kind === "usecase" ? (
                       <>
                         <UseCaseShareButton
                           text={text}
@@ -1512,7 +1546,40 @@ export function ViewPlayground({
                           onAnnounce={setAnnouncement}
                         />
                       </>
-                    )}
+                    ) : doc.kind === "er" ? (
+                      <>
+                        <ErShareButton
+                          text={text}
+                          title={documentTitle(doc)}
+                          format={doc.format}
+                          onAnnounce={setAnnouncement}
+                        />
+                        {/* From the parsed FILE, not a paneRef: these
+                            exporters render from the model, so they work
+                            mid-focus and with the focus dimming excluded by
+                            construction — the export renderer never had it. */}
+                        <SvgExportButton
+                          render={(theme) => renderErSvg(doc.file, theme)}
+                          title={documentTitle(doc)}
+                          noun="ER diagram"
+                          onAnnounce={setAnnouncement}
+                        />
+                      </>
+                    ) : doc.kind === "dict" ? (
+                      <>
+                        <DictShareButton
+                          text={text}
+                          title={documentTitle(doc)}
+                          onAnnounce={setAnnouncement}
+                        />
+                        <SvgExportButton
+                          render={(theme) => renderDictSvg(doc.file, theme)}
+                          title={documentTitle(doc)}
+                          noun="data dictionary"
+                          onAnnounce={setAnnouncement}
+                        />
+                      </>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setImmersive(!isImmersive)}
@@ -1552,8 +1619,12 @@ export function ViewPlayground({
                     file={doc.file}
                     onAnnounce={setAnnouncement}
                   />
-                ) : (
+                ) : doc.kind === "usecase" ? (
                   <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
+                ) : doc.kind === "er" ? (
+                  <ErViewer file={doc.file} onAnnounce={setAnnouncement} />
+                ) : (
+                  <DictViewer file={doc.file} onAnnounce={setAnnouncement} />
                 )}
               </section>
             )

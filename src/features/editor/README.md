@@ -93,11 +93,11 @@ Bindings are suppressed centrally while focus is in `input`, `textarea`,
 **in-memory**, not `navigator.clipboard`: a C4 payload is a graph, and paste
 must stay synchronous so it lands as exactly one history entry.
 
-Copy snapshots the selected nodes plus only the edges *internal* to that
+Copy snapshots the selected nodes plus only the edges _internal_ to that
 selection — an edge with one endpoint outside it cannot be rewired, since a
 `C4Edge` must join two nodes in the same diagram. Paste calls
 `store.pasteNodes`, which regenerates ids file-wide (so a payload can be
-pasted repeatedly, and into a *different* diagram of a compatible level) and
+pasted repeatedly, and into a _different_ diagram of a compatible level) and
 throws `InvalidNodeTypeError` when a type is illegal at the target level.
 
 A paste is a **flat clone**: `childDiagramId`, `childRef` and `externalRef`
@@ -107,14 +107,14 @@ are dropped rather than copied, so two nodes never own one subtree.
 
 Each marker owns one corner of the node frame so they never collide:
 
-| Corner | Marker | Condition |
-|---|---|---|
-| top-left | unknown-icon warning dot | icon slug did not resolve |
-| top-right | child-count badge | child diagram has **> 0** nodes |
-| bottom-left | `↑ <level>` ref chip | node carries an `externalRef` |
-| bottom-right | relate grip | any node, not mid-rename |
+| Corner       | Marker                   | Condition                       |
+| ------------ | ------------------------ | ------------------------------- |
+| top-left     | unknown-icon warning dot | icon slug did not resolve       |
+| top-right    | child-count badge        | child diagram has **> 0** nodes |
+| bottom-left  | `↑ <level>` ref chip     | node carries an `externalRef`   |
+| bottom-right | relate grip              | any node, not mid-rename        |
 
-The child badge is gated on the child *count*, never on `childDiagramId`
+The child badge is gated on the child _count_, never on `childDiagramId`
 merely existing — a badge reading `0` advertises nothing to open. An empty
 child diagram stays reachable via `mod+ArrowDown`.
 
@@ -129,18 +129,18 @@ bare `opacity-60` — indistinguishable from a drag ghost.
 
 Four affordances, one code path, so they cannot drift:
 
-| Entry point | Duplicates |
-|---|---|
+| Entry point             | Duplicates                                              |
+| ----------------------- | ------------------------------------------------------- |
 | right-click → Duplicate | node under the **cursor** (right-click does not select) |
-| inspector button | the current selection |
-| `mod+c` / `mod+v` | the current selection, into any compatible diagram |
+| inspector button        | the current selection                                   |
+| `mod+c` / `mod+v`       | the current selection, into any compatible diagram      |
 
 All three call `store.pasteNodes`, so duplicate inherits paste's correctness
 rules for free — and duplicate never writes to the clipboard, so duplicating
 does not clobber what the user copied.
 
 Duplicate has no on-canvas control: the node's one corner grip is spent on
-*relate*, which needs to be spatial (drag to where the new element goes).
+_relate_, which needs to be spatial (drag to where the new element goes).
 Duplicate needs no aim, so panel and menu entries serve it.
 
 ## Relate grip (`components/nodes/relate-grip.tsx`)
@@ -154,13 +154,13 @@ and creates the node+edge pair. One creation path, one set of level rules.
 Not a duplicate of the connection handles: handles join two things that already
 exist, this grip is the "…and it talks to a NEW thing" path.
 
-**Placeholders get the grip too.** Read-only governs *identity* — no rename,
+**Placeholders get the grip too.** Read-only governs _identity_ — no rename,
 retype or duplicate — but drawing a relationship FROM a boundary element is the
 whole reason it is in the diagram (`userRef -> accounts` in a container view).
 Handles were already available on placeholders; withholding the grip only made
 the two disagree.
 
-The drag is hand-rolled because React Flow drags *existing* nodes and the
+The drag is hand-rolled because React Flow drags _existing_ nodes and the
 target does not exist until release. `nodrag` is what stops the parent node
 being dragged instead — `stopPropagation` alone is not enough.
 
@@ -175,7 +175,7 @@ claimed. `Alt` suspends grid snapping, `Shift` is
 with a grid-unit gutter. Programmatic creation only (palette, `^ref` placement);
 a drop or connector release already expressed an intent and is left alone.
 
-The previous rule rejected only an *exact* position collision, so the second
+The previous rule rejected only an _exact_ position collision, so the second
 item added at the viewport centre landed 16px off the first — overlapping enough
 to read as one smudged node. Real intersection testing is what makes "add"
 repeatable.
@@ -183,7 +183,7 @@ repeatable.
 ## Connection handles
 
 `node-chrome.tsx` keeps the 8px dot but gives it a **24px hit area** via
-`after:-inset-2`, and reveals handles on *selection* as well as hover — they
+`after:-inset-2`, and reveals handles on _selection_ as well as hover — they
 used to vanish the moment the pointer left the node, which is exactly when you
 reach for one. Handles are the only way to start a relationship, so an 8px
 hover-only target was the main source of missed connection drags.
@@ -211,7 +211,7 @@ a list in the rail because a list grows with the model and a search field does
 not — the inline version pushed the type palette off-screen on a busy context
 diagram.
 
-Only **ancestor** nodes are offered (a `^ref` draws *this* diagram's boundary,
+Only **ancestor** nodes are offered (a `^ref` draws _this_ diagram's boundary,
 so its members are established further out). Three filters: level rules still
 apply (a `softwareSystem` is legal at `context` but not `container`), a
 placeholder is never itself referenced, and anything already referenced here is
@@ -240,7 +240,7 @@ rejects.
 Deleting an original cascades to its placeholders (`DeleteCascade.refsByDiagramId`)
 and forces a confirmation naming the diagrams that lose them. Before this,
 deleting left a dangling ref that `validate.ts` does not catch — it checks the
-ref's *shape*, never that the target resolves. The bug survived because
+ref's _shape_, never that the target resolves. The bug survived because
 `applyDeleteCascade` was dead code while `deleteNodes` kept an inlined copy;
 the store now calls the helper.
 

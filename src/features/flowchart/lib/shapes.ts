@@ -97,7 +97,9 @@ export const FLOW_FOCUS_RING_PAD = 5;
  */
 export function focusRingGeometry(
   node: Pick<LaidFlowNode, "shape" | "x" | "y" | "width" | "height">,
-): ShapeGeometry & { box: { x: number; y: number; width: number; height: number } } {
+): ShapeGeometry & {
+  box: { x: number; y: number; width: number; height: number };
+} {
   const pad = FLOW_FOCUS_RING_PAD;
   const box = {
     x: node.x - pad,

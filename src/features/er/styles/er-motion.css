@@ -1,0 +1,360 @@
+/* ---------------------------------------------------------------------------
+ * ER viewer motion: THE REVEAL, then one quiet idle gesture.
+ *
+ * THE MODEL, and how it differs from its four siblings. A flowchart is a
+ * PATH, so its entrance traces the path and its idle pulse re-walks it. A
+ * use-case diagram has no flow, so nothing there travels. An ER diagram is a
+ * third case: it has DIRECTION but no traffic. A foreign key points
+ * somewhere — that is why the layout puts parents on the left — but nothing
+ * moves along the line, so the reveal may follow the direction while the
+ * resting gesture must not travel.
+ *
+ * THE REVEAL, two phases:
+ *   1. the ENTITIES rise, staggered by `--er-wave` — the entity's COLUMN,
+ *      which is its dependency depth, stamped by the renderer as a
+ *      server-rendered inline style. So the schema assembles parents-first,
+ *      which is the order the geometry already drew: the stagger states no
+ *      ranking the document does not. Capped by `--er-wave-cap` so a wide
+ *      schema compresses instead of trickling (the flowchart's rank-cap
+ *      rule, held identically in TS and here).
+ *   2. the CONNECTORS arrive, on each edge's own clock (`--er-edge`).
+ *      Identifying lines DRAW end to end with a dashoffset; non-identifying
+ *      ones FADE in whole, because they are already dashed and a dashoffset
+ *      draw would overwrite the dash that carries their meaning. That is the
+ *      same rule the flowchart holds for its loop dash and the use-case
+ *      canvas for its «include»/«extend» dependencies.
+ *
+ * THE IDLE GESTURES, two of them:
+ *
+ *   - Every connector carries a PULSE: a short bright segment that travels
+ *     its length, staggered per edge so the diagram breathes rather than
+ *     blinking in unison. `new-diagram-type.md` makes this a standing rule —
+ *     "line connectors are always animated" — and the first cut of this
+ *     canvas broke it, on the argument that nothing travels along a foreign
+ *     key. That argument was about what the LINE means, and it is answered by
+ *     HOW the pulse is drawn rather than by refusing to draw one: the pulse
+ *     is a SECOND path over the base line, so a solid line stays solid and
+ *     the identifying/non-identifying distinction is untouched. Dashing the
+ *     base line to make it travel would have changed what the diagram says.
+ *   - The dashed, non-identifying lines also MARCH their own dash. The
+ *     canvas-wide rule beside `@keyframes af-frame-march` in globals.css is
+ *     that only a line which is ALREADY dashed may march.
+ *
+ * OPT OUT TWICE, and neither is optional:
+ *   - `prefers-reduced-motion: no-preference` gates every animation here.
+ *     The reveal plays at FIRST PAINT, before any hook has run, so this
+ *     media query is the only thing that can suppress it — a JS-written
+ *     custom property arrives too late.
+ *   - `[data-idle-motion="off"]` stops the ambient march, the app-wide
+ *     toggle every canvas honours.
+ * The resting state — no animation at all — is what a no-JS reader gets, and
+ * it is a complete diagram.
+ *
+ * The durations here are the one definition; `check:er-motion` reads them
+ * and asserts the worst-case reveal stays inside its budget.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --er-entity-rise: 320ms;
+  --er-entity-beat: 60ms;
+  --er-edge-draw: 260ms;
+  --er-edge-beat: 40ms;
+  --er-march: 1100ms;
+  /* One full travel of a pulse, and the gap between two edges starting
+     theirs. Slow on purpose: this runs forever on a page someone is reading,
+     and a fast repeating motion in peripheral vision is the thing that makes
+     an idle animation feel like a distraction rather than life. */
+  --er-pulse: 3600ms;
+  --er-pulse-beat: 260ms;
+  /* The focused line's travel. Slower than the ambient pulse on purpose: a
+     focused connector is being read, and a mark that crosses it quickly reads
+     as a flicker rather than as a pointer. */
+  --er-current: 5200ms;
+}
+
+/* The resting state: everything visible, nothing moving. Anything below only
+   ever overrides this inside the reduced-motion media query, which is what
+   makes stillness the default rather than a fallback. */
+.af-er-entity,
+.af-er-edge {
+  opacity: 1;
+}
+
+.af-er-edge-line {
+  stroke-dashoffset: 0;
+}
+
+/* The pulse is INVISIBLE at rest. It exists in the DOM unconditionally so the
+   exported SVG and the no-JS reader get identical markup to the canvas, and
+   it is opacity-0 until the media query below turns it on — which makes
+   stillness the default rather than something switched off afterwards. */
+.af-er-edge-pulse,
+.af-er-edge-halo {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-er-entity {
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: af-er-rise var(--er-entity-rise) ease-out forwards;
+    animation-delay: calc(
+      min(var(--er-wave, 0), var(--er-wave-cap, 6)) * var(--er-entity-beat)
+    );
+  }
+
+  /* Edges land after the boxes they join — the worst-case entity delay plus
+     the rise, so a line never draws to a box that has not arrived. */
+  .af-er-edge {
+    opacity: 0;
+    animation: af-er-fade var(--er-edge-draw) ease-out forwards;
+    animation-delay: calc(
+      var(--er-wave-cap, 6) * var(--er-entity-beat) + var(--er-entity-rise) +
+        var(--er-edge, 0) * var(--er-edge-beat)
+    );
+  }
+
+  /* An identifying line DRAWS. The dasharray here is the animation's, not
+     the notation's — the line is solid, so borrowing the dash for the draw
+     costs nothing and is removed by the time it rests. */
+  .af-er-edge:not(.af-er-edge-dashed) .af-er-edge-line {
+    stroke-dasharray: 1400;
+    stroke-dashoffset: 1400;
+    animation: af-er-draw var(--er-edge-draw) ease-out forwards;
+    animation-delay: inherit;
+  }
+
+  @keyframes af-er-rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes af-er-fade {
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes af-er-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* THE PULSE. A short lit segment travelling the line's whole length: the
+     dash pattern is one visible run followed by a gap long enough to cover
+     any connector this layout produces, so exactly one segment is on the line
+     at a time and it reads as a travelling pulse rather than as a dashed
+     line. The offset animates the full period, which is what makes the loop
+     seamless. */
+  .af-er-edge-pulse,
+  .af-er-edge-halo {
+    stroke-dasharray: 26 900;
+    stroke-dashoffset: 926;
+    animation: af-er-pulse var(--er-pulse) linear infinite;
+    /* A NEGATIVE delay, which is the whole fix for a bug you could see: a
+       POSITIVE delay makes the animation wait, and any class change on an
+       ancestor restarts it — so leaving focus made every connector vanish for
+       the length of that delay and then reappear. A negative delay starts the
+       animation already part-way through, so it staggers the edges without
+       any of them ever waiting, and a restart is invisible because there is
+       no silent head to replay. */
+    animation-delay: calc(var(--er-edge, 0) * var(--er-pulse-beat) * -1);
+  }
+
+  [data-idle-motion="off"] .af-er-edge-pulse,
+  [data-idle-motion="off"] .af-er-edge-halo {
+    animation: none;
+    opacity: 0;
+  }
+
+  /* The halo never rises above a wash: it is the soft edge of the mark, and at
+     full strength it would simply be a second, fatter line. */
+  .af-er-edge-halo {
+    animation-name: af-er-pulse-halo;
+  }
+
+  @keyframes af-er-pulse-halo {
+    0% {
+      opacity: 0;
+      stroke-dashoffset: 926;
+    }
+    12% {
+      opacity: 0.3;
+    }
+    75% {
+      opacity: 0.3;
+    }
+    100% {
+      opacity: 0;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes af-er-pulse {
+    0% {
+      opacity: 0;
+      stroke-dashoffset: 926;
+    }
+    12% {
+      opacity: 0.85;
+    }
+    75% {
+      opacity: 0.85;
+    }
+    100% {
+      opacity: 0;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* The second ambient gesture. Only the already-dashed kind marches. */
+  .af-er-edge-dashed .af-er-edge-line {
+    animation:
+      af-er-fade var(--er-edge-draw) ease-out forwards,
+      af-er-march var(--er-march) linear infinite;
+  }
+
+  [data-idle-motion="off"] .af-er-edge-dashed .af-er-edge-line {
+    animation: af-er-fade var(--er-edge-draw) ease-out forwards;
+  }
+
+  @keyframes af-er-march {
+    to {
+      stroke-dashoffset: -22;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * FOCUS, and the resting states around it.
+ *
+ * Focus is a READING AID, so it dims rather than hides: a dimmed table is
+ * still legible if you look at it, which is what separates "show me what this
+ * touches" from "hide everything else". 0.28 was chosen as the lowest opacity
+ * at which a column name is still readable against `--canvas` on the default
+ * high-contrast theme — below that the diagram stops being a diagram and
+ * becomes a spotlight.
+ *
+ * The transition is NOT gated on reduced motion: it is a state change a
+ * reader triggered, not an ambient gesture, and a hard cut between focus
+ * states is harder to follow than a fade. It is short enough (140ms) to read
+ * as instant.
+ * ------------------------------------------------------------------------- */
+
+.af-er-canvas .af-er-entity,
+.af-er-canvas .af-er-edge {
+  transition:
+    opacity 140ms ease-out,
+    filter 140ms ease-out;
+}
+
+.af-er-has-focus .af-er-dimmed {
+  opacity: 0.28;
+}
+
+.af-er-entity[role="button"],
+.af-er-edge[role="button"] {
+  cursor: pointer;
+}
+
+/* HOVER DOES NOT RESTYLE THE LINE EITHER. It used to recolour the stroke to
+   `--edge-drift` and thicken it to 2.5px, which is the same "a new border
+   appeared" the lit state was asked to stop doing — and it was the one people
+   actually SAW, because a pointer resting anywhere near a connector triggers
+   it. The component's lit state was fixed first and this was missed, which is
+   why the band survived that change.
+
+   The hit area still has to be discoverable — it is 18px wide and invisible,
+   so without any feedback the cursor changes over an empty-looking strip and
+   nothing says why. So hovering lights the PULSE instead: the mark that is
+   already travelling the line gets the glow and the accent, and the line
+   underneath it is untouched. Motion is the signal here as everywhere else on
+   this canvas. */
+@media (prefers-reduced-motion: no-preference) {
+  .af-er-edge[role="button"]:hover .af-er-edge-pulse,
+  .af-er-edge[role="button"]:hover .af-er-edge-halo {
+    stroke: var(--primary);
+  }
+}
+
+/* With motion suppressed there is no pulse to light, so the hit area needs a
+   static tell — the one place a stroke change is the only option left. Kept
+   deliberately narrow: reduced-motion only. */
+@media (prefers-reduced-motion: reduce) {
+  .af-er-edge[role="button"]:hover .af-er-edge-line {
+    stroke: var(--edge-drift);
+  }
+}
+
+.af-er-edge[role="button"]:focus-visible {
+  outline: none;
+}
+
+/* KEYBOARD focus keeps its ring, and this is the one exception on the canvas.
+   A keyboard user has no pointer and no hover, so removing it would leave them
+   with no way to know where they are — an accessibility affordance, not a
+   reading aid, and the two are not interchangeable. */
+.af-er-edge[role="button"]:focus-visible .af-er-edge-line {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+}
+
+/* The lift on hover is what makes a box feel like an object rather than a
+   drawing of one. `filter` rather than `transform`, because a transform on an
+   SVG group re-rasterises its text on some engines and the type visibly
+   softens for the duration. */
+.af-er-entity[role="button"]:hover {
+  filter: brightness(1.06);
+}
+
+.af-er-entity[role="button"]:focus-visible {
+  outline: none;
+}
+
+.af-er-entity[role="button"]:focus-visible rect {
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* THE ONE TRAVELLING GESTURE, and it only exists under focus. At rest an
+     ER diagram holds still except for the dashed march below — nothing
+     travels along a foreign key, so a permanent current would be animating a
+     claim the notation does not make. Under focus it is different: the reader
+     has asked "what does this table talk to", and a current along exactly
+     those lines answers it in motion. Same argument the C4 canvas makes for
+     lighting a selected path. */
+  /* FOCUS DOES NOT STOP THE PULSE, it changes it. Stopping and restarting it
+     is what made connectors blink on the way out of focus; and the lit line
+     needs a travelling mark anyway, since that is what says "these are the
+     ones you asked about".
+     
+     THE LIT LINE IS NEVER DASHED. The first cut gave it `stroke-dasharray`,
+     which turned a solid identifying relationship into a dashed one for as
+     long as it was focused — i.e. focus silently changed what the diagram
+     SAID. The lit treatment is a brighter, blurred travelling segment over
+     an untouched base line instead: a glow, which adds emphasis without
+     borrowing a glyph that already means something. */
+  .af-er-has-focus .af-er-lit .af-er-edge-pulse,
+  .af-er-has-focus .af-er-lit .af-er-edge-halo {
+    stroke: var(--primary);
+    /* Slower than the ambient pulse. A focused line is being READ, and a mark
+       that crosses it quickly is a flicker rather than a pointer. */
+    animation-duration: var(--er-current);
+  }
+
+  /* A dimmed line keeps its pulse but loses the brightness, so the diagram
+     does not go dead around the focus. */
+  .af-er-has-focus .af-er-dimmed .af-er-edge-pulse,
+  .af-er-has-focus .af-er-dimmed .af-er-edge-halo {
+    opacity: 0;
+  }
+}

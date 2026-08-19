@@ -50,6 +50,8 @@ const KINDS = [
   { name: "Sequence", phase: "af-hero-kind-2" },
   { name: "Flowchart", phase: "af-hero-kind-3" },
   { name: "Use case", phase: "af-hero-kind-4" },
+  { name: "ER", phase: "af-hero-kind-5" },
+  { name: "Dictionary", phase: "af-hero-kind-6" },
 ];
 
 let assertions = 0;
@@ -213,13 +215,53 @@ check("no element carrying a phase class carries an inline style", () => {
 /* ---- 5. reduced motion parks on ONE diagram ------------------------------ */
 
 check("reduced motion parks on exactly one complete diagram", () => {
+  /* The selector is DERIVED from KINDS, not spelled out. It used to be the
+     literal `.af-hero-kind-2, .af-hero-kind-3, .af-hero-kind-4`, so adding a
+     fifth kind made the pattern miss entirely — and `assert.notEqual(x, null)`
+     passes for `undefined`, so the failure surfaced as a TypeError on the next
+     line instead of as the real message. Both are fixed here: the list grows
+     with the table, and the guard tests for a match rather than for null. */
+  const others = KINDS.filter((kind) => kind.phase !== null).map(
+    (kind) => `\\.${kind.phase}`,
+  );
   const parked = globals.match(
-    /\.af-hero-kind-2,\n\s*\.af-hero-kind-3,\n\s*\.af-hero-kind-4 \{([^}]*)\}/,
+    new RegExp(`${others.join(",\\s*")}\\s*\\{([^}]*)\\}`),
   )?.[1];
-  assert.notEqual(parked, null, "the other three kinds are not parked at all");
+  assert.ok(
+    parked !== undefined,
+    `the other ${others.length} kinds are not parked together — expected a rule listing ${others.length} phase classes`,
+  );
   assert.ok(
     parked.includes("opacity: 0") && parked.includes("visibility: hidden"),
-    `the other three keep their from-frame and stack on the C4 panel: ${parked}`,
+    `the other ${others.length} keep their from-frame and stack on the C4 panel: ${parked}`,
+  );
+});
+
+/* ---- 5b. the ER panel's connectors ATTACH to its tables ------------------ */
+
+check("the ER panel derives its connectors from its table rects", () => {
+  /* THE BUG THIS EXISTS FOR: the panel's paths and crow's feet were
+     hand-written coordinates while its tables were placed by a SEPARATE set of
+     hand-written coordinates. The two disagreed, so the dashed connector began
+     at y=150 in a panel whose Customer table ends at y=78 — a line starting in
+     mid-air, attached to nothing. It rendered, it stayed inside the box, and
+     every other assertion here passed.
+
+     Rather than re-deriving the geometry (which would be this check owning a
+     second copy of the thing that went wrong), it asserts the panel has no
+     literal path data at all: every `d` must be computed. A panel that
+     computes its paths from its own rects cannot detach them. */
+  const panel = hero.match(/function ErPanel\(\)[\s\S]*?\n\}/)?.[0];
+  assert.notEqual(panel, undefined, "no ErPanel found");
+  const literalPaths = panel.match(/d="M [\d.]/g) ?? [];
+  assert.equal(
+    literalPaths.length,
+    0,
+    `${literalPaths.length} hand-written path(s) in ErPanel — derive them from the table rects, or they will drift out of step with where the tables actually are`,
+  );
+  assert.ok(
+    /const TABLES = \{/.test(panel) && /const link = \(/.test(panel),
+    "ErPanel should place its tables in one table and derive the links from it",
   );
 });
 

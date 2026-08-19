@@ -37,6 +37,8 @@
  */
 
 import type {
+  DictLabFile,
+  ErLabFile,
   FlowchartLabFile,
   SequenceLabFile,
   UseCaseLabFile,
@@ -47,6 +49,8 @@ import {
   serializeFlowchartText,
   serializeSequenceText,
   serializeUseCaseText,
+  serializeErText,
+  serializeDictText,
 } from "@/features/archtext";
 import {
   detectMermaidUseCase,
@@ -54,6 +58,7 @@ import {
   serializeMermaidFlowchart,
   serializeMermaidSequence,
   serializeMermaidUseCase,
+  serializeMermaidEr,
 } from "@/features/mermaid";
 /* PAST THE BARRELS, DELIBERATELY, and the same exception `dry.md` already
    tolerates for `validate/lib/check.ts`: both feature barrels export React
@@ -84,6 +89,20 @@ import {
   type UseCaseSourceFormat,
 } from "@/features/usecase/input/parse";
 import { USECASE_EXAMPLE } from "@/features/usecase/input/example";
+import {
+  ER_FORMAT_LABEL,
+  parseErInput,
+  type ErParseErrorDetail,
+  type ErSourceFormat,
+} from "@/features/er/input/parse";
+import { ER_EXAMPLE } from "@/features/er/input/example";
+import {
+  DICT_FORMAT_LABEL,
+  parseDictInput,
+  type DictParseErrorDetail,
+  type DictSourceFormat,
+} from "@/features/dict/input/parse";
+import { DICT_EXAMPLE } from "@/features/dict/input/example";
 import { detectFormat } from "@/features/viewer/input/detect";
 import {
   importMermaid,
@@ -100,7 +119,8 @@ import {
 /* -------------------------------------------------------------------------- */
 
 /** Which example seeds the pane — the ONLY thing `?d=` varies. */
-export type SeedKind = "c4" | "sequence" | "flowchart" | "usecase";
+export type SeedKind =
+  "c4" | "sequence" | "flowchart" | "usecase" | "er" | "dict";
 
 /** The languages a C4 document can sit in the pane as. */
 export type C4SourceFormat = "alab" | "json" | "mermaid";
@@ -120,7 +140,9 @@ export type ViewDocument =
       format: FlowchartSourceFormat;
       file: FlowchartLabFile;
     }
-  | { kind: "usecase"; format: UseCaseSourceFormat; file: UseCaseLabFile };
+  | { kind: "usecase"; format: UseCaseSourceFormat; file: UseCaseLabFile }
+  | { kind: "er"; format: ErSourceFormat; file: ErLabFile }
+  | { kind: "dict"; format: DictSourceFormat; file: DictLabFile };
 
 /**
  * Every way the pane's text can fail, each in its native reader's shape.
@@ -137,6 +159,8 @@ export type ViewSourceError =
   // located the failure.
   | FlowchartParseErrorDetail
   | UseCaseParseErrorDetail
+  | ErParseErrorDetail
+  | DictParseErrorDetail
   | { kind: "unknown-format"; message: string };
 
 export type ViewParseResult =
@@ -153,6 +177,42 @@ export type ToggleFormat = "alab" | "mermaid";
 /* -------------------------------------------------------------------------- */
 
 export function parseViewSource(text: string): ViewParseResult {
+  /* ER GOES FIRST, and it is the only kind that may. The other three arrive
+     as typed verdicts from the sequence detector because their headers are
+     things that detector already has to recognise; ER's two dialects each
+     have an EXACT header no other reader here claims (`archlab 1.0 er` and
+     `erDiagram`), so testing them costs two string comparisons and cannot
+     steal a document from another canvas. Teaching the sequence detector a
+     fifth header would have bought nothing and given it one more grammar to
+     stay in step with. */
+  /* The dictionary reader runs beside the ER one and for the same reason:
+     `archlab 1.0 dict` is an exact header no other reader here claims, so the
+     test is one string comparison and cannot steal a document. */
+  const dict = parseDictInput(text);
+  if (dict.status === "ok") {
+    return {
+      status: "ok",
+      value: { kind: "dict", format: dict.value.format, file: dict.value.file },
+    };
+  }
+  if (dict.error.kind === "parse") {
+    return { status: "error", error: dict.error };
+  }
+
+  const er = parseErInput(text);
+  if (er.status === "ok") {
+    return {
+      status: "ok",
+      value: { kind: "er", format: er.value.format, file: er.value.file },
+    };
+  }
+  if (er.error.kind === "parse") {
+    /* Detected as ER and failed INSIDE an ER grammar — located where that
+       parser located it. Anything else means "not ER at all", which is not an
+       error yet: the readers below still get their turn. */
+    return { status: "error", error: er.error };
+  }
+
   const sequence = parseSequenceInput(text);
   if (sequence.status === "ok") {
     return {
@@ -302,8 +362,8 @@ export function parseViewSource(text: string): ViewParseResult {
       // of first lines that would have worked.
       message:
         text.trim() === ""
-          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart` or `archlab 1.0 usecase`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, or a flowchart)."
-          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart` or `graph`.",
+          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er` or `archlab 1.0 dict`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, a flowchart, or an erDiagram)."
+          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart`, `graph` or `erDiagram`.",
     },
   };
 }
@@ -335,6 +395,13 @@ export function sourceTextFor(doc: ViewDocument): string {
       ? serializeMermaidUseCase(doc.file)
       : serializeUseCaseText(doc.file);
   }
+  if (doc.kind === "er") {
+    return doc.format === "mermaid"
+      ? serializeMermaidEr(doc.file)
+      : serializeErText(doc.file);
+  }
+  /* One dialect, so no format fork — Mermaid has no dictionary notation. */
+  if (doc.kind === "dict") return serializeDictText(doc.file);
   switch (doc.format) {
     case "alab":
       return doc.synced.aftText;
@@ -367,6 +434,12 @@ export function convertedSourceText(
       ? serializeMermaidUseCase(doc.file)
       : serializeUseCaseText(doc.file);
   }
+  if (doc.kind === "er") {
+    return to === "mermaid"
+      ? serializeMermaidEr(doc.file)
+      : serializeErText(doc.file);
+  }
+  if (doc.kind === "dict") return serializeDictText(doc.file);
   return to === "mermaid"
     ? serializeMermaidC4(doc.synced.file)
     : doc.synced.aftText;
@@ -394,6 +467,10 @@ export function describeDocument(doc: ViewDocument): string {
       return `a flowchart (${FLOWCHART_FORMAT_LABEL[doc.format]})`;
     case "usecase":
       return `a use-case diagram (${USECASE_FORMAT_LABEL[doc.format]})`;
+    case "er":
+      return `an ER diagram (${ER_FORMAT_LABEL[doc.format]})`;
+    case "dict":
+      return `a data dictionary (${DICT_FORMAT_LABEL[doc.format]})`;
   }
 }
 
@@ -475,6 +552,29 @@ title "Your system"
   user -- act
   act ..> pay : include
 `,
+  er: `archlab 1.0 er
+title "Your schema"
+
+@er
+  entity customer "Customer"
+    attr id uuid pk
+    attr email string uk
+  entity order "Order"
+    attr id uuid pk
+    attr customer_id uuid fk
+
+  customer ||--o{ order : places
+`,
+  dict: `archlab 1.0 dict
+title "Your fields"
+
+@dict
+  section "Customer"
+    field id uuid required unique
+      desc "What this field means, and why it exists"
+      source "where the value comes from"
+    field email string required pii
+`,
 };
 
 export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
@@ -482,6 +582,8 @@ export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
   sequence: SEQUENCE_EXAMPLE,
   flowchart: FLOWCHART_EXAMPLE,
   usecase: USECASE_EXAMPLE,
+  er: ER_EXAMPLE,
+  dict: DICT_EXAMPLE,
 };
 
 function mustParse(text: string): ViewDocument {
@@ -501,4 +603,6 @@ export const VIEW_SEED_DOCUMENT: Record<SeedKind, ViewDocument> = {
   sequence: mustParse(SEQUENCE_EXAMPLE),
   flowchart: mustParse(FLOWCHART_EXAMPLE),
   usecase: mustParse(USECASE_EXAMPLE),
+  er: mustParse(ER_EXAMPLE),
+  dict: mustParse(DICT_EXAMPLE),
 };

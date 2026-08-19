@@ -35,7 +35,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:view-input
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -368,33 +368,49 @@ for (const [label, text] of [
       (m) => m[1],
     );
 
-  const c4 = idsIn("src/features/viewer/service/model-service.ts");
-  const seq = idsIn("src/features/sequence/service/example-service.ts");
-  const flow = idsIn("src/features/flowchart/service/example-service.ts");
-  const uc = idsIn("src/features/usecase/service/example-service.ts");
+  /* DERIVED, not four hand-listed files. Two registries were added and this
+     list was not, so ER and dictionary ids went unchecked for collisions —
+     the same silent gap the resolver had. Reading the directory means a
+     seventh registry is covered the day it exists. */
+  const REGISTRY_FILES = [
+    ["C4", "src/features/viewer/service/model-service.ts"],
+    ...readdirSync(path.join(ROOT, "src/features"))
+      .filter((feature) =>
+        existsSync(
+          path.join(
+            ROOT,
+            "src/features",
+            feature,
+            "service/example-service.ts",
+          ),
+        ),
+      )
+      .map((feature) => [
+        feature,
+        `src/features/${feature}/service/example-service.ts`,
+      ]),
+  ];
+  const registryIds = REGISTRY_FILES.map(([name, file]) => [name, idsIn(file)]);
 
-  /* `?e=` spans ALL FOUR registries so a reader never has to know which kind
-     an id belongs to. The day two collide it resolves whichever is looked up
-     first — a bundled example quietly opening as the wrong document. Counted
-     pairwise rather than as a set, so the failure message can name which two
-     registries disagree. */
-  const clashes = [
-    ["C4", "sequence", c4.filter((id) => seq.includes(id))],
-    ["C4", "flowchart", c4.filter((id) => flow.includes(id))],
-    ["C4", "use-case", c4.filter((id) => uc.includes(id))],
-    ["sequence", "flowchart", seq.filter((id) => flow.includes(id))],
-    ["sequence", "use-case", seq.filter((id) => uc.includes(id))],
-    ["flowchart", "use-case", flow.filter((id) => uc.includes(id))],
-  ].filter(([, , shared]) => shared.length > 0);
+  /* `?e=` spans EVERY registry so a reader never has to know which kind an id
+     belongs to. The day two collide it resolves whichever is looked up first —
+     a bundled example quietly opening as the wrong document. Counted pairwise
+     rather than as a set, so the message can name which two disagree. */
+  const clashes = [];
+  for (let i = 0; i < registryIds.length; i += 1) {
+    for (let j = i + 1; j < registryIds.length; j += 1) {
+      const [aName, aIds] = registryIds[i];
+      const [bName, bIds] = registryIds[j];
+      const shared = aIds.filter((id) => bIds.includes(id));
+      if (shared.length > 0) clashes.push([aName, bName, shared]);
+    }
+  }
 
   check(
-    `example ids are unique across all four registries (${c4.length} C4 + ` +
-      `${seq.length} sequence + ${flow.length} flowchart + ${uc.length} use-case)`,
-    clashes.length === 0 &&
-      c4.length > 0 &&
-      seq.length > 0 &&
-      flow.length > 0 &&
-      uc.length > 0,
+    `example ids are unique across all ${registryIds.length} registries (` +
+      registryIds.map(([name, ids]) => `${ids.length} ${name}`).join(" + ") +
+      ")",
+    clashes.length === 0 && registryIds.every(([, ids]) => ids.length > 0),
     clashes.length > 0
       ? clashes
           .map(
@@ -402,17 +418,50 @@ for (const [label, text] of [
               `${a} and ${b} both define: ${shared.join(", ")}`,
           )
           .join("; ")
-      : "no ids parsed — has a registry moved?",
+      : "a registry parsed zero ids — has one moved?",
   );
 
   const resolver = read("src/features/playground/lib/example-param.ts");
+
+  /* DERIVED FROM THE FILESYSTEM, not a list of four names. THE BUG THIS
+     REPLACES A WEAKER ASSERTION FOR: the ER and dictionary registries were
+     added and the resolver was not, so every "Open in the playground" link
+     from a /demo card of either kind returned `null`. And `null` is the same
+     answer an UNKNOWN id gives — the deliberate fall-back-to-the-seed path —
+     so the playground opened on the C4 seed with no error, no 404 and nothing
+     anywhere reporting a problem. The previous version of this check listed
+     the four loaders it knew by name and passed happily while two registries
+     went unasked. A hardcoded list cannot notice a registry it has never
+     heard of; the filesystem can. */
+  const registries = readdirSync(path.join(ROOT, "src/features"))
+    .filter((feature) =>
+      existsSync(
+        path.join(ROOT, "src/features", feature, "service/example-service.ts"),
+      ),
+    )
+    .map((feature) => ({
+      feature,
+      loader: /export function (load\w+Example)\(/.exec(
+        read(`src/features/${feature}/service/example-service.ts`),
+      )?.[1],
+    }));
+  const unasked = registries.filter(
+    ({ loader }) => loader === undefined || !resolver.includes(loader),
+  );
   check(
-    "the resolver tries ALL FOUR registries before giving up",
-    resolver.includes("loadViewerModel") &&
-      resolver.includes("loadSequenceExample") &&
-      resolver.includes("loadFlowchartExample") &&
-      resolver.includes("loadUseCaseExample"),
-    "a registry the resolver never asks is a set of demo cards whose ?e= links all open the default seed",
+    `the resolver asks every example registry that exists (${registries.length} found)`,
+    registries.length >= 4 && unasked.length === 0,
+    unasked.length === 0
+      ? `only ${registries.length} registries found — has a service moved?`
+      : `never asked: ${unasked.map((r) => r.feature).join(", ")} — a registry the resolver never asks is a set of demo cards whose ?e= links all open the default seed, silently`,
+  );
+  /* The C4 registry has no `load*Example` export (its service predates that
+     convention), so it is named directly — but named HERE, beside the derived
+     check, rather than being one of four names that hid the gap. */
+  check(
+    "the resolver asks the C4 model registry too",
+    resolver.includes("loadViewerModel"),
+    "C4 models are the one registry without a load*Example export",
   );
   check(
     "an unknown ?e= falls back rather than throwing",

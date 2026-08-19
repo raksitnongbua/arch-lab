@@ -110,7 +110,7 @@ function riseAt(ms: number): CSSProperties {
 }
 
 /**
- * The four kinds, in cycle order, each paired with the phase class that puts it
+ * The six kinds, in cycle order, each paired with the phase class that puts it
  * at its own quarter of the swap. THE FIRST HAS NO CLASS on purpose: it runs the
  * bare `af-hero-kind` clock at zero offset, and inventing an `af-hero-kind-1`
  * that sets `animation-delay: 0s` would be a class whose only job is to restate
@@ -127,6 +127,8 @@ const KINDS: readonly { name: string; phase: string }[] = [
   { name: "Sequence", phase: "af-hero-kind-2" },
   { name: "Flowchart", phase: "af-hero-kind-3" },
   { name: "Use case", phase: "af-hero-kind-4" },
+  { name: "ER", phase: "af-hero-kind-5" },
+  { name: "Dictionary", phase: "af-hero-kind-6" },
 ];
 
 /**
@@ -141,6 +143,8 @@ const SUBTITLES: readonly { name: string; meta: string; phase: string }[] = [
   { name: "Place an order", meta: "4 participants", phase: "af-hero-kind-2" },
   { name: "Order fulfilment", meta: "6 steps", phase: "af-hero-kind-3" },
   { name: "Food delivery", meta: "2 actors", phase: "af-hero-kind-4" },
+  { name: "Shop orders", meta: "3 tables", phase: "af-hero-kind-5" },
+  { name: "Customer API", meta: "4 fields", phase: "af-hero-kind-6" },
 ];
 
 export function HeroDiagram({ className }: { className?: string }) {
@@ -372,7 +376,7 @@ export function HeroDiagram({ className }: { className?: string }) {
             />
           </div>
 
-          {/* The other three kinds, same box, each offset whole quarters. */}
+          {/* The other four kinds, same box, each offset a whole fifth. */}
           <div className="af-hero-kind af-hero-kind-2 absolute inset-0">
             <SequencePanel />
           </div>
@@ -381,6 +385,12 @@ export function HeroDiagram({ className }: { className?: string }) {
           </div>
           <div className="af-hero-kind af-hero-kind-4 absolute inset-0">
             <UseCasePanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-5 absolute inset-0">
+            <ErPanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-6 absolute inset-0">
+            <DictPanel />
           </div>
         </div>
       </div>
@@ -999,6 +1009,380 @@ function MiniActor({
         {actor.name}
       </text>
     </g>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The ER panel                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Three tables and the two lines between them — the smallest drawing that is
+ * recognisably an ER diagram rather than three boxes.
+ *
+ * WHAT IT HAS TO SHOW to earn its slot, and why each is here rather than a
+ * simplification:
+ *
+ *   - A HEADER BAND and RULED ROWS. Without them a table is a labelled box and
+ *     the panel says "C4" to anyone glancing at it.
+ *   - A `PK` and an `FK`, in the accent. They are what makes the rows read as
+ *     COLUMNS rather than as a list, and they are the notation someone
+ *     searching for "ER diagram" is looking for.
+ *   - CROW'S FEET, both ends, both kinds. A line without them is not an ER
+ *     relationship — the whole notation is at the ends — so the miniature
+ *     draws the real `one` bar and the real `zero-or-more` foot, mirrored,
+ *     exactly as `er-diagram.tsx` composes them from a bar, a ring and a fan.
+ *
+ * Hand-drawn at fixed coordinates like its four siblings, not driven through
+ * `layoutEr`: the panel is 320px wide and the real layout solves for a canvas
+ * that scrolls, so feeding it a document would produce a correct diagram at
+ * the wrong scale. The tradeoff is the one the other panels already accept —
+ * this is artwork ABOUT the renderer, and `check:hero` pins the pairing.
+ */
+/* -------------------------------------------------------------------------- */
+/* The data dictionary panel                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Four documented fields — the smallest drawing that is recognisably a
+ * DICTIONARY rather than a table of anything.
+ *
+ * What earns its slot: the column HEADINGS (a dictionary is read by column,
+ * and without them this is just rows), a wrapped MEANING (the column that
+ * makes it a dictionary rather than a schema dump), and the flag BADGES
+ * outlined exactly as the real canvas outlines them — including the one solid
+ * `pii`, which is the only mark on that canvas allowed to shout.
+ *
+ * Hand-drawn at fixed coordinates like its five siblings rather than driven
+ * through `layoutDict`: the panel is 320px wide and the real layout solves for
+ * a 940px page, so feeding it a document would produce a correct table at the
+ * wrong scale.
+ */
+function DictPanel() {
+  const COLS = { name: 12, type: 96, rules: 150, meaning: 214 };
+  const rows = [
+    { name: "id", type: "uuid", flags: ["required"], meaning: "Never reused" },
+    { name: "email", type: "string", flags: ["pii"], meaning: "Lowercased" },
+    { name: "name", type: "string", flags: [], meaning: "Free text" },
+    { name: "ltv", type: "numeric", flags: ["derived"], meaning: "Nightly" },
+  ];
+  const badge = (flag: string) => {
+    const solid = flag === "pii";
+    const mark =
+      flag === "required"
+        ? "var(--primary)"
+        : solid
+          ? "var(--destructive)"
+          : "var(--node-meta)";
+    return { solid, mark };
+  };
+
+  return (
+    <svg viewBox="0 0 320 240" className="h-full w-full" aria-hidden="true">
+      <rect
+        x="4"
+        y="34"
+        width="312"
+        height="184"
+        rx="8"
+        fill="var(--node)"
+        stroke="var(--node-border)"
+      />
+      <text
+        x="8"
+        y="22"
+        dominantBaseline="central"
+        fontSize="12"
+        fontWeight="650"
+        fill="var(--foreground)"
+      >
+        Customer
+      </text>
+      {(["name", "type", "rules", "meaning"] as const).map((key) => (
+        <text
+          key={key}
+          x={COLS[key]}
+          y="48"
+          dominantBaseline="central"
+          fontSize="7"
+          fontWeight="600"
+          letterSpacing="0.5"
+          fill="var(--muted-foreground)"
+        >
+          {key === "name"
+            ? "FIELD"
+            : key === "rules"
+              ? "RULES"
+              : key === "type"
+                ? "TYPE"
+                : "MEANING"}
+        </text>
+      ))}
+      <line
+        x1="4"
+        y1="58"
+        x2="316"
+        y2="58"
+        stroke="var(--node-border)"
+        strokeWidth="1"
+      />
+      {rows.map((row, index) => {
+        const y = 76 + index * 36;
+        return (
+          <g key={row.name}>
+            {index > 0 ? (
+              <line
+                x1="4"
+                y1={y - 18}
+                x2="316"
+                y2={y - 18}
+                stroke="var(--node-border)"
+                strokeWidth="1"
+                opacity="0.5"
+              />
+            ) : null}
+            <text
+              x={COLS.name}
+              y={y}
+              dominantBaseline="central"
+              fontSize="8.5"
+              fontWeight="600"
+              fill="var(--node-foreground)"
+            >
+              {row.name}
+            </text>
+            <text
+              x={COLS.type}
+              y={y}
+              dominantBaseline="central"
+              fontSize="8"
+              fill="var(--node-meta)"
+            >
+              {row.type}
+            </text>
+            {row.flags.map((flag) => {
+              const paint = badge(flag);
+              const width = flag.length * 4.6 + 10;
+              return (
+                <g key={flag}>
+                  <rect
+                    x={COLS.rules}
+                    y={y - 6}
+                    width={width}
+                    height="12"
+                    rx="6"
+                    fill={paint.solid ? paint.mark : "none"}
+                    stroke={paint.mark}
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={COLS.rules + width / 2}
+                    y={y}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize="6.5"
+                    fontWeight="700"
+                    fill={
+                      paint.solid ? "var(--destructive-foreground)" : paint.mark
+                    }
+                  >
+                    {flag}
+                  </text>
+                </g>
+              );
+            })}
+            <text
+              x={COLS.meaning}
+              y={y}
+              dominantBaseline="central"
+              fontSize="8"
+              fill="var(--node-foreground)"
+            >
+              {row.meaning}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function ErPanel() {
+  /* THE TABLE RECTS ARE DATA, and the connectors are DERIVED from them.
+     THE BUG THIS FIXES: the paths and the crow's feet were hand-written
+     coordinates while the tables were placed by SEPARATE hand-written
+     coordinates, and the two sets did not agree — the dashed line began at
+     y=150 in a panel whose Customer table ends at y=78, so it started in
+     mid-air with nothing attached to it. Deriving both from one table makes
+     that class of mistake unspellable rather than merely fixed. */
+  const TABLES = {
+    customer: { x: 8, y: 24, w: 100, rows: 2 },
+    order: { x: 148, y: 84, w: 108, rows: 2 },
+    audit: { x: 148, y: 162, w: 108, rows: 1 },
+  } as const;
+  const HEAD = 22;
+  const ROW = 16;
+  const FOOT = 11;
+  const SPREAD = 5;
+
+  const box = (key: keyof typeof TABLES) => {
+    const t = TABLES[key];
+    return { ...t, h: HEAD + t.rows * ROW };
+  };
+
+  /** Right edge of `from` to left edge of `to`, out-across-in. `exitOffset`
+   * separates two lines leaving one table so they do not overlap. */
+  const link = (
+    from: keyof typeof TABLES,
+    to: keyof typeof TABLES,
+    exitOffset: number,
+  ) => {
+    const a = box(from);
+    const b = box(to);
+    const startX = a.x + a.w;
+    const startY = a.y + a.h / 2 + exitOffset;
+    const endX = b.x;
+    const endY = b.y + b.h / 2;
+    const midX = (startX + endX) / 2;
+    return {
+      d: `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`,
+      startX,
+      startY,
+      endX,
+      endY,
+    };
+  };
+
+  const toOrder = link("customer", "order", -8);
+  const toAudit = link("customer", "audit", 8);
+
+  /** The `one` end: a bar ACROSS the line, just outside the box it leaves. */
+  const bar = (x: number, y: number) =>
+    `M ${x + FOOT * 0.55} ${y - SPREAD} L ${x + FOOT * 0.55} ${y + SPREAD}`;
+
+  /** The `zero-or-more` end: a three-toed fan opening away from the box it
+   * enters, exactly as `er-diagram.tsx` composes it. */
+  const fan = (x: number, y: number) =>
+    `M ${x} ${y} L ${x - FOOT} ${y - SPREAD} M ${x} ${y} L ${x - FOOT} ${y + SPREAD} M ${x} ${y} L ${x - FOOT} ${y}`;
+
+  const table = (
+    x: number,
+    y: number,
+    width: number,
+    name: string,
+    rows: { name: string; type: string; key?: string }[],
+  ) => (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={22 + rows.length * 16}
+        rx={6}
+        fill="var(--node)"
+        stroke="var(--node-border)"
+        strokeWidth={1}
+      />
+      <path
+        d={`M ${x} ${y + 22} L ${x} ${y + 6} Q ${x} ${y} ${x + 6} ${y} L ${x + width - 6} ${y} Q ${x + width} ${y} ${x + width} ${y + 6} L ${x + width} ${y + 22} Z`}
+        fill="var(--primary)"
+        opacity={0.12}
+      />
+      <line
+        x1={x}
+        y1={y + 22}
+        x2={x + width}
+        y2={y + 22}
+        stroke="var(--node-border)"
+        strokeWidth={1}
+      />
+      <text
+        x={x + 8}
+        y={y + 11}
+        dominantBaseline="central"
+        fontSize={9.5}
+        fontWeight={650}
+        fill="var(--node-foreground)"
+      >
+        {name}
+      </text>
+      {rows.map((row, index) => (
+        <g key={row.name}>
+          <text
+            x={x + 8}
+            y={y + 22 + index * 16 + 8}
+            dominantBaseline="central"
+            fontSize={8}
+            fill="var(--node-foreground)"
+          >
+            {row.name}
+          </text>
+          {row.key !== undefined ? (
+            <text
+              x={x + width - 8 - row.type.length * 4.6 - 6}
+              y={y + 22 + index * 16 + 8}
+              textAnchor="end"
+              dominantBaseline="central"
+              fontSize={7}
+              fontWeight={700}
+              fill="var(--primary)"
+            >
+              {row.key}
+            </text>
+          ) : null}
+          <text
+            x={x + width - 8}
+            y={y + 22 + index * 16 + 8}
+            textAnchor="end"
+            dominantBaseline="central"
+            fontSize={8}
+            fill="var(--node-meta)"
+          >
+            {row.type}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+
+  return (
+    <svg viewBox="0 0 320 240" className="h-full w-full" aria-hidden="true">
+      {/* Lines under the tables, so a connector never crosses a box it only
+          passes — the rule the real canvas holds. */}
+      <g
+        className="af-hero-er-line"
+        fill="none"
+        stroke="var(--edge)"
+        strokeWidth={1.2}
+      >
+        <path d={toOrder.d} />
+        <path d={toAudit.d} strokeDasharray="4 3" />
+      </g>
+      {/* The crow's feet, drawn as the real canvas composes them: a BAR is "at
+          least one", a FAN is "many", a RING is "zero allowed". */}
+      <g fill="none" stroke="var(--edge)" strokeWidth={1.2}>
+        <path d={bar(toOrder.startX, toOrder.startY)} />
+        <path d={fan(toOrder.endX, toOrder.endY)} />
+        <path d={bar(toAudit.startX, toAudit.startY)} />
+        <path d={fan(toAudit.endX, toAudit.endY)} />
+        <circle
+          cx={toAudit.endX - FOOT - 4}
+          cy={toAudit.endY}
+          r={3}
+          fill="var(--canvas)"
+        />
+      </g>
+
+      {table(8, 24, 100, "Customer", [
+        { name: "id", type: "uuid", key: "PK" },
+        { name: "email", type: "string", key: "UK" },
+      ])}
+      {table(148, 84, 108, "Order", [
+        { name: "id", type: "uuid", key: "PK" },
+        { name: "customer_id", type: "uuid", key: "FK" },
+      ])}
+      {table(148, 162, 108, "Audit log", [{ name: "at", type: "timestamptz" }])}
+    </svg>
   );
 }
 

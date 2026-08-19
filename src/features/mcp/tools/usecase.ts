@@ -202,7 +202,8 @@ function auditUseCase(file: UseCaseLabFile): UseCaseAudit {
 
 function renderElements(file: UseCaseLabFile): string {
   const rows = file.elements.map((element) => {
-    const tech = element.technology === undefined ? "" : ` [${element.technology}]`;
+    const tech =
+      element.technology === undefined ? "" : ` [${element.technology}]`;
     return `| \`${element.id}\` | ${element.label}${tech} | ${element.kind} |`;
   });
   return ["| Id | Label | Kind |", "| --- | --- | --- |", ...rows].join("\n");

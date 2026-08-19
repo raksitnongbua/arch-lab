@@ -28,4 +28,6 @@ export const KIND_BLURB: Record<SeedKind, string> = {
   sequence: "Who calls whom, in order, over time",
   flowchart: "Steps, decisions and the loops back",
   usecase: "Who can do what at the system's edge",
+  er: "What you store, and how one record finds another",
+  dict: "What each field means, and where its value comes from",
 };

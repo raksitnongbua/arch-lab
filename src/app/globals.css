@@ -3,6 +3,8 @@
 @import "../features/sequence/styles/sequence-motion.css";
 @import "../features/flowchart/styles/flowchart-motion.css";
 @import "../features/usecase/styles/usecase-motion.css";
+@import "../features/er/styles/er-motion.css";
+@import "../features/dict/styles/dict-motion.css";
 @import "../features/mcp/styles/mcp-motion.css";
 
 /* ---------------------------------------------------------------------------
@@ -1628,23 +1630,26 @@
  * opacity because it animates discretely — an off panel becomes `hidden` for
  * its whole three-quarters rather than being composited invisibly forever.
  *
- * THE SLOT IS A QUARTER, and 26s is chosen from the other end: a panel needs
- * about 2s to assemble itself, so a 6.5s slot leaves ~4.5s of settled diagram
- * to actually read. Lengthening the slot to the 8.5s the two-kind version used
- * would have put the fourth kind 25s after page load, which is longer than
- * anyone looks at a hero.
+ * THE SLOT IS A FIFTH, and the 6.5s slot is chosen from the other end: a panel
+ * needs about 2s to assemble itself, so 6.5s leaves ~4.5s of settled diagram to
+ * actually read. THE SLOT IS FIXED AND THE CYCLE GREW — 26s to 39s as ER and the dictionary
+ * became the fifth kind — rather than the reverse: shortening each slot to keep
+ * the cycle at 26s would have taken every panel below the time it needs to be
+ * read, which trades all five kinds for one. The cost is that the fifth kind
+ * arrives 26s after load, and it is accepted because the alternative makes the
+ * other four worse.
  *
  * Fully out before the next comes in — the fade windows do not overlap — since
  * two diagrams half-visible at once reads as a rendering fault rather than a
  * transition. */
 @keyframes af-hero-swap {
   0%,
-  21.7% {
+  14.4% {
     opacity: 1;
     visibility: visible;
   }
-  25%,
-  96.7% {
+  16.66%,
+  97.8% {
     opacity: 0;
     visibility: hidden;
   }
@@ -1655,10 +1660,10 @@
 }
 
 .af-hero-kind {
-  animation: af-hero-swap 26s ease-in-out infinite;
+  animation: af-hero-swap 39s ease-in-out infinite;
 }
 
-/* The quarter-cycle offsets. Negative, so kinds two to four are already mid-cycle
+/* The sixth-cycle offsets. Negative, so kinds two to six are already mid-cycle
    on the first frame instead of the card sitting on a blank panel until its turn
    comes round.
    EACH CLASS IS ONE DECLARATION, which makes them fragile in a specific way
@@ -1680,6 +1685,14 @@
   animation-delay: -19.5s;
 }
 
+.af-hero-kind-5 {
+  animation-delay: -26s;
+}
+
+.af-hero-kind-6 {
+  animation-delay: -32.5s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* The global backstop already collapses the entrances onto their natural
      frame. The ambient loops need saying explicitly: parked, not sped up. */
@@ -1694,9 +1707,9 @@
     opacity: 0;
   }
 
-  /* The swap PARKS on the C4 panel rather than cycling. The other three need
+  /* The swap PARKS on the C4 panel rather than cycling. The other five need
      stating separately: without the second rule they keep their from-frame and
-     all four diagrams stack on top of each other. Parking on one real,
+     all six diagrams stack on top of each other. Parking on one real,
      complete diagram is the meaningful frame here — which is the whole
      reduced-motion rule in this codebase, not merely "slower". */
   .af-hero-kind {
@@ -1707,7 +1720,9 @@
 
   .af-hero-kind-2,
   .af-hero-kind-3,
-  .af-hero-kind-4 {
+  .af-hero-kind-4,
+  .af-hero-kind-5,
+  .af-hero-kind-6 {
     animation: none;
     opacity: 0;
     visibility: hidden;
