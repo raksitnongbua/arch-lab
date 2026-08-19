@@ -9,8 +9,13 @@
  * text, which is a distraction rather than life. The standing "connectors are
  * always animated" rule is satisfied vacuously: there are no connectors.
  *
- * THE REVEAL: sections rise in document order, staggered by `--dict-wave` and
- * capped so a long dictionary compresses instead of trickling. Stamped as a
+ * THE REVEAL, three beats: the TITLE arrives, then each section rises in
+ * document order (`--dict-wave`), then its ROWS fill in top to bottom
+ * (`--dict-row`) — which is the order a dictionary is read, so the motion
+ * states the reading order and nothing else. Both staggers are capped, so a
+ * long dictionary compresses instead of trickling; the row cap matters most,
+ * because a hundred-field section would otherwise take ten seconds to
+ * assemble. Stamped as a
  * server-rendered inline style, because a first-paint animation cannot wait
  * for JavaScript.
  *
@@ -21,16 +26,27 @@
  * ------------------------------------------------------------------------- */
 
 :root {
+  --dict-title-rise: 340ms;
   --dict-section-rise: 300ms;
   --dict-section-beat: 70ms;
   --dict-wave-cap: 5;
+  --dict-row-rise: 260ms;
+  --dict-row-beat: 34ms;
+  --dict-row-cap: 12;
 }
 
-.af-dict-section {
+.af-dict-section,
+.af-dict-row,
+.af-dict-title {
   opacity: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .af-dict-row {
+    transform-box: fill-box;
+    transform-origin: left center;
+  }
+
   .af-dict-section {
     opacity: 0;
     transform-box: fill-box;
@@ -39,6 +55,36 @@
     animation-delay: calc(
       min(var(--dict-wave, 0), var(--dict-wave-cap)) * var(--dict-section-beat)
     );
+  }
+
+  .af-dict-title {
+    opacity: 0;
+    animation: af-dict-rise var(--dict-title-rise) ease-out forwards;
+  }
+
+  /* Rows land AFTER their section has arrived — the worst-case section delay
+     plus its rise — so a row never appears on a panel that is not there yet.
+     Capped by `--dict-row-cap`: past a dozen rows the beat stops growing, or a
+     long section trickles in for ten seconds. */
+  .af-dict-row {
+    opacity: 0;
+    animation: af-dict-row-in var(--dict-row-rise) ease-out forwards;
+    animation-delay: calc(
+      var(--dict-wave-cap) * var(--dict-section-beat) +
+        var(--dict-section-rise) +
+        min(var(--dict-row, 0), var(--dict-row-cap)) * var(--dict-row-beat)
+    );
+  }
+
+  @keyframes af-dict-row-in {
+    from {
+      opacity: 0;
+      transform: translateX(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   @keyframes af-dict-rise {

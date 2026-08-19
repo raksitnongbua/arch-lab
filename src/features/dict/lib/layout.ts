@@ -36,6 +36,8 @@ export const DICT = {
    * dictionary is read as a column of text, so it takes a page width and
    * wraps into it rather than growing sideways without limit. */
   width: 940,
+  /** Height of the document title band above the first section. */
+  titleHeight: 54,
   /** Height of a section heading band. */
   sectionHeight: 46,
   /** Height of the column-header row under a heading. */
@@ -189,6 +191,18 @@ export interface LaidDictSection {
 export interface DictLayout {
   width: number;
   height: number;
+  /**
+   * The document's own title, drawn at the top of the canvas.
+   *
+   * ON THE CANVAS, not only in the page chrome, because the canvas is what
+   * gets EXPORTED and shared — an image of a dictionary with no title is a
+   * table of fields belonging to nothing, and the reader it reaches is
+   * usually not the one who exported it. The sequence canvas made this call
+   * first and for the same reason.
+   */
+  title: string | null;
+  /** Baseline y of the title, when there is one. */
+  titleY: number;
   sections: LaidDictSection[];
   /** x of each column's left text edge, shared by every section so the table
    * reads as ONE table rather than as several that happen to be stacked. */
@@ -267,8 +281,17 @@ export function layoutDict(file: DictLabFile): DictLayout {
   }
   const width = Math.max(DICT.width, cursor + DICT.margin);
 
+  const title =
+    typeof file.metadata?.title === "string" && file.metadata.title !== ""
+      ? file.metadata.title
+      : null;
+
   const laid: LaidDictSection[] = [];
   let y = DICT.margin;
+  const titleY = y + DICT.titleHeight / 2;
+  /* The band is only reserved when there IS a title: an untitled document
+     should not carry a band of empty space where one would have been. */
+  if (title !== null) y += DICT.titleHeight;
 
   for (const [index, section] of sections.entries()) {
     const top = y;
@@ -348,6 +371,8 @@ export function layoutDict(file: DictLabFile): DictLayout {
   return {
     width,
     height: Math.max(y - DICT.sectionGap + DICT.margin, DICT.margin * 2),
+    title,
+    titleY,
     sections: laid,
     columnX,
     columnWidth,

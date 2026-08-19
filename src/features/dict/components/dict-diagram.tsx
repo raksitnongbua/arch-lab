@@ -69,11 +69,13 @@ const FLAG_PAINT: Readonly<
 
 function Row({
   field,
+  index,
   columnX,
   columnWidth,
   striped,
 }: {
   field: LaidDictField;
+  index: number;
   columnX: Record<DictColumn, number>;
   columnWidth: Record<DictColumn, number>;
   striped: boolean;
@@ -81,7 +83,10 @@ function Row({
   const description = field.cells.find((cell) => cell.column === "description");
   const baseline = field.y + DICT.lineHeight * 1.15;
   return (
-    <g className="af-dict-row">
+    <g
+      className="af-dict-row"
+      style={{ "--dict-row": index } as React.CSSProperties}
+    >
       {/* A HAIRLINE BETWEEN ROWS, not a zebra fill. A wide row with a wrapped
           cell in the middle is exactly where an eye loses its line, so rows
           need separating — but the default theme separates by OUTLINE rather
@@ -240,6 +245,20 @@ export function DictDiagram({
       role="img"
       aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections`}
     >
+      {layout.title !== null ? (
+        <text
+          className="af-dict-title"
+          x={layout.columnX.name - DICT.padX}
+          y={layout.titleY}
+          dominantBaseline="central"
+          fontSize={22}
+          fontWeight={700}
+          fill="var(--foreground)"
+        >
+          {layout.title}
+        </text>
+      ) : null}
+
       {layout.sections.map((section) => (
         <g
           key={section.label}
@@ -323,6 +342,9 @@ export function DictDiagram({
           {section.fields.map((field, index) => (
             <Row
               key={field.name}
+              /* The row's own index, stamped for the reveal: a dictionary
+                 fills in top to bottom, which is the order it is read. */
+              index={index}
               field={field}
               columnX={layout.columnX}
               columnWidth={layout.columnWidth}
