@@ -91,9 +91,9 @@ function Row({
           alternating parity to be legible. */}
       {striped ? (
         <line
-          x1={columnX.name}
+          x1={columnX.name - DICT.padX * 0.4}
           y1={field.y}
-          x2={columnX.source + columnWidth.source}
+          x2={columnX.source + columnWidth.source + DICT.padX * 0.4}
           y2={field.y}
           stroke="var(--node-border)"
           strokeWidth={1}
@@ -268,6 +268,30 @@ export function DictDiagram({
               {section.technology}
             </text>
           ) : null}
+
+          {/* THE TABLE'S OWN SURFACE, drawn before the headings so everything
+              sits on it. `--node` on `--canvas` is the pair every other canvas
+              here uses for a shape against its background, so it is already
+              measured in all six themes — which is why the panel is that pair
+              rather than a hand-picked tint of the canvas colour, and why it
+              lifts the table without the high-contrast theme losing the
+              distinction.
+
+              The SECTION HEADING STAYS OUTSIDE IT, above the top edge: the
+              heading names the table, and a name printed inside the thing it
+              names reads as a first row. */}
+          <rect
+            x={layout.columnX.name - DICT.padX}
+            y={section.headerY - DICT.padX * 0.5}
+            width={right - layout.columnX.name + DICT.padX * 2}
+            height={
+              section.y + section.height - section.headerY + DICT.padX * 0.5
+            }
+            rx={10}
+            fill="var(--node)"
+            stroke="var(--node-border)"
+            strokeWidth={1}
+          />
 
           {/* The column headings, and the rule under them. A dictionary is
               read by column, so the headings repeat per section rather than
