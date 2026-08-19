@@ -241,6 +241,20 @@ console.log("the notation survives the motion");
   const litRules = [...css.matchAll(/\.af-er-lit[^{]*\{([^}]*)\}/g)]
     .map((match) => match[1])
     .join("\n");
+  /* FOCUS ADDS NO PAINT AT ALL NOW, not merely no dasharray. The lit line
+     used to take `--primary` and thicken to 2px, which is a second border
+     appearing where one already was. The signal is MOTION — the lit lines
+     animate while everything else dims — so the canvas must not vary a
+     stroke, a width or a fill on the lit state. */
+  check(
+    "the canvas paints nothing differently on the lit state",
+    /* Scoped to PAINT attributes. A first version matched any `state === "lit"`
+       and flagged the click handler's own toggle, which is behaviour rather
+       than paint — the assertion has to name what it forbids, not everything
+       that mentions the word. */
+    !/(stroke|strokeWidth|fill|opacity)=\{[^}]*state === "lit"/.test(diagram),
+    "a lit-state paint expression is a border by another name — the signal is the animation",
+  );
   check(
     "focusing a line never dashes it — the lit treatment is a glow, not a restyle",
     !/stroke-dasharray/.test(litRules),

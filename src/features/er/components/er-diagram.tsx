@@ -344,7 +344,14 @@ function Relationship({
   const d = relationship.points
     .map((point, at) => `${at === 0 ? "M" : "L"} ${point.x} ${point.y}`)
     .join(" ");
-  const stroke = state === "lit" ? "var(--primary)" : "var(--edge)";
+  /* FOCUS ADDS NO STROKE, ANYWHERE. The lit line used to take `--primary` and
+     thicken to 2px, which is a second border appearing where there was one
+     before — the same complaint the entity boxes had, one element down. The
+     line, its feet and its label keep exactly the paint they had at rest;
+     what changes is that the lit ones ANIMATE (the travelling glow in
+     `../styles/er-motion.css`) while everything else dims. Motion is the
+     signal, not a restyle. */
+  const stroke = "var(--edge)";
   const dashed = relationship.kind === "non-identifying";
   const interactive = onFocus !== undefined;
   const toggle = (): void =>
@@ -400,7 +407,7 @@ function Relationship({
         d={d}
         fill="none"
         stroke={stroke}
-        strokeWidth={state === "lit" ? 2 : 1.5}
+        strokeWidth={1.5}
         strokeLinejoin="round"
         /* The dash is the NOTATION, not decoration: a non-identifying
            relationship IS a dashed line. The stylesheet therefore fades this
@@ -448,7 +455,7 @@ function Relationship({
             height={LABEL_PLATE_HALF_HEIGHT * 2}
             rx={LABEL_PLATE_HALF_HEIGHT}
             fill="var(--node)"
-            stroke={state === "lit" ? "var(--primary)" : "var(--node-border)"}
+            stroke="var(--node-border)"
             strokeWidth={1}
           />
           <text
@@ -458,7 +465,7 @@ function Relationship({
             dominantBaseline="central"
             fontSize={12}
             fontWeight={500}
-            fill={state === "lit" ? "var(--primary)" : "var(--node-foreground)"}
+            fill="var(--node-foreground)"
           >
             {relationship.label}
           </text>
