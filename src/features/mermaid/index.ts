@@ -22,6 +22,10 @@
  *     per `MERMAID_FLOWCHART_EXPORT_CAVEAT`: `desc`, `[technology]`,
  *     `#tag`s, a group's tint and the header beyond the title have no
  *     Mermaid equivalent.
+ *   - `parseMermaidEr(source, options?)` / `serializeMermaidEr(file)` —
+ *     Mermaid `erDiagram` ⇄ `ErLabFile`. The only dialect here whose
+ *     detection is EXACT rather than heuristic: Mermaid has a real ER
+ *     document type, so `detectMermaidEr` tests one header word.
  *   - `parseMermaidUseCase(source, options?)` — Mermaid `flowchart` /
  *     `graph` code read under the USE-CASE convention (circles = actors,
  *     stadiums = use cases, subgraph = system boundary) →
@@ -80,6 +84,15 @@ export {
   MERMAID_USECASE_EXPORT_CAVEAT,
 } from "./lib/usecase-emit";
 export type { SerializeMermaidUseCaseOptions } from "./lib/usecase-emit";
+export { detectMermaidEr, parseMermaidEr } from "./lib/er";
+export type { ParseMermaidErOptions } from "./lib/er";
+export { serializeMermaidEr } from "./lib/er-emit";
+export type { SerializeMermaidErOptions } from "./lib/er-emit";
+export {
+  MERMAID_ER_CAVEAT,
+  MERMAID_ER_EXPORT_CAVEAT,
+  MERMAID_ER_HEADER_WORD,
+} from "./lib/er-mapping";
 export { MERMAID_EXTENSION_KEY, readMermaidExtension } from "./lib/toModel";
 export type {
   MermaidBoundary,
