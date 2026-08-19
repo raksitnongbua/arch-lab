@@ -23,12 +23,12 @@
  */
 
 /*
- * The feature carries ALL FOUR `.alab` document types — the C4 grammar,
+ * The feature carries ALL FIVE `.alab` document types — the C4 grammar,
  * the sequence grammar (`./lib/sequence/`), the flowchart grammar
- * (`./lib/flowchart/`) and the use-case grammar (`./lib/usecase/`). They
- * share the header line, the `!` escape, the cursor, the error type and the
- * token classes, which is why the three newer grammars live here rather
- * than as sibling features:
+ * (`./lib/flowchart/`), the use-case grammar (`./lib/usecase/`) and the ER
+ * grammar (`./lib/er/`). They share the header line, the `!` escape, the
+ * cursor, the error type and the token classes, which is why the four newer
+ * grammars live here rather than as sibling features:
  *
  *   - `parseSequenceText` / `serializeSequenceText` — `.alab` sequence
  *     text ⇄ `SequenceLabFile`, lossless both ways, same error contract.
@@ -36,10 +36,12 @@
  *     text ⇄ `FlowchartLabFile`, same lossless and error contract.
  *   - `parseUseCaseText` / `serializeUseCaseText` — `.alab` use-case
  *     text ⇄ `UseCaseLabFile`, same lossless and error contract.
+ *   - `parseErText` / `serializeErText` — `.alab` ER text ⇄ `ErLabFile`,
+ *     same lossless and error contract.
  *   - `detectAlabKind` — which grammar a source belongs to, from its first
  *     meaningful line ("archlab 1.0" = C4, "archlab 1.0 sequence" =
  *     sequence, "archlab 1.0 flowchart" = flowchart, "archlab 1.0 usecase"
- *     = use-case).
+ *     = use-case, "archlab 1.0 er" = ER).
  */
 
 export { parseArchText } from "./lib/parse";
@@ -76,3 +78,11 @@ export {
   DEPENDENCY_STEREOTYPES,
   ELEMENT_KIND_BY_KEYWORD,
 } from "./lib/usecase/keywords";
+export { parseErText } from "./lib/er/parse";
+export { serializeErText } from "./lib/er/serialize";
+export {
+  ATTRIBUTE_KEYS,
+  ER_HEADER_WORD,
+  LEFT_CARDINALITY,
+  RIGHT_CARDINALITY,
+} from "./lib/er/keywords";
