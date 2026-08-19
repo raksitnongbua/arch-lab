@@ -46,6 +46,7 @@
     "check:usecase": "node scripts/usecase-check.mjs",
     "check:usecase-layout": "node scripts/usecase-layout-check.mjs",
     "check:er": "node scripts/er-check.mjs",
+    "check:er-layout": "node scripts/er-layout-check.mjs",
     "check:sequence-layout": "node scripts/sequence-layout-check.mjs",
     "check:sequence-motion": "node scripts/sequence-motion-check.mjs",
     "check:sequence-collapse": "node scripts/sequence-collapse-check.mjs",

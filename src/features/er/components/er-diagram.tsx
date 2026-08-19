@@ -2,41 +2,44 @@
  * The ER canvas: one SVG drawn straight from `layoutEr`'s coordinates.
  *
  * SVG RATHER THAN `@xyflow/react`, which the C4 canvas uses. Nothing in an ER
- * diagram is dragged, drilled into or selected as a graph node — it is a
- * schema you read — so a node-graph runtime would buy panning this canvas
- * gets from its container anyway, and cost the ability to hand the SAME
- * element tree to the SVG exporter. The use-case and flowchart canvases made
- * the same call for the same reason.
+ * diagram is dragged or drilled into — it is a schema you read — so a
+ * node-graph runtime would buy panning this canvas gets from its container
+ * anyway, and cost the ability to hand the SAME element tree to the SVG
+ * exporter. The use-case and flowchart canvases made the same call.
  *
  * WHAT IT DRAWS, and why each part is shaped as it is:
  *
- *   - An ENTITY is a table, not a labelled shape: a header bar carrying the
- *     name (and `[technology]` when the document sets one), then one row per
- *     column with the name, the type, and the key roles. The key roles are
- *     drawn in the accent colour and right-aligned, because `PK` is what a
- *     reader scans an entity for and a left-aligned one hides behind the
- *     type.
+ *   - An ENTITY is a table, not a labelled shape: a tinted header band
+ *     carrying the name (and `[technology]` when set), then one row per
+ *     column reading `name … [KEYS] type`. All three sit on ONE baseline,
+ *     at x positions the layout computed — the first cut nudged the key
+ *     badge with a `dy` and landed it on the row above, so `PK` appeared to
+ *     belong to the previous column.
  *   - A CONNECTOR is an orthogonal polyline with a crow's foot at each end.
  *     The feet are drawn HERE rather than as SVG `marker` elements, because a
- *     marker inherits `orient` from the path's own tangent and an ER foot has
- *     to face the box it touches — at the `to` end that is the opposite of
- *     the tangent, and `orient="auto-start-reverse"` only fixes one of the
- *     two. Drawing them from the layout's `dx`/`dy` makes both ends honest
- *     and keeps the exporter identical to the canvas.
+ *     marker takes its orientation from the path's tangent and an ER foot has
+ *     to face the box it touches — at the `to` end that is the opposite, and
+ *     `orient="auto-start-reverse"` fixes one end while breaking the other.
  *   - The LABEL sits on the middle segment with a canvas-coloured plate
  *     behind it, so a verb never has a line running through it.
  *
- * MOTION lives in `../styles/er-motion.css` and is opt-out twice — the
- * media query holds it still for `prefers-reduced-motion`, and the app-wide
- * idle-motion toggle stops the ambient gesture. The per-entity stagger is
- * stamped as an inline custom property here because it is SERVER-RENDERED:
- * a first-paint animation cannot wait for JavaScript to write a variable
- * (`usecase/lib/motion.ts` argues this at length, and the rule is the same).
+ * FOCUS. Clicking an entity dims everything it is not joined to and lights
+ * the relationships that touch it, which is the question a reader actually
+ * brings to a schema: "what does this table talk to?" The first cut had no
+ * focus at all on the argument that an ER box already shows its detail —
+ * that was wrong twice over. It ignored `desc`, which is the one thing the
+ * box CANNOT show, and it left the fifth canvas as the only one a reader
+ * cannot interrogate.
  *
- * The stagger names the LAYOUT'S OWN ORDER — an entity's column, which is its
- * dependency depth — so the reveal says "parents, then what depends on them",
- * which is what the geometry already drew. It states no ranking the document
- * does not.
+ * SERVER-SAFE. `onFocus` is optional and no hook runs here, so this component
+ * renders in a server component and a no-JS reader gets the whole diagram —
+ * which is what lets the crawlable example pages ship the SVG in their HTML.
+ * `check:seo` cares: an AI crawler does not run JavaScript.
+ *
+ * MOTION lives in `../styles/er-motion.css` and is opt-out twice. The
+ * per-entity stagger is stamped as an inline custom property here because it
+ * is SERVER-RENDERED: a first-paint animation cannot wait for JavaScript to
+ * write a variable (`usecase/lib/motion.ts` argues this at length).
  */
 
 import type {
@@ -52,6 +55,27 @@ import type { ErLabFile } from "@/types";
  * rule, held here in TS and in the stylesheet's `--er-wave-cap`. */
 const WAVE_CAP = 6;
 
+/** A rectangle rounded on its TOP corners only — the header band, which has
+ * to follow the box's own radius above and sit flush on the rule below. */
+function topRoundedPath(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): string {
+  const r = Math.min(radius, height);
+  return [
+    `M ${x} ${y + height}`,
+    `L ${x} ${y + r}`,
+    `Q ${x} ${y} ${x + r} ${y}`,
+    `L ${x + width - r} ${y}`,
+    `Q ${x + width} ${y} ${x + width} ${y + r}`,
+    `L ${x + width} ${y + height}`,
+    "Z",
+  ].join(" ");
+}
+
 /* -------------------------------------------------------------------------- */
 /* Crow's feet                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -59,13 +83,13 @@ const WAVE_CAP = 6;
 /**
  * One end's glyph, built from the layout's outward direction.
  *
- * The four cardinalities are two independent marks, which is why this is
+ * The four cardinalities are TWO INDEPENDENT MARKS, which is why this is
  * composed rather than a table of four shapes: a BAR across the line means
- * "at least one", a RING on the line means "zero is allowed", and a FOOT
- * (the three-toed fan) means "many". `one` is a bar; `zero-or-one` is a ring
- * plus a bar; `one-or-more` is a bar plus a foot; `zero-or-more` is a ring
- * plus a foot. Reading them as two marks is also how a reader learns them,
- * so the drawing matches the explanation.
+ * "at least one", a RING on the line means "zero is allowed", and a FOOT (the
+ * three-toed fan) means "many". `one` is a bar; `zero-or-one` a ring and a
+ * bar; `one-or-more` a bar and a foot; `zero-or-more` a ring and a foot.
+ * Reading them as two marks is how a reader learns them, so the drawing
+ * matches the explanation.
  */
 function EndGlyph({
   end,
@@ -75,8 +99,6 @@ function EndGlyph({
   stroke: string;
 }): React.JSX.Element {
   const { x, y, dx, dy, cardinality } = end;
-  /* Along the line, away from the box. Perpendicular, for the bar's width
-     and the foot's spread. */
   const ax = dx * ER.footLength;
   const ay = dy * ER.footLength;
   const px = -dy * ER.footSpread;
@@ -86,14 +108,14 @@ function EndGlyph({
   const optional =
     cardinality === "zero-or-one" || cardinality === "zero-or-more";
 
-  /* The bar sits one glyph-length out when a foot shares the end, so the two
-     marks read as two marks instead of overlapping into a blob. */
+  /* The bar sits further out when a foot shares the end, so the two marks
+     read as two marks instead of overlapping into a blob. */
   const barT = many ? 1 : 0.55;
   const bx = x + ax * barT;
   const by = y + ay * barT;
 
   return (
-    <g className="af-er-foot" fill="none" stroke={stroke} strokeWidth={1.6}>
+    <g fill="none" stroke={stroke} strokeWidth={1.6} strokeLinecap="round">
       {many ? (
         <>
           <line x1={x} y1={y} x2={x + ax + px} y2={y + ay + py} />
@@ -104,9 +126,9 @@ function EndGlyph({
       <line x1={bx + px} y1={by + py} x2={bx - px} y2={by - py} />
       {optional ? (
         <circle
-          cx={x + ax * (many ? 1.65 : 1.35)}
-          cy={y + ay * (many ? 1.65 : 1.35)}
-          r={ER.footSpread * 0.62}
+          cx={x + ax * (many ? 1.7 : 1.4)}
+          cy={y + ay * (many ? 1.7 : 1.4)}
+          r={ER.footSpread * 0.6}
           fill="var(--canvas)"
         />
       ) : null}
@@ -118,46 +140,96 @@ function EndGlyph({
 /* Entities                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function Entity({ entity }: { entity: LaidErEntity }): React.JSX.Element {
+function Entity({
+  entity,
+  state,
+  onFocus,
+}: {
+  entity: LaidErEntity;
+  state: "none" | "focused" | "related" | "dimmed";
+  onFocus?: (id: string | null) => void;
+}): React.JSX.Element {
   const headerY = entity.y + ER.headerHeight;
+  const interactive = onFocus !== undefined;
+  const border =
+    state === "focused"
+      ? "var(--primary)"
+      : state === "related"
+        ? "var(--edge-drift)"
+        : "var(--node-border)";
+
   return (
     <g
-      className="af-er-entity"
+      className={`af-er-entity af-er-${state}`}
       style={
-        {
-          "--er-wave": Math.min(entity.depth, WAVE_CAP),
-        } as React.CSSProperties
+        { "--er-wave": Math.min(entity.depth, WAVE_CAP) } as React.CSSProperties
       }
+      {...(interactive
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-pressed": state === "focused",
+            "aria-label": `${entity.label}: ${entity.attributes.length} columns`,
+            onClick: () => onFocus(state === "focused" ? null : entity.id),
+            onKeyDown: (event: React.KeyboardEvent) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              onFocus(state === "focused" ? null : entity.id);
+            },
+          }
+        : {})}
     >
+      {/* The description is the ONE thing the box cannot draw, so it rides a
+          native tooltip as well as the detail panel — a reader who never
+          clicks still finds it. */}
+      {entity.description !== undefined ? (
+        <title>{`${entity.label} — ${entity.description}`}</title>
+      ) : null}
+
       <rect
         x={entity.x}
         y={entity.y}
         width={entity.width}
         height={entity.height}
-        rx={10}
+        rx={12}
         fill="var(--node)"
-        stroke="var(--node-border)"
-        strokeWidth={1.2}
+        stroke={border}
+        strokeWidth={state === "focused" ? 2 : 1.2}
+        filter="url(#af-er-shadow)"
       />
-      {/* The header's floor. Drawn as a line rather than a filled band so a
-          theme that separates by outline rather than by fill — the default —
-          still shows the split. */}
+      {/* A tinted header band, not a bare rule. It is what makes the box read
+          as a TABLE rather than a bordered list — the header of every table a
+          reader has seen is a band — and it is drawn as a low-opacity fill of
+          the accent so every theme gets it from its own palette rather than
+          from a hardcoded grey. */}
+      <path
+        d={topRoundedPath(
+          entity.x,
+          entity.y,
+          entity.width,
+          ER.headerHeight,
+          12,
+        )}
+        fill="var(--primary)"
+        opacity={state === "focused" ? 0.2 : 0.11}
+      />
       {entity.attributes.length > 0 ? (
         <line
           x1={entity.x}
           y1={headerY}
           x2={entity.x + entity.width}
           y2={headerY}
-          stroke="var(--node-border)"
+          stroke={border}
           strokeWidth={1.2}
         />
       ) : null}
+
       <text
         x={entity.x + ER.padX}
         y={entity.y + ER.headerHeight / 2}
         dominantBaseline="central"
         fontSize={ER.labelSize}
-        fontWeight={600}
+        fontWeight={650}
         fill="var(--node-foreground)"
       >
         {entity.label}
@@ -174,10 +246,14 @@ function Entity({ entity }: { entity: LaidErEntity }): React.JSX.Element {
           {entity.technology}
         </text>
       ) : null}
+
       {entity.attributes.map((attribute) => (
         <g key={attribute.name}>
+          {attribute.description !== undefined ? (
+            <title>{`${attribute.name} — ${attribute.description}`}</title>
+          ) : null}
           <text
-            x={entity.x + ER.padX}
+            x={attribute.nameX}
             y={attribute.y}
             dominantBaseline="central"
             fontSize={ER.rowSize}
@@ -185,8 +261,22 @@ function Entity({ entity }: { entity: LaidErEntity }): React.JSX.Element {
           >
             {attribute.name}
           </text>
+          {attribute.keysX !== null ? (
+            <text
+              x={attribute.keysX}
+              y={attribute.y}
+              textAnchor="end"
+              dominantBaseline="central"
+              fontSize={ER.rowSize - 1.5}
+              fontWeight={700}
+              letterSpacing={0.3}
+              fill="var(--primary)"
+            >
+              {attribute.keys}
+            </text>
+          ) : null}
           <text
-            x={entity.x + entity.width - ER.padX}
+            x={attribute.typeX}
             y={attribute.y}
             textAnchor="end"
             dominantBaseline="central"
@@ -195,25 +285,6 @@ function Entity({ entity }: { entity: LaidErEntity }): React.JSX.Element {
           >
             {attribute.type}
           </text>
-          {attribute.keys !== "" ? (
-            <text
-              x={entity.x + entity.width - ER.padX}
-              y={attribute.y}
-              textAnchor="end"
-              dominantBaseline="central"
-              fontSize={ER.rowSize - 1.5}
-              fontWeight={600}
-              fill="var(--primary)"
-              /* Pushed left of the type by the type's own width would need a
-                 measurement; instead the key rides one row-height above the
-                 baseline's right edge via a dx, which is stable at every
-                 font because it is expressed in the row's own units. */
-              dx={-4}
-              dy={-ER.rowHeight * 0.42}
-            >
-              {attribute.keys}
-            </text>
-          ) : null}
         </g>
       ))}
     </g>
@@ -227,19 +298,21 @@ function Entity({ entity }: { entity: LaidErEntity }): React.JSX.Element {
 function Relationship({
   relationship,
   index,
+  state,
 }: {
   relationship: LaidErRelationship;
   index: number;
+  state: "none" | "lit" | "dimmed";
 }): React.JSX.Element {
   const d = relationship.points
     .map((point, at) => `${at === 0 ? "M" : "L"} ${point.x} ${point.y}`)
     .join(" ");
-  const stroke = "var(--edge)";
+  const stroke = state === "lit" ? "var(--primary)" : "var(--edge)";
   const dashed = relationship.kind === "non-identifying";
 
   return (
     <g
-      className={`af-er-edge${dashed ? "af-er-edge-dashed" : ""}`}
+      className={`af-er-edge af-er-${state}${dashed ? "af-er-edge-dashed" : ""}`}
       style={{ "--er-edge": index } as React.CSSProperties}
     >
       <path
@@ -247,9 +320,9 @@ function Relationship({
         d={d}
         fill="none"
         stroke={stroke}
-        strokeWidth={1.5}
+        strokeWidth={state === "lit" ? 2 : 1.5}
         strokeLinejoin="round"
-        /* The dash is the notation, not decoration: a non-identifying
+        /* The dash is the NOTATION, not decoration: a non-identifying
            relationship IS a dashed line. The stylesheet therefore fades this
            kind in rather than drawing it with a dashoffset, which would
            overwrite the dash that carries the meaning. */
@@ -262,11 +335,11 @@ function Relationship({
           {/* A plate the canvas colour, so the verb sits ON the diagram
               rather than having a line drawn through it. */}
           <rect
-            x={relationship.labelX - relationship.label.length * 3.4 - 6}
-            y={relationship.labelY - 9}
-            width={relationship.label.length * 6.8 + 12}
-            height={18}
-            rx={5}
+            x={relationship.labelX - relationship.label.length * 3.4 - 7}
+            y={relationship.labelY - 9.5}
+            width={relationship.label.length * 6.8 + 14}
+            height={19}
+            rx={9.5}
             fill="var(--canvas)"
           />
           <text
@@ -275,7 +348,9 @@ function Relationship({
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={11.5}
-            fill="var(--muted-foreground)"
+            fill={
+              state === "lit" ? "var(--primary)" : "var(--muted-foreground)"
+            }
           >
             {relationship.label}
           </text>
@@ -292,27 +367,57 @@ function Relationship({
 export interface ErDiagramProps {
   file: ErLabFile;
   className?: string;
+  /** The focused entity id, or null. Omit both this and `onFocus` for a
+   * static, server-rendered diagram. */
+  focusId?: string | null;
+  onFocus?: (id: string | null) => void;
 }
 
-/**
- * Draws an ER document. Pure — it takes a file and renders; there is no
- * state, so it is safe in a server component and the no-JS reader gets the
- * whole diagram.
- */
 export function ErDiagram({
   file,
   className,
+  focusId = null,
+  onFocus,
 }: ErDiagramProps): React.JSX.Element {
   const layout = layoutEr(file);
+
+  /* Which entities the focused one actually touches. Computed from the
+     RELATIONSHIPS rather than from proximity, because "what does this table
+     talk to" is the question focus answers and adjacency on the canvas is not
+     the same thing. */
+  const related = new Set<string>();
+  if (focusId !== null) {
+    related.add(focusId);
+    for (const relationship of layout.relationships) {
+      if (relationship.from === focusId) related.add(relationship.to);
+      if (relationship.to === focusId) related.add(relationship.from);
+    }
+  }
+
   return (
     <svg
-      className={className}
+      className={`af-er-canvas${focusId !== null ? "af-er-has-focus" : ""}${className === undefined ? "" : ` ${className}`}`}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       width="100%"
       role="img"
       aria-label={`Entity-relationship diagram: ${file.metadata?.title ?? "untitled"}, ${layout.entities.length} entities`}
       style={{ "--er-wave-cap": WAVE_CAP } as React.CSSProperties}
     >
+      <defs>
+        {/* A soft lift, not a drop shadow — the boxes should read as sitting
+            ON the canvas, which is what separates a diagram meant to be
+            PRESENTED from one that merely renders (`purpose.md`). */}
+        <filter id="af-er-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow
+            dx="0"
+            dy="1.5"
+            stdDeviation="3"
+            floodColor="var(--node-foreground)"
+            floodOpacity="0.10"
+          />
+        </filter>
+      </defs>
+
       {/* Relationships first, so a line can never be drawn over a box it
           merely passes. */}
       {layout.relationships.map((relationship, index) => (
@@ -320,10 +425,30 @@ export function ErDiagram({
           key={`${relationship.from}->${relationship.to}-${index}`}
           relationship={relationship}
           index={index}
+          state={
+            focusId === null
+              ? "none"
+              : relationship.from === focusId || relationship.to === focusId
+                ? "lit"
+                : "dimmed"
+          }
         />
       ))}
       {layout.entities.map((entity) => (
-        <Entity key={entity.id} entity={entity} />
+        <Entity
+          key={entity.id}
+          entity={entity}
+          state={
+            focusId === null
+              ? "none"
+              : entity.id === focusId
+                ? "focused"
+                : related.has(entity.id)
+                  ? "related"
+                  : "dimmed"
+          }
+          onFocus={onFocus}
+        />
       ))}
     </svg>
   );

@@ -136,3 +136,76 @@
     }
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * FOCUS, and the resting states around it.
+ *
+ * Focus is a READING AID, so it dims rather than hides: a dimmed table is
+ * still legible if you look at it, which is what separates "show me what this
+ * touches" from "hide everything else". 0.28 was chosen as the lowest opacity
+ * at which a column name is still readable against `--canvas` on the default
+ * high-contrast theme — below that the diagram stops being a diagram and
+ * becomes a spotlight.
+ *
+ * The transition is NOT gated on reduced motion: it is a state change a
+ * reader triggered, not an ambient gesture, and a hard cut between focus
+ * states is harder to follow than a fade. It is short enough (140ms) to read
+ * as instant.
+ * ------------------------------------------------------------------------- */
+
+.af-er-canvas .af-er-entity,
+.af-er-canvas .af-er-edge {
+  transition:
+    opacity 140ms ease-out,
+    filter 140ms ease-out;
+}
+
+.af-er-has-focus .af-er-dimmed {
+  opacity: 0.28;
+}
+
+.af-er-entity[role="button"] {
+  cursor: pointer;
+}
+
+/* The lift on hover is what makes a box feel like an object rather than a
+   drawing of one. `filter` rather than `transform`, because a transform on an
+   SVG group re-rasterises its text on some engines and the type visibly
+   softens for the duration. */
+.af-er-entity[role="button"]:hover {
+  filter: brightness(1.06);
+}
+
+.af-er-entity[role="button"]:focus-visible {
+  outline: none;
+}
+
+.af-er-entity[role="button"]:focus-visible rect {
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* THE ONE TRAVELLING GESTURE, and it only exists under focus. At rest an
+     ER diagram holds still except for the dashed march below — nothing
+     travels along a foreign key, so a permanent current would be animating a
+     claim the notation does not make. Under focus it is different: the reader
+     has asked "what does this table talk to", and a current along exactly
+     those lines answers it in motion. Same argument the C4 canvas makes for
+     lighting a selected path. */
+  .af-er-has-focus .af-er-lit .af-er-edge-line {
+    stroke-dasharray: 5 7;
+    animation: af-er-current 900ms linear infinite;
+  }
+
+  [data-idle-motion="off"] .af-er-has-focus .af-er-lit .af-er-edge-line {
+    animation: none;
+    stroke-dasharray: none;
+  }
+
+  @keyframes af-er-current {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+}

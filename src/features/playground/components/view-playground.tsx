@@ -887,7 +887,7 @@ export function ViewPlayground({
             live editor
           </Badge>
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-            C4, sequence, flowchart or use case —{" "}
+            C4, sequence, flowchart, use case or ER —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
             JSON, or Mermaid, auto-detected and rendered live. Nothing leaves
             your browser.{" "}

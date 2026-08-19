@@ -86,13 +86,31 @@ export const ER = {
   footLength: 13,
   /** Half-height of a crow's foot, and the radius of the optional-`o` ring. */
   footSpread: 7,
+  /** Gap between a key badge and the type it sits left of. */
+  keyGap: 10,
 } as const;
 
 /* -------------------------------------------------------------------------- */
 /* Laid-out shapes                                                             */
 /* -------------------------------------------------------------------------- */
 
-/** One column row, already positioned relative to the canvas. */
+/**
+ * One column row, already positioned relative to the canvas.
+ *
+ * THE THREE X POSITIONS ARE COMPUTED HERE, not in the renderer, because
+ * placing the key badge needs the TYPE's rendered width and this module is
+ * the only one that measures. The first cut nudged the badge with a `dy` to
+ * dodge the type, which put it on the row above and made `PK` look like it
+ * belonged to the previous column — visible on every keyed row in the first
+ * screenshot of this canvas.
+ *
+ * The row reads `name … [KEYS] type`, all three on one baseline: the name
+ * left-anchored, the type end-anchored at the right padding, and the badge
+ * end-anchored just left of the type. The badge sits INSIDE the row rather
+ * than beyond the type, because the type is the row's most variable string
+ * and anchoring the badge to the box edge would make the gap between them
+ * jump from row to row.
+ */
 export interface LaidErAttribute {
   name: string;
   type: string;
@@ -100,6 +118,12 @@ export interface LaidErAttribute {
   description?: string;
   /** Absolute y of the row's vertical centre. */
   y: number;
+  /** Left-anchored x of the column name. */
+  nameX: number;
+  /** End-anchored x of the type. */
+  typeX: number;
+  /** End-anchored x of the key badge, or `null` when the row carries none. */
+  keysX: number | null;
 }
 
 export interface LaidErEntity {
@@ -190,9 +214,12 @@ function entityWidth(entity: ErEntity): number {
     const row =
       textWidth(attribute.name, ER.rowSize) +
       textWidth(attribute.type, ER.rowSize) +
-      (keys === "" ? 0 : textWidth(keys, ER.rowSize)) +
-      /* Two inter-column gutters, so name/type/keys never touch. */
-      ER.rowSize * 2.4;
+      (keys === "" ? 0 : textWidth(keys, ER.rowSize) + ER.keyGap) +
+      /* One more gutter between the name and whatever follows it, so the
+         three never touch even on the widest row. The gap RESERVED here is
+         the same constant the placement subtracts, or a badge could be
+         pushed off the left edge of its own row. */
+      ER.keyGap * 1.6;
     if (row > widest) widest = row;
   }
   return Math.max(ER.minWidth, Math.ceil(widest + ER.padX * 2));
@@ -393,15 +420,25 @@ export function layoutEr(file: ErLabFile): ErLayout {
         width,
         height,
         depth: index,
-        attributes: (entity.attributes ?? []).map((attribute, row) => ({
-          name: attribute.name,
-          type: attribute.type,
-          keys: keysText(attribute),
-          ...(attribute.description !== undefined
-            ? { description: attribute.description }
-            : {}),
-          y: y + ER.headerHeight + row * ER.rowHeight + ER.rowHeight / 2,
-        })),
+        attributes: (entity.attributes ?? []).map((attribute, row) => {
+          const keys = keysText(attribute);
+          const typeX = x + width - ER.padX;
+          return {
+            name: attribute.name,
+            type: attribute.type,
+            keys,
+            ...(attribute.description !== undefined
+              ? { description: attribute.description }
+              : {}),
+            y: y + ER.headerHeight + row * ER.rowHeight + ER.rowHeight / 2,
+            nameX: x + ER.padX,
+            typeX,
+            keysX:
+              keys === ""
+                ? null
+                : typeX - textWidth(attribute.type, ER.rowSize) - ER.keyGap,
+          };
+        }),
       });
       y += height + ER.rowGap;
     }
