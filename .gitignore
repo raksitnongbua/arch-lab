@@ -72,9 +72,12 @@ yarn-error.log*
 # under it would never match anything.
 .claude/*
 # ...except the project rules, which README.md links to and reviewers need to
-# see in a diff. Everything else under .claude/ — worktrees, settings.local.json
-# — stays ignored by the line above.
+# see in a diff, and the subagent definitions, which encode the same decisions
+# for the agents that do the work — a reviewer who cannot see them cannot tell
+# why an agent asserted something. Everything else under .claude/ — worktrees,
+# settings.local.json — stays ignored by the line above.
 !.claude/rules/
+!.claude/agents/
 
 # Agent-captured verification screenshots — evidence, not source.
 .claude-screenshots/

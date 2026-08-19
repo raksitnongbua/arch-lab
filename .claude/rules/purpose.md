@@ -48,6 +48,9 @@ Keep both working; they are the argument for using this at all.
 
 ## Scope
 
+- Adding a fifth notation is the largest change this repo accepts, and the order
+  of the work is fixed. It is written down in
+  [`new-diagram-type.md`](new-diagram-type.md); read it before starting one.
 - Both document types — C4 and sequence — are stable and in real use as of
   v1.0.0. Treat their formats as things people have files of.
 - The MCP surface and `.alab` are marked **beta** in-product. If a change breaks
