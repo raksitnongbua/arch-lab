@@ -156,6 +156,18 @@ export interface LaidErEnd {
   cardinality: ErCardinality;
 }
 
+/**
+ * The plate a label sits on, sized with the same character ratio every other
+ * string here is measured with. OWNED BY THE LAYOUT because placement needs
+ * it: a label can only be kept clear of a crow's foot if the geometry knows
+ * how wide the label is.
+ */
+export const labelPlateWidth = (label: string): number =>
+  Math.max(34, label.length * ER.rowSize * CHAR_WIDTH_RATIO + 18);
+
+/** Half-height of a label plate, for the same reason. */
+export const LABEL_PLATE_HALF_HEIGHT = 11;
+
 export interface LaidErRelationship {
   from: string;
   to: string;
@@ -348,6 +360,63 @@ function route(
   };
 }
 
+/**
+ * The point on `points` where a `plate`-wide label can sit clear of both
+ * ends. Walks the segments longest-first and takes the first that has room for
+ * the plate PLUS a foot's length at each end it touches; falls back to the
+ * longest segment's midpoint pushed perpendicular, which is beside the line
+ * rather than on it.
+ */
+function labelSpot(
+  points: { x: number; y: number }[],
+  plate: number,
+): { x: number; y: number } {
+  const segments = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    /* The first and last segments are the stubs leaving a box, and a foot
+       occupies the whole of one — never a candidate. */
+    const touchesEnd = i === 1 || i === points.length - 1;
+    segments.push({ a, b, length, touchesEnd, index: i });
+  }
+  const ordered = [...segments].sort((x, y) => y.length - x.length);
+
+  const needed = plate + ER.footLength * 2;
+  const roomy = ordered.find(
+    (segment) => !segment.touchesEnd && segment.length >= needed,
+  );
+  if (roomy !== undefined) {
+    return {
+      x: (roomy.a.x + roomy.b.x) / 2,
+      y: (roomy.a.y + roomy.b.y) / 2,
+    };
+  }
+
+  /* Nothing has room. Take the longest segment regardless and push the label
+     off the line, perpendicular, so it is beside the connector instead of
+     printed over it. */
+  const longest = ordered[0] ?? {
+    a: points[0],
+    b: points[points.length - 1],
+    length: 0,
+  };
+  const midX = (longest.a.x + longest.b.x) / 2;
+  const midY = (longest.a.y + longest.b.y) / 2;
+  const horizontal =
+    Math.abs(longest.b.x - longest.a.x) >= Math.abs(longest.b.y - longest.a.y);
+  /* Far enough to clear a FOOT, not merely to clear the line. The first
+     attempt pushed by half a plate plus 6px, which still left "is taken as"
+     inside the foot's spread on the course-catalogue example: the plate has to
+     clear `LABEL_PLATE_HALF_HEIGHT + footSpread`, plus a margin so a glyph and
+     a plate read as separate rather than merely not intersecting. */
+  const push = LABEL_PLATE_HALF_HEIGHT + ER.footSpread + 12;
+  return horizontal
+    ? { x: midX, y: midY - push }
+    : { x: midX + plate / 2 + 8, y: midY };
+}
+
 interface Vec {
   x: number;
   y: number;
@@ -518,11 +587,28 @@ export function layoutEr(file: ErLabFile): ErLayout {
     }
 
     const { points, fromEnd, toEnd } = route(from, to);
-    /* The label sits on the MIDDLE segment — the one that spans the gap
-       between the boxes — so it can never land on a box or on a stub that
-       touches one. */
-    const a = points[1];
-    const b = points[2];
+    /* WHERE THE LABEL GOES, and why the obvious answer was wrong. It used to
+       sit at the midpoint of the middle segment, which keeps it off a BOX but
+       nothing else — and on a real schema that is not enough:
+
+         - When two boxes are close, the middle segment is short and the plate
+           overhangs into the crow's feet at both ends. "is taken as" was drawn
+           straight through a foot.
+         - When several relationships run between the same pair of columns,
+           their middle segments are near-parallel and the plates land on top
+           of each other.
+
+       So the label now takes the LONGEST segment that can actually hold the
+       plate clear of both feet, and if no segment can, it is pushed
+       perpendicular to the line instead of overlapping it. Sitting beside a
+       line is legible; sitting on a glyph is not. */
+    const plate =
+      relationship.label === undefined
+        ? 0
+        : labelPlateWidth(relationship.label);
+    const spot = labelSpot(points, plate);
+    const a = { x: spot.x, y: spot.y };
+    const b = a;
     drawn.push({
       from: relationship.from,
       to: relationship.to,
@@ -533,9 +619,47 @@ export function layoutEr(file: ErLabFile): ErLayout {
       points,
       fromEnd: { ...fromEnd, cardinality: relationship.fromCardinality },
       toEnd: { ...toEnd, cardinality: relationship.toCardinality },
-      labelX: (a.x + b.x) / 2,
-      labelY: (a.y + b.y) / 2,
+      labelX: a.x,
+      labelY: a.y,
     });
+  }
+
+  /* LABELS THAT LANDED ON EACH OTHER ARE PUSHED APART, in a second pass.
+     Placement can only see one relationship at a time — it keeps a label off
+     the feet of ITS OWN line — so two labels pushed off two nearby segments
+     can arrive at the same place. On the course-catalogue example "is taken
+     as" landed on "requires" the moment both cleared their feet. Resolved
+     here, where every label's final position is known, by nudging the later
+     one further along the axis it was already pushed on: the first-placed
+     label keeps the spot it earned, which makes the result stable rather than
+     dependent on iteration order. */
+  for (let i = 0; i < drawn.length; i += 1) {
+    const later = drawn[i];
+    if (later.label === undefined) continue;
+    const halfLater = labelPlateWidth(later.label) / 2;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const clash = drawn.slice(0, i).find((earlier) => {
+        if (earlier.label === undefined) return false;
+        return (
+          Math.abs(earlier.labelX - later.labelX) <
+            labelPlateWidth(earlier.label) / 2 + halfLater &&
+          Math.abs(earlier.labelY - later.labelY) <
+            LABEL_PLATE_HALF_HEIGHT * 2 + 4
+        );
+      });
+      if (clash === undefined) break;
+      /* Away from the label it hit, along whichever axis they are closer on —
+         the shorter move is the one that keeps the label nearest its line. */
+      const dx = later.labelX - clash.labelX;
+      const dy = later.labelY - clash.labelY;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        later.labelX +=
+          (dx >= 0 ? 1 : -1) *
+          (labelPlateWidth(clash.label as string) / 2 + halfLater + 8);
+      } else {
+        later.labelY += (dy >= 0 ? 1 : -1) * (LABEL_PLATE_HALF_HEIGHT * 2 + 8);
+      }
+    }
   }
 
   const width =

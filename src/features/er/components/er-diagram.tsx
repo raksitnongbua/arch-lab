@@ -47,9 +47,12 @@ import type {
   LaidErEntity,
   LaidErRelationship,
 } from "../lib/layout";
-import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
-
-import { ER, layoutEr } from "../lib/layout";
+import {
+  ER,
+  LABEL_PLATE_HALF_HEIGHT,
+  labelPlateWidth,
+  layoutEr,
+} from "../lib/layout";
 import type { ErLabFile } from "@/types";
 
 /**
@@ -76,17 +79,6 @@ export type ErFocus =
  * wide schema compresses instead of trickling in. The flowchart's rank-cap
  * rule, held here in TS and in the stylesheet's `--er-wave-cap`. */
 const WAVE_CAP = 6;
-
-/**
- * The plate a relationship label sits on, wide enough for the text.
- *
- * Measured with the SAME character ratio the layout measures every other
- * string with, rather than a hand-tuned multiplier: the previous
- * `length * 6.8 + 14` was a guess that ran narrow on a long verb, so
- * "ships to" overhung its own plate on both sides.
- */
-const labelWidth = (label: string): number =>
-  Math.max(34, label.length * ER.rowSize * CHAR_WIDTH_RATIO + 18);
 
 /** A rectangle rounded on its TOP corners only — the header band, which has
  * to follow the box's own radius above and sit flush on the rule below. */
@@ -448,11 +440,11 @@ function Relationship({
               label belonging to the diagram — and the text is
               `--node-foreground`, which that surface is measured against. */}
           <rect
-            x={relationship.labelX - labelWidth(relationship.label) / 2}
-            y={relationship.labelY - 11}
-            width={labelWidth(relationship.label)}
-            height={22}
-            rx={11}
+            x={relationship.labelX - labelPlateWidth(relationship.label) / 2}
+            y={relationship.labelY - LABEL_PLATE_HALF_HEIGHT}
+            width={labelPlateWidth(relationship.label)}
+            height={LABEL_PLATE_HALF_HEIGHT * 2}
+            rx={LABEL_PLATE_HALF_HEIGHT}
             fill="var(--node)"
             stroke={state === "lit" ? "var(--primary)" : "var(--node-border)"}
             strokeWidth={1}

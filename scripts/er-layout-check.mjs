@@ -74,11 +74,15 @@ registerHooks({
 const { parseErText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { layoutEr, ER } = await import(
+const { layoutEr, ER, labelPlateWidth, LABEL_PLATE_HALF_HEIGHT } = await import(
   pathToFileURL(path.join(ROOT, "src/features/er/lib/layout.ts")).href
 );
 const { ER_EXAMPLE } = await import(
   pathToFileURL(path.join(ROOT, "src/features/er/input/example.ts")).href
+);
+const { listErExampleIds, loadErExample } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/er/service/example-service.ts"))
+    .href
 );
 const { CHAR_WIDTH_RATIO } = await import(
   pathToFileURL(path.join(ROOT, "src/lib/text-metrics.ts")).href
@@ -99,6 +103,18 @@ const check = (label, condition, detail) => {
 
 const width = (text, size) => text.length * size * CHAR_WIDTH_RATIO;
 const layout = layoutEr(parseErText(ER_EXAMPLE));
+
+/* EVERY REGISTERED EXAMPLE, not just the seed. The label-vs-foot bug was
+   invisible on the seed and plain on `course-catalogue`, and a check that
+   measures one fixture is a check that measures one fixture. Derived from the
+   registry so a third example is covered the day it is added. */
+const ALL_LAYOUTS = [
+  ["seed", layout],
+  ...listErExampleIds().map((id) => {
+    const example = loadErExample(id);
+    return [id, example.status === "ok" ? layoutEr(example.file) : null];
+  }),
+].filter(([, value]) => value !== null);
 
 /* ----------------------------------------------------------------------- */
 console.log("boxes");
@@ -237,6 +253,61 @@ console.log("connectors");
     "no relationship label lands on a box",
     onBox.length === 0,
     onBox.join(", "),
+  );
+
+  /* THE DEFECT THESE EXIST FOR: the label sat at the midpoint of the middle
+     segment, which keeps it off a BOX — the only thing asserted before — and
+     nothing else. On the course-catalogue example "is taken as" was drawn
+     straight through a crow's foot, and "takes" and "requires" landed on the
+     lines beside them. A label printed over a glyph is not a label. */
+  const onFoot = [];
+  for (const [name, laid] of ALL_LAYOUTS)
+    for (const relationship of laid.relationships) {
+      if (relationship.label === undefined) continue;
+      const half = labelPlateWidth(relationship.label) / 2;
+      for (const end of [relationship.fromEnd, relationship.toEnd]) {
+        /* The foot occupies from the box edge out to `footLength` along the
+         stub, plus its spread across it. A generous box around that. */
+        const fx = end.x + (end.dx * ER.footLength) / 2;
+        const fy = end.y + (end.dy * ER.footLength) / 2;
+        const reachX = Math.abs(end.dx) * ER.footLength + ER.footSpread;
+        const reachY = Math.abs(end.dy) * ER.footLength + ER.footSpread;
+        if (
+          Math.abs(relationship.labelX - fx) < half + reachX &&
+          Math.abs(relationship.labelY - fy) < LABEL_PLATE_HALF_HEIGHT + reachY
+        ) {
+          onFoot.push(`${name}: ${relationship.from}->${relationship.to}`);
+        }
+      }
+    }
+  check(
+    `no label is drawn over a crow's foot (${ALL_LAYOUTS.length} documents)`,
+    onFoot.length === 0,
+    `${onFoot.join(", ")} — a label printed over a glyph is not a label`,
+  );
+
+  const collided = [];
+  for (const [name, laid] of ALL_LAYOUTS) {
+    const labelled = laid.relationships.filter((r) => r.label !== undefined);
+    for (let i = 0; i < labelled.length; i += 1) {
+      for (let j = i + 1; j < labelled.length; j += 1) {
+        const a = labelled[i];
+        const b = labelled[j];
+        const halfA = labelPlateWidth(a.label) / 2;
+        const halfB = labelPlateWidth(b.label) / 2;
+        if (
+          Math.abs(a.labelX - b.labelX) < halfA + halfB &&
+          Math.abs(a.labelY - b.labelY) < LABEL_PLATE_HALF_HEIGHT * 2
+        ) {
+          collided.push(`${name}: ${a.label} / ${b.label}`);
+        }
+      }
+    }
+  }
+  check(
+    "no two relationship labels overlap each other",
+    collided.length === 0,
+    collided.join(", "),
   );
 
   const diagonal = [];

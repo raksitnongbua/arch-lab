@@ -21,9 +21,12 @@ import type { ErLabFile } from "@/types";
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
-import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
-
-import { ER, layoutEr } from "../lib/layout";
+import {
+  ER,
+  LABEL_PLATE_HALF_HEIGHT,
+  labelPlateWidth,
+  layoutEr,
+} from "../lib/layout";
 import type { LaidErEnd } from "../lib/layout";
 
 const FONT_SANS =
@@ -107,13 +110,10 @@ export function renderErSvg(file: ErLabFile, theme: ExportTheme): RenderedSvg {
          node-foreground text. Sized with the shared character ratio, not a
          hand-tuned multiplier, so the exported label cannot overhang a plate
          the screen's does not. */
-      const plate = Math.max(
-        34,
-        label.length * ER.rowSize * CHAR_WIDTH_RATIO + 18,
-      );
+      const plate = labelPlateWidth(label);
       push(
         `<rect x="${relationship.labelX - plate / 2}" y="${relationship.labelY - 11}" ` +
-          `width="${plate}" height="22" rx="11" fill="${theme.node}" ` +
+          `width="${plate}" height="${LABEL_PLATE_HALF_HEIGHT * 2}" rx="${LABEL_PLATE_HALF_HEIGHT}" fill="${theme.node}" ` +
           `stroke="${theme.nodeBorder}" stroke-width="1"/>`,
       );
       push(
