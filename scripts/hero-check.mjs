@@ -236,6 +236,34 @@ check("reduced motion parks on exactly one complete diagram", () => {
   );
 });
 
+/* ---- 5b. the ER panel's connectors ATTACH to its tables ------------------ */
+
+check("the ER panel derives its connectors from its table rects", () => {
+  /* THE BUG THIS EXISTS FOR: the panel's paths and crow's feet were
+     hand-written coordinates while its tables were placed by a SEPARATE set of
+     hand-written coordinates. The two disagreed, so the dashed connector began
+     at y=150 in a panel whose Customer table ends at y=78 — a line starting in
+     mid-air, attached to nothing. It rendered, it stayed inside the box, and
+     every other assertion here passed.
+
+     Rather than re-deriving the geometry (which would be this check owning a
+     second copy of the thing that went wrong), it asserts the panel has no
+     literal path data at all: every `d` must be computed. A panel that
+     computes its paths from its own rects cannot detach them. */
+  const panel = hero.match(/function ErPanel\(\)[\s\S]*?\n\}/)?.[0];
+  assert.notEqual(panel, undefined, "no ErPanel found");
+  const literalPaths = panel.match(/d="M [\d.]/g) ?? [];
+  assert.equal(
+    literalPaths.length,
+    0,
+    `${literalPaths.length} hand-written path(s) in ErPanel — derive them from the table rects, or they will drift out of step with where the tables actually are`,
+  );
+  assert.ok(
+    /const TABLES = \{/.test(panel) && /const link = \(/.test(panel),
+    "ErPanel should place its tables in one table and derive the links from it",
+  );
+});
+
 /* ---- 6. the new artwork is inside the box -------------------------------- */
 
 const BOX = { w: 350, h: 336 };

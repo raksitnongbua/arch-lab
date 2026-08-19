@@ -1035,6 +1035,63 @@ function MiniActor({
  * this is artwork ABOUT the renderer, and `check:hero` pins the pairing.
  */
 function ErPanel() {
+  /* THE TABLE RECTS ARE DATA, and the connectors are DERIVED from them.
+     THE BUG THIS FIXES: the paths and the crow's feet were hand-written
+     coordinates while the tables were placed by SEPARATE hand-written
+     coordinates, and the two sets did not agree — the dashed line began at
+     y=150 in a panel whose Customer table ends at y=78, so it started in
+     mid-air with nothing attached to it. Deriving both from one table makes
+     that class of mistake unspellable rather than merely fixed. */
+  const TABLES = {
+    customer: { x: 8, y: 24, w: 100, rows: 2 },
+    order: { x: 148, y: 84, w: 108, rows: 2 },
+    audit: { x: 148, y: 162, w: 108, rows: 1 },
+  } as const;
+  const HEAD = 22;
+  const ROW = 16;
+  const FOOT = 11;
+  const SPREAD = 5;
+
+  const box = (key: keyof typeof TABLES) => {
+    const t = TABLES[key];
+    return { ...t, h: HEAD + t.rows * ROW };
+  };
+
+  /** Right edge of `from` to left edge of `to`, out-across-in. `exitOffset`
+   * separates two lines leaving one table so they do not overlap. */
+  const link = (
+    from: keyof typeof TABLES,
+    to: keyof typeof TABLES,
+    exitOffset: number,
+  ) => {
+    const a = box(from);
+    const b = box(to);
+    const startX = a.x + a.w;
+    const startY = a.y + a.h / 2 + exitOffset;
+    const endX = b.x;
+    const endY = b.y + b.h / 2;
+    const midX = (startX + endX) / 2;
+    return {
+      d: `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`,
+      startX,
+      startY,
+      endX,
+      endY,
+    };
+  };
+
+  const toOrder = link("customer", "order", -8);
+  const toAudit = link("customer", "audit", 8);
+
+  /** The `one` end: a bar ACROSS the line, just outside the box it leaves. */
+  const bar = (x: number, y: number) =>
+    `M ${x + FOOT * 0.55} ${y - SPREAD} L ${x + FOOT * 0.55} ${y + SPREAD}`;
+
+  /** The `zero-or-more` end: a three-toed fan opening away from the box it
+   * enters, exactly as `er-diagram.tsx` composes it. */
+  const fan = (x: number, y: number) =>
+    `M ${x} ${y} L ${x - FOOT} ${y - SPREAD} M ${x} ${y} L ${x - FOOT} ${y + SPREAD} M ${x} ${y} L ${x - FOOT} ${y}`;
+
   const table = (
     x: number,
     y: number,
@@ -1125,20 +1182,22 @@ function ErPanel() {
         stroke="var(--edge)"
         strokeWidth={1.2}
       >
-        <path d="M 108 46 L 128 46 L 128 106 L 148 106" />
-        <path
-          d="M 108 150 L 128 150 L 128 178 L 148 178"
-          strokeDasharray="4 3"
-        />
+        <path d={toOrder.d} />
+        <path d={toAudit.d} strokeDasharray="4 3" />
       </g>
       {/* The crow's feet, drawn as the real canvas composes them: a BAR is "at
           least one", a FAN is "many", a RING is "zero allowed". */}
       <g fill="none" stroke="var(--edge)" strokeWidth={1.2}>
-        <line x1="105" y1="40" x2="105" y2="52" />
-        <path d="M 148 106 L 140 100 M 148 106 L 140 112 M 148 106 L 140 106" />
-        <line x1="105" y1="144" x2="105" y2="156" />
-        <circle cx="139" cy="178" r="3" fill="var(--canvas)" />
-        <path d="M 148 178 L 142 173 M 148 178 L 142 183" />
+        <path d={bar(toOrder.startX, toOrder.startY)} />
+        <path d={fan(toOrder.endX, toOrder.endY)} />
+        <path d={bar(toAudit.startX, toAudit.startY)} />
+        <path d={fan(toAudit.endX, toAudit.endY)} />
+        <circle
+          cx={toAudit.endX - FOOT - 4}
+          cy={toAudit.endY}
+          r={3}
+          fill="var(--canvas)"
+        />
       </g>
 
       {table(8, 24, 100, "Customer", [
