@@ -88,7 +88,8 @@
    exported SVG and the no-JS reader get identical markup to the canvas, and
    it is opacity-0 until the media query below turns it on — which makes
    stillness the default rather than something switched off afterwards. */
-.af-er-edge-pulse {
+.af-er-edge-pulse,
+.af-er-edge-halo {
   opacity: 0;
 }
 
@@ -153,7 +154,8 @@
      at a time and it reads as a travelling pulse rather than as a dashed
      line. The offset animates the full period, which is what makes the loop
      seamless. */
-  .af-er-edge-pulse {
+  .af-er-edge-pulse,
+  .af-er-edge-halo {
     stroke-dasharray: 26 900;
     stroke-dashoffset: 926;
     animation: af-er-pulse var(--er-pulse) linear infinite;
@@ -167,9 +169,33 @@
     animation-delay: calc(var(--er-edge, 0) * var(--er-pulse-beat) * -1);
   }
 
-  [data-idle-motion="off"] .af-er-edge-pulse {
+  [data-idle-motion="off"] .af-er-edge-pulse,
+  [data-idle-motion="off"] .af-er-edge-halo {
     animation: none;
     opacity: 0;
+  }
+
+  /* The halo never rises above a wash: it is the soft edge of the mark, and at
+     full strength it would simply be a second, fatter line. */
+  .af-er-edge-halo {
+    animation-name: af-er-pulse-halo;
+  }
+
+  @keyframes af-er-pulse-halo {
+    0% {
+      opacity: 0;
+      stroke-dashoffset: 926;
+    }
+    12% {
+      opacity: 0.3;
+    }
+    75% {
+      opacity: 0.3;
+    }
+    100% {
+      opacity: 0;
+      stroke-dashoffset: 0;
+    }
   }
 
   @keyframes af-er-pulse {
@@ -253,10 +279,9 @@
    underneath it is untouched. Motion is the signal here as everywhere else on
    this canvas. */
 @media (prefers-reduced-motion: no-preference) {
-  .af-er-edge[role="button"]:hover .af-er-edge-pulse {
+  .af-er-edge[role="button"]:hover .af-er-edge-pulse,
+  .af-er-edge[role="button"]:hover .af-er-edge-halo {
     stroke: var(--primary);
-    stroke-width: 4;
-    filter: url(#af-er-glow);
   }
 }
 
@@ -318,10 +343,9 @@
      SAID. The lit treatment is a brighter, blurred travelling segment over
      an untouched base line instead: a glow, which adds emphasis without
      borrowing a glyph that already means something. */
-  .af-er-has-focus .af-er-lit .af-er-edge-pulse {
+  .af-er-has-focus .af-er-lit .af-er-edge-pulse,
+  .af-er-has-focus .af-er-lit .af-er-edge-halo {
     stroke: var(--primary);
-    stroke-width: 4;
-    filter: url(#af-er-glow);
     /* Slower than the ambient pulse. A focused line is being READ, and a mark
        that crosses it quickly is a flicker rather than a pointer. */
     animation-duration: var(--er-current);
@@ -329,7 +353,8 @@
 
   /* A dimmed line keeps its pulse but loses the brightness, so the diagram
      does not go dead around the focus. */
-  .af-er-has-focus .af-er-dimmed .af-er-edge-pulse {
+  .af-er-has-focus .af-er-dimmed .af-er-edge-pulse,
+  .af-er-has-focus .af-er-dimmed .af-er-edge-halo {
     opacity: 0;
   }
 }

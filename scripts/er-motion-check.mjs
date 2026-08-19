@@ -143,7 +143,9 @@ console.log("opt out twice");
   check(
     "the resting state is a complete diagram, not an empty canvas",
     !/opacity:\s*0\s*;/.test(
-      unguarded.replace(/\.af-er-edge-pulse\s*\{[^}]*\}/g, ""),
+      /* The pulse AND its halo are hidden at rest by design — they are the
+         travelling mark, not part of the resting diagram. */
+      unguarded.replace(/\.af-er-edge-pulse[\s\S]{0,40}?\{[^}]*\}/g, ""),
     ),
     "something outside the media query hides an entity or an edge",
   );
@@ -223,7 +225,7 @@ console.log("the notation survives the motion");
   check(
     "the pulse is a separate path, not a dash on the base line",
     /className="af-er-edge-pulse"/.test(diagram) &&
-      /\.af-er-edge-pulse\s*\{[^}]*stroke-dasharray/.test(css),
+      /\.af-er-edge-pulse[\s\S]{0,40}?\{[^}]*stroke-dasharray/.test(css),
     "the pulse must ride over the line — dashing the base line would make a solid (identifying) relationship read as dashed",
   );
   /* The FOCUS CURRENT is the one sanctioned exception: a reader asked for it
@@ -282,11 +284,22 @@ console.log("the notation survives the motion");
     !/stroke-dasharray/.test(litRules),
     "a lit rule sets stroke-dasharray: focus would turn an identifying relationship into a non-identifying one",
   );
+  /* NO SVG FILTER ON A CONNECTOR, ever. `<filter x="-50%" width="200%">` is
+     objectBoundingBox units by default, and a horizontal connector has a
+     ZERO-HEIGHT bounding box — the region collapses and the browser paints
+     bands across the gap between the boxes, nowhere near the line. That
+     shipped, and no amount of stroke-tweaking touched it because no stroke
+     was drawing it. The glow is a wider path now. */
   check(
-    "the focused line's emphasis is a glow filter",
-    /\.af-er-lit[^{]*\{[^}]*filter:\s*url\(#af-er-glow\)/.test(css) &&
-      /id="af-er-glow"/.test(diagram),
-    "the lit pulse should use the glow filter defined in the canvas defs",
+    "no filter is applied to a connector, whose bounding box can be zero-height",
+    !/\.af-er-edge[^{]*\{[^}]*filter:\s*url\(/.test(css),
+    "a percentage filter region on a flat path degenerates — use a wider path",
+  );
+  check(
+    "the emphasis is a halo path, drawn with the mark it softens",
+    /className="af-er-edge-halo"/.test(diagram) &&
+      /\.af-er-edge-halo/.test(css),
+    "the glow should be geometry, not a filter region",
   );
 
   check(

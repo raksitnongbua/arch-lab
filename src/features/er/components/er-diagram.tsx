@@ -424,6 +424,17 @@ function Relationship({
           motion the other four canvases have, which
           `new-diagram-type.md` requires: "line connectors are always
           animated". */}
+      {/* The halo, under the sharp mark and sharing its dash so the two travel
+          as one. Drawn as a path rather than a blur for the reason in `defs`. */}
+      <path
+        className="af-er-edge-halo"
+        d={d}
+        fill="none"
+        stroke="var(--edge-drift)"
+        strokeWidth={9}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <path
         className="af-er-edge-pulse"
         d={d}
@@ -548,20 +559,17 @@ export function ErDiagram({
             floodOpacity="0.10"
           />
         </filter>
-        {/* The focus glow. A blur of the mark merged UNDER the mark itself, so
-            the travelling segment keeps its own sharp edge and gains a halo —
-            a blur alone would just make it soft and dim. It exists as a
-            filter rather than a second stroked path because the halo has to
-            follow the same dash offset as the mark, and two paths would need
-            their animations kept in step by hand. */}
-        <filter id="af-er-glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3.5" result="halo" />
-          <feMerge>
-            <feMergeNode in="halo" />
-            <feMergeNode in="halo" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
+        {/* THERE IS NO GLOW FILTER ANY MORE, and it must not come back as one.
+            It was `<filter x="-50%" width="200%">`, which is objectBoundingBox
+            units by default — and a HORIZONTAL CONNECTOR HAS A ZERO-HEIGHT
+            BOUNDING BOX, so the filter region collapsed and the browser painted
+            the result as two long bands spanning the gap between the boxes,
+            nowhere near the line they were meant to hug. Every attempt to fix
+            it by adjusting strokes failed, because no stroke was drawing them.
+
+            The glow is a second, wider PATH now (`af-er-edge-halo`), which has
+            no filter region to degenerate. If a filter is ever wanted here it
+            needs `filterUnits="userSpaceOnUse"` with an explicit region. */}
       </defs>
 
       {/* THE BACKDROP. A transparent rect over the whole canvas, FIRST so it
