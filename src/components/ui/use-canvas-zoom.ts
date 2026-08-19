@@ -146,6 +146,29 @@ export function useCanvasZoom({
 
   const scale = zoom === "fit" ? fitScale : zoom;
 
+  /* CENTRED ON FIRST PAINT. A diagram larger than its pane used to open on its
+     top-left corner, which for a wide schema is the emptiest part of it — the
+     reader's first move was always a drag toward the middle. Once only: after
+     that the scroll position is the reader's, and re-centring on every content
+     change would fight them as they type. */
+  const centred = useRef(false);
+  useEffect(() => {
+    if (centred.current) return;
+    const pane = paneRef.current;
+    if (pane === null || pane.scrollWidth === 0) return;
+    if (
+      pane.scrollWidth <= pane.clientWidth &&
+      pane.scrollHeight <= pane.clientHeight
+    ) {
+      /* Nothing overflows yet — `safe center` is already doing the centring,
+         and claiming the one-shot here would spend it on a no-op. */
+      return;
+    }
+    centred.current = true;
+    pane.scrollLeft = (pane.scrollWidth - pane.clientWidth) / 2;
+    pane.scrollTop = (pane.scrollHeight - pane.clientHeight) / 2;
+  }, [paneRef, scale, contentWidth, contentHeight]);
+
   const step = useCallback(
     (direction: 1 | -1) => {
       apply(scale * (direction === 1 ? ZOOM_STEP : 1 / ZOOM_STEP));

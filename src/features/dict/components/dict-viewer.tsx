@@ -65,11 +65,19 @@ export function DictViewer({
 
   return (
     <div className="relative h-full w-full">
+      {/* See `er-viewer.tsx` for why the pane uses `safe center` and the
+          wrapper is sized in pixels on both axes. */}
       <div
         ref={paneRef}
-        className="h-full w-full cursor-grab overflow-auto p-4"
+        className="flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4"
       >
-        <div style={{ width: size.width * camera.scale }}>
+        <div
+          className="shrink-0"
+          style={{
+            width: size.width * camera.scale,
+            height: size.height * camera.scale,
+          }}
+        >
           <DictDiagram file={file} className="block" />
         </div>
       </div>

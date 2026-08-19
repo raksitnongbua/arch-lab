@@ -158,7 +158,7 @@ export function ErViewer({
           viewer's own top-level convention. */}
       <div
         ref={paneRef}
-        className="h-full w-full cursor-grab overflow-auto p-4"
+        className="flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4"
         onKeyDown={(event) => {
           if (event.key === "Escape" && focusId !== null) setRawFocus(null);
         }}
@@ -167,8 +167,23 @@ export function ErViewer({
             a percentage width can only ever shrink to the pane, which is why
             this canvas could not be zoomed in at all — there was nothing to
             scroll. An explicit width makes the pane scrollable, which is what
-            panning is. */}
-        <div style={{ width: size.width * camera.scale }}>
+            panning is. HEIGHT too, or the pane cannot centre it vertically and
+            a fitted diagram sits against the top edge.
+
+            `safe center` on the pane, not plain `center`: ordinary flex
+            centring puts overflow on BOTH sides of the container and the
+            start-side overflow is unreachable — you can drag right and never
+            get back to the left edge, which is what "stuck" was. `safe` falls
+            back to start alignment the moment the content is larger than the
+            pane, so it centres a small diagram and stays fully scrollable for
+            a large one. */}
+        <div
+          className="shrink-0"
+          style={{
+            width: size.width * camera.scale,
+            height: size.height * camera.scale,
+          }}
+        >
           <ErDiagram
             file={file}
             focus={focus}
