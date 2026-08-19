@@ -259,9 +259,6 @@ console.log("the notation survives the motion");
      state was cleaned first and the CSS `:hover` rule was missed — and hover
      was the one people actually saw, because a pointer resting anywhere near a
      connector triggers it. So both layers are asserted now. */
-  const hoverRules = [...css.matchAll(/:hover[^{]*\{([^}]*)\}/g)]
-    .map((match) => match[1])
-    .join("\n");
   check(
     "hovering a connector does not restyle the line it is over",
     !/\.af-er-edge\[role="button"\]:hover \.af-er-edge-line\s*\{[^}]*stroke-width/.test(
