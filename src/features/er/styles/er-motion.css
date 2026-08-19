@@ -66,6 +66,10 @@
      an idle animation feel like a distraction rather than life. */
   --er-pulse: 3600ms;
   --er-pulse-beat: 260ms;
+  /* The focused line's travel. Slower than the ambient pulse on purpose: a
+     focused connector is being read, and a mark that crosses it quickly reads
+     as a flicker rather than as a pointer. */
+  --er-current: 5200ms;
 }
 
 /* The resting state: everything visible, nothing moving. Anything below only
@@ -153,13 +157,14 @@
     stroke-dasharray: 26 900;
     stroke-dashoffset: 926;
     animation: af-er-pulse var(--er-pulse) linear infinite;
-    /* Behind the boxes' arrival: a line that pulses before its tables exist
-       draws attention to nothing. Staggered per edge so they do not fire
-       together. */
-    animation-delay: calc(
-      var(--er-wave-cap, 6) * var(--er-entity-beat) + var(--er-entity-rise) +
-        var(--er-edge, 0) * var(--er-pulse-beat)
-    );
+    /* A NEGATIVE delay, which is the whole fix for a bug you could see: a
+       POSITIVE delay makes the animation wait, and any class change on an
+       ancestor restarts it — so leaving focus made every connector vanish for
+       the length of that delay and then reappear. A negative delay starts the
+       animation already part-way through, so it staggers the edges without
+       any of them ever waiting, and a restart is invisible because there is
+       no silent head to replay. */
+    animation-delay: calc(var(--er-edge, 0) * var(--er-pulse-beat) * -1);
   }
 
   [data-idle-motion="off"] .af-er-edge-pulse {
@@ -276,26 +281,29 @@
      has asked "what does this table talk to", and a current along exactly
      those lines answers it in motion. Same argument the C4 canvas makes for
      lighting a selected path. */
-  /* A lit line already carries the current below; pulsing it too would be
-     two travelling gestures on one path. */
-  .af-er-has-focus .af-er-edge-pulse {
-    animation: none;
+  /* FOCUS DOES NOT STOP THE PULSE, it changes it. Stopping and restarting it
+     is what made connectors blink on the way out of focus; and the lit line
+     needs a travelling mark anyway, since that is what says "these are the
+     ones you asked about".
+     
+     THE LIT LINE IS NEVER DASHED. The first cut gave it `stroke-dasharray`,
+     which turned a solid identifying relationship into a dashed one for as
+     long as it was focused — i.e. focus silently changed what the diagram
+     SAID. The lit treatment is a brighter, blurred travelling segment over
+     an untouched base line instead: a glow, which adds emphasis without
+     borrowing a glyph that already means something. */
+  .af-er-has-focus .af-er-lit .af-er-edge-pulse {
+    stroke: var(--primary);
+    stroke-width: 4;
+    filter: url(#af-er-glow);
+    /* Slower than the ambient pulse. A focused line is being READ, and a mark
+       that crosses it quickly is a flicker rather than a pointer. */
+    animation-duration: var(--er-current);
+  }
+
+  /* A dimmed line keeps its pulse but loses the brightness, so the diagram
+     does not go dead around the focus. */
+  .af-er-has-focus .af-er-dimmed .af-er-edge-pulse {
     opacity: 0;
-  }
-
-  .af-er-has-focus .af-er-lit .af-er-edge-line {
-    stroke-dasharray: 5 7;
-    animation: af-er-current 900ms linear infinite;
-  }
-
-  [data-idle-motion="off"] .af-er-has-focus .af-er-lit .af-er-edge-line {
-    animation: none;
-    stroke-dasharray: none;
-  }
-
-  @keyframes af-er-current {
-    to {
-      stroke-dashoffset: -24;
-    }
   }
 }

@@ -16,6 +16,20 @@ places in the same order. Follow that order. It is not a preference: each step
 depends on the one before it, and the ones people skip are the last two, which
 are the reason anybody finds the diagram at all.
 
+## Do this first: write the checklist down
+
+Before any code, copy the checklist at the bottom of this file into the pull
+request description and tick items as they land.
+
+This is not ceremony. The order below has been skipped twice, both times by an
+agent that had READ this file — once by building the parser before the view
+page and shipping a grammar nothing could draw, once by stopping after step 2
+and calling it a checkpoint while the user could see nothing. Reading a rule
+and holding it across a long build are different things, and a list in the PR
+is the only part that survives a context window. **If a step is genuinely not
+done, the box stays unticked and the PR says so** — an unticked box is a
+smaller failure than a step silently dropped.
+
 **The bar to clear before you start:** a new notation must answer a question the
 existing four cannot. Each kind's one-line job lives in
 `src/features/playground/lib/kind-copy.ts` — write yours before you write any
@@ -31,6 +45,13 @@ half-parsed.
 
 Start at `/view`, not at the parser. The view page is where a reader meets the
 diagram, and building it first stops you shipping a grammar nothing can draw.
+
+**This is the most-skipped step in the file, and skipping it is seductive**
+because the parser is the part with the clearest specification. Build the
+canvas against a HAND-BUILT model object first — twenty lines, no parser — and
+only then write the grammar that produces it. If you find yourself with a
+byte-perfect round trip and nothing on screen, you have already made the
+mistake.
 
 **Check Mermaid support before you design the grammar.** This is the step that
 constrains everything after it, which is why it comes first:
@@ -178,13 +199,102 @@ See `deploy.md` for why routes are load-bearing.
 - Add the kind to `/faq` if it changes an answer already there — what it exports,
   how it compares to Mermaid, what an agent can do with it.
 
+## Reporting progress
+
+A step is DONE when a user can see it, not when it typechecks. Two rules:
+
+- **Never report a partial build as a checkpoint** unless the user asked for
+  one. "The grammar works, nothing draws it yet" is not progress a reader can
+  use; it is the middle of step 1.
+- **Say which of the five steps are unstarted**, by number, every time you
+  report. The failure mode is not lying about what is done — it is going quiet
+  about what is not.
+
+## Motion: the standing rules
+
+These come last in the file and are broken first, because each is easy to
+argue out of for one diagram kind:
+
+- **Every connector is animated.** Not "unless the notation implies no flow" —
+  that argument is about what the LINE MEANS, and it is answered by HOW the
+  motion is drawn. An ER connector carries a pulse on a SECOND path over the
+  base line, so a solid line stays solid; dashing the base line to make it
+  travel would have changed what the diagram says about identity. Find the
+  drawing that keeps the notation, do not skip the motion.
+- **Focus never restyles the notation.** Lighting a line means a glow, a
+  colour or a weight — never a dasharray, a shape change or an arrowhead,
+  because every one of those already means something.
+- **Stagger with NEGATIVE animation delays.** A positive delay on an infinite
+  animation is invisible until an ancestor class changes; then the animation
+  restarts and replays its silent head, and the reader sees every connector
+  blink off and back on. This shipped.
+- **A class list is an array joined with a space**, never concatenated. A lost
+  leading space merges two classes into one nonsense class, every rule
+  targeting it silently stops applying, and nothing reports it — CSS selectors
+  that match nothing are not errors. This shipped too.
+
 ## Finally
 
 Run the whole gate — `pnpm typecheck && pnpm lint && pnpm build` — plus every
 `check:*` above. There is no CI; nothing runs them for you.
+
+Tick every box in the checklist below, or say in the PR which are unticked and
+why.
 
 Write the changelog entry grouped by capability, not as a flat list, in the
 manner of the flowchart and use-case entries: what it draws, what it converts,
 how it lays out, how it moves, what it exports. State explicitly that no existing
 document, link or route changed — or, if one did, that it is a breaking change
 and bump the major version.
+
+## The checklist
+
+Copy this into the pull request. Each line is a place the last two additions
+touched; an unticked box is a decision, not an oversight.
+
+**1. View and format**
+
+- [ ] `/view?d=<kind>` renders a real canvas
+- [ ] `/view/<short>` alias route
+- [ ] `src/features/archtext/lib/<kind>/` — keywords, schema, parse, serialize
+- [ ] header word registered in `sequence/detect.ts`
+- [ ] `src/features/mermaid/lib/<kind>{,-mapping,-emit}.ts`, two-way or a named
+      lossy import
+- [ ] `check:<kind>` — byte-identical round trip, forward tolerance, refusals,
+      no cross-parsing with the other grammars
+
+**2. Canvas**
+
+- [ ] derived layout (never a grid) + `check:<kind>-layout`
+- [ ] connectors animated; focus that does not restyle the notation
+- [ ] `check:<kind>-motion` — opt out twice, reveal budget, every styled class
+      actually emitted
+- [ ] complete in every theme + `check:<kind>-palette`
+- [ ] SVG/PNG export, GIF where there is a trace, share button
+
+**3. MCP**
+
+- [ ] `validate_<kind>` / `format_<kind>` reporting defects a parse cannot see
+- [ ] catalogue entries and a section in `catalog.ts`
+- [ ] `create_share_link` accepts the kind
+- [ ] `pnpm build:skill` + `check:skill`, `check:mcp`
+
+**4. Site**
+
+- [ ] home page notation card
+- [ ] home page HERO miniature (`hero-diagram.tsx` + the cycle in
+      `globals.css` + `check:hero`)
+- [ ] `/syntax` snippets + `check:syntax-docs`, VS Code grammar
+- [ ] playground starter, seed, `?d=` value, `kind-copy.ts` blurb
+- [ ] `/demo` section, example registry, `/view/<kind>/[exampleId]` pages
+- [ ] `/validate` accepts it + `check:validate-samples`
+- [ ] every "four kinds" sentence on the site now says five
+
+**5. SEO and GEO**
+
+- [ ] sitemap: alias route and every example page
+- [ ] route metadata: title < 60, description < 160, canonical
+- [ ] OG card names the kind + `check:og-cards`
+- [ ] `llms.txt` and `llms-full.txt`
+- [ ] the kind's one-sentence description is in server-rendered HTML
+- [ ] `/faq` updated if it changes an answer already there

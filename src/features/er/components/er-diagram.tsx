@@ -524,6 +524,20 @@ export function ErDiagram({
             floodOpacity="0.10"
           />
         </filter>
+        {/* The focus glow. A blur of the mark merged UNDER the mark itself, so
+            the travelling segment keeps its own sharp edge and gains a halo —
+            a blur alone would just make it soft and dim. It exists as a
+            filter rather than a second stroked path because the halo has to
+            follow the same dash offset as the mark, and two paths would need
+            their animations kept in step by hand. */}
+        <filter id="af-er-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3.5" result="halo" />
+          <feMerge>
+            <feMergeNode in="halo" />
+            <feMergeNode in="halo" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
 
       {/* THE BACKDROP. A transparent rect over the whole canvas, FIRST so it

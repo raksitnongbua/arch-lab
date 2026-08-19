@@ -50,6 +50,7 @@ const KINDS = [
   { name: "Sequence", phase: "af-hero-kind-2" },
   { name: "Flowchart", phase: "af-hero-kind-3" },
   { name: "Use case", phase: "af-hero-kind-4" },
+  { name: "ER", phase: "af-hero-kind-5" },
 ];
 
 let assertions = 0;
@@ -213,13 +214,25 @@ check("no element carrying a phase class carries an inline style", () => {
 /* ---- 5. reduced motion parks on ONE diagram ------------------------------ */
 
 check("reduced motion parks on exactly one complete diagram", () => {
+  /* The selector is DERIVED from KINDS, not spelled out. It used to be the
+     literal `.af-hero-kind-2, .af-hero-kind-3, .af-hero-kind-4`, so adding a
+     fifth kind made the pattern miss entirely — and `assert.notEqual(x, null)`
+     passes for `undefined`, so the failure surfaced as a TypeError on the next
+     line instead of as the real message. Both are fixed here: the list grows
+     with the table, and the guard tests for a match rather than for null. */
+  const others = KINDS.filter((kind) => kind.phase !== null).map(
+    (kind) => `\\.${kind.phase}`,
+  );
   const parked = globals.match(
-    /\.af-hero-kind-2,\n\s*\.af-hero-kind-3,\n\s*\.af-hero-kind-4 \{([^}]*)\}/,
+    new RegExp(`${others.join(",\\s*")}\\s*\\{([^}]*)\\}`),
   )?.[1];
-  assert.notEqual(parked, null, "the other three kinds are not parked at all");
+  assert.ok(
+    parked !== undefined,
+    `the other ${others.length} kinds are not parked together — expected a rule listing ${others.length} phase classes`,
+  );
   assert.ok(
     parked.includes("opacity: 0") && parked.includes("visibility: hidden"),
-    `the other three keep their from-frame and stack on the C4 panel: ${parked}`,
+    `the other ${others.length} keep their from-frame and stack on the C4 panel: ${parked}`,
   );
 });
 

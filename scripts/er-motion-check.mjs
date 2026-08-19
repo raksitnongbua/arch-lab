@@ -174,6 +174,34 @@ console.log("budget");
     `${worst}ms — a reveal longer than this reads as the page being slow`,
   );
 
+  /* THE BLINK. A POSITIVE delay on an infinite animation is invisible until
+     an ancestor class changes — then the animation restarts and replays its
+     silent head, so the mark disappears for the length of the delay. That is
+     exactly what leaving focus looked like: every connector vanished for
+     ~1.3s and came back. A negative delay staggers without ever waiting. */
+  /* Scoped to the pulse's OWN rule blocks: a lazy match across the whole
+     stylesheet ran past this rule into the entity's, and reported the
+     entity's positive delay as the pulse's. */
+  const pulseBlocks = [
+    ...css.matchAll(/\.af-er-edge-pulse[^{]*\{([^}]*)\}/g),
+  ].map((match) => match[1]);
+  const pulseDelay = pulseBlocks
+    .map((block) => /animation-delay:([^;]+);/.exec(block))
+    .find((match) => match !== null);
+  check(
+    "the ambient pulse staggers with a NEGATIVE delay, so a restart is invisible",
+    pulseDelay !== undefined && /-1|:\s*-/.test(pulseDelay[1]),
+    pulseDelay === undefined
+      ? "the pulse declares no animation-delay at all"
+      : `got ${pulseDelay[1].trim()} — a positive delay makes every focus change blink the connectors off and on`,
+  );
+
+  check(
+    "the focused line travels more slowly than the ambient pulse",
+    ms("er-current") > ms("er-pulse"),
+    `current ${ms("er-current")}ms vs pulse ${ms("er-pulse")}ms — a focused line is being read, and a fast mark reads as a flicker`,
+  );
+
   check(
     "the ambient pulse is slow enough not to nag (>= 2s per travel)",
     ms("er-pulse") >= 2000,
@@ -206,6 +234,25 @@ console.log("the notation survives the motion");
     /\.af-er-has-focus[^{]*\{[^}]*\}/g,
     "",
   );
+  /* FOCUS MUST NOT RESTYLE THE NOTATION. A solid line means identifying; the
+     first focus treatment gave the lit line a dasharray, so focusing a solid
+     relationship silently redrew it as a non-identifying one for as long as
+     it was focused. */
+  const litRules = [...css.matchAll(/\.af-er-lit[^{]*\{([^}]*)\}/g)]
+    .map((match) => match[1])
+    .join("\n");
+  check(
+    "focusing a line never dashes it — the lit treatment is a glow, not a restyle",
+    !/stroke-dasharray/.test(litRules),
+    "a lit rule sets stroke-dasharray: focus would turn an identifying relationship into a non-identifying one",
+  );
+  check(
+    "the focused line's emphasis is a glow filter",
+    /\.af-er-lit[^{]*\{[^}]*filter:\s*url\(#af-er-glow\)/.test(css) &&
+      /id="af-er-glow"/.test(diagram),
+    "the lit pulse should use the glow filter defined in the canvas defs",
+  );
+
   check(
     "no rule animates the base line's dasharray outside the focus current",
     !/\.af-er-edge-line\s*\{[^}]*stroke-dasharray:\s*\d+\s+\d+/.test(

@@ -38,10 +38,13 @@ export function GET(): Response {
 
 > ${APP_DESCRIPTION}
 
-${APP_NAME} reads and writes four kinds of architecture document as plain text:
-C4 models, UML-style sequence diagrams, flowcharts and use-case diagrams. The
-text format is \`.alab\`; arch-lab JSON and Mermaid (\`C4Context\`,
-\`sequenceDiagram\`, \`flowchart\`/\`graph\`) are also accepted and converted.
+${APP_NAME} reads and writes five kinds of architecture document as plain text:
+C4 models, UML-style sequence diagrams, flowcharts, use-case diagrams and
+entity-relationship diagrams. The text format is \`.alab\`; arch-lab JSON and
+Mermaid (\`C4Context\`, \`sequenceDiagram\`, \`flowchart\`/\`graph\`,
+\`erDiagram\`) are also accepted and converted. The ER conversion is the only
+one that is two-way and total over the diagram — Mermaid has a real
+\`erDiagram\`, so nothing the picture shows is lost in either direction.
 Everything runs in the browser — there is no account, and nothing is uploaded.
 
 ## For agents
@@ -53,7 +56,7 @@ Everything runs in the browser — there is no account, and nothing is uploaded.
 
 Use the server for the two things a file editor cannot do alone: get the exact
 grammar, and get the real parser's verdict on something you wrote — there is a
-validate and a format tool for each of the four document kinds. There is no
+validate and a format tool for each of the five document kinds. There is no
 mutation API — you edit \`.alab\` files yourself.
 
 ## Full reference
@@ -64,12 +67,12 @@ mutation API — you edit \`.alab\` files yourself.
 ## Pages
 
 - ${origin}/ — what this is, in one screen
-- ${origin}/view — the playground: paste or write either kind and see it
-  rendered live. \`?d=seq\` starts from a sequence example, \`?e=<id>\` opens a
-  bundled one (ids are listed on /demo)
+- ${origin}/view — the playground: paste or write any of the five kinds and see
+  it rendered live. \`?d=seq\` starts from a sequence example and \`?d=er\` from
+  an ER one, \`?e=<id>\` opens a bundled one (ids are listed on /demo)
 - ${origin}/syntax — the \`.alab\` grammar, every example parser-verified
 - ${origin}/validate — paste a document, get a located verdict
-- ${origin}/demo — finished examples of both kinds
+- ${origin}/demo — finished examples of all five kinds
 - ${origin}/faq — what this is, what it exports, what leaves the browser, and
   what an agent may do over MCP, as short self-contained answers
 `;

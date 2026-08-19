@@ -18,6 +18,16 @@
 
 export { ErViewer } from "./components/er-viewer";
 export { ErDiagram } from "./components/er-diagram";
+export type { ErFocus } from "./components/er-diagram";
+export { ErExampleView } from "./components/er-example-view";
+export {
+  listErExampleIds,
+  listErExamples,
+  loadErExample,
+  type ErExampleListing,
+  type ErExampleResult,
+  type ErExampleSummary,
+} from "./service/example-service";
 export {
   ER_FORMAT_LABEL,
   MERMAID_ER_CAVEAT,

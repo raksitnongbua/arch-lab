@@ -110,7 +110,7 @@ function riseAt(ms: number): CSSProperties {
 }
 
 /**
- * The four kinds, in cycle order, each paired with the phase class that puts it
+ * The five kinds, in cycle order, each paired with the phase class that puts it
  * at its own quarter of the swap. THE FIRST HAS NO CLASS on purpose: it runs the
  * bare `af-hero-kind` clock at zero offset, and inventing an `af-hero-kind-1`
  * that sets `animation-delay: 0s` would be a class whose only job is to restate
@@ -127,6 +127,7 @@ const KINDS: readonly { name: string; phase: string }[] = [
   { name: "Sequence", phase: "af-hero-kind-2" },
   { name: "Flowchart", phase: "af-hero-kind-3" },
   { name: "Use case", phase: "af-hero-kind-4" },
+  { name: "ER", phase: "af-hero-kind-5" },
 ];
 
 /**
@@ -141,6 +142,7 @@ const SUBTITLES: readonly { name: string; meta: string; phase: string }[] = [
   { name: "Place an order", meta: "4 participants", phase: "af-hero-kind-2" },
   { name: "Order fulfilment", meta: "6 steps", phase: "af-hero-kind-3" },
   { name: "Food delivery", meta: "2 actors", phase: "af-hero-kind-4" },
+  { name: "Shop orders", meta: "3 tables", phase: "af-hero-kind-5" },
 ];
 
 export function HeroDiagram({ className }: { className?: string }) {
@@ -372,7 +374,7 @@ export function HeroDiagram({ className }: { className?: string }) {
             />
           </div>
 
-          {/* The other three kinds, same box, each offset whole quarters. */}
+          {/* The other four kinds, same box, each offset a whole fifth. */}
           <div className="af-hero-kind af-hero-kind-2 absolute inset-0">
             <SequencePanel />
           </div>
@@ -381,6 +383,9 @@ export function HeroDiagram({ className }: { className?: string }) {
           </div>
           <div className="af-hero-kind af-hero-kind-4 absolute inset-0">
             <UseCasePanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-5 absolute inset-0">
+            <ErPanel />
           </div>
         </div>
       </div>
@@ -999,6 +1004,153 @@ function MiniActor({
         {actor.name}
       </text>
     </g>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The ER panel                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Three tables and the two lines between them — the smallest drawing that is
+ * recognisably an ER diagram rather than three boxes.
+ *
+ * WHAT IT HAS TO SHOW to earn its slot, and why each is here rather than a
+ * simplification:
+ *
+ *   - A HEADER BAND and RULED ROWS. Without them a table is a labelled box and
+ *     the panel says "C4" to anyone glancing at it.
+ *   - A `PK` and an `FK`, in the accent. They are what makes the rows read as
+ *     COLUMNS rather than as a list, and they are the notation someone
+ *     searching for "ER diagram" is looking for.
+ *   - CROW'S FEET, both ends, both kinds. A line without them is not an ER
+ *     relationship — the whole notation is at the ends — so the miniature
+ *     draws the real `one` bar and the real `zero-or-more` foot, mirrored,
+ *     exactly as `er-diagram.tsx` composes them from a bar, a ring and a fan.
+ *
+ * Hand-drawn at fixed coordinates like its four siblings, not driven through
+ * `layoutEr`: the panel is 320px wide and the real layout solves for a canvas
+ * that scrolls, so feeding it a document would produce a correct diagram at
+ * the wrong scale. The tradeoff is the one the other panels already accept —
+ * this is artwork ABOUT the renderer, and `check:hero` pins the pairing.
+ */
+function ErPanel() {
+  const table = (
+    x: number,
+    y: number,
+    width: number,
+    name: string,
+    rows: { name: string; type: string; key?: string }[],
+  ) => (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={22 + rows.length * 16}
+        rx={6}
+        fill="var(--node)"
+        stroke="var(--node-border)"
+        strokeWidth={1}
+      />
+      <path
+        d={`M ${x} ${y + 22} L ${x} ${y + 6} Q ${x} ${y} ${x + 6} ${y} L ${x + width - 6} ${y} Q ${x + width} ${y} ${x + width} ${y + 6} L ${x + width} ${y + 22} Z`}
+        fill="var(--primary)"
+        opacity={0.12}
+      />
+      <line
+        x1={x}
+        y1={y + 22}
+        x2={x + width}
+        y2={y + 22}
+        stroke="var(--node-border)"
+        strokeWidth={1}
+      />
+      <text
+        x={x + 8}
+        y={y + 11}
+        dominantBaseline="central"
+        fontSize={9.5}
+        fontWeight={650}
+        fill="var(--node-foreground)"
+      >
+        {name}
+      </text>
+      {rows.map((row, index) => (
+        <g key={row.name}>
+          <text
+            x={x + 8}
+            y={y + 22 + index * 16 + 8}
+            dominantBaseline="central"
+            fontSize={8}
+            fill="var(--node-foreground)"
+          >
+            {row.name}
+          </text>
+          {row.key !== undefined ? (
+            <text
+              x={x + width - 8 - row.type.length * 4.6 - 6}
+              y={y + 22 + index * 16 + 8}
+              textAnchor="end"
+              dominantBaseline="central"
+              fontSize={7}
+              fontWeight={700}
+              fill="var(--primary)"
+            >
+              {row.key}
+            </text>
+          ) : null}
+          <text
+            x={x + width - 8}
+            y={y + 22 + index * 16 + 8}
+            textAnchor="end"
+            dominantBaseline="central"
+            fontSize={8}
+            fill="var(--node-meta)"
+          >
+            {row.type}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+
+  return (
+    <svg viewBox="0 0 320 240" className="h-full w-full" aria-hidden="true">
+      {/* Lines under the tables, so a connector never crosses a box it only
+          passes — the rule the real canvas holds. */}
+      <g
+        className="af-hero-er-line"
+        fill="none"
+        stroke="var(--edge)"
+        strokeWidth={1.2}
+      >
+        <path d="M 108 46 L 128 46 L 128 106 L 148 106" />
+        <path
+          d="M 108 150 L 128 150 L 128 178 L 148 178"
+          strokeDasharray="4 3"
+        />
+      </g>
+      {/* The crow's feet, drawn as the real canvas composes them: a BAR is "at
+          least one", a FAN is "many", a RING is "zero allowed". */}
+      <g fill="none" stroke="var(--edge)" strokeWidth={1.2}>
+        <line x1="105" y1="40" x2="105" y2="52" />
+        <path d="M 148 106 L 140 100 M 148 106 L 140 112 M 148 106 L 140 106" />
+        <line x1="105" y1="144" x2="105" y2="156" />
+        <circle cx="139" cy="178" r="3" fill="var(--canvas)" />
+        <path d="M 148 178 L 142 173 M 148 178 L 142 183" />
+      </g>
+
+      {table(8, 24, 100, "Customer", [
+        { name: "id", type: "uuid", key: "PK" },
+        { name: "email", type: "string", key: "UK" },
+      ])}
+      {table(148, 84, 108, "Order", [
+        { name: "id", type: "uuid", key: "PK" },
+        { name: "customer_id", type: "uuid", key: "FK" },
+      ])}
+      {table(148, 162, 108, "Audit log", [{ name: "at", type: "timestamptz" }])}
+    </svg>
   );
 }
 

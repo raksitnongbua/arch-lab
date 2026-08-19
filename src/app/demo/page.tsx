@@ -9,6 +9,7 @@ import { VIEW_EXAMPLE_PARAM } from "@/features/playground/lib/example-param";
 import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
 import { listSequenceExamples } from "@/features/sequence/service/example-service";
 import { listUseCaseExamples } from "@/features/usecase/service/example-service";
+import { listErExamples } from "@/features/er/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 
 export const metadata: Metadata = {
@@ -66,7 +67,7 @@ const SHOWCASES_PER_KIND = 2;
 /** The heading, the intro and the jump bar take the first three cascade slots. */
 const ROWS_BEFORE_SECTIONS = 3;
 
-type Kind = "c4" | "sequence" | "flowchart" | "usecase";
+type Kind = "c4" | "sequence" | "flowchart" | "usecase" | "er";
 
 /**
  * One showcased document, already resolved out of its kind's listing type.
@@ -128,6 +129,11 @@ const KIND_CHROME: Record<
     accent: "var(--uc-actor-border)",
     Glyph: UseCaseGlyph,
   },
+  er: {
+    short: "ER diagrams",
+    accent: "var(--node-database-border)",
+    Glyph: ErGlyph,
+  },
 };
 
 /** The order the sections render and the jump bar lists them in. */
@@ -136,6 +142,7 @@ const KIND_ORDER: readonly Kind[] = [
   "sequence",
   "flowchart",
   "usecase",
+  "er",
 ] as const;
 
 export default function DemoPage(): React.JSX.Element {
@@ -220,11 +227,31 @@ export default function DemoPage(): React.JSX.Element {
         },
   );
 
+  const er: ExampleRow[] = listErExamples().map((listing) =>
+    listing.status === "invalid"
+      ? listing
+      : {
+          status: "ok",
+          id: listing.summary.id,
+          title: listing.summary.title,
+          description: listing.summary.description,
+          meta: [
+            `${listing.summary.entityCount} tables`,
+            `${listing.summary.columnCount} columns`,
+            listing.summary.relationshipCount === 1
+              ? "1 relationship"
+              : `${listing.summary.relationshipCount} relationships`,
+          ],
+          readOnlyHref: `/view/er/${listing.summary.id}`,
+        },
+  );
+
   const byKind: Record<Kind, ExampleRow[]> = {
     c4,
     sequence,
     flowchart,
     usecase,
+    er,
   };
 
   /*
@@ -426,6 +453,28 @@ function SequenceGlyph(): React.JSX.Element {
 
 /** A use case: a stick figure beside an ellipse. The pairing is the whole
  * tell — an actor against the system's edge is what no other kind draws. */
+/** An ER diagram: two tables, ruled under their headers, and the line
+ * between them ending in a crow's foot. */
+function ErGlyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    >
+      <rect x="1" y="3" width="5.2" height="6" rx="1" />
+      <path d="M1 5.2h5.2" />
+      <rect x="9.8" y="7" width="5.2" height="6" rx="1" />
+      <path d="M9.8 9.2h5" />
+      <path d="M6.2 6.1h1.8v3.9h1.8M8 8.6l1.8 1.4M8 11.4l1.8-1.4" />
+    </svg>
+  );
+}
+
 function UseCaseGlyph(): React.JSX.Element {
   return (
     <svg
