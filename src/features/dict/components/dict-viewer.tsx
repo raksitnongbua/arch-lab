@@ -16,7 +16,7 @@
  * reference document a search engine cannot read is a reference nobody finds.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DictLabFile } from "@/types";
 
@@ -42,6 +42,7 @@ export function DictViewer({
   file,
   onAnnounce,
 }: DictViewerProps): React.JSX.Element {
+  const paneRef = useRef<HTMLDivElement>(null);
   const sections = useMemo(() => file.sections ?? [], [file]);
   const fields = useMemo(
     () => sections.reduce((sum, section) => sum + section.fields.length, 0),
@@ -54,8 +55,28 @@ export function DictViewer({
     );
   }, [sections.length, fields, onAnnounce]);
 
-  const size = useMemo(() => layoutDict(file), [file]);
-  const paneRef = useRef<HTMLDivElement>(null);
+  /* The pane's width, so the table can use the room it has rather than
+     leaving gutters on a wide screen. Measured here — the layout stays pure
+     and is simply told the number. */
+  const [paneWidth, setPaneWidth] = useState(0);
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (pane === null) return;
+    const update = (): void => {
+      setPaneWidth(pane.clientWidth);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(pane);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const size = useMemo(
+    () => layoutDict(file, { availableWidth: paneWidth - 32 }),
+    [file, paneWidth],
+  );
   const camera = useCanvasZoom({
     paneRef,
     contentWidth: size.width,
@@ -78,7 +99,11 @@ export function DictViewer({
             height: size.height * camera.scale,
           }}
         >
-          <DictDiagram file={file} className="block" />
+          <DictDiagram
+            file={file}
+            availableWidth={paneWidth - 32}
+            className="block"
+          />
         </div>
       </div>
       {/* The house zoom pill — the same control, classes and gesture hints

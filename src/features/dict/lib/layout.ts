@@ -32,10 +32,20 @@ import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 
 /** Every tunable distance in the dictionary canvas, in px, in one table. */
 export const DICT = {
-  /** Total canvas width. FIXED, unlike every other kind's derived width: a
-   * dictionary is read as a column of text, so it takes a page width and
+  /** Default canvas width when the caller does not say how much room it has.
+   * A dictionary is read as a column of text, so it takes a page width and
    * wraps into it rather than growing sideways without limit. */
   width: 940,
+  /**
+   * The widest the MEANING column may get, however much room there is.
+   *
+   * A dictionary in a 1600px pane could give its descriptions 900px, and that
+   * is worse to read, not better: past roughly 90 characters the eye loses
+   * the start of the next line. So extra room widens the table only up to
+   * here, and beyond that the page stays put and centres. This is the number
+   * that keeps "use the space" from becoming "stretch the text".
+   */
+  maxDescription: 560,
   /** Height of the document title band above the first section. */
   titleHeight: 54,
   /** Height of a section heading band. */
@@ -218,7 +228,18 @@ export interface DictLayout {
  * one shared grid reads as one document with headings in it, which is what a
  * dictionary is.
  */
-export function layoutDict(file: DictLabFile): DictLayout {
+export function layoutDict(
+  file: DictLabFile,
+  options: {
+    /**
+     * How much width the caller can actually give the table. The layout stays
+     * PURE — it is told the number rather than measuring a pane — so the
+     * export renderer and the check scripts can pass nothing and get the
+     * fixed page width they have always had.
+     */
+    availableWidth?: number;
+  } = {},
+): DictLayout {
   const sections = file.sections ?? [];
   const every = sections.flatMap((section) => section.fields ?? []);
 
@@ -260,9 +281,14 @@ export function layoutDict(file: DictLabFile): DictLayout {
   /* The description takes what is left, and never less than its minimum: a
      description column narrower than this wraps to two words a line, which is
      unreadable in a way a slightly wider canvas is not. */
-  const descriptionWidth = Math.max(
-    DICT.minDescription,
-    DICT.width - DICT.margin * 2 - fixed,
+  /* The description takes what is left of whatever room there is, floored at
+     its readable minimum and CAPPED at `maxDescription` — a wide pane widens
+     the table up to that point and then stops, rather than stretching prose
+     across the whole screen. */
+  const page = Math.max(DICT.width, options.availableWidth ?? DICT.width);
+  const descriptionWidth = Math.min(
+    DICT.maxDescription,
+    Math.max(DICT.minDescription, page - DICT.margin * 2 - fixed),
   );
 
   const columnWidth: Record<DictColumn, number> = {

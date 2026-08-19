@@ -221,13 +221,17 @@ function Row({
 export interface DictDiagramProps {
   file: DictLabFile;
   className?: string;
+  /** How much width the table may use. Omitted for a static render, which
+   * takes the fixed page width. */
+  availableWidth?: number;
 }
 
 export function DictDiagram({
   file,
   className,
+  availableWidth,
 }: DictDiagramProps): React.JSX.Element {
-  const layout = layoutDict(file);
+  const layout = layoutDict(file, { availableWidth });
   const right = layout.columnX.source + layout.columnWidth.source;
 
   return (

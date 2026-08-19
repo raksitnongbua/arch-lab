@@ -254,6 +254,58 @@ console.log("rows hold their own content");
   check("rows never overlap each other", stacked);
 }
 
+console.log("the table uses its room, but not past readable");
+
+{
+  /* "Use the space" must not become "stretch the text". Past roughly 90
+     characters a line loses the eye on the way back, so extra pane width
+     widens the table only up to `maxDescription`. Asserted at three widths,
+     because the interesting behaviour is the CAP and a single measurement
+     cannot show a ceiling. */
+  const narrow = layoutDict(parseDictText(DICT_EXAMPLE), {
+    availableWidth: 700,
+  });
+  const roomy = layoutDict(parseDictText(DICT_EXAMPLE), {
+    availableWidth: 1400,
+  });
+  const absurd = layoutDict(parseDictText(DICT_EXAMPLE), {
+    availableWidth: 4000,
+  });
+
+  check(
+    "a wider pane gives the meaning column more room",
+    roomy.columnWidth.description > narrow.columnWidth.description,
+    `${narrow.columnWidth.description} -> ${roomy.columnWidth.description}`,
+  );
+  check(
+    `the meaning column stops growing at its readable cap (${DICT.maxDescription}px)`,
+    roomy.columnWidth.description <= DICT.maxDescription &&
+      absurd.columnWidth.description === roomy.columnWidth.description,
+    `roomy ${roomy.columnWidth.description}, absurd ${absurd.columnWidth.description}`,
+  );
+  check(
+    "a pane narrower than the page still gets the readable minimum",
+    narrow.columnWidth.description >= DICT.minDescription,
+    `${narrow.columnWidth.description}`,
+  );
+  check(
+    "nothing clips at any of the three widths",
+    [narrow, roomy, absurd].every((candidate) =>
+      candidate.sections.every((section) =>
+        section.fields.every((field) =>
+          field.cells.every((cell) =>
+            cell.lines.every(
+              (line) =>
+                width(line, DICT.cellSize) <=
+                candidate.columnWidth[cell.column] - DICT.padX * 2 + 0.5,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 console.log("one grid, and it wraps");
 
 {
