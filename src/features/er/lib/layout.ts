@@ -607,8 +607,6 @@ export function layoutEr(file: ErLabFile): ErLayout {
         ? 0
         : labelPlateWidth(relationship.label);
     const spot = labelSpot(points, plate);
-    const a = { x: spot.x, y: spot.y };
-    const b = a;
     drawn.push({
       from: relationship.from,
       to: relationship.to,
@@ -619,8 +617,8 @@ export function layoutEr(file: ErLabFile): ErLayout {
       points,
       fromEnd: { ...fromEnd, cardinality: relationship.fromCardinality },
       toEnd: { ...toEnd, cardinality: relationship.toCardinality },
-      labelX: a.x,
-      labelY: a.y,
+      labelX: spot.x,
+      labelY: spot.y,
     });
   }
 
