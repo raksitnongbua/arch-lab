@@ -176,12 +176,14 @@ function Entity({
 }): React.JSX.Element {
   const headerY = entity.y + ER.headerHeight;
   const interactive = onFocus !== undefined;
-  const border =
-    state === "focused"
-      ? "var(--primary)"
-      : state === "related"
-        ? "var(--edge-drift)"
-        : "var(--node-border)";
+  /* NO BORDER CHANGE ON FOCUS. A focused box used to take `--primary` and a
+     related one `--edge-drift`, which meant a single click recoloured the
+     outline of every table it touched — on a schema where most tables touch
+     most others, that is nearly the whole diagram changing colour to say one
+     thing. Focus is already carried by three quieter signals that do not
+     restyle the notation: everything unrelated DIMS, the lit connectors carry
+     the travelling glow, and the panel names the joins in words. Adding a
+     fourth made the canvas louder without making it clearer. */
 
   return (
     <g
@@ -226,8 +228,8 @@ function Entity({
         height={entity.height}
         rx={12}
         fill="var(--node)"
-        stroke={border}
-        strokeWidth={state === "focused" ? 2 : 1.2}
+        stroke="var(--node-border)"
+        strokeWidth={1.2}
         filter="url(#af-er-shadow)"
       />
       {/* A tinted header band, not a bare rule. It is what makes the box read
@@ -244,7 +246,7 @@ function Entity({
           12,
         )}
         fill="var(--primary)"
-        opacity={state === "focused" ? 0.2 : 0.11}
+        opacity={0.11}
       />
       {entity.attributes.length > 0 ? (
         <line
@@ -252,7 +254,7 @@ function Entity({
           y1={headerY}
           x2={entity.x + entity.width}
           y2={headerY}
-          stroke={border}
+          stroke="var(--node-border)"
           strokeWidth={1.2}
         />
       ) : null}
