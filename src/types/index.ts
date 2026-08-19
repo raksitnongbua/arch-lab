@@ -3,3 +3,4 @@ export * from "./sequence";
 export * from "./flowchart";
 export * from "./usecase";
 export * from "./er";
+export * from "./dict";
