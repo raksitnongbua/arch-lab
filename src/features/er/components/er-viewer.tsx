@@ -158,7 +158,7 @@ export function ErViewer({
           viewer's own top-level convention. */}
       <div
         ref={paneRef}
-        className="h-full w-full overflow-auto p-4"
+        className="h-full w-full cursor-grab overflow-auto p-4"
         onKeyDown={(event) => {
           if (event.key === "Escape" && focusId !== null) setRawFocus(null);
         }}

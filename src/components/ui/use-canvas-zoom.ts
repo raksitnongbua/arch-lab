@@ -18,6 +18,11 @@
  * regression. This hook was written to their shape rather than a new one, so
  * the adoption is a deletion rather than a redesign.
  *
+ * IT ALSO OWNS DRAG-TO-PAN, because panning and zooming are one camera and
+ * splitting them across two hooks means two things reading the same scroll
+ * offsets. The drag defers to anything that owns a click, so focusing a table
+ * still works.
+ *
  * THE ANCHOR IS THE SUBTLE PART. Zooming changes the scrollable size, so a
  * naive implementation leaves the reader looking somewhere else. The anchor is
  * kept as FRACTIONS of the scrollable content plus the viewport point they
@@ -187,6 +192,80 @@ export function useCanvasZoom({
       if (frame !== null) cancelAnimationFrame(frame);
     };
   }, [paneRef, scale, apply]);
+
+  /* DRAG TO PAN. Scrollbars alone are not how anyone moves around a diagram —
+     the gesture people reach for is grabbing the canvas — and on a zoomed-in
+     schema the scrollbars may not even be near the pointer.
+     
+     POINTER EVENTS, not mouse: one implementation covers a trackpad, a mouse
+     and a touch screen, and `setPointerCapture` keeps the drag alive when the
+     pointer leaves the pane mid-gesture, which is the common way a drag ends
+     up half-applied.
+     
+     IT DEFERS TO THE THINGS THAT OWN A CLICK. A primary-button press on an
+     entity is a FOCUS, not a pan, so a drag only starts on a target that is
+     not interactive — otherwise clicking a table would jitter the canvas and
+     sometimes fail to focus at all. A middle-button drag always pans, because
+     nothing else claims it. */
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (pane === null) return;
+    let origin: {
+      x: number;
+      y: number;
+      left: number;
+      top: number;
+      id: number;
+    } | null = null;
+
+    const onDown = (event: PointerEvent): void => {
+      if (event.button !== 0 && event.button !== 1) return;
+      if (
+        event.button === 0 &&
+        (event.target as Element | null)?.closest(
+          '[role="button"],a,button,input,textarea,select',
+        ) !== null
+      ) {
+        return;
+      }
+      origin = {
+        x: event.clientX,
+        y: event.clientY,
+        left: pane.scrollLeft,
+        top: pane.scrollTop,
+        id: event.pointerId,
+      };
+      pane.setPointerCapture(event.pointerId);
+      pane.style.cursor = "grabbing";
+    };
+
+    const onMove = (event: PointerEvent): void => {
+      if (origin === null || event.pointerId !== origin.id) return;
+      event.preventDefault();
+      pane.scrollLeft = origin.left - (event.clientX - origin.x);
+      pane.scrollTop = origin.top - (event.clientY - origin.y);
+    };
+
+    const onUp = (event: PointerEvent): void => {
+      if (origin === null || event.pointerId !== origin.id) return;
+      origin = null;
+      pane.style.cursor = "";
+      if (pane.hasPointerCapture(event.pointerId)) {
+        pane.releasePointerCapture(event.pointerId);
+      }
+    };
+
+    pane.addEventListener("pointerdown", onDown);
+    pane.addEventListener("pointermove", onMove);
+    pane.addEventListener("pointerup", onUp);
+    pane.addEventListener("pointercancel", onUp);
+    return () => {
+      pane.removeEventListener("pointerdown", onDown);
+      pane.removeEventListener("pointermove", onMove);
+      pane.removeEventListener("pointerup", onUp);
+      pane.removeEventListener("pointercancel", onUp);
+    };
+  }, [paneRef]);
 
   return {
     zoom,

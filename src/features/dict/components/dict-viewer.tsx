@@ -65,7 +65,10 @@ export function DictViewer({
 
   return (
     <div className="relative h-full w-full">
-      <div ref={paneRef} className="h-full w-full overflow-auto p-4">
+      <div
+        ref={paneRef}
+        className="h-full w-full cursor-grab overflow-auto p-4"
+      >
         <div style={{ width: size.width * camera.scale }}>
           <DictDiagram file={file} className="block" />
         </div>

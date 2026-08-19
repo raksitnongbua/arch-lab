@@ -70,10 +70,18 @@ export const ER = {
   padX: 14,
   /** Minimum box width, so a one-column table is still a box and not a slot. */
   minWidth: 168,
-  /** Horizontal gap between two columns of entities. */
-  columnGap: 96,
-  /** Vertical gap between two entities in one column. */
-  rowGap: 44,
+  /** Horizontal gap between two columns of entities.
+   *
+   * WIDE ENOUGH FOR A LABEL PLATE PLUS BOTH FEET, which is what the old 96
+   * was not: a verb like "is taken as" needs ~100px, two feet need 26 more,
+   * and the leftover was negative — so a label had nowhere legal to sit
+   * between two columns and ended up overhanging a box. Spacing is the fix
+   * for a crowded diagram; nudging labels is only the fallback. */
+  columnGap: 168,
+  /** Vertical gap between two entities in one column. Wide enough that a
+   * label pushed off a horizontal run lands in clear space rather than on
+   * the box below. */
+  rowGap: 72,
   /** Canvas padding around the whole diagram. */
   margin: 40,
   /** How far a connector runs straight out of a box before it turns. */
@@ -622,40 +630,90 @@ export function layoutEr(file: ErLabFile): ErLayout {
     });
   }
 
-  /* LABELS THAT LANDED ON EACH OTHER ARE PUSHED APART, in a second pass.
-     Placement can only see one relationship at a time — it keeps a label off
-     the feet of ITS OWN line — so two labels pushed off two nearby segments
-     can arrive at the same place. On the course-catalogue example "is taken
-     as" landed on "requires" the moment both cleared their feet. Resolved
-     here, where every label's final position is known, by nudging the later
-     one further along the axis it was already pushed on: the first-placed
-     label keeps the spot it earned, which makes the result stable rather than
-     dependent on iteration order. */
-  for (let i = 0; i < drawn.length; i += 1) {
-    const later = drawn[i];
-    if (later.label === undefined) continue;
-    const halfLater = labelPlateWidth(later.label) / 2;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const clash = drawn.slice(0, i).find((earlier) => {
-        if (earlier.label === undefined) return false;
-        return (
-          Math.abs(earlier.labelX - later.labelX) <
-            labelPlateWidth(earlier.label) / 2 + halfLater &&
-          Math.abs(earlier.labelY - later.labelY) <
-            LABEL_PLATE_HALF_HEIGHT * 2 + 4
+  /* THE TWO RESOLUTION PASSES RUN TOGETHER, NOT IN SEQUENCE. Pushing a label
+     off a box can land it on another label, and separating two labels can land
+     one on a box — so running each once leaves the second's output unchecked
+     by the first. `requires` came out sitting on the Course box for exactly
+     that reason. Three rounds is enough for every bundled document and is
+     bounded, which matters more than converging: a layout that loops is worse
+     than a label 4px off. */
+  for (let round = 0; round < 3; round += 1) {
+    /* LABELS ARE PUSHED OFF BOXES FIRST. A plate is ~100px wide, so a label
+       whose CENTRE is clear of every box can still overhang two of them — which
+       is exactly what "is taken as" and "requires" did. Tested by extents, not
+       by the centre point, and moved along the axis with the shorter escape. */
+    for (const relationship of drawn) {
+      if (relationship.label === undefined) continue;
+      const half = labelPlateWidth(relationship.label) / 2;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const hit = laid.find(
+          (entity) =>
+            relationship.labelX + half > entity.x &&
+            relationship.labelX - half < entity.x + entity.width &&
+            relationship.labelY + LABEL_PLATE_HALF_HEIGHT > entity.y &&
+            relationship.labelY - LABEL_PLATE_HALF_HEIGHT <
+              entity.y + entity.height,
         );
-      });
-      if (clash === undefined) break;
-      /* Away from the label it hit, along whichever axis they are closer on —
-         the shorter move is the one that keeps the label nearest its line. */
-      const dx = later.labelX - clash.labelX;
-      const dy = later.labelY - clash.labelY;
-      if (Math.abs(dx) >= Math.abs(dy)) {
-        later.labelX +=
-          (dx >= 0 ? 1 : -1) *
-          (labelPlateWidth(clash.label as string) / 2 + halfLater + 8);
-      } else {
-        later.labelY += (dy >= 0 ? 1 : -1) * (LABEL_PLATE_HALF_HEIGHT * 2 + 8);
+        if (hit === undefined) break;
+        const escapeLeft = relationship.labelX + half - hit.x + 8;
+        const escapeRight =
+          hit.x + hit.width - (relationship.labelX - half) + 8;
+        const escapeUp =
+          relationship.labelY + LABEL_PLATE_HALF_HEIGHT - hit.y + 8;
+        const escapeDown =
+          hit.y +
+          hit.height -
+          (relationship.labelY - LABEL_PLATE_HALF_HEIGHT) +
+          8;
+        const shortest = Math.min(
+          escapeLeft,
+          escapeRight,
+          escapeUp,
+          escapeDown,
+        );
+        if (shortest === escapeLeft) relationship.labelX -= escapeLeft;
+        else if (shortest === escapeRight) relationship.labelX += escapeRight;
+        else if (shortest === escapeUp) relationship.labelY -= escapeUp;
+        else relationship.labelY += escapeDown;
+      }
+    }
+
+    /* THEN labels that landed on each other are pushed apart.
+       Placement can only see one relationship at a time — it keeps a label off
+       the feet of ITS OWN line — so two labels pushed off two nearby segments
+       can arrive at the same place. On the course-catalogue example "is taken
+       as" landed on "requires" the moment both cleared their feet. Resolved
+       here, where every label's final position is known, by nudging the later
+       one further along the axis it was already pushed on: the first-placed
+       label keeps the spot it earned, which makes the result stable rather than
+       dependent on iteration order. */
+    for (let i = 0; i < drawn.length; i += 1) {
+      const later = drawn[i];
+      if (later.label === undefined) continue;
+      const halfLater = labelPlateWidth(later.label) / 2;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const clash = drawn.slice(0, i).find((earlier) => {
+          if (earlier.label === undefined) return false;
+          return (
+            Math.abs(earlier.labelX - later.labelX) <
+              labelPlateWidth(earlier.label) / 2 + halfLater &&
+            Math.abs(earlier.labelY - later.labelY) <
+              LABEL_PLATE_HALF_HEIGHT * 2 + 4
+          );
+        });
+        if (clash === undefined) break;
+        /* Away from the label it hit, along whichever axis they are closer on —
+           the shorter move is the one that keeps the label nearest its line. */
+        const dx = later.labelX - clash.labelX;
+        const dy = later.labelY - clash.labelY;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          later.labelX +=
+            (dx >= 0 ? 1 : -1) *
+            (labelPlateWidth(clash.label as string) / 2 + halfLater + 8);
+        } else {
+          later.labelY +=
+            (dy >= 0 ? 1 : -1) * (LABEL_PLATE_HALF_HEIGHT * 2 + 8);
+        }
       }
     }
   }

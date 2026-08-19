@@ -234,23 +234,32 @@ console.log("column rows");
 console.log("connectors");
 
 {
+  /* BY EXTENTS, NOT BY THE CENTRE POINT. The first version of this assertion
+     asked whether the label's CENTRE fell inside a box — which a ~100px plate
+     can clear while still overhanging two of them, and that is precisely what
+     shipped: "requires" sat on the Course box and "is taken as" was clipped by
+     its right edge, with this check green. A test that measures a point cannot
+     catch a rectangle. */
   const onBox = [];
-  for (const relationship of layout.relationships) {
-    for (const entity of layout.entities) {
-      if (
-        relationship.labelX > entity.x &&
-        relationship.labelX < entity.x + entity.width &&
-        relationship.labelY > entity.y &&
-        relationship.labelY < entity.y + entity.height
-      ) {
-        onBox.push(
-          `${relationship.from}->${relationship.to} over ${entity.id}`,
-        );
+  for (const [name, laid] of ALL_LAYOUTS) {
+    for (const relationship of laid.relationships) {
+      if (relationship.label === undefined) continue;
+      const half = labelPlateWidth(relationship.label) / 2;
+      for (const entity of laid.entities) {
+        if (
+          relationship.labelX + half > entity.x &&
+          relationship.labelX - half < entity.x + entity.width &&
+          relationship.labelY + LABEL_PLATE_HALF_HEIGHT > entity.y &&
+          relationship.labelY - LABEL_PLATE_HALF_HEIGHT <
+            entity.y + entity.height
+        ) {
+          onBox.push(`${name}: ${relationship.label} over ${entity.id}`);
+        }
       }
     }
   }
   check(
-    "no relationship label lands on a box",
+    `no label plate overlaps a box (${ALL_LAYOUTS.length} documents, by extents)`,
     onBox.length === 0,
     onBox.join(", "),
   );

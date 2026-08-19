@@ -89,8 +89,8 @@ grammars are refused by the old parsers with a message naming the right one.
 - Line numbers on `/validate`'s source pane, which had been left out when
   `/view` and `/syntax` got them — on the one page whose whole output is "line 12,
   column 4".
-- The ER and dictionary canvases zoom and pan, with the same pill, the same
-  clamps and the same pinch gesture every other canvas has.
+- The ER and dictionary canvases zoom, and drag to pan, with the same pill,
+  the same clamps and the same pinch gesture every other canvas has.
 - The home page's hero cycles all six notations.
 - Export is one menu across every kind now: Copy PNG, Download PNG and
   Download SVG, with a single sharpness axis, so the two new kinds do not
