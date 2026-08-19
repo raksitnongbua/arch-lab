@@ -24,11 +24,21 @@
  *      same rule the flowchart holds for its loop dash and the use-case
  *      canvas for its «include»/«extend» dependencies.
  *
- * THE IDLE GESTURE: the dashed, non-identifying lines MARCH their own dash,
- * and nothing else moves. The canvas-wide rule beside `@keyframes
- * af-frame-march` in globals.css is that only a line which is ALREADY dashed
- * may march — marching a solid line means giving it a dasharray, and a solid
- * ER line that becomes dashed has changed what it says about identity.
+ * THE IDLE GESTURES, two of them:
+ *
+ *   - Every connector carries a PULSE: a short bright segment that travels
+ *     its length, staggered per edge so the diagram breathes rather than
+ *     blinking in unison. `new-diagram-type.md` makes this a standing rule —
+ *     "line connectors are always animated" — and the first cut of this
+ *     canvas broke it, on the argument that nothing travels along a foreign
+ *     key. That argument was about what the LINE means, and it is answered by
+ *     HOW the pulse is drawn rather than by refusing to draw one: the pulse
+ *     is a SECOND path over the base line, so a solid line stays solid and
+ *     the identifying/non-identifying distinction is untouched. Dashing the
+ *     base line to make it travel would have changed what the diagram says.
+ *   - The dashed, non-identifying lines also MARCH their own dash. The
+ *     canvas-wide rule beside `@keyframes af-frame-march` in globals.css is
+ *     that only a line which is ALREADY dashed may march.
  *
  * OPT OUT TWICE, and neither is optional:
  *   - `prefers-reduced-motion: no-preference` gates every animation here.
@@ -50,6 +60,12 @@
   --er-edge-draw: 260ms;
   --er-edge-beat: 40ms;
   --er-march: 1100ms;
+  /* One full travel of a pulse, and the gap between two edges starting
+     theirs. Slow on purpose: this runs forever on a page someone is reading,
+     and a fast repeating motion in peripheral vision is the thing that makes
+     an idle animation feel like a distraction rather than life. */
+  --er-pulse: 3600ms;
+  --er-pulse-beat: 260ms;
 }
 
 /* The resting state: everything visible, nothing moving. Anything below only
@@ -62,6 +78,14 @@
 
 .af-er-edge-line {
   stroke-dashoffset: 0;
+}
+
+/* The pulse is INVISIBLE at rest. It exists in the DOM unconditionally so the
+   exported SVG and the no-JS reader get identical markup to the canvas, and
+   it is opacity-0 until the media query below turns it on — which makes
+   stillness the default rather than something switched off afterwards. */
+.af-er-edge-pulse {
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -119,7 +143,48 @@
     }
   }
 
-  /* The one ambient gesture. Only the already-dashed kind marches. */
+  /* THE PULSE. A short lit segment travelling the line's whole length: the
+     dash pattern is one visible run followed by a gap long enough to cover
+     any connector this layout produces, so exactly one segment is on the line
+     at a time and it reads as a travelling pulse rather than as a dashed
+     line. The offset animates the full period, which is what makes the loop
+     seamless. */
+  .af-er-edge-pulse {
+    stroke-dasharray: 26 900;
+    stroke-dashoffset: 926;
+    animation: af-er-pulse var(--er-pulse) linear infinite;
+    /* Behind the boxes' arrival: a line that pulses before its tables exist
+       draws attention to nothing. Staggered per edge so they do not fire
+       together. */
+    animation-delay: calc(
+      var(--er-wave-cap, 6) * var(--er-entity-beat) + var(--er-entity-rise) +
+        var(--er-edge, 0) * var(--er-pulse-beat)
+    );
+  }
+
+  [data-idle-motion="off"] .af-er-edge-pulse {
+    animation: none;
+    opacity: 0;
+  }
+
+  @keyframes af-er-pulse {
+    0% {
+      opacity: 0;
+      stroke-dashoffset: 926;
+    }
+    12% {
+      opacity: 0.85;
+    }
+    75% {
+      opacity: 0.85;
+    }
+    100% {
+      opacity: 0;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* The second ambient gesture. Only the already-dashed kind marches. */
   .af-er-edge-dashed .af-er-edge-line {
     animation:
       af-er-fade var(--er-edge-draw) ease-out forwards,
@@ -164,8 +229,26 @@
   opacity: 0.28;
 }
 
-.af-er-entity[role="button"] {
+.af-er-entity[role="button"],
+.af-er-edge[role="button"] {
   cursor: pointer;
+}
+
+/* A hovered line brightens along its whole length, so the hit area — which is
+   18px wide and invisible — is discoverable: without this the pointer changes
+   over an empty-looking strip and nothing says why. */
+.af-er-edge[role="button"]:hover .af-er-edge-line {
+  stroke: var(--edge-drift);
+  stroke-width: 2.5;
+}
+
+.af-er-edge[role="button"]:focus-visible {
+  outline: none;
+}
+
+.af-er-edge[role="button"]:focus-visible .af-er-edge-line {
+  stroke: var(--primary);
+  stroke-width: 2.5;
 }
 
 /* The lift on hover is what makes a box feel like an object rather than a
@@ -193,6 +276,13 @@
      has asked "what does this table talk to", and a current along exactly
      those lines answers it in motion. Same argument the C4 canvas makes for
      lighting a selected path. */
+  /* A lit line already carries the current below; pulsing it too would be
+     two travelling gestures on one path. */
+  .af-er-has-focus .af-er-edge-pulse {
+    animation: none;
+    opacity: 0;
+  }
+
   .af-er-has-focus .af-er-lit .af-er-edge-line {
     stroke-dasharray: 5 7;
     animation: af-er-current 900ms linear infinite;

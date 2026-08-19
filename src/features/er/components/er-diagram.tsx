@@ -50,6 +50,26 @@ import type {
 import { ER, layoutEr } from "../lib/layout";
 import type { ErLabFile } from "@/types";
 
+/**
+ * What is focused: a table, a relationship, or nothing.
+ *
+ * A UNION rather than an entity id, because a reader has two questions about
+ * a schema and only one is about a table. "What does this table talk to" is
+ * answered by focusing the box; "what does THIS line mean" — which
+ * cardinality sits on which end, is it identifying — is answered by focusing
+ * the line, and a crow's foot is exactly the notation a reader has not
+ * memorised. Making only the box clickable left the harder question
+ * unanswerable.
+ *
+ * A relationship is addressed by INDEX, not by its `from`/`to` pair: two
+ * tables may be joined more than once (an order has a billing address and a
+ * shipping address), and an id pair cannot tell those two lines apart.
+ */
+export type ErFocus =
+  | { kind: "entity"; id: string }
+  | { kind: "relationship"; index: number }
+  | null;
+
 /** How many columns' worth of stagger before the beat stops growing, so a
  * wide schema compresses instead of trickling in. The flowchart's rank-cap
  * rule, held here in TS and in the stylesheet's `--er-wave-cap`. */
@@ -147,7 +167,7 @@ function Entity({
 }: {
   entity: LaidErEntity;
   state: "none" | "focused" | "related" | "dimmed";
-  onFocus?: (id: string | null) => void;
+  onFocus?: (focus: ErFocus) => void;
 }): React.JSX.Element {
   const headerY = entity.y + ER.headerHeight;
   const interactive = onFocus !== undefined;
@@ -160,7 +180,7 @@ function Entity({
 
   return (
     <g
-      className={`af-er-entity af-er-${state}`}
+      className={["af-er-entity", `af-er-${state}`].join(" ")}
       style={
         { "--er-wave": Math.min(entity.depth, WAVE_CAP) } as React.CSSProperties
       }
@@ -170,11 +190,19 @@ function Entity({
             tabIndex: 0,
             "aria-pressed": state === "focused",
             "aria-label": `${entity.label}: ${entity.attributes.length} columns`,
-            onClick: () => onFocus(state === "focused" ? null : entity.id),
+            onClick: (event: React.MouseEvent) => {
+              /* Stopped, or the backdrop clears the focus this click set. */
+              event.stopPropagation();
+              onFocus(
+                state === "focused" ? null : { kind: "entity", id: entity.id },
+              );
+            },
             onKeyDown: (event: React.KeyboardEvent) => {
               if (event.key !== "Enter" && event.key !== " ") return;
               event.preventDefault();
-              onFocus(state === "focused" ? null : entity.id);
+              onFocus(
+                state === "focused" ? null : { kind: "entity", id: entity.id },
+              );
             },
           }
         : {})}
@@ -299,22 +327,67 @@ function Relationship({
   relationship,
   index,
   state,
+  onFocus,
 }: {
   relationship: LaidErRelationship;
   index: number;
   state: "none" | "lit" | "dimmed";
+  onFocus?: (focus: ErFocus) => void;
 }): React.JSX.Element {
   const d = relationship.points
     .map((point, at) => `${at === 0 ? "M" : "L"} ${point.x} ${point.y}`)
     .join(" ");
   const stroke = state === "lit" ? "var(--primary)" : "var(--edge)";
   const dashed = relationship.kind === "non-identifying";
+  const interactive = onFocus !== undefined;
+  const toggle = (): void =>
+    onFocus?.(state === "lit" ? null : { kind: "relationship", index });
 
   return (
     <g
-      className={`af-er-edge af-er-${state}${dashed ? "af-er-edge-dashed" : ""}`}
+      className={[
+        "af-er-edge",
+        `af-er-${state}`,
+        dashed ? "af-er-edge-dashed" : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{ "--er-edge": index } as React.CSSProperties}
+      {...(interactive
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-label": `Relationship from ${relationship.from} to ${relationship.to}`,
+            onClick: (event: React.MouseEvent) => {
+              /* Stopped, or the backdrop would clear the focus this click just
+                 set: the backdrop is a sibling covering the whole canvas, so
+                 the event reaches it on the way up. */
+              event.stopPropagation();
+              toggle();
+            },
+            onKeyDown: (event: React.KeyboardEvent) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              toggle();
+            },
+          }
+        : {})}
     >
+      {/* A WIDE INVISIBLE HIT PATH. A 1.5px line is not a click target — the
+          pointer has to land within a pixel of it — so the same geometry is
+          drawn again at 18px and transparent, purely to be hit.
+          `pointer-events: stroke` is set explicitly because a transparent
+          stroke receives no events by default. */}
+      {interactive ? (
+        <path
+          d={d}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={18}
+          strokeLinejoin="round"
+          style={{ cursor: "pointer", pointerEvents: "stroke" }}
+        />
+      ) : null}
       <path
         className="af-er-edge-line"
         d={d}
@@ -327,6 +400,24 @@ function Relationship({
            kind in rather than drawing it with a dashoffset, which would
            overwrite the dash that carries the meaning. */
         strokeDasharray={dashed ? "6 5" : undefined}
+      />
+      {/* THE AMBIENT PULSE, a SECOND path over the first rather than a dash on
+          the line itself. Dashing the base line would destroy the notation — a
+          solid line means identifying and a dashed one means it is not, so
+          animating a solid line into a dashed one changes what the diagram
+          says about identity. A short travelling segment on top leaves the
+          base line exactly as it was and still gives every connector the
+          motion the other four canvases have, which
+          `new-diagram-type.md` requires: "line connectors are always
+          animated". */}
+      <path
+        className="af-er-edge-pulse"
+        d={d}
+        fill="none"
+        stroke="var(--edge-drift)"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
       <EndGlyph end={relationship.fromEnd} stroke={stroke} />
       <EndGlyph end={relationship.toEnd} stroke={stroke} />
@@ -367,19 +458,21 @@ function Relationship({
 export interface ErDiagramProps {
   file: ErLabFile;
   className?: string;
-  /** The focused entity id, or null. Omit both this and `onFocus` for a
-   * static, server-rendered diagram. */
-  focusId?: string | null;
-  onFocus?: (id: string | null) => void;
+  /** What is focused, or null. Omit both this and `onFocus` for a static,
+   * server-rendered diagram. */
+  focus?: ErFocus;
+  onFocus?: (focus: ErFocus) => void;
 }
 
 export function ErDiagram({
   file,
   className,
-  focusId = null,
+  focus = null,
   onFocus,
 }: ErDiagramProps): React.JSX.Element {
   const layout = layoutEr(file);
+  const focusId = focus?.kind === "entity" ? focus.id : null;
+  const focusEdge = focus?.kind === "relationship" ? focus.index : null;
 
   /* Which entities the focused one actually touches. Computed from the
      RELATIONSHIPS rather than from proximity, because "what does this table
@@ -393,10 +486,25 @@ export function ErDiagram({
       if (relationship.to === focusId) related.add(relationship.from);
     }
   }
+  /* Focusing a LINE lights the two tables it joins — the line's whole meaning
+     is which two, so dimming both would hide the answer it was clicked for. */
+  if (focusEdge !== null) {
+    const relationship = layout.relationships[focusEdge];
+    if (relationship !== undefined) {
+      related.add(relationship.from);
+      related.add(relationship.to);
+    }
+  }
 
   return (
     <svg
-      className={`af-er-canvas${focusId !== null ? "af-er-has-focus" : ""}${className === undefined ? "" : ` ${className}`}`}
+      className={[
+        "af-er-canvas",
+        focus !== null ? "af-er-has-focus" : null,
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       width="100%"
       role="img"
@@ -418,6 +526,28 @@ export function ErDiagram({
         </filter>
       </defs>
 
+      {/* THE BACKDROP. A transparent rect over the whole canvas, FIRST so it
+          sits under everything, whose only job is to catch a click that hit
+          nothing and clear the focus. Without it the only ways out are the
+          panel's close button and clicking the focused item again, and neither
+          is what a reader reaches for — clicking the empty space around a
+          diagram to deselect is the convention every canvas tool shares, and
+          its absence reads as the focus being stuck. */}
+      {onFocus !== undefined ? (
+        <rect
+          x={0}
+          y={0}
+          width={layout.width}
+          height={layout.height}
+          fill="transparent"
+          onClick={() => onFocus(null)}
+          /* A click TARGET, not a control: keyboard users clear focus with
+             Escape, which the viewer owns, so putting this in the tab order
+             would announce "backdrop" for no gain. */
+          aria-hidden="true"
+        />
+      ) : null}
+
       {/* Relationships first, so a line can never be drawn over a box it
           merely passes. */}
       {layout.relationships.map((relationship, index) => (
@@ -425,12 +555,17 @@ export function ErDiagram({
           key={`${relationship.from}->${relationship.to}-${index}`}
           relationship={relationship}
           index={index}
+          onFocus={onFocus}
           state={
-            focusId === null
+            focus === null
               ? "none"
-              : relationship.from === focusId || relationship.to === focusId
-                ? "lit"
-                : "dimmed"
+              : focusEdge !== null
+                ? index === focusEdge
+                  ? "lit"
+                  : "dimmed"
+                : relationship.from === focusId || relationship.to === focusId
+                  ? "lit"
+                  : "dimmed"
           }
         />
       ))}
@@ -439,7 +574,7 @@ export function ErDiagram({
           key={entity.id}
           entity={entity}
           state={
-            focusId === null
+            focus === null
               ? "none"
               : entity.id === focusId
                 ? "focused"
