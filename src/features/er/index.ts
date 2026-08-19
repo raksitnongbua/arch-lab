@@ -46,3 +46,4 @@ export type {
   LaidErEntity,
   LaidErRelationship,
 } from "./lib/layout";
+export { ErShareButton } from "./share/share-button";

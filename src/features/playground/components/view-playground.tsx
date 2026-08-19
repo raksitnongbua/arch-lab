@@ -123,8 +123,8 @@ import {
   UseCaseShareButton,
   UseCaseViewer,
 } from "@/features/usecase";
-import { ErViewer } from "@/features/er";
-import { DictViewer } from "@/features/dict";
+import { ErShareButton, ErViewer } from "@/features/er";
+import { DictShareButton, DictViewer } from "@/features/dict";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SequenceExportButton,
@@ -1531,6 +1531,24 @@ export function ViewPlayground({
                           onAnnounce={setAnnouncement}
                         />
                       </>
+                    ) : doc.kind === "er" ? (
+                      /* Share only, for now: the export pair needs a
+                         from-model SVG renderer per kind (the exporters never
+                         clone the live DOM, so a canvas cannot be exported by
+                         reading it), and that is not written yet. Sharing
+                         needs none of it — the codec packs the TEXT. */
+                      <ErShareButton
+                        text={text}
+                        title={documentTitle(doc)}
+                        format={doc.format}
+                        onAnnounce={setAnnouncement}
+                      />
+                    ) : doc.kind === "dict" ? (
+                      <DictShareButton
+                        text={text}
+                        title={documentTitle(doc)}
+                        onAnnounce={setAnnouncement}
+                      />
                     ) : null}
                     <button
                       type="button"

@@ -46,3 +46,4 @@ export type {
   LaidDictField,
   LaidDictSection,
 } from "./lib/layout";
+export { DictShareButton } from "./share/share-button";
