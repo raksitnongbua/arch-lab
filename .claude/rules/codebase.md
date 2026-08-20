@@ -77,11 +77,11 @@ deploy.
   `node scripts/gen-share-keys.mjs > env` is one missing dot from `.env` and
   `git add -A` would have staged it. Do not weaken those lines.
 
-## Why changes here keep going wrong, and the four habits that prevent it
+## Why changes here keep going wrong, and the five habits that prevent it
 
 Written after a run of avoidable defects on one branch. Every one shipped
 green: the build passed, the checks passed, and the bug was visible to the
-person who opened the page. They share four causes, and each has a cheap
+person who opened the page. They share five causes, and each has a cheap
 habit that would have caught it.
 
 **1. Writing a helper instead of finding the one that exists.** A second PNG
@@ -118,6 +118,19 @@ that check must be written from the FILESYSTEM or the DATA, never from a
 hand-listed set of names. A hardcoded list cannot notice the thing it has never
 heard of; three checks in this repo passed for exactly that reason while the
 feature under them was broken.
+
+**5. A rule stricter than the product needs will cause defects of its own.**
+Two on this branch did. "Every connector is animated", written as an absolute,
+forced motion onto a canvas where nothing travels — which forced a glow to
+distinguish focus, which was built as an SVG filter, whose region collapsed on a
+flat path and painted bands across the diagram. And "focus may light a line with
+a colour or a weight" permitted exactly the repaint that had to be removed
+twice.
+→ **When a rule keeps producing work nobody asked for, suspect the rule.** Both
+now state the TEST rather than the verdict — "would removing this lose
+information?" instead of "always animate". A rule that says what to CHECK
+survives a case its author did not imagine; a rule that says what to DO does
+not.
 
 **And one about reporting.** A step is done when a user can see it, not when it
 typechecks. Say which parts are unstarted, by name, every time — the failure is

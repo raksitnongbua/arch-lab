@@ -113,6 +113,13 @@ that is a defect, not a follow-up.
   distinct shapes must be six distinct shapes in all six themes, contrast
   measured. `check:themes` and a `check:<kind>-palette` prove it. A
   half-populated palette ships a choice that makes the diagram look broken.
+
+  **A `check:<kind>-palette` is only owed by a kind that HAS a palette** — one
+  that assigns colour by type, like the flowchart's six shapes or C4's five
+  roles. ER and the data dictionary paint from the shared node tokens and have
+  no per-type colour to complete, so demanding the check of them would only
+  produce a script asserting that nothing exists. A vacuous check is worse than
+  no check: it reports coverage it does not have.
 - SVG and PNG export, GIF export of the trace, and share links, matching what
   the other kinds offer. Anything you leave out is a gap a user will find.
 
@@ -215,15 +222,38 @@ A step is DONE when a user can see it, not when it typechecks. Two rules:
 These come last in the file and are broken first, because each is easy to
 argue out of for one diagram kind:
 
-- **Every connector is animated.** Not "unless the notation implies no flow" —
-  that argument is about what the LINE MEANS, and it is answered by HOW the
-  motion is drawn. An ER connector carries a pulse on a SECOND path over the
-  base line, so a solid line stays solid; dashing the base line to make it
-  travel would have changed what the diagram says about identity. Find the
-  drawing that keeps the notation, do not skip the motion.
-- **Focus never restyles the notation.** Lighting a line means a glow, a
-  colour or a weight — never a dasharray, a shape change or an arrowhead,
-  because every one of those already means something.
+- **Motion on a connector must SAY something.** This rule used to read "every
+  connector is animated", absolutely, and it was over-strict — it is the
+  clearest case in this file of a rule causing the defect it was meant to
+  prevent. Read what it cost, because the shape repeats:
+
+  The ER canvas draws lines along which nothing travels. The absolute rule
+  forced a pulse onto them anyway; the pulse then made the focus state
+  indistinguishable, so focus got a glow; the glow was implemented as an SVG
+  filter; and the filter had a percentage region on a **zero-height bounding
+  box**, which the browser painted as two bands across the diagram. Three
+  commits went into chasing those bands, and every one of them adjusted a
+  stroke — because the rule had made a stroke the obvious suspect. Nothing in
+  that chain was asked for by anything except this rule.
+
+  The test is now: **would removing this motion lose information?** A
+  flowchart's trace answers "what order does this run in", so it earns its
+  entrance. A dictionary has no connectors, so the question does not arise. An
+  ER connector's ambient pulse says nothing a static line does not — keep it
+  only while it stays cheap and quiet, and drop it the moment it costs a second
+  visual language to survive.
+- **Focus dims and animates. It does not repaint.** This was looser and wrong
+  too: it used to permit "a glow, a colour or a weight", and colour and weight
+  were both added and then removed, twice, because a focused line that
+  recolours is a new border appearing where one already was. Dim what is
+  unrelated, animate what is lit, and change no stroke, fill, width or
+  arrowhead in either direction. Keyboard `:focus-visible` is the one
+  exception, because a keyboard user has no hover to fall back on.
+- **Never apply an SVG `filter` to a connector.** A percentage filter region is
+  `objectBoundingBox` units, and a horizontal or vertical line has a
+  zero-extent box in one axis — the region collapses and the paint lands
+  somewhere else entirely. If a soft edge is wanted, draw a wider path. Pinned
+  by `check:er-motion`; it belongs in any new kind's motion check.
 - **Stagger with NEGATIVE animation delays.** A positive delay on an infinite
   animation is invisible until an ancestor class changes; then the animation
   restarts and replays its silent head, and the reader sees every connector
@@ -269,7 +299,8 @@ touched; an unticked box is a decision, not an oversight.
 - [ ] connectors animated; focus that does not restyle the notation
 - [ ] `check:<kind>-motion` — opt out twice, reveal budget, every styled class
       actually emitted
-- [ ] complete in every theme + `check:<kind>-palette`
+- [ ] complete in every theme, and `check:<kind>-palette` **if the kind assigns
+      colour by type** (see step 2 — not every kind has a palette)
 - [ ] SVG/PNG export, GIF where there is a trace, share button
 
 **3. MCP**
