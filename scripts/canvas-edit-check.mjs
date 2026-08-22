@@ -58,6 +58,17 @@
  *      that type stripping cannot load — the tactic `check:shortcuts` and
  *      `check:viewer-motion` already use for facts that exist only in a
  *      component.
+ *  10. THE LOCK DEFAULTS TO EDITABLE and is decided server-side, so no reader
+ *      gets a frame of the wrong state — a frame in which a drag can land.
+ *  11. A CANVAS EDIT RE-PROJECTS ONLY THE NODE IT CHANGED. React Flow keeps a
+ *      node's measured size and handle bounds only for an object it is handed
+ *      by identity; every other node it re-adopts loses its handle bounds, and
+ *      every edge touching one of them has no position until the next
+ *      measurement — error 008 and a blink of the connector layer. Since every
+ *      edit re-parses the text, a projection without a cache pays that for the
+ *      whole diagram on every drag release, which is exactly the hitch a
+ *      reader reported. Asserted from the projection's OUTPUT (which objects
+ *      are the same objects), not from its source.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
@@ -114,6 +125,9 @@ const {
 } = await load("src/features/playground/input/canvas-edit.ts");
 const { parseViewSource, VIEW_SEED_TEXT, sourceTextFor } = await load(
   "src/features/playground/input/parse.ts",
+);
+const { createNodeProjectionCache, projectViewerNodes } = await load(
+  "src/features/viewer/lib/project-nodes.ts",
 );
 
 /* ----------------------------------------------------------------------- */
@@ -709,6 +723,223 @@ console.log("\nEvery notation that cannot carry geometry says so");
         ? canvasEditability(asMermaid.value)
         : asMermaid.error,
     )}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 11. The projection: a drag costs ONE re-adopt, not N                     */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA canvas edit re-projects only the node it changed");
+
+{
+  /* WHY THIS SECTION EXISTS. React Flow measures how much work a render costs
+     by OBJECT IDENTITY: `adoptUserNodes` keeps its internal node — measured
+     size, handle bounds, absolute position — only for an incoming object that
+     is `===` the one it adopted last time. Otherwise it rebuilds it and resets
+     `handleBounds`, and until the next DOM measurement lands every edge
+     touching that node has no position: error 008, an EdgeWrapper that renders
+     nothing, and a blink of the connector layer. Every canvas edit re-parses
+     the text, so every node arrives as a NEW object — which is why a drag
+     release used to blink the whole diagram, and why `project-nodes.ts` caches
+     by identity. These assertions are the only thing standing between that
+     cache and the next person who "simplifies" it back into a plain map. */
+  const original = c4Document(VIEW_SEED_TEXT.c4);
+  const diagramId = original.synced.model.rootDiagramId;
+  const nodesOf = (doc) => doc.synced.model.diagrams[diagramId].nodes;
+  const cache = createNodeProjectionCache();
+  const projectInto = (doc, editable = true) =>
+    projectViewerNodes({
+      model: doc.synced.model,
+      diagram: doc.synced.model.diagrams[diagramId],
+      editable,
+      cache,
+    });
+
+  const first = projectInto(original);
+  check(
+    "the seed projects more than a couple of nodes",
+    first.length >= 3,
+    `projected ${first.length}`,
+  );
+
+  /* THE FIXTURE HAS TO BE THE REAL PROBLEM, or everything below passes for the
+     wrong reason: an unchanged re-parse must genuinely hand over all-new model
+     objects, the way `movedNodeDocument` does. */
+  const reparsed = c4Document(sourceTextFor(original));
+  check(
+    "an unchanged re-parse really does replace every model node object",
+    reparsed.synced.model !== original.synced.model &&
+      nodesOf(reparsed).every((node, i) => node !== nodesOf(original)[i]),
+    "the parser is returning shared objects — this section would prove nothing",
+  );
+
+  const again = projectInto(reparsed);
+  check(
+    "an equal model costs no new node objects",
+    again.length === first.length &&
+      again.every((node, i) => node === first[i]),
+    `${again.filter((node, i) => node !== first[i]).length} of ${again.length} ` +
+      "nodes were replaced — React Flow would re-adopt them and every edge's " +
+      "position lookup would come back null for a frame",
+  );
+
+  /* THE DRAG ITSELF. One press must cost exactly one new object, and it must be
+     the node that moved — not "about one", and not the whole diagram.
+     DRAGGED PAST EVERY OTHER NODE on purpose: the entrance delay is a rank in
+     reading order, so this is the move that reshuffles every other node's
+     rank. A projection that recomputed those delays would replace all of the
+     objects here and this assertion would say so; a gentle nudge would not
+     move a single rank and would prove nothing. */
+  const target = nodesOf(original)[0];
+  const to = {
+    x: target.position.x,
+    y:
+      Math.max(...nodesOf(original).map((node) => node.position.y)) +
+      EDIT_GRID * 8,
+  };
+  const moved = movedNodeDocument(original, diagramId, target.id, to);
+  const afterMove = projectInto(moved);
+  const replaced = afterMove.filter((node, i) => node !== first[i]);
+  check(
+    "a finished drag replaces exactly one node object",
+    replaced.length === 1 && replaced[0].id === target.id,
+    `replaced: ${replaced.map((node) => node.id).join(", ") || "none"}`,
+  );
+  check(
+    "and that object carries the position the drag landed on",
+    replaced.length === 1 &&
+      replaced[0].position.x === to.x &&
+      replaced[0].position.y === to.y,
+    `position: ${JSON.stringify(replaced[0]?.position)}`,
+  );
+
+  /* The entrance delay is a RANK over every node's position, so moving one
+     node reshuffles other nodes' ranks. Recomputing it would hand untouched
+     nodes a new inline style — a new object, a re-adopt — for an animation
+     that finished seconds ago. The moved node keeps its own delay for the same
+     reason: it is on screen, and its entrance is over. */
+  const delayOf = (node) => node.style["--viewer-enter-delay"];
+  check(
+    "a move never re-choreographs an entrance that already played",
+    afterMove.every((node, i) => delayOf(node) === delayOf(first[i])),
+    "an on-screen node was given a new --viewer-enter-delay",
+  );
+
+  /* THE HANDLE-BOUNDS CARRY-OVER, which is what keeps the ONE re-adopted node
+     from blinking its own connectors: React Flow reuses the previous handle
+     bounds only when the incoming object already claims a measured size
+     (`parseHandles`), and resets them when `measured` is absent. Truthful
+     because the flow writes width/height onto the wrapper, so the measured box
+     IS the model's size — asserted as that relationship, not as two numbers. */
+  check(
+    "every projected node claims the measured size the model gives it",
+    afterMove.every(
+      (node) =>
+        node.measured?.width === node.width &&
+        node.measured?.height === node.height,
+    ),
+    "a node arrived without `measured` — React Flow would drop its handle " +
+      "bounds on the next re-adopt and its edges would vanish for a frame",
+  );
+
+  /* PURE DATA, which is what makes the cache's signature total: it compares
+     `JSON.stringify` of the whole node, so anything unserialisable is
+     invisible to it. A callback put back into `data` would be ignored by the
+     comparison AND frozen into the cached object — a handler closing over a
+     model the reader has moved past. */
+  const functionPaths = (value, path = "node") => {
+    if (typeof value === "function") return [path];
+    if (value === null || typeof value !== "object") return [];
+    return Object.entries(value).flatMap(([key, inner]) =>
+      functionPaths(inner, `${path}.${key}`),
+    );
+  };
+  const callbacks = afterMove.flatMap((node) => functionPaths(node));
+  check(
+    "a projected node is pure data, with no callback in it",
+    callbacks.length === 0,
+    `functions found at: ${callbacks.join(", ")} — these belong in ` +
+      "ViewerNodeActionsProvider, not in the node object",
+  );
+
+  /* NOT BLINDLY STALE. The signature must notice a field that is not the model
+     node: flipping the edit switch changes `draggable` on every node, so every
+     object must be replaced. Without this, a cache that returned its entry
+     unconditionally would pass every assertion above. */
+  const locked = projectInto(moved, false);
+  check(
+    "flipping the edit switch re-projects every node",
+    locked.every(
+      (node, i) => node !== afterMove[i] && node.draggable === false,
+    ),
+    "a cached object survived a change to a field outside `data.node` — the " +
+      "canvas would stay draggable after the lock was applied",
+  );
+
+  /* A DELETE MUST NOT LEAK. The entry for a node that is gone would grow the
+     cache for the life of the page, and an id reused by a later edit would
+     inherit the dead node's entrance delay. */
+  const beforeDelete = projectInto(moved);
+  const deleted = deletedNodeDocument(
+    moved,
+    diagramId,
+    nodesOf(moved).at(-1).id,
+  );
+  const afterDelete = projectInto(deleted);
+  check(
+    "a delete keeps every surviving node's object",
+    afterDelete.length === beforeDelete.length - 1 &&
+      afterDelete.every((node, i) => node === beforeDelete[i]),
+    "the survivors were replaced — the whole diagram would re-adopt for one " +
+      "removed element",
+  );
+  check(
+    "and drops the dead node's cache entry",
+    cache.entries.size === afterDelete.length,
+    `${cache.entries.size} entries for ${afterDelete.length} nodes`,
+  );
+
+  /* A LEVEL CHANGE STARTS OVER: node ids are unique per diagram, not per
+     model, so an id can mean one element here and a different one a level
+     down. Reusing an entry across diagrams would render the wrong element. */
+  const childId = Object.keys(deleted.synced.model.diagrams).find(
+    (id) => id !== diagramId,
+  );
+  if (typeof childId === "string") {
+    const childDiagram = deleted.synced.model.diagrams[childId];
+    const child = projectViewerNodes({
+      model: deleted.synced.model,
+      diagram: childDiagram,
+      editable: true,
+      cache,
+    });
+    check(
+      "drilling into another diagram starts the cache over",
+      child.length === childDiagram.nodes.length &&
+        cache.entries.size === child.length,
+      `${cache.entries.size} entries for ${child.length} nodes — an entry ` +
+        "from the level above survived, and an id shared between levels would " +
+        "render the wrong element",
+    );
+  } else {
+    check(
+      "the seed has a second diagram to drill into",
+      false,
+      "no child diagram in the seed — the level-change rule is untested",
+    );
+  }
+
+  /* ONE CACHE PER MOUNTED CANVAS. A source assertion because it is a fact
+     about the component: a cache rebuilt on every render remembers nothing,
+     every assertion above still passes in isolation, and the hitch comes
+     straight back. */
+  const canvasSource = read("src/features/viewer/components/viewer-canvas.tsx");
+  check(
+    "the canvas holds one projection cache for its lifetime",
+    /useState\(createNodeProjectionCache\)/.test(canvasSource),
+    "the cache is no longer created once per canvas — a cache built during " +
+      "render remembers nothing and the projection is a plain map again",
   );
 }
 
