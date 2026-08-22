@@ -61,11 +61,10 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import type { C4Diagram, C4Edge } from "@/types";
-import { childLevelOf, hasChildDiagram, isBoundaryPlaceholder } from "@/types";
+import { childLevelOf, hasChildDiagram } from "@/types";
 
 import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
-import { nodeColorStyle } from "@/features/editor/lib/node-colors";
 
 import {
   breadcrumbFor,
@@ -84,6 +83,10 @@ import {
 } from "../lib/canvas-constants";
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
+import {
+  createNodeProjectionCache,
+  projectViewerNodes,
+} from "../lib/project-nodes";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
 import { ViewerNodeDetail, type NodeDetail } from "./viewer-node-detail";
 import {
@@ -92,7 +95,12 @@ import {
   type ViewerFlowEdge,
 } from "./viewer-edge";
 import { FrameLayer } from "@/features/editor/components/frame-layer";
-import { ViewerNode, type ViewerFlowNode } from "./viewer-node";
+import {
+  ViewerNode,
+  ViewerNodeActionsProvider,
+  type ViewerFlowNode,
+  type ViewerNodeActions,
+} from "./viewer-node";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
 import { useModKey } from "@/lib/mod-key";
@@ -910,6 +918,18 @@ function ViewerCanvasInner({
     [model, navigateTo],
   );
 
+  /* ---- what a node can navigate to -----------------------------------------
+   * CONTEXT, NOT NODE DATA, and the projection is the reason. Both handlers
+   * close over `model`, so both are new functions on every edit — and a node
+   * object carrying a new function is a new node object, which is the re-adopt
+   * the projection cache exists to avoid (see `lib/project-nodes.ts`). Through
+   * context they can change as freely as they like: a context change re-renders
+   * the node components and leaves the node OBJECTS alone. */
+  const nodeActions = useMemo<ViewerNodeActions>(
+    () => ({ drillInto, openReference }),
+    [drillInto, openReference],
+  );
+
   // Element selection routes through React Flow's onNodeClick, not a handler
   // inside the node component: with every interactive flag off (draggable /
   // selectable / connectable all false), React Flow sets `pointer-events:
@@ -943,6 +963,12 @@ function ViewerCanvasInner({
    * that memo records what re-adoption costs (every EdgeWrapper unmounts and
    * remounts, stealing focus mid-selection). One commit per press-to-release
    * keeps that invariant and produces exactly one text edit to undo.
+   *
+   * The release itself used to pay that cost once, which a reader saw as a
+   * hitch at the end of the gesture: the new document is a new model, and the
+   * projection handed React Flow a fresh object for every node in it. The
+   * projection cache in `lib/project-nodes.ts` is what removed it — only the
+   * node this handler actually moved arrives as a new object now.
    *
    * `Math.round` after the snap, not instead of it: `snapGrid` quantises, but
    * a zoomed canvas can still hand back a value carrying float error, and
@@ -1243,87 +1269,26 @@ function ViewerCanvasInner({
   // position lookup comes back null — every EdgeWrapper unmounts and
   // remounts, stealing focus from the edge's label button mid-selection.
   // Node dimming is done with a small dynamic stylesheet instead (below).
-  const nodes = useMemo(() => {
-    const childLevel = childLevelOf(diagram.level);
-
-    // Entrance order = reading order (top-left → bottom-right), not array
-    // order: the stagger should look like the diagram being drawn, and a
-    // hand-edited .alab file's node order is whatever the author typed.
-    // Delay is capped so a large diagram finishes settling with the level
-    // transition instead of trickling in after it. Computed HERE (not in the
-    // node component) because it needs the whole diagram; it rides the same
-    // inline style as the colour variables, so nothing new re-renders.
-    const enterDelay = new Map<string, number>();
-    [...diagram.nodes]
-      .sort(
-        (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
-      )
-      .forEach((node, rank) => {
-        enterDelay.set(
-          node.id,
-          Math.min(
-            rank * VIEWER_DURATIONS.nodeEnterStagger,
-            VIEWER_DURATIONS.nodeEnterMaxDelay,
-          ),
-        );
-      });
-
-    const flowNodes: ViewerFlowNode[] = diagram.nodes.map((node) => {
-      const drillable =
-        hasChildDiagram(node) && typeof node.childDiagramId === "string";
-      // Gated on the child COUNT, not on `childDiagramId` merely existing: a
-      // pointer at an empty diagram is nothing to zoom into, and a chip
-      // reading "0" is an affordance that lies.
-      const childCount =
-        drillable && node.childDiagramId
-          ? getDiagram(model, node.childDiagramId).nodes.length
-          : 0;
-      return {
-        id: node.id,
-        type: "c4" as const,
-        position: { x: node.position.x, y: node.position.y },
-        width: node.size.width,
-        height: node.size.height,
-        draggable: editable,
-        connectable: false,
-        selectable: false,
-        focusable: false,
-        // Same colour plumbing as the editor's projection: two custom
-        // properties on the wrapper, inherited by the shape classes.
-        // Author tagColors (frozen in model metadata) beat the type default.
-        // The entrance delay rides along as a third custom property — the
-        // wrapper's inline style is already the per-node channel, and the
-        // animation itself lives on the INNER element (viewer-node.tsx), so
-        // React Flow's positioning transform is never animated.
-        style: {
-          ...nodeColorStyle(node, model.file.metadata.tagColors),
-          "--viewer-enter-delay": `${enterDelay.get(node.id) ?? 0}ms`,
-        } as React.CSSProperties,
-        data: {
-          node,
-          level: diagram.level,
-          isPlaceholder: isBoundaryPlaceholder(node),
-          // A dangling `^ref` resolves to null and renders no chip.
-          refSourceLevel:
-            node.externalRef !== undefined
-              ? (model.diagrams[node.externalRef.diagramId]?.level ?? null)
-              : null,
-          onDrill: drillInto,
-          onOpenReference: openReference,
-          drill:
-            node.childDiagramId && childLevel !== null && childCount > 0
-              ? {
-                  childDiagramId: node.childDiagramId,
-                  childLevelLabel: childLevel,
-                  childCount,
-                }
-              : null,
-        },
-      };
-    });
-
-    return flowNodes;
-  }, [model, diagram, drillInto, openReference, editable]);
+  //
+  // The same cost is why the projection lives in `lib/project-nodes.ts` behind
+  // a cache rather than being spelled out here: a new model (which is what
+  // every canvas edit and every keystroke in the source pane produces) would
+  // otherwise replace all of the node objects and pay that re-adopt in full.
+  // The cache hands back the identical object for a node nothing changed
+  // about, so a drag release costs one re-adopt instead of N.
+  //
+  // Held in state, not a ref, and that is not a workaround: a ref is for a
+  // value the render does not need, and this one is read BY the render (the
+  // `react-hooks/refs` rule says the same thing, as an error). The lazy
+  // initialiser runs once, so every render sees the one cache; projecting the
+  // same diagram twice returns the same objects, which is what keeps a
+  // double-invoked render honest.
+  const [projectionCache] = useState(createNodeProjectionCache);
+  const nodes = useMemo(
+    () =>
+      projectViewerNodes({ model, diagram, editable, cache: projectionCache }),
+    [model, diagram, editable, projectionCache],
+  );
 
   const edges = useMemo(() => {
     const groups = parallelGroups(diagram.edges);
@@ -1530,117 +1495,123 @@ function ViewerCanvasInner({
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <ReactFlow<ViewerFlowNode, ViewerFlowEdge>
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={{ padding: FIT_PADDING }}
-        onNodeClick={handleNodeClick}
-        onNodeDoubleClick={handleNodeDoubleClick}
-        onEdgeClick={handleEdgeClick}
-        onPaneClick={handlePaneClick}
-        onMoveEnd={handleMoveEnd}
-        minZoom={MIN_ZOOM}
-        maxZoom={MAX_ZOOM}
-        panOnScroll
-        zoomOnScroll={false}
-        zoomOnPinch
-        zoomOnDoubleClick={false}
-        /* PAN IS TWO GESTURES, AND BOTH ARE SPELLED OUT ON PURPOSE.
-           `panOnDrag` and `panActivationKeyCode` are both React Flow
-           DEFAULTS (`panOnDrag = true`, `panActivationKeyCode = 'Space'`),
-           so leaving them off the element would behave identically today.
-           They are written anyway because an editable canvas is about to
-           depend on them: once nodes become draggable, dragging a node MOVES
-           it, and these two are then the only ways left to pan — the pane for
-           empty canvas, Space for anywhere including over a node. A default
-           that a feature depends on is a default that must not be able to
-           change under it silently, whether by a library upgrade or by
-           someone adding `selectionOnDrag` here the way the editor has it.
-           `check:viewer-motion` pins the Space key to the editor's, which is
-           the one place the same gesture is already declared. */
-        panOnDrag
-        panActivationKeyCode="Space"
-        /* The pan comment above is the other half of this line: with nodes
-           draggable, a drag STARTING ON A NODE moves it, and pan survives as
-           the pane drag and Space + drag. */
-        nodesDraggable={editable}
-        onNodeDragStop={editable ? handleNodeDragStop : undefined}
-        /* React Flow does the snapping DURING the gesture, so the node the
-           reader is dragging is on the grid the whole way rather than jumping
-           to it on release. `EDIT_GRID` is the format's own 8 — see its
-           comment for why it is not the editor's copy of that number. */
-        snapToGrid={editable}
-        snapGrid={[EDIT_GRID, EDIT_GRID]}
-        nodesConnectable={false}
-        nodesFocusable={false}
-        edgesFocusable={false}
-        elementsSelectable={false}
-        deleteKeyCode={null}
-        /* An array joined with a space, never concatenated: a lost leading
-           space merges two class names into one nonsense name, every rule
-           targeting it silently stops applying, and CSS reports nothing. */
-        className={[
-          "bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing",
-          /* THE AFFORDANCE. Without this the node keeps the body button's
-             pointer cursor and nothing on screen says it can be moved — the
-             feature would be invisible until someone tried it by accident.
-             Aimed at the WRAPPER and its button so the whole node reads as
-             draggable, not just its margins. */
-          editable
-            ? "[&_.react-flow__node]:cursor-grab [&_.react-flow__node_button]:cursor-grab [&_.react-flow__node.dragging]:cursor-grabbing"
-            : "",
-        ].join(" ")}
-      >
-        {/* Before every Panel so frames sit behind the nodes and the chrome. */}
-        <FrameLayer diagram={diagram} onFocus={clearSelection} />
-        <Panel position="top-left" className="max-w-full">
-          {/* No `currentLevel`: the last crumb already carries it, and two
-              sources for one fact can disagree. */}
-          <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
-        </Panel>
-        <Panel
-          position="top-right"
-          className="max-w-[min(19rem,calc(100%-1rem))]"
+      {/* Wraps the flow, not the page: the nodes are what consume it. */}
+      <ViewerNodeActionsProvider value={nodeActions}>
+        <ReactFlow<ViewerFlowNode, ViewerFlowEdge>
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          fitViewOptions={{ padding: FIT_PADDING }}
+          onNodeClick={handleNodeClick}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          onEdgeClick={handleEdgeClick}
+          onPaneClick={handlePaneClick}
+          onMoveEnd={handleMoveEnd}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          panOnScroll
+          zoomOnScroll={false}
+          zoomOnPinch
+          zoomOnDoubleClick={false}
+          /* PAN IS TWO GESTURES, AND BOTH ARE SPELLED OUT ON PURPOSE.
+             `panOnDrag` and `panActivationKeyCode` are both React Flow
+             DEFAULTS (`panOnDrag = true`, `panActivationKeyCode = 'Space'`),
+             so leaving them off the element would behave identically today.
+             They are written anyway because an editable canvas is about to
+             depend on them: once nodes become draggable, dragging a node MOVES
+             it, and these two are then the only ways left to pan — the pane for
+             empty canvas, Space for anywhere including over a node. A default
+             that a feature depends on is a default that must not be able to
+             change under it silently, whether by a library upgrade or by
+             someone adding `selectionOnDrag` here the way the editor has it.
+             `check:viewer-motion` pins the Space key to the editor's, which is
+             the one place the same gesture is already declared. */
+          panOnDrag
+          panActivationKeyCode="Space"
+          /* The pan comment above is the other half of this line: with nodes
+             draggable, a drag STARTING ON A NODE moves it, and pan survives as
+             the pane drag and Space + drag. */
+          nodesDraggable={editable}
+          onNodeDragStop={editable ? handleNodeDragStop : undefined}
+          /* React Flow does the snapping DURING the gesture, so the node the
+             reader is dragging is on the grid the whole way rather than jumping
+             to it on release. `EDIT_GRID` is the format's own 8 — see its
+             comment for why it is not the editor's copy of that number. */
+          snapToGrid={editable}
+          snapGrid={[EDIT_GRID, EDIT_GRID]}
+          nodesConnectable={false}
+          nodesFocusable={false}
+          edgesFocusable={false}
+          elementsSelectable={false}
+          deleteKeyCode={null}
+          /* An array joined with a space, never concatenated: a lost leading
+             space merges two class names into one nonsense name, every rule
+             targeting it silently stops applying, and CSS reports nothing. */
+          className={[
+            "bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing",
+            /* THE AFFORDANCE. Without this the node keeps the body button's
+               pointer cursor and nothing on screen says it can be moved — the
+               feature would be invisible until someone tried it by accident.
+               Aimed at the WRAPPER and its button so the whole node reads as
+               draggable, not just its margins. */
+            editable
+              ? "[&_.react-flow__node]:cursor-grab [&_.react-flow__node_button]:cursor-grab [&_.react-flow__node.dragging]:cursor-grabbing"
+              : "",
+          ].join(" ")}
         >
-          {nodeDetail !== null ? (
-            <ViewerNodeDetail
-              detail={nodeDetail}
-              onDismiss={handleDetailDismiss}
-              onZoomIn={handleDetailZoomIn}
-            />
-          ) : (
-            <ViewerEdgeDetail detail={detail} onDismiss={handleDetailDismiss} />
-          )}
-        </Panel>
-        <Panel position="bottom-left">
-          <ViewerZoomControls />
-        </Panel>
-        {/* Not in a Panel: React Flow's MiniMap positions itself, and
-            wrapping it would fight its own corner offsets. */}
-        <CanvasMinimap />
-        {/* The gesture clause is here as well as in the zoom pill's menu, and
-            the repetition is the point: a plain wheel PANS this canvas, so a
-            reader who tries it concludes the wheel does not zoom and never
-            reaches for the modifier. The failure looks like an answer, which
-            is the one case worth saying twice. */}
-        <Panel position="bottom-center" className="hidden sm:block">
-          <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
-            Click an <span className="font-medium text-primary">element</span>{" "}
-            or <span className="font-medium text-primary">connector</span> for
-            details ·{" "}
-            <span className="font-medium text-primary">double-click</span> or
-            the <span className="font-medium text-primary">zoom chip</span> to
-            zoom in ·{" "}
-            <span className="font-medium text-primary">{mod} + scroll</span>{" "}
-            zooms · <kbd className="font-mono text-[10px]">Esc</kbd> steps back
-            · drag or <kbd className="font-mono text-[10px]">Space</kbd> + drag
-            to pan
-          </p>
-        </Panel>
-      </ReactFlow>
+          {/* Before every Panel so frames sit behind the nodes and the chrome. */}
+          <FrameLayer diagram={diagram} onFocus={clearSelection} />
+          <Panel position="top-left" className="max-w-full">
+            {/* No `currentLevel`: the last crumb already carries it, and two
+                sources for one fact can disagree. */}
+            <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
+          </Panel>
+          <Panel
+            position="top-right"
+            className="max-w-[min(19rem,calc(100%-1rem))]"
+          >
+            {nodeDetail !== null ? (
+              <ViewerNodeDetail
+                detail={nodeDetail}
+                onDismiss={handleDetailDismiss}
+                onZoomIn={handleDetailZoomIn}
+              />
+            ) : (
+              <ViewerEdgeDetail
+                detail={detail}
+                onDismiss={handleDetailDismiss}
+              />
+            )}
+          </Panel>
+          <Panel position="bottom-left">
+            <ViewerZoomControls />
+          </Panel>
+          {/* Not in a Panel: React Flow's MiniMap positions itself, and
+              wrapping it would fight its own corner offsets. */}
+          <CanvasMinimap />
+          {/* The gesture clause is here as well as in the zoom pill's menu, and
+              the repetition is the point: a plain wheel PANS this canvas, so a
+              reader who tries it concludes the wheel does not zoom and never
+              reaches for the modifier. The failure looks like an answer, which
+              is the one case worth saying twice. */}
+          <Panel position="bottom-center" className="hidden sm:block">
+            <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
+              Click an <span className="font-medium text-primary">element</span>{" "}
+              or <span className="font-medium text-primary">connector</span> for
+              details ·{" "}
+              <span className="font-medium text-primary">double-click</span> or
+              the <span className="font-medium text-primary">zoom chip</span> to
+              zoom in ·{" "}
+              <span className="font-medium text-primary">{mod} + scroll</span>{" "}
+              zooms · <kbd className="font-mono text-[10px]">Esc</kbd> steps
+              back · drag or <kbd className="font-mono text-[10px]">Space</kbd>{" "}
+              + drag to pan
+            </p>
+          </Panel>
+        </ReactFlow>
+      </ViewerNodeActionsProvider>
     </div>
   );
 }

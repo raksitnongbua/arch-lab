@@ -22,7 +22,7 @@
  *     with selection and edges never remount mid-interaction.
  */
 
-import { memo, useId } from "react";
+import { createContext, memo, useContext, useId } from "react";
 import { ZoomIn } from "lucide-react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 
@@ -44,6 +44,15 @@ import {
 
 import { C4_ABSTRACTION } from "../lib/labels";
 
+/**
+ * PURE DATA, no callbacks — and that is load-bearing rather than tidy. The
+ * canvas's projection reuses a node's object when its data is unchanged
+ * (`lib/project-nodes.ts`), which is what keeps React Flow from re-adopting
+ * every node on every edit; both navigations close over the model, so a
+ * function in here would be new on every edit and defeat that, and a cached
+ * object would be holding the closure it was built with. They arrive through
+ * {@link ViewerNodeActionsProvider} instead.
+ */
 export interface ViewerNodeData extends Record<string, unknown> {
   /** The (frozen) model node. */
   node: C4Node;
@@ -51,16 +60,14 @@ export interface ViewerNodeData extends Record<string, unknown> {
   level: C4Level;
   /**
    * Present ⇔ the node has a child diagram to zoom into. Shapes the chip;
-   * the chip's own click handler calls `onDrill` directly (with propagation
-   * stopped, so the body's selection path never fires alongside it).
+   * the chip's own click handler drills directly (with propagation stopped,
+   * so the body's selection path never fires alongside it).
    */
   drill: {
     childDiagramId: string;
     childLevelLabel: string;
     childCount: number;
   } | null;
-  /** Drill into this node's child diagram — the canvas owns navigation. */
-  onDrill: (nodeId: string) => void;
   isPlaceholder: boolean;
   /**
    * For a placeholder, the LEVEL of the diagram it references — drives the
@@ -68,11 +75,40 @@ export interface ViewerNodeData extends Record<string, unknown> {
    * cannot be resolved (a dangling `^ref`).
    */
   refSourceLevel: C4Level | null;
-  /** Follow this placeholder to the node it names, and select it there. */
-  onOpenReference: (nodeId: string) => void;
 }
 
 export type ViewerFlowNode = Node<ViewerNodeData, "c4">;
+
+/** The two navigations a node can start. The canvas owns both. */
+export interface ViewerNodeActions {
+  /** Zoom into this node's child diagram. */
+  drillInto: (nodeId: string) => void;
+  /** Follow a `^ref` placeholder to the node it names, and select it there. */
+  openReference: (nodeId: string) => void;
+}
+
+const ViewerNodeActionsContext = createContext<ViewerNodeActions | null>(null);
+
+/**
+ * Wraps the flow that renders these nodes. The value may change identity as
+ * often as it likes — a context change re-renders the node components, which
+ * is cheap, and never touches the node OBJECTS, which is what React Flow
+ * measures its work by.
+ */
+export const ViewerNodeActionsProvider = ViewerNodeActionsContext.Provider;
+
+/** Throws rather than no-op: a drill chip that silently does nothing reads as
+ * a broken affordance, and only a canvas that forgot the provider can get
+ * here. */
+function useViewerNodeActions(): ViewerNodeActions {
+  const actions = useContext(ViewerNodeActionsContext);
+  if (actions === null) {
+    throw new Error(
+      "ViewerNode rendered outside ViewerNodeActionsProvider — the drill chip and reference chip would have nowhere to navigate.",
+    );
+  }
+  return actions;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Selection-outline geometry                                                  */
@@ -156,14 +192,8 @@ function outlinePath(type: C4NodeType, width: number, height: number): string {
 function ViewerNodeInner({
   data,
 }: NodeProps<ViewerFlowNode>): React.JSX.Element {
-  const {
-    node,
-    drill,
-    onDrill,
-    isPlaceholder,
-    refSourceLevel,
-    onOpenReference,
-  } = data;
+  const { node, drill, isPlaceholder, refSourceLevel } = data;
+  const { drillInto, openReference } = useViewerNodeActions();
   const { def } = resolveIcon(node);
   const [iconStyle] = useIconStyle();
   const Icon = def.byStyle[iconStyle];
@@ -367,7 +397,7 @@ function ViewerNodeInner({
           title={`Zoom into ${node.name}`}
           onClick={(event) => {
             event.stopPropagation();
-            onDrill(node.id);
+            drillInto(node.id);
           }}
           onDoubleClick={(event) => event.stopPropagation()}
           className={cn(
@@ -384,7 +414,7 @@ function ViewerNodeInner({
         <RefBadge
           sourceLevel={refSourceLevel}
           nodeName={node.name}
-          onOpen={() => onOpenReference(node.id)}
+          onOpen={() => openReference(node.id)}
         />
       ) : null}
     </div>

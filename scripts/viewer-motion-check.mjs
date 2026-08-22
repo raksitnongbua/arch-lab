@@ -388,9 +388,16 @@ check("both C4 canvases declare the same pan-activation gesture", () => {
   /* And the pill has to SAY so. The gesture existing while nothing announces
      it is how the wheel-zoom confusion this same file documents happened —
      a reader tries drag, sees a node move, and concludes the canvas cannot
-     pan. */
+     pan.
+
+     Matched against the SENTENCE, with the JSX space expressions and line
+     breaks collapsed away first. Prettier owns where that paragraph wraps —
+     wrapping the flow in one more provider was enough to move the break and
+     fail this assertion while every word a reader sees stayed put. An
+     assertion about copy must not be an assertion about indentation. */
+  const hintProse = canvas.replace(/\{" "\}/g, " ").replace(/\s+/g, " ");
   assert.match(
-    canvas,
+    hintProse,
     /Space<\/kbd> \+ drag/,
     "the canvas hint must name the pan-anywhere gesture",
   );
