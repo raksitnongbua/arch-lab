@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonClasses } from "@/components/ui/button";
 import { MCP_STATUS_LABEL } from "@/features/mcp/catalog";
-import { APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
+import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,19 +25,18 @@ import { cn } from "@/lib/utils";
  *     the grammar, testing something against it, and pointing an agent at both
  *     are the same errand. MCP sits last of the three, being the one you reach
  *     for after the format makes sense.
- *   Editor — last, at the far right. It is the heaviest destination on the bar
- *     (a full authoring surface, not a page you read), and it is the only entry
- *     that can disappear, so keeping it at the end means EDITOR_ENABLED toggles
- *     a trailing item rather than resequencing the whole nav.
+ *   There is no Editor entry any more. `/editor` was retired into a forwarding
+ *     alias for `/view` once the playground's C4 canvas became editable in
+ *     place: two entries for one job taught a reader there were two places to
+ *     go. It was last on the bar and the only entry that could disappear, so
+ *     removing it resequences nothing — and it gives back the ~60px the
+ *     viewport budget below was fighting for.
  *
  * Demo replaced the outbound "About C4" link (2026-08). That link sent a
  * first-time reader to another website to find out what a C4 diagram is,
  * which is a strange thing for this site to do when it can show them four.
  * With it gone, nothing in the header leaves the site, so the row no longer
  * needs its outside-the-<nav> slot at all.
- *
- * The Editor entry is gated behind EDITOR_ENABLED; flipping that flag
- * restores it with no other change.
  *
  * WHY THE ROW COLLAPSES BELOW `sm`. The original measurement: four entries
  * plus the wordmark and the theme toggle came to ~404px against a 393px
@@ -98,7 +97,6 @@ const NAV_LINKS: ReadonlyArray<{
   { href: "/syntax", label: "Syntax" },
   { href: "/validate", label: "Validate" },
   { href: "/mcp", label: "MCP", status: MCP_STATUS_LABEL },
-  ...(EDITOR_ENABLED ? [{ href: "/editor", label: "Editor" }] : []),
 ];
 
 /** Shared by every focusable in this file that cannot take `buttonClasses`. */

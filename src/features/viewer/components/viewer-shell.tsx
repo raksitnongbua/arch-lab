@@ -2,9 +2,9 @@
 
 /**
  * The view-mode page body: the view-only canvas, with a slim strip under it
- * naming the model (title, read-only badge, and — while EDITOR_ENABLED — the
- * way into the editor) — plus the two ways the canvas can take the whole
- * screen:
+ * naming the model (title, read-only badge, and — on a host that cannot edit
+ * in place — the way into the playground) — plus the two ways the canvas can
+ * take the whole screen:
  *
  *  1. Native fullscreen — the Fullscreen API on this shell's root element,
  *     feature-detected, state tracked through `fullscreenchange` so the
@@ -54,7 +54,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
-import { EDITOR_ENABLED } from "@/lib/constants";
+import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import {
@@ -74,7 +74,7 @@ import {
   getDiagram,
   type ViewerModel,
 } from "../lib/model";
-import { ViewerCanvas } from "./viewer-canvas";
+import { ViewerCanvas, type CanvasEditHandlers } from "./viewer-canvas";
 
 /* ---- fullscreen state, as an external store ------------------------------- */
 /* The DOM is the single source of truth (never our last button press), which
@@ -163,6 +163,7 @@ export function ViewerShell({
   initialDiagramId,
   share,
   onDiagramChange,
+  edit,
   defaultImmersive = false,
   tour: tourEnabled = true,
   titleAs: TitleTag = "h1",
@@ -174,6 +175,15 @@ export function ViewerShell({
   share?: ShareSource;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
+  /**
+   * Makes the canvas editable and reports each finished node move. Absent —
+   * every host but the playground — and the canvas stays read-only.
+   *
+   * The shell only forwards it. It deliberately holds no edit state of its
+   * own: the position a node lands at has to become TEXT to survive, and the
+   * only thing that owns the text is the page above this one.
+   */
+  edit?: CanvasEditHandlers;
   /**
    * Start in immersive mode. For a page that exists only to show one model
    * (`/view/[modelId]`) — where the diagram IS the page, so the site chrome is
@@ -366,6 +376,7 @@ export function ViewerShell({
           model={frozenModel}
           initialDiagramId={initialDiagramId}
           onDiagramChange={handleDiagramChange}
+          edit={edit}
         />
         {/* First visit it opens itself (remembered per browser — see
             components/ui/tour.tsx for the persistence verdicts); the strip's
@@ -520,11 +531,17 @@ export function ViewerShell({
                 </span>
               </button>
             ) : null}
-            {EDITOR_ENABLED ? (
+            {/* THE LINK IS FOR HOSTS THAT CANNOT EDIT. Its job is to hand the
+                model to a page that can, so on a host that already passes
+                `edit` — the playground, whose canvas is editable in place —
+                it would link to where the reader already is. Derived from the
+                prop rather than from a second "am I the playground" flag: the
+                two could disagree, and this one cannot. */}
+            {edit !== undefined ? null : CANVAS_EDIT_ENABLED ? (
               <EditModeLink model={frozenModel} diagramId={currentDiagramId} />
             ) : (
               <Badge variant="outline" className="shrink-0">
-                Editor — coming soon
+                Editing — coming soon
               </Badge>
             )}
           </div>

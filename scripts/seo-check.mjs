@@ -33,12 +33,66 @@
  * Exits non-zero on any failure. Run with: pnpm check:seo
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
+
+/* ----------------------------------------------------------------------- */
+/* Forwarding aliases, DERIVED FROM THE FILESYSTEM                          */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * Every route that forwards somewhere else, found by walking `src/app` for a
+ * `page.tsx` rendering `AliasForward` and reading its destination out of the
+ * source.
+ *
+ * THIS USED TO BE THREE HAND-WRITTEN LISTS in this file, and they were already
+ * wrong: `/view/er` and `/view/dict` had been aliases for a release and were
+ * named in none of them, so their canonicals and their descriptions went
+ * unchecked. That is the exact failure `codebase.md` describes — "a hardcoded
+ * list cannot notice the thing it has never heard of" — and three checks in
+ * this repo have passed for that reason while the feature under them was
+ * broken. Reading the directory means the next alias is covered the day it
+ * exists, wherever in the tree it lands (`/editor` is not under `src/app/view`
+ * and would have needed a fourth list).
+ *
+ * The predicate is the same one `check:share-capacity` uses to prove a route
+ * still carries a share fragment across: the page renders `AliasForward`.
+ */
+function aliasRoutes() {
+  const found = [];
+  const walk = (dir, route) => {
+    for (const entry of readdirSync(path.join(ROOT, dir))) {
+      const child = path.join(dir, entry);
+      if (statSync(path.join(ROOT, child)).isDirectory()) {
+        // Route groups and dynamic segments cannot be forwarding aliases, and
+        // guessing their URL from the directory name would be wrong.
+        if (entry.startsWith("(") || entry.startsWith("[")) continue;
+        walk(child, `${route}/${entry}`);
+        continue;
+      }
+      if (entry !== "page.tsx") continue;
+      const source = read(child);
+      if (!source.includes("AliasForward")) continue;
+      const to = /AliasForward\s+to="([^"]+)"/.exec(source)?.[1] ?? null;
+      found.push({
+        route,
+        file: child,
+        /** The destination's PATH, without the seed query — that is what a
+         *  canonical must name, since `?d=` chooses starting text, not a
+         *  different page. */
+        target: to === null ? null : to.split("?")[0],
+      });
+    }
+  };
+  walk("src/app", "");
+  return found.sort((a, b) => (a.route < b.route ? -1 : 1));
+}
+
+const ALIASES = aliasRoutes();
 
 /** What a search result shows before it truncates. */
 const DESCRIPTION_LIMIT = 160;
@@ -68,21 +122,24 @@ function check(label, ok, detail) {
  *
  * Adding a route to `src/app/sitemap.ts` means adding it here in the same
  * commit. The `?` assertion at the bottom of section 1 fails if it does not.
+ *
+ * THE ALIASES ARE NOT LISTED HERE — they are appended from `ALIASES`, which
+ * reads the filesystem. Five of them used to be typed out and two more had
+ * been shipped without being added, so their descriptions were never measured.
  */
-const ROUTES = [
+const PAGES = [
   ["/ (and the site default)", "src/lib/constants.ts", "APP_DESCRIPTION"],
   ["/demo", "src/app/demo/page.tsx", null],
-  ["/editor", "src/app/editor/page.tsx", null],
   ["/mcp", "src/app/mcp/page.tsx", null],
   ["/view", "src/app/view/page.tsx", null],
-  ["/view/c4", "src/app/view/c4/page.tsx", null],
-  ["/view/seq", "src/app/view/seq/page.tsx", null],
-  ["/view/sequence", "src/app/view/sequence/page.tsx", null],
-  ["/view/flow", "src/app/view/flow/page.tsx", null],
-  ["/view/uc", "src/app/view/uc/page.tsx", null],
   ["/validate", "src/app/validate/page.tsx", null],
   ["/syntax", "src/app/syntax/page.tsx", null],
   ["/faq", "src/app/faq/page.tsx", null],
+];
+
+const ROUTES = [
+  ...PAGES,
+  ...ALIASES.map(({ route, file }) => [route, file, null]),
 ];
 
 /* ----------------------------------------------------------------------- */
@@ -155,25 +212,39 @@ check(
   canonicalOf("src/app/view/page.tsx") === "/view",
   `expected "/view", got ${JSON.stringify(canonicalOf("src/app/view/page.tsx"))}`,
 );
-for (const alias of ["c4", "seq", "sequence", "flow", "uc"]) {
+/* One assertion per alias found on disk, and each one compares the canonical
+   against THAT alias's own destination rather than a constant `/view` — so an
+   alias pointing somewhere new is checked against where it actually points. */
+check(
+  "there are forwarding aliases to check",
+  ALIASES.length > 0,
+  "no page renders AliasForward — either they are gone or the walk is broken, " +
+    "and a broken walk would make every assertion below vacuous",
+);
+for (const { route, file, target } of ALIASES) {
   check(
-    `/view/${alias} canonicals to the playground it forwards to`,
-    canonicalOf(`src/app/view/${alias}/page.tsx`) === "/view",
-    `got ${JSON.stringify(canonicalOf(`src/app/view/${alias}/page.tsx`))}`,
+    `${route} canonicals to ${target ?? "(no destination found)"}, the page it forwards to`,
+    target !== null && canonicalOf(file) === target,
+    `canonical is ${JSON.stringify(canonicalOf(file))}, destination is ${JSON.stringify(target)}`,
+  );
+  /* An alias must not compete in search with the page it forwards to. The
+     trampoline has no content of its own; indexing it spends crawl budget on
+     a redirect and can rank it above the real page. */
+  check(
+    `${route} is noindex`,
+    /robots:\s*\{[^}]*index:\s*false/.test(read(file)),
+    "a forwarding alias that is indexable competes with its own destination",
   );
 }
 
 {
   const sitemap = read("src/app/sitemap.ts");
   const listed = [...sitemap.matchAll(/^\s*"(\/[^"]*)",/gm)].map((m) => m[1]);
+  const wrongly = ALIASES.filter(({ route }) => listed.includes(route));
   check(
     "the sitemap lists no route that canonicals elsewhere",
-    !listed.includes("/view/c4") &&
-      !listed.includes("/view/seq") &&
-      !listed.includes("/view/sequence") &&
-      !listed.includes("/view/flow") &&
-      !listed.includes("/view/uc"),
-    `listed: ${listed.join(", ")}`,
+    wrongly.length === 0,
+    `aliases in the sitemap: ${wrongly.map((a) => a.route).join(", ")}`,
   );
   check(
     "the sitemap lists the one playground",

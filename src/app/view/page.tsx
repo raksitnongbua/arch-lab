@@ -7,6 +7,10 @@ import {
   SOURCE_FOLD_COOKIE,
 } from "@/features/playground/lib/source-fold";
 import {
+  CANVAS_LOCK_COOKIE,
+  isLockedCookie,
+} from "@/features/playground/lib/canvas-lock";
+import {
   exampleTextFor,
   VIEW_EXAMPLE_PARAM,
 } from "@/features/playground/lib/example-param";
@@ -63,6 +67,10 @@ export default async function ViewPage({
       initialSourceCollapsed={isCollapsedCookie(
         store.get(SOURCE_FOLD_COOKIE)?.value,
       )}
+      /* Read on the SERVER for the same reason as the fold: a lock applied
+         after paint would let one frame of an editable canvas through, which
+         is one frame in which a drag lands. */
+      initialCanvasLocked={isLockedCookie(store.get(CANVAS_LOCK_COOKIE)?.value)}
     />
   );
 }

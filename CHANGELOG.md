@@ -7,9 +7,57 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-Two new document types. Neither changes an existing document: every `.alab`
-file, share link and route that worked before works unchanged, and the new
-grammars are refused by the old parsers with a message naming the right one.
+**This release contains a breaking change and bumps the MAJOR version:
+`/editor` no longer serves its own page.** See "Removed" below. The document
+formats are untouched — every `.alab` file and every share link that worked
+before works unchanged.
+
+Two new document types besides. Neither changes an existing document: every
+`.alab` file, share link and route that worked before works unchanged, and the
+new grammars are refused by the old parsers with a message naming the right
+one.
+
+### Removed — BREAKING
+
+- **`/editor` is retired.** The URL still opens: it is now a client-side
+  forwarding alias for `/view` that carries any `#m=` share payload across
+  intact, so an `/editor#m=…` link you are holding still shows its diagram.
+  What is gone is `/editor` as a page of its own — the palette, the inspector,
+  drill-down authoring, `^ref` placeholders, file open/save and drafts are not
+  reachable from any route. A route that links were minted against has been
+  retired, which is what makes this a major bump rather than a minor one.
+  Bookmarks and links keep working; a bookmark to the authoring surface itself
+  does not.
+
+### Added — editing on the canvas
+
+Behind a flag that is **off** in this release, so nothing below is visible yet.
+
+- The C4 canvas on `/view` can be edited directly: select an element, drag it to
+  move it, nudge it with the arrow keys, or press Delete to remove it along with
+  every relationship touching it.
+- Every change is written back into the source text as one edit per gesture, so
+  a drag shows up in a pull request as one changed line. A node returned to
+  where the default layout would have put it leaves no trace in the file at all.
+- Undo for canvas changes, with the diagram focused. Typing in the source pane
+  keeps your browser's own undo — the two histories are deliberately separate.
+- A lock in the canvas strip, remembered per browser, for presenting: it makes
+  the diagram read-only so a drag that starts on an element cannot move it.
+  Editable is the default.
+- **C4 only, and this is a property of the notations rather than a gap.**
+  Sequence, flowchart, use-case, ER and data-dictionary diagrams work their
+  layout out from the text, so there is no position in those grammars to write a
+  drag into. No lock appears on them, and `/faq` answers the question directly.
+
+### Changed
+
+- The playground's heading no longer carries a "live editor" badge, and the
+  navbar no longer carries an Editor entry — there is one place to open a
+  diagram, not two.
+- The viewer's "Edit this diagram" link hands its model to `/view` instead of
+  `/editor`, and is hidden on a page whose canvas is already editable.
+- `/editor` gained a social card. Links to it previewed as the product's
+  landing page rather than as the diagram inside the link.
 
 ### Added — flowcharts
 

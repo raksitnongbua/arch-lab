@@ -6,21 +6,40 @@ export const APP_NAME = "arch-lab";
 /* Feature flags                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Ships the C4 editor. `true` for the current deploy: the navbar carries its
- * Editor entry, `/editor` renders the real canvas, and every editor CTA and
- * capability claim on the landing page, the demo index, and view mode speaks
- * in the present tense.
+/*
+ * `EDITOR_ENABLED` WAS HERE and is deliberately gone rather than left at
+ * `false`. It gated `/editor`, a second page whose job was "a canvas you can
+ * move things on"; that route is now a forwarding alias for `/view`, whose own
+ * C4 canvas is editable in place, so there is no separate editor for a flag to
+ * ship or withhold. Its four consumers — the navbar entry, the site default
+ * title, the landing page's closing CTA and the viewer's edit link — read
+ * `CANVAS_EDIT_ENABLED` below instead, which is the honest subject: whether a
+ * canvas in this app can be edited at all.
  *
- * Flip to `false` and all of those downgrade to an honest "coming soon" on
- * their own. The one extra step is `src/app/editor/page.tsx`, which must stop
- * importing the editor while disabled — otherwise the deployed bundle still
- * carries the editor UI that the flag claims is not shipped.
- *
- * Typed `boolean`, not the literal, so both branches of every consumer stay
- * type-checked whichever way the flag points.
+ * A flag nothing reads is worse than no flag: it reads as a switch someone
+ * could still throw.
  */
-export const EDITOR_ENABLED: boolean = true;
+
+/**
+ * Makes the C4 canvas on `/view` directly editable — select a node, drag it,
+ * nudge it with the arrow keys, delete it — with every change written back
+ * into the source pane as text.
+ *
+ * `false` for the current deploy. The canvas is read-only exactly as it was,
+ * and no lock control renders. Flipping it to `true` is the whole switch:
+ * every affordance reads from this flag rather than being commented out, so
+ * neither state can ship half-built.
+ *
+ * C4 ONLY, and that is a property of the notations rather than a gap here.
+ * The other five kinds SOLVE their geometry from the text — `layoutEr` derives
+ * columns from the relationships, the dictionary is a table — so a dragged
+ * node would be moved back by the next render, and there is nowhere in those
+ * grammars to write the position down. The C4 grammar is the one that carries
+ * per-node geometry (`(x,y wxh)`), so it is the one a canvas can author.
+ *
+ * Typed `boolean`, not the literal, for the reason above.
+ */
+export const CANVAS_EDIT_ENABLED: boolean = false;
 
 /**
  * The site's one description, and it is a BUDGETED string: it is the meta

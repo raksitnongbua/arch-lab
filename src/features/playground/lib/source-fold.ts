@@ -41,70 +41,23 @@
  * also hides the rail, but it is a mode with an announced exit, and
  * persisting it would strand a reader on a page whose way out they have to
  * remember from a previous session.
+ *
+ * THE MECHANISM now lives in `preference-cookie.ts`, extracted when the
+ * editable canvas needed a second preference of the same shape. The named
+ * exports below are unchanged and remain the API every caller uses.
  */
+
+import { booleanPreference } from "./preference-cookie";
+
+/** Module-level, because `useSyncExternalStore` resubscribes if `subscribe`
+ * changes identity — see `use-preference.ts`. */
+export const sourceFoldPreference = booleanPreference({
+  cookie: "af-source-collapsed",
+  onValue: "collapsed",
+  offValue: "expanded",
+});
 
 /** The cookie the server reads and the toggle writes. */
-export const SOURCE_FOLD_COOKIE = "af-source-collapsed";
+export const SOURCE_FOLD_COOKIE = sourceFoldPreference.cookie;
 
-const COLLAPSED = "collapsed";
-
-/**
- * A year, in seconds. Long enough that the preference outlives the reason
- * someone set it; a session cookie would forget on every browser restart,
- * which is the same annoyance in slower motion.
- */
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
-
-/**
- * The server's read, from a cookie value it already has. Takes the VALUE
- * rather than reaching for `next/headers` itself, so this module stays a pure
- * function the check scripts can exercise and the caller keeps the choice of
- * how it obtained the request.
- */
-export function isCollapsedCookie(value: string | undefined): boolean {
-  return value === COLLAPSED;
-}
-
-/** The client's read, from `document.cookie`. */
-export function readSourceCollapsed(): boolean {
-  try {
-    return document.cookie
-      .split(";")
-      .some((part) => part.trim() === `${SOURCE_FOLD_COOKIE}=${COLLAPSED}`);
-  } catch {
-    return false;
-  }
-}
-
-const listeners = new Set<() => void>();
-
-/**
- * `SameSite=Lax` and no `Secure`: this is a layout preference, not a
- * credential, and forcing `Secure` would silently drop it on `http://localhost`
- * during development — a preference that works everywhere except the machine
- * it is developed on is worse than none. `path=/` because all three playground
- * routes share it.
- */
-export function writeSourceCollapsed(collapsed: boolean): void {
-  try {
-    document.cookie =
-      `${SOURCE_FOLD_COOKIE}=${collapsed ? COLLAPSED : "expanded"};` +
-      `path=/;max-age=${MAX_AGE_SECONDS};samesite=lax`;
-  } catch {
-    /* A browser refusing cookies still gets a working toggle for this
-       session — it just forgets on reload. */
-  }
-  for (const listener of listeners) listener();
-}
-
-/**
- * No `storage` event exists for cookies, so this notifies only the tab that
- * wrote. Two tabs disagreeing about a pane's fold until one reloads is a
- * non-event; inventing a polling loop for it would not be.
- */
-export function subscribeSourceCollapsed(onChange: () => void): () => void {
-  listeners.add(onChange);
-  return () => {
-    listeners.delete(onChange);
-  };
-}
+export const isCollapsedCookie = sourceFoldPreference.fromCookie;

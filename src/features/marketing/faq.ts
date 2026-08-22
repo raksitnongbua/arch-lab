@@ -135,6 +135,23 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "you send it to needs nothing installed.",
         links: [{ href: "/demo", label: "Finished examples" }],
       },
+      {
+        /* Asked because the canvas answers a drag on one notation and ignores
+           it on five, which reads as a bug rather than as a property of the
+           notations. Written as one self-contained passage: an assistant
+           quotes a passage, not a page, and this is the answer a reader
+           reaches for at the moment the drag does nothing. */
+        question: "Why can't I drag my ER diagram?",
+        answer:
+          "Because only the C4 canvas has anywhere to write the position down. The C4 grammar " +
+          "carries per-element geometry, so dragging a box edits the text and the change survives " +
+          "a reload. The other five kinds — sequence, flowchart, use case, ER and data dictionary " +
+          "— work their layout out FROM the text: an ER diagram solves its columns from the " +
+          "relationships and a data dictionary is a table, so a dragged box would be put back by " +
+          "the next render and there would be no line to write it on. Change the text and the " +
+          "layout follows.",
+        links: [{ href: "/syntax", label: "Syntax reference" }],
+      },
     ],
   },
   {

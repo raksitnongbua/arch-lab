@@ -75,13 +75,14 @@ import {
   FileText,
   ChevronDown,
   Info,
+  Lock,
+  LockOpen,
   Repeat2,
   Shrink,
   X,
 } from "lucide-react";
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import { buttonClasses, Button } from "@/components/ui/button";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
@@ -145,8 +146,10 @@ import {
   SHARE_FORWARD_ATTRIBUTE,
   sourceFileStem,
   ViewerShell,
+  type NodeMoveHandler,
   type PaneErrorDetail,
 } from "@/features/viewer";
+import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import {
@@ -166,8 +169,14 @@ import {
   type ViewDocument,
   type ViewSourceError,
 } from "../input/parse";
+import {
+  canvasEditability,
+  deletedNodeDocument,
+  movedNodeDocument,
+  ownsChildDiagram,
+} from "../input/canvas-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
-import { useSourceCollapsed } from "../lib/use-source-fold";
+import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
 
 /**
  * How long the pane rests before its content is parsed (and, for C4, the
@@ -183,6 +192,16 @@ const PARSE_DEBOUNCE_MS = 300;
  * anyone watches keystroke by keystroke.
  */
 const URL_SYNC_DEBOUNCE_MS = 800;
+
+/**
+ * How many canvas edits can be undone. Bounded because each entry is a whole
+ * copy of the document's source text, and a long session of nudging a large
+ * diagram would otherwise hold every version of it in memory for the lifetime
+ * of the page. Fifty is far past the "I did not mean that" window this is for;
+ * anything older is a change the reader has moved on from, and the text itself
+ * is still theirs to edit by hand.
+ */
+const CANVAS_UNDO_DEPTH = 50;
 
 /*
  * This page's additions to the sequence viewer's tour (its `extraTourSteps`
@@ -245,6 +264,7 @@ export function ViewPlayground({
   seed,
   initialText,
   initialSourceCollapsed = false,
+  initialCanvasLocked = false,
 }: {
   /** Which example fills the pane when no share payload does. */
   seed: SeedKind;
@@ -262,6 +282,17 @@ export function ViewPlayground({
    * is what a caller with no request context (a test, a story) should get.
    */
   initialSourceCollapsed?: boolean;
+  /**
+   * The reader's stored canvas lock, read from the request cookie by the route
+   * that mounts this — same server-side reasoning as the rail fold above, and
+   * one more reason it matters here: a lock applied after hydration would let
+   * one frame of editable canvas through, and one frame is enough for a press
+   * to land.
+   *
+   * Defaults to `false` — EDITABLE. See `lib/canvas-lock.ts` for why the
+   * permissive state is the default and who the lock is for.
+   */
+  initialCanvasLocked?: boolean;
 }): React.JSX.Element {
   /* ---- state ---------------------------------------------------------- */
 
@@ -332,6 +363,11 @@ export function ViewPlayground({
   const [sourceCollapsed, setSourceCollapsed] = useSourceCollapsed(
     initialSourceCollapsed,
   );
+
+  /** The canvas lock, remembered per browser — see `lib/canvas-lock.ts`. Its
+   * control lives in the canvas strip beside the rail toggle, because that is
+   * where the reader is looking when they want it. */
+  const [canvasLocked, setCanvasLocked] = useCanvasLocked(initialCanvasLocked);
 
   /** Scopes the sequence export button's lookup for the live <svg>. */
   const diagramPaneRef = useRef<HTMLElement>(null);
@@ -805,6 +841,171 @@ export function ViewPlayground({
     [doc, applyEdit],
   );
 
+  /* ---- editing on the canvas -------------------------------------------- */
+
+  /**
+   * Whether the canvas may be edited at all. `CANVAS_EDIT_ENABLED` is the
+   * deploy switch; `canvasEditability` is the DOCUMENT's answer (C4 only, and
+   * not while the pane holds Mermaid, which carries no geometry to write to).
+   */
+  const editability = canvasEditability(doc);
+  /**
+   * Whether the canvas is editable RIGHT NOW: the deploy flag, the document's
+   * own answer, and the reader's lock, in that order. Any one of the three
+   * says no and the canvas is the read-only surface it has always been.
+   */
+  const canvasEditable =
+    CANVAS_EDIT_ENABLED && editability.editable && !canvasLocked;
+  /**
+   * Whether to offer the lock at all. Gated on the DOCUMENT being editable,
+   * not merely on it being C4: a control that cannot change anything is worse
+   * than no control, and the five text-laid-out notations get no lock, no
+   * disabled button and no tooltip explaining an absence — there is nothing
+   * there to lock, so the strip simply does not mention it.
+   */
+  const showCanvasLock = CANVAS_EDIT_ENABLED && editability.editable;
+
+  /**
+   * A finished drag: move the node in the document this page already holds,
+   * and let the panes follow.
+   *
+   * ONE MODEL, and this is the line that keeps it that way. The moved position
+   * goes into the `ViewDocument` — the same object a keystroke produces — and
+   * `adoptDocument` writes the text out. There is no canvas-side copy of the
+   * geometry to fall out of step with the pane, because the canvas never keeps
+   * one: React Flow holds the position for the length of the gesture and hands
+   * it over on release.
+   *
+   * `null` AS THE EDITED PANE IS THE POINT, not an omission. That argument is
+   * the page's existing "never rewrite the pane the cursor is in" rule — the
+   * one that structurally rules out echo loops between the source pane and its
+   * JSON twin — and a canvas edit is the case where the answer is genuinely
+   * "neither": the reader's caret is not in either pane, so both must be
+   * rewritten or the one left alone would describe the diagram as it was.
+   *
+   * The pending debounce is dropped first, exactly as `loadStarter` and
+   * `convertPane` drop it: a queued keystroke landing after this would parse
+   * text that predates the move and put the node back.
+   */
+  /**
+   * Previous source texts, newest last — the undo history for CANVAS edits.
+   *
+   * THE TEXT IS THE UNDO UNIT, which is what lets this be a ring of strings
+   * rather than a command stack. Every canvas edit is defined by the text it
+   * produces (`canvas-edit.ts` re-parses to make that literally true), so
+   * "undo" is "put the previous text back and parse it" — there is no inverse
+   * operation to implement per edit type, and a future edit kind inherits undo
+   * for free.
+   *
+   * SEPARATE FROM THE TEXTAREA'S OWN UNDO, deliberately, and the two must not
+   * be merged. Typing in the pane keeps the browser's native undo, which knows
+   * about carets and selections and word boundaries in a way nothing here
+   * could reproduce; a canvas drag never enters that history because it is not
+   * a user edit to the field. Binding one ⌘Z to both would mean either
+   * hijacking the textarea (losing caret-accurate undo while typing) or
+   * replaying canvas edits through it as text mutations (losing the caret
+   * anyway, and fighting React's controlled value). So: focus in the pane
+   * undoes typing, focus on the canvas undoes canvas edits — see the focus
+   * guard in `viewer-canvas.tsx`, which is the one place that decides.
+   *
+   * A ref, not state: nothing renders from it, and re-rendering the page on
+   * every push would be a render per drag for no visible reason.
+   */
+  const canvasUndoRef = useRef<string[]>([]);
+
+  /**
+   * Apply one canvas edit: remember the text being replaced, adopt the new
+   * document, say what happened.
+   *
+   * `null` AS THE EDITED PANE IS THE POINT, not an omission. That argument is
+   * the page's existing "never rewrite the pane the cursor is in" rule — the
+   * one that structurally rules out echo loops between the source pane and its
+   * JSON twin — and a canvas edit is the case where the answer is genuinely
+   * "neither": the reader's caret is not in either pane, so both must be
+   * rewritten or the one left alone would describe the diagram as it was.
+   *
+   * The pending debounce is dropped first, exactly as `loadStarter` and
+   * `convertPane` drop it: a queued keystroke landing after this would parse
+   * text that predates the edit and undo it invisibly.
+   */
+  const applyCanvasEdit = useCallback(
+    (next: ViewDocument, announcement: string) => {
+      const ring = canvasUndoRef.current;
+      ring.push(text);
+      if (ring.length > CANVAS_UNDO_DEPTH) ring.shift();
+      setPending(null);
+      adoptDocument(next, null);
+      setAnnouncement(announcement);
+    },
+    [text, adoptDocument],
+  );
+
+  const handleNodeMove = useCallback<NodeMoveHandler>(
+    (diagramId, nodeId, position) => {
+      const next = movedNodeDocument(doc, diagramId, nodeId, position);
+      // null covers "landed where it started" as well as "cannot be edited",
+      // so a press that moves nothing costs no text change and no undo entry.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Moved ${nodeId} to ${position.x}, ${position.y} — the source text follows.`,
+      );
+    },
+    [doc, applyCanvasEdit],
+  );
+
+  const handleNodeDelete = useCallback(
+    (diagramId: string, nodeId: string) => {
+      /* A node owning a child diagram is refused, and the refusal is SAID.
+         Cascading would take a whole level of the model out on one keystroke;
+         going quiet would look like a broken key. */
+      if (ownsChildDiagram(doc, diagramId, nodeId)) {
+        setAnnouncement(
+          `${nodeId} cannot be deleted here — it opens a diagram of its own. Remove that level in the source text first.`,
+        );
+        return;
+      }
+      const next = deletedNodeDocument(doc, diagramId, nodeId);
+      if (next === null) return;
+      /* The undo key is NAMED here and nowhere else, because a delete is the
+         one canvas edit with nothing left on screen to put back by hand — a
+         move can always be dragged the other way. */
+      applyCanvasEdit(
+        next,
+        `Deleted ${nodeId} and every relationship touching it — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, applyCanvasEdit],
+  );
+
+  /** Put the previous source text back and parse it — see `canvasUndoRef`. */
+  const handleCanvasUndo = useCallback(() => {
+    const previous = canvasUndoRef.current.pop();
+    if (previous === undefined) {
+      setAnnouncement("Nothing left to undo on the diagram.");
+      return;
+    }
+    setPending(null);
+    setText(previous);
+    // `"source"` because the text is already set above: this parses it and
+    // adopts the document without rewriting the pane it came from.
+    applyEdit("source", previous);
+    setAnnouncement("Undid the last change made on the diagram.");
+  }, [applyEdit]);
+
+  /** The handlers together, so the canvas cannot be half-editable. */
+  const canvasEdit = useMemo(
+    () =>
+      canvasEditable
+        ? {
+            onNodeMove: handleNodeMove,
+            onNodeDelete: handleNodeDelete,
+            onUndo: handleCanvasUndo,
+          }
+        : undefined,
+    [canvasEditable, handleNodeMove, handleNodeDelete, handleCanvasUndo],
+  );
+
   // Reports which diagram is on screen so edits keep the drill-down place.
   // Also retires the share link's one-shot starting diagram: once the shell
   // is up, later remounts (edits that delete the current diagram) go back to
@@ -889,15 +1090,27 @@ export function ViewPlayground({
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             Write your own diagram
           </h1>
-          <Badge variant="accent">
-            <span className="size-1.5 rounded-full bg-accent" />
-            live editor
-          </Badge>
+          {/* THE "live editor" BADGE IS GONE. It was a status pill — the shape
+              this site uses for a release stage (`MCP_STATUS_LABEL`) — spent on
+              a claim that is neither news nor a stage: every pane on this page
+              is live, which the reader learns by typing one character. It also
+              said "editor" while the page's own heading says "write your own
+              diagram", giving one page two names for itself. */}
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
             C4, sequence, flowchart, use case, ER or dictionary —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
-            JSON, or Mermaid, auto-detected and rendered live. Nothing leaves
-            your browser.{" "}
+            JSON, or Mermaid, auto-detected and rendered live.{" "}
+            {/* WHERE THE C4-ONLY RULE IS NAMED, and it is named here because
+                this is the sentence a reader is on when they wonder why their
+                ER diagram will not move. Sourced from the flag, so the claim
+                is absent rather than false while the canvas is not shipped. */}
+            {CANVAS_EDIT_ENABLED ? (
+              <>
+                C4 diagrams can also be edited on the canvas; the other kinds
+                lay themselves out from the text.{" "}
+              </>
+            ) : null}
+            Nothing leaves your browser.{" "}
             <Link
               href="/syntax"
               className="font-medium text-primary hover:underline"
@@ -1417,8 +1630,54 @@ export function ViewPlayground({
                     onToggle={() => setSourceCollapsed(!sourceCollapsed)}
                     sourceLabel="document source"
                   />
-                  <span className="truncate text-xs text-muted-foreground">
-                    Diagram
+                  {/* ONE CONTROL, and only where it can act. The lock renders
+                      for a C4 document the canvas could edit and for nothing
+                      else — the five text-laid-out notations never reach this
+                      branch at all, so there is no disabled button and no
+                      tooltip explaining an absence. A C4 document sitting here
+                      as Mermaid is the one case that is C4 and still cannot be
+                      edited, and it gets the REASON instead of a control that
+                      would do nothing. */}
+                  <span className="flex min-w-0 items-center gap-2">
+                    {showCanvasLock ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCanvasLocked(!canvasLocked);
+                          setAnnouncement(
+                            canvasLocked
+                              ? "Canvas unlocked — drag a node to move it; arrow keys nudge the selection. Every change is written into the source text."
+                              : "Canvas locked — the diagram is read-only. Nothing on it can be moved or deleted.",
+                          );
+                        }}
+                        aria-pressed={canvasLocked}
+                        title={
+                          canvasLocked
+                            ? "Unlock the canvas — drag nodes to move them"
+                            : "Lock the canvas — stop a stray drag moving a node"
+                        }
+                        className={buttonClasses({
+                          variant: "ghost",
+                          size: "sm",
+                        })}
+                      >
+                        {canvasLocked ? (
+                          <Lock aria-hidden="true" />
+                        ) : (
+                          <LockOpen aria-hidden="true" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {canvasLocked ? "Locked" : "Editable"}
+                        </span>
+                      </button>
+                    ) : null}
+                    <span className="truncate text-xs text-muted-foreground">
+                      {CANVAS_EDIT_ENABLED &&
+                      doc.kind === "c4" &&
+                      !editability.editable
+                        ? editability.reason
+                        : "Diagram"}
+                    </span>
                   </span>
                 </div>
                 <ViewerShell
@@ -1432,6 +1691,10 @@ export function ViewPlayground({
                   initialDiagramId={sharedInitialDiagram ?? undefined}
                   share={{ kind: "payload", text: doc.synced.aftText }}
                   onDiagramChange={handleDiagramChange}
+                  /* Passing these is what makes the canvas editable — see
+                     `CanvasEditHandlers`. `undefined` leaves the shell's
+                     read-only canvas exactly as every other host gets it. */
+                  edit={canvasEdit}
                 />
               </section>
             ) : (

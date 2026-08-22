@@ -30,7 +30,11 @@ import {
 } from "@/features/mcp/catalog";
 import { CopySnippet } from "@/features/mcp/components/copy-snippet";
 import { publicOrigin } from "@/features/mcp/lib/origin";
-import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
+import {
+  APP_DESCRIPTION,
+  APP_NAME,
+  CANVAS_EDIT_ENABLED,
+} from "@/lib/constants";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -318,6 +322,22 @@ export default function Home() {
               text for you, over MCP.
             </p>
 
+            {/* THE ONE PLACE THIS SENTENCE APPEARS on the home page, and it is
+                here rather than in a feature card because it answers the
+                objection a reader arrives with — "I do not want to learn a
+                grammar to move a box". Sourced from the flag: while the canvas
+                is not shipped the sentence is ABSENT, not written in a hopeful
+                present tense (`codebase.md`, feature flags). C4 is named,
+                because the other five kinds derive their layout from the text
+                and there is nothing on them to drag. */}
+            {CANVAS_EDIT_ENABLED ? (
+              <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
+                Write it as text or drag it on the canvas — a C4 diagram is
+                editable both ways, and either way the file is the same one
+                line-per-element text you can review in a pull request.
+              </p>
+            ) : null}
+
             {/* ONE primary destination, and now ACTUALLY one. The old hero
                 offered three buttons and a badge, and a newcomer had to pick
                 between "demo", "sequence diagrams" and "editor preview" before
@@ -585,14 +605,17 @@ export default function Home() {
               >
                 See finished examples
               </Link>
-              {EDITOR_ENABLED ? (
+              {/* `/view`, not the retired `/editor`: the canvas you can drag
+                  on is the playground's, and the claim is sourced from the flag
+                  that ships it rather than written in the present tense. */}
+              {CANVAS_EDIT_ENABLED ? (
                 <>
                   {" · "}
                   <Link
-                    href="/editor"
+                    href="/view"
                     className="font-medium text-primary hover:underline"
                   >
-                    Try the canvas editor
+                    Drag it on the canvas
                   </Link>
                 </>
               ) : null}

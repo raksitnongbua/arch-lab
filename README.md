@@ -42,7 +42,7 @@ Then open <http://localhost:3000>.
 | `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus C4 review notes on a valid model (the rules live in `features/validate/lib/advisories.ts`, each citing its source).                                 |
 | `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.                                                                                     |
 | `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                                                                                                             |
-| `/editor`                    | The canvas editor: palette, inspector, drill-down, and grouping boundaries. Gated by `EDITOR_ENABLED`.                                                                                                                                                                  |
+| `/editor`                    | Retired: a forwarding alias for `/view`, carrying any `#m=` payload across. The C4 canvas on `/view` is editable in place (gated by `CANVAS_EDIT_ENABLED`).                                                                                                             |
 
 ## How the code is arranged
 

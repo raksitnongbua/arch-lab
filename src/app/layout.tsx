@@ -11,7 +11,11 @@ import {
   SHARE_FORWARD_ATTRIBUTE,
   SHARE_PARAM_MODEL,
 } from "@/features/viewer/share/codec";
-import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
+import {
+  APP_DESCRIPTION,
+  APP_NAME,
+  CANVAS_EDIT_ENABLED,
+} from "@/lib/constants";
 
 import "./globals.css";
 
@@ -44,8 +48,13 @@ const geistMono = Geist_Mono({
    the one field that ranks. Now it leads.
 
    Both variants stay under the budget: 51 and 53 characters. Measure any
-   replacement before shipping it. */
-const DEFAULT_TITLE = EDITOR_ENABLED
+   replacement before shipping it.
+
+   SOURCED FROM `CANVAS_EDIT_ENABLED` since `/editor` was retired and
+   `EDITOR_ENABLED` with it. "Editor" is a claim about a canvas you can move
+   things on, and the page that offers one is the playground — so the word
+   appears in the title exactly while that canvas ships. */
+const DEFAULT_TITLE = CANVAS_EDIT_ENABLED
   ? `${APP_NAME} — beautiful C4 and sequence diagram editor`
   : `${APP_NAME} — beautiful C4 and sequence diagrams as text`;
 

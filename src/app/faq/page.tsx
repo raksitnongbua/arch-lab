@@ -19,12 +19,14 @@ import { APP_NAME } from "@/lib/constants";
  * site, and neither a search result nor an assistant's answer has that reader.
  *
  * NO SEARCH BOX, which the checklist this page was audited against asks for.
- * Two reasons, and the second is the binding one: there are thirteen questions
- * behind a contents list, which is not a volume that needs querying — and a
- * search box is a client component, while this is the most citable page on the
- * site and AI crawlers do not run JavaScript. Trading server-rendered answers
- * for a filter over thirteen items would be the wrong way round. If this grows
- * past a screenful per topic, the answer is more topics, not a search box.
+ * Two reasons, and the second is the binding one: the questions sit behind a
+ * contents list and there are well under twenty of them, which is not a volume
+ * that needs querying — and a search box is a client component, while this is
+ * the most citable page on the site and AI crawlers do not run JavaScript.
+ * Trading server-rendered answers for a filter over a list this short would be
+ * the wrong way round. If this grows past a screenful per topic, the answer is
+ * more topics, not a search box. (Deliberately not a COUNT: the number was
+ * written as "thirteen" and was three out of date before anyone noticed.)
  */
 export const metadata: Metadata = {
   title: "FAQ — diagrams as text, share links and MCP",
@@ -36,7 +38,7 @@ export const metadata: Metadata = {
 /**
  * `FAQPage`, serialised from the SAME entries the page renders — the derivation
  * rule `check:seo` enforces elsewhere, applied here because a hand-written copy
- * of thirteen answers is thirteen chances to answer a reader one thing and a
+ * of every answer is one chance per answer to tell a reader one thing and a
  * machine another.
  *
  * ON THE TYPE ITSELF, since `/` and `/mcp` are pinned AGAINST using it and a

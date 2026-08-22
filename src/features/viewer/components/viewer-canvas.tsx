@@ -54,6 +54,7 @@ import {
   type NodeMouseHandler,
   type NodeTypes,
   type OnMoveEnd,
+  type OnNodeDrag,
   type Viewport,
 } from "@xyflow/react";
 
@@ -76,6 +77,7 @@ import {
 } from "../lib/model";
 import {
   EDGE_BASE_DASH_PERIOD,
+  EDIT_GRID,
   FIT_PADDING,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -104,6 +106,51 @@ const SCALE_FAR = 0.7;
 
 const nodeTypes: NodeTypes = { c4: ViewerNode };
 const edgeTypes: EdgeTypes = { c4: ViewerEdge };
+
+/**
+ * Reports one finished node move, in MODEL coordinates, already snapped to
+ * {@link EDIT_GRID}. Fired once per gesture — never per frame — so a consumer
+ * that turns it into a text edit produces one undoable change per gesture
+ * rather than one per pixel.
+ */
+export type NodeMoveHandler = (
+  diagramId: string,
+  nodeId: string,
+  position: { x: number; y: number },
+) => void;
+
+/**
+ * What an editable canvas needs from its host, and the EDIT SWITCH itself:
+ * passing this object makes nodes draggable, binds the nudge and delete keys,
+ * and relabels the canvas region. Omitting it leaves the read-only canvas
+ * exactly as every other host gets it.
+ *
+ * ONE OBJECT, not a handful of optional callbacks beside an `editable`
+ * boolean. Separate optional props allow the state "editable with nowhere to
+ * write" — a canvas that moves a node and then loses it on the next render —
+ * and every combination would have to be reasoned about. Here the compiler
+ * asks for all of it or none.
+ */
+export interface CanvasEditHandlers {
+  onNodeMove: NodeMoveHandler;
+  /**
+   * Remove the node. The host decides whether the removal is allowed (a node
+   * owning a child diagram is refused) and says so — the canvas only reports
+   * the keystroke.
+   */
+  onNodeDelete: (diagramId: string, nodeId: string) => void;
+  /**
+   * Undo the last canvas edit.
+   *
+   * BOUND HERE rather than by the host, even though the host is what holds the
+   * undo history, so that every key this canvas claims is decided in one place
+   * behind one focus guard. Two listeners with two guards is exactly the
+   * "two halves, each self-consistent, that disagree" shape — one of them
+   * would eventually fire while the source textarea had focus and undo the
+   * wrong thing.
+   */
+  onUndo: () => void;
+}
 
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
@@ -588,10 +635,12 @@ function ViewerCanvasInner({
   model,
   initialDiagramId,
   onDiagramChange,
+  edit,
 }: {
   model: ViewerModel;
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
+  edit?: CanvasEditHandlers;
 }): React.JSX.Element {
   /* The modifier's name for THIS reader's platform — "Ctrl + scroll" on a Mac
      names the gesture that zooms the operating system, not the canvas. */
@@ -883,6 +932,34 @@ function ViewerCanvasInner({
     [drillInto],
   );
 
+  /* ---- editing: a finished drag ---------------------------------------------
+   * ON DRAG **STOP** ONLY, which is the whole reason this is three lines
+   * rather than a gesture state machine. React Flow owns the node's position
+   * for the duration of the press — it applies the pointer delta to its own
+   * internal copy, snapping to `snapGrid` as it goes — so the position handed
+   * over here is already the landed, snapped one, and the `nodes` memo above
+   * is never touched mid-gesture. That matters beyond tidiness: replacing the
+   * node objects per frame makes React Flow re-adopt them, and the note above
+   * that memo records what re-adoption costs (every EdgeWrapper unmounts and
+   * remounts, stealing focus mid-selection). One commit per press-to-release
+   * keeps that invariant and produces exactly one text edit to undo.
+   *
+   * `Math.round` after the snap, not instead of it: `snapGrid` quantises, but
+   * a zoomed canvas can still hand back a value carrying float error, and
+   * `C4Node.position` is documented integral. */
+  const handleNodeDragStop = useCallback<OnNodeDrag<ViewerFlowNode>>(
+    (_event, node) => {
+      edit?.onNodeMove(diagramIdRef.current, node.id, {
+        x: Math.round(node.position.x),
+        y: Math.round(node.position.y),
+      });
+    },
+    [edit],
+  );
+
+  /** Editable is a property of the handlers' presence — see CanvasEditHandlers. */
+  const editable = edit !== undefined;
+
   const climbTo = useCallback(
     (targetId: string) => {
       const anchorNodeId = climbAnchorNodeId(
@@ -1065,6 +1142,100 @@ function ViewerCanvasInner({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [model, climbTo, clearSelection]);
 
+  /* ---- editing: nudge and delete the selected element ----------------------
+   * ONE GRID STEP PER PRESS, and deliberately no fine (Shift) variant. The
+   * editor's canvas offers 8px and 1px, but `C4Node.position` is documented as
+   * a multiple of 8 and the default layout emits nothing else — a 1px nudge
+   * would put the node permanently out of step with every node whose geometry
+   * the text still omits, which is a diagram that looks subtly misaligned for
+   * a reason nothing on screen explains. One step, always on the grid.
+   *
+   * SCOPED TO THE CANVAS, which matters more here than for the Escape ladder
+   * above: the source textarea is a sibling on this very page, and an
+   * unscoped ArrowLeft would move a node while someone was moving their caret.
+   * The guard is "focus is inside this canvas, or nowhere" — nowhere covers
+   * the moment just after a drag or a click on the pane, when the browser has
+   * left focus on <body> and the reader plainly still means the canvas.
+   * Anything focused OUTSIDE the canvas keeps its own keys.
+   *
+   * Registered on window rather than on the container so it shares the
+   * ladder's cancellation contract (`defaultPrevented` is respected), and
+   * `deleteKeyCode={null}` stays on the flow: React Flow's own delete would
+   * remove the node from ITS store, which the next render from the model would
+   * simply put back. The model is downstream of the text, so the text is what
+   * has to change. */
+
+  useEffect(() => {
+    if (edit === undefined) return;
+
+    const NUDGE: Record<string, { x: number; y: number }> = {
+      ArrowUp: { x: 0, y: -EDIT_GRID },
+      ArrowDown: { x: 0, y: EDIT_GRID },
+      ArrowLeft: { x: -EDIT_GRID, y: 0 },
+      ArrowRight: { x: EDIT_GRID, y: 0 },
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const container = containerRef.current;
+      if (container === null) return;
+      const focused = document.activeElement;
+      const inCanvas =
+        focused === null ||
+        focused === document.body ||
+        container.contains(focused);
+      if (!inCanvas) return;
+
+      /* UNDO FIRST, and before the selection check: the edit most likely to
+         be undone is a delete, which leaves nothing selected. Shift+Cmd+Z
+         (redo) is deliberately NOT bound — the ring is one-directional, and a
+         redo key that silently does nothing is worse than one that is not
+         advertised. */
+      const undoChord =
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        (event.key === "z" || event.key === "Z");
+      if (undoChord) {
+        event.preventDefault();
+        edit.onUndo();
+        return;
+      }
+
+      // Any other modifier means something else entirely; a bare arrow is the
+      // only nudge, and there is no fine variant (see above).
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+
+      const nodeId = selectedNodeIdRef.current;
+      if (nodeId === null) return;
+      const current = getDiagram(model, diagramIdRef.current);
+      const node = findNode(current, nodeId);
+      // A selection can outlive its node for one render after an edit; do
+      // nothing rather than address a node that is no longer there.
+      if (node === null) return;
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        edit.onNodeDelete(current.id, nodeId);
+        return;
+      }
+
+      const delta = NUDGE[event.key];
+      if (delta === undefined) return;
+      // Claimed before the browser can scroll the canvas with the same press.
+      event.preventDefault();
+      edit.onNodeMove(current.id, nodeId, {
+        x: node.position.x + delta.x,
+        y: node.position.y + delta.y,
+      });
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [edit, model]);
+
   /* ---- projection: frozen model diagram → fresh React Flow objects --------- */
 
   // Nodes deliberately do NOT depend on the edge selection: replacing the
@@ -1113,7 +1284,7 @@ function ViewerCanvasInner({
         position: { x: node.position.x, y: node.position.y },
         width: node.size.width,
         height: node.size.height,
-        draggable: false,
+        draggable: editable,
         connectable: false,
         selectable: false,
         focusable: false,
@@ -1152,7 +1323,7 @@ function ViewerCanvasInner({
     });
 
     return flowNodes;
-  }, [model, diagram, drillInto, openReference]);
+  }, [model, diagram, drillInto, openReference, editable]);
 
   const edges = useMemo(() => {
     const groups = parallelGroups(diagram.edges);
@@ -1332,7 +1503,14 @@ function ViewerCanvasInner({
       ref={containerRef}
       tabIndex={-1}
       role="region"
-      aria-label={`${diagram.title} — read-only diagram`}
+      /* The label states which canvas this IS. A reader using a screen reader
+         has no cursor to discover draggability with, so "read-only" must stop
+         being said the moment it stops being true. */
+      aria-label={
+        editable
+          ? `${diagram.title} — editable diagram`
+          : `${diagram.title} — read-only diagram`
+      }
       // absolute inset-0, not size-full: the shell's wrapper sizes itself with
       // min-h-96 + flex-1 (no definite `height`), so a percentage height here
       // would resolve to auto and collapse the canvas to zero (React Flow
@@ -1385,13 +1563,36 @@ function ViewerCanvasInner({
            the one place the same gesture is already declared. */
         panOnDrag
         panActivationKeyCode="Space"
-        nodesDraggable={false}
+        /* The pan comment above is the other half of this line: with nodes
+           draggable, a drag STARTING ON A NODE moves it, and pan survives as
+           the pane drag and Space + drag. */
+        nodesDraggable={editable}
+        onNodeDragStop={editable ? handleNodeDragStop : undefined}
+        /* React Flow does the snapping DURING the gesture, so the node the
+           reader is dragging is on the grid the whole way rather than jumping
+           to it on release. `EDIT_GRID` is the format's own 8 — see its
+           comment for why it is not the editor's copy of that number. */
+        snapToGrid={editable}
+        snapGrid={[EDIT_GRID, EDIT_GRID]}
         nodesConnectable={false}
         nodesFocusable={false}
         edgesFocusable={false}
         elementsSelectable={false}
         deleteKeyCode={null}
-        className="bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing"
+        /* An array joined with a space, never concatenated: a lost leading
+           space merges two class names into one nonsense name, every rule
+           targeting it silently stops applying, and CSS reports nothing. */
+        className={[
+          "bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing",
+          /* THE AFFORDANCE. Without this the node keeps the body button's
+             pointer cursor and nothing on screen says it can be moved — the
+             feature would be invisible until someone tried it by accident.
+             Aimed at the WRAPPER and its button so the whole node reads as
+             draggable, not just its margins. */
+          editable
+            ? "[&_.react-flow__node]:cursor-grab [&_.react-flow__node_button]:cursor-grab [&_.react-flow__node.dragging]:cursor-grabbing"
+            : "",
+        ].join(" ")}
       >
         {/* Before every Panel so frames sit behind the nodes and the chrome. */}
         <FrameLayer diagram={diagram} onFocus={clearSelection} />
@@ -1449,12 +1650,18 @@ export function ViewerCanvas({
   model,
   initialDiagramId,
   onDiagramChange,
+  edit,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
   initialDiagramId?: string;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
+  /**
+   * Makes the canvas EDITABLE. Absent (the default) and the canvas is exactly
+   * the read-only surface it has always been — see {@link CanvasEditHandlers}.
+   */
+  edit?: CanvasEditHandlers;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
@@ -1462,6 +1669,7 @@ export function ViewerCanvas({
         model={model}
         initialDiagramId={initialDiagramId}
         onDiagramChange={onDiagramChange}
+        edit={edit}
       />
     </ReactFlowProvider>
   );
