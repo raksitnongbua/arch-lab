@@ -39,7 +39,7 @@ export const APP_NAME = "arch-lab";
  *
  * Typed `boolean`, not the literal, for the reason above.
  */
-export const CANVAS_EDIT_ENABLED: boolean = false;
+export const CANVAS_EDIT_ENABLED: boolean = true;
 
 /**
  * The site's one description, and it is a BUDGETED string: it is the meta
