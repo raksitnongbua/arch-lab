@@ -55,6 +55,7 @@ import {
   type NodeTypes,
   type OnMoveEnd,
   type OnNodeDrag,
+  type OnNodesChange,
   type Viewport,
 } from "@xyflow/react";
 
@@ -81,6 +82,12 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
 } from "../lib/canvas-constants";
+import {
+  diagramWithDragOverlay,
+  dragOverlayAfter,
+  NO_DRAG_OVERLAY,
+  type DragOverlay,
+} from "../lib/drag-overlay";
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
 import {
@@ -952,29 +959,44 @@ function ViewerCanvasInner({
     [drillInto],
   );
 
-  /* ---- editing: a finished drag ---------------------------------------------
-   * ON DRAG **STOP** ONLY, which is the whole reason this is three lines
-   * rather than a gesture state machine. React Flow owns the node's position
-   * for the duration of the press — it applies the pointer delta to its own
-   * internal copy, snapping to `snapGrid` as it goes — so the position handed
-   * over here is already the landed, snapped one, and the `nodes` memo above
-   * is never touched mid-gesture. That matters beyond tidiness: replacing the
-   * node objects per frame makes React Flow re-adopt them, and the note above
-   * that memo records what re-adoption costs (every EdgeWrapper unmounts and
-   * remounts, stealing focus mid-selection). One commit per press-to-release
-   * keeps that invariant and produces exactly one text edit to undo.
+  /* ---- editing: the press, and the one commit that ends it ------------------
+   * TWO HANDLERS, AND THE SPLIT IS THE POINT. `onNodesChange` moves the node
+   * under the cursor, frame by frame, in LOCAL state; `onNodeDragStop` is the
+   * only thing that writes the document. So a press is still exactly one text
+   * edit and one undo entry — the invariant the `nodes` memo's note is about —
+   * while the reader gets the gesture they pressed for.
    *
-   * The release itself used to pay that cost once, which a reader saw as a
-   * hitch at the end of the gesture: the new document is a new model, and the
-   * projection handed React Flow a fresh object for every node in it. The
-   * projection cache in `lib/project-nodes.ts` is what removed it — only the
-   * node this handler actually moved arrives as a new object now.
+   * `onNodesChange` IS NOT OPTIONAL HERE, and this is the correction to what
+   * this comment used to claim. It said React Flow owned the node's position
+   * for the duration of the press. It does not: `XYDrag` mutates a throwaway
+   * copy of the node and offers the result to `triggerNodeChanges`, whose only
+   * two outlets are applying the change itself (uncontrolled flows, the ones
+   * given `defaultNodes`) or calling `onNodesChange`. This flow is controlled
+   * and had neither, so every frame of every drag was discarded and the node
+   * stayed put until release — measured against @xyflow/system 0.0.79, not
+   * inferred. `lib/drag-overlay.ts` holds the mechanism and the handover
+   * arithmetic; `check:canvas-edit` pins both.
    *
    * `Math.round` after the snap, not instead of it: `snapGrid` quantises, but
    * a zoomed canvas can still hand back a value carrying float error, and
-   * `C4Node.position` is documented integral. */
+   * `C4Node.position` is documented integral. The overlay rounds identically,
+   * which is what makes the last frame of the press and the committed frame
+   * the same position — and, through the projection cache, the same object. */
+  const [dragOverlay, setDragOverlay] = useState<DragOverlay>(NO_DRAG_OVERLAY);
+
+  const handleNodesChange = useCallback<OnNodesChange<ViewerFlowNode>>(
+    (changes) =>
+      setDragOverlay((current) => dragOverlayAfter(current, changes)),
+    [],
+  );
+
   const handleNodeDragStop = useCallback<OnNodeDrag<ViewerFlowNode>>(
     (_event, node) => {
+      /* The overlay is NOT cleared here. React Flow has already emitted this
+         node's `dragging: false` change, which is what clears it — and that
+         change also arrives on an ABORTED drag (a second finger, or the node
+         deleted mid-press), where this handler never runs at all. One clearing
+         path, on the library's own press boundary; see `drag-overlay.ts`. */
       edit?.onNodeMove(diagramIdRef.current, node.id, {
         x: Math.round(node.position.x),
         y: Math.round(node.position.y),
@@ -1275,7 +1297,12 @@ function ViewerCanvasInner({
   // every canvas edit and every keystroke in the source pane produces) would
   // otherwise replace all of the node objects and pay that re-adopt in full.
   // The cache hands back the identical object for a node nothing changed
-  // about, so a drag release costs one re-adopt instead of N.
+  // about, so a drag costs one re-adopt PER FRAME — the node under the
+  // pointer, which has to move — and the release costs none at all: the
+  // committed position equals the last frame's, so the cache recognises even
+  // the node that moved. `check:canvas-edit` measures that as identity,
+  // because "the node does not settle twice" is otherwise only visible in a
+  // browser.
   //
   // Held in state, not a ref, and that is not a workaround: a ref is for a
   // value the render does not need, and this one is read BY the render (the
@@ -1284,10 +1311,29 @@ function ViewerCanvasInner({
   // same diagram twice returns the same objects, which is what keeps a
   // double-invoked render honest.
   const [projectionCache] = useState(createNodeProjectionCache);
+
+  /* THE DIAGRAM AS THE READER SEES IT, which is the model's geometry except for
+     whatever node is under the pointer right now. Everything downstream of
+     GEOMETRY is fed from here rather than from `diagram`, so the node and the
+     frame that contains it cannot disagree mid-press; everything about what the
+     diagram MEANS — the detail panels, the announcements, the breadcrumb —
+     stays on `diagram`, because a press in progress has not changed any of
+     that. Between presses this IS `diagram`, by identity, so an idle or locked
+     canvas projects exactly what it did before any of this existed. */
+  const draggedDiagram = useMemo(
+    () => diagramWithDragOverlay(diagram, dragOverlay),
+    [diagram, dragOverlay],
+  );
+
   const nodes = useMemo(
     () =>
-      projectViewerNodes({ model, diagram, editable, cache: projectionCache }),
-    [model, diagram, editable, projectionCache],
+      projectViewerNodes({
+        model,
+        diagram: draggedDiagram,
+        editable,
+        cache: projectionCache,
+      }),
+    [model, draggedDiagram, editable, projectionCache],
   );
 
   const edges = useMemo(() => {
@@ -1534,6 +1580,13 @@ function ViewerCanvasInner({
              draggable, a drag STARTING ON A NODE moves it, and pan survives as
              the pane drag and Space + drag. */
           nodesDraggable={editable}
+          /* THE PAIR THAT MAKES A DRAG VISIBLE. `nodes` above makes this flow
+             controlled, and a controlled flow that declares no `onNodesChange`
+             silently discards its own drag — see the drag handlers' comment.
+             Gated on `editable` with the same ternary as the line below, so a
+             locked canvas is handed neither: nothing about the in-flight
+             overlay exists for a reader who cannot drag. */
+          onNodesChange={editable ? handleNodesChange : undefined}
           onNodeDragStop={editable ? handleNodeDragStop : undefined}
           /* React Flow does the snapping DURING the gesture, so the node the
              reader is dragging is on the grid the whole way rather than jumping
@@ -1562,7 +1615,11 @@ function ViewerCanvasInner({
           ].join(" ")}
         >
           {/* Before every Panel so frames sit behind the nodes and the chrome. */}
-          <FrameLayer diagram={diagram} onFocus={clearSelection} />
+          {/* `draggedDiagram`, not `diagram`: a frame's box is the bounding
+              box of its members' positions (`placeFrames`), so feeding it the
+              model while the nodes follow the pointer would draw a frame that
+              visibly fails to contain the node it owns, then jump on release. */}
+          <FrameLayer diagram={draggedDiagram} onFocus={clearSelection} />
           <Panel position="top-left" className="max-w-full">
             {/* No `currentLevel`: the last crumb already carries it, and two
                 sources for one fact can disagree. */}

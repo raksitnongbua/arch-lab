@@ -69,12 +69,29 @@
  *      whole diagram on every drag release, which is exactly the hitch a
  *      reader reported. Asserted from the projection's OUTPUT (which objects
  *      are the same objects), not from its source.
+ *  12. A DRAG FOLLOWS THE CURSOR, AND THE RELEASE COSTS NOTHING. The canvas is
+ *      a CONTROLLED React Flow, and in @xyflow/system 0.0.79 a controlled flow
+ *      that declares no `onNodesChange` discards every frame of its own drag:
+ *      `triggerNodeChanges` applies changes itself only for `defaultNodes`
+ *      flows, so the node stayed still under the pointer until release
+ *      re-parsed the text. Three things are pinned. That NO controlled flow in
+ *      the repo is missing the handler, found by reading the source tree rather
+ *      than by naming a file. That the in-flight overlay and the commit produce
+ *      the SAME number — driven through the library's real `snapPosition`, not
+ *      through a second copy of the arithmetic — so the last frame of the press
+ *      and the first frame after it are the same position, and therefore, via
+ *      the cache above, the same OBJECT: zero re-adopts at the handover, which
+ *      is what "the node does not settle twice" means where there is no
+ *      browser to look at. And that the press cannot outlive itself: React
+ *      Flow's own `dragging: false` is the one thing that clears the overlay,
+ *      because an ABORTED drag emits that change and never calls
+ *      `onNodeDragStop`.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { registerHooks } from "node:module";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createRequire, registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -129,6 +146,9 @@ const { parseViewSource, VIEW_SEED_TEXT, sourceTextFor } = await load(
 const { createNodeProjectionCache, projectViewerNodes } = await load(
   "src/features/viewer/lib/project-nodes.ts",
 );
+const { diagramWithDragOverlay, dragOverlayAfter, NO_DRAG_OVERLAY } =
+  await load("src/features/viewer/lib/drag-overlay.ts");
+const { placeFrames } = await load("src/features/editor/lib/frame-layout.ts");
 
 /* ----------------------------------------------------------------------- */
 /* Harness — same shape as the sibling check scripts                        */
@@ -940,6 +960,319 @@ console.log("\nA canvas edit re-projects only the node it changed");
     /useState\(createNodeProjectionCache\)/.test(canvasSource),
     "the cache is no longer created once per canvas — a cache built during " +
       "render remembers nothing and the projection is a plain map again",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 12. The press itself: the node follows the cursor, the release is free    */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA drag follows the cursor, and its release costs nothing");
+
+{
+  /* WHY THIS SECTION EXISTS. The canvas passes `nodes`, which makes the flow
+     CONTROLLED, and a controlled React Flow moves nothing by itself: `XYDrag`
+     mutates a throwaway copy of the node per frame and offers the result to
+     `triggerNodeChanges`, whose only two outlets are applying the change
+     itself (`hasDefaultNodes`, i.e. flows given `defaultNodes`) and calling
+     `onNodesChange`. With neither, every frame of every drag was discarded
+     while `NodeWrapper` went on reading the old position — a node that stayed
+     put under the pointer and appeared at its destination only after release
+     re-parsed the text. Reported as "click drag to change position not
+     smooth". */
+
+  /* --- the library half, resolved from the installed tree ----------------- */
+
+  /* DERIVED, NOT PATH-LITERAL: @xyflow/system is not a dependency of this
+     repo, it is @xyflow/react's, so it is resolved through react's own
+     `require` and then walked up to its package root — a hardcoded
+     `.pnpm/@xyflow+system@x.y.z` path would rot on the next install. */
+  const systemRoot = (() => {
+    const fromReact = createRequire(
+      createRequire(path.join(ROOT, "index.js")).resolve("@xyflow/react"),
+    );
+    let dir = path.dirname(fromReact.resolve("@xyflow/system"));
+    while (!existsSync(path.join(dir, "package.json"))) dir = path.dirname(dir);
+    return dir;
+  })();
+  const systemPkg = JSON.parse(
+    readFileSync(path.join(systemRoot, "package.json"), "utf8"),
+  );
+
+  /* THE VERSION THE COMMENTS CLAIM TO HAVE BEEN MEASURED AGAINST has to be the
+     version installed, or the comments are asserting a coupling nothing
+     enforces. Two source files say "@xyflow/system <version>" and both of them
+     describe behaviour — which outlets `triggerNodeChanges` has, when
+     `parseHandles` keeps handle bounds — that a minor bump could quietly
+     change. Failing here is the prompt to re-measure, not a nuisance. */
+  const versionClaims = [
+    "src/features/viewer/lib/drag-overlay.ts",
+    "src/features/viewer/lib/project-nodes.ts",
+  ].flatMap((file) =>
+    [...read(file).matchAll(/@xyflow\/system (\d+\.\d+\.\d+)/g)].map(
+      (match) => ({ file, version: match[1] }),
+    ),
+  );
+  check(
+    "the drag behaviour was measured against the installed @xyflow/system",
+    versionClaims.length >= 2 &&
+      versionClaims.every((claim) => claim.version === systemPkg.version),
+    `installed ${systemPkg.version}; claimed ${
+      versionClaims.map((c) => `${c.version} (${c.file})`).join(", ") ||
+      "nowhere"
+    } — re-measure the drag path before moving the number`,
+  );
+
+  const { snapPosition } = await import(
+    pathToFileURL(path.join(systemRoot, systemPkg.module)).href
+  );
+  check(
+    "the library's own snapper is what this section drives",
+    typeof snapPosition === "function",
+    "@xyflow/system stopped exporting snapPosition — the handover arithmetic " +
+      "below would be asserting a copy of it instead of the real thing",
+  );
+
+  /* --- no controlled flow in the repo may drop its own drag ---------------- */
+
+  /* READ FROM THE SOURCE TREE, not from a list of two file names: the failure
+     a hardcoded list cannot notice is a THIRD canvas, added later, that passes
+     `nodes` and forgets the handler — and whose drag would then be silently
+     inert exactly the way this one was. */
+  const tsxFiles = (function walk(dir) {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return walk(full);
+      return entry.name.endsWith(".tsx") ? [full] : [];
+    });
+  })(path.join(ROOT, "src"));
+  const flows = tsxFiles
+    .map((file) => ({ file, source: readFileSync(file, "utf8") }))
+    .filter(({ source }) => /<ReactFlow[<\s]/.test(source));
+  check(
+    "the source walk actually found the flows",
+    flows.length >= 2,
+    `found ${flows.length} <ReactFlow> element(s) under src/ — the walk is ` +
+      "broken and every assertion below it proves nothing",
+  );
+  for (const { file, source } of flows) {
+    const relative = path.relative(ROOT, file);
+    if (!/\bnodes=\{/.test(source)) continue;
+    check(
+      `${relative} is controlled and handles its own node changes`,
+      /\bonNodesChange=\{/.test(source),
+      "a flow given `nodes` but no `onNodesChange` throws every drag frame " +
+        "away: the node does not follow the cursor and nothing errors",
+    );
+  }
+
+  /* THE EDIT SWITCH. A locked canvas must be handed neither handler, so that
+     nothing about the in-flight overlay exists for a reader who cannot drag —
+     the same ternary the commit already uses, checked as the pair so the two
+     cannot drift apart. */
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  check(
+    "the viewer gates its drag handlers on the edit switch, both of them",
+    /onNodesChange=\{editable \? \w+ : undefined\}/.test(canvas) &&
+      /onNodeDragStop=\{editable \? \w+ : undefined\}/.test(canvas),
+    "one of the two drag handlers is no longer gated on `editable` — a " +
+      "locked canvas would run part of the edit path",
+  );
+
+  /* --- drive a real press --------------------------------------------------- */
+
+  const document_ = c4Document(VIEW_SEED_TEXT.c4);
+  const rootId = document_.synced.model.rootDiagramId;
+  const rootDiagram = document_.synced.model.diagrams[rootId];
+  const dragCache = createNodeProjectionCache();
+  const projectDragged = (diagram, model = document_.synced.model) =>
+    projectViewerNodes({ model, diagram, editable: true, cache: dragCache });
+
+  check(
+    "an idle canvas projects the model diagram itself, by identity",
+    diagramWithDragOverlay(rootDiagram, NO_DRAG_OVERLAY) === rootDiagram,
+    "the overlay allocates a diagram when no press is in progress — every " +
+      "read-only host would re-project on every render",
+  );
+  check(
+    "a change batch about anything else costs no render",
+    dragOverlayAfter(NO_DRAG_OVERLAY, [
+      { id: "any", type: "dimensions", dimensions: { width: 1, height: 1 } },
+    ]) === NO_DRAG_OVERLAY,
+    "the overlay allocated for a change it does not read — a ResizeObserver " +
+      "dimensions change would re-project the whole diagram",
+  );
+
+  const atRest = projectDragged(rootDiagram);
+  const dragged = rootDiagram.nodes[0];
+  /* DRAGGED PAST EVERY OTHER NODE, in twelve frames, at a fractional pointer
+     step. The distance matters for the same reason it does in section 11 — the
+     entrance delay is a rank in reading order, so this is the move that
+     reshuffles every other node's rank, and a gentle nudge would not move a
+     single rank and could not fail. The fractional step matters because it is
+     what a zoomed canvas hands over: the snapper has to be the thing that
+     quantises it, not this script. */
+  const landingY =
+    Math.max(...rootDiagram.nodes.map((node) => node.position.y)) +
+    EDIT_GRID * 8;
+  const framePositions = [];
+  for (let frame = 1; frame <= 12; frame += 1) {
+    framePositions.push(
+      snapPosition(
+        {
+          x: dragged.position.x + frame * 3.37,
+          y:
+            dragged.position.y + ((landingY - dragged.position.y) * frame) / 12,
+        },
+        [EDIT_GRID, EDIT_GRID],
+      ),
+    );
+  }
+  check(
+    "the drag path really does leave the node's starting cell",
+    framePositions.at(-1).y !== dragged.position.y &&
+      framePositions.at(-1).y >=
+        Math.max(...rootDiagram.nodes.map((node) => node.position.y)),
+    `path ended at ${JSON.stringify(framePositions.at(-1))} from ` +
+      `${JSON.stringify(dragged.position)} — too short to reshuffle a rank`,
+  );
+
+  let overlay = NO_DRAG_OVERLAY;
+  let inFlight = atRest;
+  const perFrameReplacements = [];
+  for (const position of framePositions) {
+    overlay = dragOverlayAfter(overlay, [
+      { id: dragged.id, type: "position", position, dragging: true },
+    ]);
+    const previous = inFlight;
+    inFlight = projectDragged(diagramWithDragOverlay(rootDiagram, overlay));
+    perFrameReplacements.push(
+      inFlight.filter((node, i) => node !== previous[i]).map((n) => n.id),
+    );
+  }
+  check(
+    "every frame of the press moves the node the pointer is on",
+    perFrameReplacements.every(
+      (ids) => ids.length === 1 && ids[0] === dragged.id,
+    ),
+    `per-frame replacements: ${JSON.stringify(perFrameReplacements)} — a ` +
+      "frame that replaced nothing is a node that did not follow the cursor; " +
+      "a frame that replaced several is a re-adopt of nodes that never moved",
+  );
+  const shown = inFlight.find((node) => node.id === dragged.id).position;
+  check(
+    "and shows it at the position the library snapped to",
+    shown.x === framePositions.at(-1).x && shown.y === framePositions.at(-1).y,
+    `showing ${JSON.stringify(shown)}, snapped ${JSON.stringify(framePositions.at(-1))}`,
+  );
+
+  /* --- the handover, which is where a flicker would live ------------------- */
+
+  /* THE PRESS BOUNDARY IS THE LIBRARY'S FLAG, not this handler's existence.
+     React Flow emits `dragging: false` both at the end of a gesture and on an
+     ABORTED one — a second finger, or the node deleted under the pointer —
+     and the aborted path never calls `onNodeDragStop`. Clearing on the flag is
+     what stops an aborted press leaving a position the document never saw. */
+  const landed = framePositions.at(-1);
+  const released = dragOverlayAfter(overlay, [
+    { id: dragged.id, type: "position", position: landed, dragging: false },
+  ]);
+  check(
+    "the press boundary clears the overlay, whether or not a commit follows",
+    released.size === 0,
+    `${released.size} entr(y/ies) survived the release — an aborted drag ` +
+      "would leave the node showing a position the text never received, with " +
+      "nothing left to correct it",
+  );
+
+  const committed = movedNodeDocument(document_, rootId, dragged.id, {
+    x: Math.round(landed.x),
+    y: Math.round(landed.y),
+  });
+  check(
+    "a press over that distance is a real edit, not a refused no-op",
+    committed !== null,
+    "movedNodeDocument refused the fixture — the handover below would be " +
+      "comparing a diagram against itself",
+  );
+  const committedDiagram = committed.synced.model.diagrams[rootId];
+  const committedPosition = committedDiagram.nodes.find(
+    (node) => node.id === dragged.id,
+  ).position;
+  /* THE ARITHMETIC HAS TO AGREE, and this is the assertion that says so
+     without a browser: the overlay rounds what the library snapped, the commit
+     rounds the same value, and `C4Node.position` is integral — so if either
+     side ever rounded differently the node would land on one pixel and then
+     move to another. */
+  check(
+    "the committed position is the position the last frame was showing",
+    committedPosition.x === shown.x && committedPosition.y === shown.y,
+    `committed ${JSON.stringify(committedPosition)}, shown ${JSON.stringify(shown)}`,
+  );
+  const afterRelease = projectDragged(
+    diagramWithDragOverlay(committedDiagram, released),
+    committed.synced.model,
+  );
+  check(
+    "and the release re-adopts nothing at all — the node cannot settle twice",
+    afterRelease.length === inFlight.length &&
+      afterRelease.every((node, i) => node === inFlight[i]),
+    `${afterRelease
+      .filter((node, i) => node !== inFlight[i])
+      .map((n) => n.id)
+      .join(", ")} ` +
+      "was replaced when the text caught up: the reader would see that node " +
+      "re-adopted after the gesture had visibly finished",
+  );
+
+  /* --- the frame and the node it contains must not disagree ---------------- */
+
+  /* A frame's box is the bounding box of its members' positions, so a frame
+     fed the MODEL while the nodes follow the pointer would visibly fail to
+     contain the node it owns and then jump on release. Asserted as the
+     relationship (contains / does not contain), and in both directions, so it
+     is provably the overlay doing the work. The seed carries no frames, so one
+     is added here: `frames` plus `frameId` is the whole of the model's
+     membership contract (see C4Diagram's comment). */
+  const framedDiagram = {
+    ...rootDiagram,
+    frames: [{ id: "f-boundary", label: "Internal" }],
+    nodes: rootDiagram.nodes.map((node) => ({
+      ...node,
+      frameId: "f-boundary",
+    })),
+  };
+  const contains = (frame, node) =>
+    frame !== undefined &&
+    node.position.x >= frame.x &&
+    node.position.y >= frame.y &&
+    node.position.x + node.size.width <= frame.x + frame.width &&
+    node.position.y + node.size.height <= frame.y + frame.height;
+  const midPress = new Map([[dragged.id, landed]]);
+  const staleFrame = placeFrames(framedDiagram)[0];
+  const liveFrame = placeFrames(
+    diagramWithDragOverlay(framedDiagram, midPress),
+  )[0];
+  const movedNode = { ...dragged, position: landed };
+  check(
+    "the fixture frame would genuinely be left behind by the model alone",
+    !contains(staleFrame, movedNode),
+    `frame ${JSON.stringify(staleFrame)} already contains the dragged node at ` +
+      `${JSON.stringify(landed)} — this pair proves nothing`,
+  );
+  check(
+    "a frame follows the node it contains for the whole press",
+    contains(liveFrame, movedNode),
+    `frame ${JSON.stringify(liveFrame)} does not contain the node at ` +
+      `${JSON.stringify(landed)} — the boundary would visibly lag its own ` +
+      "member and jump on release",
+  );
+  check(
+    "and the canvas feeds the frames and the nodes the same diagram",
+    /diagram: draggedDiagram/.test(canvas) &&
+      /<FrameLayer diagram=\{draggedDiagram\}/.test(canvas),
+    "the projection and the frame layer are reading different diagrams — two " +
+      "halves of one picture, each self-consistent, that disagree mid-press",
   );
 }
 
