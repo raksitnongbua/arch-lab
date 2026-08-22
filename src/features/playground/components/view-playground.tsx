@@ -145,8 +145,10 @@ import {
   SHARE_FORWARD_ATTRIBUTE,
   sourceFileStem,
   ViewerShell,
+  type NodeMoveHandler,
   type PaneErrorDetail,
 } from "@/features/viewer";
+import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import {
@@ -166,6 +168,7 @@ import {
   type ViewDocument,
   type ViewSourceError,
 } from "../input/parse";
+import { canvasEditability, movedNodeDocument } from "../input/canvas-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
 import { useSourceCollapsed } from "../lib/use-source-fold";
 
@@ -805,6 +808,53 @@ export function ViewPlayground({
     [doc, applyEdit],
   );
 
+  /* ---- editing on the canvas -------------------------------------------- */
+
+  /**
+   * Whether the canvas may be edited at all. `CANVAS_EDIT_ENABLED` is the
+   * deploy switch; `canvasEditability` is the DOCUMENT's answer (C4 only, and
+   * not while the pane holds Mermaid, which carries no geometry to write to).
+   */
+  const editability = canvasEditability(doc);
+  const canvasEditable = CANVAS_EDIT_ENABLED && editability.editable;
+
+  /**
+   * A finished drag: move the node in the document this page already holds,
+   * and let the panes follow.
+   *
+   * ONE MODEL, and this is the line that keeps it that way. The moved position
+   * goes into the `ViewDocument` — the same object a keystroke produces — and
+   * `adoptDocument` writes the text out. There is no canvas-side copy of the
+   * geometry to fall out of step with the pane, because the canvas never keeps
+   * one: React Flow holds the position for the length of the gesture and hands
+   * it over on release.
+   *
+   * `null` AS THE EDITED PANE IS THE POINT, not an omission. That argument is
+   * the page's existing "never rewrite the pane the cursor is in" rule — the
+   * one that structurally rules out echo loops between the source pane and its
+   * JSON twin — and a canvas edit is the case where the answer is genuinely
+   * "neither": the reader's caret is not in either pane, so both must be
+   * rewritten or the one left alone would describe the diagram as it was.
+   *
+   * The pending debounce is dropped first, exactly as `loadStarter` and
+   * `convertPane` drop it: a queued keystroke landing after this would parse
+   * text that predates the move and put the node back.
+   */
+  const handleNodeMove = useCallback<NodeMoveHandler>(
+    (diagramId, nodeId, position) => {
+      const next = movedNodeDocument(doc, diagramId, nodeId, position);
+      // null covers "landed where it started" as well as "cannot be edited",
+      // so a press that moves nothing costs no text change and no undo entry.
+      if (next === null) return;
+      setPending(null);
+      adoptDocument(next, null);
+      setAnnouncement(
+        `Moved ${nodeId} to ${position.x}, ${position.y} — the source text follows.`,
+      );
+    },
+    [doc, adoptDocument],
+  );
+
   // Reports which diagram is on screen so edits keep the drill-down place.
   // Also retires the share link's one-shot starting diagram: once the shell
   // is up, later remounts (edits that delete the current diagram) go back to
@@ -1432,6 +1482,10 @@ export function ViewPlayground({
                   initialDiagramId={sharedInitialDiagram ?? undefined}
                   share={{ kind: "payload", text: doc.synced.aftText }}
                   onDiagramChange={handleDiagramChange}
+                  /* Passing the handler is what makes the canvas editable —
+                     see `NodeMoveHandler`. `undefined` leaves the shell's
+                     read-only canvas exactly as every other host gets it. */
+                  onNodeMove={canvasEditable ? handleNodeMove : undefined}
                 />
               </section>
             ) : (

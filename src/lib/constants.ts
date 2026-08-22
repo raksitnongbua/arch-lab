@@ -23,6 +23,27 @@ export const APP_NAME = "arch-lab";
 export const EDITOR_ENABLED: boolean = true;
 
 /**
+ * Makes the C4 canvas on `/view` directly editable — select a node, drag it,
+ * nudge it with the arrow keys, delete it — with every change written back
+ * into the source pane as text.
+ *
+ * `false` for the current deploy. The canvas is read-only exactly as it was,
+ * and no lock control renders. Flipping it to `true` is the whole switch:
+ * every affordance reads from this flag rather than being commented out, so
+ * neither state can ship half-built.
+ *
+ * C4 ONLY, and that is a property of the notations rather than a gap here.
+ * The other five kinds SOLVE their geometry from the text — `layoutEr` derives
+ * columns from the relationships, the dictionary is a table — so a dragged
+ * node would be moved back by the next render, and there is nowhere in those
+ * grammars to write the position down. The C4 grammar is the one that carries
+ * per-node geometry (`(x,y wxh)`), so it is the one a canvas can author.
+ *
+ * Typed `boolean`, not the literal, for the reason above.
+ */
+export const CANVAS_EDIT_ENABLED: boolean = false;
+
+/**
  * The site's one description, and it is a BUDGETED string: it is the meta
  * description, the Open Graph and Twitter description, and the `description`
  * of the home page's JSON-LD. A search result truncates around 155–160

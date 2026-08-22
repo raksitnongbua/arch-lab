@@ -54,6 +54,7 @@ import {
   type NodeMouseHandler,
   type NodeTypes,
   type OnMoveEnd,
+  type OnNodeDrag,
   type Viewport,
 } from "@xyflow/react";
 
@@ -76,6 +77,7 @@ import {
 } from "../lib/model";
 import {
   EDGE_BASE_DASH_PERIOD,
+  EDIT_GRID,
   FIT_PADDING,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -104,6 +106,24 @@ const SCALE_FAR = 0.7;
 
 const nodeTypes: NodeTypes = { c4: ViewerNode };
 const edgeTypes: EdgeTypes = { c4: ViewerEdge };
+
+/**
+ * Reports one finished node move, in MODEL coordinates, already snapped to
+ * {@link EDIT_GRID}. Fired once per press-to-release — never per frame — so a
+ * consumer that turns it into a text edit produces one undoable change per
+ * gesture rather than one per pixel.
+ *
+ * ITS PRESENCE IS THE EDIT SWITCH. Passing it makes nodes draggable and
+ * relabels the canvas region; omitting it leaves the read-only canvas
+ * untouched. One prop rather than an `editable` boolean beside a callback,
+ * because two props allow the state "editable with nowhere to write", which
+ * would be a canvas that moves a node and then loses it on the next render.
+ */
+export type NodeMoveHandler = (
+  diagramId: string,
+  nodeId: string,
+  position: { x: number; y: number },
+) => void;
 
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
@@ -588,10 +608,12 @@ function ViewerCanvasInner({
   model,
   initialDiagramId,
   onDiagramChange,
+  onNodeMove,
 }: {
   model: ViewerModel;
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
+  onNodeMove?: NodeMoveHandler;
 }): React.JSX.Element {
   /* The modifier's name for THIS reader's platform — "Ctrl + scroll" on a Mac
      names the gesture that zooms the operating system, not the canvas. */
@@ -883,6 +905,34 @@ function ViewerCanvasInner({
     [drillInto],
   );
 
+  /* ---- editing: a finished drag ---------------------------------------------
+   * ON DRAG **STOP** ONLY, which is the whole reason this is three lines
+   * rather than a gesture state machine. React Flow owns the node's position
+   * for the duration of the press — it applies the pointer delta to its own
+   * internal copy, snapping to `snapGrid` as it goes — so the position handed
+   * over here is already the landed, snapped one, and the `nodes` memo above
+   * is never touched mid-gesture. That matters beyond tidiness: replacing the
+   * node objects per frame makes React Flow re-adopt them, and the note above
+   * that memo records what re-adoption costs (every EdgeWrapper unmounts and
+   * remounts, stealing focus mid-selection). One commit per press-to-release
+   * keeps that invariant and produces exactly one text edit to undo.
+   *
+   * `Math.round` after the snap, not instead of it: `snapGrid` quantises, but
+   * a zoomed canvas can still hand back a value carrying float error, and
+   * `C4Node.position` is documented integral. */
+  const handleNodeDragStop = useCallback<OnNodeDrag<ViewerFlowNode>>(
+    (_event, node) => {
+      onNodeMove?.(diagramIdRef.current, node.id, {
+        x: Math.round(node.position.x),
+        y: Math.round(node.position.y),
+      });
+    },
+    [onNodeMove],
+  );
+
+  /** Editable is a property of the callback's presence — see NodeMoveHandler. */
+  const editable = onNodeMove !== undefined;
+
   const climbTo = useCallback(
     (targetId: string) => {
       const anchorNodeId = climbAnchorNodeId(
@@ -1113,7 +1163,7 @@ function ViewerCanvasInner({
         position: { x: node.position.x, y: node.position.y },
         width: node.size.width,
         height: node.size.height,
-        draggable: false,
+        draggable: editable,
         connectable: false,
         selectable: false,
         focusable: false,
@@ -1152,7 +1202,7 @@ function ViewerCanvasInner({
     });
 
     return flowNodes;
-  }, [model, diagram, drillInto, openReference]);
+  }, [model, diagram, drillInto, openReference, editable]);
 
   const edges = useMemo(() => {
     const groups = parallelGroups(diagram.edges);
@@ -1332,7 +1382,14 @@ function ViewerCanvasInner({
       ref={containerRef}
       tabIndex={-1}
       role="region"
-      aria-label={`${diagram.title} — read-only diagram`}
+      /* The label states which canvas this IS. A reader using a screen reader
+         has no cursor to discover draggability with, so "read-only" must stop
+         being said the moment it stops being true. */
+      aria-label={
+        editable
+          ? `${diagram.title} — editable diagram`
+          : `${diagram.title} — read-only diagram`
+      }
       // absolute inset-0, not size-full: the shell's wrapper sizes itself with
       // min-h-96 + flex-1 (no definite `height`), so a percentage height here
       // would resolve to auto and collapse the canvas to zero (React Flow
@@ -1385,13 +1442,36 @@ function ViewerCanvasInner({
            the one place the same gesture is already declared. */
         panOnDrag
         panActivationKeyCode="Space"
-        nodesDraggable={false}
+        /* The pan comment above is the other half of this line: with nodes
+           draggable, a drag STARTING ON A NODE moves it, and pan survives as
+           the pane drag and Space + drag. */
+        nodesDraggable={editable}
+        onNodeDragStop={editable ? handleNodeDragStop : undefined}
+        /* React Flow does the snapping DURING the gesture, so the node the
+           reader is dragging is on the grid the whole way rather than jumping
+           to it on release. `EDIT_GRID` is the format's own 8 — see its
+           comment for why it is not the editor's copy of that number. */
+        snapToGrid={editable}
+        snapGrid={[EDIT_GRID, EDIT_GRID]}
         nodesConnectable={false}
         nodesFocusable={false}
         edgesFocusable={false}
         elementsSelectable={false}
         deleteKeyCode={null}
-        className="bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing"
+        /* An array joined with a space, never concatenated: a lost leading
+           space merges two class names into one nonsense name, every rule
+           targeting it silently stops applying, and CSS reports nothing. */
+        className={[
+          "bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing",
+          /* THE AFFORDANCE. Without this the node keeps the body button's
+             pointer cursor and nothing on screen says it can be moved — the
+             feature would be invisible until someone tried it by accident.
+             Aimed at the WRAPPER and its button so the whole node reads as
+             draggable, not just its margins. */
+          editable
+            ? "[&_.react-flow__node]:cursor-grab [&_.react-flow__node_button]:cursor-grab [&_.react-flow__node.dragging]:cursor-grabbing"
+            : "",
+        ].join(" ")}
       >
         {/* Before every Panel so frames sit behind the nodes and the chrome. */}
         <FrameLayer diagram={diagram} onFocus={clearSelection} />
@@ -1449,12 +1529,18 @@ export function ViewerCanvas({
   model,
   initialDiagramId,
   onDiagramChange,
+  onNodeMove,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
   initialDiagramId?: string;
   /** Reports which diagram is on screen (initial diagram included). */
   onDiagramChange?: (diagramId: string) => void;
+  /**
+   * Makes the canvas EDITABLE. Absent (the default) and the canvas is exactly
+   * the read-only surface it has always been — see {@link NodeMoveHandler}.
+   */
+  onNodeMove?: NodeMoveHandler;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
@@ -1462,6 +1548,7 @@ export function ViewerCanvas({
         model={model}
         initialDiagramId={initialDiagramId}
         onDiagramChange={onDiagramChange}
+        onNodeMove={onNodeMove}
       />
     </ReactFlowProvider>
   );

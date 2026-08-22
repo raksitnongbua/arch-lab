@@ -10,6 +10,27 @@ export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 2.5;
 
 /**
+ * The grid a dragged node lands on, in model px, while the canvas is editable.
+ *
+ * 8 IS THE FORMAT'S OWN RULE, not a canvas preference: `C4Node.position` is
+ * documented as "always integral, snapped to multiples of 8" (`types/c4.ts`),
+ * and `archtext/lib/defaults.ts` computes its whole default layout in
+ * multiples of 8 so that omitted geometry and written geometry sit on one
+ * grid. A drag that landed off-grid would put a node a few pixels out of step
+ * with every node whose position the text still omits.
+ *
+ * DELIBERATELY NOT IMPORTED FROM THE EDITOR, which declares the same 8 twice
+ * (`editor/state/model.ts`, `editor/lib/canvas-constants.ts`) for reasons its
+ * own comments give. Both are past that feature's barrel, and a cross-feature
+ * deep import is the thing `dry.md` refuses; this file is already the
+ * sanctioned viewer-side twin of `editor/lib/canvas-constants.ts` (see the
+ * header). The shared authority is the format rule above, and
+ * `check:canvas-edit` asserts this constant still agrees with the default
+ * layout's grid — so the two cannot part company silently.
+ */
+export const EDIT_GRID = 8;
+
+/**
  * Fit-to-view padding around the diagram bounds.
  *
  * Per-side rather than one fraction, because the canvas is not empty at its
