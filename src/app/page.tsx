@@ -322,6 +322,22 @@ export default function Home() {
               text for you, over MCP.
             </p>
 
+            {/* THE ONE PLACE THIS SENTENCE APPEARS on the home page, and it is
+                here rather than in a feature card because it answers the
+                objection a reader arrives with — "I do not want to learn a
+                grammar to move a box". Sourced from the flag: while the canvas
+                is not shipped the sentence is ABSENT, not written in a hopeful
+                present tense (`codebase.md`, feature flags). C4 is named,
+                because the other five kinds derive their layout from the text
+                and there is nothing on them to drag. */}
+            {CANVAS_EDIT_ENABLED ? (
+              <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
+                Write it as text or drag it on the canvas — a C4 diagram is
+                editable both ways, and either way the file is the same one
+                line-per-element text you can review in a pull request.
+              </p>
+            ) : null}
+
             {/* ONE primary destination, and now ACTUALLY one. The old hero
                 offered three buttons and a badge, and a newcomer had to pick
                 between "demo", "sequence diagrams" and "editor preview" before

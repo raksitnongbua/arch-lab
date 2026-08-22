@@ -83,7 +83,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import { buttonClasses, Button } from "@/components/ui/button";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
@@ -1091,15 +1090,27 @@ export function ViewPlayground({
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             Write your own diagram
           </h1>
-          <Badge variant="accent">
-            <span className="size-1.5 rounded-full bg-accent" />
-            live editor
-          </Badge>
+          {/* THE "live editor" BADGE IS GONE. It was a status pill — the shape
+              this site uses for a release stage (`MCP_STATUS_LABEL`) — spent on
+              a claim that is neither news nor a stage: every pane on this page
+              is live, which the reader learns by typing one character. It also
+              said "editor" while the page's own heading says "write your own
+              diagram", giving one page two names for itself. */}
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
             C4, sequence, flowchart, use case, ER or dictionary —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
-            JSON, or Mermaid, auto-detected and rendered live. Nothing leaves
-            your browser.{" "}
+            JSON, or Mermaid, auto-detected and rendered live.{" "}
+            {/* WHERE THE C4-ONLY RULE IS NAMED, and it is named here because
+                this is the sentence a reader is on when they wonder why their
+                ER diagram will not move. Sourced from the flag, so the claim
+                is absent rather than false while the canvas is not shipped. */}
+            {CANVAS_EDIT_ENABLED ? (
+              <>
+                C4 diagrams can also be edited on the canvas; the other kinds
+                lay themselves out from the text.{" "}
+              </>
+            ) : null}
+            Nothing leaves your browser.{" "}
             <Link
               href="/syntax"
               className="font-medium text-primary hover:underline"
