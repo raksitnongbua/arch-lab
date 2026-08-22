@@ -2,9 +2,9 @@
 
 /**
  * The view-mode page body: the view-only canvas, with a slim strip under it
- * naming the model (title, read-only badge, and — while EDITOR_ENABLED — the
- * way into the editor) — plus the two ways the canvas can take the whole
- * screen:
+ * naming the model (title, read-only badge, and — on a host that cannot edit
+ * in place — the way into the playground) — plus the two ways the canvas can
+ * take the whole screen:
  *
  *  1. Native fullscreen — the Fullscreen API on this shell's root element,
  *     feature-detected, state tracked through `fullscreenchange` so the
@@ -54,7 +54,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
-import { EDITOR_ENABLED } from "@/lib/constants";
+import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 import {
@@ -531,11 +531,17 @@ export function ViewerShell({
                 </span>
               </button>
             ) : null}
-            {EDITOR_ENABLED ? (
+            {/* THE LINK IS FOR HOSTS THAT CANNOT EDIT. Its job is to hand the
+                model to a page that can, so on a host that already passes
+                `edit` — the playground, whose canvas is editable in place —
+                it would link to where the reader already is. Derived from the
+                prop rather than from a second "am I the playground" flag: the
+                two could disagree, and this one cannot. */}
+            {edit !== undefined ? null : CANVAS_EDIT_ENABLED ? (
               <EditModeLink model={frozenModel} diagramId={currentDiagramId} />
             ) : (
               <Badge variant="outline" className="shrink-0">
-                Editor — coming soon
+                Editing — coming soon
               </Badge>
             )}
           </div>

@@ -6,21 +6,19 @@ export const APP_NAME = "arch-lab";
 /* Feature flags                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Ships the C4 editor. `true` for the current deploy: the navbar carries its
- * Editor entry, `/editor` renders the real canvas, and every editor CTA and
- * capability claim on the landing page, the demo index, and view mode speaks
- * in the present tense.
+/*
+ * `EDITOR_ENABLED` WAS HERE and is deliberately gone rather than left at
+ * `false`. It gated `/editor`, a second page whose job was "a canvas you can
+ * move things on"; that route is now a forwarding alias for `/view`, whose own
+ * C4 canvas is editable in place, so there is no separate editor for a flag to
+ * ship or withhold. Its four consumers — the navbar entry, the site default
+ * title, the landing page's closing CTA and the viewer's edit link — read
+ * `CANVAS_EDIT_ENABLED` below instead, which is the honest subject: whether a
+ * canvas in this app can be edited at all.
  *
- * Flip to `false` and all of those downgrade to an honest "coming soon" on
- * their own. The one extra step is `src/app/editor/page.tsx`, which must stop
- * importing the editor while disabled — otherwise the deployed bundle still
- * carries the editor UI that the flag claims is not shipped.
- *
- * Typed `boolean`, not the literal, so both branches of every consumer stay
- * type-checked whichever way the flag points.
+ * A flag nothing reads is worse than no flag: it reads as a switch someone
+ * could still throw.
  */
-export const EDITOR_ENABLED: boolean = true;
 
 /**
  * Makes the C4 canvas on `/view` directly editable — select a node, drag it,

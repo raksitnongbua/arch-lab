@@ -30,7 +30,11 @@ import {
 } from "@/features/mcp/catalog";
 import { CopySnippet } from "@/features/mcp/components/copy-snippet";
 import { publicOrigin } from "@/features/mcp/lib/origin";
-import { APP_DESCRIPTION, APP_NAME, EDITOR_ENABLED } from "@/lib/constants";
+import {
+  APP_DESCRIPTION,
+  APP_NAME,
+  CANVAS_EDIT_ENABLED,
+} from "@/lib/constants";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -585,14 +589,17 @@ export default function Home() {
               >
                 See finished examples
               </Link>
-              {EDITOR_ENABLED ? (
+              {/* `/view`, not the retired `/editor`: the canvas you can drag
+                  on is the playground's, and the claim is sourced from the flag
+                  that ships it rather than written in the present tense. */}
+              {CANVAS_EDIT_ENABLED ? (
                 <>
                   {" · "}
                   <Link
-                    href="/editor"
+                    href="/view"
                     className="font-medium text-primary hover:underline"
                   >
-                    Try the canvas editor
+                    Drag it on the canvas
                   </Link>
                 </>
               ) : null}

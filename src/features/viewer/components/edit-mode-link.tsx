@@ -2,19 +2,25 @@
 
 /**
  * "Edit this diagram" — hands the model on screen, opened at the diagram on
- * screen, to the editor. The mirror image of the editor's `ViewModeLink`, and
- * deliberately built the same way: a real `<a href>` whose fragment is encoded
- * ahead of the click, so middle-click, ⌘-click and "open in new tab" behave
- * like any other link.
+ * screen, to the playground. The mirror image of the editor's `ViewModeLink`,
+ * and deliberately built the same way: a real `<a href>` whose fragment is
+ * encoded ahead of the click, so middle-click, ⌘-click and "open in new tab"
+ * behave like any other link.
  *
  * The model travels inside the link through the same share codec both
- * directions already use — nothing is uploaded, and the editor needs no access
- * to this page's state. It is the whole file, not a reconstruction: see
+ * directions already use — nothing is uploaded, and the destination needs no
+ * access to this page's state. It is the whole file, not a reconstruction: see
  * `archLabFileFrom`.
  *
- * This replaced a plain link to `/editor`, which opened the blank starter
- * document — from a page showing a model, the one thing you want to edit is
- * that model.
+ * IT USED TO POINT AT `/editor`, which is now a forwarding alias for `/view`.
+ * The destination changed rather than the mechanism: the playground reads a
+ * `#m=…` payload on mount exactly as the editor did, and its C4 canvas is
+ * editable in place, so "edit this diagram" arrives somewhere that can both
+ * draw it and let you move it.
+ *
+ * It also replaced a plain link with no payload at all, which opened the blank
+ * starter document — from a page showing a model, the one thing you want to
+ * edit is that model.
  *
  * ---- On the length ceiling ----
  *
@@ -80,7 +86,12 @@ export function EditModeLink({
     // synchronous setState there is a cascading render.
     void encodeShareFragment(text, diagramId).then((fragment) => {
       if (cancelled) return;
-      const target = `/editor#${fragment}`;
+      /* `/view`, not `/editor`: the editor route is retired and the
+         playground reads the payload in the fragment exactly as the editor
+         did. Pointing at the alias would work — it forwards the fragment on
+         purpose — but sending a reader through a trampoline they never asked
+         for costs a render and a history entry for nothing. */
+      const target = `/view#${fragment}`;
       if (
         `${window.location.origin}${target}`.length > MAX_HANDOFF_URL_LENGTH
       ) {

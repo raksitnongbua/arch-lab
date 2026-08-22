@@ -11,6 +11,8 @@ import { listViewerModelIds } from "@/features/viewer";
 /**
  * Every page a crawler should know about. The static routes are written out
  * by hand — there are seven and they change with the router, not with data —
+ * and `check:seo` measures the description of every one of them, plus every
+ * forwarding alias it finds on disk.
  * while the `/view/[modelId]` entries come from the same registry that feeds
  * `generateStaticParams`, so a bundled example added there appears here
  * without anyone remembering a second list.
@@ -25,14 +27,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const staticRoutes = [
     "",
     "/demo",
-    "/editor",
     "/syntax",
     "/validate",
-    /* ONE playground URL. `/view/c4` and `/view/seq` were separate entries
-       when they were separate pages; they are forwarding aliases now, and
-       listing a route that canonicals elsewhere asks a crawler to index a
-       trampoline. The seed lives in `?d=`, which a sitemap has no reason to
-       enumerate — it changes the starting text, not the page. */
+    /* ONE playground URL, and `/editor` is no longer beside it. The C4 canvas
+       on `/view` is editable in place, so the two were one job on two pages;
+       `/editor` is a forwarding alias now, and listing a route that canonicals
+       elsewhere asks a crawler to index a trampoline. Same reason `/view/c4`
+       and `/view/seq` are absent. The seed lives in `?d=`, which a sitemap has
+       no reason to enumerate — it changes the starting text, not the page. */
     "/view",
     "/mcp",
     "/faq",

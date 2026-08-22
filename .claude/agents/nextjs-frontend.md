@@ -52,9 +52,9 @@ and the decisions are written down. Read them before proposing an alternative.
 - **Budgeted strings stay in budget.** `SITE_DESCRIPTION` and every route's meta
   description are read by search results; over ~160 characters the tail is
   written for nobody. `check:seo` measures them.
-- **Feature flags source their own copy.** `EDITOR_ENABLED` gates the editor and
-  every CTA reads from it. Never hardcode a capability claim in the present
-  tense.
+- **Feature flags source their own copy.** `CANVAS_EDIT_ENABLED` gates the
+  editable canvas and every CTA reads from it. Never hardcode a capability
+  claim in the present tense.
 
 ## Before you hand anything back
 

@@ -34,7 +34,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -96,6 +96,45 @@ const { createShareLink } = await loadModule("src/features/mcp/tools/share.ts");
 
 const readSource = (relative) =>
   readFileSync(path.join(ROOT, relative), "utf8");
+
+/**
+ * Every forwarding alias on disk, with the destination it carries a fragment
+ * to — found by walking `src/app` for a `page.tsx` rendering `AliasForward`.
+ *
+ * DERIVED, because this file listed its aliases by hand in three places and
+ * the lists were already incomplete: `/view/er` and `/view/dict` had shipped
+ * without being added, so no assertion here proved a link minted against
+ * either still opened. The retirement of `/editor` is the case that settles
+ * the argument — it is not under `src/app/view`, so a fourth hand-written list
+ * would have been needed, and `EditModeLink` minted `/editor#m=…` for every
+ * "Edit this diagram" click. A hardcoded list cannot notice a route it has
+ * never heard of; the filesystem can. Same predicate `check:seo` uses.
+ */
+function aliasRoutes() {
+  const found = [];
+  const walk = (dir, route) => {
+    for (const entry of readdirSync(path.join(ROOT, dir))) {
+      const child = path.join(dir, entry);
+      if (statSync(path.join(ROOT, child)).isDirectory()) {
+        if (entry.startsWith("(") || entry.startsWith("[")) continue;
+        walk(child, `${route}/${entry}`);
+        continue;
+      }
+      if (entry !== "page.tsx") continue;
+      const source = readSource(child);
+      if (!source.includes("AliasForward")) continue;
+      found.push({
+        route,
+        file: child,
+        to: /AliasForward\s+to="([^"]+)"/.exec(source)?.[1] ?? null,
+      });
+    }
+  };
+  walk("src/app", "");
+  return found.sort((a, b) => (a.route < b.route ? -1 : 1));
+}
+
+const ALIASES = aliasRoutes();
 
 let failures = 0;
 let assertions = 0;
@@ -276,16 +315,13 @@ await check(
       mcp.includes("/view#${fragment}"),
       "create_share_link must mint bare /view",
     );
-    for (const seeded of [
-      "/view/seq#",
-      "/view/sequence#",
-      "/view/c4#",
-      "/view/flow#",
-      "/view/uc#",
-    ]) {
+    /* Derived from the aliases on disk: minting against a TRAMPOLINE spends
+       characters on a route that only forwards, and the payload competes for
+       them. A hand-written list could not have covered a new alias. */
+    for (const { route } of ALIASES) {
       assert.ok(
-        !mcp.includes(seeded),
-        `create_share_link must not still mint ${seeded}`,
+        !mcp.includes(`${route}#`),
+        `create_share_link must not mint ${route}#, which only forwards`,
       );
     }
   },
@@ -303,20 +339,17 @@ await check(
        A link is a bookmark someone else is holding: `/view/seq#m=…` was the
        minted shape for every sequence share, and `/view/sequence#m=…` before
        that. Both must open forever. */
-    const destinationOf = (file) =>
-      /AliasForward to="([^"]+)"/.exec(readSource(`src/app/view/${file}`))?.[1];
-
+    /* EVERY alias on disk, not the five that used to be typed here. Each one
+       joins this compatibility surface the day it ships, and the two that
+       shipped without being added (`/view/er`, `/view/dict`) are exactly why
+       the list is now read rather than written. `/editor` is in it too: it was
+       the minting target for every "Edit this diagram" click. */
     const payload = FROZEN_SEQ_FRAGMENT;
-    for (const [route, file] of [
-      ["/view/c4", "c4/page.tsx"],
-      ["/view/seq", "seq/page.tsx"],
-      ["/view/sequence", "sequence/page.tsx"],
-      // Each alias joins the same compatibility surface the day it ships:
-      // any link a user ever builds against it must open forever.
-      ["/view/flow", "flow/page.tsx"],
-      ["/view/uc", "uc/page.tsx"],
-    ]) {
-      const to = destinationOf(file);
+    assert.ok(
+      ALIASES.length >= 7,
+      `expected the known aliases and more, found ${ALIASES.length} — a broken walk makes this vacuous`,
+    );
+    for (const { route, to } of ALIASES) {
       assert.ok(to, `${route} must forward somewhere`);
       // Exactly what AliasForward does on mount.
       const body = normalizeShareFragment(`#${payload}`);
@@ -354,11 +387,14 @@ await check("the minted route is the REAL page, not a trampoline", async () => {
     existsSync(path.join(ROOT, "src/app/view/opengraph-image.tsx")),
     "the route share links carry must own a social card",
   );
-  for (const alias of ["c4", "seq", "flow", "uc"]) {
+  /* Derived: every alias found on disk forwards. Listing four names proved
+     nothing about the three that were not in the list. */
+  for (const { route, file, to } of ALIASES) {
     assert.ok(
-      readSource(`src/app/view/${alias}/page.tsx`).includes("AliasForward"),
-      `src/app/view/${alias} must forward, carrying the fragment`,
+      readSource(file).includes("AliasForward"),
+      `${route} must forward, carrying the fragment`,
     );
+    assert.ok(to, `${route} must name a destination`);
   }
 });
 
