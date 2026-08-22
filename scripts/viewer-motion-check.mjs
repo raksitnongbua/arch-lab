@@ -428,8 +428,12 @@ check(
         `${route} does not pass the stored fold into the playground`,
       );
     }
+    /* The hook moved to `use-preference.ts` when the canvas lock became a
+       second preference of the same shape: the server-snapshot rule is now
+       decided in ONE place for both, which is a stronger thing to pin than
+       either wrapper. */
     assert.match(
-      read("src/features/playground/lib/use-source-fold.ts"),
+      read("src/features/playground/lib/use-preference.ts"),
       /\(\) => initial/,
       "the server snapshot must be what the server rendered, or hydration corrects it visibly",
     );

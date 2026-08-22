@@ -75,6 +75,8 @@ import {
   FileText,
   ChevronDown,
   Info,
+  Lock,
+  LockOpen,
   Repeat2,
   Shrink,
   X,
@@ -175,7 +177,7 @@ import {
   ownsChildDiagram,
 } from "../input/canvas-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
-import { useSourceCollapsed } from "../lib/use-source-fold";
+import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
 
 /**
  * How long the pane rests before its content is parsed (and, for C4, the
@@ -263,6 +265,7 @@ export function ViewPlayground({
   seed,
   initialText,
   initialSourceCollapsed = false,
+  initialCanvasLocked = false,
 }: {
   /** Which example fills the pane when no share payload does. */
   seed: SeedKind;
@@ -280,6 +283,17 @@ export function ViewPlayground({
    * is what a caller with no request context (a test, a story) should get.
    */
   initialSourceCollapsed?: boolean;
+  /**
+   * The reader's stored canvas lock, read from the request cookie by the route
+   * that mounts this — same server-side reasoning as the rail fold above, and
+   * one more reason it matters here: a lock applied after hydration would let
+   * one frame of editable canvas through, and one frame is enough for a press
+   * to land.
+   *
+   * Defaults to `false` — EDITABLE. See `lib/canvas-lock.ts` for why the
+   * permissive state is the default and who the lock is for.
+   */
+  initialCanvasLocked?: boolean;
 }): React.JSX.Element {
   /* ---- state ---------------------------------------------------------- */
 
@@ -350,6 +364,11 @@ export function ViewPlayground({
   const [sourceCollapsed, setSourceCollapsed] = useSourceCollapsed(
     initialSourceCollapsed,
   );
+
+  /** The canvas lock, remembered per browser — see `lib/canvas-lock.ts`. Its
+   * control lives in the canvas strip beside the rail toggle, because that is
+   * where the reader is looking when they want it. */
+  const [canvasLocked, setCanvasLocked] = useCanvasLocked(initialCanvasLocked);
 
   /** Scopes the sequence export button's lookup for the live <svg>. */
   const diagramPaneRef = useRef<HTMLElement>(null);
@@ -831,7 +850,21 @@ export function ViewPlayground({
    * not while the pane holds Mermaid, which carries no geometry to write to).
    */
   const editability = canvasEditability(doc);
-  const canvasEditable = CANVAS_EDIT_ENABLED && editability.editable;
+  /**
+   * Whether the canvas is editable RIGHT NOW: the deploy flag, the document's
+   * own answer, and the reader's lock, in that order. Any one of the three
+   * says no and the canvas is the read-only surface it has always been.
+   */
+  const canvasEditable =
+    CANVAS_EDIT_ENABLED && editability.editable && !canvasLocked;
+  /**
+   * Whether to offer the lock at all. Gated on the DOCUMENT being editable,
+   * not merely on it being C4: a control that cannot change anything is worse
+   * than no control, and the five text-laid-out notations get no lock, no
+   * disabled button and no tooltip explaining an absence — there is nothing
+   * there to lock, so the strip simply does not mention it.
+   */
+  const showCanvasLock = CANVAS_EDIT_ENABLED && editability.editable;
 
   /**
    * A finished drag: move the node in the document this page already holds,
@@ -1586,8 +1619,54 @@ export function ViewPlayground({
                     onToggle={() => setSourceCollapsed(!sourceCollapsed)}
                     sourceLabel="document source"
                   />
-                  <span className="truncate text-xs text-muted-foreground">
-                    Diagram
+                  {/* ONE CONTROL, and only where it can act. The lock renders
+                      for a C4 document the canvas could edit and for nothing
+                      else — the five text-laid-out notations never reach this
+                      branch at all, so there is no disabled button and no
+                      tooltip explaining an absence. A C4 document sitting here
+                      as Mermaid is the one case that is C4 and still cannot be
+                      edited, and it gets the REASON instead of a control that
+                      would do nothing. */}
+                  <span className="flex min-w-0 items-center gap-2">
+                    {showCanvasLock ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCanvasLocked(!canvasLocked);
+                          setAnnouncement(
+                            canvasLocked
+                              ? "Canvas unlocked — drag a node to move it; arrow keys nudge the selection. Every change is written into the source text."
+                              : "Canvas locked — the diagram is read-only. Nothing on it can be moved or deleted.",
+                          );
+                        }}
+                        aria-pressed={canvasLocked}
+                        title={
+                          canvasLocked
+                            ? "Unlock the canvas — drag nodes to move them"
+                            : "Lock the canvas — stop a stray drag moving a node"
+                        }
+                        className={buttonClasses({
+                          variant: "ghost",
+                          size: "sm",
+                        })}
+                      >
+                        {canvasLocked ? (
+                          <Lock aria-hidden="true" />
+                        ) : (
+                          <LockOpen aria-hidden="true" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {canvasLocked ? "Locked" : "Editable"}
+                        </span>
+                      </button>
+                    ) : null}
+                    <span className="truncate text-xs text-muted-foreground">
+                      {CANVAS_EDIT_ENABLED &&
+                      doc.kind === "c4" &&
+                      !editability.editable
+                        ? editability.reason
+                        : "Diagram"}
+                    </span>
                   </span>
                 </div>
                 <ViewerShell

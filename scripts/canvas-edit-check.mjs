@@ -557,6 +557,87 @@ console.log("\nThe canvas undo ring is bounded and stays out of the pane");
 }
 
 /* ----------------------------------------------------------------------- */
+/* 10. The lock: editable by default, decided by the server                 */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nThe canvas lock defaults to editable and is read server-side");
+
+{
+  const { isLockedCookie, CANVAS_LOCK_COOKIE } = await load(
+    "src/features/playground/lib/canvas-lock.ts",
+  );
+
+  /* EDITABLE IS THE DEFAULT, and this is the assertion that keeps it so. A
+     reader with no cookie must get the editable canvas; flipping the stored
+     sense (storing "editable" instead of "locked") would silently make every
+     first-time reader read-only and hide the feature entirely. */
+  check(
+    "no cookie means editable",
+    isLockedCookie(undefined) === false,
+    "an absent cookie locked the canvas — the feature would be invisible",
+  );
+  check(
+    "an unrecognised cookie value means editable, not locked",
+    isLockedCookie("") === false && isLockedCookie("true") === false,
+    "a stale or foreign value locked the canvas",
+  );
+  check(
+    "the stored lock reads back as locked",
+    isLockedCookie("locked") === true,
+    "the lock does not survive a reload",
+  );
+
+  /* READ ON THE SERVER, for the reason the source fold already established:
+     a preference applied after hydration shows one frame of the wrong state,
+     and for a lock that frame is one in which a drag can land. */
+  const route = read("src/app/view/page.tsx");
+  check(
+    "the route passes the stored lock into the playground",
+    /initialCanvasLocked=\{isLockedCookie\(/.test(route) &&
+      /store\.get\(CANVAS_LOCK_COOKIE\)/.test(route),
+    "the lock is not read from the request cookie — it would flash editable",
+  );
+  /* The NAME, not the string. A route hard-typing "af-canvas-locked" would
+     read a cookie nothing writes the day the name changes, and the mismatch
+     would be silent — the lock would simply never be remembered. */
+  check(
+    "the route names the cookie through the constant, not a literal",
+    !route.includes(`"${CANVAS_LOCK_COOKIE}"`),
+    `the cookie name "${CANVAS_LOCK_COOKIE}" is typed out in the route`,
+  );
+
+  /* ONE MECHANISM FOR BOTH PREFERENCES. The failure this prevents is the one
+     `dry.md` calls a copy-paste fingerprint: two cookie modules with the same
+     bodies, one of which later learns a fix the other does not. */
+  const lock = read("src/features/playground/lib/canvas-lock.ts");
+  const fold = read("src/features/playground/lib/source-fold.ts");
+  check(
+    "both preferences are built from the one cookie mechanism",
+    /booleanPreference\(/.test(lock) && /booleanPreference\(/.test(fold),
+    "a preference re-implements the cookie read/write instead of sharing it",
+  );
+
+  /* THE LOCK EXISTS ONLY WHERE IT CAN ACT. `showCanvasLock` is gated on the
+     document being editable, not on the flag alone — the five text-laid-out
+     notations must get no control, not a disabled one. */
+  const page = read("src/features/playground/components/view-playground.tsx");
+  check(
+    "the lock renders only for a document the canvas can edit",
+    /const showCanvasLock =\s*CANVAS_EDIT_ENABLED && editability\.editable;/.test(
+      page,
+    ),
+    "the lock's condition no longer requires an editable document — a " +
+      "notation with nothing to lock would get a control that cannot act",
+  );
+  check(
+    "the lock is never rendered as a disabled button",
+    !/showCanvasLock[\s\S]{0,400}?disabled=/.test(page),
+    "a disabled lock appeared — an absent control is the agreed answer for a " +
+      "notation that has no geometry to lock",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 /* 6. Refusals, derived from the seed table                                */
 /* ----------------------------------------------------------------------- */
 
