@@ -31,7 +31,7 @@ one.
 
 ### Added — editing on the canvas
 
-Behind a flag that is **off** in this release, so nothing below is visible yet.
+Live. It shipped behind a flag, which was turned on in the same release.
 
 - The C4 canvas on `/view` can be edited directly: select an element, drag it to
   move it, nudge it with the arrow keys, or press Delete to remove it along with
