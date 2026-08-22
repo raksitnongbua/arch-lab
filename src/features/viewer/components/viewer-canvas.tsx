@@ -109,21 +109,48 @@ const edgeTypes: EdgeTypes = { c4: ViewerEdge };
 
 /**
  * Reports one finished node move, in MODEL coordinates, already snapped to
- * {@link EDIT_GRID}. Fired once per press-to-release — never per frame — so a
- * consumer that turns it into a text edit produces one undoable change per
- * gesture rather than one per pixel.
- *
- * ITS PRESENCE IS THE EDIT SWITCH. Passing it makes nodes draggable and
- * relabels the canvas region; omitting it leaves the read-only canvas
- * untouched. One prop rather than an `editable` boolean beside a callback,
- * because two props allow the state "editable with nowhere to write", which
- * would be a canvas that moves a node and then loses it on the next render.
+ * {@link EDIT_GRID}. Fired once per gesture — never per frame — so a consumer
+ * that turns it into a text edit produces one undoable change per gesture
+ * rather than one per pixel.
  */
 export type NodeMoveHandler = (
   diagramId: string,
   nodeId: string,
   position: { x: number; y: number },
 ) => void;
+
+/**
+ * What an editable canvas needs from its host, and the EDIT SWITCH itself:
+ * passing this object makes nodes draggable, binds the nudge and delete keys,
+ * and relabels the canvas region. Omitting it leaves the read-only canvas
+ * exactly as every other host gets it.
+ *
+ * ONE OBJECT, not a handful of optional callbacks beside an `editable`
+ * boolean. Separate optional props allow the state "editable with nowhere to
+ * write" — a canvas that moves a node and then loses it on the next render —
+ * and every combination would have to be reasoned about. Here the compiler
+ * asks for all of it or none.
+ */
+export interface CanvasEditHandlers {
+  onNodeMove: NodeMoveHandler;
+  /**
+   * Remove the node. The host decides whether the removal is allowed (a node
+   * owning a child diagram is refused) and says so — the canvas only reports
+   * the keystroke.
+   */
+  onNodeDelete: (diagramId: string, nodeId: string) => void;
+  /**
+   * Undo the last canvas edit.
+   *
+   * BOUND HERE rather than by the host, even though the host is what holds the
+   * undo history, so that every key this canvas claims is decided in one place
+   * behind one focus guard. Two listeners with two guards is exactly the
+   * "two halves, each self-consistent, that disagree" shape — one of them
+   * would eventually fire while the source textarea had focus and undo the
+   * wrong thing.
+   */
+  onUndo: () => void;
+}
 
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
@@ -608,12 +635,12 @@ function ViewerCanvasInner({
   model,
   initialDiagramId,
   onDiagramChange,
-  onNodeMove,
+  edit,
 }: {
   model: ViewerModel;
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
-  onNodeMove?: NodeMoveHandler;
+  edit?: CanvasEditHandlers;
 }): React.JSX.Element {
   /* The modifier's name for THIS reader's platform — "Ctrl + scroll" on a Mac
      names the gesture that zooms the operating system, not the canvas. */
@@ -922,16 +949,16 @@ function ViewerCanvasInner({
    * `C4Node.position` is documented integral. */
   const handleNodeDragStop = useCallback<OnNodeDrag<ViewerFlowNode>>(
     (_event, node) => {
-      onNodeMove?.(diagramIdRef.current, node.id, {
+      edit?.onNodeMove(diagramIdRef.current, node.id, {
         x: Math.round(node.position.x),
         y: Math.round(node.position.y),
       });
     },
-    [onNodeMove],
+    [edit],
   );
 
-  /** Editable is a property of the callback's presence — see NodeMoveHandler. */
-  const editable = onNodeMove !== undefined;
+  /** Editable is a property of the handlers' presence — see CanvasEditHandlers. */
+  const editable = edit !== undefined;
 
   const climbTo = useCallback(
     (targetId: string) => {
@@ -1114,6 +1141,100 @@ function ViewerCanvasInner({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [model, climbTo, clearSelection]);
+
+  /* ---- editing: nudge and delete the selected element ----------------------
+   * ONE GRID STEP PER PRESS, and deliberately no fine (Shift) variant. The
+   * editor's canvas offers 8px and 1px, but `C4Node.position` is documented as
+   * a multiple of 8 and the default layout emits nothing else — a 1px nudge
+   * would put the node permanently out of step with every node whose geometry
+   * the text still omits, which is a diagram that looks subtly misaligned for
+   * a reason nothing on screen explains. One step, always on the grid.
+   *
+   * SCOPED TO THE CANVAS, which matters more here than for the Escape ladder
+   * above: the source textarea is a sibling on this very page, and an
+   * unscoped ArrowLeft would move a node while someone was moving their caret.
+   * The guard is "focus is inside this canvas, or nowhere" — nowhere covers
+   * the moment just after a drag or a click on the pane, when the browser has
+   * left focus on <body> and the reader plainly still means the canvas.
+   * Anything focused OUTSIDE the canvas keeps its own keys.
+   *
+   * Registered on window rather than on the container so it shares the
+   * ladder's cancellation contract (`defaultPrevented` is respected), and
+   * `deleteKeyCode={null}` stays on the flow: React Flow's own delete would
+   * remove the node from ITS store, which the next render from the model would
+   * simply put back. The model is downstream of the text, so the text is what
+   * has to change. */
+
+  useEffect(() => {
+    if (edit === undefined) return;
+
+    const NUDGE: Record<string, { x: number; y: number }> = {
+      ArrowUp: { x: 0, y: -EDIT_GRID },
+      ArrowDown: { x: 0, y: EDIT_GRID },
+      ArrowLeft: { x: -EDIT_GRID, y: 0 },
+      ArrowRight: { x: EDIT_GRID, y: 0 },
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const container = containerRef.current;
+      if (container === null) return;
+      const focused = document.activeElement;
+      const inCanvas =
+        focused === null ||
+        focused === document.body ||
+        container.contains(focused);
+      if (!inCanvas) return;
+
+      /* UNDO FIRST, and before the selection check: the edit most likely to
+         be undone is a delete, which leaves nothing selected. Shift+Cmd+Z
+         (redo) is deliberately NOT bound — the ring is one-directional, and a
+         redo key that silently does nothing is worse than one that is not
+         advertised. */
+      const undoChord =
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        (event.key === "z" || event.key === "Z");
+      if (undoChord) {
+        event.preventDefault();
+        edit.onUndo();
+        return;
+      }
+
+      // Any other modifier means something else entirely; a bare arrow is the
+      // only nudge, and there is no fine variant (see above).
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+
+      const nodeId = selectedNodeIdRef.current;
+      if (nodeId === null) return;
+      const current = getDiagram(model, diagramIdRef.current);
+      const node = findNode(current, nodeId);
+      // A selection can outlive its node for one render after an edit; do
+      // nothing rather than address a node that is no longer there.
+      if (node === null) return;
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        edit.onNodeDelete(current.id, nodeId);
+        return;
+      }
+
+      const delta = NUDGE[event.key];
+      if (delta === undefined) return;
+      // Claimed before the browser can scroll the canvas with the same press.
+      event.preventDefault();
+      edit.onNodeMove(current.id, nodeId, {
+        x: node.position.x + delta.x,
+        y: node.position.y + delta.y,
+      });
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [edit, model]);
 
   /* ---- projection: frozen model diagram → fresh React Flow objects --------- */
 
@@ -1529,7 +1650,7 @@ export function ViewerCanvas({
   model,
   initialDiagramId,
   onDiagramChange,
-  onNodeMove,
+  edit,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -1538,9 +1659,9 @@ export function ViewerCanvas({
   onDiagramChange?: (diagramId: string) => void;
   /**
    * Makes the canvas EDITABLE. Absent (the default) and the canvas is exactly
-   * the read-only surface it has always been — see {@link NodeMoveHandler}.
+   * the read-only surface it has always been — see {@link CanvasEditHandlers}.
    */
-  onNodeMove?: NodeMoveHandler;
+  edit?: CanvasEditHandlers;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
@@ -1548,7 +1669,7 @@ export function ViewerCanvas({
         model={model}
         initialDiagramId={initialDiagramId}
         onDiagramChange={onDiagramChange}
-        onNodeMove={onNodeMove}
+        edit={edit}
       />
     </ReactFlowProvider>
   );

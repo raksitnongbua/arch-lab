@@ -74,7 +74,7 @@ import {
   getDiagram,
   type ViewerModel,
 } from "../lib/model";
-import { ViewerCanvas, type NodeMoveHandler } from "./viewer-canvas";
+import { ViewerCanvas, type CanvasEditHandlers } from "./viewer-canvas";
 
 /* ---- fullscreen state, as an external store ------------------------------- */
 /* The DOM is the single source of truth (never our last button press), which
@@ -163,7 +163,7 @@ export function ViewerShell({
   initialDiagramId,
   share,
   onDiagramChange,
-  onNodeMove,
+  edit,
   defaultImmersive = false,
   tour: tourEnabled = true,
   titleAs: TitleTag = "h1",
@@ -183,7 +183,7 @@ export function ViewerShell({
    * own: the position a node lands at has to become TEXT to survive, and the
    * only thing that owns the text is the page above this one.
    */
-  onNodeMove?: NodeMoveHandler;
+  edit?: CanvasEditHandlers;
   /**
    * Start in immersive mode. For a page that exists only to show one model
    * (`/view/[modelId]`) — where the diagram IS the page, so the site chrome is
@@ -376,7 +376,7 @@ export function ViewerShell({
           model={frozenModel}
           initialDiagramId={initialDiagramId}
           onDiagramChange={handleDiagramChange}
-          onNodeMove={onNodeMove}
+          edit={edit}
         />
         {/* First visit it opens itself (remembered per browser — see
             components/ui/tour.tsx for the persistence verdicts); the strip's

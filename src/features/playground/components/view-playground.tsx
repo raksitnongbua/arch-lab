@@ -168,7 +168,12 @@ import {
   type ViewDocument,
   type ViewSourceError,
 } from "../input/parse";
-import { canvasEditability, movedNodeDocument } from "../input/canvas-edit";
+import {
+  canvasEditability,
+  deletedNodeDocument,
+  movedNodeDocument,
+  ownsChildDiagram,
+} from "../input/canvas-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
 import { useSourceCollapsed } from "../lib/use-source-fold";
 
@@ -186,6 +191,16 @@ const PARSE_DEBOUNCE_MS = 300;
  * anyone watches keystroke by keystroke.
  */
 const URL_SYNC_DEBOUNCE_MS = 800;
+
+/**
+ * How many canvas edits can be undone. Bounded because each entry is a whole
+ * copy of the document's source text, and a long session of nudging a large
+ * diagram would otherwise hold every version of it in memory for the lifetime
+ * of the page. Fifty is far past the "I did not mean that" window this is for;
+ * anything older is a change the reader has moved on from, and the text itself
+ * is still theirs to edit by hand.
+ */
+const CANVAS_UNDO_DEPTH = 50;
 
 /*
  * This page's additions to the sequence viewer's tour (its `extraTourSteps`
@@ -840,19 +855,123 @@ export function ViewPlayground({
    * `convertPane` drop it: a queued keystroke landing after this would parse
    * text that predates the move and put the node back.
    */
+  /**
+   * Previous source texts, newest last — the undo history for CANVAS edits.
+   *
+   * THE TEXT IS THE UNDO UNIT, which is what lets this be a ring of strings
+   * rather than a command stack. Every canvas edit is defined by the text it
+   * produces (`canvas-edit.ts` re-parses to make that literally true), so
+   * "undo" is "put the previous text back and parse it" — there is no inverse
+   * operation to implement per edit type, and a future edit kind inherits undo
+   * for free.
+   *
+   * SEPARATE FROM THE TEXTAREA'S OWN UNDO, deliberately, and the two must not
+   * be merged. Typing in the pane keeps the browser's native undo, which knows
+   * about carets and selections and word boundaries in a way nothing here
+   * could reproduce; a canvas drag never enters that history because it is not
+   * a user edit to the field. Binding one ⌘Z to both would mean either
+   * hijacking the textarea (losing caret-accurate undo while typing) or
+   * replaying canvas edits through it as text mutations (losing the caret
+   * anyway, and fighting React's controlled value). So: focus in the pane
+   * undoes typing, focus on the canvas undoes canvas edits — see the focus
+   * guard in `viewer-canvas.tsx`, which is the one place that decides.
+   *
+   * A ref, not state: nothing renders from it, and re-rendering the page on
+   * every push would be a render per drag for no visible reason.
+   */
+  const canvasUndoRef = useRef<string[]>([]);
+
+  /**
+   * Apply one canvas edit: remember the text being replaced, adopt the new
+   * document, say what happened.
+   *
+   * `null` AS THE EDITED PANE IS THE POINT, not an omission. That argument is
+   * the page's existing "never rewrite the pane the cursor is in" rule — the
+   * one that structurally rules out echo loops between the source pane and its
+   * JSON twin — and a canvas edit is the case where the answer is genuinely
+   * "neither": the reader's caret is not in either pane, so both must be
+   * rewritten or the one left alone would describe the diagram as it was.
+   *
+   * The pending debounce is dropped first, exactly as `loadStarter` and
+   * `convertPane` drop it: a queued keystroke landing after this would parse
+   * text that predates the edit and undo it invisibly.
+   */
+  const applyCanvasEdit = useCallback(
+    (next: ViewDocument, announcement: string) => {
+      const ring = canvasUndoRef.current;
+      ring.push(text);
+      if (ring.length > CANVAS_UNDO_DEPTH) ring.shift();
+      setPending(null);
+      adoptDocument(next, null);
+      setAnnouncement(announcement);
+    },
+    [text, adoptDocument],
+  );
+
   const handleNodeMove = useCallback<NodeMoveHandler>(
     (diagramId, nodeId, position) => {
       const next = movedNodeDocument(doc, diagramId, nodeId, position);
       // null covers "landed where it started" as well as "cannot be edited",
       // so a press that moves nothing costs no text change and no undo entry.
       if (next === null) return;
-      setPending(null);
-      adoptDocument(next, null);
-      setAnnouncement(
+      applyCanvasEdit(
+        next,
         `Moved ${nodeId} to ${position.x}, ${position.y} — the source text follows.`,
       );
     },
-    [doc, adoptDocument],
+    [doc, applyCanvasEdit],
+  );
+
+  const handleNodeDelete = useCallback(
+    (diagramId: string, nodeId: string) => {
+      /* A node owning a child diagram is refused, and the refusal is SAID.
+         Cascading would take a whole level of the model out on one keystroke;
+         going quiet would look like a broken key. */
+      if (ownsChildDiagram(doc, diagramId, nodeId)) {
+        setAnnouncement(
+          `${nodeId} cannot be deleted here — it opens a diagram of its own. Remove that level in the source text first.`,
+        );
+        return;
+      }
+      const next = deletedNodeDocument(doc, diagramId, nodeId);
+      if (next === null) return;
+      /* The undo key is NAMED here and nowhere else, because a delete is the
+         one canvas edit with nothing left on screen to put back by hand — a
+         move can always be dragged the other way. */
+      applyCanvasEdit(
+        next,
+        `Deleted ${nodeId} and every relationship touching it — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, applyCanvasEdit],
+  );
+
+  /** Put the previous source text back and parse it — see `canvasUndoRef`. */
+  const handleCanvasUndo = useCallback(() => {
+    const previous = canvasUndoRef.current.pop();
+    if (previous === undefined) {
+      setAnnouncement("Nothing left to undo on the diagram.");
+      return;
+    }
+    setPending(null);
+    setText(previous);
+    // `"source"` because the text is already set above: this parses it and
+    // adopts the document without rewriting the pane it came from.
+    applyEdit("source", previous);
+    setAnnouncement("Undid the last change made on the diagram.");
+  }, [applyEdit]);
+
+  /** The handlers together, so the canvas cannot be half-editable. */
+  const canvasEdit = useMemo(
+    () =>
+      canvasEditable
+        ? {
+            onNodeMove: handleNodeMove,
+            onNodeDelete: handleNodeDelete,
+            onUndo: handleCanvasUndo,
+          }
+        : undefined,
+    [canvasEditable, handleNodeMove, handleNodeDelete, handleCanvasUndo],
   );
 
   // Reports which diagram is on screen so edits keep the drill-down place.
@@ -1482,10 +1601,10 @@ export function ViewPlayground({
                   initialDiagramId={sharedInitialDiagram ?? undefined}
                   share={{ kind: "payload", text: doc.synced.aftText }}
                   onDiagramChange={handleDiagramChange}
-                  /* Passing the handler is what makes the canvas editable —
-                     see `NodeMoveHandler`. `undefined` leaves the shell's
+                  /* Passing these is what makes the canvas editable — see
+                     `CanvasEditHandlers`. `undefined` leaves the shell's
                      read-only canvas exactly as every other host gets it. */
-                  onNodeMove={canvasEditable ? handleNodeMove : undefined}
+                  edit={canvasEdit}
                 />
               </section>
             ) : (

@@ -114,6 +114,57 @@ export function movedNodeDocument(
   );
 }
 
+/**
+ * `doc` with one node — and every relationship touching it — removed, or
+ * `null` when the edit cannot apply.
+ *
+ * THE EDGES GO WITH IT, and that is not a tidy-up. An edge naming a node that
+ * no longer exists fails the model's own validation, so leaving them would
+ * turn Delete into a document that will not re-parse — the reader would press
+ * one key and get a parse error over a diagram they could no longer edit.
+ *
+ * A node owning a CHILD DIAGRAM is refused rather than cascaded. Deleting one
+ * box would otherwise silently take a whole level of the model with it, and
+ * nothing about pressing Delete on a node suggests that. `ownsChildDiagram`
+ * lets the caller say so instead of appearing to do nothing.
+ */
+export function deletedNodeDocument(
+  doc: ViewDocument,
+  diagramId: string,
+  nodeId: string,
+): ViewDocument | null {
+  if (!canvasEditability(doc).editable || doc.kind !== "c4") return null;
+  if (findNode(doc.synced.file, diagramId, nodeId) === null) return null;
+  if (ownsChildDiagram(doc, diagramId, nodeId)) return null;
+
+  return rebuild(
+    doc,
+    mapDiagram(doc.synced.file, diagramId, (diagram) => ({
+      ...diagram,
+      nodes: diagram.nodes.filter((node) => node.id !== nodeId),
+      edges: diagram.edges.filter(
+        (edge) => edge.source !== nodeId && edge.target !== nodeId,
+      ),
+    })),
+  );
+}
+
+/**
+ * Whether deleting `nodeId` would be refused for owning a child diagram, so
+ * the UI can explain the refusal rather than swallow the keystroke.
+ */
+export function ownsChildDiagram(
+  doc: ViewDocument,
+  diagramId: string,
+  nodeId: string,
+): boolean {
+  if (doc.kind !== "c4") return false;
+  const node = doc.synced.file.diagrams
+    .find((diagram) => diagram.id === diagramId)
+    ?.nodes.find((candidate) => candidate.id === nodeId);
+  return typeof node?.childDiagramId === "string" && node.childDiagramId !== "";
+}
+
 /* -------------------------------------------------------------------------- */
 /* Internals                                                                   */
 /* -------------------------------------------------------------------------- */

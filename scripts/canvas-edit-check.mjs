@@ -45,16 +45,30 @@
  *      hand-listed set of kinds: every non-C4 document the playground can hold
  *      reports itself uneditable with a reason. A hardcoded list cannot notice
  *      a seventh notation the day it is added; the table can.
+ *   7. A NUDGE STAYS ON THE GRID, and four of them round a square return the
+ *      text to byte-identical — a nudge that rounds or double-applies its
+ *      delta would leave a residue the reader cannot see and cannot undo by
+ *      nudging back.
+ *   8. DELETE TAKES ITS OWN RELATIONSHIPS AND NO OTHERS. An edge naming a
+ *      removed node fails the model's validation, so a delete that left one
+ *      would hand back a document that will not re-parse. A node owning a
+ *      child diagram is refused rather than cascaded.
+ *   9. UNDO IS BOUNDED AND SEPARATE from the textarea's native history. These
+ *      are source assertions, because the ring lives in a `.tsx` component
+ *      that type stripping cannot load — the tactic `check:shortcuts` and
+ *      `check:viewer-motion` already use for facts that exist only in a
+ *      component.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
+const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
 /* ----------------------------------------------------------------------- */
 /* Module resolution: `@/*` alias + extensionless relative imports -> .ts   */
@@ -92,9 +106,12 @@ const load = (relative) =>
 
 const { defaultPositions } = await load("src/features/archtext/index.ts");
 const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
-const { canvasEditability, movedNodeDocument } = await load(
-  "src/features/playground/input/canvas-edit.ts",
-);
+const {
+  canvasEditability,
+  deletedNodeDocument,
+  movedNodeDocument,
+  ownsChildDiagram,
+} = await load("src/features/playground/input/canvas-edit.ts");
 const { parseViewSource, VIEW_SEED_TEXT, sourceTextFor } = await load(
   "src/features/playground/input/parse.ts",
 );
@@ -299,6 +316,243 @@ console.log("\nA dragged node survives the round trip into text");
     "an unknown diagram id is refused rather than throwing",
     movedNodeDocument(original, "no-such-diagram", target.id, to) === null,
     "expected null",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 7. The keyboard nudge                                                    */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA nudge is one grid step and stays on the grid");
+
+{
+  /* The canvas computes `position + delta` and calls the same mover a drag
+     does, so what is asserted here is the ARITHMETIC the canvas performs —
+     that four nudges in a square return the node to where it started, and
+     therefore to text identical to the canonical original. The failure this
+     catches: a nudge that rounds, clamps or double-applies its delta leaves a
+     residue, and a reader who nudges left then right has permanently changed
+     their file by a pixel or two with nothing to show for it. */
+  const original = c4Document(VIEW_SEED_TEXT.c4);
+  const canonical = sourceTextFor(original);
+  const diagramId = original.synced.model.rootDiagramId;
+  const nodeId = original.synced.file.diagrams.find((d) => d.id === diagramId)
+    .nodes[0].id;
+
+  const deltas = [
+    { x: 0, y: -EDIT_GRID },
+    { x: EDIT_GRID, y: 0 },
+    { x: 0, y: EDIT_GRID },
+    { x: -EDIT_GRID, y: 0 },
+  ];
+
+  let walked = original;
+  let offGrid = null;
+  for (const delta of deltas) {
+    const node = walked.synced.file.diagrams
+      .find((d) => d.id === diagramId)
+      .nodes.find((n) => n.id === nodeId);
+    const next = movedNodeDocument(walked, diagramId, nodeId, {
+      x: node.position.x + delta.x,
+      y: node.position.y + delta.y,
+    });
+    if (next === null) {
+      offGrid = `a nudge by (${delta.x},${delta.y}) was refused`;
+      break;
+    }
+    const landed = next.synced.file.diagrams
+      .find((d) => d.id === diagramId)
+      .nodes.find((n) => n.id === nodeId).position;
+    if (landed.x % EDIT_GRID !== 0 || landed.y % EDIT_GRID !== 0) {
+      offGrid = `landed off-grid at (${landed.x},${landed.y})`;
+      break;
+    }
+    walked = next;
+  }
+
+  check(
+    "every nudge lands on the grid",
+    offGrid === null,
+    offGrid ?? undefined,
+  );
+  check(
+    "four nudges round a square leave the text byte-identical",
+    offGrid === null && sourceTextFor(walked) === canonical,
+    offGrid === null ? firstDiff(sourceTextFor(walked), canonical) : offGrid,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 8. Delete takes the relationships with it                                */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nDeleting a node leaves a document that still parses");
+
+{
+  const original = c4Document(VIEW_SEED_TEXT.c4);
+  const diagramId = original.synced.model.rootDiagramId;
+  const diagram = original.synced.file.diagrams.find((d) => d.id === diagramId);
+
+  /* A node WITH relationships, chosen from the data rather than named: the
+     whole point of the assertion is the edges, so picking a leaf by hand
+     would have made it vacuous. */
+  const connected = diagram.nodes.find((node) =>
+    diagram.edges.some(
+      (edge) => edge.source === node.id || edge.target === node.id,
+    ),
+  );
+  check(
+    "the fixture has a node with relationships to delete",
+    connected !== undefined && diagram.edges.length > 0,
+    `${diagram.nodes.length} nodes, ${diagram.edges.length} edges`,
+  );
+
+  if (connected !== undefined) {
+    const edgesTouching = diagram.edges.filter(
+      (edge) => edge.source === connected.id || edge.target === connected.id,
+    ).length;
+
+    const after = deletedNodeDocument(original, diagramId, connected.id);
+    check(
+      "a delete produces a document",
+      after !== null,
+      "got null — a connected node could not be deleted",
+    );
+
+    if (after !== null) {
+      const left = after.synced.file.diagrams.find((d) => d.id === diagramId);
+      check(
+        "the node is gone",
+        left.nodes.every((node) => node.id !== connected.id),
+        "it is still there",
+      );
+      /* THE ASSERTION THAT MATTERS. An edge naming a deleted node fails the
+         model's own validation, so a delete that left one behind would hand
+         the reader a document that will not re-parse. That it re-parsed at
+         all is proof (`rebuild` returns null otherwise) — this names the
+         count so the failure message says what was left. */
+      check(
+        `all ${edgesTouching} relationships touching it went with it`,
+        left.edges.every(
+          (edge) =>
+            edge.source !== connected.id && edge.target !== connected.id,
+        ),
+        `left: ${left.edges
+          .filter((e) => e.source === connected.id || e.target === connected.id)
+          .map((e) => `${e.source}->${e.target}`)
+          .join(", ")}`,
+      );
+      check(
+        "no other relationship was removed",
+        left.edges.length === diagram.edges.length - edgesTouching,
+        `expected ${diagram.edges.length - edgesTouching}, got ${left.edges.length}`,
+      );
+    }
+  }
+
+  check(
+    "deleting an unknown node is refused rather than throwing",
+    deletedNodeDocument(original, diagramId, "no-such-node") === null,
+    "expected null",
+  );
+
+  /* A node that OWNS a child diagram must be refused, and `ownsChildDiagram`
+     must agree with the refusal — the UI reads the predicate to explain
+     itself, so a predicate that disagreed with the mover would either explain
+     a refusal that did not happen or stay silent about one that did. Drawn
+     from the seed model's own drill-down structure. */
+  const parent = original.synced.file.diagrams
+    .flatMap((d) => d.nodes.map((node) => ({ diagramId: d.id, node })))
+    .find(
+      ({ node }) =>
+        typeof node.childDiagramId === "string" && node.childDiagramId !== "",
+    );
+  check(
+    "the seed model has a drill-down node to test the refusal with",
+    parent !== undefined,
+    "no node in the C4 seed owns a child diagram — this assertion is vacuous",
+  );
+  if (parent !== undefined) {
+    check(
+      "a node owning a child diagram reports itself as such",
+      ownsChildDiagram(original, parent.diagramId, parent.node.id) === true,
+      "it does not",
+    );
+    check(
+      "deleting a node that owns a child diagram is refused, never cascaded",
+      deletedNodeDocument(original, parent.diagramId, parent.node.id) === null,
+      "it was deleted — a whole level of the model would go with one keystroke",
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
+/* 9. Undo: bounded, and separate from the textarea's own                   */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nThe canvas undo ring is bounded and stays out of the pane");
+
+{
+  /* The ring lives in a `.tsx` component, which type stripping cannot load,
+     so these are source assertions — the same tactic `check:shortcuts` and
+     `check:viewer-motion` use for facts that only exist in a component. Each
+     names the failure it prevents; a source scan that merely restated the
+     implementation would pass forever. */
+  const page = read("src/features/playground/components/view-playground.tsx");
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+
+  check(
+    "the undo history is bounded by a named constant",
+    /const CANVAS_UNDO_DEPTH = \d+;/.test(page),
+    "CANVAS_UNDO_DEPTH is gone — every version of the source text would be " +
+      "held for the life of the page",
+  );
+  check(
+    "the ring drops its oldest entry when it is full",
+    /ring\.length > CANVAS_UNDO_DEPTH\) ring\.shift\(\)/.test(page),
+    "the bound is declared but not enforced, which is the same as unbounded",
+  );
+
+  /* THE TWO UNDO HISTORIES MUST STAY SEPARATE. If the canvas ever bound its
+     undo without the focus guard, ⌘Z while typing in the source pane would
+     revert a drag instead of the reader's last keystroke — losing typing that
+     the browser's own history was holding safely. The guard is the whole
+     mechanism, so its absence is the regression. */
+  check(
+    "the canvas claims its keys only while the canvas has focus",
+    /container\.contains\(focused\)/.test(canvas) &&
+      /if \(!inCanvas\) return;/.test(canvas),
+    "the focus guard is gone — canvas keys would fire while the source " +
+      "textarea had focus, and undo would revert the wrong history",
+  );
+  check(
+    "the nudge keys and the undo chord share one listener",
+    (canvas.match(/window\.addEventListener\("keydown"/g) ?? []).length === 2,
+    "expected exactly two keydown listeners in the canvas (the Escape ladder " +
+      "and the edit keys); a third means a second guard to keep in step",
+  );
+
+  /* React Flow must not delete nodes itself. Its delete would remove the node
+     from ITS store, which the next render from the model would put straight
+     back — a key that appears to work and does nothing. The model is
+     downstream of the text, so only a text edit can remove a node. */
+  check(
+    "React Flow's own delete key stays disabled",
+    /deleteKeyCode=\{null\}/.test(canvas),
+    "deleteKeyCode is no longer null — Delete would edit React Flow's store " +
+      "instead of the document, and the node would reappear on the next render",
+  );
+
+  /* The nudge has no fine variant on purpose (positions are multiples of 8).
+     A Shift-modified nudge would put a node permanently out of step with
+     every node whose geometry the text still omits. */
+  check(
+    "there is no fine (Shift) nudge on the viewer canvas",
+    /!event\.shiftKey/.test(canvas) &&
+      !/shift\+\$\{key\}/.test(canvas) &&
+      !/shiftKey \? 1 :/.test(canvas),
+    "a sub-grid nudge appeared — see EDIT_GRID for why positions stay on the " +
+      "format's 8px grid",
   );
 }
 

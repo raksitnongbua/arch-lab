@@ -13,7 +13,10 @@ export { ViewerShell } from "./components/viewer-shell";
 /* The shell's editable-canvas contract. Exported because the playground is
  * the one host that passes it, and it does so through this barrel — see the
  * note above about not deep-importing `viewer/components/*`. */
-export type { NodeMoveHandler } from "./components/viewer-canvas";
+export type {
+  CanvasEditHandlers,
+  NodeMoveHandler,
+} from "./components/viewer-canvas";
 export { ViewerBundledView } from "./components/viewer-bundled-view";
 export {
   listViewerModelIds,
