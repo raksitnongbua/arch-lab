@@ -1370,7 +1370,21 @@ function ViewerCanvasInner({
         zoomOnScroll={false}
         zoomOnPinch
         zoomOnDoubleClick={false}
+        /* PAN IS TWO GESTURES, AND BOTH ARE SPELLED OUT ON PURPOSE.
+           `panOnDrag` and `panActivationKeyCode` are both React Flow
+           DEFAULTS (`panOnDrag = true`, `panActivationKeyCode = 'Space'`),
+           so leaving them off the element would behave identically today.
+           They are written anyway because an editable canvas is about to
+           depend on them: once nodes become draggable, dragging a node MOVES
+           it, and these two are then the only ways left to pan — the pane for
+           empty canvas, Space for anywhere including over a node. A default
+           that a feature depends on is a default that must not be able to
+           change under it silently, whether by a library upgrade or by
+           someone adding `selectionOnDrag` here the way the editor has it.
+           `check:viewer-motion` pins the Space key to the editor's, which is
+           the one place the same gesture is already declared. */
         panOnDrag
+        panActivationKeyCode="Space"
         nodesDraggable={false}
         nodesConnectable={false}
         nodesFocusable={false}
@@ -1421,7 +1435,8 @@ function ViewerCanvasInner({
             zoom in ·{" "}
             <span className="font-medium text-primary">{mod} + scroll</span>{" "}
             zooms · <kbd className="font-mono text-[10px]">Esc</kbd> steps back
-            · drag to pan
+            · drag or <kbd className="font-mono text-[10px]">Space</kbd> + drag
+            to pan
           </p>
         </Panel>
       </ReactFlow>
