@@ -2788,12 +2788,69 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
     ),
     "the long prose has no home left — nothing on the page teaches the list in full",
   );
+  /* THE STRIP'S CONTENT IS GATED, ITS EXISTENCE IS NOT — and the difference is
+     a bug the old spelling of this assertion required.
+
+     It used to pin `edit === undefined ? null : (… GESTURES …)`, i.e. the strip
+     rendering only while editing was on. That was right about the wording (a
+     read-only canvas must not list gestures it does not offer) and wrong about
+     the layout: the drawing is PANE-FITTED, so a row that appears re-fits the
+     whole diagram at a different scale. Once the canvas started locked by
+     default, pressing Edit both revealed the legend and shrank the diagram —
+     the reader's first act on the canvas resized it.
+
+     So both halves are asserted separately now: the gestures stay behind the
+     gate, and the container stays outside it. */
+  /* ANCHORED ON WHAT THE STRIP IS, not on a property asserted below. An earlier
+     spelling anchored on `h-7`, so removing the height made the block "not
+     found" and failed every assertion here identically — a break has to name
+     the thing it broke. The caveat is the strip's last child and is required by
+     its own assertion elsewhere, which makes it a stable landmark. */
+  const stripAt = /<div className="hidden[^"]*"/.exec(viewer);
+  const strip =
+    stripAt === null
+      ? ""
+      : (/^[\s\S]{0,2600}?SEQUENCE_MOUSE_GUIDE_CAVEAT[\s\S]{0,240}?\n      <\/div>/.exec(
+          viewer.slice(stripAt.index),
+        )?.[0] ?? "");
+  /* READ THE TEXT BEFORE THE CONTAINER, not the container itself. The first
+     spelling of this tested `strip` for a leading `{edit === undefined ? null :`
+     — which sits OUTSIDE the match, so re-introducing the original bug passed
+     green. Measured on the characters preceding the tag instead. */
+  const beforeStrip =
+    stripAt === null
+      ? ""
+      : viewer.slice(Math.max(0, stripAt.index - 140), stripAt.index);
   check(
-    "the affordance strip is gated on the edit handlers being present",
-    /edit === undefined \? null : \([\s\S]{0,900}?SEQUENCE_MOUSE_GESTURES/.test(
-      viewer,
+    "the affordance strip renders whether or not editing is on",
+    strip !== "" &&
+      !/\?\s*null\s*:\s*$/.test(beforeStrip.trimEnd() + "") &&
+      !/edit === undefined \? null :/.test(beforeStrip),
+    "a strip that appears with the edit toggle rescales a pane-fitted drawing",
+  );
+  check(
+    "the gesture legend is still gated on the edit handlers",
+    /edit === undefined \? \([\s\S]{0,400}?SEQUENCE_READ_ONLY_HINT[\s\S]{0,400}?SEQUENCE_MOUSE_GESTURES/.test(
+      strip,
     ),
-    "a locked or read-only canvas would list gestures it does not offer",
+    "a read-only canvas would list gestures it does not offer",
+  );
+  /* HEIGHT STATED, NOT INFERRED FROM CONTENT, and no wrapping — the two
+     properties that keep the pane a constant size. `flex-wrap` is what let the
+     caveat take a second row at some widths and not others, so resizing the
+     window rescaled the drawing; the sideways scroll is what replaces it. */
+  check(
+    "the strip states a fixed height and never wraps",
+    /\bh-7\b/.test(strip) &&
+      !/\bflex-wrap\b/.test(strip) &&
+      /\boverflow-x-auto\b/.test(strip) &&
+      /\bwhitespace-nowrap\b/.test(strip),
+    "content-sized or wrapping, either of which re-fits the diagram",
+  );
+  check(
+    "the read-only canvas gets a sentence of its own rather than an empty strip",
+    /SEQUENCE_READ_ONLY_HINT/.test(viewer),
+    "a blank row holds the height but tells the reader nothing",
   );
 }
 

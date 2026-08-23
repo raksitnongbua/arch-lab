@@ -117,6 +117,7 @@ import {
   SEQUENCE_MOUSE_GESTURES,
   SEQUENCE_MOUSE_GUIDE,
   SEQUENCE_MOUSE_GUIDE_CAVEAT,
+  SEQUENCE_READ_ONLY_HINT,
   type SequenceGuideIcon,
 } from "../lib/mouse-guide";
 import {
@@ -2308,34 +2309,66 @@ export function SequenceViewer({
           `SequenceEditHandlers` — so a gesture added to the canvas cannot ship
           without an entry, an icon and a name. Twice on this branch a correct,
           shipped gesture was reported as broken because no surface named it. */}
-      {edit === undefined ? null : (
-        <ul className="hidden flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:flex">
-          {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
-            const Glyph = GUIDE_GLYPH[gesture.icon];
-            return (
-              <li
-                key={gesture.handler}
-                /* The full path on hover for a mouse user, and as the item's
-                   accessible name for everyone else — the long half is demoted,
-                   never dropped. */
-                title={gesture.mouse}
-                className="inline-flex items-center gap-1"
-              >
-                <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
-                <span>{gesture.label}</span>
-                <span className="sr-only">— {gesture.mouse}</span>
-              </li>
-            );
-          })}
-          {/* THE CAVEAT STAYS PROSE, and stays last. It is the only line here
-              that is about what dragging does NOT do, so it has no glyph to
-              lead with — and it is the sentence a reader arriving from a
-              drawing tool needs before their first drag, not after it. */}
-          <li className="basis-full text-muted-foreground/80 sm:basis-auto">
-            {SEQUENCE_MOUSE_GUIDE_CAVEAT}
-          </li>
-        </ul>
-      )}
+      {/* ---- THE LEGEND'S HEIGHT IS FIXED, and that is the whole point ----
+
+          The drawing is PANE-FITTED: `fit` scales by
+          `min(paneW/vbW, paneH/vbH)`, so anything that changes this strip's
+          height re-fits the entire diagram at a different scale. The dock is an
+          overlay for exactly that reason, and its comment names the failure —
+          "precisely the reflow-jump the overlay was chosen to avoid". This
+          strip was a layout sibling and reintroduced it twice over:
+
+            - `flex-wrap` let the row count follow the pane width, so the
+              caveat's `basis-full` took a second row at some widths and not
+              others. Resizing the window rescaled the drawing.
+            - It rendered only while editing was ON, so once the canvas started
+              LOCKED by default, pressing Edit both revealed the legend and
+              quietly shrank the diagram — the reader's first act on the canvas
+              resized it.
+
+          So: one row that never wraps, scrolling sideways when the glyphs do
+          not fit, and PRESENT WHETHER OR NOT EDITING IS ON. `h-7` is stated
+          rather than left to the content because a fixed height is the property
+          being defended; `check:sequence-layout` pins all three.
+
+          A read-only canvas gets the one sentence that is true of it instead of
+          a legend of gestures it does not offer — same row, same height, so the
+          toggle changes what the strip SAYS and never what it occupies. */}
+      <div className="hidden h-7 shrink-0 items-center gap-x-3 overflow-x-auto border-t border-border bg-card px-4 text-xs whitespace-nowrap text-muted-foreground sm:flex">
+        {edit === undefined ? (
+          <span>{SEQUENCE_READ_ONLY_HINT}</span>
+        ) : (
+          <>
+            {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
+              const Glyph = GUIDE_GLYPH[gesture.icon];
+              return (
+                <span
+                  key={gesture.handler}
+                  /* The full path on hover for a mouse user, and as the item's
+                     accessible name for everyone else — the long half is
+                     demoted, never dropped. */
+                  title={gesture.mouse}
+                  className="inline-flex shrink-0 items-center gap-1"
+                >
+                  <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
+                  <span>{gesture.label}</span>
+                  <span className="sr-only">— {gesture.mouse}</span>
+                </span>
+              );
+            })}
+            {/* THE CAVEAT STAYS, and stays last — it is the only entry about
+                what dragging does NOT do, so it has no glyph to lead with, and
+                it is what a reader arriving from a drawing tool needs before
+                their first drag. It rides the same scroll rather than taking a
+                row of its own, which is what used to make the strip two lines
+                tall at some widths; the tour card still reads it out in full to
+                a reader who opens it to be taught. */}
+            <span className="shrink-0 text-muted-foreground/80">
+              {SEQUENCE_MOUSE_GUIDE_CAVEAT}
+            </span>
+          </>
+        )}
+      </div>
 
       {/* Text alternative: the whole story as an ordered list, for readers
           the SVG serves poorly — with playback gone this is the only LINEAR

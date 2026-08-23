@@ -194,3 +194,21 @@ export const SEQUENCE_MOUSE_GUIDE = SEQUENCE_MOUSE_GESTURES.map(
  */
 export const SEQUENCE_MOUSE_GUIDE_CAVEAT =
   "Dragging a message or a lifeline card reorders it; dragging bare canvas pans the view. Nothing here is positioned — a dragged element takes a neighbour's place in the order rather than staying where you drop it, and notes and fragments are edited in the source text beside the diagram.";
+
+/**
+ * What the strip says when the canvas is READ-ONLY, and the reason it exists at
+ * all is layout rather than wording.
+ *
+ * The legend used to render only while editing was on. Once the canvas started
+ * LOCKED by default, that made pressing Edit reveal a row and — because the
+ * drawing is pane-fitted — rescale the whole diagram, so a reader's first act
+ * on the canvas resized it. The strip is now always present and swaps its
+ * CONTENTS, which means the read-only state needs a sentence of its own.
+ *
+ * It names the control rather than the gesture: a locked canvas offers exactly
+ * one action, and a legend of eight gestures a reader cannot use yet would be
+ * the "shipped control nobody can find" failure inverted — eight they can see
+ * and none they can do.
+ */
+export const SEQUENCE_READ_ONLY_HINT =
+  "Read-only — press Edit above to change this diagram on the canvas.";
