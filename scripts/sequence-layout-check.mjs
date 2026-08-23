@@ -81,6 +81,18 @@ const { layoutSequence, SEQ, estimateTextWidth } = await import(
 const { CANVAS_DRAG_THRESHOLD } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/lib/reorder.ts")).href
 );
+const {
+  SEQUENCE_HEAD_SHAPES,
+  SEQUENCE_HEAD_LINE_INSET,
+  SEQ_HEAD_LENGTH,
+  SEQ_CROSS_HALF,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/arrow-heads.ts"))
+    .href
+);
+const { SEQUENCE_HEAD_STYLES } = await import(
+  pathToFileURL(path.join(ROOT, "src/types/index.ts")).href
+);
 const { SEQUENCE_EXAMPLE } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/input/example.ts")).href
 );
@@ -380,7 +392,7 @@ check(
   );
   const opener = layout.messages.find((m) => m.step === 2);
   const closer = layout.messages.find(
-    (m) => m.step === 9 && m.from === "api" && m.kind === "reply",
+    (m) => m.step === 9 && m.from === "api" && m.lineStyle === "dotted",
   );
   check(
     "an activation bar opens at its activating message's y and closes at the deactivating reply",
@@ -977,6 +989,137 @@ console.log("\nreorder slots are distinct and index-aligned with the model");
     Math.min(...rowGaps) > CANVAS_DRAG_THRESHOLD &&
       Math.min(...columnGaps) > CANVAS_DRAG_THRESHOLD,
     `narrowest row gap ${Math.min(...rowGaps)}, column gap ${Math.min(...columnGaps)}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Arrow heads: five distinct marks, each landing ON its own endpoint       */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * MEASURED, not read. Every assertion here is a RELATIONSHIP between a head's
+ * path data and the endpoint it is supposed to sit on, because the failure
+ * these prevent is geometric and silent: a head one direction-sign wrong
+ * points away from the lifeline it arrives at, and a head drawn past its tip
+ * overhangs the participant column. Both render, both look like a rendering
+ * fault, and neither is a type error.
+ *
+ * Driven from `SEQUENCE_HEAD_STYLES` so a sixth head style is measured the day
+ * it exists — a hand-listed five cannot notice one.
+ */
+
+console.log("\narrow heads");
+
+{
+  const TARGET = { x: 200, y: 100, direction: 1 };
+  const SOURCE = { x: 40, y: 100, direction: -1 };
+  /**
+   * EVERY VERTEX OF A HEAD PATH, resolved to absolute coordinates.
+   *
+   * Written because the first version of this read the raw numbers out of the
+   * `d` string, and the filled triangle is written with a RELATIVE `l` — so two
+   * of its three vertices are offsets. Reading them as coordinates made the
+   * overhang assertion below vacuous for exactly the two styles that use a
+   * triangle, which a deliberate break proved: flipping the triangle's
+   * direction sign so it drew past its own tip left this assertion green.
+   *
+   * Handles only the four commands these paths use (`M`, `L`, `l`, `v`), and
+   * throws on anything else rather than silently skipping it — a head drawn
+   * with a curve would otherwise go unmeasured.
+   */
+  const verticesOf = (d) => {
+    const tokens = d.trim().split(/\s+/);
+    const points = [];
+    let x = 0;
+    let y = 0;
+    for (let at = 0; at < tokens.length;) {
+      const command = tokens[at];
+      at += 1;
+      if (command === "Z" || command === "z") continue;
+      const take = () => Number(tokens[at++]);
+      if (command === "M" || command === "L") {
+        x = take();
+        y = take();
+      } else if (command === "l") {
+        x += take();
+        y += take();
+      } else if (command === "v") {
+        y += take();
+      } else {
+        throw new Error(`unmeasured path command "${command}" in ${d}`);
+      }
+      points.push({ x, y });
+    }
+    return points;
+  };
+
+  for (const headStyle of SEQUENCE_HEAD_STYLES) {
+    const shape = SEQUENCE_HEAD_SHAPES[headStyle](TARGET, SOURCE);
+    const paths = [...shape.filled, ...shape.stroked];
+
+    if (headStyle === "none") {
+      /* NOT an empty path — no element at all. A `d=""` path is still a DOM
+         node the hover and focus selectors match, so it would take a
+         stroke-width transition on nothing. */
+      check("`none` emits no path element at all", paths.length === 0);
+      continue;
+    }
+
+    check(`${headStyle}: emits at least one path`, paths.length > 0);
+
+    /* THE HEAD NEVER OVERHANGS ITS TIP along the line. The target end points
+       rightward here, so no x may exceed the endpoint — except the cross,
+       which is centred ON the endpoint by design and is allowed exactly its
+       half-diagonal on the far side. */
+    const overhang = headStyle === "cross" ? SEQ_CROSS_HALF : 0;
+    const xs = paths.flatMap((d) => verticesOf(d).map((point) => point.x));
+    check(
+      `${headStyle}: no vertex overhangs the endpoint it lands on (max x ${Math.max(...xs)} <= ${TARGET.x + overhang})`,
+      Math.max(...xs) <= TARGET.x + overhang,
+      paths.join(" | "),
+    );
+    check(
+      `${headStyle}: reaches back no further than its declared length (min x ${Math.min(...xs)} >= ${TARGET.x - SEQ_HEAD_LENGTH}), so it cannot swallow the label beside it`,
+      Math.min(...xs) >= Math.min(TARGET.x - SEQ_HEAD_LENGTH, SOURCE.x),
+      paths.join(" | "),
+    );
+
+    /* THE LINE STOPS SHORT ONLY WHERE THE HEAD SITS ON THE ENDPOINT. A head
+       drawn behind the tip hides the line under itself; a cross does not, and a
+       line drawn through an X reads as a plus sign on a wire. */
+    check(
+      `${headStyle}: asks the line to stop short by ${SEQUENCE_HEAD_LINE_INSET[headStyle].target}px — nonzero exactly when the mark sits ON the endpoint`,
+      SEQUENCE_HEAD_LINE_INSET[headStyle].target ===
+        (headStyle === "cross" ? SEQ_CROSS_HALF : 0),
+    );
+  }
+
+  /* MIRRORING. A right-to-left message (a reply) must draw the same head
+     reflected, not the same head rotated by nothing at all — pointing the
+     wrong way is the whole failure. */
+  const rightward = SEQUENCE_HEAD_SHAPES.arrow(TARGET, SOURCE).filled[0];
+  const leftward = SEQUENCE_HEAD_SHAPES.arrow(
+    { x: 40, y: 100, direction: -1 },
+    { x: 200, y: 100, direction: 1 },
+  ).filled[0];
+  check(
+    "a right-to-left arrow's head is the mirror of a left-to-right one, so a reply points at its own target",
+    rightward.includes(`l -${SEQ_HEAD_LENGTH} `) &&
+      leftward.includes(`l ${SEQ_HEAD_LENGTH} `),
+    `${rightward} / ${leftward}`,
+  );
+
+  /* AND THE TWO-ENDED HEAD PUTS ONE MARK AT EACH END, facing outward. Both
+     facing the same way would draw an arrow with a decoration on its tail. */
+  const both = SEQUENCE_HEAD_SHAPES.bidirectional(TARGET, SOURCE).filled;
+  check(
+    "the bidirectional head lands one mark on each endpoint, facing opposite ways",
+    both.length === 2 &&
+      both[0].startsWith(`M ${TARGET.x} ${TARGET.y}`) &&
+      both[1].startsWith(`M ${SOURCE.x} ${SOURCE.y}`) &&
+      both[0].includes(`l -${SEQ_HEAD_LENGTH} `) &&
+      both[1].includes(`l ${SEQ_HEAD_LENGTH} `),
+    both.join(" | "),
   );
 }
 

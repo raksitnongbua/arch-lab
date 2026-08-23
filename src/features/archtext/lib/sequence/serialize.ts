@@ -37,12 +37,12 @@ import { META_KEYS, splitUnknowns } from "../schema";
 import { bangLine, isRecord, tagsLine, techBody } from "../serialize";
 import { BARE_ID_RE, valueToken } from "../text";
 import {
-  ARROW_BY_MESSAGE_KIND,
   BOX_KEYWORD,
   BRANCH_KEYWORD_BY_KIND,
   FRAGMENT_KIND_BY_KEYWORD,
   PARTICIPANT_KIND_BY_KEYWORD,
   RESERVED_BODY_WORDS,
+  SEQUENCE_ARROW_TOKENS,
   SEQUENCE_BLOCK,
   SEQUENCE_HEADER_WORD,
   TINT_ATTRIBUTE,
@@ -459,12 +459,28 @@ function emitMessage(
   if (typeof from !== "string" || from === "")
     invalid("a message source", from);
   if (typeof to !== "string" || to === "") invalid("a message target", to);
-  const kind = message.kind;
-  const arrow =
-    typeof kind === "string"
-      ? ARROW_BY_MESSAGE_KIND[kind as keyof typeof ARROW_BY_MESSAGE_KIND]
+  /* The two axes are looked up TOGETHER, because a token exists only for a
+     complete pair: a document carrying a plausible `line` and a `head` from a
+     newer minor has no spelling here, and inventing one would write a
+     document this parser then refuses. Neither axis is raw-escapable
+     (`SEQ_MESSAGE_RAW`), so there is no lossless fallback to offer — the
+     refusal names whichever half is unknown. */
+  const lineStyle = message.lineStyle;
+  const headStyle = message.headStyle;
+  const byHeadStyle =
+    typeof lineStyle === "string"
+      ? SEQUENCE_ARROW_TOKENS[lineStyle as keyof typeof SEQUENCE_ARROW_TOKENS]
       : undefined;
-  if (arrow === undefined) invalid(`message "${from} → ${to}".kind`, kind);
+  if (byHeadStyle === undefined) {
+    invalid(`message "${from} → ${to}".lineStyle`, lineStyle);
+  }
+  const arrow =
+    typeof headStyle === "string"
+      ? byHeadStyle[headStyle as keyof typeof byHeadStyle]
+      : undefined;
+  if (arrow === undefined) {
+    invalid(`message "${from} → ${to}".headStyle`, headStyle);
+  }
   const label = message.label;
   if (typeof label !== "string")
     invalid(`message "${from} → ${to}".label`, label);

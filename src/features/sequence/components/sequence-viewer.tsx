@@ -78,10 +78,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import {
+  sequenceArrowPhrase,
+  SEQUENCE_HEAD_STYLE_MEANING,
+  SEQUENCE_HEAD_STYLES,
+  SEQUENCE_LINE_STYLE_MEANING,
+  SEQUENCE_LINE_STYLES,
+} from "@/types";
 import type {
   SequenceItemPath,
   SequenceLabFile,
-  SequenceMessageKind,
+  SequenceHeadStyle,
+  SequenceLineStyle,
   SequenceMessageRevision,
   SequenceParticipantKind,
   SequenceParticipantRevision,
@@ -2110,11 +2118,11 @@ export function SequenceViewer({
                     />
                   ) : null}
                   <DockRow
-                    term="Kind"
+                    term="Arrow"
                     value={
                       focusedMessage.self
-                        ? `${focusedMessage.kind} (self-message)`
-                        : focusedMessage.kind
+                        ? `${sequenceArrowPhrase(focusedMessage)} (self-message)`
+                        : sequenceArrowPhrase(focusedMessage)
                     }
                     mono
                   />
@@ -2378,7 +2386,8 @@ export function SequenceViewer({
         {layout.messages.map((message) => (
           <li key={message.step}>
             {nameById.get(message.from) ?? message.from} to{" "}
-            {nameById.get(message.to) ?? message.to} ({message.kind}
+            {nameById.get(message.to) ?? message.to} (
+            {sequenceArrowPhrase(message)}
             {message.self ? ", self-message" : ""}): {message.label}
             {message.technology !== undefined ? ` [${message.technology}]` : ""}
           </li>
@@ -2711,7 +2720,15 @@ function MessageForm({
   onCancel: () => void;
 }): React.JSX.Element {
   const [label, setLabel] = useState(message.label);
-  const [kind, setKind] = useState<SequenceMessageKind>(message.kind);
+  /* TWO MENUS, because an arrow is two independent axes and a single menu of
+     ten would ask the reader to find "dotted line with a cross" in a list
+     rather than set the two facts they are holding. */
+  const [lineStyle, setLineStyle] = useState<SequenceLineStyle>(
+    message.lineStyle,
+  );
+  const [headStyle, setHeadStyle] = useState<SequenceHeadStyle>(
+    message.headStyle,
+  );
   const [technology, setTechnology] = useState(message.technology ?? "");
   const [description, setDescription] = useState(message.description ?? "");
 
@@ -2729,10 +2746,10 @@ function MessageForm({
    *
    * WHY A SELECT COMMITS ON CHANGE AND TEXT WAITS FOR APPLY. This panel had
    * both semantics and no way to tell which was which: the From and To menus
-   * fired `onRepointTo` immediately, while the arrow-kind menu only called
-   * `setKind`. So a reader changed the arrow's style, watched the diagram not
+   * fired `onRepointTo` immediately, while the arrow menu only called its own
+   * setter. So a reader changed the arrow's style, watched the diagram not
    * change, and reported that the style could not be changed at all. It could —
-   * `revisedMessageEdit` writes `~>` and `..>` correctly — but nothing said an
+   * `revisedMessageEdit` writes every token correctly — but nothing said an
    * Apply was owed, and the menu beside it needed none.
    *
    * A select is a decision, complete the moment it is made; a text field is
@@ -2750,7 +2767,8 @@ function MessageForm({
     over: Partial<SequenceMessageRevision>,
   ): SequenceMessageRevision => ({
     label,
-    kind,
+    lineStyle,
+    headStyle,
     technology: orAbsent(technology),
     description: orAbsent(description),
     ...over,
@@ -2837,21 +2855,45 @@ function MessageForm({
           Repoint on the canvas
         </button>
       </div>
-      <DockField term="Kind">
+      {/* THE TWO AXES, one menu each. Both option lists are built from the
+          axis arrays rather than typed out, so a style added to the model
+          appears here without an edit — the alternative is a menu that offers
+          four of five heads, which reads as the fifth being unsupported. */}
+      <DockField term="Line">
         <select
-          value={kind}
+          value={lineStyle}
           onChange={(event) => {
-            const next = event.target.value as SequenceMessageKind;
-            setKind(next);
+            const next = event.target.value as SequenceLineStyle;
+            setLineStyle(next);
             // Acts at once, like the endpoint menus beside it — see
             // `revisionWith` for why a select does and a text field does not.
-            onSubmit(revisionWith({ kind: next }));
+            onSubmit(revisionWith({ lineStyle: next }));
           }}
           className={FIELD_CLASSES}
         >
-          <option value="sync">sync — a call the sender waits on</option>
-          <option value="async">async — fire and forget</option>
-          <option value="reply">reply — a return</option>
+          {SEQUENCE_LINE_STYLES.map((style) => (
+            <option key={style} value={style}>
+              {style} — {SEQUENCE_LINE_STYLE_MEANING[style]}
+            </option>
+          ))}
+        </select>
+      </DockField>
+      <DockField term="Head">
+        <select
+          value={headStyle}
+          onChange={(event) => {
+            const next = event.target.value as SequenceHeadStyle;
+            setHeadStyle(next);
+            // Acts at once — see `revisionWith`.
+            onSubmit(revisionWith({ headStyle: next }));
+          }}
+          className={FIELD_CLASSES}
+        >
+          {SEQUENCE_HEAD_STYLES.map((style) => (
+            <option key={style} value={style}>
+              {style} — {SEQUENCE_HEAD_STYLE_MEANING[style]}
+            </option>
+          ))}
         </select>
       </DockField>
       <DockField term="Technology">

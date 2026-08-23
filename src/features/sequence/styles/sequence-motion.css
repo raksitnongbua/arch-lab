@@ -227,16 +227,26 @@
  * THE GATE is `data-seq-march` on the diagram root (motion.ts's
  * `sequenceMarchState`) rather than a custom property, because switching the
  * march off has to withdraw the DASHARRAY as well as the animation — a stopped
- * march still wearing its pattern would leave a reply's motion frozen mid-slide
- * or, worse, a sync arrow dashed. Off means each kind simply wears its resting
- * appearance: solid for sync and async, 6/5 for replies, the gradient at its
- * base colours, exactly as it was before any idle motion existed.
+ * march still wearing its pattern would leave a dotted line's motion frozen
+ * mid-slide or, worse, a solid one dashed. Off means each line style simply
+ * wears its resting appearance: unbroken for solid, 6/5 for dotted, the
+ * gradient at its base colours, exactly as it was before any idle motion
+ * existed.
+ *
+ * EVERY RULE HERE KEYS ON `data-line`, NOT ON A KIND. The attribute carries
+ * the line style (`solid` / `dotted`) and nothing else, so the two rules below
+ * are exhaustive over the ten arrows by construction. They were written as
+ * `[data-kind="reply"]` and `:not([data-kind="reply"])` while `reply` was the
+ * only dotted arrow; had they stayed that way, the four other dotted arrows
+ * would have marched as though they were solid — a comet riding a dashed line
+ * — and nothing would have reported it, because a CSS selector that matches
+ * the wrong element is not an error.
  */
 
-/* Replies march their dash — the one kind where the dash IS the resting
+/* A DOTTED line marches its dash — the case where the dash IS the resting
  * identity, so moving it adds motion without overwriting meaning. Linear,
  * because a dash that eases would read as slipping. */
-[data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
+[data-seq-march="on"] .af-seq-msg[data-idle][data-line="dotted"] .af-seq-line {
   stroke-dasharray: 6 5;
   animation-name: af-seq-march-dashed;
   animation-duration: var(--seq-march-dashed, 2750ms);
@@ -244,13 +254,11 @@
   animation-iteration-count: infinite;
 }
 
-/* The SOLID kinds get no dash — they stay one unbroken line and a COMET of
- * light travels over them instead. A dash on a solid arrow makes it read as
- * async-or-reply, so marching them overwrote the kind; short bands of light do
- * not touch it. */
-[data-seq-march="on"]
-  .af-seq-msg[data-idle]:not([data-kind="reply"])
-  .af-seq-line {
+/* A SOLID line gets no dash — it stays one unbroken line and a COMET of light
+ * travels over it instead. A dash on a solid arrow makes it read as dotted, so
+ * marching it overwrote the line style; short bands of light do not touch
+ * it. */
+[data-seq-march="on"] .af-seq-msg[data-idle][data-line="solid"] .af-seq-line {
   stroke-dasharray: none;
 }
 
@@ -569,8 +577,11 @@
   font-weight: 600;
 }
 
-/* The head is a filled or stroked triangle depending on kind, so hover has to
- * reach both paint channels to keep an arrowhead in step with its line. */
+/* A head is filled or stroked depending on its style (`SEQUENCE_HEAD_SHAPES`),
+ * so hover has to reach both paint channels to keep a head in step with its
+ * line. Only the stroked one takes a weight: a filled triangle has no stroke
+ * to thicken, and giving it one would grow the silhouette rather than the
+ * outline. */
 .af-seq-msg:has(.af-seq-chrome-hit:hover) .af-seq-head-line {
   stroke-width: 2;
 }
@@ -649,10 +660,10 @@
   }
   /* Idle motion is motion and nothing else, so it goes away entirely rather
      than freezing (same rule as .viewer-edge-drift). But it CANNOT park on
-     "no dash": the dash pattern is per-kind meaning, so each kind is put
-     back on its resting pattern explicitly — solid for sync/async, 6/5 for
-     replies. Withdrawing the dasharray wholesale here would quietly turn
-     every reply into a solid line, which reads as a call rather than a
+     "no dash": the dash pattern is the LINE STYLE's meaning, so each style is
+     put back on its resting pattern explicitly — unbroken for solid, 6/5 for
+     dotted. Withdrawing the dasharray wholesale here would quietly turn every
+     dotted line into a solid one, which reads as a call rather than a
      return. The COMET cannot park at all — three stopped bands are bright
      stripes sitting on every line, not a resting state — so it goes by
      DISPLAY, the same treatment the C4 viewer gives .viewer-edge-drift.
@@ -664,12 +675,12 @@
   [data-seq-march="on"] .af-seq-msg[data-idle] .af-seq-flow {
     display: none;
   }
-  [data-seq-march="on"]
-    .af-seq-msg[data-idle]:not([data-kind="reply"])
-    .af-seq-line {
+  [data-seq-march="on"] .af-seq-msg[data-idle][data-line="solid"] .af-seq-line {
     stroke-dasharray: none;
   }
-  [data-seq-march="on"] .af-seq-msg[data-idle][data-kind="reply"] .af-seq-line {
+  [data-seq-march="on"]
+    .af-seq-msg[data-idle][data-line="dotted"]
+    .af-seq-line {
     stroke-dasharray: 6 5;
   }
 }

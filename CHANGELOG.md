@@ -7,6 +7,50 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Every arrow a sequence diagram can draw — all ten of them.** A sequence
+  message used to be one of three kinds; it is now two independent choices, a
+  line style and a head style, which is the same model Mermaid's arrow table
+  is. The full grid, with the three arrows that already existed spelled exactly
+  as before:
+
+  |            | no head | arrowhead | cross  | open   | both ends |
+  | ---------- | ------- | --------- | ------ | ------ | --------- |
+  | **solid**  | `--`    | `->`      | `x>`   | `~>`   | `<->`     |
+  | **dotted** | `..`    | `..>`     | `..x>` | `..~>` | `<..>`    |
+  - **Grammar.** Seven new tokens. The no-head and both-ends spellings are
+    borrowed verbatim from the C4 grammar, which has written `--`, `..`, `<->`
+    and `<..>` for the same four drawings since 1.0; `x>` is the cross both
+    Mermaid and PlantUML use for a lost message, and `..` is the dotted prefix
+    this grammar already used in `..>`.
+  - **Canvas.** Five head shapes, each drawn distinctly: the filled triangle, its
+    unfilled twin for an open async head, a cross centred on the endpoint for a
+    message that never arrives, a head at each end, and nothing at all for a
+    plain line. They paint through the same theme tokens the line does, so they
+    follow the theme and escalate with the line on focus. A dotted line dashes
+    and a solid one carries the travelling comet — decided by the line style
+    now, so all five dotted arrows dash rather than only the reply.
+  - **Mermaid conversion is lossless in both directions, for all ten.** Import
+    used to collapse eight arrows onto three kinds, discarding both the head
+    shape and solid-versus-dotted; export wrote one canonical arrow per kind.
+    Both now read one table. `<<->>` and `<<-->>` import for the first time —
+    they were handled by neither direction and were not refused by name either,
+    so a diagram using one failed with an error about its source participant.
+  - **Editing.** The details panel has two menus, Line and Head, each acting the
+    moment you pick from it.
+  - **Everywhere else.** `/syntax` and the MCP syntax reference carry the arrow
+    table, generated from the grammar rather than typed out; `validate_sequence`
+    counts messages per axis; the VS Code grammar highlights all ten (`~>` had
+    never been highlit at all); and the bundled Payment capture example uses all
+    five heads where each one says something the others cannot.
+
+  **Not a breaking change for any file you have**, and every existing document
+  round-trips byte-identically — `->`, `~>` and `..>` mean and serialize as
+  exactly what they did. It **is** forward-incompatible in one direction: a
+  document using one of the seven new tokens will be refused, by name and with
+  the full token menu, by any older parser.
+
 ### Fixed
 
 - Changing a sequence message's arrow style now takes effect when you pick it.

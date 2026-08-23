@@ -12,16 +12,33 @@
  * reference — this module is what makes that impossible to ship.
  *
  * Imported by `scripts/syntax-docs-check.mjs` through Node's type stripping:
- * keep the syntax erasable, and keep the imports to pure-data LEAVES. There is
- * exactly one — `@/lib/constants`, for the title cap the notes below quote — and
- * it must stay that way: this module is reached from `mcp/catalog.ts`, whose
- * "no React, no zod, no SDK" promise keeps a protocol server out of the `/mcp`
- * page's bundle. The cap is imported rather than typed out because these notes
- * are what an agent reads through `get_syntax_reference`, and a number that
- * disagreed with the checkers would be worse than no number at all.
+ * keep the syntax erasable, and keep the imports to pure-data LEAVES — this
+ * module is reached from `mcp/catalog.ts`, whose "no React, no zod, no SDK"
+ * promise keeps a protocol server out of the `/mcp` page's bundle. There are
+ * now FOUR, and each is a leaf whose own only dependency is `@/types`:
+ *
+ *   - `@/lib/constants` — the title cap the notes below quote.
+ *   - `@/types` — the arrow grid and the two axis glossaries.
+ *   - `archtext/lib/sequence/keywords` — the `.alab` arrow tokens.
+ *   - `mermaid/lib/sequence-mapping` — the Mermaid arrow spellings.
+ *
+ * The last two are DEEP imports past a feature barrel, which this repo
+ * otherwise avoids, and they are deliberate: reaching either barrel would pull
+ * a parser into the `/mcp` bundle, and the alternative — retyping ten arrow
+ * tokens and ten Mermaid spellings on this page — is the failure mode this
+ * whole module exists to prevent. Everything a number or a token here quotes is
+ * interpolated from the thing that implements it.
  */
 
+import {
+  SEQUENCE_ARROWS_GRID,
+  SEQUENCE_HEAD_STYLE_MEANING,
+  SEQUENCE_LINE_STYLE_MEANING,
+  SEQUENCE_LINE_STYLES,
+} from "@/types/sequence";
 import { MAX_TITLE_LENGTH } from "@/lib/constants";
+import { sequenceArrowToken } from "@/features/archtext/lib/sequence/keywords";
+import { mermaidSequenceArrow } from "@/features/mermaid/lib/sequence-mapping";
 
 /* -------------------------------------------------------------------------- */
 /* Complete examples (shown as code blocks, checked verbatim)                 */
@@ -238,6 +255,10 @@ title "Message kinds"
   api -> api : "Validates the cart"
   api ~> queue : "order.created" [Avro]
   queue ..> api : "ack"
+  api x> queue : "stale.event (dropped)"
+  api <-> queue : "Health handshake"
+  queue ..~> api : "replay.offer"
+  web -- api : "Shares a session cookie"
   note right api : "Retries are idempotent"
   note over api queue : "Both sides are at-least-once"
 `,
@@ -804,6 +825,55 @@ export const EDGE_ARROW_ROWS: readonly EdgeArrowRow[] = [
     example: "web .. db",
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* Sequence arrows                                                             */
+/* -------------------------------------------------------------------------- */
+
+export interface SequenceArrowRow {
+  arrow: string;
+  lineStyle: string;
+  headStyle: string;
+  /**
+   * What the HEAD says, only. The line axis is glossed once in the prose above
+   * the table rather than repeated down a column: composing the two
+   * ("a call outward, both ways at once") produced a phrase that read as
+   * self-contradictory, and the reader already has the line style in the
+   * column beside it.
+   */
+  headMeaning: string;
+  /** The Mermaid arrow this converts to and from, both ways, losslessly. */
+  mermaid: string;
+}
+
+/** The line axis in one line each, for the prose above the arrow table. */
+export const SEQUENCE_LINE_STYLE_ROWS: readonly {
+  lineStyle: string;
+  meaning: string;
+}[] = SEQUENCE_LINE_STYLES.map((lineStyle) => ({
+  lineStyle,
+  meaning: SEQUENCE_LINE_STYLE_MEANING[lineStyle],
+}));
+
+/**
+ * The sequence grammar's ten arrows, DERIVED from the grid rather than typed
+ * out. A table of ten hand-written rows is a table that shows nine after the
+ * next axis value is added, and this page is where an author comes to find out
+ * what the format can spell — an incomplete answer here reads as an
+ * unsupported feature.
+ *
+ * `check:syntax-docs` parses every example on the page through the real
+ * parser, which is what keeps the derived spelling honest: a token that stopped
+ * parsing would fail the build rather than render as a suggestion.
+ */
+export const SEQUENCE_ARROW_ROWS: readonly SequenceArrowRow[] =
+  SEQUENCE_ARROWS_GRID.map((arrow) => ({
+    arrow: sequenceArrowToken(arrow),
+    lineStyle: arrow.lineStyle,
+    headStyle: arrow.headStyle,
+    headMeaning: SEQUENCE_HEAD_STYLE_MEANING[arrow.headStyle],
+    mermaid: mermaidSequenceArrow(arrow),
+  }));
 
 export interface EdgeAttrRow {
   attr: string;

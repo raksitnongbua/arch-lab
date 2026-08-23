@@ -50,6 +50,7 @@ import { useIconStyle } from "@/lib/icon-style";
 import { tagFillCss } from "@/features/editor/lib/node-colors";
 import { cn } from "@/lib/utils";
 import { TINT_WASH_OPACITY } from "@/lib/tint";
+import { sequenceArrowPhrase } from "@/types";
 
 import type {
   LaidFragment,
@@ -58,6 +59,11 @@ import type {
   SequenceLayout,
 } from "../lib/layout";
 import { estimateTextWidth, SEQ } from "../lib/layout";
+import type { SequenceHeadEnd } from "../lib/arrow-heads";
+import {
+  SEQUENCE_HEAD_LINE_INSET,
+  SEQUENCE_HEAD_SHAPES,
+} from "../lib/arrow-heads";
 import { CANVAS_DRAG_THRESHOLD } from "../lib/reorder";
 
 /**
@@ -1673,19 +1679,31 @@ function Message({
   /** Non-null when this arrow can be dragged to another row. */
   drag: DragSurface | null;
 }): React.JSX.Element {
-  const { y, fromX, toX, kind, self } = message;
+  const { y, fromX, toX, lineStyle, headStyle, self } = message;
   const dir = toX >= fromX ? 1 : -1;
 
-  const linePath = self
-    ? `M ${fromX} ${y} h ${SEQ.selfLoopWidth} v ${SEQ.selfLoopHeight} H ${fromX + 7}`
-    : `M ${fromX} ${y} L ${toX} ${y}`;
+  /* Head geometry. A self-message's head points LEFT, back at the lifeline,
+     and its SOURCE end is where the loop leaves, pointing the other way —
+     which is what makes a bidirectional self-message draw two heads facing
+     each other across the loop rather than two facing the same way. */
+  const target: SequenceHeadEnd = self
+    ? { x: fromX + 7, y: y + SEQ.selfLoopHeight, direction: -1 }
+    : { x: toX, y, direction: dir };
+  const source: SequenceHeadEnd = self
+    ? { x: fromX, y, direction: 1 }
+    : { x: fromX, y, direction: dir === 1 ? -1 : 1 };
+  const head = SEQUENCE_HEAD_SHAPES[headStyle](target, source);
 
-  // Head geometry. A self-message's head points LEFT, back at the lifeline.
-  const headX = self ? fromX + 7 : toX;
-  const headY = self ? y + SEQ.selfLoopHeight : y;
-  const headDir = self ? -1 : dir;
-  const filledHead = `M ${headX} ${headY} l ${-9 * headDir} -4.5 v 9 Z`;
-  const openHead = `M ${headX - 9 * headDir} ${headY - 4.5} L ${headX} ${headY} L ${headX - 9 * headDir} ${headY + 4.5}`;
+  /* The line stops short only where the head sits ON the endpoint rather than
+     behind it — today only the cross (see `SEQUENCE_HEAD_LINE_INSET`). */
+  const inset = SEQUENCE_HEAD_LINE_INSET[headStyle];
+  const lineEndX = self
+    ? target.x - inset.target * target.direction
+    : toX - inset.target * dir;
+
+  const linePath = self
+    ? `M ${fromX} ${y} h ${SEQ.selfLoopWidth} v ${SEQ.selfLoopHeight} H ${lineEndX}`
+    : `M ${fromX} ${y} L ${lineEndX} ${y}`;
 
   const midX = (fromX + toX) / 2;
   const labelX = self ? fromX + SEQ.selfLoopWidth + 10 : midX;
@@ -1721,7 +1739,7 @@ function Message({
      and a control whose name is a paragraph is unusable to navigate by. The
      name says the detail exists and where it appears; the dock reads it. */
   const ariaLabel =
-    `Step ${message.step}: ${message.from} to ${message.to}, ${kind}${self ? ", self-message" : ""} — ${message.label}` +
+    `Step ${message.step}: ${message.from} to ${message.to}, ${sequenceArrowPhrase(message)}${self ? ", self-message" : ""} — ${message.label}` +
     (message.description !== undefined ? ". Has details" : "");
 
   /**
@@ -1751,10 +1769,12 @@ function Message({
       opacity={drag?.active === true ? 0.35 : undefined}
       data-focused={focused || undefined}
       data-animate={animateRank !== null ? animateToken : undefined}
-      // The kind picks which dash pattern marches (the stylesheet's march
-      // block); replies keep the 6/5 they already wear, the solid kinds get a
-      // long dash and a small gap.
-      data-kind={kind}
+      // The LINE STYLE picks which dash pattern marches (the stylesheet's
+      // march block): a dotted line keeps the 6/5 it already wears, a solid
+      // one gets a long dash and a small gap. The head is not in an attribute
+      // at all — it is geometry, and the stylesheet has nothing to say about
+      // it beyond the two paint classes.
+      data-line={lineStyle}
       // The step number, for consumers outside React that need to address one
       // message: the GIF export reveals messages in order and has only the DOM
       // to work from (export/frames.ts).
@@ -1815,9 +1835,13 @@ function Message({
         </defs>
       ) : null}
 
-      {kind === "reply" ? (
-        /* Replies FADE (dashed from frame one) — see sequence-motion.css for
-           why they cannot share the dashoffset draw. */
+      {lineStyle === "dotted" ? (
+        /* A DOTTED line FADES in (it is dashed from frame one) — see
+           sequence-motion.css for why it cannot share the dashoffset draw.
+           The test is the LINE STYLE, not "is this a reply": a dotted line
+           with an open or a cross head has the same reason it cannot be drawn
+           by animating a dashoffset, and asking about a kind name is how
+           four of the five dotted arrows would have drawn solid. */
         <path
           className="af-seq-line af-seq-fade-in"
           d={linePath}
@@ -1872,7 +1896,7 @@ function Message({
           faint smudge rather than a band riding the line. It looked like the
           animation was broken, and it was. C4 paints its flow layers over the
           base for the same reason. */}
-      {idle && kind !== "reply" && paintId !== null ? (
+      {idle && lineStyle === "solid" && paintId !== null ? (
         <g className="af-seq-flow" aria-hidden="true">
           <path
             className="af-seq-flow-band af-seq-flow-glow"
@@ -1892,11 +1916,24 @@ function Message({
         </g>
       ) : null}
 
-      {kind === "sync" ? (
-        <path className="af-seq-head af-seq-head-fill" d={filledHead} />
-      ) : (
-        <path className="af-seq-head af-seq-head-line" d={openHead} />
-      )}
+      {/* THE HEAD, from the shared shape table — one or two paths depending
+          on the style, and NONE at all for a headless line. Filled and
+          stroked paths carry different classes because they paint through
+          different SVG channels; both resolve to --edge and both escalate to
+          --primary with the rest of the message, so no theme has a per-head
+          colour to complete. `check:sequence-layout` asserts the emitted set
+          is distinct per style, derived from the head union. */}
+      {head.filled.map((d, at) => (
+        <path key={`f${at}`} className="af-seq-head af-seq-head-fill" d={d} />
+      ))}
+      {head.stroked.map((d, at) => (
+        <path
+          key={`s${at}`}
+          className="af-seq-head af-seq-head-line"
+          d={d}
+          fill="none"
+        />
+      ))}
 
       <text
         className="af-seq-label af-seq-fade-in"

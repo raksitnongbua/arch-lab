@@ -1179,7 +1179,8 @@ console.log("\nEvery notation that cannot carry geometry says so");
         () =>
           revisedMessageEdit(parsed.value, "", [0], {
             label: "x",
-            kind: "sync",
+            lineStyle: "solid",
+            headStyle: "arrow",
           }),
       ],
       [
