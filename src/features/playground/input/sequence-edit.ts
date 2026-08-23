@@ -20,10 +20,15 @@
  *
  *   1. THERE IS NO GEOMETRY TO EDIT. `src/types/sequence.ts` has no position
  *      field at all — a participant's column is its index in `participants`
- *      and a message's time is its index in `items`. So the gestures are not
- *      "move" and "delete" but "revise" (rewrite one element's own wording)
- *      and "insert" (add one message). `canvasEditability(doc, "revise")`
- *      answers for these; the same function defaulting to `"move"` still
+ *      and a message's time is its index in `items`. So the gesture set is not
+ *      "move" and "delete" but: REVISE (rewrite one element's own wording),
+ *      REPOINT (send a message between two other lifelines), INSERT (a message
+ *      or a participant) and REMOVE (a message or a participant).
+ *      `canvasEditability(doc, "revise")` answers for all six — deliberately
+ *      one ability rather than one per gesture, because they gate on the same
+ *      two facts (an `.alab` sequence pane, and the canvas unlocked) and a
+ *      second ability would be a second thing for `check:canvas-edit` to
+ *      derive the lock from. The same function defaulting to `"move"` still
  *      refuses every sequence document, which is correct and unchanged.
  *   2. AN ELEMENT IS ADDRESSED BY PATH, NOT BY ID. Items have no ids; position
  *      is identity (`SequenceItemPath`). Turning what the reader clicked into
@@ -40,13 +45,24 @@
  *      instead — every edit here reports `path: "patch"` or returns `null`,
  *      and `check:sequence` pins that there is no third outcome.
  *
- * FOUR HAZARDS THE INSERT MUST NOT MAKE WORSE, all of them pre-existing and
- * none of them this gesture's to fix. Activation `+`/`-` is unpaired and
+ * FOUR HAZARDS NO GESTURE HERE MAY MAKE WORSE, all of them pre-existing and
+ * none of them any one gesture's to fix. Activation `+`/`-` is unpaired and
  * unvalidated; `autonumber` renumbers positionally; a note attaches by text
  * position rather than by id; and `updated`, `:participant` and
- * `autonumber false` are omitted at their defaults. Every one of them is safe
- * for the same single reason: an insert adds EXACTLY ONE LINE and renormalises
- * nothing. A whole-document re-emit would have disturbed all four.
+ * `autonumber false` are omitted at their defaults.
+ *
+ * The INSERTS are safe for one reason: each adds EXACTLY ONE LINE and
+ * renormalises nothing. A whole-document re-emit would have disturbed all four.
+ *
+ * The REMOVALS are the ones that had to answer for themselves, because taking
+ * a line out is not symmetrical with putting one in — the document left behind
+ * can be one the parser refuses, or one that draws something the reader did not
+ * ask for a screen away from where they pressed. Each verdict is written at the
+ * gesture, and they are: activation refuses (`activationRefusal`), a referenced
+ * participant refuses with a count (`participantRemovalRefusal`), a neighbouring
+ * note is carried rather than eaten, an emptied fragment branch is left empty
+ * because the grammar permits one, and renumbering is correct behaviour rather
+ * than damage. None of those is a guess; `check:sequence` measures each.
  */
 
 import type {
@@ -112,6 +128,43 @@ export const INSERTED_MESSAGE_LABEL = "New message";
 
 /** The kind a two-click insert gives its new message: the ordinary call. */
 export const INSERTED_MESSAGE_KIND: SequenceMessageKind = "sync";
+
+/**
+ * The display name a new participant is created with, on the same reasoning as
+ * `INSERTED_MESSAGE_LABEL`: a placeholder you can see you have to change beats
+ * an empty lifeline header the reader cannot tell from a rendering fault. The
+ * model requires a non-empty name anyway (`emitParticipant` refuses `""`), so
+ * there is no "unnamed" option to choose instead.
+ */
+export const INSERTED_PARTICIPANT_NAME = "New participant";
+
+/**
+ * The id stem a new participant gets. An id is a TOKEN in the grammar and the
+ * name every message refers to, so it is deliberately not derived from the
+ * display name — a name is prose ("New participant" has a space in it) and
+ * deriving one from the other would put a slugifier on the path of every
+ * insert.
+ */
+export const INSERTED_PARTICIPANT_ID = "NewParticipant";
+
+/**
+ * `INSERTED_PARTICIPANT_ID`, suffixed until nothing already holds it.
+ *
+ * A COLLISION IS NOT HYPOTHETICAL — pressing the button twice reaches it — and
+ * a duplicate id is not a soft failure: the second declaration would silently
+ * become a second lifeline the parser cannot tell from the first, or be refused
+ * outright. Counting from 2 so the first one is unsuffixed, which is what the
+ * reader sees in the common case.
+ */
+function freshParticipantId(
+  participants: readonly SequenceParticipant[],
+): string {
+  const taken = new Set(participants.map((p) => p.id));
+  if (!taken.has(INSERTED_PARTICIPANT_ID)) return INSERTED_PARTICIPANT_ID;
+  let suffix = 2;
+  while (taken.has(`${INSERTED_PARTICIPANT_ID}${suffix}`)) suffix += 1;
+  return `${INSERTED_PARTICIPANT_ID}${suffix}`;
+}
 
 /* The two revision shapes live in `@/types` beside the model they are a subset
    of, not here beside the gesture that applies them: the sequence VIEWER
@@ -274,6 +327,326 @@ export function insertedMessageEdit(
       { span: { start: placed.afterLine + 1, end: placed.afterLine }, lines },
     ]),
   );
+}
+
+/**
+ * `doc` with one message's ENDPOINTS rewritten, or `null` when the edit cannot
+ * apply.
+ *
+ * The gesture `SequenceMessageRevision` says is "a different gesture" — this
+ * one. It is separate from `revisedMessageEdit` rather than four more fields on
+ * it because an endpoint is POINTED AT on the canvas, not typed into a form:
+ * the caller arms the same two-click lifeline picker an insert uses, so the
+ * reader names a lifeline by clicking the lifeline.
+ *
+ * A WHOLE-BLOCK REWRITE, like both revise gestures and for the same reason —
+ * `from` and `to` live on the declaration line, but the block is the unit
+ * `canonicalMessageBlock` deals in, and splitting the rule "declaration line
+ * only for endpoints, whole block for wording" across two gestures would be
+ * two answers to one question. The block's `desc` and `!` lines come back
+ * byte-identical, so the wider unit costs nothing here.
+ *
+ * REFUSES A MESSAGE CARRYING AN ACTIVATION FLAG; `activationRefusal` argues
+ * why, and it is the same reason a delete refuses one.
+ */
+export function repointedMessageEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  path: SequenceItemPath,
+  from: string,
+  to: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
+    return null;
+  }
+  const current = sequenceItemAt(doc.file.items, path);
+  if (current === undefined || current.step !== "message") return null;
+  // Same guard, same sentence, as the insert's: an endpoint that is not a
+  // declared participant makes a document the parser refuses.
+  const byId = new Set(doc.file.participants.map((p) => p.id));
+  if (!byId.has(from) || !byId.has(to)) return null;
+  if (activationRefusal(doc, path) !== null) return null;
+
+  const edited = replaceItem(doc.file, path, { ...current, from, to });
+  /* `patchBlock` refuses an edit that changes no bytes, so repointing a
+     message to the endpoints it already had costs no undo entry — the same
+     contract a form submitted unchanged gets. */
+  return patchBlock(doc, sourceText, edited, (spans, pad) => ({
+    span: spans.items.get(sequenceItemKey(path)),
+    lines: canonicalMessageBlock(edited, path, pad),
+  }));
+}
+
+/**
+ * `doc` with one message REMOVED — its declaration line and every continuation
+ * line it owns — or `null` when the edit cannot apply.
+ *
+ * EXACTLY ITS OWN BLOCK AND NOTHING ELSE. The span the parser recorded reaches
+ * to the message's last continuation line (`endLine`, and `parse.ts` says why
+ * it exists), so removing the range removes the `desc` and the `!` escapes with
+ * it. Removing only the declaration line would leave an orphan `desc` at
+ * indent + 2 with nothing above it to attach to.
+ *
+ * THREE THINGS THIS DELIBERATELY DOES NOT DO, each of them a hazard named in
+ * this file's header:
+ *
+ *   - A NOTE BESIDE THE DELETED MESSAGE IS CARRIED, not deleted with it and not
+ *     a reason to refuse. A note is a sibling item with its own span (it is not
+ *     attached to a message by any id — `parse.ts`), so it stays valid, stays
+ *     on screen and re-anchors to whatever now precedes it. Deleting it too
+ *     would be eating the author's prose because it sat next to the thing they
+ *     pointed at, which is the whole failure this module exists to prevent;
+ *     refusing over it would make most annotated documents undeletable. The
+ *     cost is honest and visible: a note may end up describing a step that is
+ *     gone, in front of a reader who can see it and say so.
+ *   - AN EMPTY FRAGMENT BRANCH IS LEFT EMPTY. Deleting the only message inside
+ *     an `alt` lane leaves the lane with no items, which the grammar permits
+ *     outright (`SequenceBranch.items` — "may be empty"), so there is nothing
+ *     to guard. Measured in `check:sequence`, not assumed.
+ *   - AUTONUMBER RENUMBERS. Every later step's number drops by one, which is
+ *     what positional numbering means and is the correct answer rather than a
+ *     bug to work around.
+ */
+export function deletedMessageEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  path: SequenceItemPath,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
+    return null;
+  }
+  const current = sequenceItemAt(doc.file.items, path);
+  if (current === undefined || current.step !== "message") return null;
+  if (activationRefusal(doc, path) !== null) return null;
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable === null) return null;
+  const span = patchable.spans.items.get(sequenceItemKey(path));
+  if (span === undefined) return null;
+
+  /* No `edited` model is built, unlike `deletedNodeEdit` on the C4 side. That
+     one needs one because a `^ref` elsewhere has to be REWRITTEN from the
+     post-delete model; nothing here refers to a message, so the text patch is
+     the whole edit and `adopt`'s re-parse is the only reading of it. */
+  return adopt(doc, applyPatches(sourceText, [{ span, lines: [] }]));
+}
+
+/**
+ * `doc` with one participant REMOVED — its declaration line and continuations —
+ * or `null` when the edit cannot apply, which includes every case
+ * `participantRemovalRefusal` names.
+ *
+ * REFUSED, NEVER CASCADED, and this is the one place the sequence canvas
+ * deliberately parts company with its C4 sibling. `deletedNodeEdit` takes the
+ * edges with the node, and that is right there: an edge is one line, it is
+ * drawn touching the node, and a reader deleting a box can see what goes with
+ * it. A lifeline's messages are not like that — they are spread down the whole
+ * flow, most of them off screen from the header card the reader pressed, and
+ * taking them would silently delete steps in fragments they never opened and
+ * renumber everything after each one. So this refuses, and says how many
+ * messages are in the way. The composition is the point: the reader can now
+ * delete those messages on the canvas one at a time, watching each one go, and
+ * then delete the lifeline.
+ */
+export function deletedParticipantEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  participantId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
+    return null;
+  }
+  /* THIS GUARD IS NOT WHAT KEEPS THE DOCUMENT VALID — `adopt`'s re-parse
+     already does, and removing this line was tried: every removal still
+     refused, because the text it produces does not parse. What the guard buys
+     is the REASON. Without it the caller gets a bare `null`, which it reports
+     as "the pane and the diagram do not match yet" — a sentence that is false
+     and sends the reader to wait for a parse that already happened. The
+     predicate is the same one the dock reads, so the refusal the reader hears
+     and the refusal that happens are one answer. */
+  if (participantRemovalRefusal(doc, participantId) !== null) return null;
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable === null) return null;
+  const span = patchable.spans.participants.get(participantId);
+  if (span === undefined) return null;
+
+  return adopt(doc, applyPatches(sourceText, [{ span, lines: [] }]));
+}
+
+/**
+ * `doc` with one participant ADDED at the end of the lifeline order, or `null`
+ * when the edit cannot apply.
+ *
+ * EXACTLY ONE LINE, for the same reason the message insert is one line: the new
+ * participant carries no `desc`, no `[technology]` and no explicit kind, so its
+ * canonical block is one line by construction rather than by a rule this
+ * function has to remember. The caller opens the dock on it, so naming it is
+ * the next keystroke.
+ *
+ * WHY IT ALWAYS LANDS AT THE ROOT BODY INDENT, never at the last
+ * participant's own. A participant nested in a `box` sits two spaces deeper,
+ * and copying that indent would put the new lifeline INSIDE the box — a
+ * bracket the reader never asked to widen. Writing at the root indent directly
+ * after the last participant closes the box by dedent and leaves its run
+ * contiguous, which is the rule `serialize.ts` refuses a document for
+ * breaking. (`check:sequence` proves both halves: the line lands outside the
+ * box, and the box still round-trips.)
+ *
+ * WHY THERE IS AN ANCHOR FALLBACK. A document with a title and a bare
+ * `@sequence` parses to zero participants, so there is no span to sit after —
+ * and that empty document is exactly where "add a lifeline" is most wanted.
+ * `spans.bodyLine` is the `@sequence` opener, added to `SequenceSpans` for
+ * this gesture under the licence its own comment gives.
+ */
+export function insertedParticipantEdit(
+  doc: ViewDocument,
+  sourceText: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
+    return null;
+  }
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable === null) return null;
+
+  const id = freshParticipantId(doc.file.participants);
+  const edited: SequenceLabFile = {
+    ...doc.file,
+    participants: [
+      ...doc.file.participants,
+      { id, name: INSERTED_PARTICIPANT_NAME },
+    ],
+  };
+  const lines = canonicalParticipantBlock(edited, id, ROOT_ITEM_INDENT);
+  if (lines === null || lines.length !== 1) return null;
+
+  /* AFTER THE LAST PARTICIPANT THE PARSER SAW — derived from the span map, so
+     it cannot disagree with the parse, and never after the last LINE of the
+     section (a trailing comment there is the author's and belongs where they
+     put it). A participant declaration may legally precede `autonumber`, so
+     the line straight after the opener is a legal home in the empty case. */
+  const ends = [...patchable.spans.participants.values()].map((s) => s.end);
+  const afterLine =
+    ends.length === 0 ? patchable.spans.bodyLine : Math.max(...ends);
+
+  return adopt(
+    doc,
+    applyPatches(sourceText, [
+      { span: { start: afterLine + 1, end: afterLine }, lines },
+    ]),
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Refusals, said rather than swallowed                                        */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * These two are the sequence canvas's `ownsChildDiagram`: a refusal the UI can
+ * READ OUT, so a destructive control that declines explains itself instead of
+ * looking like a dead key. Both are pure and both are the same predicate the
+ * gestures above guard with — one answer to "can this happen", not a check in
+ * the module and a different one in the dock.
+ */
+
+/**
+ * Why the message at `path` cannot be deleted or repointed, or `null` when it
+ * can.
+ *
+ * ONE REASON: it carries an activation flag. `+`/`-` on a message is half of an
+ * open/close pairing the parser neither pairs nor validates, so removing or
+ * moving one end changes a BAR SEVERAL ROWS AWAY from the arrow the reader
+ * pressed — and the layout does not complain, which is what makes it bad. It
+ * was measured rather than assumed: an unmatched close is silently dropped and
+ * an unmatched open runs to the bottom of the lifeline. Either way the reader
+ * presses one thing and something else moves, off screen.
+ *
+ * So the flag has to come off in the source pane first, where every `+` and `-`
+ * in the file is visible at once. That is the same verdict
+ * `SequenceMessageRevision` reached for not offering an activation checkbox,
+ * and it is deliberately a refusal rather than a rebalance: rebalancing would
+ * mean this module deciding which `-` closes which `+`, a pairing the format
+ * does not define, and a second authority on it is exactly the "two halves that
+ * disagree" failure `codebase.md` names.
+ */
+export function activationRefusal(
+  doc: ViewDocument,
+  path: SequenceItemPath,
+): string | null {
+  if (doc.kind !== "sequence") return null;
+  const item = sequenceItemAt(doc.file.items, path);
+  if (item === undefined || item.step !== "message") return null;
+  const flags = [
+    item.activate === true ? "+" : null,
+    item.deactivate === true ? "-" : null,
+  ].filter((flag) => flag !== null);
+  if (flags.length === 0) return null;
+  return `This message carries an activation flag (${flags.join(" and ")}), which opens or closes a bar on another row. Remove it in the source text first, then delete or repoint the message.`;
+}
+
+/**
+ * Why `participantId` cannot be removed, or `null` when it can. Three ways a
+ * removal makes a document the PARSER REFUSES, all three measured:
+ *
+ *   - a message names it as source or target ("does not resolve to a
+ *     participant");
+ *   - a note names it (the same refusal, from the note's own check);
+ *   - it is the only member of a `box`, which then "holds no participants".
+ *
+ * The counts are in the sentence because "cannot delete" without a number is a
+ * dead control: a reader told "4 messages still use it" knows what to do next,
+ * and knows when they are done.
+ */
+export function participantRemovalRefusal(
+  doc: ViewDocument,
+  participantId: string,
+): string | null {
+  if (doc.kind !== "sequence") return null;
+  const participant = doc.file.participants.find((p) => p.id === participantId);
+  if (participant === undefined) {
+    return `There is no lifeline called ${participantId} to remove.`;
+  }
+
+  const referrers = { messages: 0, notes: 0 };
+  const walk = (items: readonly SequenceLabFile["items"][number][]): void => {
+    for (const item of items) {
+      if (item.step === "message") {
+        if (item.from === participantId || item.to === participantId) {
+          referrers.messages += 1;
+        }
+      } else if (item.step === "note") {
+        if (item.participants.includes(participantId)) referrers.notes += 1;
+      } else {
+        for (const branch of item.branches) walk(branch.items);
+      }
+    }
+  };
+  walk(doc.file.items);
+
+  if (referrers.messages > 0 || referrers.notes > 0) {
+    const parts = [
+      referrers.messages > 0
+        ? `${referrers.messages} message${referrers.messages === 1 ? "" : "s"}`
+        : null,
+      referrers.notes > 0
+        ? `${referrers.notes} note${referrers.notes === 1 ? "" : "s"}`
+        : null,
+    ].filter((part) => part !== null);
+    return `${participant.name} still has ${parts.join(" and ")} pointing at it. Delete those first — the lifeline goes when nothing refers to it.`;
+  }
+
+  /* The box guard is LAST because it is the rarest and the least obvious: a
+     one-member box is a bracket around a single lifeline, and taking the
+     lifeline out leaves a bracket around nothing, which the grammar cannot
+     spell and the parser refuses outright. */
+  const soleBox = (doc.file.boxes ?? []).find(
+    (box) =>
+      box.participants.length === 1 && box.participants[0] === participantId,
+  );
+  if (soleBox !== undefined) {
+    return `${participant.name} is the only lifeline in the “${soleBox.label}” box, and a box cannot be empty. Remove the box in the source text first.`;
+  }
+  return null;
 }
 
 /** Where a new message goes — in the model, and in the text. */

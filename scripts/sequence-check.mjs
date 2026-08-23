@@ -118,7 +118,14 @@ const { parseViewSource, VIEW_SEED_TEXT } = await import(
 );
 const {
   INSERTED_MESSAGE_LABEL,
+  INSERTED_PARTICIPANT_NAME,
+  activationRefusal,
+  deletedMessageEdit,
+  deletedParticipantEdit,
   insertedMessageEdit,
+  insertedParticipantEdit,
+  participantRemovalRefusal,
+  repointedMessageEdit,
   revisedMessageEdit,
   revisedParticipantEdit,
 } = await import(
@@ -1686,8 +1693,135 @@ console.log(
     return out;
   };
 
+  /** Notes anywhere in the tree — the count a delete must not change. */
+  const countNotes = (items) =>
+    items.reduce(
+      (total, item) =>
+        item.step === "note"
+          ? total + 1
+          : item.step === "fragment"
+            ? total + item.branches.reduce((n, b) => n + countNotes(b.items), 0)
+            : total,
+      0,
+    );
+
+  /** How many messages and notes name `id` — the numbers a refusal quotes. */
+  const countReferences = (items, id) =>
+    items.reduce(
+      (total, item) => {
+        if (item.step === "message") {
+          return item.from === id || item.to === id
+            ? { messages: total.messages + 1, notes: total.notes }
+            : total;
+        }
+        if (item.step === "note") {
+          return item.participants.includes(id)
+            ? { messages: total.messages, notes: total.notes + 1 }
+            : total;
+        }
+        return item.branches.reduce((running, b) => {
+          const inner = countReferences(b.items, id);
+          return {
+            messages: running.messages + inner.messages,
+            notes: running.notes + inner.notes,
+          };
+        }, total);
+      },
+      { messages: 0, notes: 0 },
+    );
+
+  const spansOf = (text) => parseSequenceTextWithSpans(text).spans;
+
   const withDesc = paths.find(
     (p) => sequenceItemAt(file.items, p).description !== undefined,
+  );
+
+  /* TWO SUBJECTS THE STALE-PANE LOOP AT THE END OF THIS SECTION NEEDS, hoisted
+     here because getting them wrong is the specific way that loop passes for
+     the wrong reason. It asserts "refused because the pane disagrees with the
+     canvas" — but a message carrying `+` is refused by the ACTIVATION guard and
+     a referenced lifeline by the REFERENCE guard, whichever pane it is handed.
+     Both would have gone green while the staleness check they exist to prove
+     was missing entirely. So the loop is given a message with no activation
+     flag, and a document with a lifeline nothing points at. */
+  const deletableMsg = paths.find((p) => {
+    const m = sequenceItemAt(file.items, p);
+    return m.activate === undefined && m.deactivate === undefined;
+  });
+  /* NULL-TOLERANT ON PURPOSE. These feed a dozen assertions below, and when
+     the gesture under test breaks they go null — at which point a bare
+     `withSpare.text` throws and takes the whole script down with a stack
+     trace, hiding every assertion after it. A crash is technically a failure,
+     but it is a failure that reports the wrong thing: this is how a broken
+     insert once looked like a broken check. So the shape is preserved and one
+     assertion says which half is missing. */
+  const withSpare = insertedParticipantEdit(doc.value, authored);
+  const spareDoc =
+    withSpare === null
+      ? { status: "skipped" }
+      : parseViewSource(withSpare.text);
+  const spareId =
+    spareDoc.status === "ok"
+      ? spareDoc.value.file.participants.at(-1).id
+      : null;
+  check(
+    "the stale-pane loop has a message and a lifeline that nothing else refuses",
+    deletableMsg !== undefined &&
+      spareId !== null &&
+      activationRefusal(doc.value, deletableMsg) === null &&
+      participantRemovalRefusal(spareDoc.value, spareId) === null,
+    `deletableMsg ${JSON.stringify(deletableMsg)}, spare ${JSON.stringify(spareId)} — the staleness assertions below would otherwise pass on another guard's refusal`,
+  );
+  /* Stand-ins so a missing fixture costs one ✗ above rather than a stack trace
+     here. They are deliberately the UNMODIFIED document, which makes every
+     assertion that depends on the spare lifeline fail rather than skip. */
+  const spareText = withSpare === null ? authored : withSpare.text;
+  const spareValue = spareDoc.status === "ok" ? spareDoc.value : doc.value;
+
+  /* A SECOND NON-CANONICAL FIXTURE, and the reason it exists is worth stating
+     because it is the same trap as the one above. The repoint and delete
+     assertions need a message that owns CONTINUATION LINES — that is the only
+     way to show the block is the patch unit and that a `desc` comes back
+     byte-identical — and that does NOT carry an activation flag, or the guard
+     refuses it and every assertion below reads "refused" as "correct".
+     Measured: no message in the seed is both. So this one is built.
+
+     Non-canonical in the same three ways the seed fixture is (a `//` comment, a
+     blank line the parser drops, `updated` and `:participant` written out at
+     values canonical form omits), because that is what makes a re-emit visible.
+     It also carries a NOTE directly after the message under test, which is what
+     the "a note is carried, not eaten" assertion needs. */
+  const BLOCKY = [
+    "archlab 1.0 sequence",
+    "updated 2026-08-01T00:00:00.000Z",
+    'title "Blocky"',
+    "",
+    "@sequence",
+    "  // Reviewed 2026-08-01 — do not reorder these lines.",
+    "",
+    '  cust:actor "Customer"',
+    '  web:participant "Storefront"',
+    '  api "Order API"',
+    "",
+    '  cust -> web : "Clicks buy" [HTTPS]',
+    '    desc "POST /cart\\nreturns 200"',
+    "    ! x-trace after label : true",
+    '  note right web : "explains the click"',
+    '  web -> api : "Place the order"',
+    "",
+  ].join("\n");
+  const blockyDoc = parseViewSource(BLOCKY);
+  const blockySpans = spansOf(BLOCKY);
+  const blockyTarget = [0];
+  check(
+    "the block fixture parses, is non-canonical, and its first message owns a 3-line block",
+    blockyDoc.status === "ok" &&
+      serializeSequenceText(parseSequenceText(BLOCKY)) !== BLOCKY &&
+      blockySpans.items.get(sequenceItemKey(blockyTarget)).end -
+        blockySpans.items.get(sequenceItemKey(blockyTarget)).start ===
+        2 &&
+      activationRefusal(blockyDoc.value, blockyTarget) === null,
+    `status ${blockyDoc.status}`,
   );
   const before = sequenceItemAt(file.items, withDesc);
   const revision = {
@@ -2022,6 +2156,615 @@ console.log(
     "an undeclared endpoint was accepted",
   );
 
+  /* ---- repoint: the endpoints move and nothing else does ------------------- */
+
+  /* A REPOINT IS THE ONE GESTURE WHOSE WHOLE JOB IS ON THE DECLARATION LINE
+     while its patch unit is the BLOCK, so it is the one that can quietly
+     rewrite a `desc` or reorder a `!` escape and still look right on the
+     canvas. Every assertion here is about the bytes it did NOT touch. */
+  {
+    const target = blockyTarget; // owns a desc and a `!` escape below it
+    const source = BLOCKY;
+    const at = blockyDoc.value;
+    const message = sequenceItemAt(at.file.items, target);
+    const elsewhere = at.file.participants.find(
+      (p) => p.id !== message.from && p.id !== message.to,
+    );
+    check(
+      "the repoint fixture has a third lifeline to move the arrow to",
+      elsewhere !== undefined,
+      "the fixture has too few participants for this to prove anything",
+    );
+
+    const moved = repointedMessageEdit(
+      at,
+      source,
+      target,
+      message.from,
+      elsewhere.id,
+    );
+    check(
+      "a repoint reports the patch path, never a re-emit",
+      moved !== null && moved.path === "patch",
+      `got ${JSON.stringify(moved && moved.path)}`,
+    );
+    check(
+      "the author's comment and blank line survive a repoint",
+      moved !== null &&
+        moved.text.includes("// Reviewed 2026-08-01") &&
+        moved.text.split("\n")[6] === "",
+      "the comment or the author's blank line was eaten",
+    );
+    check(
+      "a field written out that canonical form omits survives a repoint",
+      moved !== null &&
+        moved.text.includes("updated 2026-08-01T00:00:00.000Z") &&
+        moved.text.includes(":participant"),
+      "a re-emit normalised the author's explicit defaults away",
+    );
+
+    /* THE DECLARATION LINE AND NOTHING ELSE. The block is the patch unit, so
+       the `desc` and `!` lines inside it are REWRITTEN — byte-identically,
+       which is the whole claim. If they ever stop being byte-identical this is
+       the assertion that says so, because the canvas would look right either
+       way. */
+    const movedSpan = blockySpans.items.get(sequenceItemKey(target));
+    check(
+      "a repoint changes exactly one line — the declaration, not the block's desc",
+      moved !== null &&
+        changedLines(source, moved.text).length === 1 &&
+        changedLines(source, moved.text)[0] === movedSpan.start,
+      `changed ${JSON.stringify(moved && changedLines(source, moved.text))}, span starts at ${movedSpan.start}`,
+    );
+
+    /* DERIVED FROM THE SERIALIZER, never a hand-written expected string: a
+       patch that writes almost-canonical text trades a silent loss for a worse
+       one, and only the serializer knows what canonical is. */
+    const movedDoc = parseViewSource(moved.text);
+    check(
+      "the repointed document re-parses as an .alab sequence document",
+      movedDoc.status === "ok" && movedDoc.value.format === "alab",
+      `status: ${movedDoc.status}`,
+    );
+    const movedPad = /^ */.exec(source.split("\n")[movedSpan.start - 1])[0];
+    check(
+      "the repointed block is byte-identical to what a full serialise would write",
+      canonicalMessageBlock(movedDoc.value.file, target, movedPad).join(
+        "\n",
+      ) ===
+        moved.text
+          .split("\n")
+          .slice(movedSpan.start - 1, movedSpan.end)
+          .join("\n"),
+      "the patched block is not what the serializer would emit",
+    );
+    const after = sequenceItemAt(movedDoc.value.file.items, target);
+    check(
+      "the repoint reads back as written, and moves only the endpoint asked for",
+      after.to === elsewhere.id &&
+        after.from === message.from &&
+        after.label === message.label &&
+        after.description === message.description &&
+        after.technology === message.technology,
+      `read back ${JSON.stringify(after)}`,
+    );
+    check(
+      "a repoint to the endpoints the message already has is refused",
+      repointedMessageEdit(at, source, target, message.from, message.to) ===
+        null,
+      "an unchanged repoint cost an undo entry",
+    );
+    check(
+      "a repoint naming an undeclared lifeline is refused",
+      repointedMessageEdit(at, source, target, "ghost", message.to) === null,
+      "an undeclared endpoint was accepted",
+    );
+  }
+
+  /* ---- the activation guard ------------------------------------------------- */
+
+  /* `+`/`-` IS UNPAIRED AND UNVALIDATED, so deleting or repointing the message
+     that carries one changes a bar SEVERAL ROWS AWAY and the layout does not
+     complain — measured: an unmatched close is dropped, an unmatched open runs
+     to the bottom of the lifeline. Both gestures refuse, and the refusal is a
+     SENTENCE, because a control that declines in silence reads as broken. */
+  {
+    const activating = paths.find((p) => {
+      const m = sequenceItemAt(file.items, p);
+      return m.activate === true || m.deactivate === true;
+    });
+    check(
+      "the seed really does carry an activation flag, so this guard is exercised",
+      activating !== undefined,
+      "no activating message in the fixture — the guard below proves nothing",
+    );
+    const reason = activationRefusal(doc.value, activating);
+    check(
+      "an activating message reports a refusal a reader can act on",
+      typeof reason === "string" && reason.length > 40,
+      `reason: ${JSON.stringify(reason)}`,
+    );
+    check(
+      "the refusal names the source text as the place to fix it",
+      typeof reason === "string" && reason.includes("source text"),
+      "a refusal that does not say what to do next is a dead end",
+    );
+    check(
+      "deleting an activating message is refused",
+      deletedMessageEdit(doc.value, authored, activating) === null,
+      "an unbalanced activation bar was allowed",
+    );
+    check(
+      "repointing an activating message is refused",
+      repointedMessageEdit(
+        doc.value,
+        authored,
+        activating,
+        file.participants[0].id,
+        file.participants[1].id,
+      ) === null,
+      "an activation bar was moved to another lifeline",
+    );
+
+    const plain = paths.find(
+      (p) =>
+        sequenceItemAt(file.items, p).activate === undefined &&
+        sequenceItemAt(file.items, p).deactivate === undefined,
+    );
+    check(
+      "a message with no activation flag reports no refusal",
+      activationRefusal(doc.value, plain) === null,
+      "the guard refuses messages it has no business refusing",
+    );
+  }
+
+  /* ---- delete a message: its own block, and only its own block -------------- */
+
+  {
+    /* CHOSEN FOR ITS CONTINUATION LINES. A delete that removed only the
+       declaration line would leave a `desc` at indent + 2 with nothing above it
+       to attach to — which is why the span reaches to `endLine` at all. The
+       purpose-built fixture is used because no seed message owns a `desc`
+       without also carrying an activation flag; see where BLOCKY is defined. */
+    const target = blockyTarget;
+    const source = BLOCKY;
+    const at = blockyDoc.value;
+    const span = blockySpans.items.get(sequenceItemKey(target));
+    check(
+      "the message under test owns continuation lines",
+      span.end - span.start === 2,
+      `span ${span.start}..${span.end} is not three lines`,
+    );
+
+    const gone = deletedMessageEdit(at, source, target);
+    check(
+      "a delete reports the patch path, never a re-emit",
+      gone !== null && gone.path === "patch",
+      `got ${JSON.stringify(gone && gone.path)}`,
+    );
+    check(
+      "a delete removes exactly its own block — declaration and continuations",
+      gone !== null &&
+        gone.text.split("\n").length ===
+          source.split("\n").length - (span.end - span.start + 1),
+      `line count went ${source.split("\n").length} -> ${gone && gone.text.split("\n").length}, block is ${span.end - span.start + 1} lines`,
+    );
+    /* EVERY OTHER LINE IS STILL THERE, IN ORDER. Compared as the two halves
+       either side of the removed span rather than by counting: a delete that
+       removed the right NUMBER of lines from the wrong place would pass a count
+       and fail this. */
+    const src = source.split("\n");
+    check(
+      "every byte outside the deleted block survives, in order",
+      gone !== null &&
+        gone.text ===
+          [...src.slice(0, span.start - 1), ...src.slice(span.end)].join("\n"),
+      "a delete disturbed a line it was not about",
+    );
+    check(
+      "the author's comment, blank line and explicit defaults survive a delete",
+      gone !== null &&
+        gone.text.includes("// Reviewed 2026-08-01") &&
+        gone.text.includes("updated 2026-08-01T00:00:00.000Z") &&
+        gone.text.includes(":participant"),
+      "the comment or an explicit default was eaten",
+    );
+    const goneDoc = parseViewSource(gone.text);
+    check(
+      "the document left behind parses, with one message fewer",
+      goneDoc.status === "ok" &&
+        sequenceMessagePaths(goneDoc.value.file.items).length ===
+          sequenceMessagePaths(at.file.items).length - 1,
+      `status ${goneDoc.status}`,
+    );
+    /* THE NOTE SAT DIRECTLY AFTER THE DELETED MESSAGE, which is the only
+       position where "carried or eaten" is a real question — a note attaches by
+       text position, not by any id, so the one following the message is exactly
+       the one a cascade would take. */
+    check(
+      "a note the delete did not name is CARRIED, not eaten with the message",
+      goneDoc.status === "ok" &&
+        countNotes(goneDoc.value.file.items) === 1 &&
+        countNotes(at.file.items) === 1,
+      "deleting a message took the neighbouring note with it",
+    );
+
+    /* AN EMPTIED FRAGMENT BRANCH IS LEGAL, so the delete needs no guard for it.
+       Measured here rather than assumed, because the whole verdict rests on it:
+       if the grammar ever stops accepting an empty branch, this delete starts
+       producing documents the parser refuses. */
+    const lonely = [
+      "archlab 1.0 sequence",
+      'title "Lonely"',
+      "",
+      "@sequence",
+      '  a "A"',
+      '  b "B"',
+      "",
+      '  alt "only"',
+      '    a -> b : "the only step in here"',
+      "",
+    ].join("\n");
+    const lonelyDoc = parseViewSource(lonely);
+    const emptied = deletedMessageEdit(lonelyDoc.value, lonely, [0, 0, 0]);
+    check(
+      "deleting the only message in a fragment branch leaves a document that parses",
+      emptied !== null && parseViewSource(emptied.text).status === "ok",
+      `got ${JSON.stringify(emptied && emptied.text)}`,
+    );
+    check(
+      "...and the branch is still there, empty, rather than the fragment vanishing",
+      emptied !== null &&
+        parseViewSource(emptied.text).value.file.items[0].branches[0].items
+          .length === 0,
+      "the fragment did not survive its last message",
+    );
+  }
+
+  /* ---- remove a lifeline: refused while anything still points at it -------- */
+
+  {
+    /* THE REFUSAL IS THE FEATURE HERE. Removing a referenced participant makes
+       a document the parser refuses outright ("does not resolve to a
+       participant"), so a gesture that let it through would hand the reader a
+       parse error over a diagram they could no longer edit. The C4 canvas
+       cascades instead; `deletedParticipantEdit` argues why this one must not. */
+    const referenced = file.participants[0].id;
+    const reason = participantRemovalRefusal(doc.value, referenced);
+    check(
+      "removing a referenced lifeline is refused with a reason",
+      typeof reason === "string" && reason.length > 40,
+      `reason: ${JSON.stringify(reason)}`,
+    );
+    /* THE COUNT IS IN THE SENTENCE, and it is the REAL count — a refusal
+       saying "some messages" leaves the reader with no way to know when they
+       are done. Derived by walking the model, so the wording cannot drift from
+       the document. */
+    const uses = countReferences(file.items, referenced);
+    check(
+      "the refusal quotes the true number of messages still pointing at it",
+      typeof reason === "string" &&
+        uses.messages > 0 &&
+        reason.includes(String(uses.messages)),
+      `${uses.messages} messages, reason: ${JSON.stringify(reason)}`,
+    );
+    check(
+      "the refusal counts notes as referrers too, not just messages",
+      uses.notes === 0 || reason.includes(String(uses.notes)),
+      `${uses.notes} notes, reason: ${JSON.stringify(reason)}`,
+    );
+    check(
+      "and the gesture itself declines, so text is never produced for it",
+      deletedParticipantEdit(doc.value, authored, referenced) === null,
+      "a referenced lifeline was removed anyway",
+    );
+
+    /* A LIFELINE NOTHING REFERS TO CAN GO, or the refusal above would just be
+       a gesture that never works. The spare one hoisted at the top of this
+       section is exactly that: added by the insert gesture, named by nothing. */
+    const addedDoc = spareDoc;
+    const freshId = spareId;
+    check(
+      "a lifeline nothing refers to reports no refusal",
+      freshId !== null &&
+        participantRemovalRefusal(addedDoc.value, freshId) === null,
+      `reason: ${JSON.stringify(freshId === null ? "no spare lifeline" : participantRemovalRefusal(addedDoc.value, freshId))}`,
+    );
+    const removed = deletedParticipantEdit(spareValue, spareText, freshId);
+    check(
+      "removing it reports the patch path",
+      removed !== null && removed.path === "patch",
+      `got ${JSON.stringify(removed && removed.path)}`,
+    );
+    /* THE ROUND TRIP IS THE STRONGEST FORM THIS CAN TAKE: add a lifeline, take
+       it away, and the file is the reader's original BYTES — comment, blank
+       line, explicit defaults and all. Nothing weaker distinguishes "put the
+       text back" from "re-emitted something equivalent". */
+    check(
+      "add a lifeline then remove it and the text is byte-identical to the original",
+      removed !== null && removed.text === authored,
+      removed === null
+        ? "the removal was refused"
+        : firstDiff(removed.text, authored),
+    );
+
+    /* THE GUARD IS DERIVED FROM THE PARSER, not from a second opinion about
+       what the parser accepts — habit 4 in `codebase.md`, and the reason this
+       assertion is worth more than the individual refusals above. For EVERY
+       lifeline in the fixture: the refusal says no exactly when removing that
+       lifeline's block would produce text the real parser rejects. Too strict
+       and a removable lifeline is stuck; too lax and the reader gets a parse
+       error over a diagram they can no longer edit. Both directions fail here.
+
+       The text is spliced directly rather than through the gesture, because the
+       gesture consults the guard — asking it would be asking the guard about
+       itself. */
+    for (const participant of file.participants) {
+      const span = spans.participants.get(participant.id);
+      const src = authored.split("\n");
+      const without = [
+        ...src.slice(0, span.start - 1),
+        ...src.slice(span.end),
+      ].join("\n");
+      let parses = true;
+      try {
+        parseSequenceText(without);
+      } catch {
+        parses = false;
+      }
+      check(
+        `the removal guard for ${participant.id} agrees with the parser`,
+        (participantRemovalRefusal(doc.value, participant.id) === null) ===
+          parses,
+        `guard says ${JSON.stringify(participantRemovalRefusal(doc.value, participant.id))}, parser ${parses ? "accepts" : "rejects"} the text`,
+      );
+    }
+
+    /* A LIFELINE ONLY A NOTE MENTIONS. The loop above cannot reach this case —
+       every lifeline in the fixture is also named by a message, so dropping the
+       note count entirely would not change one of its verdicts. It is the
+       cheapest way for the guard to be wrong: a note's participants are checked
+       by the parser exactly like a message's, so missing them means producing a
+       document that does not parse. */
+    const noteOnly = [
+      "archlab 1.0 sequence",
+      'title "Annotated"',
+      "",
+      "@sequence",
+      '  a "A"',
+      '  b "B"',
+      '  watcher "Watcher"',
+      "",
+      '  a -> b : "hi"',
+      '  note over watcher : "only a note mentions this one"',
+      "",
+    ].join("\n");
+    const noteOnlyDoc = parseViewSource(noteOnly);
+    check(
+      "the note-only fixture parses, with a lifeline no message names",
+      noteOnlyDoc.status === "ok" &&
+        countReferences(noteOnlyDoc.value.file.items, "watcher").messages ===
+          0 &&
+        countReferences(noteOnlyDoc.value.file.items, "watcher").notes === 1,
+      `status ${noteOnlyDoc.status}`,
+    );
+    const noteReason = participantRemovalRefusal(noteOnlyDoc.value, "watcher");
+    check(
+      "a lifeline only a note mentions is still refused, and the note is counted",
+      typeof noteReason === "string" && noteReason.includes("1 note"),
+      `reason: ${JSON.stringify(noteReason)}`,
+    );
+    check(
+      "and the gesture declines, so no unparseable document is produced",
+      deletedParticipantEdit(noteOnlyDoc.value, noteOnly, "watcher") === null,
+      "a lifeline a note still names was removed",
+    );
+
+    /* THE ONE-MEMBER BOX. Taking the only lifeline out of a box leaves a
+       bracket around nothing, which the parser refuses ("holds no
+       participants"). Tested on its own fixture because the seed has no box. */
+    const boxed = [
+      "archlab 1.0 sequence",
+      'title "Boxed"',
+      "",
+      "@sequence",
+      '  a "A"',
+      '  box "Data"',
+      '    b "B"',
+      "",
+    ].join("\n");
+    const boxedDoc = parseViewSource(boxed);
+    check(
+      "the box fixture parses with a one-member box and no messages",
+      boxedDoc.status === "ok" &&
+        boxedDoc.value.file.boxes.length === 1 &&
+        boxedDoc.value.file.boxes[0].participants.length === 1,
+      `status ${boxedDoc.status}`,
+    );
+    const boxReason = participantRemovalRefusal(boxedDoc.value, "b");
+    check(
+      "removing a box's only member is refused, naming the box",
+      typeof boxReason === "string" && boxReason.includes("Data"),
+      `reason: ${JSON.stringify(boxReason)}`,
+    );
+    check(
+      "and the gesture declines rather than producing a bracket around nothing",
+      deletedParticipantEdit(boxedDoc.value, boxed, "b") === null,
+      "an empty box was written",
+    );
+  }
+
+  /* ---- add a lifeline ------------------------------------------------------- */
+
+  {
+    const added = withSpare;
+    check(
+      "adding a lifeline reports the patch path and keeps the comment",
+      added !== null &&
+        added.path === "patch" &&
+        added.text.includes("// Reviewed 2026-08-01"),
+      `got ${JSON.stringify(added && added.path)}`,
+    );
+    check(
+      "adding a lifeline adds exactly one line",
+      spareText.split("\n").length === authored.split("\n").length + 1,
+      `${authored.split("\n").length} -> ${spareText.split("\n").length}`,
+    );
+    /* AFTER THE LAST PARTICIPANT THE PARSER SAW, not at the end of the section:
+       the blank line separating the lifelines from the flow is the author's and
+       stays below the new declaration. */
+    const lastEnd = Math.max(
+      ...[...spans.participants.values()].map((s) => s.end),
+    );
+    check(
+      "the new lifeline lands directly after the last one the parser saw",
+      spareText.split("\n")[lastEnd].trimStart().startsWith("NewParticipant"),
+      `line ${lastEnd + 1} is ${JSON.stringify(spareText.split("\n")[lastEnd])}`,
+    );
+    const addedDoc = parseViewSource(spareText);
+    check(
+      "the document re-parses with one lifeline more, at the end of the order",
+      addedDoc.status === "ok" &&
+        addedDoc.value.file.participants.length ===
+          file.participants.length + 1 &&
+        addedDoc.value.file.participants.at(-1).name ===
+          INSERTED_PARTICIPANT_NAME,
+      `status ${addedDoc.status}`,
+    );
+    /* DERIVED FROM THE SERIALIZER. A hand-written expected line would pass
+       while the emitter changed underneath it. */
+    const freshId = addedDoc.value.file.participants.at(-1).id;
+    check(
+      "the new line is byte-identical to what a full serialise would write",
+      canonicalParticipantBlock(addedDoc.value.file, freshId, "  ").join(
+        "\n",
+      ) === spareText.split("\n")[lastEnd],
+      "the inserted line is not what the serializer would emit",
+    );
+
+    /* PRESSED TWICE. The id is the name every message refers to, so a
+       duplicate is not a cosmetic problem — it is two lifelines the parser
+       cannot tell apart. */
+    const again = insertedParticipantEdit(addedDoc.value, spareText);
+    const againDoc = again === null ? null : parseViewSource(again.text);
+    const ids =
+      againDoc === null || againDoc.status !== "ok"
+        ? []
+        : againDoc.value.file.participants.map((p) => p.id);
+    check(
+      "adding a second lifeline gives it a different id",
+      ids.length > 0 && new Set(ids).size === ids.length,
+      `ids: ${ids.join(", ")}`,
+    );
+
+    /* A BOX MUST NOT SWALLOW IT. The new line is written at the ROOT body
+       indent, so appending after a lifeline that sits inside a box leaves the
+       box's run contiguous — the rule `serialize.ts` refuses a document for
+       breaking. */
+    const boxed = [
+      "archlab 1.0 sequence",
+      'title "Boxed"',
+      "",
+      "@sequence",
+      "  // keep me",
+      '  a "A"',
+      '  box "Data"',
+      '    b "B"',
+      "",
+      '  a -> b : "hi"',
+      "",
+    ].join("\n");
+    const boxedDoc = parseViewSource(boxed);
+    const boxedAdd = insertedParticipantEdit(boxedDoc.value, boxed);
+    check(
+      "the box fixture accepts a new lifeline at all",
+      boxedAdd !== null,
+      "the box assertions below would be vacuous",
+    );
+    const boxedAfter =
+      boxedAdd === null
+        ? { status: "skipped" }
+        : parseViewSource(boxedAdd.text);
+    check(
+      "a lifeline added after a box run lands OUTSIDE the box",
+      boxedAfter.status === "ok" &&
+        boxedAfter.value.file.boxes.length === 1 &&
+        boxedAfter.value.file.boxes[0].participants.length === 1 &&
+        boxedAfter.value.file.boxes[0].participants[0] === "b",
+      `boxes: ${JSON.stringify(boxedAfter.status === "ok" ? boxedAfter.value.file.boxes : boxedAfter.error)}`,
+    );
+    check(
+      "...at the root body indent, so the dedent is what closes the box",
+      boxedAdd !== null &&
+        /^ {2}\S/.test(
+          boxedAdd.text.split("\n").find((l) => l.includes("NewParticipant")) ??
+            "",
+        ),
+      "the new lifeline was indented into the box",
+    );
+    check(
+      "...and the box still round-trips through the serializer",
+      boxedAfter.status === "ok" &&
+        serializeSequenceText(boxedAfter.value.file).includes('box "Data"'),
+      "the serializer refused the box the insert left behind",
+    );
+
+    /* THE EMPTY DOCUMENT is the case with no participant span to sit after, and
+       the one where "add a lifeline" matters most. `spans.bodyLine` is what
+       makes it reachable. */
+    const bare = [
+      "archlab 1.0 sequence",
+      'title "Nothing yet"',
+      "",
+      "@sequence",
+      "",
+    ].join("\n");
+    const bareDoc = parseViewSource(bare);
+    check(
+      "a document with no lifelines at all parses, so the fallback is reachable",
+      bareDoc.status === "ok" && bareDoc.value.file.participants.length === 0,
+      `status ${bareDoc.status}`,
+    );
+    const first = insertedParticipantEdit(bareDoc.value, bare);
+    check(
+      "the first lifeline of an empty document lands right after the @sequence line",
+      first !== null &&
+        first.text.split("\n")[spansOf(bare).bodyLine] ===
+          `  NewParticipant "${INSERTED_PARTICIPANT_NAME}"`,
+      `got ${JSON.stringify(first && first.text)}`,
+    );
+    check(
+      "...and the document it produces re-parses with that lifeline in it",
+      first !== null &&
+        parseViewSource(first.text).status === "ok" &&
+        parseViewSource(first.text).value.file.participants.length === 1,
+      "the first lifeline produced text the parser refuses",
+    );
+
+    /* A LIFELINE MAY PRECEDE `autonumber`, which is what makes the line
+       straight after the opener a legal home. Measured, because the whole
+       fallback rests on it. */
+    const numbered = [
+      "archlab 1.0 sequence",
+      'title "Numbered"',
+      "",
+      "@sequence",
+      "  autonumber",
+      "",
+    ].join("\n");
+    const numberedAdd = insertedParticipantEdit(
+      parseViewSource(numbered).value,
+      numbered,
+    );
+    check(
+      "a lifeline inserted above an autonumber line still parses",
+      numberedAdd !== null &&
+        parseViewSource(numberedAdd.text).status === "ok" &&
+        parseViewSource(numberedAdd.text).value.file.autonumber === true,
+      `got ${JSON.stringify(numberedAdd && numberedAdd.text)}`,
+    );
+  }
+
   /* ---- there is no re-emit path at all ------------------------------------- */
 
   /* THE SHARPEST DIFFERENCE FROM THE C4 CANVAS, and the one most likely to be
@@ -2054,6 +2797,32 @@ console.log(
         file.participants[1].id,
       ),
     ],
+    /* THE FOUR NEWER GESTURES ARE IN THIS LOOP FOR THE SAME REASON THE FIRST
+       THREE ARE: each is its own entry point into the splice, and the one that
+       forgets to ask whether the pane agrees with the canvas is the one that
+       corrupts the reader's file rather than refusing. A delete is the worst
+       case of it — it would remove lines by numbers that describe a document
+       that is no longer on screen. */
+    [
+      "a repoint",
+      repointedMessageEdit(
+        doc.value,
+        stale,
+        deletableMsg,
+        file.participants[0].id,
+        file.participants[1].id,
+      ),
+    ],
+    ["a message delete", deletedMessageEdit(doc.value, stale, deletableMsg)],
+    [
+      "a lifeline removal",
+      deletedParticipantEdit(
+        spareValue,
+        `${spareText}  cust -> web : "typed but not parsed yet"\n`,
+        spareId,
+      ),
+    ],
+    ["a lifeline insert", insertedParticipantEdit(doc.value, stale)],
   ]) {
     check(
       `${name} against a pane that disagrees with the canvas is refused, not re-emitted`,
@@ -2069,6 +2838,20 @@ console.log(
       revisedParticipantEdit(doc.value, authored, file.participants[0].id, {
         name: "Renamed",
       }),
+      /* EVERY GESTURE, not a sample. `"reemit"` is reachable from any of them
+         the moment one grows a fallback, and the whole reason this section
+         exists is that a re-emit passes every other assertion in this file
+         while deleting the reader's comments. */
+      repointedMessageEdit(
+        blockyDoc.value,
+        BLOCKY,
+        blockyTarget,
+        sequenceItemAt(blockyDoc.value.file.items, blockyTarget).from,
+        blockyDoc.value.file.participants.at(-1).id,
+      ),
+      deletedMessageEdit(doc.value, authored, deletableMsg),
+      deletedParticipantEdit(spareValue, spareText, spareId),
+      insertedParticipantEdit(doc.value, authored),
     ].every((edit) => edit !== null && edit.path === "patch"),
     "a sequence edit re-emitted, which would delete the reader's comments",
   );

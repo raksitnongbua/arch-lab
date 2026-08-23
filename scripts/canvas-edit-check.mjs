@@ -159,9 +159,15 @@ const { defaultPositions, defaultSizeFor } = await load(
 const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
 const { canvasEditability, deletedNodeEdit, movedNodeEdit, ownsChildDiagram } =
   await load("src/features/playground/input/canvas-edit.ts");
-const { revisedMessageEdit } = await load(
-  "src/features/playground/input/sequence-edit.ts",
-);
+const {
+  revisedMessageEdit,
+  revisedParticipantEdit,
+  insertedMessageEdit,
+  repointedMessageEdit,
+  deletedMessageEdit,
+  deletedParticipantEdit,
+  insertedParticipantEdit,
+} = await load("src/features/playground/input/sequence-edit.ts");
 const { parseViewSource, VIEW_SEED_TEXT, sourceTextFor } = await load(
   "src/features/playground/input/parse.ts",
 );
@@ -821,15 +827,51 @@ console.log("\nEvery notation that cannot carry geometry says so");
     );
     /* And the refusal is REAL, not advisory: the gesture itself declines, or a
        caller that forgot to ask would splice into a grammar whose line numbers
-       mean something else. */
-    check(
-      `revisedMessageEdit declines a ${kind} document`,
-      revisedMessageEdit(parsed.value, "", [0], {
-        label: "x",
-        kind: "sync",
-      }) === null,
-      "expected null",
-    );
+       mean something else.
+
+       EVERY GESTURE IS LISTED, not just the first one written. Each of these is
+       an independent entry point into the same splice, and the one that forgets
+       its `canvasEditability` guard is the one nothing here would notice — the
+       table is what makes "all six refuse" a measured fact rather than six
+       separate hopes. A gesture added to `sequence-edit.ts` and not added here
+       is unguarded until someone points it at an ER document. */
+    for (const [name, run] of [
+      [
+        "revisedMessageEdit",
+        () =>
+          revisedMessageEdit(parsed.value, "", [0], {
+            label: "x",
+            kind: "sync",
+          }),
+      ],
+      [
+        "revisedParticipantEdit",
+        () => revisedParticipantEdit(parsed.value, "", "x", { name: "y" }),
+      ],
+      [
+        "insertedMessageEdit",
+        () => insertedMessageEdit(parsed.value, "", null, "a", "b"),
+      ],
+      [
+        "repointedMessageEdit",
+        () => repointedMessageEdit(parsed.value, "", [0], "a", "b"),
+      ],
+      ["deletedMessageEdit", () => deletedMessageEdit(parsed.value, "", [0])],
+      [
+        "deletedParticipantEdit",
+        () => deletedParticipantEdit(parsed.value, "", "a"),
+      ],
+      [
+        "insertedParticipantEdit",
+        () => insertedParticipantEdit(parsed.value, ""),
+      ],
+    ]) {
+      check(
+        `${name} declines a ${kind} document`,
+        run() === null,
+        "expected null",
+      );
+    }
   }
 
   /* DEFAULTING TO `"move"` IS LOAD-BEARING. Every existing caller — and the
@@ -1871,13 +1913,174 @@ console.log("\nLocking never offers a link to somewhere you already are");
     !/C4 diagrams can also be edited on the canvas/.test(playground),
     "the page contradicts the feature it is describing",
   );
+  /* IT ALSO HAS TO NAME WHAT THE CANVAS DOES, not merely that it does
+     something. The claim was "sequence messages edited on it" while the canvas
+     had grown creation, repointing and removal for both messages and
+     lifelines — true, and still useless to the reader it is written for, who
+     is looking for a control they do not know exists. So the assertion moved
+     from "the word sequence appears" to "the verbs appear": every gesture the
+     dock and the strip offer is named in the sentence. If a gesture is added,
+     this fails until the sentence grows — which is the point, and is cheaper
+     than the alternative that already happened once (a shipped gesture no page
+     mentioned for a whole release).
+
+     Matched as an unordered set of words rather than one phrase, so rewording
+     the sentence for readability does not fail a check about honesty. */
+  /* Whitespace-normalised first: this is JSX, so the sentence is wrapped
+     across source lines at arbitrary points and a phrase like "the other
+     kinds" straddles a newline plus fourteen spaces of indentation. */
+  const flowed = playground.replace(/\s+/g, " ");
+  const claim =
+    /C4 nodes can be dragged.{0,240}?the other kinds lay themselves out/.exec(
+      flowed,
+    );
   check(
-    "the heading names the sequence canvas",
-    /sequence messages\s*\n?\s*edited on it|sequence messages edited/.test(
-      playground,
-    ),
-    "a shipped editable canvas the page never mentions",
+    "the heading still carries the canvas-editing claim",
+    claim !== null,
+    "the sentence that tells a reader the canvas is editable is gone",
   );
+  for (const verb of [
+    "sequence messages",
+    "lifelines",
+    "added",
+    "edited",
+    "repointed",
+    "removed",
+  ]) {
+    check(
+      `the heading's claim names "${verb}"`,
+      claim !== null && claim[0].includes(verb),
+      "a gesture the canvas offers that the page never mentions",
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
+/* 14. Every sequence gesture is REACHABLE, not merely correct              */
+/* ----------------------------------------------------------------------- */
+
+/* THIS SECTION EXISTS BECAUSE SECTION 8 DID NOT CATCH IT ONCE ALREADY. The
+   canvas lock was right in `canvasEditability` and absent from the branch the
+   sequence canvas renders, for a whole release — a function nothing called.
+   The same shape is available to every gesture: `sequence-edit.ts` can grow a
+   perfectly guarded, perfectly patched removal that no button anywhere invokes,
+   and `check:sequence` would pass all 265 of its assertions on it.
+
+   So the list of gestures is DERIVED from the viewer's own handler interface —
+   the contract the two sides already share — rather than hand-listed here. A
+   hand-listed set cannot notice the gesture it has never heard of, which is the
+   failure `codebase.md` habit 4 names and the reason `chrome.ts` reads a prefix
+   instead of a list. Adding a handler to `SequenceEditHandlers` therefore adds
+   two assertions automatically, and they fail until something calls it. */
+console.log("\nEvery sequence gesture is reachable from the canvas it edits");
+{
+  const viewer = read("src/features/sequence/components/sequence-viewer.tsx");
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+
+  const contract =
+    /export interface SequenceEditHandlers \{([\s\S]*?)\n\}/.exec(viewer);
+  check(
+    "the viewer declares a handler contract this section can derive from",
+    contract !== null,
+    "SequenceEditHandlers not found — every assertion below would be vacuous",
+  );
+  const handlers = [
+    ...new Set(
+      [...(contract?.[1] ?? "").matchAll(/^\s{2}(on[A-Z]\w*)\s*[?:]/gm)].map(
+        (m) => m[1],
+      ),
+    ),
+  ];
+  check(
+    "the contract names at least the seven gestures the canvas ships",
+    handlers.length >= 7,
+    `found ${handlers.length}: ${handlers.join(", ")}`,
+  );
+
+  for (const handler of handlers) {
+    /* CALLED, not merely accepted. `edit.onX(` / `edit?.onX(` is the viewer
+       actually invoking it from a control or a gesture sink; a handler that
+       only appears in the interface is a promise with nothing behind it. */
+    check(
+      `the viewer reaches ${handler} from a control`,
+      /* `edit.onX(` for a call, or a bare `edit.onX` handed straight to an
+         onClick — both are the handler being reached. What this rules out is
+         the name appearing ONLY in the interface, which is a promise with
+         nothing behind it. */
+      new RegExp(`edit\\??\\.${handler}\\b`).test(viewer),
+      "the handler is declared but nothing in the viewer reaches it",
+    );
+    /* AND THE HOST SUPPLIES IT. The bundle is memoised behind `sequenceEditable`,
+       so a handler missing from it means the control is rendered and inert. */
+    check(
+      `the playground wires ${handler} into the sequence bundle`,
+      new RegExp(`${handler}:\\s*handle`).test(playground),
+      "the viewer would render a control the host never answers",
+    );
+  }
+
+  /* THE CONTROLS THEMSELVES ARE GATED ON `edit`, which is what keeps a LOCKED
+     canvas free of them rather than showing dead ones — the distinction PR #69
+     landed and the thing section 8 guards for the lock itself. Counted rather
+     than spot-checked: every one of these three strings introduces editing
+     chrome, and one of them rendering unconditionally is the regression. */
+  check(
+    "the add-a-lifeline control is gated on the edit handlers being present",
+    /edit === undefined \? null : \([\s\S]{0,400}?onInsertParticipant/.test(
+      viewer,
+    ),
+    "a create control that renders on a locked or read-only canvas",
+  );
+  /* Counted from the RENDER SITES rather than from a gate pattern: there are
+     two `<DockRemoveButton` renders (message and lifeline) and each must sit
+     behind an `edit !== undefined` test. Written this way round because the two
+     use different JSX shapes — one `&&` chain, one ternary — and a regex
+     matching only the shape that existed when this was written would pass
+     forever while the other drifted. */
+  const removeSites = [...viewer.matchAll(/<DockRemoveButton/g)];
+  check(
+    "the dock renders exactly two remove controls — a message and a lifeline",
+    removeSites.length === 2,
+    `found ${removeSites.length}`,
+  );
+  check(
+    "every remove control is gated on the edit handlers being present",
+    removeSites.every((site) =>
+      viewer
+        .slice(Math.max(0, site.index - 700), site.index)
+        .includes("edit !== undefined"),
+    ),
+    "a destructive control that renders without a host to answer it",
+  );
+
+  /* NO CONFIRM DIALOG, SO UNDO IS THE SAFETY NET, so both removals must go
+     through the ring. `applyCanvasEdit` is the only thing that pushes onto it
+     (section 9 proves the ring is bounded and separate from the textarea's), so
+     a handler that called `setText` directly would lose the undo silently. */
+  for (const handler of [
+    "handleDeleteMessage",
+    "handleDeleteParticipant",
+    "handleRepointMessage",
+    "handleInsertParticipant",
+  ]) {
+    const body = new RegExp(
+      `const ${handler} = useCallback\\(([\\s\\S]*?)\\n  \\);`,
+    ).exec(playground);
+    check(
+      `${handler} routes through applyCanvasEdit, so it lands on the undo ring`,
+      body !== null &&
+        body[1].includes("applyCanvasEdit(") &&
+        !body[1].includes("setText("),
+      "a canvas edit that cannot be undone",
+    );
+    check(
+      `${handler} tells the reader how to undo it`,
+      body !== null && /Cmd or Ctrl \+ Z/.test(body[1]),
+      "a destructive or structural edit with no stated way back",
+    );
+  }
 }
 
 console.log(

@@ -425,11 +425,22 @@ export function sequenceItemKey(path: SequenceItemPath): string {
  * was". The dock's form shows all four at once and submits all four, so a diff
  * would only add a way for the form and the model to disagree.
  *
- * `from`, `to`, `activate` and `deactivate` are deliberately NOT here.
- * Rewriting an endpoint is a different gesture (it moves the arrow), and the
- * activation flags are half of an unvalidated open/close pairing — offering a
- * checkbox on one message that can unbalance the bars several rows below it
- * would be a control whose effect is invisible from where you press it.
+ * `from`, `to`, `activate` and `deactivate` are deliberately NOT here, and the
+ * two halves of that sentence have since gone different ways.
+ *
+ * ENDPOINTS ARE A DIFFERENT GESTURE, and it now exists: `repointedMessageEdit`
+ * in `playground/input/sequence-edit.ts`, driven by the same armed two-click
+ * lifeline picker an insert uses. They stayed out of this form rather than
+ * arriving in it as two text inputs because an endpoint is POINTED AT, not
+ * typed — a form field would ask the reader to spell an id while the lifeline
+ * it names is on screen a few pixels away, and a typo there is a document the
+ * parser refuses.
+ *
+ * THE ACTIVATION FLAGS ARE STILL OUT, for the reason they always were: they
+ * are half of an unvalidated open/close pairing, so a control on one message
+ * can unbalance the bars several rows below it, where the reader cannot see
+ * what they did. The same reasoning now also REFUSES a delete or a repoint of
+ * a message that carries one — see `activationRefusal`.
  */
 export interface SequenceMessageRevision {
   label: string;

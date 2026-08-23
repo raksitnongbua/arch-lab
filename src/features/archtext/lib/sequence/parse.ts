@@ -249,11 +249,30 @@ const NOTE_KEYS_SET: ReadonlySet<string> = new Set(NOTE_KEYS);
 export interface SequenceSpans {
   participants: ReadonlyMap<string, LineSpan>;
   items: ReadonlyMap<string, LineSpan>;
+  /**
+   * The 1-based line of the `@sequence` opener — the ANCHOR a participant
+   * insert falls back to when the document declares no participants to sit
+   * after.
+   *
+   * Added under the licence the paragraph above gives ("add it with the first
+   * gesture that needs it"); `insertedParticipantEdit` is that gesture. A
+   * document with a title and a bare `@sequence` parses to zero participants
+   * and zero items, so it offers no span at all — and that empty document is
+   * exactly where "add a lifeline" is most wanted, so refusing there would
+   * make the gesture useless precisely when it matters.
+   *
+   * WHY THE OPENER AND NOT "AFTER THE `autonumber` LINE": a participant
+   * declaration may legally precede `autonumber` — the body reads both in any
+   * order — so the line straight after the opener is always a legal home for
+   * one. That is measured in `check:sequence` rather than trusted here.
+   */
+  bodyLine: number;
 }
 
 interface SpanCollector {
   participants: Map<string, LineSpan>;
   items: Map<string, LineSpan>;
+  bodyLine: number;
 }
 
 /**
@@ -291,6 +310,7 @@ export function parseSequenceTextWithSpans(source: string): {
   let autonumber: boolean | undefined;
   let autonumberSeen = false;
   let bodyOpened = false;
+  let bodyLine = 0;
   let seenContent = false;
   let lastItem: Continuable | null = null;
 
@@ -394,6 +414,7 @@ export function parseSequenceTextWithSpans(source: string): {
           );
         }
         bodyOpened = true;
+        bodyLine = lineNo;
         contexts.push({ itemIndent: 2, branch: rootBranch, fragment: null });
         lastItem = null;
         continue;
@@ -490,6 +511,9 @@ export function parseSequenceTextWithSpans(source: string): {
   const spans: SpanCollector = {
     participants: new Map(),
     items: new Map(),
+    /* Set above and non-zero by construction: the `!bodyOpened` refusal
+       immediately before this is the only way past the opener without one. */
+    bodyLine,
   };
   const file = resolve(
     header,

@@ -22,7 +22,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   focused). A dashed rule shows where it will land, the lifelines are tab
   stops so the mouse is not the only route, and Escape cancels. Exactly one
   line is added and nothing else in the file is renormalised.
-- Both gestures share the canvas lock and the canvas undo ring with the C4
+- **Move an arrow to different lifelines.** The message editor now shows where
+  the arrow runs and offers "Repoint on the canvas": it arms the same two-click
+  lifeline picker the insert uses, so you choose the new sender and receiver by
+  clicking them rather than typing ids. Only the message's declaration line
+  changes; its `desc` and any `!` lines come back byte-identical.
+- **Remove a message or a lifeline.** The details panel gains a Remove control
+  for whatever is focused. A message goes with its `desc` and `!` continuation
+  lines and nothing else — a note beside it is kept, not deleted with it, and
+  later `autonumber` steps renumber as they should. There is no confirmation
+  step because Cmd/Ctrl + Z with the diagram focused brings it back.
+- **Add a lifeline.** The figure button beside `+` in the canvas strip appends
+  a placeholder lifeline at the end of the order, ready to rename in the
+  details panel. It lands outside any `box`, and it works on a document that
+  declares no lifelines at all.
+- Two removals are refused rather than allowed to break your file, and both say
+  why: a lifeline that messages or notes still point at names how many (delete
+  those first), or that it is the only member of a `box`; and a message
+  carrying an activation `+`/`-` says so, because removing or moving one end of
+  an unpaired flag changes a bar rows away from where you pressed. Take the
+  flag off in the source pane first.
+- Every gesture shares the canvas lock and the canvas undo ring with the C4
   canvas: locking the diagram removes the editing controls entirely, and
   Cmd/Ctrl + Z with the diagram focused steps back through canvas edits.
 
@@ -33,6 +53,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   refuses these edits by name: Mermaid cannot hold a message's `desc` or
   `[technology]`, so the change would be lost on the next round trip — switch
   the pane to `.alab` to edit on the canvas.
+- The playground's own description of the canvas now names what you can do to a
+  sequence diagram on it — add, edit, repoint, remove — rather than only that it
+  is editable. The viewer's tour card says the same.
 
 ### Fixed
 

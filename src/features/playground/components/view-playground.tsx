@@ -183,9 +183,16 @@ import {
   type CanvasEdit,
 } from "../input/canvas-edit";
 import {
+  activationRefusal,
+  deletedMessageEdit,
+  deletedParticipantEdit,
   insertedMessageEdit,
+  insertedParticipantEdit,
+  participantRemovalRefusal,
+  repointedMessageEdit,
   revisedMessageEdit,
   revisedParticipantEdit,
+  INSERTED_PARTICIPANT_NAME,
 } from "../input/sequence-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
 import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
@@ -1066,6 +1073,99 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleRepointMessage = useCallback(
+    (path: SequenceItemPath, from: string, to: string) => {
+      /* The activation refusal is READ OUT before the edit is attempted, for
+         the same reason `ownsChildDiagram` is on the C4 side: `null` from the
+         gesture covers every refusal at once, and a two-click gesture that
+         ends in silence reads as a broken control. This is the one refusal
+         with a cause the reader can act on, so it gets its own sentence. */
+      const blocked = activationRefusal(doc, path);
+      if (blocked !== null) {
+        setAnnouncement(blocked);
+        return;
+      }
+      const next = repointedMessageEdit(doc, text, path, from, to);
+      if (next === null) {
+        setAnnouncement(
+          "The message was not repointed — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `Message now runs from ${from} to ${to} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleDeleteMessage = useCallback(
+    (path: SequenceItemPath) => {
+      const blocked = activationRefusal(doc, path);
+      if (blocked !== null) {
+        setAnnouncement(blocked);
+        return;
+      }
+      const next = deletedMessageEdit(doc, text, path);
+      if (next === null) {
+        setAnnouncement(
+          "The message was not deleted — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      /* Undo is NAMED here for the reason the C4 delete names it: a delete is
+         the one sequence edit with nothing left on screen to put back by hand.
+         A revise can be retyped and a repoint re-clicked; a deleted message's
+         wording is gone unless the ring gives it back. */
+      applyCanvasEdit(
+        next,
+        "Message deleted — the source text follows, and later steps renumber. Press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleDeleteParticipant = useCallback(
+    (participantId: string) => {
+      /* SAID WITH A COUNT, never swallowed. Refusing to remove a lifeline is
+         the most likely refusal on this canvas — a lifeline nothing points at
+         is the exception — so the sentence has to tell the reader what is in
+         the way and how much of it. */
+      const blocked = participantRemovalRefusal(doc, participantId);
+      if (blocked !== null) {
+        setAnnouncement(blocked);
+        return;
+      }
+      const next = deletedParticipantEdit(doc, text, participantId);
+      if (next === null) {
+        setAnnouncement(
+          "The lifeline was not removed — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `${participantId} removed — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleInsertParticipant = useCallback(() => {
+    const next = insertedParticipantEdit(doc, text);
+    if (next === null) {
+      setAnnouncement(
+        "The lifeline was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+      );
+      return;
+    }
+    applyCanvasEdit(
+      next,
+      `“${INSERTED_PARTICIPANT_NAME}” added at the end of the lifeline order — the source text follows. Click its header to rename it; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+    );
+  }, [doc, text, applyCanvasEdit]);
+
   /**
    * The handler bundle the sequence viewer takes — PRESENT only while editing
    * is on, absent otherwise. Presence is the signal: the viewer renders no
@@ -1079,6 +1179,10 @@ export function ViewPlayground({
             onReviseMessage: handleReviseMessage,
             onReviseParticipant: handleReviseParticipant,
             onInsertMessage: handleInsertMessage,
+            onRepointMessage: handleRepointMessage,
+            onDeleteMessage: handleDeleteMessage,
+            onDeleteParticipant: handleDeleteParticipant,
+            onInsertParticipant: handleInsertParticipant,
           }
         : undefined,
     [
@@ -1086,6 +1190,10 @@ export function ViewPlayground({
       handleReviseMessage,
       handleReviseParticipant,
       handleInsertMessage,
+      handleRepointMessage,
+      handleDeleteMessage,
+      handleDeleteParticipant,
+      handleInsertParticipant,
     ],
   );
 
@@ -1226,12 +1334,19 @@ export function ViewPlayground({
                 The two abilities are named separately on purpose: they are
                 genuinely different, and collapsing them into "C4 and sequence
                 can be edited" would promise a sequence drag that does not
-                exist. */}
+                exist.
+
+                THE SEQUENCE HALF NAMES THE VERBS, since the gestures grew past
+                "edited": messages and lifelines can now be added, rewritten,
+                repointed and removed. Listing them beats a vaguer "can be
+                edited" for the same reason the sentence is here at all — a
+                reader hunting for the control needs to know it exists before
+                they will look for it. */}
             {CANVAS_EDIT_ENABLED ? (
               <>
-                C4 nodes can be dragged on the canvas and sequence messages
-                edited on it; the other kinds lay themselves out from the
-                text.{" "}
+                C4 nodes can be dragged on the canvas, and sequence messages and
+                lifelines added, edited, repointed and removed on it; the other
+                kinds lay themselves out from the text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}

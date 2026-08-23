@@ -117,18 +117,31 @@ export function resolveFocusSteps(
 }
 
 /**
- * The armed state of the two-click insert gesture, and the sink for the clicks.
+ * Which gesture the armed lifeline picker is serving. ONE PICKER, TWO ERRANDS —
+ * inserting a message needs two lifelines named, and repointing one needs
+ * exactly the same two, so a second picker would be a second set of hit
+ * columns, a second modal state and a second Escape rung for no new mechanic.
+ * The purpose only changes the words: what the reader is choosing is identical,
+ * so the affordance is identical, and only the sentence a screen reader hears
+ * says whether the arrow is new or being moved.
+ */
+export type SequencePickPurpose = "insert" | "repoint";
+
+/**
+ * The armed state of the two-click lifeline picker, and the sink for the clicks.
  *
  * WHY THE INDICATOR'S Y ARRIVES FROM THE VIEWER rather than being worked out
- * here: where the new message lands is a MODEL fact (after the focused step,
- * or at the end), and the viewer is what holds the focus. Re-deriving it from
- * `focus` inside the renderer would be a second answer to "where does it go",
- * free to disagree with the answer the edit actually uses.
+ * here: which row the gesture is about is a MODEL fact (after the focused step,
+ * at the end, or the focused message's own row), and the viewer is what holds
+ * the focus. Re-deriving it from `focus` inside the renderer would be a second
+ * answer to "where does it go", free to disagree with the answer the edit
+ * actually uses.
  */
-export interface SequenceInsertArming {
+export interface SequenceLifelinePick {
+  purpose: SequencePickPurpose;
   /** The sender already picked; `null` while the first click is still owed. */
   from: string | null;
-  /** Y of the row the new message will occupy, in SVG user units. */
+  /** Y of the row the gesture is about, in SVG user units. */
   atY: number;
   onPick: (participantId: string) => void;
 }
@@ -175,12 +188,12 @@ export interface SequenceDiagramProps {
   dependencyCount: ReadonlyMap<string, number>;
   onToggleCollapse: (id: string) => void;
   /**
-   * Non-null only while the INSERT-A-MESSAGE gesture is armed. Absent by
-   * default, which is what keeps every host that only READS a diagram — the
-   * example view, the chooser previews — free of editing chrome without
-   * passing a flag to say so.
+   * Non-null only while a two-click lifeline gesture is armed — inserting a
+   * message or repointing one. Absent by default, which is what keeps every
+   * host that only READS a diagram — the example view, the chooser previews —
+   * free of editing chrome without passing a flag to say so.
    */
-  insert?: SequenceInsertArming | null;
+  pick?: SequenceLifelinePick | null;
   /*
    * There is NO onClearFocus here, deliberately. Clearing is what happens when
    * a click lands on nothing, and "nothing" is bigger than this component: in
@@ -210,7 +223,7 @@ export function SequenceDiagram({
   collapsed,
   dependencyCount,
   onToggleCollapse,
-  insert = null,
+  pick = null,
 }: SequenceDiagramProps): React.JSX.Element {
   /**
    * Every dim decision below derives from THIS set (see resolveFocusSteps):
@@ -775,7 +788,7 @@ export function SequenceDiagram({
         />
       ))}
 
-      {/* ---- the insert gesture's arming layer ----
+      {/* ---- the lifeline picker's arming layer ----
           LAST IN DOCUMENT ORDER, and that is the only place it can be: SVG
           has no z-index, so a per-lifeline hit column drawn any earlier would
           sit UNDER the message hit boxes and the reader would arm the gesture,
@@ -795,13 +808,13 @@ export function SequenceDiagram({
           to put something is a diagram fighting the choice. The indicator is a
           static dashed rule, which is the same visual language every editor
           uses for "the thing goes here". */}
-      {insert === null ? null : (
-        <g className="af-seq-chrome-insert">
+      {pick === null ? null : (
+        <g className="af-seq-chrome-pick">
           <line
             x1={layout.minX + 4}
             x2={layout.minX + layout.width - 4}
-            y1={insert.atY}
-            y2={insert.atY}
+            y1={pick.atY}
+            y2={pick.atY}
             stroke="var(--primary)"
             strokeWidth={1.5}
             strokeDasharray="6 4"
@@ -809,28 +822,36 @@ export function SequenceDiagram({
           />
           {layout.participants.map((participant) => (
             <rect
-              key={`insert-${participant.id}`}
+              key={`pick-${participant.id}`}
               /* Literal class list, chrome-prefixed: `check:sequence-export`
                  reads the className off the markup and fails a control it
                  cannot strip, which is how this rect stays out of every
                  exported SVG, PNG and GIF frame. */
-              className="af-seq-chrome-hit af-seq-chrome-hit-region af-seq-chrome-insert-target"
+              className="af-seq-chrome-hit af-seq-chrome-hit-region af-seq-chrome-pick-target"
               x={participant.x - participant.headerWidth / 2}
               y={layout.lifelineTop}
               width={participant.headerWidth}
               height={Math.max(0, layout.footerTop - layout.lifelineTop)}
               role="button"
               tabIndex={0}
+              /* The SENTENCE is the only thing the purpose changes. "the new
+                 message" and "this message" are the difference between adding
+                 an arrow and moving one, and a reader who cannot see the
+                 dashed rule has nothing else to tell them which they are in. */
               aria-label={
-                insert.from === null
-                  ? `Send the new message from ${participant.name}`
-                  : `Send the new message to ${participant.name}`
+                pick.purpose === "insert"
+                  ? pick.from === null
+                    ? `Send the new message from ${participant.name}`
+                    : `Send the new message to ${participant.name}`
+                  : pick.from === null
+                    ? `Send this message from ${participant.name} instead`
+                    : `Send this message to ${participant.name} instead`
               }
               onClick={(event) => {
                 event.stopPropagation();
-                insert.onPick(participant.id);
+                pick.onPick(participant.id);
               }}
-              onKeyDown={keyActivate(() => insert.onPick(participant.id))}
+              onKeyDown={keyActivate(() => pick.onPick(participant.id))}
             />
           ))}
         </g>

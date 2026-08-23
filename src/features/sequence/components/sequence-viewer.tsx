@@ -56,6 +56,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeftRight,
   Check,
   EyeOff,
   HelpCircle,
@@ -64,6 +65,8 @@ import {
   Plus,
   Scan,
   SquareMinus,
+  Trash2,
+  UserPlus,
   Waves,
   X,
   ZoomIn,
@@ -107,7 +110,7 @@ import {
 } from "../lib/collapse";
 import { layoutSequence } from "../lib/layout";
 import { sequenceMarchState, sequenceMotionVars } from "../lib/motion";
-import type { SequenceFocus, SequenceInsertArming } from "./sequence-diagram";
+import type { SequenceFocus, SequenceLifelinePick } from "./sequence-diagram";
 import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
 
 /* -------------------------------------------------------------------------- */
@@ -143,7 +146,44 @@ export interface SequenceEditHandlers {
     from: string,
     to: string,
   ) => void;
+  /** Send an existing message between two other lifelines. */
+  onRepointMessage: (path: SequenceItemPath, from: string, to: string) => void;
+  onDeleteMessage: (path: SequenceItemPath) => void;
+  onDeleteParticipant: (participantId: string) => void;
+  /** Appends a placeholder lifeline; the host picks its id and name. */
+  onInsertParticipant: () => void;
+  /*
+   * WHY NO `canDelete`, AND NO DISABLED STATE FOR THE REMOVE CONTROLS. Both
+   * deletes can be refused — a message carrying an activation flag, a lifeline
+   * messages still point at — and the refusal has a SENTENCE with a count in
+   * it. That sentence is the host's to say: it is the host that owns the
+   * document, the refusal predicates and the one live region, and asking this
+   * component to mirror the predicate so it could grey a button out would be a
+   * second authority on "is this deletable" free to disagree with the one that
+   * decides. So the control is always live, and pressing it either deletes or
+   * explains. That is the same verdict the C4 canvas reached for a node that
+   * owns a child diagram.
+   */
 }
+
+/**
+ * The armed two-click gesture, as the viewer holds it.
+ *
+ * A DISCRIMINATED UNION rather than one shape with an optional `path`, because
+ * the two purposes need different things to be true: an insert may legitimately
+ * have no anchor (it appends), while a repoint without an address is not a
+ * repoint. Making `path` optional would let the second case compile.
+ */
+type Arming =
+  | { purpose: "insert"; from: string | null }
+  | {
+      purpose: "repoint";
+      from: string | null;
+      /** The message being moved, captured when the gesture was armed. */
+      path: SequenceItemPath;
+      /** Its step at arm time — for the indicator's row and the wording. */
+      step: number;
+    };
 
 /* -------------------------------------------------------------------------- */
 /* The viewer                                                                   */
@@ -881,8 +921,8 @@ export function SequenceViewer({
    * Tab-escape-hatch (see sequence-playground.tsx), not to diagram focus.
    */
   /**
-   * The armed insert gesture: `null` when disarmed, `{ from: null }` while the
-   * sender click is owed, `{ from: id }` while the receiver click is owed.
+   * The armed two-click gesture: `null` when disarmed, `from: null` while the
+   * sender click is owed, `from: id` while the receiver click is owed.
    *
    * A BUTTON THEN TWO CLICKS, not a drag. A drag from lifeline to lifeline was
    * the obvious alternative and is unavailable: the canvas already owns
@@ -890,8 +930,17 @@ export function SequenceViewer({
    * `handlePointerDown`), so a second meaning for the same gesture would make
    * both ambiguous. The modal arm is also the only shape that is reachable
    * from the keyboard, since the lifeline targets become tab stops.
+   *
+   * TWO PURPOSES, ONE MACHINE. `"repoint"` carries the ADDRESS of the message
+   * being moved, captured when the gesture was armed rather than re-read from
+   * `focus` when the second click lands. Focus is not frozen while the picker
+   * is up — the reader can click bare canvas, which clears it — so a repoint
+   * that re-read it would find `null` and silently do nothing, having taken two
+   * deliberate clicks. Capturing the address at arm time means the gesture
+   * finishes what the reader started or is refused with a reason, never
+   * quietly abandoned.
    */
-  const [arming, setArming] = useState<{ from: string | null } | null>(null);
+  const [arming, setArming] = useState<Arming | null>(null);
 
   const disarm = useCallback(
     (announcement: string | null) => {
@@ -915,7 +964,14 @@ export function SequenceViewer({
     focusRef.current = focus;
     clearFocusRef.current = handleClearFocus;
     disarmRef.current =
-      arming === null ? null : () => disarm("Insert cancelled.");
+      arming === null
+        ? null
+        : () =>
+            disarm(
+              arming.purpose === "insert"
+                ? "Insert cancelled."
+                : "Repoint cancelled.",
+            );
   }, [focus, handleClearFocus, arming, disarm]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1016,7 +1072,7 @@ export function SequenceViewer({
     focus.id === editing.id;
 
   const handleArmInsert = useCallback(() => {
-    setArming({ from: null });
+    setArming({ purpose: "insert", from: null });
     onAnnounce(
       focus?.kind === "message"
         ? `Inserting a message after step ${focus.step}. Click or tab to the sending lifeline, then the receiving one. Escape cancels.`
@@ -1025,24 +1081,60 @@ export function SequenceViewer({
   }, [focus, onAnnounce]);
 
   /**
-   * One lifeline click. The first supplies the sender, the second the receiver
-   * and fires the edit — a SELF-message when they are the same lifeline, which
-   * is a legal and useful thing to draw, so it is not refused.
+   * Arm the picker to MOVE the focused message's endpoints.
    *
-   * The new message is FOCUSED and opened for editing, at the step it will
-   * occupy once the host's re-parse arrives (`after + 1`, or the end). Focus is
-   * validated at read time against the new layout, so pointing at a step that
-   * does not exist yet costs nothing if the edit is refused — it reads as no
-   * focus rather than as a wrong selection.
+   * Closes the edit form as it arms, deliberately. The two cannot both be the
+   * reader's attention: the form's fields describe the message's wording and
+   * the picker is about to change something the form does not show, so leaving
+   * the form open would invite an Apply that submits stale wording over the
+   * repointed line. Reopening it afterwards is one press of the pencil.
    */
-  const handlePickInsertEnd = useCallback(
+  const handleArmRepoint = useCallback(() => {
+    if (focus?.kind !== "message" || focusedMessagePath === null) return;
+    setEditing(null);
+    setArming({
+      purpose: "repoint",
+      from: null,
+      path: focusedMessagePath,
+      step: focus.step,
+    });
+    onAnnounce(
+      `Repointing step ${focus.step}. Click or tab to the new sending lifeline, then the receiving one. Escape cancels.`,
+    );
+  }, [focus, focusedMessagePath, onAnnounce]);
+
+  /**
+   * One lifeline click, for either purpose. The first supplies the sender, the
+   * second the receiver and fires the edit — a SELF-message when they are the
+   * same lifeline, which is a legal and useful thing to draw, so it is not
+   * refused for either gesture.
+   *
+   * For an INSERT the new message is FOCUSED and opened for editing, at the
+   * step it will occupy once the host's re-parse arrives (`after + 1`, or the
+   * end). Focus is validated at read time against the new layout, so pointing
+   * at a step that does not exist yet costs nothing if the edit is refused — it
+   * reads as no focus rather than as a wrong selection.
+   */
+  const handlePickEnd = useCallback(
     (participantId: string) => {
       if (edit === undefined || arming === null) return;
       if (arming.from === null) {
-        setArming({ from: participantId });
+        setArming({ ...arming, from: participantId });
         onAnnounce(
           `Sending from ${nameById.get(participantId) ?? participantId}. Now choose the receiving lifeline.`,
         );
+        return;
+      }
+      /* REPOINT COMPLETES HERE and returns: it has its own address from arm
+         time, so none of the focus reasoning below applies to it. The message
+         it moves keeps its step number — endpoints do not reorder anything —
+         so the focus and the open dock stay pointed at the same step, and the
+         reader watches the arrow move under a panel that is still describing
+         it. */
+      if (arming.purpose === "repoint") {
+        const { path, from } = arming;
+        setArming(null);
+        edit.onRepointMessage(path, from, participantId);
         return;
       }
       /* A MESSAGE FOCUS WITH NO ADDRESS IS REFUSED, not quietly appended.
@@ -1080,26 +1172,36 @@ export function SequenceViewer({
   );
 
   /**
-   * Y of the insertion indicator: the midpoint of the gap the new row will
-   * open. Read out of `layout.yByStep` rather than recomputed, so the line the
-   * reader sees and the place the message lands are one answer.
+   * Y of the indicator, and the two purposes want different rows.
+   *
+   * An INSERT points at the midpoint of the gap the new row will open — the
+   * space between two existing steps, because that is where the message goes. A
+   * REPOINT points at the row of the message being moved, because nothing new
+   * opens: the arrow the reader is about to redirect is already drawn there, and
+   * a rule in the gap below it would say the wrong thing.
+   *
+   * Both read out of `layout.yByStep` rather than recomputing anything, so the
+   * line the reader sees and the row the edit is about are one answer.
    */
-  const insertIndicatorY =
-    focus?.kind === "message"
-      ? ((layout.yByStep[focus.step - 1] ?? layout.lifelineTop) +
-          (layout.yByStep[focus.step] ?? layout.lifelineBottom)) /
-        2
-      : ((layout.yByStep[layout.stepCount - 1] ?? layout.lifelineTop) +
-          layout.lifelineBottom) /
-        2;
+  const indicatorY =
+    arming?.purpose === "repoint"
+      ? (layout.yByStep[arming.step - 1] ?? layout.lifelineTop)
+      : focus?.kind === "message"
+        ? ((layout.yByStep[focus.step - 1] ?? layout.lifelineTop) +
+            (layout.yByStep[focus.step] ?? layout.lifelineBottom)) /
+          2
+        : ((layout.yByStep[layout.stepCount - 1] ?? layout.lifelineTop) +
+            layout.lifelineBottom) /
+          2;
 
-  const insertArming: SequenceInsertArming | null =
+  const lifelinePick: SequenceLifelinePick | null =
     arming === null
       ? null
       : {
+          purpose: arming.purpose,
           from: arming.from,
-          atY: insertIndicatorY,
-          onPick: handlePickInsertEnd,
+          atY: indicatorY,
+          onPick: handlePickEnd,
         };
 
   /* ---- render -------------------------------------------------------------- */
@@ -1330,7 +1432,7 @@ export function SequenceViewer({
               collapsed={collapsed}
               dependencyCount={dependencyCount}
               onToggleCollapse={handleToggleCollapse}
-              insert={insertArming}
+              pick={lifelinePick}
             />
           </div>
         </div>
@@ -1464,6 +1566,30 @@ export function SequenceViewer({
               <Plus aria-hidden="true" className="size-4" />
             </button>
           )}
+          {/* ---- add a lifeline ----
+              BESIDE the insert-message control, in the same strip, on the same
+              "editing is on right now" condition — the two are the canvas's
+              only CREATE gestures and a reader looking for one will look where
+              the other is.
+
+              NO ARMING, unlike its neighbour, and the asymmetry is the honest
+              one: an inserted message needs two lifelines named before it can
+              exist, while a lifeline needs nothing but a place, and its place
+              is decided (the end of the order — a column can be moved in the
+              source pane, and there is no drag on this canvas to move it
+              with). Arming a gesture that has nothing to ask would be a modal
+              state with one legal answer. */}
+          {edit === undefined ? null : (
+            <button
+              type="button"
+              onClick={edit.onInsertParticipant}
+              aria-label="Add a lifeline"
+              title="Add a lifeline at the end of the flow"
+              className={ZOOM_BUTTON_CLASSES}
+            >
+              <UserPlus aria-hidden="true" className="size-4" />
+            </button>
+          )}
           {tourEnabled ? (
             <button
               type="button"
@@ -1593,6 +1719,8 @@ export function SequenceViewer({
                   <MessageForm
                     key={`msg-form-${focusedMessage.step}`}
                     message={focusedMessage}
+                    endpoints={`${nameById.get(focusedMessage.from) ?? focusedMessage.from} → ${nameById.get(focusedMessage.to) ?? focusedMessage.to}`}
+                    onRepoint={handleArmRepoint}
                     onCancel={() => setEditing(null)}
                     onSubmit={(revision) => {
                       setEditing(null);
@@ -1659,6 +1787,29 @@ export function SequenceViewer({
                 </dl>
               ) : null}
 
+              {/* ---- remove this message ----
+                  BELOW the facts, not beside the pencil in the header. The
+                  header already holds Close, and a destructive control one
+                  misclick from "put this panel away" is a trap; down here it is
+                  the last thing in the panel and reads as the end of the list
+                  of things you can do to a message.
+
+                  Gated on the message having an ADDRESS. A drawn message whose
+                  object the unfiltered tree no longer holds (a fold; see
+                  `focusedMessagePath`) has nothing to delete BY, and the same
+                  fold already replaces the edit form with the sentence
+                  explaining it — so the reader is told why, once, rather than
+                  offered a second control that would refuse. */}
+              {edit !== undefined &&
+              focusedMessage !== null &&
+              !editingMessage &&
+              focusedMessagePath !== null ? (
+                <DockRemoveButton
+                  label="Remove this message"
+                  onRemove={() => edit.onDeleteMessage(focusedMessagePath)}
+                />
+              ) : null}
+
               {focusedParticipant !== null && editingParticipant ? (
                 <ParticipantForm
                   key={`p-form-${focusedParticipant.id}`}
@@ -1703,6 +1854,17 @@ export function SequenceViewer({
                     nameById={nameById}
                     onFocusMessage={handleFocusMessage}
                   />
+                  {/* Directly under the message list, which is the panel's own
+                      answer to why a removal may be refused: the count in that
+                      heading is the same count the refusal will quote back. */}
+                  {edit !== undefined ? (
+                    <DockRemoveButton
+                      label="Remove this lifeline"
+                      onRemove={() =>
+                        edit.onDeleteParticipant(focusedParticipant.id)
+                      }
+                    />
+                  ) : null}
                 </>
               ) : null}
 
@@ -1834,12 +1996,15 @@ const FOCUS_TOUR_STEP: TourStep = {
    fold step rides: a tour step naming a control that is not on screen sends the
    reader hunting for it. */
 const EDIT_TOUR_STEP: TourStep = {
-  title: "Change what a step says",
+  title: "Edit the flow on the canvas",
   body:
     "Click a message or a lifeline, then the pencil in the details panel, to " +
-    "rewrite its wording. The + in this strip adds a message: press it, click " +
-    "the sending lifeline, then the receiving one. Every change is written " +
-    "into the source text beside the diagram, one line at a time.",
+    "rewrite its wording — or “Repoint on the canvas” to send the arrow " +
+    "between two other lifelines. The panel also removes what you have " +
+    "selected. In this strip, + adds a message (press it, click the sending " +
+    "lifeline, then the receiving one) and the figure adds a lifeline. Every " +
+    "change is written into the source text beside the diagram, one line at a " +
+    "time, and Cmd or Ctrl + Z undoes it.",
   icon: Pencil,
 };
 
@@ -1972,6 +2137,42 @@ function DockField({
   );
 }
 
+/**
+ * The dock's one destructive control.
+ *
+ * NO CONFIRMATION DIALOG, deliberately, and undo is the reason: every canvas
+ * edit lands on the playground's 50-deep ring, so Cmd/Ctrl + Z with the diagram
+ * focused puts a deleted element back — text, wording, continuation lines and
+ * all. A confirm step would tax every deletion to protect against one, and the
+ * page already says so in the announcement it makes. This is the same trade the
+ * C4 canvas's Delete key takes.
+ *
+ * IT MAY ALSO REFUSE. Both removals can be declined with a reason (an
+ * activation flag, a lifeline still referred to), and the host says that reason
+ * in the live region rather than this button greying itself out —
+ * `SequenceEditHandlers` argues why the predicate stays on one side.
+ */
+function DockRemoveButton({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <button
+        type="button"
+        onClick={onRemove}
+        className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <Trash2 aria-hidden="true" className="size-3.5" />
+        {label}
+      </button>
+    </div>
+  );
+}
+
 /** Apply / Cancel, in that order — the primary action nearest the fields. */
 function DockFormActions({
   onCancel,
@@ -2006,10 +2207,15 @@ function DockFormActions({
  */
 function MessageForm({
   message,
+  endpoints,
+  onRepoint,
   onSubmit,
   onCancel,
 }: {
   message: LaidMessage;
+  /** The current sender and receiver, by display name, already formatted. */
+  endpoints: string;
+  onRepoint: () => void;
   onSubmit: (revision: SequenceMessageRevision) => void;
   onCancel: () => void;
 }): React.JSX.Element {
@@ -2047,6 +2253,34 @@ function MessageForm({
           className={FIELD_CLASSES}
         />
       </DockField>
+      {/* ---- the endpoints ----
+          SHOWN, AND CHANGED BY POINTING — not two text inputs. An endpoint is a
+          participant id, and asking the reader to spell one while the lifeline
+          it names is on screen a few pixels away invites a typo that makes a
+          document the parser refuses. So this row states where the arrow runs
+          and hands the gesture to the canvas, where the answer is a lifeline
+          you can click.
+
+          NOT a <DockField>: that wraps a <label> around a control, and a button
+          that leaves the form is not this form's input. Pressing it closes the
+          form (see `handleArmRepoint`) so a stale Apply cannot land on top of
+          the repointed line. */}
+      <div className="rounded-md border border-border bg-secondary/40 px-2 py-1.5">
+        <span className="block text-xs font-medium text-muted-foreground">
+          Endpoints
+        </span>
+        <span className="mt-0.5 block text-sm text-foreground">
+          {endpoints}
+        </span>
+        <button
+          type="button"
+          onClick={onRepoint}
+          className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <ArrowLeftRight aria-hidden="true" className="size-3.5" />
+          Repoint on the canvas
+        </button>
+      </div>
       <DockField term="Kind">
         <select
           value={kind}

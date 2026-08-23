@@ -605,9 +605,9 @@
   fill: var(--ring);
 }
 
-/* ---- the insert gesture's lifeline targets ----------------------------------
- * While the two-click insert is armed, every lifeline becomes a full-height
- * button. A hit region with no paint at all would leave the reader guessing
+/* ---- the lifeline picker's targets ------------------------------------------
+ * While a two-click lifeline gesture is armed — inserting a message or
+ * repointing one — every lifeline becomes a full-height button. A hit region with no paint at all would leave the reader guessing
  * which part of the canvas is now a target — the gesture is modal, and a modal
  * state that looks identical to the resting one is how a reader ends up
  * clicking a message and wondering why nothing happened. So the columns carry
@@ -619,12 +619,12 @@
  * this is not it, and a pulsing target would compete with the diagram the
  * reader is trying to read.
  */
-.af-seq-chrome-insert-target {
+.af-seq-chrome-pick-target {
   fill: color-mix(in oklch, var(--primary) 7%, transparent);
 }
 
-.af-seq-chrome-insert-target:hover,
-.af-seq-chrome-insert-target:focus-visible {
+.af-seq-chrome-pick-target:hover,
+.af-seq-chrome-pick-target:focus-visible {
   fill: color-mix(in oklch, var(--primary) 20%, transparent);
 }
 
