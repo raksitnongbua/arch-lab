@@ -19,14 +19,19 @@
  * is what makes this drift-proof: whatever the stylesheet says today is what
  * the export gets, with no list of rules to maintain here.
  *
- * FOUR THINGS ARE DROPPED, and each would be a defect in a still image:
- *   - hit regions, which are invisible controls and mean nothing in a file;
- *   - the fold pill, which is an affordance for a reader who can click;
- *   - the `desc` marker, which points at a detail only a click can reveal;
+ * TWO CATEGORIES ARE DROPPED, and each would be a defect in a still image:
+ *   - CHROME — anything that exists only for a reader who can point at the
+ *     screen: hit regions (invisible controls), the fold pill (an affordance
+ *     for a click), the `…` mark on a truncated label (a footnote whose
+ *     footnote is a click). Recognised by the `af-seq-chrome-` prefix rather
+ *     than by name, so a control added tomorrow is covered today; the
+ *     convention and the reason for it are in `../lib/chrome.ts`.
  *   - the idle comet bands, which are motion and nothing else. Frozen, they are
  *     three bright stripes across every message — the same reason reduced
  *     motion removes them rather than parking them.
  */
+
+import { SEQUENCE_CHROME_SELECTOR } from "../lib/chrome";
 
 /** What `viewer/export/download.ts` rasterises. */
 export interface RenderedSequenceSvg {
@@ -70,18 +75,17 @@ const CARRIED = [
 ] as const;
 
 /**
- * Controls that mean nothing in a file, whatever the export is for — and the
- * "there is more" mark, for the same reason one step further: it is a
- * footnote marker whose footnote is a click, and a still image has no click.
- * Left in, it would promise a detail the file cannot show. (The detail
- * itself does not travel; a `desc` lives in the .alab source, which is what
- * to share when the detail is the point.)
+ * Everything that exists only for someone who can point at the screen.
+ *
+ * DERIVED FROM THE NAMING CONVENTION, not from a list of names. It WAS three
+ * hand-written selectors, and that is a bug waiting for the next class: a
+ * drag handle, a selection outline or an insertion indicator would have
+ * serialised into every SVG, every PNG and all twenty GIF frames, and no
+ * check would have gone red — the export check could only assert that the
+ * list contained the names it already knew. `../lib/chrome.ts` states the
+ * convention and `check:sequence-export` proves the feature obeys it.
  */
-const DROPPED_ALWAYS = [
-  ".af-seq-hit",
-  ".af-seq-fold",
-  ".af-seq-label-more",
-].join(",");
+const DROPPED_ALWAYS = SEQUENCE_CHROME_SELECTOR;
 
 /**
  * The idle comet bands. Dropped from a STILL — frozen, they are three bright

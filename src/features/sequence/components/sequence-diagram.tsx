@@ -787,7 +787,7 @@ function FragmentControl({
     <g className="af-seq-frag-ctl">
       <g className="pointer-events-none">{children}</g>
       <rect
-        className="af-seq-hit af-seq-hit-region"
+        className="af-seq-chrome-hit af-seq-chrome-hit-region"
         x={hitX}
         y={hitY}
         width={hitWidth}
@@ -1040,10 +1040,10 @@ function ParticipantColumn({
         </text>
       ) : null}
       {/* The whole header is the participant's click/keyboard target —
-          `af-seq-hit-region` makes the rect's INTERIOR hit-testable
+          `af-seq-chrome-hit-region` makes the rect's INTERIOR hit-testable
           (pointer-events: all), not just an 18px stroke band around it. */}
       <rect
-        className="af-seq-hit af-seq-hit-region"
+        className="af-seq-chrome-hit af-seq-chrome-hit-region"
         x={x - headerWidth / 2}
         y={layout.headerTop}
         width={headerWidth}
@@ -1085,7 +1085,7 @@ function ParticipantColumn({
           target stays 24×18 regardless of how small the glyph is, because a
           minimal control must be quiet, not hard to hit. */}
       {dependencies > 0 ? (
-        <g className="af-seq-fold">
+        <g className="af-seq-chrome-fold">
           <text
             x={x + headerWidth / 2 - 9}
             y={boxTop + 16}
@@ -1097,7 +1097,7 @@ function ParticipantColumn({
             {collapsed ? `+${dependencies}` : "−"}
           </text>
           <rect
-            className="af-seq-hit af-seq-hit-region"
+            className="af-seq-chrome-hit af-seq-chrome-hit-region"
             x={x + headerWidth / 2 - 24}
             y={boxTop + 3}
             width={24}
@@ -1182,7 +1182,7 @@ function ParticipantColumn({
           {participant.name}
         </text>
         <rect
-          className="af-seq-hit af-seq-hit-region"
+          className="af-seq-chrome-hit af-seq-chrome-hit-region"
           x={x - headerWidth / 2}
           y={layout.footerTop}
           width={headerWidth}
@@ -1251,7 +1251,7 @@ function Message({
    * ONE hit target per message, covering the arrow AND its label — a user's
    * instinct is to click the words, and two separate targets would double
    * the tab stops and split the accessible name. Built as closed rect
-   * subpaths (hit-tested by fill via `.af-seq-hit-region`, no stroke) so the
+   * subpaths (hit-tested by fill via `.af-seq-chrome-hit-region`, no stroke) so the
    * bounds are EXACT — the old 18px-stroke trick would halo 9px past every
    * edge and let a label box steal clicks from its neighbour.
    *
@@ -1457,18 +1457,18 @@ function Message({
           <tspan className="af-seq-label-meta"> [{message.technology}]</tspan>
         ) : null}
         {/* The footnote mark for a message that carries a `desc` — see
-            .af-seq-label-more. aria-hidden because the accessible name below
+            .af-seq-chrome-more. aria-hidden because the accessible name below
             says it in words; a screen reader announcing "bullet" would be
             noise, not an affordance. */}
         {message.description !== undefined ? (
-          <tspan className="af-seq-label-more" aria-hidden="true">
+          <tspan className="af-seq-chrome-more" aria-hidden="true">
             {" •"}
           </tspan>
         ) : null}
       </text>
 
       <path
-        className="af-seq-hit af-seq-hit-region"
+        className="af-seq-chrome-hit af-seq-chrome-hit-region"
         d={hitPath}
         role="button"
         tabIndex={0}

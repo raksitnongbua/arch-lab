@@ -472,7 +472,8 @@ export function SequenceViewer({
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
       // Interactive targets keep their own behaviour — see the limits above.
-      if ((event.target as Element).closest?.(".af-seq-hit") != null) return;
+      if ((event.target as Element).closest?.(".af-seq-chrome-hit") != null)
+        return;
       const pane = event.currentTarget;
       const scrollable =
         pane.scrollWidth > pane.clientWidth ||
@@ -774,7 +775,9 @@ export function SequenceViewer({
     } else if (raw.kind === "participant") {
       const name = nameById.get(raw.id) ?? raw.id;
       target =
-        [...pane.querySelectorAll(".af-seq-participant .af-seq-hit")].find(
+        [
+          ...pane.querySelectorAll(".af-seq-participant .af-seq-chrome-hit"),
+        ].find(
           (el) => el.getAttribute("aria-label") === `Focus participant ${name}`,
         ) ?? null;
     }
