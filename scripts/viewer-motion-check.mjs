@@ -448,6 +448,164 @@ check(
 );
 
 /* ----------------------------------------------------------------------- */
+/* The fold settles NOTHING after first paint, and stays reachable          */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * These are motion assertions even though nothing here moves, and that is the
+ * point: the drawing is PANE-FITTED — `fit` scales by
+ * `min(paneW/vbW, paneH/vbH)` — so a rail that slides, grows or is corrected
+ * into place after paint narrows the canvas pane and re-fits the whole diagram
+ * at a different scale. That reflow jump is a bug this repo has already fixed
+ * once in `sequence-viewer.tsx`, and the rail fold now DEFAULTS to folded
+ * (`playground/lib/source-fold.ts`), so the arrangement it decides is the one
+ * every first-time reader sees.
+ *
+ * The second half is the price of that default: folded, the toggle is the only
+ * thing on screen saying the diagram is written as text — one of the two things
+ * a drawing tool cannot do (`purpose.md`) — so it must be reachable and legible
+ * wherever the fold applies.
+ */
+
+/** A named region of `split-workbench.tsx`, so a rename fails loudly here
+ *  rather than silently handing an assertion an empty string to pass on. */
+function workbenchRegion(source, from, to) {
+  const start = source.indexOf(from);
+  assert.notEqual(start, -1, `\`${from}\` is gone from split-workbench.tsx`);
+  const end = to === null ? source.length : source.indexOf(to, start);
+  assert.notEqual(end, -1, `\`${to}\` is gone from split-workbench.tsx`);
+  return source.slice(start, end);
+}
+
+const TOGGLE_DECL = "export function SourceRailToggle";
+const workbench = read("src/components/ui/split-workbench.tsx");
+
+/** Every class string a `guard &&` clause contributes to a `cn(…)` call. */
+function guardedClasses(region, guard) {
+  const matches = [
+    ...region.matchAll(new RegExp(`${guard} &&\\s*"([^"]*)"`, "g")),
+  ];
+  assert.notEqual(
+    matches.length,
+    0,
+    `nothing in the layout is guarded by \`${guard} &&\` any more`,
+  );
+  return matches.map(([, classes]) => classes);
+}
+
+check(
+  "the fold hides the rail only where a toggle exists to bring it back",
+  () => {
+    const layout = workbenchRegion(
+      workbench,
+      "export function SplitWorkbench",
+      TOGGLE_DECL,
+    );
+    /* BELOW `lg` THE PANES STACK and no toggle is rendered, so an unprefixed
+       hide would leave a phone reader an editor whose only way back is a wider
+       window. That is not hypothetical: the fold is remembered across visits,
+       so a reader who folded it on a laptop carried the cookie to their phone.
+       The two halves have to agree — the widths the fold applies at, and the
+       widths the toggle exists at. */
+    for (const classes of guardedClasses(layout, "collapsed")) {
+      for (const token of classes.split(/\s+/).filter(Boolean)) {
+        assert.match(
+          token,
+          /^lg:/,
+          `the fold applies "${token}" below lg, where there is no toggle to undo it`,
+        );
+      }
+    }
+    const toggle = workbenchRegion(workbench, TOGGLE_DECL, null);
+    assert.match(
+      toggle,
+      /"hidden lg:inline-flex"/,
+      "the toggle is no longer lg-only — the fold and its control must cover the same widths",
+    );
+  },
+);
+
+check("immersive hides the rail at every width, not only at lg", () => {
+  const layout = workbenchRegion(
+    workbench,
+    "export function SplitWorkbench",
+    TOGGLE_DECL,
+  );
+  /* The asymmetry with the fold above is deliberate and is why these are two
+     props. Immersive covers the viewport with a fixed canvas, so a rail merely
+     left behind it is an editor a keyboard can tab into and nobody can see;
+     `hidden` is what takes the textarea out of the tab order. */
+  assert.ok(
+    guardedClasses(layout, "immersive").some((classes) =>
+      classes.split(/\s+/).includes("hidden"),
+    ),
+    "immersive no longer hides the rail unprefixed — below lg it would sit in the tab order behind a fullscreen canvas",
+  );
+});
+
+check("the workbench animates colour and nothing else", () => {
+  const layout = workbenchRegion(
+    workbench,
+    "export function SplitWorkbench",
+    TOGGLE_DECL,
+  );
+  /* A transitioned or animated pane is a canvas whose width is still arriving
+     after first paint, which re-fits the diagram at a second scale in front of
+     the reader. The divider's `transition-colors` is fine — a colour costs no
+     layout. Measured over the LAYOUT only, so the toggle's own button
+     transition (shared with every other button) is not caught by it. */
+  for (const [token] of layout.matchAll(/transition-[\w[\]-]+/g)) {
+    assert.equal(
+      token,
+      "transition-colors",
+      `${token} animates something other than colour in the workbench — the canvas pane's size must be final at first paint`,
+    );
+  }
+  assert.doesNotMatch(
+    layout,
+    /\banimate-/,
+    "an animation appeared on a workbench pane — the diagram would re-fit as it played",
+  );
+});
+
+check("the fold removes the rail rather than sizing it to nothing", () => {
+  const layout = workbenchRegion(
+    workbench,
+    "export function SplitWorkbench",
+    TOGGLE_DECL,
+  );
+  /* A zero-width rail looks identical and is not: the textarea stays in the tab
+     order, so a keyboard reader tabs into an editor they cannot see, and
+     `SplitWorkbench`'s header records that `hidden` is what makes the folded
+     state real for a keyboard. */
+  assert.ok(
+    guardedClasses(layout, "collapsed").every((classes) =>
+      classes.split(/\s+/).includes("lg:hidden"),
+    ),
+    "the fold is expressed as something other than `display: none` — a rail sized to zero is still focusable",
+  );
+});
+
+check("the folded face keeps its label at every width it appears at", () => {
+  const toggle = workbenchRegion(workbench, TOGGLE_DECL, null);
+  /* `hidden xl:inline` used to wrap this label, so between `lg` and `xl` —
+     every 13" laptop — the only signpost to the text format was one 16px panel
+     glyph. With the rail folded by default that glyph is the whole invitation,
+     and `source-fold.ts` says in as many words that the default is only
+     defensible while this holds. */
+  assert.doesNotMatch(
+    toggle,
+    /className="[^"]*\bhidden [a-z]+:inline\b/,
+    "the toggle's label is responsively hidden again — the folded rail's only signpost becomes an icon",
+  );
+  assert.match(
+    toggle,
+    /collapsed \? "Edit the text"/,
+    "the folded face stopped naming the action it performs",
+  );
+});
+
+/* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

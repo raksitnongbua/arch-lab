@@ -214,6 +214,7 @@ import {
 } from "../input/sequence-edit";
 import { CANVAS_LOCKED_BY_DEFAULT } from "../lib/canvas-lock";
 import { KIND_BLURB } from "../lib/kind-copy";
+import { SOURCE_FOLDED_BY_DEFAULT } from "../lib/source-fold";
 import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
 
 /**
@@ -255,11 +256,18 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
       "diagram. Escape brings it back — a focused message clears first.",
     icon: Expand,
   },
+  /* THE RAIL GETS A STEP for the same reason the lock below does, and it
+     arrived with the same change: the rail is folded by default
+     (`lib/source-fold.ts`), so this is the second chance to say that the
+     diagram is drawn from a text document you can edit. The strip's own "Edit
+     the text" is meant to answer it without help; this says where the pane
+     appears and what typing in it does, which a two-word button cannot. */
   {
     title: "The text behind it",
     body:
-      "The source that draws this diagram sits beside it — edit the pane and " +
-      "the diagram re-renders as you type.",
+      "This diagram is drawn from a text document. “Edit the text” at the top " +
+      "of this pane opens it alongside the diagram — type in it and the " +
+      "drawing re-renders as you go.",
     icon: FileText,
   },
   /* THE LOCK GETS A STEP because it is the one control that takes every other
@@ -317,7 +325,7 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
 export function ViewPlayground({
   seed,
   initialText,
-  initialSourceCollapsed = false,
+  initialSourceCollapsed = SOURCE_FOLDED_BY_DEFAULT,
   initialCanvasLocked = CANVAS_LOCKED_BY_DEFAULT,
 }: {
   /** Which example fills the pane when no share payload does. */
@@ -332,8 +340,12 @@ export function ViewPlayground({
    * The reader's stored rail fold, read from the request cookie by the route
    * that mounts this. Passed in rather than read here because only a SERVER
    * component can see the request, and the whole point is that the first
-   * rendered byte already has the right layout. Defaults to expanded, which
-   * is what a caller with no request context (a test, a story) should get.
+   * rendered byte already has the right layout.
+   *
+   * Defaults to the module's own constant rather than a second literal, so a
+   * host that omits the prop cannot disagree with the server's read of the
+   * cookie — the same rule as the lock below. See `lib/source-fold.ts` for why
+   * folded is that default and what the toggle owes the reader in return.
    */
   initialSourceCollapsed?: boolean;
   /**
@@ -411,11 +423,14 @@ export function ViewPlayground({
   const [startersOpen, setStartersOpen] = useState(false);
   const startersMenuId = useId();
 
-  /** The left rail's fold. The toggle lives in the canvas column's own strip,
-   * because a control that vanishes with the thing it hides cannot restore it.
-   * REMEMBERED across visits in a cookie the SERVER reads, so the first
-   * rendered byte already has the right layout — see `lib/source-fold.ts` for
-   * why localStorage could not do that without a visible correction. */
+  /** The left rail's fold, FOLDED unless the reader has said otherwise. The
+   * toggle lives in the canvas column's own strip, because a control that
+   * vanishes with the thing it hides cannot restore it — and with folding the
+   * default, that strip is where a first-time reader learns the diagram is
+   * written as text at all. REMEMBERED across visits in a cookie the SERVER
+   * reads, so the first rendered byte already has the right layout — see
+   * `lib/source-fold.ts` for why localStorage could not do that without a
+   * visible correction, and for the argument that the default rests on. */
   const [sourceCollapsed, setSourceCollapsed] = useSourceCollapsed(
     initialSourceCollapsed,
   );
@@ -1606,19 +1621,26 @@ export function ViewPlayground({
           </details>
         ) : null}
 
-        {/* ---- the workbench: source at 30%, canvas at 70% ----
+        {/* ---- the workbench: the canvas, and the source at 30% beside it ----
           The pane and the diagram it describes are on screen TOGETHER; both
           predecessor pages arrived at this layout the hard way (see
-          components/ui/split-workbench.tsx for the argument). The rail's
-          collapse gives the canvas everything when a wide diagram needs it. */}
+          components/ui/split-workbench.tsx for the argument).
+
+          IT OPENS WITH THE RAIL FOLDED, so the arrangement above is what the
+          reader gets on the second press rather than the first: presentation is
+          the product, and the drawing takes the opening moment
+          (`lib/source-fold.ts` carries the argument and its cost). Nothing
+          about it settles after paint — the fold is decided from the request
+          cookie, so the canvas is already the width it will keep. */}
         <SplitWorkbench
-          /* Immersive collapses the RAIL; it must not hide the workbench,
-             because the canvas that fixes itself over the viewport is inside
-             it and `display: none` on an ancestor beats `position: fixed` on
-             a descendant. (Fixed once already on the branch that carries the
-             `SplitWorkbench` change; restated here because this branch is cut
-             from main, which does not have it yet.) */
-          collapsed={sourceCollapsed || isImmersive}
+          /* TWO PROPS, not `sourceCollapsed || isImmersive`. The reader's fold
+             applies at `lg` and up, where the toggle exists to undo it;
+             immersive hides the rail at every width. Neither may hide the
+             WORKBENCH: the canvas that fixes itself over the viewport is
+             inside it, and `display: none` on an ancestor beats
+             `position: fixed` on a descendant. */
+          collapsed={sourceCollapsed}
+          immersive={isImmersive}
           sourceLabel="document source"
           source={
             /* THE RAIL IS A COLUMN THAT FILLS ITS HEIGHT, not a scrolling

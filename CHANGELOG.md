@@ -9,6 +9,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- On a phone, a rail folded on a wider screen no longer hides the editor with no
+  way back. The remembered fold now applies only at the widths that render a
+  control to undo it.
 - An old `/view` link carrying a query now keeps it. `/view?e=atlas-shop`
   forwarded to `/live` with the example id dropped, so the reader arrived at the
   seed rather than the diagram they asked for; `?e=` and `?d=` now travel with
@@ -16,6 +19,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The playground opens on the diagram, not on the editor.** `/live` rendered
+  the source rail expanded on a first visit, so the page showed a monospace
+  editor before it showed anything it draws. The rail now starts folded on a
+  desktop window, where the canvas takes the whole width; on a narrow one —
+  where the panes stack and no fold control is offered — the canvas comes first
+  instead, so a phone no longer opens on a screenful of text with the diagram
+  below the fold. Both are decided before the page renders, so nothing moves or
+  re-fits after it appears.
+- **The rail's control now says what is behind it.** Folded, it reads "Edit the
+  text" with a tinted border instead of showing an unlabelled panel icon, and it
+  keeps that label at every width the rail exists at. The playground tour's
+  source step names it too.
+- A reader who had already chosen to keep the rail open keeps it open — only the
+  never-set case changed meaning, and the fold is still remembered across
+  visits.
 - **The playground moved from `/view` to `/live`, and the header entry now
   reads "Live".** The page had not only viewed for two releases — the C4 and
   sequence canvases answer a drag and rewrite your source text under you — so

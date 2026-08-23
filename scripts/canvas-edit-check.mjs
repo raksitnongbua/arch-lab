@@ -814,6 +814,52 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
     "a preference re-implements the cookie read/write instead of sharing it",
   );
 
+  const page = read("src/features/playground/components/view-playground.tsx");
+
+  /* THE RAIL FOLD MOVED ITS DEFAULT THE SAME WAY THE LOCK DID, and it is
+     asserted here rather than beside it because it is the same failure with a
+     different cost: the fold decides what a reader SEES first (`purpose.md` —
+     presentation is the product), so getting it wrong means either a code
+     editor before any drawing, or a reader who had opened the rail finding it
+     shut again. Behavioural, through the real module, because a check that
+     reads `whenUnset: true` back out of the source passes on a value that was
+     never wired to anything. */
+  const { isCollapsedCookie, SOURCE_FOLDED_BY_DEFAULT } = await load(
+    "src/features/playground/lib/source-fold.ts",
+  );
+  check(
+    "a first visit gets the rail folded, from the module's own default",
+    isCollapsedCookie(undefined) === true &&
+      isCollapsedCookie(undefined) === SOURCE_FOLDED_BY_DEFAULT,
+    "an absent cookie opened the rail — the page shows a monospace editor " +
+      "before it shows what it draws; or the cookie read and the exported " +
+      "default disagree, so a host that omits the prop renders what the " +
+      "server did not",
+  );
+  /* THE ONE THAT PROTECTS AN EXISTING READER, exactly as the lock's does. The
+     default moved by changing what an ABSENT cookie means; a reader who had
+     deliberately opened the rail has `expanded` on disk and must still get it.
+     Inverting a spelling, or dropping the off-value branch so the opt-out
+     falls to the now-folded default, would pass every other assertion here and
+     silently reverse everyone who had already chosen. */
+  check(
+    "a reader who opened the rail keeps it open across the default change",
+    isCollapsedCookie("expanded") === false &&
+      isCollapsedCookie("collapsed") === true,
+    "a stored fold no longer means what the reader chose — the spelling was " +
+      "renamed or inverted rather than only the never-set case moving",
+  );
+  /* NOT A SECOND LITERAL AT THE PROP. The playground renders for hosts that do
+     not pass the prop, and a `false` written there would keep the OLD default
+     alive next to a server that now reads folded — `codebase.md` habit 4, two
+     halves each self-consistent. */
+  check(
+    "the playground's prop default is the constant, not a literal",
+    /initialSourceCollapsed = SOURCE_FOLDED_BY_DEFAULT,/.test(page) &&
+      !/initialSourceCollapsed = (?:true|false)/.test(page),
+    "the prop default is a hand-typed boolean again — it will disagree with " +
+      "the server's read the next time the default moves",
+  );
   /* THE LOCK EXISTS ONLY WHERE IT CAN ACT. `showCanvasLock` is gated on the
      document being editable, not on the flag alone — the text-laid-out
      notations must get no control, not a disabled one.
@@ -824,7 +870,6 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      `move` and refuses `revise`, a sequence document does the opposite. A lock
      gated on `move` alone would have left the sequence canvas editable with no
      way to lock it — a diagram someone is presenting, still taking edits. */
-  const page = read("src/features/playground/components/view-playground.tsx");
   check(
     "the lock renders only for a document one of the canvases can edit",
     /const showCanvasLock =\s*CANVAS_EDIT_ENABLED &&\s*\(editability\.editable \|\| wordingEditability\.editable\);/.test(
