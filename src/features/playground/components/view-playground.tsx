@@ -171,9 +171,10 @@ import {
 } from "../input/parse";
 import {
   canvasEditability,
-  deletedNodeDocument,
-  movedNodeDocument,
+  deletedNodeEdit,
+  movedNodeEdit,
   ownsChildDiagram,
+  type CanvasEdit,
 } from "../input/canvas-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
 import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
@@ -866,28 +867,6 @@ export function ViewPlayground({
   const showCanvasLock = CANVAS_EDIT_ENABLED && editability.editable;
 
   /**
-   * A finished drag: move the node in the document this page already holds,
-   * and let the panes follow.
-   *
-   * ONE MODEL, and this is the line that keeps it that way. The moved position
-   * goes into the `ViewDocument` — the same object a keystroke produces — and
-   * `adoptDocument` writes the text out. There is no canvas-side copy of the
-   * geometry to fall out of step with the pane, because the canvas never keeps
-   * one: React Flow holds the position for the length of the gesture and hands
-   * it over on release.
-   *
-   * `null` AS THE EDITED PANE IS THE POINT, not an omission. That argument is
-   * the page's existing "never rewrite the pane the cursor is in" rule — the
-   * one that structurally rules out echo loops between the source pane and its
-   * JSON twin — and a canvas edit is the case where the answer is genuinely
-   * "neither": the reader's caret is not in either pane, so both must be
-   * rewritten or the one left alone would describe the diagram as it was.
-   *
-   * The pending debounce is dropped first, exactly as `loadStarter` and
-   * `convertPane` drop it: a queued keystroke landing after this would parse
-   * text that predates the move and put the node back.
-   */
-  /**
    * Previous source texts, newest last — the undo history for CANVAS edits.
    *
    * THE TEXT IS THE UNDO UNIT, which is what lets this be a ring of strings
@@ -914,27 +893,40 @@ export function ViewPlayground({
   const canvasUndoRef = useRef<string[]>([]);
 
   /**
-   * Apply one canvas edit: remember the text being replaced, adopt the new
-   * document, say what happened.
+   * Apply one canvas edit: remember the text being replaced, put the edited
+   * text in the pane, adopt the document it parsed to, say what happened.
    *
-   * `null` AS THE EDITED PANE IS THE POINT, not an omission. That argument is
-   * the page's existing "never rewrite the pane the cursor is in" rule — the
-   * one that structurally rules out echo loops between the source pane and its
-   * JSON twin — and a canvas edit is the case where the answer is genuinely
-   * "neither": the reader's caret is not in either pane, so both must be
-   * rewritten or the one left alone would describe the diagram as it was.
+   * ONE MODEL, and this is where it holds. The gesture is resolved into TEXT by
+   * `canvas-edit.ts`, and the document adopted here is that text's own parse —
+   * so there is no canvas-side copy of the geometry to fall out of step with
+   * the pane. React Flow holds the position for the length of the gesture and
+   * hands it over on release; nothing keeps it afterwards.
+   *
+   * THE EDITED PANE IS `"source"`, not `null`, and the distinction is the whole
+   * comment-preservation fix — see the inline note below. The rule that
+   * argument enforces is unchanged: whichever pane's text was just written is
+   * never rewritten again from the model, which is what structurally rules out
+   * echo loops between the source pane and its JSON twin.
    *
    * The pending debounce is dropped first, exactly as `loadStarter` and
    * `convertPane` drop it: a queued keystroke landing after this would parse
    * text that predates the edit and undo it invisibly.
    */
   const applyCanvasEdit = useCallback(
-    (next: ViewDocument, announcement: string) => {
+    (edit: CanvasEdit, announcement: string) => {
       const ring = canvasUndoRef.current;
       ring.push(text);
       if (ring.length > CANVAS_UNDO_DEPTH) ring.shift();
       setPending(null);
-      adoptDocument(next, null);
+      setText(edit.text);
+      // `"source"` — NOT `null`, and this is the line that keeps comments. The
+      // text is already set above, as a PATCH of the author's own bytes; letting
+      // `adoptDocument` regenerate the source pane from the model would put the
+      // whole-document re-emit — and the comment loss with it — straight back.
+      // The rule it enforces is unchanged: the pane being written is never
+      // rewritten again from the model. The JSON twin still follows, because a
+      // canvas edit is the one case where the caret is in neither pane.
+      adoptDocument(edit.doc, "source");
       setAnnouncement(announcement);
     },
     [text, adoptDocument],
@@ -942,7 +934,7 @@ export function ViewPlayground({
 
   const handleNodeMove = useCallback<NodeMoveHandler>(
     (diagramId, nodeId, position) => {
-      const next = movedNodeDocument(doc, diagramId, nodeId, position);
+      const next = movedNodeEdit(doc, text, diagramId, nodeId, position);
       // null covers "landed where it started" as well as "cannot be edited",
       // so a press that moves nothing costs no text change and no undo entry.
       if (next === null) return;
@@ -951,7 +943,7 @@ export function ViewPlayground({
         `Moved ${nodeId} to ${position.x}, ${position.y} — the source text follows.`,
       );
     },
-    [doc, applyCanvasEdit],
+    [doc, text, applyCanvasEdit],
   );
 
   const handleNodeDelete = useCallback(
@@ -965,7 +957,7 @@ export function ViewPlayground({
         );
         return;
       }
-      const next = deletedNodeDocument(doc, diagramId, nodeId);
+      const next = deletedNodeEdit(doc, text, diagramId, nodeId);
       if (next === null) return;
       /* The undo key is NAMED here and nowhere else, because a delete is the
          one canvas edit with nothing left on screen to put back by hand — a
@@ -975,7 +967,7 @@ export function ViewPlayground({
         `Deleted ${nodeId} and every relationship touching it — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
       );
     },
-    [doc, applyCanvasEdit],
+    [doc, text, applyCanvasEdit],
   );
 
   /** Put the previous source text back and parse it — see `canvasUndoRef`. */

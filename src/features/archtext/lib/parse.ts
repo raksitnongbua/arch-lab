@@ -63,7 +63,22 @@ export interface Loc {
   column: number;
 }
 
-interface PendingNode extends Loc {
+/**
+ * A declaration that can own indent-4 continuation lines. `endLine` is the
+ * last line of the block — the declaration line itself when it has none.
+ *
+ * Tracked so `parseArchTextWithSpans` can hand a caller the LINE RANGE each
+ * node and edge occupies. That is what lets the editable canvas splice one
+ * line into the author's own text instead of re-emitting the whole document,
+ * which silently deleted every `//` comment in it (this parser drops comment
+ * lines with no capture, and the serializer has nothing to write back).
+ * See `playground/input/canvas-edit.ts`.
+ */
+interface PendingBlock extends Loc {
+  endLine: number;
+}
+
+interface PendingNode extends PendingBlock {
   id: string;
   type: C4NodeType;
   /**
@@ -103,7 +118,7 @@ interface PendingFrame extends Loc {
   inLoc?: Loc;
 }
 
-interface PendingEdge extends Loc {
+interface PendingEdge extends PendingBlock {
   source: string;
   sourceLoc: Loc;
   target: string;
@@ -306,11 +321,64 @@ export function segString(segment: PathSegment, what: string): string {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * The 1-based, INCLUSIVE line range one declaration occupies in the source,
+ * continuation lines included. `start === end` for a single-line declaration.
+ */
+export interface LineSpan {
+  start: number;
+  end: number;
+}
+
+/**
+ * Where each node and edge of a parse sits in the source text.
+ *
+ * Keyed by `spanKey(diagramId, memberId)` — ids are unique per diagram, not
+ * per file, so the diagram has to be part of the key. Edge keys use the
+ * RESOLVED id (the explicit `id=` or the default `e-<source>-<target>`), which
+ * is the id the model carries, so a caller holding a model edge can look its
+ * line up without re-deriving the default.
+ *
+ * The point of this is to make a text edit possible where a re-emit is
+ * lossy: the serializer writes canonical text, which has no `//` comments, no
+ * author blank lines and no fields omitted-at-default that the author wrote
+ * out anyway. Splicing lines by span keeps every byte the edit did not touch.
+ */
+export interface ArchTextSpans {
+  nodes: ReadonlyMap<string, LineSpan>;
+  edges: ReadonlyMap<string, LineSpan>;
+}
+
+/** The `ArchTextSpans` key for a member of a diagram. */
+export function spanKey(diagramId: string, memberId: string): string {
+  // A space is safe as the joiner where `.` or `-` would not be: the id
+  // grammar is `[A-Za-z0-9_][A-Za-z0-9_.-]*`, so no id can contain a space and
+  // therefore no pair of ids can forge another pair's key.
+  return `${diagramId} ${memberId}`;
+}
+
+interface SpanCollector {
+  nodes: Map<string, LineSpan>;
+  edges: Map<string, LineSpan>;
+}
+
+/**
  * Parses `.alab` source into an `ArchLabFile`. Pure and deterministic; the
  * result passes the editor's `validateArchLabFile` unchanged. Throws
  * `ArchTextParseError` (line + column) on any problem — all-or-nothing.
  */
 export function parseArchText(source: string): ArchLabFile {
+  return parseArchTextWithSpans(source).file;
+}
+
+/**
+ * `parseArchText`, plus where every node and edge came from — the same parse,
+ * so the spans cannot describe a different reading of the text than the model
+ * does. Callers that only want the model should use `parseArchText`.
+ */
+export function parseArchTextWithSpans(source: string): {
+  file: ArchLabFile;
+  spans: ArchTextSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -444,13 +512,19 @@ export function parseArchText(source: string): ArchLabFile {
       );
     }
     parseContinuation(cursor, member);
+    // The block now reaches this line. Recorded here rather than inside
+    // `parseContinuation` because this loop is the only place that knows a
+    // line number without being handed one.
+    member.endLine = lineNo;
   }
 
   if (!seenContent || header.version === undefined) {
     failAt(1, 1, 'the file is empty — expected an "archlab <version>" line');
   }
 
-  return resolve(header, diagrams, diagramById, nodeHome);
+  const spans: SpanCollector = { nodes: new Map(), edges: new Map() };
+  const file = resolve(header, diagrams, diagramById, nodeHome, spans);
+  return { file, spans };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1136,6 +1210,7 @@ function parseNodeLine(
 
   const node: PendingNode = {
     ...loc,
+    endLine: loc.line,
     id,
     type,
     name,
@@ -1350,6 +1425,7 @@ function parseEdgeLine(
 
   const edge: PendingEdge = {
     ...loc,
+    endLine: loc.line,
     source,
     sourceLoc: loc,
     target,
@@ -1601,6 +1677,10 @@ function resolve(
   diagrams: PendingDiagram[],
   diagramById: Map<string, PendingDiagram>,
   nodeHome: Map<string, { diagram: PendingDiagram; node: PendingNode }>,
+  /* Filled as each member is assembled, so a span is only ever recorded for a
+     member that survived the resolve pass — a span for a node the resolve
+     rejected would point a caller at a line of a file that does not parse. */
+  spans: SpanCollector,
 ): ArchLabFile {
   if (header.title === undefined && !header.metaRaw.has("title")) {
     failAt(1, 1, 'the file has no title — add a line like: title "My System"');
@@ -1856,6 +1936,10 @@ function resolve(
       add("frameId", node.frameId);
       add("pinned", pick(node.pinned, node.raw, "pinned"));
       finalNodes.push(assemble(pairs, node.unknowns));
+      spans.nodes.set(spanKey(diagram.id, node.id), {
+        start: node.line,
+        end: node.endLine,
+      });
     }
 
     /* edges */
@@ -1947,6 +2031,10 @@ function resolve(
       add("realizes", pick(edge.realizes, edge.raw, "realizes"));
       add("waypoints", waypoints);
       finalEdges.push(assemble(pairs, edge.unknowns));
+      spans.edges.set(spanKey(diagram.id, id), {
+        start: edge.line,
+        end: edge.endLine,
+      });
     }
 
     /* frames — cross-checked here, where every frame and node of this

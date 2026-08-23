@@ -86,6 +86,22 @@
  *      Flow's own `dragging: false` is the one thing that clears the overlay,
  *      because an ABORTED drag emits that change and never calls
  *      `onNodeDragStop`.
+ *  13. AN EDIT IS A LINE PATCH, so the author's own bytes survive it. This is
+ *      the section that exists because the whole-document re-emit it replaced
+ *      passed every assertion 1–12 for a release while silently deleting every
+ *      `//` comment in the file on the first drag. Canonical text cannot catch
+ *      that — a re-emit of canonical text IS canonical text — so this section
+ *      drives the same gestures from deliberately NON-canonical text and
+ *      asserts that every line the gesture is not about is byte-identical:
+ *      comments, blank lines, spacing, and a geometry token the author wrote
+ *      out that the serializer omits at its default. The patched line itself is
+ *      compared against what a FULL serialise emits for that node, because a
+ *      patch that writes almost-canonical text trades a silent loss for a
+ *      worse one. And the fallback is pinned BY NAME: every edit reports
+ *      `path`, and the two conditions that force `"reemit"` — a pane holding
+ *      JSON, and a pane whose text means a different document than the canvas
+ *      is showing — each have an assertion, so the safe path cannot silently
+ *      stop being taken.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
@@ -132,14 +148,12 @@ registerHooks({
 const load = (relative) =>
   import(pathToFileURL(path.join(ROOT, relative)).href);
 
-const { defaultPositions } = await load("src/features/archtext/index.ts");
+const { defaultPositions, defaultSizeFor } = await load(
+  "src/features/archtext/index.ts",
+);
 const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
-const {
-  canvasEditability,
-  deletedNodeDocument,
-  movedNodeDocument,
-  ownsChildDiagram,
-} = await load("src/features/playground/input/canvas-edit.ts");
+const { canvasEditability, deletedNodeEdit, movedNodeEdit, ownsChildDiagram } =
+  await load("src/features/playground/input/canvas-edit.ts");
 const { parseViewSource, VIEW_SEED_TEXT, sourceTextFor } = await load(
   "src/features/playground/input/parse.ts",
 );
@@ -268,15 +282,19 @@ console.log("\nA dragged node survives the round trip into text");
   const from = { x: target.position.x, y: target.position.y };
   const to = { x: from.x + EDIT_GRID * 3, y: from.y + EDIT_GRID * 2 };
 
-  const moved = movedNodeDocument(original, diagramId, target.id, to);
+  /* DRIVEN FROM THE CANONICAL TEXT, so the patch and the baseline are the same
+     document — see assertion 4 in the header. Section 13 below drives the same
+     gestures from deliberately NON-canonical text, which is where the patch
+     earns its keep. */
+  const moved = movedNodeEdit(original, canonical, diagramId, target.id, to);
   check(
     "a move produces a document",
-    moved !== null && moved.kind === "c4",
-    `got ${moved === null ? "null" : moved.kind}`,
+    moved !== null && moved.doc.kind === "c4",
+    `got ${moved === null ? "null" : moved.doc.kind}`,
   );
 
-  if (moved !== null && moved.kind === "c4") {
-    const landed = moved.synced.file.diagrams
+  if (moved !== null && moved.doc.kind === "c4") {
+    const landed = moved.doc.synced.file.diagrams
       .find((d) => d.id === diagramId)
       .nodes.find((n) => n.id === target.id).position;
     check(
@@ -285,7 +303,7 @@ console.log("\nA dragged node survives the round trip into text");
       `expected (${to.x},${to.y}), got (${landed.x},${landed.y})`,
     );
 
-    const movedText = sourceTextFor(moved);
+    const movedText = moved.text;
 
     /* THE GEOMETRY TOKEN'S SPELLING, taken from the serializer's own output
        rather than asserted as a pattern this script invented. The failure it
@@ -318,14 +336,20 @@ console.log("\nA dragged node survives the round trip into text");
     );
 
     /* 4. Back to the default — the token must vanish entirely. */
-    const restored = movedNodeDocument(moved, diagramId, target.id, from);
+    const restored = movedNodeEdit(
+      moved.doc,
+      moved.text,
+      diagramId,
+      target.id,
+      from,
+    );
     check(
       "moving back to the default position produces a document",
       restored !== null,
       "got null",
     );
     if (restored !== null) {
-      const restoredText = sourceTextFor(restored);
+      const restoredText = restored.text;
       check(
         "a node returned to its default position leaves NO trace in the text",
         restoredText === canonical,
@@ -336,19 +360,20 @@ console.log("\nA dragged node survives the round trip into text");
     /* 5. A press that lands where it began. */
     check(
       "a move to the position the node already has is refused",
-      movedNodeDocument(moved, diagramId, target.id, to) === null,
+      movedNodeEdit(moved.doc, moved.text, diagramId, target.id, to) === null,
       "expected null, got a document — the pane would be rewritten for nothing",
     );
   }
 
   check(
     "an unknown node id is refused rather than throwing",
-    movedNodeDocument(original, diagramId, "no-such-node", to) === null,
+    movedNodeEdit(original, canonical, diagramId, "no-such-node", to) === null,
     "expected null",
   );
   check(
     "an unknown diagram id is refused rather than throwing",
-    movedNodeDocument(original, "no-such-diagram", target.id, to) === null,
+    movedNodeEdit(original, canonical, "no-such-diagram", target.id, to) ===
+      null,
     "expected null",
   );
 }
@@ -380,13 +405,17 @@ console.log("\nA nudge is one grid step and stays on the grid");
     { x: -EDIT_GRID, y: 0 },
   ];
 
-  let walked = original;
+  /* The DOCUMENT AND ITS PANE TEXT are walked together, exactly as the page
+     holds them: each nudge patches the text the previous one produced, so this
+     also proves a patch composes with itself rather than only with canonical
+     input. */
+  let walked = { doc: original, text: canonical };
   let offGrid = null;
   for (const delta of deltas) {
-    const node = walked.synced.file.diagrams
+    const node = walked.doc.synced.file.diagrams
       .find((d) => d.id === diagramId)
       .nodes.find((n) => n.id === nodeId);
-    const next = movedNodeDocument(walked, diagramId, nodeId, {
+    const next = movedNodeEdit(walked.doc, walked.text, diagramId, nodeId, {
       x: node.position.x + delta.x,
       y: node.position.y + delta.y,
     });
@@ -394,7 +423,7 @@ console.log("\nA nudge is one grid step and stays on the grid");
       offGrid = `a nudge by (${delta.x},${delta.y}) was refused`;
       break;
     }
-    const landed = next.synced.file.diagrams
+    const landed = next.doc.synced.file.diagrams
       .find((d) => d.id === diagramId)
       .nodes.find((n) => n.id === nodeId).position;
     if (landed.x % EDIT_GRID !== 0 || landed.y % EDIT_GRID !== 0) {
@@ -411,8 +440,8 @@ console.log("\nA nudge is one grid step and stays on the grid");
   );
   check(
     "four nudges round a square leave the text byte-identical",
-    offGrid === null && sourceTextFor(walked) === canonical,
-    offGrid === null ? firstDiff(sourceTextFor(walked), canonical) : offGrid,
+    offGrid === null && walked.text === canonical,
+    offGrid === null ? firstDiff(walked.text, canonical) : offGrid,
   );
 }
 
@@ -446,7 +475,12 @@ console.log("\nDeleting a node leaves a document that still parses");
       (edge) => edge.source === connected.id || edge.target === connected.id,
     ).length;
 
-    const after = deletedNodeDocument(original, diagramId, connected.id);
+    const after = deletedNodeEdit(
+      original,
+      sourceTextFor(original),
+      diagramId,
+      connected.id,
+    );
     check(
       "a delete produces a document",
       after !== null,
@@ -454,7 +488,9 @@ console.log("\nDeleting a node leaves a document that still parses");
     );
 
     if (after !== null) {
-      const left = after.synced.file.diagrams.find((d) => d.id === diagramId);
+      const left = after.doc.synced.file.diagrams.find(
+        (d) => d.id === diagramId,
+      );
       check(
         "the node is gone",
         left.nodes.every((node) => node.id !== connected.id),
@@ -463,7 +499,7 @@ console.log("\nDeleting a node leaves a document that still parses");
       /* THE ASSERTION THAT MATTERS. An edge naming a deleted node fails the
          model's own validation, so a delete that left one behind would hand
          the reader a document that will not re-parse. That it re-parsed at
-         all is proof (`rebuild` returns null otherwise) — this names the
+         all is proof (`adopt` returns null otherwise) — this names the
          count so the failure message says what was left. */
       check(
         `all ${edgesTouching} relationships touching it went with it`,
@@ -486,7 +522,12 @@ console.log("\nDeleting a node leaves a document that still parses");
 
   check(
     "deleting an unknown node is refused rather than throwing",
-    deletedNodeDocument(original, diagramId, "no-such-node") === null,
+    deletedNodeEdit(
+      original,
+      sourceTextFor(original),
+      diagramId,
+      "no-such-node",
+    ) === null,
     "expected null",
   );
 
@@ -514,7 +555,12 @@ console.log("\nDeleting a node leaves a document that still parses");
     );
     check(
       "deleting a node that owns a child diagram is refused, never cascaded",
-      deletedNodeDocument(original, parent.diagramId, parent.node.id) === null,
+      deletedNodeEdit(
+        original,
+        sourceTextFor(original),
+        parent.diagramId,
+        parent.node.id,
+      ) === null,
       "it was deleted — a whole level of the model would go with one keystroke",
     );
   }
@@ -715,8 +761,8 @@ console.log("\nEvery notation that cannot carry geometry says so");
     /* And the refusal must be real, not only advisory: the mover itself has
        to decline, or a caller that forgot to ask would corrupt a document. */
     check(
-      `movedNodeDocument declines a ${kind} document`,
-      movedNodeDocument(parsed.value, "any", "any", { x: 0, y: 0 }) === null,
+      `movedNodeEdit declines a ${kind} document`,
+      movedNodeEdit(parsed.value, "", "any", "any", { x: 0, y: 0 }) === null,
       "expected null",
     );
   }
@@ -785,7 +831,7 @@ console.log("\nA canvas edit re-projects only the node it changed");
 
   /* THE FIXTURE HAS TO BE THE REAL PROBLEM, or everything below passes for the
      wrong reason: an unchanged re-parse must genuinely hand over all-new model
-     objects, the way `movedNodeDocument` does. */
+     objects, the way a canvas edit does. */
   const reparsed = c4Document(sourceTextFor(original));
   check(
     "an unchanged re-parse really does replace every model node object",
@@ -818,7 +864,13 @@ console.log("\nA canvas edit re-projects only the node it changed");
       Math.max(...nodesOf(original).map((node) => node.position.y)) +
       EDIT_GRID * 8,
   };
-  const moved = movedNodeDocument(original, diagramId, target.id, to);
+  const moved = movedNodeEdit(
+    original,
+    sourceTextFor(original),
+    diagramId,
+    target.id,
+    to,
+  ).doc;
   const afterMove = projectInto(moved);
   const replaced = afterMove.filter((node, i) => node !== first[i]);
   check(
@@ -901,11 +953,12 @@ console.log("\nA canvas edit re-projects only the node it changed");
      cache for the life of the page, and an id reused by a later edit would
      inherit the dead node's entrance delay. */
   const beforeDelete = projectInto(moved);
-  const deleted = deletedNodeDocument(
+  const deleted = deletedNodeEdit(
     moved,
+    sourceTextFor(moved),
     diagramId,
     nodesOf(moved).at(-1).id,
-  );
+  ).doc;
   const afterDelete = projectInto(deleted);
   check(
     "a delete keeps every surviving node's object",
@@ -1185,17 +1238,20 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
       "nothing left to correct it",
   );
 
-  const committed = movedNodeDocument(document_, rootId, dragged.id, {
-    x: Math.round(landed.x),
-    y: Math.round(landed.y),
-  });
+  const committedEdit = movedNodeEdit(
+    document_,
+    sourceTextFor(document_),
+    rootId,
+    dragged.id,
+    { x: Math.round(landed.x), y: Math.round(landed.y) },
+  );
   check(
     "a press over that distance is a real edit, not a refused no-op",
-    committed !== null,
-    "movedNodeDocument refused the fixture — the handover below would be " +
+    committedEdit !== null,
+    "movedNodeEdit refused the fixture — the handover below would be " +
       "comparing a diagram against itself",
   );
-  const committedDiagram = committed.synced.model.diagrams[rootId];
+  const committedDiagram = committedEdit.doc.synced.model.diagrams[rootId];
   const committedPosition = committedDiagram.nodes.find(
     (node) => node.id === dragged.id,
   ).position;
@@ -1211,7 +1267,7 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
   );
   const afterRelease = projectDragged(
     diagramWithDragOverlay(committedDiagram, released),
-    committed.synced.model,
+    committedEdit.doc.synced.model,
   );
   check(
     "and the release re-adopts nothing at all — the node cannot settle twice",
@@ -1273,6 +1329,283 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
       /<FrameLayer diagram=\{draggedDiagram\}/.test(canvas),
     "the projection and the frame layer are reading different diagrams — two " +
       "halves of one picture, each self-consistent, that disagree mid-press",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 13. An edit is a LINE PATCH, so the author's own bytes survive it        */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nAn edit keeps every byte it is not about");
+
+{
+  /* NON-CANONICAL ON PURPOSE, in every way the serializer normalises, because
+     canonical input cannot fail these assertions — a re-emit of canonical text
+     IS canonical text, which is exactly why the whole-document re-emit passed
+     every check in this file for a release while silently eating comments.
+     Each deviation below is one form of the damage:
+       - `//` lines, which the parser drops with no capture and the serializer
+         has nothing to write back;
+       - a blank line inside the diagram body, which a re-emit reflows away;
+       - an explicit `(x,y wxh)` on `web` that is exactly the DEFAULT for that
+         node, so the serializer omits the token entirely — an author's
+         explicit write of an omitted-at-default field. Computed from
+         `defaultPositions`/`defaultSizeFor` rather than typed, or a tune to
+         the layout would turn this into an ordinary non-default geometry and
+         the assertion below would pass while proving nothing;
+       - `:"uses"` with no space, which canonical form writes as `: "uses"`. */
+  const webPoint = defaultPositions(
+    ["cust", "web"],
+    [{ source: "cust", target: "web" }],
+  ).get("web");
+  const webSize = defaultSizeFor("system");
+  const webDefaultToken = `(${webPoint.x},${webPoint.y} ${webSize.width}x${webSize.height})`;
+
+  const authored = [
+    `archlab 1.0`,
+    `title "Commented"`,
+    ``,
+    `// A note about the whole file.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // Who uses this thing.`,
+    `  cust:person "Customer" (400,240 160x96)`,
+    `    desc "The paying kind."`,
+    `  web:system "Web App" ${webDefaultToken}`,
+    ``,
+    `  // How they reach it.`,
+    `  cust -> web :"uses"`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  const canonical = sourceTextFor(doc);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== canonical,
+    "the authored text already equals what the serializer emits",
+  );
+
+  const comments = (text) => text.split("\n").filter((l) => l.includes("//"));
+  check(
+    "and a whole-document re-emit would genuinely destroy it",
+    comments(canonical).length === 0 && comments(authored).length === 3,
+    `${comments(canonical).length} comments survive canonicalisation, ` +
+      `${comments(authored).length} were written — if these match, the ` +
+      "assertions below cannot fail",
+  );
+
+  /* --- a move --------------------------------------------------------------- */
+
+  const to = { x: 400 + EDIT_GRID * 2, y: 240 + EDIT_GRID };
+  const moved = movedNodeEdit(doc, authored, "ctx", "cust", to);
+  check(
+    "a drag on authored text takes the PATCH path, by name",
+    moved !== null && moved.path === "patch",
+    `path: ${moved === null ? "refused" : moved.path}`,
+  );
+
+  const changed = changedLines(authored, moved?.text ?? "");
+  check(
+    "a drag on authored text still rewrites exactly one line",
+    changed.length === 1,
+    `${changed.length} lines changed: ${changed
+      .map((c) => `#${c.index + 1}`)
+      .join(", ")}`,
+  );
+
+  /* 1. THE COMMENTS. Byte for byte, in position — not merely "still present":
+     a patch that shifted them by a line would have moved a comment off the
+     declaration it was written above, which is the same loss more quietly. */
+  const untouched = (before, after, skip) => {
+    const b = before.split("\n");
+    const a = after.split("\n");
+    if (a.length !== b.length)
+      return `line count changed ${b.length} → ${a.length}`;
+    for (let i = 0; i < b.length; i += 1) {
+      if (i === skip) continue;
+      if (a[i] !== b[i]) {
+        return `line ${i + 1}: ${JSON.stringify(b[i])} → ${JSON.stringify(a[i])}`;
+      }
+    }
+    return null;
+  };
+  const drift =
+    changed.length === 1
+      ? untouched(authored, moved.text, changed[0].index)
+      : "wrong number of changed lines";
+  check(
+    "every OTHER line is byte-identical after a drag — comments, blanks, spacing",
+    drift === null,
+    drift ?? undefined,
+  );
+
+  /* 2. BLANK LINES, called out separately from the sweep above because this is
+     the one the eye forgives and a diff does not: the serializer places blanks
+     by rule (one before each diagram, one between nodes and edges), so a
+     re-emit silently re-spaces a file an author had laid out. */
+  const blanks = (text) =>
+    text.split("\n").flatMap((line, i) => (line === "" ? [i] : []));
+  check(
+    "a drag moves no blank line",
+    JSON.stringify(blanks(moved?.text ?? "")) ===
+      JSON.stringify(blanks(authored)),
+    `${JSON.stringify(blanks(moved?.text ?? ""))} vs ${JSON.stringify(blanks(authored))}`,
+  );
+
+  /* 3. AN OMITTED-AT-DEFAULT FIELD THE AUTHOR WROTE OUT. `web`'s `(0,0 200x120)`
+     is exactly what the default layout would give it, so the serializer drops
+     the token — and dropping it changes nothing about the render, which is why
+     this loss is invisible until the author opens their file in git. Proven to
+     be the real case by asserting the canonical form does NOT carry it. */
+  check(
+    "the fixture's explicit geometry really is one the serializer omits",
+    !canonical.includes(webDefaultToken) && authored.includes(webDefaultToken),
+    `${webDefaultToken} survives canonicalisation — it is not the default ` +
+      "after all, and this pair proves nothing",
+  );
+  check(
+    "an explicitly-written default geometry survives a drag on another node",
+    (moved?.text ?? "").includes(`  web:system "Web App" ${webDefaultToken}`),
+    "the `web` line lost the geometry its author typed",
+  );
+
+  /* 4. THE PATCHED LINE IS CANONICAL. Derived from the serializer, never
+     hand-written: a patch that wrote almost-canonical text would trade a
+     silent comment loss for a silent divergence between the edited line and
+     every other line in the file, which is worse. The comparison is against
+     the line a FULL serialise of the moved document produces for that node. */
+  const canonicalAfter = sourceTextFor(moved?.doc ?? doc);
+  const movedNodeLine = canonicalAfter
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("cust:person"));
+  check(
+    "the patched line is byte-identical to what the serializer would emit",
+    changed.length === 1 && changed[0].after === movedNodeLine,
+    `patched:   ${JSON.stringify(changed[0]?.after)}\n      ` +
+      `serialiser: ${JSON.stringify(movedNodeLine)}`,
+  );
+
+  /* --- a delete ------------------------------------------------------------- */
+
+  const deleted = deletedNodeEdit(doc, authored, "ctx", "web");
+  check(
+    "a delete on authored text takes the PATCH path too, by name",
+    deleted !== null && deleted.path === "patch",
+    `path: ${deleted === null ? "refused" : deleted.path}`,
+  );
+  check(
+    "a delete keeps every comment the author wrote",
+    JSON.stringify(comments(deleted?.text ?? "")) ===
+      JSON.stringify(comments(authored)),
+    `${JSON.stringify(comments(deleted?.text ?? ""))}`,
+  );
+  /* The node's whole BLOCK goes, continuation lines included. A `desc` left
+     indented under nothing is not merely untidy — it fails the parser's
+     "this continuation line has no node or edge line above it". */
+  const survivingDesc = deletedNodeEdit(doc, authored, "ctx", "cust");
+  check(
+    "deleting a node removes its continuation lines with it",
+    survivingDesc !== null &&
+      !survivingDesc.text.includes(`desc "The paying kind."`),
+    "the `desc` line outlived the node it belonged to",
+  );
+
+  /* --- round trip, in its new and stronger form ---------------------------- */
+
+  /* THE INVARIANT THIS FIX MUST NOT BUY ITS WAY OUT OF. `check:roundtrip`
+     already proves that opening a canonical file and saving it changes no
+     bytes. A patch raises the bar: drag a node and drag it back, and the
+     AUTHORED bytes must return — not canonical ones. Assertion 4 above proves
+     the same thing for canonical input, where it cannot distinguish a working
+     patch from a re-emit; this is the version that can. It is also the
+     assertion that would catch an off-by-one in `applyPatches`, which would
+     show up as a duplicated or swallowed line rather than as a wrong value. */
+  const there = movedNodeEdit(doc, authored, "ctx", "cust", to);
+  const back =
+    there === null
+      ? null
+      : movedNodeEdit(there.doc, there.text, "ctx", "cust", {
+          x: 400,
+          y: 240,
+        });
+  check(
+    "a drag and a drag back restore the AUTHORED bytes, not canonical ones",
+    back !== null && back.text === authored,
+    back === null
+      ? "the return drag was refused"
+      : firstDiff(back.text, authored),
+  );
+
+  /* --- the named fallback ------------------------------------------------- */
+
+  /* THE RE-EMIT PATH IS PINNED, not left to be discovered. The next person has
+     to be able to tell which gestures are safe, and `path` is the only thing
+     that says so — an assertion that never names `"reemit"` would let the
+     patch path silently stop being taken. Both forcing conditions from
+     `patchablePane` are exercised. */
+  const jsonPane = { ...doc, format: "json" };
+  const inJson = movedNodeEdit(
+    jsonPane,
+    doc.synced.jsonText,
+    "ctx",
+    "cust",
+    to,
+  );
+  check(
+    "a C4 document sitting in the pane as JSON re-emits, and says so",
+    inJson !== null && inJson.path === "reemit",
+    `path: ${inJson === null ? "refused" : inJson.path}`,
+  );
+  check(
+    "and the re-emit is written in the pane's OWN language, not .alab",
+    inJson !== null && inJson.text === inJson.doc.synced.jsonText,
+    "the JSON pane was handed .alab text",
+  );
+  /* AGREEMENT IS SEMANTIC, NOT TEXTUAL, and that distinction is worth pinning
+     in both directions. A comment typed since the last parse means the SAME
+     document, so its spans are still valid and the patch must go ahead —
+     keeping the comment the reader just wrote. A renamed node means a
+     different document, and splicing by its line numbers would corrupt the
+     pane. */
+  const commentedSince = movedNodeEdit(
+    doc,
+    `${authored}// typed since the last parse, and semantically nothing\n`,
+    "ctx",
+    "cust",
+    to,
+  );
+  check(
+    "a pane that only gained a comment since the last parse is still patched",
+    commentedSince !== null &&
+      commentedSince.path === "patch" &&
+      commentedSince.text.includes("typed since the last parse"),
+    `path: ${commentedSince === null ? "refused" : commentedSince.path}`,
+  );
+  const renamed = movedNodeEdit(
+    doc,
+    authored.replace(`"Customer"`, `"Renamed Customer"`),
+    "ctx",
+    "cust",
+    to,
+  );
+  check(
+    "a pane that MEANS something else re-emits rather than splicing into it",
+    renamed !== null && renamed.path === "reemit",
+    `path: ${renamed === null ? "refused" : renamed.path} — line numbers from ` +
+      "a document the canvas is not showing would corrupt the reader's file",
+  );
+  const broken = movedNodeEdit(
+    doc,
+    `${authored}  not a node line at all\n`,
+    "ctx",
+    "cust",
+    to,
+  );
+  check(
+    "a pane that does not parse re-emits rather than splicing into it",
+    broken !== null && broken.path === "reemit",
+    `path: ${broken === null ? "refused" : broken.path}`,
   );
 }
 

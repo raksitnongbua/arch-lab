@@ -309,6 +309,30 @@ export function serializeArchText(file: ArchLabFile): string {
 
   /* --------------------- node lookup for owner inference ----------------- */
 
+  const nodeHome = buildNodeHome(diagrams);
+
+  /* ------------------------------ diagrams ------------------------------- */
+
+  for (const diagram of diagrams) {
+    lines.push("");
+    emitDiagram(lines, diagram, nodeHome);
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Which diagram each node id lives in, and under what name — the lookup the
+ * `^ref` name-omission rule and a diagram's title-omission rule both consult.
+ * First declaration wins, matching the parser's own owner inference.
+ *
+ * Shared with `canonicalNodeLine` for the same reason as `defaultLayoutFor`:
+ * a `^ref` line's name is omitted or written depending on this map, so a
+ * second copy could omit a name the file around it writes out.
+ */
+function buildNodeHome(
+  diagrams: readonly Record<string, unknown>[],
+): ReadonlyMap<string, { diagramId: string; name: string }> {
   const nodeHome = new Map<string, { diagramId: string; name: string }>();
   for (const diagram of diagrams) {
     const id = diagram.id;
@@ -328,15 +352,68 @@ export function serializeArchText(file: ArchLabFile): string {
       }
     }
   }
+  return nodeHome;
+}
 
-  /* ------------------------------ diagrams ------------------------------- */
+/**
+ * The canonical DECLARATION line for one node — byte for byte the
+ * `  <id>:<kind> "Name" …` line `serializeArchText` would write for it, geometry
+ * token (or its canonical omission) included.
+ *
+ * WHY THIS EXISTS. A canvas drag used to be a whole-document re-emit, which
+ * deleted every `//` comment, every author blank line and every field the
+ * author wrote out that canonical form omits at its default. A drag is now a
+ * one-LINE splice into the author's own text, and this is where the
+ * replacement line comes from — derived from the serializer rather than
+ * assembled a second time, so a patched line cannot be non-canonical.
+ * See `playground/input/canvas-edit.ts`.
+ *
+ * The node's CONTINUATION lines (`desc`, `!` escapes) are deliberately not
+ * returned. A drag changes nothing below the declaration line, and handing
+ * back a whole block would invite a splice that reflows a `desc` line's
+ * spacing for no reason.
+ *
+ * `null` when `diagramId` or `nodeId` is not in `file`.
+ */
+export function canonicalNodeLine(
+  file: ArchLabFile,
+  diagramId: string,
+  nodeId: string,
+): string | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const diagramsValue = file.diagrams;
+  if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
+  const diagrams = diagramsValue.map((diagram, i) => {
+    if (!isRecord(diagram)) invalid(`diagrams[${i}]`, diagram);
+    return diagram;
+  });
+  const diagram = diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
 
-  for (const diagram of diagrams) {
-    lines.push("");
-    emitDiagram(lines, diagram, nodeHome);
+  const nodes = (diagram.nodes as unknown[]).map(
+    (node) => node as Record<string, unknown>,
+  );
+  const node = nodes.find((candidate) => candidate.id === nodeId);
+  if (node === undefined) return null;
+
+  const edgesValue = diagram.edges;
+  if (!Array.isArray(edgesValue)) {
+    invalid(`diagram "${diagramId}".edges`, edgesValue);
   }
+  const edges = edgesValue.map((edge, i) => {
+    if (!isRecord(edge)) invalid(`diagram "${diagramId}".edges[${i}]`, edge);
+    return edge;
+  });
 
-  return `${lines.join("\n")}\n`;
+  const lines: string[] = [];
+  emitNode(
+    lines,
+    node,
+    defaultLayoutFor(nodes, edges),
+    buildNodeHome(diagrams),
+  );
+  // `emitNode` pushes the declaration line first and its continuations after.
+  return lines[0];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -466,17 +543,7 @@ function emitDiagram(
     return edge;
   });
 
-  const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
-  // Same inputs the parser uses to fill omitted geometry in, so geometry that
-  // matches the default layout is omitted again here.
-  const layout = defaultPositions(
-    sortedIds,
-    edges.flatMap((edge) =>
-      typeof edge.source === "string" && typeof edge.target === "string"
-        ? [{ source: edge.source, target: edge.target }]
-        : [],
-    ),
-  );
+  const layout = defaultLayoutFor(nodes, edges);
   for (const node of nodes) {
     emitNode(lines, node, layout, nodeHome);
   }
@@ -484,6 +551,32 @@ function emitDiagram(
   for (const edge of edges) {
     emitEdge(lines, edge);
   }
+}
+
+/**
+ * The default layered layout a diagram's nodes are measured against — the same
+ * inputs the parser uses to fill omitted geometry in, so geometry matching the
+ * default is omitted again on the way out.
+ *
+ * Extracted because `canonicalNodeLine` has to reach the SAME verdict for the
+ * one line it writes as a whole-file serialise would. Two copies of this is
+ * precisely the "two halves of one thing, each self-consistent, that disagree"
+ * failure: a patched line whose geometry token was decided against a different
+ * layout is text the next parse reads as a different diagram.
+ */
+function defaultLayoutFor(
+  nodes: readonly Record<string, unknown>[],
+  edges: readonly Record<string, unknown>[],
+): ReadonlyMap<string, Point> {
+  const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
+  return defaultPositions(
+    sortedIds,
+    edges.flatMap((edge) =>
+      typeof edge.source === "string" && typeof edge.target === "string"
+        ? [{ source: edge.source, target: edge.target }]
+        : [],
+    ),
+  );
 }
 
 function emitNode(

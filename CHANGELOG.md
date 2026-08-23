@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A canvas edit no longer deletes the comments in your `.alab` file.** Since
+  the editable canvas shipped, one drag rewrote the whole document from the
+  model — and the canonical form the writer emits has no `//` comment lines, so
+  every comment in the file was gone on the first gesture. A drag or a Delete
+  now patches only the lines it is about, leaving comments, your own blank
+  lines and spacing, and any field you wrote out that canonical form omits at
+  its default, exactly as you typed them.
+- A drag while the source pane holds arch-lab JSON, or text that has not
+  parsed yet, still rewrites the whole document — there is no line to patch in
+  either case. Nothing is lost in the JSON pane, which has no comments.
+
 ## [2.0.0] - 2026-08-23
 
 **This release contains a breaking change and bumps the MAJOR version:
