@@ -2368,6 +2368,66 @@ console.log("\nThe mouse guide names every gesture, and claims no others");
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* 17. The host remembers what the numbering toggle has to put back            */
+/* -------------------------------------------------------------------------- */
+
+/* `toggledAutonumberEdit` cannot answer "which off state was this document in"
+   from the text once the flag reads `autonumber`, so it takes the answer as an
+   argument and the HOST supplies it. That split is only safe while the host
+   actually captures it, and a wrong capture is invisible: both off spellings
+   render the same, so the symptom is a line quietly appearing or disappearing
+   in someone's file.
+
+   `check:sequence` asserts the GESTURE is lossless given a correct argument.
+   These assert the host computes one — the other half of a coupling that
+   `sequence-edit.ts`'s header and the check's own helper both claim exists. */
+{
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+
+  check(
+    "the playground remembers an off spelling for the numbering toggle",
+    /autonumberOffSpellingRef\s*=\s*useRef</.test(playground),
+    "without it the off position has to guess, and guessing edits the file",
+  );
+  /* CAPTURED ON THE WAY ON, which is what makes a ref safe here: there is
+     nothing to invalidate when the document changes, because the next turn-on
+     reads the file again. A capture on the way OFF would read the flag it is
+     about to overwrite and always answer "absent". */
+  check(
+    "it captures the spelling while numbering is still off",
+    /if\s*\(!numberedNow\)\s*\{\s*autonumberOffSpellingRef\.current\s*=/.test(
+      playground,
+    ),
+    "capturing after the flag is set reads the wrong state",
+  );
+  check(
+    "an explicit `autonumber false` is what gets remembered",
+    /autonumberOffSpellingRef\.current\s*=[\s\S]{0,180}?autonumber === false[\s\S]{0,60}?"false"/.test(
+      playground,
+    ),
+    "the state whose silent deletion this whole mechanism exists to stop",
+  );
+  /* A FILE THAT ARRIVED NUMBERED was never off, so there is nothing to
+     remember and the fallback decides. It has to keep the author's line where
+     they put it, not remove it — a re-added flag lands after the block's
+     leading prose, which moves a flag the author wrote above their comment. */
+  check(
+    "a file that arrived numbered falls back to keeping its flag line",
+    /autonumberOffSpellingRef\.current \?\? "false"/.test(playground),
+    'falling back to "absent" moves the author\'s flag below their comment',
+  );
+  check(
+    "the toggle is called with a restore argument, not the default",
+    /toggledAutonumberEdit\(\s*doc,\s*text,\s*autonumberOffSpellingRef/.test(
+      playground,
+    ),
+    "a two-argument call takes the default and cannot restore anything",
+  );
+}
+
 console.log(
   `\n${failures === 0 ? "PASS" : "FAIL"} — ${assertions - failures}/${assertions} assertions\n`,
 );

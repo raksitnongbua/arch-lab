@@ -558,27 +558,40 @@ export function insertedParticipantEdit(
  *   - `autonumber false` → on: that line REPLACED, at its own indent. Inserting
  *     a second flag line instead would be a document the parser refuses
  *     outright ("duplicate autonumber line").
- *   - `autonumber` → off: that line REMOVED, back to absent — NOT rewritten to
- *     `autonumber false`.
+ *   - `autonumber` → off: that line rewritten to `restore`, which is what the
+ *     document said before the toggle turned numbering on.
  *
- * WHY OFF REMOVES RATHER THAN WRITING `false`. Absent is the state every
- * document that has never mentioned numbering is in, so writing `false` would
- * mean a reader who pressed the control twice out of curiosity is left with a
- * line they did not author and cannot see the point of — the gesture leaving a
- * trace after undoing itself. Removing makes on-then-off byte-identical to
- * where it started, which is the round-trip property the rest of this module
- * is built to keep.
+ * WHY OFF TAKES A `restore` ARGUMENT INSTEAD OF ALWAYS REMOVING THE LINE.
+ * A toggle has two positions and this field has THREE states: absent,
+ * `autonumber false`, and `autonumber`. The first two render identically, so
+ * one off position has to stand for both — and a rule that always removed the
+ * line silently deleted `autonumber false` from the file of an author who had
+ * written it by hand. Nothing looked wrong, because the diagram numbers
+ * nothing either way; their line was simply gone.
  *
- * THE COST, STATED: an author who WROTE `autonumber false` by hand, turned
- * numbering on and then off again, ends with the line gone rather than back.
- * That is one line, of the field they were toggling, changed by two deliberate
- * presses on it — not the collateral loss of comments and unrelated fields this
- * module exists to prevent. `check:sequence` measures each of the three
- * transitions rather than trusting this paragraph.
+ * Always writing `false` instead trades that for the mirror-image defect: a
+ * reader who presses the control twice out of curiosity is left with a line
+ * they never authored. Neither rule can be lossless on its own, because the
+ * information the off direction needs — which of the two off states this
+ * document was in — is not in the text once the flag reads `autonumber`.
+ *
+ * So the caller supplies it. The host captures the spelling at the moment it
+ * turns numbering ON, which is the one moment the answer is still in the file,
+ * and hands it back on the way off. Capturing per turn-on rather than per
+ * document is what makes it correct with nothing to invalidate: switching
+ * document, undoing, or editing the pane cannot leave a stale answer behind,
+ * because the next turn-on reads the file again.
+ *
+ * `"absent"` is the default, so a caller that has nothing remembered — a file
+ * that arrived with `autonumber` already on — removes the line, which is the
+ * right reading of "the toggle removes what turns it on".
  */
 export function toggledAutonumberEdit(
   doc: ViewDocument,
   sourceText: string,
+  /** What the off position writes: the spelling this document used before the
+   * toggle turned numbering on. */
+  restore: "absent" | "false" = "absent",
 ): CanvasEdit | null {
   if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
     return null;
@@ -605,9 +618,15 @@ export function toggledAutonumberEdit(
         }
       : {
           span: { start: at, end: at },
-          // Off is the removal; on rewrites the flag at the indent the author's
-          // own line carries, on the same rule `patchBlock` follows.
-          lines: turningOn ? [`${indentOf(lines[at - 1])}autonumber`] : [],
+          /* Both directions rewrite the flag at the indent the author's own
+             line carries, on the same rule `patchBlock` follows. Off is a
+             removal only when there is nothing to restore — see the header for
+             why that answer comes from the caller and not from this text. */
+          lines: turningOn
+            ? [`${indentOf(lines[at - 1])}autonumber`]
+            : restore === "false"
+              ? [`${indentOf(lines[at - 1])}autonumber false`]
+              : [],
         };
 
   return adopt(doc, applyPatches(sourceText, [patch]));

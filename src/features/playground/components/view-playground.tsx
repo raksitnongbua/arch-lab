@@ -957,6 +957,17 @@ export function ViewPlayground({
    * every push would be a render per drag for no visible reason.
    */
   const canvasUndoRef = useRef<string[]>([]);
+  /**
+   * What the numbering toggle's OFF position should write: the spelling this
+   * document used before the toggle turned numbering on. See the capture in
+   * `handleToggleAutonumber` for why it is taken on the way on, and
+   * `toggledAutonumberEdit`'s header for why the answer cannot come from the
+   * text once the flag reads `autonumber`.
+   *
+   * A ref, not state: nothing renders from it, and it is read only inside the
+   * handler that writes it.
+   */
+  const autonumberOffSpellingRef = useRef<"absent" | "false" | null>(null);
 
   /**
    * Apply one canvas edit: remember the text being replaced, put the edited
@@ -1184,7 +1195,38 @@ export function ViewPlayground({
   }, [doc, text, applyCanvasEdit]);
 
   const handleToggleAutonumber = useCallback(() => {
-    const next = toggledAutonumberEdit(doc, text);
+    /* CAPTURED HERE, on the way ON, because this is the last moment the answer
+       is still in the file. `autonumber` and its absence render identically to
+       `autonumber false`, so the off direction cannot tell from the text which
+       of the two off spellings the author had — and always removing the line
+       silently deleted an `autonumber false` somebody had written by hand.
+
+       Captured PER TURN-ON rather than per document, which is what makes a ref
+       safe here: there is no staleness to invalidate. Switching document,
+       undoing, or retyping the pane cannot leave a wrong answer behind, because
+       the next turn-on reads the file again. A file that arrives with numbering
+       already on has nothing remembered and falls back to `"absent"`, which is
+       the right reading of "the toggle removes what turns it on". */
+    const numberedNow = doc.kind === "sequence" && doc.file.autonumber === true;
+    if (!numberedNow) {
+      autonumberOffSpellingRef.current =
+        doc.kind === "sequence" && doc.file.autonumber === false
+          ? "false"
+          : "absent";
+    }
+    /* A FILE THAT ARRIVED ALREADY NUMBERED has no remembered off state, because
+       it was never off — so the off position has to invent one, and the two
+       candidates are not equally good. Removing the line loses WHERE the author
+       put it: `autonumberAnchor` writes a new flag after the block's leading
+       prose, so a flag written above an opening comment comes back below it.
+       Writing `false` in place keeps the line exactly where they had it and
+       makes off-then-on byte-identical. Both spellings render the same; only
+       one leaves the rest of the file alone. */
+    const next = toggledAutonumberEdit(
+      doc,
+      text,
+      autonumberOffSpellingRef.current ?? "false",
+    );
     if (next === null) {
       setAnnouncement(
         "The step numbering was not changed — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",

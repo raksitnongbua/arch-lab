@@ -2837,21 +2837,47 @@ console.log(
         : null;
     };
 
-    /** One toggle from `text`, or `null` if it refused. */
-    const toggle = (text) => {
-      const parsed = parseViewSource(text);
-      return parsed.status === "ok"
-        ? toggledAutonumberEdit(parsed.value, text)
-        : null;
+    /* ONE TOGGLE, THROUGH THE HOST'S OWN RULE. `toggledAutonumberEdit` takes
+       the off spelling as an argument because the text cannot supply it once the
+       flag reads `autonumber` (see its header). Calling it with the default
+       here would assert a call the shipped host never makes for a document that
+       arrived numbered — a check narrower than the behaviour, which is how the
+       silent deletion of a hand-written `autonumber false` got through in the
+       first place.
+
+       So this mirrors `handleToggleAutonumber`: the ref starts empty, is
+       captured on the way ON, and falls back to `"false"` for a file that was
+       never off. `check:canvas-edit` asserts the host still follows it. */
+    const makeToggle = () => {
+      let remembered = null;
+      return (text) => {
+        const parsed = parseViewSource(text);
+        if (parsed.status !== "ok") return null;
+        if (parsed.value.file.autonumber !== true) {
+          remembered =
+            parsed.value.file.autonumber === false ? "false" : "absent";
+        }
+        return toggledAutonumberEdit(parsed.value, text, remembered ?? "false");
+      };
     };
+    /** One toggle from `text` by a reader who has pressed nothing before. */
+    const toggle = (text) => makeToggle()(text);
 
     const offFromOn = toggle(numberedOn);
+    /* THE OFF POSITION RESTORES, IT DOES NOT NORMALISE. A file that arrived
+       numbered was never off, so the off position has to invent an off state,
+       and it writes `autonumber false` IN PLACE rather than removing the line.
+       Removing it loses WHERE the author put the flag: a new one is written
+       after the block's leading prose, so a flag above an opening comment came
+       back below it. Both spellings render the same; only one leaves the rest
+       of the file alone. */
     check(
-      "turning numbering off REMOVES the line — it does not write `autonumber false`",
+      "turning numbering off on a file that arrived numbered keeps the flag's own line",
       offFromOn !== null &&
-        offFromOn.doc.file.autonumber === undefined &&
-        !offFromOn.text.includes("autonumber"),
-      `got ${JSON.stringify(offFromOn && offFromOn.text.match(/.*autonumber.*/))}`,
+        offFromOn.doc.file.autonumber === false &&
+        (offFromOn.text.match(/^\s*autonumber\b/gm) ?? []).length === 1 &&
+        offFromOn.text.split("\n").length === numberedOn.split("\n").length,
+      `got ${JSON.stringify(offFromOn && offFromOn.text.match(/.*autonumber.*/g))}`,
     );
     /* THE ROUND TRIP THAT DECIDED IT. Removing rather than writing `false` is
        what makes a reader who presses the control twice out of curiosity end
@@ -2940,6 +2966,52 @@ console.log(
           after.text.includes("// Reviewed 2026-08-01") &&
           after.text.includes("updated 2026-08-01T00:00:00.000Z"),
         "a numbering toggle normalised a field it was not asked about",
+      );
+    }
+
+    /* PRESS IT TWICE AND THE FILE IS WHERE YOU LEFT IT — from EVERY starting
+       state, which is the assertion that was missing when this shipped.
+
+       The toggle has two positions and the field has three states: absent,
+       `autonumber false`, and `autonumber`. The first two render identically,
+       so one off position stands for both, and the earlier rule — off always
+       removes the line — silently deleted an `autonumber false` an author had
+       written by hand. Nothing looked wrong, because the diagram numbers
+       nothing either way. The assertions above passed throughout: they measured
+       absent → on → off and never the state they broke.
+
+       Looped over the three starting states rather than written out for the one
+       that failed, because the failure a hand-picked pair cannot notice is a
+       fourth spelling of the same field. Three presses, so the second is also
+       checked to be reversible rather than merely to look like the first. */
+    for (const [name, start] of [
+      ["absent", absent],
+      ["an explicit `autonumber false`", explicitFalse],
+      ["`autonumber`", numberedOn],
+    ]) {
+      const press = makeToggle();
+      const one = press(start);
+      const two = one === null ? null : press(one.text);
+      const three = two === null ? null : press(two.text);
+      check(
+        `pressing the toggle twice from ${name} returns the file byte for byte`,
+        two !== null && two.text === start,
+        two === null
+          ? "a press refused"
+          : `first difference at line ${changedLines(two.text, start)[0]}`,
+      );
+      check(
+        `and a third press from ${name} lands exactly where the first did`,
+        three !== null && one !== null && three.text === one.text,
+        "the toggle is not idempotent across a full cycle",
+      );
+      check(
+        `every press from ${name} flips what the canvas draws`,
+        one !== null &&
+          two !== null &&
+          (one.doc.file.autonumber === true) !==
+            (two.doc.file.autonumber === true),
+        "the toggle changed bytes without changing the numbering",
       );
     }
 

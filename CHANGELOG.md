@@ -7,6 +7,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Turning step numbering off no longer removes an `autonumber false` line you
+  wrote yourself, and no longer moves a flag you had written above a comment
+  down below it. Pressing the numbering button twice now leaves the file byte
+  for byte where it was, from any of the three states the field has.
+
 ### Added
 
 - **The sequence canvas is editable.** Click a message or a lifeline and the
