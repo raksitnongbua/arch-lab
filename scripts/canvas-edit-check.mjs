@@ -1278,6 +1278,42 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
 
 /* ----------------------------------------------------------------------- */
 
+console.log("\nLocking never offers a link to somewhere you already are");
+
+{
+  /* THE BUG THIS PINS: "Edit this diagram" is meant for hosts that cannot edit,
+     and it was hidden whenever `edit` was passed. But locking the canvas
+     WITHDRAWS those handlers, so `edit` went undefined and the link came
+     back — locking a diagram to present it made a button appear offering to
+     open it somewhere the reader already was.
+
+     Capability and current state are different questions. `edit` is "editing
+     is on right now"; `canEdit` is "editing is possible here". The link must
+     read the second. */
+  const shell = read("src/features/viewer/components/viewer-shell.tsx");
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+
+  check(
+    "the shell takes a capability prop distinct from its handlers",
+    /canEdit\?:\s*boolean/.test(shell),
+    "without it the only signal is `edit`, which the lock withdraws",
+  );
+  check(
+    "the edit link is gated on capability, not on editing being on",
+    /canEdit === true \? null|edit !== undefined \|\| canEdit === true \? null/.test(
+      shell,
+    ),
+    "gating on `edit` alone is what made the link reappear on lock",
+  );
+  check(
+    "the playground declares the capability from the document, not the lock",
+    /canEdit=\{CANVAS_EDIT_ENABLED && editability\.editable\}/.test(playground),
+    "passing the lock state here would reintroduce the bug through the prop",
+  );
+}
+
 console.log(
   `\n${failures === 0 ? "PASS" : "FAIL"} — ${assertions - failures}/${assertions} assertions\n`,
 );
