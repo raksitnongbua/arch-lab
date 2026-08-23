@@ -164,6 +164,7 @@ export function ViewerShell({
   share,
   onDiagramChange,
   edit,
+  canEdit,
   defaultImmersive = false,
   tour: tourEnabled = true,
   titleAs: TitleTag = "h1",
@@ -184,6 +185,21 @@ export function ViewerShell({
    * only thing that owns the text is the page above this one.
    */
   edit?: CanvasEditHandlers;
+  /**
+   * True when the HOST can edit this diagram, whether or not editing is
+   * switched on right now.
+   *
+   * SEPARATE FROM `edit` BECAUSE THE TWO ANSWER DIFFERENT QUESTIONS, and
+   * conflating them shipped a bug: "Edit this diagram" was hidden whenever
+   * `edit` was passed, which is right for an unlocked playground — but locking
+   * the canvas withdraws the handlers, so `edit` went undefined and the link
+   * came back. Locking a diagram made a button appear offering to open it
+   * somewhere you already were.
+   *
+   * `edit` is "editing is on"; this is "editing is possible here". The link is
+   * for hosts where it is not.
+   */
+  canEdit?: boolean;
   /**
    * Start in immersive mode. For a page that exists only to show one model
    * (`/view/[modelId]`) — where the diagram IS the page, so the site chrome is
@@ -532,12 +548,15 @@ export function ViewerShell({
               </button>
             ) : null}
             {/* THE LINK IS FOR HOSTS THAT CANNOT EDIT. Its job is to hand the
-                model to a page that can, so on a host that already passes
-                `edit` — the playground, whose canvas is editable in place —
-                it would link to where the reader already is. Derived from the
-                prop rather than from a second "am I the playground" flag: the
-                two could disagree, and this one cannot. */}
-            {edit !== undefined ? null : CANVAS_EDIT_ENABLED ? (
+                model to a page that can, so on a host that could edit it in
+                place the link would point at where the reader already is.
+                Gated on `canEdit` — the host's CAPABILITY — not on `edit`,
+                which is only whether editing is on this instant: locking the
+                canvas withdraws the handlers, and gating on those alone made
+                the link reappear the moment a reader locked the diagram to
+                present it. */}
+            {edit !== undefined ||
+            canEdit === true ? null : CANVAS_EDIT_ENABLED ? (
               <EditModeLink model={frozenModel} diagramId={currentDiagramId} />
             ) : (
               <Badge variant="outline" className="shrink-0">

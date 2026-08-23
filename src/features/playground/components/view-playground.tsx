@@ -1691,6 +1691,12 @@ export function ViewPlayground({
                   initialDiagramId={sharedInitialDiagram ?? undefined}
                   share={{ kind: "payload", text: doc.synced.aftText }}
                   onDiagramChange={handleDiagramChange}
+                  /* The playground can always edit a C4 document, even while
+                     the reader has it locked to present — so the shell must
+                     not offer a link to "edit this diagram somewhere else",
+                     which would point back here. Capability, not current
+                     state; see `canEdit` on the shell. */
+                  canEdit={CANVAS_EDIT_ENABLED && editability.editable}
                   /* Passing these is what makes the canvas editable — see
                      `CanvasEditHandlers`. `undefined` leaves the shell's
                      read-only canvas exactly as every other host gets it. */
