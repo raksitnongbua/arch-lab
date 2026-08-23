@@ -22,11 +22,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   focused). A dashed rule shows where it will land, the lifelines are tab
   stops so the mouse is not the only route, and Escape cancels. Exactly one
   line is added and nothing else in the file is renormalised.
-- **Move an arrow to different lifelines.** The message editor now shows where
-  the arrow runs and offers "Repoint on the canvas": it arms the same two-click
-  lifeline picker the insert uses, so you choose the new sender and receiver by
-  clicking them rather than typing ids. Only the message's declaration line
-  changes; its `desc` and any `!` lines come back byte-identical.
+- **Move an arrow to different lifelines.** The message editor carries From and
+  To menus listing the diagram's own lifelines by name, and changing either one
+  moves the arrow straight away. "Repoint on the canvas" is still there beside
+  them: it arms a two-click lifeline picker, which is the quicker route at the
+  far end of a long flow. Only the message's declaration line changes; its
+  `desc` and any `!` lines come back byte-identical.
 - **Remove a message or a lifeline.** The details panel gains a Remove control
   for whatever is focused. A message goes with its `desc` and `!` continuation
   lines and nothing else — a note beside it is kept, not deleted with it, and
@@ -45,6 +46,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Every gesture shares the canvas lock and the canvas undo ring with the C4
   canvas: locking the diagram removes the editing controls entirely, and
   Cmd/Ctrl + Z with the diagram focused steps back through canvas edits.
+- **Number the steps from the canvas.** The numbered-list icon in the canvas
+  strip turns `autonumber` on and off without opening the source pane. Turning
+  it on writes one line at the head of the block, past any comment you opened
+  it with; turning it off removes that line rather than writing
+  `autonumber false`, so switching it on and back off leaves your file exactly
+  as it was. An explicit `autonumber false` you typed yourself is replaced when
+  you turn numbering on, and does not come back when you turn it off again.
+- **A mouse guide under the canvas.** While editing is on, a row under the
+  diagram names every gesture the canvas offers and what to click for it, and
+  says what dragging does instead — it pans the view; nothing on this canvas is
+  moved by dragging, and notes and fragments are edited in the source text. The
+  viewer's tour card carries the same list, and the tour now also explains that
+  the lock takes the editing controls away.
 
 ### Changed
 
@@ -54,8 +68,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `[technology]`, so the change would be lost on the next round trip — switch
   the pane to `.alab` to edit on the canvas.
 - The playground's own description of the canvas now names what you can do to a
-  sequence diagram on it — add, edit, repoint, remove — rather than only that it
-  is editable. The viewer's tour card says the same.
+  sequence diagram on it — add, edit, repoint, number, remove — rather than only
+  that it is editable. The viewer's tour card says the same.
+- **An armed insert or repoint now tells you on screen what to click next.** It
+  only ever said so to a screen reader, so pressing "Repoint on the canvas"
+  looked like a control that closed the editor and did nothing. A prompt now
+  appears over the diagram naming the click you owe and that Escape cancels,
+  and it is the same sentence the announcement carries. It never appears in an
+  exported SVG, PNG or GIF frame.
 
 ### Fixed
 

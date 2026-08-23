@@ -75,6 +75,7 @@ import {
   FileText,
   ChevronDown,
   Info,
+  LockOpen,
   Repeat2,
   Shrink,
   X,
@@ -192,6 +193,7 @@ import {
   repointedMessageEdit,
   revisedMessageEdit,
   revisedParticipantEdit,
+  toggledAutonumberEdit,
   INSERTED_PARTICIPANT_NAME,
 } from "../input/sequence-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
@@ -242,6 +244,21 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
       "The source that draws this diagram sits beside it — edit the pane and " +
       "the diagram re-renders as you type.",
     icon: FileText,
+  },
+  /* THE LOCK GETS A STEP because it is the one control that takes every other
+     one away. A reader who pressed it to present, came back later and found the
+     pencil and the pill's editing buttons gone has no way to connect the two —
+     the button that did it reads “Locked” at the top of the pane, several
+     hundred pixels from the controls it withdrew. The tour is where that
+     connection can be made once. It teaches the SEQUENCE canvas's wording
+     because this is the sequence viewer's tour; the C4 shell carries its own. */
+  {
+    title: "Lock it to present",
+    body:
+      "“Editable” at the top of this pane turns the canvas read-only, so a " +
+      "stray click cannot change the diagram while you are talking over it. " +
+      "The editing controls go with it, and press it again to bring them back.",
+    icon: LockOpen,
   },
 ];
 
@@ -1166,6 +1183,29 @@ export function ViewPlayground({
     );
   }, [doc, text, applyCanvasEdit]);
 
+  const handleToggleAutonumber = useCallback(() => {
+    const next = toggledAutonumberEdit(doc, text);
+    if (next === null) {
+      setAnnouncement(
+        "The step numbering was not changed — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+      );
+      return;
+    }
+    /* THE NEW STATE IS READ OFF THE RE-PARSED DOCUMENT, not predicted from the
+       old one. The gesture writes text and `adopt` reads it back, so this is
+       the only reading that cannot be wrong about what the file now says — and
+       the sentence a screen-reader user gets instead of watching the numbers
+       appear has to be right about which way the toggle went. */
+    const on =
+      next.doc.kind === "sequence" && next.doc.file.autonumber === true;
+    applyCanvasEdit(
+      next,
+      on
+        ? "Every step is now numbered — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo."
+        : "Step numbers are off — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.",
+    );
+  }, [doc, text, applyCanvasEdit]);
+
   /**
    * The handler bundle the sequence viewer takes — PRESENT only while editing
    * is on, absent otherwise. Presence is the signal: the viewer renders no
@@ -1183,6 +1223,7 @@ export function ViewPlayground({
             onDeleteMessage: handleDeleteMessage,
             onDeleteParticipant: handleDeleteParticipant,
             onInsertParticipant: handleInsertParticipant,
+            onToggleAutonumber: handleToggleAutonumber,
           }
         : undefined,
     [
@@ -1194,6 +1235,7 @@ export function ViewPlayground({
       handleDeleteMessage,
       handleDeleteParticipant,
       handleInsertParticipant,
+      handleToggleAutonumber,
     ],
   );
 
@@ -1345,8 +1387,8 @@ export function ViewPlayground({
             {CANVAS_EDIT_ENABLED ? (
               <>
                 C4 nodes can be dragged on the canvas, and sequence messages and
-                lifelines added, edited, repointed and removed on it; the other
-                kinds lay themselves out from the text.{" "}
+                lifelines added, edited, repointed, numbered and removed on it;
+                the other kinds lay themselves out from the text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}

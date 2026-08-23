@@ -60,6 +60,7 @@ import {
   Check,
   EyeOff,
   HelpCircle,
+  ListOrdered,
   MousePointerClick,
   Pencil,
   Plus,
@@ -103,6 +104,15 @@ import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
 import { messagePathForStep } from "../lib/address";
+import {
+  armingCancelled,
+  armingPrompt,
+  ARMING_PROMPT_CLASS,
+} from "../lib/arming-prompt";
+import {
+  SEQUENCE_MOUSE_GUIDE,
+  SEQUENCE_MOUSE_GUIDE_CAVEAT,
+} from "../lib/mouse-guide";
 import {
   collapseSequence,
   dependenciesOf,
@@ -152,6 +162,14 @@ export interface SequenceEditHandlers {
   onDeleteParticipant: (participantId: string) => void;
   /** Appends a placeholder lifeline; the host picks its id and name. */
   onInsertParticipant: () => void;
+  /**
+   * Turn step numbering on or off — the diagram's one drawing flag, and the
+   * only gesture here that is about the WHOLE document rather than an element
+   * in it. No argument: the host reads the current state off the text it owns
+   * and writes the other one, which keeps the "is it on" question with the
+   * document rather than with a control that could disagree with it.
+   */
+  onToggleAutonumber: () => void;
   /*
    * WHY NO `canDelete`, AND NO DISABLED STATE FOR THE REMOVE CONTROLS. Both
    * deletes can be refused — a message carrying an activation flag, a lifeline
@@ -964,14 +982,7 @@ export function SequenceViewer({
     focusRef.current = focus;
     clearFocusRef.current = handleClearFocus;
     disarmRef.current =
-      arming === null
-        ? null
-        : () =>
-            disarm(
-              arming.purpose === "insert"
-                ? "Insert cancelled."
-                : "Repoint cancelled.",
-            );
+      arming === null ? null : () => disarm(armingCancelled(arming.purpose));
   }, [focus, handleClearFocus, arming, disarm]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1071,12 +1082,19 @@ export function SequenceViewer({
     focus?.kind === "participant" &&
     focus.id === editing.id;
 
+  /* THE ANNOUNCEMENT AND THE ON-SCREEN PROMPT ARE ONE SENTENCE, from
+     `armingPrompt`. Writing it here as well as in the render is what left a
+     mouse user with no instruction at all for a release — the module's header
+     carries the whole story. The handlers cannot read the rendered value
+     (`arming` is set in the same tick), so both call the same function. */
   const handleArmInsert = useCallback(() => {
     setArming({ purpose: "insert", from: null });
     onAnnounce(
-      focus?.kind === "message"
-        ? `Inserting a message after step ${focus.step}. Click or tab to the sending lifeline, then the receiving one. Escape cancels.`
-        : "Inserting a message at the end of the flow. Click or tab to the sending lifeline, then the receiving one. Escape cancels.",
+      armingPrompt({
+        purpose: "insert",
+        step: focus?.kind === "message" ? focus.step : null,
+        fromName: null,
+      }),
     );
   }, [focus, onAnnounce]);
 
@@ -1099,9 +1117,43 @@ export function SequenceViewer({
       step: focus.step,
     });
     onAnnounce(
-      `Repointing step ${focus.step}. Click or tab to the new sending lifeline, then the receiving one. Escape cancels.`,
+      armingPrompt({
+        purpose: "repoint",
+        step: focus.step,
+        fromName: null,
+      }),
     );
   }, [focus, focusedMessagePath, onAnnounce]);
+
+  /**
+   * Change one endpoint from the FORM, without arming anything.
+   *
+   * THE DISCOVERABLE HALF of the same gesture, and the reason it exists is that
+   * the other half was not discoverable at all: the two-click picker is the
+   * better gesture once you know it, and a mouse user had no way to find out it
+   * was there. Two menus in the panel the reader already has open need no mode,
+   * no prompt and no second click.
+   *
+   * IT ACTS IMMEDIATELY rather than on Apply, and that is not a shortcut — it
+   * is what keeps "one text change per gesture" true. Apply submits the
+   * message's WORDING through `onReviseMessage`; if endpoints rode along, one
+   * press would be two patches, and the second would be computed against a
+   * document the first had already replaced. Firing here leaves Apply meaning
+   * exactly what it meant before, and the form is not remounted by a repoint
+   * (its `key` is the step, which endpoints do not change), so half-typed text
+   * in the fields survives.
+   *
+   * The selects show `message.from` / `message.to` and hold no state of their
+   * own, so a refusal simply leaves them reading the document — the host says
+   * why in the live region, as it does for the picker.
+   */
+  const handleRepointFromForm = useCallback(
+    (from: string, to: string) => {
+      if (edit === undefined || focusedMessagePath === null) return;
+      edit.onRepointMessage(focusedMessagePath, from, to);
+    },
+    [edit, focusedMessagePath],
+  );
 
   /**
    * One lifeline click, for either purpose. The first supplies the sender, the
@@ -1121,7 +1173,11 @@ export function SequenceViewer({
       if (arming.from === null) {
         setArming({ ...arming, from: participantId });
         onAnnounce(
-          `Sending from ${nameById.get(participantId) ?? participantId}. Now choose the receiving lifeline.`,
+          armingPrompt({
+            purpose: arming.purpose,
+            step: arming.purpose === "repoint" ? arming.step : null,
+            fromName: nameById.get(participantId) ?? participantId,
+          }),
         );
         return;
       }
@@ -1203,6 +1259,35 @@ export function SequenceViewer({
           atY: indicatorY,
           onPick: handlePickEnd,
         };
+
+  /**
+   * The armed gesture's instruction, ON SCREEN. Non-null exactly when something
+   * is armed, so the render needs no second condition.
+   *
+   * For an insert the step comes from `focus`, which is where the anchor comes
+   * from too — the reader can clear focus mid-gesture and the prompt follows,
+   * which is honest: the message really would go to the end of the flow.
+   */
+  const armingPromptText =
+    arming === null
+      ? null
+      : armingPrompt({
+          purpose: arming.purpose,
+          step:
+            arming.purpose === "repoint"
+              ? arming.step
+              : focus?.kind === "message"
+                ? focus.step
+                : null,
+          fromName:
+            arming.from === null
+              ? null
+              : (nameById.get(arming.from) ?? arming.from),
+        });
+
+  /** Whether the file numbers its steps — read once, used by the canvas and by
+   * the control that writes it, so the glyph and the drawing cannot disagree. */
+  const numbered = shown.autonumber === true;
 
   /* ---- render -------------------------------------------------------------- */
 
@@ -1422,7 +1507,7 @@ export function SequenceViewer({
             <SequenceDiagram
               layout={layout}
               title={shown.metadata.title}
-              autonumber={shown.autonumber === true}
+              autonumber={numbered}
               focus={focus}
               focusNonce={rawFocus?.nonce ?? 0}
               zoom={zoom}
@@ -1436,6 +1521,40 @@ export function SequenceViewer({
             />
           </div>
         </div>
+
+        {/* ---- the armed gesture's prompt, ON SCREEN ----
+            THE BUG THIS FIXES: pressing “Repoint on the canvas” closed the edit
+            form, drew a dashed rule, and said what to do next only into the
+            playground's `sr-only` live region. A mouse user saw a panel vanish
+            and concluded the feature was broken — which is what was reported.
+            The announcement stays; this is an addition, and both come from
+            `armingPrompt` so they cannot drift into saying different things.
+
+            TOP CENTRE, over the canvas, not in the pill that armed it: the
+            reader's next action is a click on a lifeline HEADER, and those run
+            along the top of the drawing. Absolutely positioned so it cannot
+            reflow the pane — in fit mode a bar that took layout height would
+            re-fit and rescale the whole diagram the instant a gesture armed.
+            `pointer-events-none` because it sits over the very lifelines it is
+            telling the reader to click.
+
+            NO ANIMATION, deliberately: appearing is a state change, and
+            `check:sequence-motion` keeps entrance motion to one rule on the
+            drawing root. It is also outside the `<svg>` the exporter clones, so
+            it cannot reach an SVG, PNG or GIF frame; it carries the chrome
+            class anyway — see `ARMING_PROMPT_CLASS`. */}
+        {armingPromptText === null ? null : (
+          <p
+            className={cn(
+              "pointer-events-none absolute top-3 left-1/2 z-20 max-w-[min(32rem,90%)]",
+              "-translate-x-1/2 rounded-full border border-primary/50 bg-card/95 px-3 py-1.5",
+              "text-center text-xs font-medium text-foreground shadow-lg backdrop-blur-sm",
+              ARMING_PROMPT_CLASS,
+            )}
+          >
+            {armingPromptText}
+          </p>
+        )}
 
         {/* ---- zoom controls (bottom-left, the C4 viewer's pill pattern) ----
             The hand-rolled fitView/zoomTo: FIT is the default and the reset
@@ -1544,7 +1663,7 @@ export function SequenceViewer({
               onClick={
                 arming === null
                   ? handleArmInsert
-                  : () => disarm("Insert cancelled.")
+                  : () => disarm(armingCancelled(arming.purpose))
               }
               aria-pressed={arming !== null}
               aria-label={
@@ -1588,6 +1707,37 @@ export function SequenceViewer({
               className={ZOOM_BUTTON_CLASSES}
             >
               <UserPlus aria-hidden="true" className="size-4" />
+            </button>
+          )}
+          {/* ---- number the steps ----
+              THE FLAG HAD NO CONTROL AT ALL. `autonumber` has been in the
+              format, the serializer and the renderer since 1.0.0, and the only
+              way to reach it was to type the word into the source pane — which
+              a reader who came to the canvas to read a diagram has no reason to
+              know about. It was asked for as a missing feature; it was a missing
+              button.
+
+              IN THIS STRIP because it is the one editing gesture that changes
+              how the WHOLE diagram is drawn rather than what one element says,
+              which is exactly what the toggles above it do (icon style, idle
+              motion). A pressed state rather than two glyphs, matching the
+              idle-motion toggle beside it.
+
+              Gated on `edit` like its neighbours: it writes a line into the
+              document, so on a locked or read-only canvas it is not a control
+              that should be disabled — it is one that has nothing to write. */}
+          {edit === undefined ? null : (
+            <button
+              type="button"
+              onClick={edit.onToggleAutonumber}
+              aria-pressed={numbered}
+              aria-label={
+                numbered ? "Turn off step numbers" : "Number every step"
+              }
+              title={numbered ? "Step numbers: on" : "Step numbers: off"}
+              className={`${ZOOM_BUTTON_CLASSES} aria-pressed:text-foreground`}
+            >
+              <ListOrdered aria-hidden="true" className="size-4" />
             </button>
           )}
           {tourEnabled ? (
@@ -1719,8 +1869,15 @@ export function SequenceViewer({
                   <MessageForm
                     key={`msg-form-${focusedMessage.step}`}
                     message={focusedMessage}
-                    endpoints={`${nameById.get(focusedMessage.from) ?? focusedMessage.from} → ${nameById.get(focusedMessage.to) ?? focusedMessage.to}`}
+                    /* THE DRAWN participants, not the parsed ones, and the
+                       same set the two-click picker can reach: a folded-away
+                       lifeline has no column to point at, so offering it in a
+                       menu would let the reader send an arrow somewhere they
+                       cannot see it arrive. One rule for both halves of the
+                       gesture. */
+                    participants={shown.participants}
                     onRepoint={handleArmRepoint}
+                    onRepointTo={handleRepointFromForm}
                     onCancel={() => setEditing(null)}
                     onSubmit={(revision) => {
                       setEditing(null);
@@ -1934,6 +2091,24 @@ export function SequenceViewer({
         ) : null}
       </p>
 
+      {/* ---- the mouse guide ----
+          A SECOND ROW, only while editing is on, and the reason it is a row of
+          its own rather than more clauses on the one above: the bar above is
+          about READING the diagram and applies to every reader, while this is
+          the list of things a reader can CHANGE, which most hosts of this
+          viewer cannot offer at all.
+
+          The sentences come from `lib/mouse-guide.ts`, which derives them from
+          `SequenceEditHandlers` — so a gesture added to the canvas cannot ship
+          without a line here. Twice on this branch a correct, shipped gesture
+          was reported as broken because no surface named it. */}
+      {edit === undefined ? null : (
+        <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
+          <span className="font-medium text-foreground">With a mouse:</span>{" "}
+          {SEQUENCE_MOUSE_GUIDE} · {SEQUENCE_MOUSE_GUIDE_CAVEAT}
+        </p>
+      )}
+
       {/* Text alternative: the whole story as an ordered list, for readers
           the SVG serves poorly — with playback gone this is the only LINEAR
           reading of the diagram. Kept in sync for free — it reads the same
@@ -1995,16 +2170,17 @@ const FOCUS_TOUR_STEP: TourStep = {
 /* Offered only when the host passed edit handlers, on the same condition the
    fold step rides: a tour step naming a control that is not on screen sends the
    reader hunting for it. */
+/* THE BODY IS DERIVED, not written here, and that is the point: it is the same
+   `lib/mouse-guide.ts` list the hint bar under the canvas renders. Two hand-kept
+   copies of "how to edit this" is how the endpoint gesture came to be mentioned
+   in one place, in the past tense of a control that had moved, while a reader
+   hunted for it — and how the numbering flag was mentioned in neither. */
 const EDIT_TOUR_STEP: TourStep = {
   title: "Edit the flow on the canvas",
   body:
-    "Click a message or a lifeline, then the pencil in the details panel, to " +
-    "rewrite its wording — or “Repoint on the canvas” to send the arrow " +
-    "between two other lifelines. The panel also removes what you have " +
-    "selected. In this strip, + adds a message (press it, click the sending " +
-    "lifeline, then the receiving one) and the figure adds a lifeline. Every " +
-    "change is written into the source text beside the diagram, one line at a " +
-    "time, and Cmd or Ctrl + Z undoes it.",
+    `With a mouse alone: ${SEQUENCE_MOUSE_GUIDE}. ` +
+    `${SEQUENCE_MOUSE_GUIDE_CAVEAT} Every change is written into the source ` +
+    "text beside the diagram, one line at a time, and Cmd or Ctrl + Z undoes it.",
   icon: Pencil,
 };
 
@@ -2207,15 +2383,18 @@ function DockFormActions({
  */
 function MessageForm({
   message,
-  endpoints,
+  participants,
   onRepoint,
+  onRepointTo,
   onSubmit,
   onCancel,
 }: {
   message: LaidMessage;
-  /** The current sender and receiver, by display name, already formatted. */
-  endpoints: string;
+  /** The lifelines an endpoint may name — the drawn ones; the caller says why. */
+  participants: readonly { id: string; name: string }[];
   onRepoint: () => void;
+  /** Both endpoints, whole, for whichever menu the reader just changed. */
+  onRepointTo: (from: string, to: string) => void;
   onSubmit: (revision: SequenceMessageRevision) => void;
   onCancel: () => void;
 }): React.JSX.Element {
@@ -2254,24 +2433,61 @@ function MessageForm({
         />
       </DockField>
       {/* ---- the endpoints ----
-          SHOWN, AND CHANGED BY POINTING — not two text inputs. An endpoint is a
-          participant id, and asking the reader to spell one while the lifeline
-          it names is on screen a few pixels away invites a typo that makes a
-          document the parser refuses. So this row states where the arrow runs
-          and hands the gesture to the canvas, where the answer is a lifeline
-          you can click.
+          TWO MENUS AND A CANVAS GESTURE, and it took both to make this
+          reachable. The row used to STATE the endpoints and offer only
+          “Repoint on the canvas”, on the reasoning that an endpoint is pointed
+          at rather than typed — a typo in a hand-spelled participant id is a
+          document the parser refuses. That reasoning was right about typing and
+          wrong about the conclusion: a MENU cannot be mistyped, it lists the
+          document's own lifelines by display name, and the two-click picker it
+          replaced as the first thing a reader finds was invisible to anyone who
+          could not hear the live region. "I cannot change from and to" is what
+          that cost.
 
-          NOT a <DockField>: that wraps a <label> around a control, and a button
-          that leaves the form is not this form's input. Pressing it closes the
-          form (see `handleArmRepoint`) so a stale Apply cannot land on top of
-          the repointed line. */}
+          So the menus are the discoverable route and the canvas picker stays
+          for the reader who now knows it is there — it is the better gesture at
+          the far end of a long flow, where the lifeline is easier to point at
+          than to find in a list.
+
+          THE MENUS FIRE ON CHANGE, not on Apply; `handleRepointFromForm` is
+          where that is argued. They are `DockField`s because a select IS this
+          form's input in the ordinary sense, unlike the button below them,
+          which leaves the form (see `handleArmRepoint`) so a stale Apply cannot
+          land on top of the repointed line. */}
       <div className="rounded-md border border-border bg-secondary/40 px-2 py-1.5">
         <span className="block text-xs font-medium text-muted-foreground">
           Endpoints
         </span>
-        <span className="mt-0.5 block text-sm text-foreground">
-          {endpoints}
-        </span>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <DockField term="From">
+            <select
+              value={message.from}
+              onChange={(event) => onRepointTo(event.target.value, message.to)}
+              className={FIELD_CLASSES}
+            >
+              {participants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.name}
+                </option>
+              ))}
+            </select>
+          </DockField>
+          <DockField term="To">
+            <select
+              value={message.to}
+              onChange={(event) =>
+                onRepointTo(message.from, event.target.value)
+              }
+              className={FIELD_CLASSES}
+            >
+              {participants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.name}
+                </option>
+              ))}
+            </select>
+          </DockField>
+        </div>
         <button
           type="button"
           onClick={onRepoint}

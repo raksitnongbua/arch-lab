@@ -267,12 +267,27 @@ export interface SequenceSpans {
    * one. That is measured in `check:sequence` rather than trusted here.
    */
   bodyLine: number;
+  /**
+   * The 1-based line of the `autonumber` flag, or `null` when the document
+   * does not carry one. A single line rather than a `LineSpan` because the
+   * flag has no continuations — the grammar gives it a word and an optional
+   * `true`/`false` and nothing else.
+   *
+   * Added under the same licence as `bodyLine`; `toggledAutonumberEdit` is the
+   * gesture that needs it, and it needs the DISTINCTION as much as the number.
+   * Absent, `autonumber` and `autonumber false` are three states the
+   * serializer writes differently, so a toggle that only knew the model's
+   * boolean could not tell "the author wrote nothing" from "the author wrote
+   * false" — and would normalise the first into the second.
+   */
+  autonumberLine: number | null;
 }
 
 interface SpanCollector {
   participants: Map<string, LineSpan>;
   items: Map<string, LineSpan>;
   bodyLine: number;
+  autonumberLine: number | null;
 }
 
 /**
@@ -309,6 +324,7 @@ export function parseSequenceTextWithSpans(source: string): {
   const contexts: Context[] = [];
   let autonumber: boolean | undefined;
   let autonumberSeen = false;
+  let autonumberLine: number | null = null;
   let bodyOpened = false;
   let bodyLine = 0;
   let seenContent = false;
@@ -488,6 +504,10 @@ export function parseSequenceTextWithSpans(source: string): {
         }
         autonumberSeen = true;
         autonumber = value;
+        // `at` is the flag keyword's own position, so this is the line a
+        // toggle replaces or removes — read off the parse rather than found
+        // again by scanning for the word, which would also match a `desc`.
+        autonumberLine = at.line;
       },
       rootHasSteps: () => rootBranch.items.length > 0,
     });
@@ -514,6 +534,7 @@ export function parseSequenceTextWithSpans(source: string): {
     /* Set above and non-zero by construction: the `!bodyOpened` refusal
        immediately before this is the only way past the opener without one. */
     bodyLine,
+    autonumberLine,
   };
   const file = resolve(
     header,

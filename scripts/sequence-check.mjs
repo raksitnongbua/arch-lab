@@ -128,6 +128,7 @@ const {
   repointedMessageEdit,
   revisedMessageEdit,
   revisedParticipantEdit,
+  toggledAutonumberEdit,
 } = await import(
   pathToFileURL(
     path.join(ROOT, "src/features/playground/input/sequence-edit.ts"),
@@ -2765,6 +2766,196 @@ console.log(
     );
   }
 
+  /* ---- numbering: three states, and the one that must not be written ------- */
+
+  /* WHY THIS SUBSECTION IS LONGER THAN THE GESTURE. `autonumber` is one of the
+     three fields `serialize.ts` omits at its default, and the three states —
+     absent, `autonumber`, `autonumber false` — are the exact shape of the bug
+     the whole line-patch architecture was built to stop. A toggle that turned
+     "the author wrote nothing" into "the author wrote false" would be a
+     re-emit's normalisation, arriving one gesture at a time and passing every
+     other assertion in this file.
+
+     Each transition is measured on the SAME non-canonical fixture the rest of
+     this section uses, so the comment line and the blank line are in the file
+     while the flag moves. Every assertion below reads the whole text back, not
+     just the model: the model cannot show a lost comment. */
+  {
+    /* THE THREE FIXTURES, derived from `authored` rather than hand-written, so
+       none of them can drift from the document the gestures above are proven
+       on. `authored` carries `autonumber` (the seed does), which makes it the
+       ON fixture; removing the line gives ABSENT; rewriting it gives FALSE. */
+    const numberedOn = authored;
+    const absent = authored.replace("  autonumber\n", "");
+    const explicitFalse = authored.replace(
+      "  autonumber\n",
+      "  autonumber false\n",
+    );
+    check(
+      "the three numbering fixtures really are three different states",
+      parseSequenceText(numberedOn).autonumber === true &&
+        parseSequenceText(absent).autonumber === undefined &&
+        parseSequenceText(explicitFalse).autonumber === false,
+      `on ${parseSequenceText(numberedOn).autonumber}, absent ${parseSequenceText(absent).autonumber}, false ${parseSequenceText(explicitFalse).autonumber}`,
+    );
+    /* THE SPAN THE GESTURE STEERS BY. A flag line found by scanning for the
+       word would also match a `desc` that mentions it; the parser records the
+       keyword's own line, and `null` is how "absent" is told apart from
+       "false". */
+    check(
+      "the parser reports the autonumber line, and null when there is none",
+      parseSequenceTextWithSpans(numberedOn).spans.autonumberLine !== null &&
+        numberedOn
+          .split("\n")
+          [
+            parseSequenceTextWithSpans(numberedOn).spans.autonumberLine - 1
+          ].trim() === "autonumber" &&
+        parseSequenceTextWithSpans(absent).spans.autonumberLine === null &&
+        parseSequenceTextWithSpans(explicitFalse).spans.autonumberLine !== null,
+      `on ${parseSequenceTextWithSpans(numberedOn).spans.autonumberLine}, absent ${parseSequenceTextWithSpans(absent).spans.autonumberLine}`,
+    );
+
+    /**
+     * The 1-based line `longer` has and `shorter` does not, or `null` when they
+     * are not one line apart.
+     *
+     * `changedLines` CANNOT ANSWER THIS and using it here is how these
+     * assertions first "failed": it compares line N with line N, so inserting
+     * or removing a line reports every line after it as changed. The revise
+     * gestures replace in place and are fine with it; a flag being added or
+     * taken away needs the multiset question instead — remove the candidate
+     * line and the rest must be byte-identical.
+     */
+    const oneLineApart = (shorter, longer) => {
+      const a = shorter.split("\n");
+      const b = longer.split("\n");
+      if (b.length !== a.length + 1) return null;
+      const at = b.findIndex((line, index) => line !== a[index]);
+      const index = at === -1 ? b.length - 1 : at;
+      return b.filter((_, i) => i !== index).join("\n") === shorter
+        ? index + 1
+        : null;
+    };
+
+    /** One toggle from `text`, or `null` if it refused. */
+    const toggle = (text) => {
+      const parsed = parseViewSource(text);
+      return parsed.status === "ok"
+        ? toggledAutonumberEdit(parsed.value, text)
+        : null;
+    };
+
+    const offFromOn = toggle(numberedOn);
+    check(
+      "turning numbering off REMOVES the line — it does not write `autonumber false`",
+      offFromOn !== null &&
+        offFromOn.doc.file.autonumber === undefined &&
+        !offFromOn.text.includes("autonumber"),
+      `got ${JSON.stringify(offFromOn && offFromOn.text.match(/.*autonumber.*/))}`,
+    );
+    /* THE ROUND TRIP THAT DECIDED IT. Removing rather than writing `false` is
+       what makes a reader who presses the control twice out of curiosity end
+       where they started, byte for byte — the property the alternative loses
+       for every document that had never mentioned numbering. */
+    const backOn = offFromOn === null ? null : toggle(offFromOn.text);
+    check(
+      "on → off → on returns the file byte-for-byte, comment and blank line included",
+      backOn !== null && backOn.text === numberedOn,
+      backOn === null
+        ? "the second toggle refused"
+        : `first difference at line ${changedLines(backOn.text, numberedOn)[0]}`,
+    );
+
+    const onFromAbsent = toggle(absent);
+    check(
+      "turning numbering on from an absent field adds exactly one line, the flag",
+      onFromAbsent !== null &&
+        onFromAbsent.doc.file.autonumber === true &&
+        oneLineApart(absent, onFromAbsent.text) !== null &&
+        onFromAbsent.text
+          .split("\n")
+          [oneLineApart(absent, onFromAbsent.text) - 1].trim() === "autonumber",
+      `got ${JSON.stringify(onFromAbsent && onFromAbsent.text.match(/.*autonumber.*/g))}`,
+    );
+    /* PAST THE AUTHOR'S LEADING PROSE, not straight after the opener. The
+       fixture opens its body with a comment and a blank line, so a flag written
+       at the opener would push both down — which is the specific reason the
+       round trip above is byte-identical rather than merely equivalent. */
+    check(
+      "the inserted flag lands after the comment the body opens with, not above it",
+      onFromAbsent !== null &&
+        (() => {
+          const written = onFromAbsent.text.split("\n");
+          const at = written.findIndex((line) => line.trim() === "autonumber");
+          return at > 0 && written[at - 1].trim() === "";
+        })(),
+      "the flag was written above prose the author put at the head of the block",
+    );
+
+    const onFromFalse = toggle(explicitFalse);
+    check(
+      "turning numbering on from an explicit false REPLACES that line, never adds a second",
+      onFromFalse !== null &&
+        onFromFalse.doc.file.autonumber === true &&
+        onFromFalse.text.split("\n").length ===
+          explicitFalse.split("\n").length &&
+        (onFromFalse.text.match(/^\s*autonumber\b/gm) ?? []).length === 1,
+      `got ${JSON.stringify(onFromFalse && onFromFalse.text.match(/.*autonumber.*/g))}`,
+    );
+
+    /* THE WHOLE POINT, ONE ASSERTION: no transition may touch a byte that is
+       not the flag's own line. This is what a re-emit fails, and it is checked
+       across all three starting states at once so a gesture cannot be safe on
+       the fixture it was written against and lossy on the other two. */
+    for (const [name, before, after] of [
+      ["on → off", numberedOn, offFromOn],
+      ["absent → on", absent, onFromAbsent],
+      ["false → on", explicitFalse, onFromFalse],
+    ]) {
+      /* Whichever direction the line count went, the flag's own line is the
+         only difference: a removal is one line apart the other way round, and a
+         `false` → `true` rewrite is the same length and answers to
+         `changedLines`. */
+      const differs =
+        after === null
+          ? null
+          : after.text.split("\n").length === before.split("\n").length
+            ? changedLines(after.text, before)
+            : [
+                oneLineApart(after.text, before) ??
+                  oneLineApart(before, after.text),
+              ].filter((line) => line !== null);
+      check(
+        `${name} changes exactly one line, and it is the flag's`,
+        differs !== null &&
+          differs.length === 1 &&
+          /autonumber/.test(
+            `${before.split("\n")[differs[0] - 1] ?? ""}${after.text.split("\n")[differs[0] - 1] ?? ""}`,
+          ),
+        `differing lines ${JSON.stringify(differs)}`,
+      );
+      check(
+        `${name} keeps the author's comment and blank line`,
+        after !== null &&
+          after.text.includes("// Reviewed 2026-08-01") &&
+          after.text.includes("updated 2026-08-01T00:00:00.000Z"),
+        "a numbering toggle normalised a field it was not asked about",
+      );
+    }
+
+    /* A CANVAS THE READER LOCKED, and a document that is not a sequence at
+       all: the same two refusals every other gesture here owes, asserted
+       because this one takes no address and so has fewer chances to notice. */
+    check(
+      "a C4 document refuses the numbering toggle",
+      toggledAutonumberEdit(
+        parseViewSource(VIEW_SEED_TEXT.c4).value,
+        VIEW_SEED_TEXT.c4,
+      ) === null,
+      "a gesture for the sequence canvas answered for another notation",
+    );
+  }
+
   /* ---- there is no re-emit path at all ------------------------------------- */
 
   /* THE SHARPEST DIFFERENCE FROM THE C4 CANVAS, and the one most likely to be
@@ -2823,6 +3014,7 @@ console.log(
       ),
     ],
     ["a lifeline insert", insertedParticipantEdit(doc.value, stale)],
+    ["a numbering toggle", toggledAutonumberEdit(doc.value, stale)],
   ]) {
     check(
       `${name} against a pane that disagrees with the canvas is refused, not re-emitted`,
@@ -2852,6 +3044,7 @@ console.log(
       deletedMessageEdit(doc.value, authored, deletableMsg),
       deletedParticipantEdit(spareValue, spareText, spareId),
       insertedParticipantEdit(doc.value, authored),
+      toggledAutonumberEdit(doc.value, authored),
     ].every((edit) => edit !== null && edit.path === "patch"),
     "a sequence edit re-emitted, which would delete the reader's comments",
   );

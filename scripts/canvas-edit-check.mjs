@@ -1946,6 +1946,10 @@ console.log("\nLocking never offers a link to somewhere you already are");
     "edited",
     "repointed",
     "removed",
+    /* Added with the numbering toggle. This list is hand-kept and section 16 is
+       the derived answer to that, but the two ask different questions: this one
+       is about the sentence a reader meets BEFORE they open the canvas. */
+    "numbered",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
@@ -2055,6 +2059,65 @@ console.log("\nEvery sequence gesture is reachable from the canvas it edits");
     "a destructive control that renders without a host to answer it",
   );
 
+  /* THE ENDPOINT GESTURE HAS TO BE REACHABLE WITHOUT A MODE, which is the one
+     thing section 14 could not see when it was written. `onRepointMessage` was
+     reached — from the armed two-click picker — so this section passed while the
+     only route to it was a gesture a mouse user could not discover: pressing
+     “Repoint on the canvas” closed the form and said what to do next into an
+     `sr-only` region. "I cannot change from and to" was the report.
+
+     So the form itself must carry the endpoints as MENUS. A menu cannot be
+     mistyped (which is what kept them off the form originally) and needs no
+     second click. Scoped to `MessageForm`'s own body, so a select somewhere
+     else in the file cannot satisfy it. */
+  {
+    const start = viewer.indexOf("function MessageForm(");
+    const form = viewer.slice(start, viewer.indexOf("\nfunction ", start + 1));
+    check(
+      "the message form is found, so the endpoint assertions are not vacuous",
+      start !== -1 && form.length > 400,
+      `MessageForm slice is ${form.length} characters`,
+    );
+    for (const [term, changed] of [
+      ["From", "onRepointTo(event.target.value, message.to)"],
+      ["To", "onRepointTo(message.from, event.target.value)"],
+    ]) {
+      check(
+        `the form offers a ${term} menu that repoints the message`,
+        new RegExp(`<DockField term="${term}">`).test(form) &&
+          form.includes(changed),
+        `no ${term} select wired to the repoint gesture`,
+      );
+    }
+    /* THE MENU LISTS THE DOCUMENT'S OWN LIFELINES. Hardcoded options, or the
+       ids rather than the names, would put the reader back to matching a token
+       against a card — the thing that made typing one a bad idea. */
+    check(
+      "the menus are built from the participants the caller passes, by display name",
+      /participants\.map\(\(participant\) => \(/.test(form) &&
+        /value=\{participant\.id\}/.test(form) &&
+        /\{participant\.name\}/.test(form),
+      "the endpoint menus do not list the document's lifelines by name",
+    );
+    /* AND THE CANVAS GESTURE SURVIVES. It is the better one at the far end of a
+       long flow, and it was never wrong — only undiscoverable. Removing it
+       while adding the menus would be trading one gap for another. */
+    check(
+      "the canvas picker is still offered beside the menus",
+      form.includes("onClick={onRepoint}") &&
+        form.includes("Repoint on the canvas"),
+      "the two-click gesture was dropped rather than made findable",
+    );
+    check(
+      "the menus reach the host's repoint handler",
+      /onRepointTo=\{handleRepointFromForm\}/.test(viewer) &&
+        /const handleRepointFromForm[\s\S]{0,400}?edit\.onRepointMessage\(/.test(
+          viewer,
+        ),
+      "the selects are rendered but change nothing",
+    );
+  }
+
   /* NO CONFIRM DIALOG, SO UNDO IS THE SAFETY NET, so both removals must go
      through the ring. `applyCanvasEdit` is the only thing that pushes onto it
      (section 9 proves the ring is bounded and separate from the textarea's), so
@@ -2081,6 +2144,228 @@ console.log("\nEvery sequence gesture is reachable from the canvas it edits");
       "a destructive or structural edit with no stated way back",
     );
   }
+}
+
+/* ----------------------------------------------------------------------- */
+/* 15. An armed gesture is VISIBLE, and says the same thing to everyone     */
+/* ----------------------------------------------------------------------- */
+
+/* WHY THIS SECTION EXISTS, and it is the third variation of section 14's story
+   rather than a new one. The repoint gesture was reachable (14 passed), correct
+   (`check:sequence` passed) and unusable: pressing “Repoint on the canvas”
+   closed the form, drew a dashed rule, and put "click the sending lifeline,
+   then the receiving one" into the playground's `sr-only` live region and
+   nowhere else. A mouse user saw a panel disappear and reported the feature as
+   broken. Reachable is not the same as legible, and nothing here asked the
+   second question.
+
+   So: the instruction must exist ON SCREEN while a gesture is armed, and the
+   two surfaces must come from ONE source. The second half is the part that
+   rots — a visible prompt and an announcement written separately will drift,
+   and a reader comparing them cannot tell which is true. The sentences are
+   therefore DERIVED here by calling the function, never typed into this file,
+   so rewording the prompt cannot make these assertions vacuous. */
+console.log("\nAn armed gesture says the same thing on screen and out loud");
+{
+  const { armingPrompt, armingCancelled, ARMING_PROMPT_CLASS } = await load(
+    "src/features/sequence/lib/arming-prompt.ts",
+  );
+  const viewer = read("src/features/sequence/components/sequence-viewer.tsx");
+
+  /* EVERY SHAPE THE STATE CAN TAKE, enumerated rather than sampled: the branch
+     that was missing "Escape cancels" was the second click, which is the one a
+     reader most needs it on — they have already committed a click. */
+  const states = [
+    { purpose: "insert", step: null, fromName: null },
+    { purpose: "insert", step: 3, fromName: null },
+    { purpose: "insert", step: 3, fromName: "Storefront" },
+    { purpose: "repoint", step: 4, fromName: null },
+    { purpose: "repoint", step: 4, fromName: "Storefront" },
+  ];
+  const prompts = states.map((state) => armingPrompt(state));
+  check(
+    "every armed state has a prompt, and every one of them offers the way out",
+    prompts.length === states.length &&
+      prompts.every(
+        (text) => text.length > 20 && text.endsWith("Escape cancels."),
+      ),
+    JSON.stringify(prompts),
+  );
+  /* THE PROMPT SAYS WHAT TO CLICK NEXT. Both halves of the gesture name a
+     lifeline, because "repointing step 4" alone tells a reader what is
+     happening and not what to do about it. */
+  check(
+    "every prompt names the lifeline the reader must click",
+    prompts.every((text) => /lifeline/.test(text)),
+    JSON.stringify(prompts),
+  );
+  /* THE TWO CLICKS READ DIFFERENTLY. Not "every state is unique" — once the
+     sender is chosen, both purposes ask the same question and deliberately
+     share a sentence. What must never happen is the prompt standing still while
+     the gesture advances, which would leave a reader who has already clicked
+     once with no sign that it landed. */
+  const owedSender = states
+    .filter((state) => state.fromName === null)
+    .map((state) => armingPrompt(state));
+  const owedReceiver = states
+    .filter((state) => state.fromName !== null)
+    .map((state) => armingPrompt(state));
+  check(
+    "the prompt changes after the first click, so the reader can see it landed",
+    owedSender.length > 0 &&
+      owedReceiver.length > 0 &&
+      owedSender.every((text) => !owedReceiver.includes(text)),
+    JSON.stringify({ owedSender, owedReceiver }),
+  );
+  check(
+    "each purpose says which gesture it is while the first click is owed",
+    new Set(owedSender).size === owedSender.length,
+    "two different armed gestures look identical before the first click",
+  );
+
+  /* ONE SOURCE, MEASURED FROM THE OUTPUT. If any prompt's own words appear in
+     the viewer as a literal, the sentence has been written twice and the two
+     copies are free to diverge — which is exactly how the announcement came to
+     be the only one that existed. */
+  for (const text of prompts) {
+    check(
+      `the viewer does not spell "${text.slice(0, 34)}…" out for itself`,
+      !viewer.includes(text),
+      "the prompt wording is duplicated in the component — it will drift",
+    );
+  }
+  check(
+    "the cancel sentence is shared too, not retyped at the button",
+    !viewer.includes(armingCancelled("insert")) &&
+      !viewer.includes(armingCancelled("repoint")) &&
+      /armingCancelled\(/.test(viewer),
+    "the two ways out of an armed gesture would say different things",
+  );
+
+  /* BOTH SURFACES, from that one source. The announcement is the pre-existing
+     half; the rendered node is the fix. Asserted separately because losing
+     either one is a different bug with the same symptom. */
+  check(
+    "the armed gesture is still announced, through the shared prompt",
+    /onAnnounce\(\s*armingPrompt\(/.test(viewer),
+    "the live region lost its instruction",
+  );
+  check(
+    "and the prompt is RENDERED, gated on something being armed",
+    /armingPromptText === null \? null : \(/.test(viewer) &&
+      /armingPromptText\s*=\s*\n?\s*arming === null/.test(viewer),
+    "a mouse user would be back to watching a panel vanish with no instruction",
+  );
+  check(
+    "the rendered prompt carries the chrome class, so it can never reach an export",
+    new RegExp(`ARMING_PROMPT_CLASS`).test(viewer) &&
+      ARMING_PROMPT_CLASS.includes("af-seq-chrome-"),
+    `${ARMING_PROMPT_CLASS} is not chrome, or the render does not use it`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 16. The guide NAMES every gesture the canvas offers                     */
+/* ----------------------------------------------------------------------- */
+
+/* THE FOURTH TIME THE SAME SHAPE. Section 8 asks whether the page's heading
+   names the gestures; it does that against a hand-listed set of verbs, which
+   cannot notice the gesture it has never heard of. Section 14 fixed that for
+   reachability by deriving the list from `SequenceEditHandlers`. This does it
+   for the thing a reader actually reads: the mouse guide under the canvas and
+   the tour step built from the same list.
+
+   Twice on this branch a shipped, correct gesture was reported as missing —
+   the endpoint change, and step numbering, which had no control at all. Both
+   would have failed here. Adding a handler to `SequenceEditHandlers` adds one
+   assertion below and it fails until the guide grows a line for it. */
+console.log("\nThe mouse guide names every gesture, and claims no others");
+{
+  const {
+    SEQUENCE_MOUSE_GESTURES,
+    SEQUENCE_MOUSE_GUIDE,
+    SEQUENCE_MOUSE_GUIDE_CAVEAT,
+  } = await load("src/features/sequence/lib/mouse-guide.ts");
+  const viewer = read("src/features/sequence/components/sequence-viewer.tsx");
+
+  /* THE SAME DERIVATION SECTION 14 USES, deliberately re-read rather than
+     shared: if the two ever disagree about what the contract says, the
+     assertions below are measuring a different set from the ones above. */
+  const contract =
+    /export interface SequenceEditHandlers \{([\s\S]*?)\n\}/.exec(viewer);
+  const handlers = [
+    ...new Set(
+      [...(contract?.[1] ?? "").matchAll(/^\s{2}(on[A-Z]\w*)\s*[?:]/gm)].map(
+        (m) => m[1],
+      ),
+    ),
+  ];
+  check(
+    "the guide has a line for each of the gestures the contract declares",
+    handlers.length >= 7 && SEQUENCE_MOUSE_GESTURES.length === handlers.length,
+    `${SEQUENCE_MOUSE_GESTURES.length} guide lines for ${handlers.length} gestures`,
+  );
+  const taught = new Set(SEQUENCE_MOUSE_GESTURES.map((g) => g.handler));
+  for (const handler of handlers) {
+    check(
+      `the guide tells a mouse user how to reach ${handler}`,
+      taught.has(handler) &&
+        (SEQUENCE_MOUSE_GESTURES.find((g) => g.handler === handler)?.mouse
+          .length ?? 0) > 12,
+      "a gesture the canvas offers that no surface on the page names",
+    );
+  }
+  /* AND NOTHING ELSE. A line for a handler that no longer exists teaches a
+     control that has been removed, which sends a reader hunting exactly as an
+     unmentioned one does. */
+  check(
+    "the guide teaches no gesture the contract does not declare",
+    [...taught].every((handler) => handlers.includes(handler)),
+    `${[...taught].filter((h) => !handlers.includes(h)).join(", ")} is taught but not declared`,
+  );
+
+  /* IT MUST NOT CLAIM A GESTURE THAT DOES NOT EXIST, and there are exactly
+     three of those worth naming. There is no drag on this canvas (the pointer
+     owns panning), and notes and fragments carry no line span at all
+     (`SequenceSpans`) so nothing can edit them here. A guide that implied
+     otherwise would be worse than silence: the reader would try it, get
+     nothing, and conclude the working gestures are broken too. */
+  check(
+    "the gesture list promises no drag",
+    !/\bdrag/i.test(SEQUENCE_MOUSE_GUIDE),
+    "there is no drag-to-edit on this canvas",
+  );
+  check(
+    "the gesture list promises no note or fragment editing",
+    !/\bnote|\bfragment/i.test(SEQUENCE_MOUSE_GUIDE),
+    "neither has a span to patch, so neither has a canvas gesture",
+  );
+  /* THE CAVEAT SAYS SO OUT LOUD, which is the other half: a reader arriving
+     from a drawing tool tries to drag a message first, and the canvas pans
+     instead. Silence there reads as a broken canvas. */
+  check(
+    "the caveat says what dragging does instead",
+    /\bdrag/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT) &&
+      /pan/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT),
+    "the one gesture a reader tries first is unexplained",
+  );
+
+  /* BOTH SURFACES RENDER THE ONE LIST. The hint bar is where a reader already
+     looks for affordances; the tour is what opens itself on a first visit.
+     Neither is allowed to be a second hand-kept copy — that is how the tour
+     came to describe the endpoint gesture in words the panel no longer used. */
+  check(
+    "the hint bar and the tour step both read the derived guide",
+    (viewer.match(/SEQUENCE_MOUSE_GUIDE\b/g) ?? []).length >= 2,
+    "one of the two surfaces is writing its own copy of the list",
+  );
+  check(
+    "the hint bar's editing row is gated on the edit handlers being present",
+    /edit === undefined \? null : \([\s\S]{0,600}?SEQUENCE_MOUSE_GUIDE/.test(
+      viewer,
+    ),
+    "a locked or read-only canvas would list gestures it does not offer",
+  );
 }
 
 console.log(

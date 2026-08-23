@@ -244,6 +244,10 @@ check("the exporter no longer post-processes serialized markup", () => {
 const { SEQUENCE_CHROME_CLASS_PREFIX, SEQUENCE_CHROME_SELECTOR } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/lib/chrome.ts")).href
 );
+const { ARMING_PROMPT_CLASS } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/arming-prompt.ts"))
+    .href
+);
 
 /** Every file the sequence feature draws or styles itself with. */
 function sequenceSourceFiles() {
@@ -388,6 +392,46 @@ check("the prefix divides the drawing, it does not swallow it", () => {
       `${swept} would strip the part of the drawing that carries the meaning`,
     );
   }
+});
+
+check("the armed gesture's prompt cannot reach a file", () => {
+  /*
+   * A PROMPT IS THE PUREST CASE OF CHROME by `chrome.ts`'s own test — a reader
+   * holding a still image loses nothing by the absence of "click the sending
+   * lifeline", and gains a sentence of instructions printed across their
+   * diagram if it survives. It is rendered by `sequence-viewer.tsx` as HTML
+   * beside the drawing, so today it is not in the clone root at all (this file
+   * pins that root as `svg.af-seq-svg` above), and the interactive scan is
+   * scoped to the renderer for exactly that reason.
+   *
+   * Which is why the assertion is about the BOUNDARY rather than the class:
+   * moving the prompt into the SVG — to sit over the lifeline it names, say —
+   * is a reasonable-looking change that would put it in every SVG, PNG and all
+   * twenty GIF frames. This fails first, and the prefix behind it means the
+   * fix is already in place.
+   */
+  const drawing = readFileSync(
+    path.join(ROOT, "src/features/sequence/components/sequence-diagram.tsx"),
+    "utf8",
+  );
+  for (const name of ["armingPrompt", "ARMING_PROMPT_CLASS"]) {
+    assert.ok(
+      !drawing.includes(name),
+      `${name} reached the SVG renderer — the prompt would export into every still and GIF frame`,
+    );
+  }
+  /* AND IT IS STILL STRIPPED IF IT EVER DOES. Read out of the exporter's own
+     selector rather than compared against the literal prefix, so this measures
+     the thing that does the removing. */
+  const matched = /\[class\*="([^"]+)"\]/.exec(SEQUENCE_CHROME_SELECTOR);
+  assert.ok(
+    matched,
+    `cannot read a substring out of ${SEQUENCE_CHROME_SELECTOR}`,
+  );
+  assert.ok(
+    ARMING_PROMPT_CLASS.includes(matched[1]),
+    `${ARMING_PROMPT_CLASS} is not matched by the exporter's ${SEQUENCE_CHROME_SELECTOR}`,
+  );
 });
 
 check("the comet is dropped from a still and kept for the animation", () => {

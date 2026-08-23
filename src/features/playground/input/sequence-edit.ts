@@ -23,8 +23,9 @@
  *      and a message's time is its index in `items`. So the gesture set is not
  *      "move" and "delete" but: REVISE (rewrite one element's own wording),
  *      REPOINT (send a message between two other lifelines), INSERT (a message
- *      or a participant) and REMOVE (a message or a participant).
- *      `canvasEditability(doc, "revise")` answers for all six — deliberately
+ *      or a participant), REMOVE (a message or a participant) and TOGGLE the
+ *      diagram's one drawing flag, `autonumber`.
+ *      `canvasEditability(doc, "revise")` answers for all seven — deliberately
  *      one ability rather than one per gesture, because they gate on the same
  *      two facts (an `.alab` sequence pane, and the canvas unlocked) and a
  *      second ability would be a second thing for `check:canvas-edit` to
@@ -53,6 +54,9 @@
  *
  * The INSERTS are safe for one reason: each adds EXACTLY ONE LINE and
  * renormalises nothing. A whole-document re-emit would have disturbed all four.
+ * The NUMBERING TOGGLE is the one gesture that touches a hazard on this list
+ * head-on — `autonumber` is one of the three fields omitted at its default —
+ * and `toggledAutonumberEdit` is where the three states are argued out.
  *
  * The REMOVALS are the ones that had to answer for themselves, because taking
  * a line out is not symmetrical with putting one in — the document left behind
@@ -535,6 +539,109 @@ export function insertedParticipantEdit(
       { span: { start: afterLine + 1, end: afterLine }, lines },
     ]),
   );
+}
+
+/**
+ * `doc` with step numbering turned on or off, or `null` when the edit cannot
+ * apply.
+ *
+ * WHAT "ON" AND "OFF" ARE IN THE TEXT, which is the whole of this gesture. The
+ * serializer writes three different things (`serialize.ts`): nothing at all for
+ * an absent field, `autonumber` for `true`, `autonumber false` for `false`. Two
+ * of those three DRAW THE SAME DIAGRAM, so the toggle's own state is
+ * `autonumber === true` and the interesting question is only ever which bytes
+ * the other state is spelled with.
+ *
+ *   - absent → on: one line inserted at the head of the body's content, past any
+ *     comment or blank line the author opened the block with —
+ *     `autonumberAnchor` argues why that and not the opener itself.
+ *   - `autonumber false` → on: that line REPLACED, at its own indent. Inserting
+ *     a second flag line instead would be a document the parser refuses
+ *     outright ("duplicate autonumber line").
+ *   - `autonumber` → off: that line REMOVED, back to absent — NOT rewritten to
+ *     `autonumber false`.
+ *
+ * WHY OFF REMOVES RATHER THAN WRITING `false`. Absent is the state every
+ * document that has never mentioned numbering is in, so writing `false` would
+ * mean a reader who pressed the control twice out of curiosity is left with a
+ * line they did not author and cannot see the point of — the gesture leaving a
+ * trace after undoing itself. Removing makes on-then-off byte-identical to
+ * where it started, which is the round-trip property the rest of this module
+ * is built to keep.
+ *
+ * THE COST, STATED: an author who WROTE `autonumber false` by hand, turned
+ * numbering on and then off again, ends with the line gone rather than back.
+ * That is one line, of the field they were toggling, changed by two deliberate
+ * presses on it — not the collateral loss of comments and unrelated fields this
+ * module exists to prevent. `check:sequence` measures each of the three
+ * transitions rather than trusting this paragraph.
+ */
+export function toggledAutonumberEdit(
+  doc: ViewDocument,
+  sourceText: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
+    return null;
+  }
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable === null) return null;
+
+  const lines = sourceText.split("\n");
+  const at = patchable.spans.autonumberLine;
+  const turningOn = doc.file.autonumber !== true;
+
+  const patch: LinePatch =
+    at === null
+      ? {
+          /* An empty span at the head of the body's CONTENT — the same
+             insertion arithmetic `insertedMessageEdit` uses. Always the ON
+             flag: no line means the field is absent, and absent already reads
+             as off, so this branch cannot be a turn-off. */
+          span: {
+            start: autonumberAnchor(patchable.spans.bodyLine, lines) + 1,
+            end: autonumberAnchor(patchable.spans.bodyLine, lines),
+          },
+          lines: [`${ROOT_ITEM_INDENT}autonumber`],
+        }
+      : {
+          span: { start: at, end: at },
+          // Off is the removal; on rewrites the flag at the indent the author's
+          // own line carries, on the same rule `patchBlock` follows.
+          lines: turningOn ? [`${indentOf(lines[at - 1])}autonumber`] : [],
+        };
+
+  return adopt(doc, applyPatches(sourceText, [patch]));
+}
+
+/**
+ * The 1-based line a newly written `autonumber` flag goes AFTER: the last of
+ * the author's own leading blank and `//` lines inside the body, or the
+ * `@sequence` opener itself when the body has no content.
+ *
+ * WHY NOT SIMPLY THE OPENER, which is what `insertedParticipantEdit` uses.
+ * Because this gesture is the only one a reader can run in both directions on
+ * the same line, and the pair has to be lossless: writing the flag straight
+ * after the opener would push a comment the author had put at the head of the
+ * block down one row, so pressing the control twice out of curiosity would
+ * REORDER their prose rather than leave the file where it started.
+ * `check:sequence` measures that on-off-on is byte-identical, which is the
+ * assertion this function exists to satisfy.
+ *
+ * SCANNED, not read off the span map, and that is forced rather than chosen:
+ * the parser drops comment and blank lines with no capture, so there is no span
+ * that can say where the author's leading prose ends. Blank lines are skipped
+ * only when real content follows — a body that is nothing but comments and
+ * blanks anchors on the opener, because appending past the file's last line
+ * would drop the trailing newline the splice otherwise preserves.
+ */
+function autonumberAnchor(bodyLine: number, lines: readonly string[]): number {
+  for (let index = bodyLine; index < lines.length; index += 1) {
+    const trimmed = lines[index].trim();
+    if (trimmed === "" || trimmed.startsWith("//")) continue;
+    // `index` is 0-based, so it is already the line BEFORE the content line.
+    return index;
+  }
+  return bodyLine;
 }
 
 /* -------------------------------------------------------------------------- */
