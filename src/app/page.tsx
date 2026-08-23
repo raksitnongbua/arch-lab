@@ -36,6 +36,7 @@ import { publicOrigin } from "@/features/mcp/lib/origin";
    client chunk on the landing page. `view/page.tsx` deep-imports the same
    feature's pure modules for the same reason. */
 import {
+  CANVAS_EDITABLE_SUMMARY,
   CANVAS_EDITING_PASSAGE,
   CANVAS_EDIT_OFFERS,
 } from "@/features/playground/input/canvas-edit";
@@ -134,9 +135,9 @@ type Notation = keyof typeof CANVAS_EDIT_OFFERS.move;
  * is the exact claim that went stale five times on this branch.
  *
  * Two words, not a sentence: the cards are a grid a reader scans to answer "can
- * I drag this one", and `CANVAS_EDITING_PASSAGE` in the hero above has already
- * said what a canvas gesture writes. A card that repeated it six times would
- * bury the difference it exists to show.
+ * I drag this one", and `CANVAS_EDITING_PASSAGE` — in "How you actually use it",
+ * below — has already said what a canvas gesture writes. A card that repeated it
+ * six times would bury the difference it exists to show.
  */
 function editedHow(notation: Notation): { label: string; onCanvas: boolean } {
   const onCanvas = Object.values(CANVAS_EDIT_OFFERS).some(
@@ -373,32 +374,53 @@ export default function Home() {
                 {APP_NAME}
               </span>{" "}
               is a browser-based editor for architecture diagrams written as
-              plain text. Describe a system in a few lines and it draws it — a
-              beautiful, zoomable C4 model you can drill into level by level, a
-              sequence flow you can click through message by message, a
-              flowchart, a use-case diagram, an ER model or a data dictionary.
-              Your AI agent can write that text for you, over MCP.
+              plain text. Describe a system in a few lines and it draws it.
             </p>
 
-            {/* THE ONE PLACE THIS SENTENCE APPEARS on the home page, and it is
-                here rather than in a feature card because it answers the
-                objection a reader arrives with — "I do not want to learn a
-                grammar to move a box". Sourced from the flag: while the canvas
-                is not shipped the sentence is ABSENT, not written in a hopeful
-                present tense (`codebase.md`, feature flags).
+            {/* WHAT THE HERO KEEPS: a DEFINITION and one short claim, in that
+                order, and no enumeration.
 
-                AND IT IS NO LONGER WRITTEN HERE. It used to read "a C4 diagram
-                is editable both ways", with a comment explaining that the other
-                five kinds have nothing to drag — true when written, and still on
-                the page for a release after the sequence canvas learned to
-                reorder messages and lifelines. It is now
-                `CANVAS_EDITING_PASSAGE`, assembled from the capability grid, and
-                it is the SAME STRING that `/llms.txt`, `/llms-full.txt` and
-                `/faq` serve: an assistant quotes a passage rather than a page,
-                so four paraphrases would be four chances to be quoted wrongly. */}
+                The paragraph above used to name all six notations with a clause
+                each — "a beautiful, zoomable C4 model you can drill into level
+                by level, a sequence flow you can click through message by
+                message, …" — plus the MCP line. That was ~70 words, and with
+                the citation passage that used to sit here a reader met about 130
+                before the first button.
+
+                THE ENUMERATION WENT, NOT THE DEFINITION. `check:seo` requires
+                the "is a browser-based editor" form to survive, because an
+                assistant asked "what is arch-lab" extracts "X is a Y that Z"
+                and paraphrases the rest — cutting that costs the site the one
+                sentence it is quoted by. The six names were the removable half:
+                the notation cards below name every one of them in prose, in the
+                notation's own vocabulary, which is what a search for "sequence
+                diagram as text" actually matches. MCP keeps its own section.
+
+                WHAT THE HERO KEEPS OF THE EDITING CLAIM: the shortest true
+                form of it, and no more.
+
+                The full `CANVAS_EDITING_PASSAGE` was here, and it was the right
+                sentence in the wrong place. Between it and the paragraph above,
+                a reader met about 130 words before the first button — the
+                citation passage was doing GEO work at the expense of the person
+                actually reading the page. It has moved to "How you actually use
+                it", which is still server-rendered HTML on this same route, so
+                nothing an assistant or a crawler reads has been lost; only the
+                order a human meets it in has changed.
+
+                THIS LINE IS NOT A PARAPHRASE OF IT, which matters — the reason
+                one constant serves four surfaces is that four paraphrases are
+                four chances to be quoted wrongly. `CANVAS_EDITABLE_SUMMARY` is
+                derived from the same capability grid, so it names whichever
+                notations offer a canvas gesture and cannot drift from the
+                passage below or go stale when a seventh notation lands.
+
+                Sourced from the flag, so while the canvas is not shipped the
+                claim is ABSENT rather than written in a hopeful present tense
+                (`codebase.md`, feature flags). */}
             {CANVAS_EDIT_ENABLED ? (
-              <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
-                {CANVAS_EDITING_PASSAGE}
+              <p className="mt-3 max-w-2xl text-base text-muted-foreground/90">
+                {CANVAS_EDITABLE_SUMMARY}
               </p>
             ) : null}
 
@@ -656,6 +678,29 @@ export default function Home() {
           >
             How you actually use it
           </h2>
+          {/* THE CITATION PASSAGE LIVES HERE, not in the hero.
+
+              It is the answer to "can I edit an arch-lab diagram on the canvas,
+              and which kinds", written as one self-contained passage because an
+              assistant quotes a passage rather than a page
+              (`new-diagram-type.md`, GEO). The hero carried it and cost the
+              reader 130 words before the first button; this section is where
+              somebody is already asking how the thing is used, so the sentence
+              is answering a question rather than delaying one.
+
+              STILL THE SAME CONSTANT, and still server-rendered on this route —
+              `/llms.txt`, `/llms-full.txt` and `/faq` serve the identical
+              string, and `check:seo` asserts each of the four reads it from
+              `CANVAS_EDITING_PASSAGE` rather than pasting its words. Moving it
+              within the page keeps every one of those assertions true; pasting
+              a shortened copy here would have broken the one property they
+              exist to defend. */}
+          {CANVAS_EDIT_ENABLED ? (
+            <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+              {CANVAS_EDITING_PASSAGE}
+            </p>
+          ) : null}
+
           <ol className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-3">
             {STEPS.map((step, index) => {
               const Icon = step.icon;

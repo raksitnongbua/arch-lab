@@ -7,6 +7,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- The home page hero is 31 words instead of 136. The list of what each notation
+  draws moved to the notation cards, which already name all six in their own
+  vocabulary, and the full two-ways-to-edit passage moved down to "How you
+  actually use it" — still on the page, just no longer between you and the first
+  button.
+
 ### Fixed
 
 - Turning step numbering off no longer removes an `autonumber false` line you
