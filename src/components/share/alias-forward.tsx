@@ -14,11 +14,14 @@
  * trampoline.
  *
  * ONE COMPONENT, taking its destination as a prop, because the direction has
- * already flipped once. `/view/seq` used to be the alias and `/view/sequence`
- * the page; the pair now runs the other way (see `app/view/seq/page.tsx` for
+ * already flipped once. `/live/seq` used to be the alias and `/live/sequence`
+ * the page; the pair now runs the other way (see `app/live/seq/page.tsx` for
  * why), and a second hand-written forwarder would have been the moment the
  * two drifted on the fragment handling — which is the part that is easy to
- * get wrong and expensive when it is.
+ * get wrong and expensive when it is. That prop is now carrying sixteen
+ * routes, since the whole family was renamed from `/view` and each old path
+ * stayed behind as a trampoline (`app/live/page.tsx` records the rename and
+ * the naming convention these comments follow).
  */
 
 import { useEffect } from "react";
@@ -30,7 +33,7 @@ export function AliasForward({
   to,
   label,
 }: {
-  /** Destination path, without a fragment (`/view/seq`). */
+  /** Destination path, without a fragment (`/live/seq`). */
   to: string;
   /** What the holding line says, e.g. "the sequence playground". */
   label: string;
@@ -46,8 +49,29 @@ export function AliasForward({
 
        Forwarding unconditionally, payload or not, keeps the alias honest: it
        always means the same destination, never a second one. */
+    /* THE QUERY IS CARRIED TOO, and forgetting it dropped real links. The
+       forward used to be `to` plus the fragment, so `/view?e=atlas-shop`
+       arrived at `/live` with the example id gone — and `?e=` is how every
+       demo card and every crawlable example page addresses a document, so the
+       reader landed on the seed instead of the diagram they asked for. The
+       fragment was carried because the SHARE payload lives there; `?e=` and
+       `?d=` are the other half of the same compatibility promise.
+
+       MERGED, not concatenated, because five of the six destinations carry a
+       `?d=` of their own (`/live?d=seq`) — appending a second query string
+       would produce `?d=seq?e=x`, whose `d` then reads as `seq?e=x` and
+       matches no kind. The DESTINATION wins a collision: the alias's `d`
+       comes from the path the reader actually asked for, so `/view/seq?d=er`
+       is a contradiction the route already settled. */
+    const here = new URL(window.location.href);
+    const target = new URL(to, window.location.origin);
+    for (const [key, value] of here.searchParams) {
+      if (!target.searchParams.has(key)) target.searchParams.set(key, value);
+    }
     const body = normalizeShareFragment(window.location.hash);
-    router.replace(`${to}${body === "" ? "" : `#${body}`}`);
+    router.replace(
+      `${target.pathname}${target.search}${body === "" ? "" : `#${body}`}`,
+    );
   }, [router, to]);
 
   return (

@@ -13,7 +13,7 @@ import {
  * this: a shared sequence link previewed as "C4 architecture diagrams", which
  * described the other document kind entirely.
  *
- * It covers `/view/sequence/[exampleId]` too, since a nested route inherits
+ * It covers `/live/sequence/[exampleId]` too, since a nested route inherits
  * the nearest image. That is the right default: an example IS the sequence
  * playground with a document already in it, and a per-example card would have
  * to render a real diagram at 1200×630 — a different job, and one that cannot

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The client wrapper for `/view/[modelId]` — a bundled model's ViewerShell,
+ * The client wrapper for `/live/[modelId]` — a bundled model's ViewerShell,
  * opened immersive (this route shows one model and nothing else), plus the two
  * share-related concerns the server page cannot handle:
  *
@@ -62,7 +62,7 @@ export function ViewerBundledView({
       share={{ kind: "bundled", modelId: model.id }}
       // Deliberately NOT immersive by default any more. Hiding the site chrome
       // on arrival dropped a reader somewhere with no visible route back to the
-      // rest of the app, and made this route behave unlike `/view` for a reason
+      // rest of the app, and made this route behave unlike `/live` for a reason
       // nobody could infer from the screen. Immersive is still one click away on
       // the strip under the canvas — a choice now, rather than a state you have
       // to notice and undo.

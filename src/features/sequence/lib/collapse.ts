@@ -180,6 +180,13 @@ function filterItems(
     if (item.step === "message") {
       // A message with either end hidden has nothing to draw between.
       if (hidden.has(item.from) || hidden.has(item.to)) continue;
+      /* THE SAME OBJECT, not a copy, and that is now load-bearing rather than
+         merely cheap. Folding renumbers the steps, so a step number is not an
+         address into the file — `lib/address.ts` recovers the address by
+         finding this identical object in the unfiltered tree, which is what
+         lets a canvas edit fire correctly while something is folded. Cloning
+         here (`{ ...item }`) would break that with nothing on screen to show
+         it; `check:sequence` pins it. */
       out.push(item);
       continue;
     }

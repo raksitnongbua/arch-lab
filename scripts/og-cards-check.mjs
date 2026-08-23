@@ -58,21 +58,21 @@ const check = (label, ok, detail) => {
 /** Every card, and the route each one is the preview for. */
 const CARDS = [
   ["src/app/opengraph-image.tsx", "/ (and every route without its own)"],
-  ["src/app/view/c4/opengraph-image.tsx", "/view/c4"],
+  ["src/app/live/c4/opengraph-image.tsx", "/live/c4"],
   /* The sequence card lives with the REAL sequence page, which is the short
-     route (`/view/seq`) — that is the URL every minted share link carries, and
+     route (`/live/seq`) — that is the URL every minted share link carries, and
      a preview is fetched for the URL as shared. It used to sit at
-     `/view/sequence`, which the pair's flip turned into an alias, and for as
+     `/live/sequence`, which the pair's flip turned into an alias, and for as
      long as it did every minted link previewed with the ROOT card: "C4
      architecture diagrams", the other document kind, which is the exact bug
      this card exists to fix. */
-  ["src/app/view/seq/opengraph-image.tsx", "/view/seq"],
+  ["src/app/live/seq/opengraph-image.tsx", "/live/seq"],
   /* The third and fourth document kinds get their cards WITH their routes,
-     not after the first mis-preview — a `/view/flow` or `/view/uc` link
+     not after the first mis-preview — a `/live/flow` or `/live/uc` link
      previewing as the landing page (or as any other kind) is exactly the
      failure mode item 1 records. */
-  ["src/app/view/flow/opengraph-image.tsx", "/view/flow"],
-  ["src/app/view/uc/opengraph-image.tsx", "/view/uc"],
+  ["src/app/live/flow/opengraph-image.tsx", "/live/flow"],
+  ["src/app/live/uc/opengraph-image.tsx", "/live/uc"],
   /* `/mcp` is not a document kind and gets a card anyway, because "no card"
      is not neutral — Next serves the ROOT one, so every link to the connect
      guide previewed as "Architecture diagrams that survive review" over a C4
@@ -84,15 +84,27 @@ const CARDS = [
 
 /**
  * Cards that are a RE-EXPORT of one above rather than their own drawing.
- * `/view/sequence` needs one so the example routes nested under it inherit a
+ * `/live/sequence` needs one so the example routes nested under it inherit a
  * sequence-shaped preview instead of the root card — but it must stay a
  * re-export, because two copies of a card are two cards that can disagree.
  */
 const REEXPORTED_CARDS = [
   [
-    "src/app/view/sequence/opengraph-image.tsx",
-    "src/app/view/seq/opengraph-image.tsx",
-    "/view/sequence/[exampleId]",
+    "src/app/live/sequence/opengraph-image.tsx",
+    "src/app/live/seq/opengraph-image.tsx",
+    "/live/sequence/[exampleId]",
+  ],
+  /* THE RETIRED `/view` FAMILY NEEDS ONE FOR THE SAME REASON `/editor` did.
+     Every share link minted before the rename to `/live` carries a `/view`
+     path, and a preview is fetched for the URL AS SHARED — the trampoline's
+     own URL, not the one it forwards to. With no card here Next serves the
+     ROOT one, and every already-circulating diagram link previews as the
+     product's landing page: item 1's failure, arriving through a rename
+     instead of through a missing file. The nested trampolines inherit it. */
+  [
+    "src/app/view/opengraph-image.tsx",
+    "src/app/live/opengraph-image.tsx",
+    "/view and every /view/* trampoline",
   ],
 ];
 const FRAME = "src/features/marketing/og/card.tsx";

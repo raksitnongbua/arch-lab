@@ -9,7 +9,7 @@
  * consumes a parsed file and owns only layout, the focus interaction, and
  * export.
  *
- * What the `/view` wiring needs: the viewer to mount, the pure layout for
+ * What the `/live` wiring needs: the viewer to mount, the pure layout for
  * anything that measures, the export pair (SVG string + PNG blob) with its
  * rendered-result type, the Share/Export toolbar buttons, and the input
  * layer (reader + seed example).

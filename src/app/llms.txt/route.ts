@@ -4,6 +4,7 @@ import {
   MCP_TOOLS,
 } from "@/features/mcp/catalog";
 import { publicOrigin } from "@/features/mcp/lib/origin";
+import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
 /**
@@ -24,6 +25,13 @@ import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
  * handler and not a file in `public/`: a static copy is a second place to
  * forget.
  *
+ * THE EDITING PASSAGE IS DERIVED TOO, from the capability grid in
+ * `playground/input/canvas-edit.ts`, and it is the same string the landing
+ * page, `/llms-full.txt` and `/faq` serve. An assistant asked "can I edit an
+ * arch-lab diagram by dragging" quotes one passage rather than a page, so the
+ * four surfaces that answer it say it in one wording — and neither this file nor
+ * the full reference mentioned a canvas at all until they did.
+ *
  * It is deliberately SHORT. The format's value is being skimmable in one
  * read; a mirror of the docs would just be the docs again, less current.
  * Links point at the pages that own each subject.
@@ -39,13 +47,17 @@ export function GET(): Response {
 > ${APP_DESCRIPTION}
 
 ${APP_NAME} reads and writes six kinds of architecture document as plain text:
-C4 models, UML-style sequence diagrams, flowcharts, use-case diagrams and
+C4 models, UML-style sequence diagrams, flowcharts, use-case diagrams,
 entity-relationship diagrams and data dictionaries. The text format is \`.alab\`; arch-lab JSON and
 Mermaid (\`C4Context\`, \`sequenceDiagram\`, \`flowchart\`/\`graph\`,
 \`erDiagram\`) are also accepted and converted. The ER conversion is the only
 one that is two-way and total over the diagram — Mermaid has a real
 \`erDiagram\`, so nothing the picture shows is lost in either direction.
 Everything runs in the browser — there is no account, and nothing is uploaded.
+
+## Editing a diagram: as text, or on the canvas
+
+${CANVAS_EDITING_PASSAGE}
 
 ## For agents
 
@@ -67,9 +79,10 @@ mutation API — you edit \`.alab\` files yourself.
 ## Pages
 
 - ${origin}/ — what this is, in one screen
-- ${origin}/view — the playground: paste or write any of the five kinds and see
-  it rendered live. \`?d=seq\` starts from a sequence example and \`?d=er\` from
-  an ER one, \`?e=<id>\` opens a bundled one (ids are listed on /demo)
+- ${origin}/live — the playground: paste or write any of the six kinds and see
+  it rendered live, and the one page where a canvas gesture is available.
+  \`?d=seq\` starts from a sequence example and \`?d=er\` from an ER one,
+  \`?e=<id>\` opens a bundled one (ids are listed on /demo)
 - ${origin}/syntax — the \`.alab\` grammar, every example parser-verified
 - ${origin}/validate — paste a document, get a located verdict
 - ${origin}/demo — finished examples of all six kinds

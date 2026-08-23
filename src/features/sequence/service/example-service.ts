@@ -28,7 +28,7 @@ import { eachMessage } from "../lib/collapse";
 /* -------------------------------------------------------------------------- */
 
 export interface SequenceExampleSource {
-  /** Stable id — doubles as the `/view/sequence/[exampleId]` route segment. */
+  /** Stable id — doubles as the `/live/sequence/[exampleId]` route segment. */
   id: string;
   /** One line on what the flow shows, for the demo card. */
   blurb: string;

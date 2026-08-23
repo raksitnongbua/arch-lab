@@ -1,4 +1,5 @@
 import { MCP_TOOLS } from "@/features/mcp/catalog";
+import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
 import { APP_NAME } from "@/lib/constants";
 
 /**
@@ -62,16 +63,16 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           `${APP_NAME} is a browser-based editor for architecture diagrams written as plain text. ` +
           "You describe a system in a few lines and it draws it: a zoomable C4 model you can drill " +
           "into level by level, a sequence flow you can click through message by message, a " +
-          "flowchart, or a use-case diagram. The text is a file you own, and git is the " +
-          "collaboration layer.",
-        links: [{ href: "/view?d=seq", label: "Open a live diagram" }],
+          "flowchart, a use-case diagram, an ER model or a data dictionary. The text is a file you " +
+          "own, and git is the collaboration layer.",
+        links: [{ href: "/live?d=seq", label: "Open a live diagram" }],
       },
       {
         question: "Do I need an account?",
         answer:
           "No. There is no sign-up, no login and no user record. Open the playground and start " +
           "typing — the worked example is already on screen.",
-        links: [{ href: "/view", label: "The playground" }],
+        links: [{ href: "/live", label: "The playground" }],
       },
       {
         question: "Is my diagram uploaded anywhere?",
@@ -116,7 +117,7 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "draws. It is not an either/or, though: Mermaid pastes straight into the playground. " +
           "C4Context, sequenceDiagram and flowchart or graph sources are converted on paste, and " +
           "you can export back to Mermaid.",
-        links: [{ href: "/view", label: "Paste Mermaid into the playground" }],
+        links: [{ href: "/live", label: "Paste Mermaid into the playground" }],
       },
       {
         question: "Can I get my work back out?",
@@ -136,19 +137,56 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
         links: [{ href: "/demo", label: "Finished examples" }],
       },
       {
+        /* THE POSITIVE FRAMING, and it is a different question from the one
+           below rather than a duplicate of it. "Why can't I drag my ER
+           diagram?" is asked by somebody already inside the app whose drag did
+           nothing; this one is asked by somebody deciding whether to open it at
+           all — and by an assistant, which is the reason it exists. Neither
+           `/llms.txt` nor `/llms-full.txt` contained the word "canvas", so
+           "can I edit an arch-lab diagram by dragging?" had nothing anywhere on
+           this site to quote, and a model answering from the grammar alone
+           would say no.
+
+           THE ANSWER IS THE SHARED PASSAGE VERBATIM, not a paraphrase of it.
+           `CANVAS_EDITING_PASSAGE` is assembled from the capability grid and
+           served in these same words by the landing page hero and both
+           `llms*.txt` documents, because an assistant quotes a passage rather
+           than a page and four wordings would be four chances to be quoted
+           wrongly. The follow-on sentence is this page's own, since a link is
+           the one thing an FAQ answer may not be. */
+        question: "Can I edit the diagram on the canvas, or only as text?",
+        answer:
+          `${CANVAS_EDITING_PASSAGE} Which notations answer a drag is a ` +
+          "property of their grammars rather than a roadmap — the next answer " +
+          "explains why an ER diagram cannot.",
+        links: [{ href: "/live", label: "The playground" }],
+      },
+      {
         /* Asked because the canvas answers a drag on one notation and ignores
-           it on five, which reads as a bug rather than as a property of the
+           it on four, which reads as a bug rather than as a property of the
            notations. Written as one self-contained passage: an assistant
            quotes a passage, not a page, and this is the answer a reader
-           reaches for at the moment the drag does nothing. */
+           reaches for at the moment the drag does nothing.
+
+           THE SEQUENCE CLAUSE IS NEW AND IS THE POINT OF THE REWRITE. This
+           answer said "the other five kinds" for as long as a sequence message
+           could not be dragged; a sequence message can now be dragged to
+           another row and a lifeline card to another column, so leaving it
+           would have made this passage the third stale claim on one branch.
+           The distinction it draws instead — REORDER versus POSITION — is the
+           real one, and it is what a reader arriving from a drawing tool has
+           to be told before their first drag. */
         question: "Why can't I drag my ER diagram?",
         answer:
-          "Because only the C4 canvas has anywhere to write the position down. The C4 grammar " +
+          "Because only the C4 canvas has anywhere to write a POSITION down. The C4 grammar " +
           "carries per-element geometry, so dragging a box edits the text and the change survives " +
-          "a reload. The other five kinds — sequence, flowchart, use case, ER and data dictionary " +
-          "— work their layout out FROM the text: an ER diagram solves its columns from the " +
-          "relationships and a data dictionary is a table, so a dragged box would be put back by " +
-          "the next render and there would be no line to write it on. Change the text and the " +
+          "a reload. A sequence diagram is the halfway case: it has no coordinates either, but it " +
+          "does have an ORDER, so dragging a message up or down moves it in time and dragging a " +
+          "lifeline card sideways moves its column — the element takes a neighbour's place rather " +
+          "than staying where you drop it. The remaining four — flowchart, use case, ER and data " +
+          "dictionary — work their layout out FROM the text: an ER diagram solves its columns from " +
+          "the relationships and a data dictionary is a table, so a dragged box would be put back " +
+          "by the next render and there would be no line to write it on. Change the text and the " +
           "layout follows.",
         links: [{ href: "/syntax", label: "Syntax reference" }],
       },
@@ -161,11 +199,13 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
       {
         question: `Which diagram kinds can ${APP_NAME} draw?`,
         answer:
-          "Four, all in the same text format and the same editor: C4 models across the context, " +
+          "Six, all in the same text format and the same editor: C4 models across the context, " +
           "container and component levels; UML-style sequence diagrams with lifelines, activation, " +
           "loops and alt fragments; flowcharts with terminators, guarded decisions and loops that " +
-          "hook back; and use-case diagrams with actors, a system boundary and include or extend " +
-          "relationships.",
+          "hook back; use-case diagrams with actors, a system boundary and include or extend " +
+          "relationships; entity-relationship diagrams with keys and crow's-foot cardinality; and " +
+          "data dictionaries of every field with its meaning, source and whether it is personal " +
+          "data.",
       },
       {
         question: "What is a .alab file?",
@@ -230,7 +270,7 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "Yes, and it is half of why the format is plain text. Point Claude Code, Cursor or any " +
           "MCP client at the server and the agent gets the two things it cannot guess: the exact " +
           `grammar, and the real parser's verdict on what it just wrote. There are ${MCP_TOOLS.length} ` +
-          "tools, covering all four document kinds.",
+          "tools, covering all six document kinds.",
         links: [{ href: "/mcp", label: "Connect your agent" }],
       },
       {

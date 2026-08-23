@@ -9,7 +9,7 @@ export const APP_NAME = "arch-lab";
 /*
  * `EDITOR_ENABLED` WAS HERE and is deliberately gone rather than left at
  * `false`. It gated `/editor`, a second page whose job was "a canvas you can
- * move things on"; that route is now a forwarding alias for `/view`, whose own
+ * move things on"; that route is now a forwarding alias for `/live`, whose own
  * C4 canvas is editable in place, so there is no separate editor for a flag to
  * ship or withhold. Its four consumers — the navbar entry, the site default
  * title, the landing page's closing CTA and the viewer's edit link — read
@@ -21,7 +21,7 @@ export const APP_NAME = "arch-lab";
  */
 
 /**
- * Makes the C4 canvas on `/view` directly editable — select a node, drag it,
+ * Makes the C4 canvas on `/live` directly editable — select a node, drag it,
  * nudge it with the arrow keys, delete it — with every change written back
  * into the source pane as text.
  *
@@ -30,12 +30,22 @@ export const APP_NAME = "arch-lab";
  * every affordance reads from this flag rather than being commented out, so
  * neither state can ship half-built.
  *
- * C4 ONLY, and that is a property of the notations rather than a gap here.
- * The other five kinds SOLVE their geometry from the text — `layoutEr` derives
- * columns from the relationships, the dictionary is a table — so a dragged
- * node would be moved back by the next render, and there is nowhere in those
- * grammars to write the position down. The C4 grammar is the one that carries
- * per-node geometry (`(x,y wxh)`), so it is the one a canvas can author.
+ * C4 ONLY FOR A POSITION, and that is a property of the notations rather than a
+ * gap here. The other five kinds SOLVE their geometry from the text —
+ * `layoutEr` derives columns from the relationships, the dictionary is a table
+ * — so a dragged node would be moved back by the next render, and there is
+ * nowhere in those grammars to write the position down. The C4 grammar is the
+ * one that carries per-node geometry (`(x,y wxh)`), so it is the one a canvas
+ * can author positions for.
+ *
+ * A SEQUENCE DIAGRAM IS STILL NOT A COUNTER-EXAMPLE, and the distinction is
+ * worth keeping straight because this flag's name invites the confusion: its
+ * canvas does answer a drag, but a drag there is an ORDER change, not a
+ * position — a dragged message takes a neighbour's slot in `items` and a
+ * dragged lifeline takes a neighbour's slot in `participants`
+ * (`sequence/lib/reorder.ts`). No coordinate is written, which is exactly why
+ * `canvasEditability(doc, "move")` still refuses every sequence document while
+ * `"revise"` allows it.
  *
  * Typed `boolean`, not the literal, for the reason above.
  */
@@ -54,15 +64,32 @@ export const CANVAS_EDIT_ENABLED: boolean = true;
  * What survives leads with what the thing does and names the two features
  * people arrive for.
  */
-/* NAMES EVERY DOCUMENT KIND, and that is the reason it is right up against the
-   160-character budget the search snippet allows. This one string is the meta
-   description on every route that does not set its own, the OG description, and
-   the sentence an assistant asked "what is arch-lab" is most likely to quote —
-   so a kind missing from here is a kind the product supports and nothing
-   outside the app ever says it supports. "No account." was the phrase that gave
-   way to make room; the pages that need it say it in their own copy. */
+/* WHAT THIS 160 BUYS, and what it stopped buying, because the previous version
+   spent 157 of them NAMING EVERY DOCUMENT KIND and had run out of room to be
+   true. It read "C4, sequence, flowchart and use-case diagrams" — four of six,
+   since ER and the data dictionary shipped after it was written — and there
+   were three characters left to fix that with, let alone to say that a diagram
+   here is now edited two ways.
+
+   SO THE ENUMERATION WENT AND THE COUNT STAYED. "six notations" is one word
+   where six names were sixty characters, and it is the half a reader can act on:
+   the names are in the `<title>` (which already leads with "beautiful C4 and
+   sequence"), in the notation cards on the home page, in the JSON-LD
+   `featureList` derived from those cards, and in `/llms.txt` — four places with
+   room, none of which is truncated at 160. What no other budgeted surface said
+   at all was that the canvas is editable, which is why that clause got the
+   space the list gave up.
+
+   `check:seo` PINS THE COUNT to `CANVAS_EDIT_OFFERS`, the total grid over the
+   document kinds, so a seventh notation fails this string rather than quietly
+   making it wrong — the exact failure the enumeration suffered.
+
+   This one string is the meta description on every route that does not set its
+   own, the OG and Twitter description, the home page's JSON-LD `description`,
+   and the sentence an assistant asked "what is arch-lab" is most likely to
+   quote. */
 export const APP_DESCRIPTION =
-  "Beautiful, zoomable C4, sequence, flowchart and use-case diagrams written as plain text, rendered live in your browser. An AI agent can author them over MCP.";
+  "Beautiful architecture diagrams in six notations, written as plain text or edited on the canvas, live in your browser. An AI agent can author them over MCP.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

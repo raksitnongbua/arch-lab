@@ -12,11 +12,11 @@
  * NOTHING MAKES IT AN ER LINK, and nothing needs to. The shared codec
  * compresses arbitrary text and the playground detects the kind from what it
  * decodes, so every document kind mints the same URL. That is also why the
- * route is bare `/view` and NOT `/view/er`: the minted route must be the real
+ * route is bare `/live` and NOT `/live/er`: the minted route must be the real
  * page — minting against a trampoline puts a client-side bounce on the most
  * common way anyone arrives, the lesson `share-capacity-check.mjs` encodes —
  * and a share link carries its own document, so it needs no seed. Every
- * character the route does not spend goes to the payload. `/view/er` exists
+ * character the route does not spend goes to the payload. `/live/er` exists
  * for `?d=er` bookmarks and forwards any fragment across intact.
  *
  * An ER diagram has no sub-diagrams, so the `diagram` props are simply not
@@ -29,7 +29,7 @@
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { ShareButton } from "@/features/viewer/share/share-button";
 
-const SHARE_ROUTE = "/view";
+const SHARE_ROUTE = "/live";
 
 export function ErShareButton({
   text,

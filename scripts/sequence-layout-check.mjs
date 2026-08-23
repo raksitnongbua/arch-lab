@@ -78,6 +78,9 @@ const { parseSequenceText } = await import(
 const { layoutSequence, SEQ, estimateTextWidth } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/lib/layout.ts")).href
 );
+const { CANVAS_DRAG_THRESHOLD } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/reorder.ts")).href
+);
 const { SEQUENCE_EXAMPLE } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/input/example.ts")).href
 );
@@ -912,6 +915,68 @@ title "Boxed"
     "the bracket is inside the viewBox — a box on the first column cannot be clipped",
     box.x >= boxed.minX && box.x + box.width <= boxed.minX + boxed.width,
     `box ${box.x}..${box.x + box.width} vs view ${boxed.minX}..${boxed.minX + boxed.width}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 10. The reorder drag's slot arithmetic has unambiguous slots             */
+/* ----------------------------------------------------------------------- */
+
+/* WHY THE DRAG NEEDS ASSERTIONS IN THE LAYOUT CHECK. Reordering by drag picks
+   the slot whose drawn position is NEAREST the pointer (`dragSurface` in
+   `sequence-diagram.tsx`), and it addresses a lifeline slot as an INDEX INTO
+   `file.participants` while reading its x from `layout.participants[index]`.
+   Three layout facts have to hold or that arithmetic is silently wrong — and
+   "silently" is the whole problem: a drop would land one row or one column out,
+   which looks like a plausible edit.
+
+   Clause 1 already asserts declaration order is preserved. These assert the
+   three properties the DRAG depends on, which is a different question: that the
+   two arrays are index-for-index the same, and that no two adjacent slots share
+   a coordinate (where "nearest" would be a coin toss). */
+console.log("\nreorder slots are distinct and index-aligned with the model");
+{
+  check(
+    "layout.participants is index-for-index the model's own participant order",
+    layout.participants.length === file.participants.length &&
+      layout.participants.every((p, at) => p.id === file.participants[at].id),
+    /* THE FAILURE: `participantReorderRange` returns an index into
+       `file.participants` and the drag reads `layout.participants[index].x`. A
+       layout that reordered, filtered or padded its own copy would put the drop
+       indicator over a different column from the one the edit moves. */
+    `${layout.participants.map((p) => p.id).join()} vs ${file.participants.map((p) => p.id).join()}`,
+  );
+  check(
+    "every message row has a distinct y, ascending",
+    layout.yByStep.length === layout.stepCount &&
+      layout.yByStep.every((y, at) => at === 0 || y > layout.yByStep[at - 1]),
+    /* Two rows at one y makes "the nearest row to the pointer" ambiguous, so a
+       drag would drop into whichever of them the loop happened to reach
+       first — a coin toss the reader cannot see or predict. */
+    `${layout.yByStep.length} rows for ${layout.stepCount} steps`,
+  );
+  check(
+    "every column has a distinct x, ascending",
+    layout.participants.every(
+      (p, at) => at === 0 || p.x > layout.participants[at - 1].x,
+    ),
+    "two columns at one x makes the nearest-column drop a coin toss",
+  );
+  /* AND THE GAPS ARE WIDER THAN THE DRAG THRESHOLD, which is what makes a
+     deliberate one-slot drag reachable at all: if a row gap were smaller than
+     the travel needed to count as a drag, the shortest possible drag would
+     already skip a slot. Read from the shared constant, never a literal. */
+  const rowGaps = layout.yByStep
+    .slice(1)
+    .map((y, at) => y - layout.yByStep[at]);
+  const columnGaps = layout.participants
+    .slice(1)
+    .map((p, at) => p.x - layout.participants[at].x);
+  check(
+    `the narrowest row and column gap both clear the drag threshold (${CANVAS_DRAG_THRESHOLD})`,
+    Math.min(...rowGaps) > CANVAS_DRAG_THRESHOLD &&
+      Math.min(...columnGaps) > CANVAS_DRAG_THRESHOLD,
+    `narrowest row gap ${Math.min(...rowGaps)}, column gap ${Math.min(...columnGaps)}`,
   );
 }
 

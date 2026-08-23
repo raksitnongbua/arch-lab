@@ -1841,7 +1841,7 @@
  * outcome, "no payload" included. That clearing is load-bearing, not
  * tidiness: the script runs once per document load and a client-side
  * navigation never reloads, so without it the flag would outlive the URL that
- * set it and blank the route for the rest of the session (this bit `/view`'s
+ * set it and blank the route for the rest of the session (this bit `/live`'s
  * retired chooser first). See `components/share/share-opening.tsx`. The
  * attribute is `SHARE_FORWARD_ATTRIBUTE` and the classes `SHARE_PENDING_CLASS`
  * in TS; they are spelled literally here only because CSS cannot import. */
@@ -2282,7 +2282,7 @@
  * outline COLOUR, so the browser's own focus indicator paints in --ring — which
  * is the violet box that survived the first attempt at this fix, sitting exactly
  * on the hit rect's bounds. The sequence canvas already did it this way
- * (`.af-seq-hit:focus-visible { outline: none }` in sequence-motion.css, with
+ * (`.af-seq-chrome-hit:focus-visible { outline: none }` in sequence-motion.css, with
  * the same "outline does not follow an SVG shape" note), and that precedent is
  * the one to copy. */
 /* `:focus`, not only `:focus-visible`. CLICKING an SVG element that carries a

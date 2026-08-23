@@ -16,9 +16,13 @@ import { cn } from "@/lib/utils";
  *
  * The order runs from DOING to READING to BUILDING, left to right:
  *
- *   View — the one entry that puts a model on screen, so it leads, and it is
- *     the one entry drawn as a button (see `cta` below).
- *   Demo — finished examples, next to View because the two answer the same
+ *   Live — the one entry that puts a model on screen, so it leads, and it is
+ *     the one entry drawn as a button (see `cta` below). It read "View" until
+ *     the route was renamed `/live`: the page had not only viewed for two
+ *     releases — you can drag the C4 and sequence canvases and the text is
+ *     rewritten under you — and a label promising a viewer taught a reader
+ *     the one thing about the page that was no longer true.
+ *   Demo — finished examples, next to Live because the two answer the same
  *     question ("show me one") from opposite ends: an empty canvas to fill,
  *     or four models already built.
  *   Syntax, Validate, MCP — the reference trio, adjacent on purpose: reading
@@ -26,7 +30,7 @@ import { cn } from "@/lib/utils";
  *     are the same errand. MCP sits last of the three, being the one you reach
  *     for after the format makes sense.
  *   There is no Editor entry any more. `/editor` was retired into a forwarding
- *     alias for `/view` once the playground's C4 canvas became editable in
+ *     alias for `/live` once the playground's C4 canvas became editable in
  *     place: two entries for one job taught a reader there were two places to
  *     go. It was last on the bar and the only entry that could disappear, so
  *     removing it resequences nothing — and it gives back the ~60px the
@@ -82,13 +86,14 @@ const NAV_LINKS: ReadonlyArray<{
    */
   cta?: boolean;
 }> = [
-  // View leads: it is the one place you can actually put a model on screen,
+  // Live leads: it is the one place you can actually put a model on screen,
   // where the header otherwise offered three ways to read ABOUT the format and
   // none to use it. Demo is a different promise — finished examples to look
   // at, rather than an empty canvas to fill — which is why it sits second and
   // not as the CTA.
-  { href: "/view", label: "View", cta: true },
-  // Demo was dropped from this list once, when View replaced it, on the
+  { href: "/live", label: "Live", cta: true },
+  // Demo was dropped from this list once, when Live (then labelled "View")
+  // replaced it, on the
   // reasoning that a reader wants to USE the tool rather than browse samples.
   // It is back (2026-08) in place of the outbound "About C4" link: sending a
   // first-time reader to another website to learn what a C4 diagram is was a
@@ -104,7 +109,7 @@ const FOCUS_RING =
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none";
 
 /**
- * A descendant counts as current: `/view/shopflow` is still "View", and
+ * A descendant counts as current: `/live/shopflow` is still "Live", and
  * highlighting only the exact path would leave a reader on a bundled model
  * with no indication of where they are. Safe because no entry is "/" — that
  * would match everything.
@@ -180,7 +185,7 @@ export function Header(): React.JSX.Element {
           the bug that hid this site's entire page backdrop.
 
           THE BLUR, NOT THE TINT, IS THE LEGIBILITY DEVICE. When the tint came
-          down to /45 at the midline (below), the busy-canvas case — /view can
+          down to /45 at the midline (below), the busy-canvas case — /live can
           scroll an accent-coloured node directly under the nav — fell under
           4.5:1 against raw content in the dark themes, and it was under it
           before the change too: at the old /60 midline, `--foreground` over an

@@ -12,7 +12,7 @@
  * genuinely is a different shape. Two document kinds, two tools, each with an
  * honest summary.
  *
- * The reader is `parseSequenceInput` — the SAME one the `/view/sequence`
+ * The reader is `parseSequenceInput` — the SAME one the `/live/sequence`
  * playground uses, which is itself a thin shell over `parseSequenceText` and
  * `parseMermaidSequence`. So "the MCP server accepted it" means the playground
  * renders it too, which is the guarantee `lib/read.ts` makes for C4 and the

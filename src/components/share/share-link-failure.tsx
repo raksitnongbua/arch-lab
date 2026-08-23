@@ -33,7 +33,7 @@
  * top of *something* — the seed example — and a half-read banner leaves the
  * reader believing the example is what they were sent.
  *
- * No route strings live here beyond `/demo`, so a `/view/*` rename cannot
+ * No route strings live here beyond `/demo`, so a `/live/*` rename cannot
  * strand a hardcoded link inside this shared component.
  */
 

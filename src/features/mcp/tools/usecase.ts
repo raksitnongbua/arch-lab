@@ -11,7 +11,7 @@
  * their reach, the boundary's contents, and the include/extend structure. Four
  * document kinds, four tools, each with an honest summary.
  *
- * The reader is `parseUseCaseInput` — the SAME one the `/view?d=uc` playground
+ * The reader is `parseUseCaseInput` — the SAME one the `/live?d=uc` playground
  * uses, itself a thin shell over `parseUseCaseText` and `parseMermaidUseCase`.
  * So "the MCP server accepted it" means the playground renders it too, which is
  * the guarantee `lib/read.ts` makes for C4 and the reason no second grammar is

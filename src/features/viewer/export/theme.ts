@@ -189,10 +189,7 @@ export function resolveExportTheme(): ExportTheme {
     primary: resolve(TOKEN_VARS.primary, "#4f46e5"),
     accent: resolve(TOKEN_VARS.accent, "#22b8cf"),
     destructive: resolve(TOKEN_VARS.destructive, "#e5484d"),
-    destructiveForeground: resolve(
-      TOKEN_VARS.destructiveForeground,
-      "#ffffff",
-    ),
+    destructiveForeground: resolve(TOKEN_VARS.destructiveForeground, "#ffffff"),
     edgeDrift: resolveExpression(
       TOKEN_VARS.edgeDrift,
       resolve(TOKEN_VARS.edge, "#7d828f"),

@@ -22,6 +22,15 @@
  *      unchanged, and every node type is legal at its diagram's level.
  *   5. A set of malformed inputs each fail with an ArchTextParseError
  *      naming a line and column (and the parse is all-or-nothing).
+ *   6. `parseArchTextWithSpans` locates every node and edge in the SOURCE, and
+ *      `canonicalNodeLine` agrees with the whole-file serialiser line for line.
+ *      The editable canvas patches a single line of the author's text using
+ *      exactly these two facts (`playground/input/canvas-edit.ts`); if a span
+ *      were off by one, or if the single-node emitter reached a different
+ *      verdict about a geometry token than a full serialise, a drag would
+ *      corrupt the file rather than edit it. Both are asserted against the
+ *      TEXT rather than against expected numbers, so they still hold for a
+ *      fixture nobody updated.
  *
  * Exits non-zero on any failure. Run with: pnpm check:archtext
  */
@@ -64,7 +73,14 @@ registerHooks({
   },
 });
 
-const { parseArchText, serializeArchText, ArchTextParseError } = await import(
+const {
+  parseArchText,
+  parseArchTextWithSpans,
+  serializeArchText,
+  spanKey,
+  canonicalNodeLine,
+  ArchTextParseError,
+} = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
 const { deserializeModel } = await import(
@@ -797,6 +813,105 @@ expectParseError(
   `${OK_HEAD}@context d "C"\n  a:person "A"\n  s:system "S" >k\n@container k owner=s\n  x:person ^k/y\n  y:person ^k/x\n`,
   "circular",
 );
+
+/* ----------------------------------------------------------------------- */
+/* 6. Spans locate every member, and one node line matches a full serialise */
+/* ----------------------------------------------------------------------- */
+
+{
+  /* THE KITCHEN SINK, which is the point: it is the fixture with continuation
+     lines, `!` escapes, `^ref`s and non-default geometry, so a span that only
+     ever covered single-line declarations would be caught here. */
+  const { file, spans } = parseArchTextWithSpans(KITCHEN_SINK);
+  const lines = KITCHEN_SINK.split("\n");
+
+  const members = file.diagrams.flatMap((diagram) => [
+    ...diagram.nodes.map((node) => ({
+      what: `node ${diagram.id}/${node.id}`,
+      span: spans.nodes.get(spanKey(diagram.id, node.id)),
+      /* The declaration line must NAME the member. For a node that is
+         `<id>:<keyword>`; the id alone would also match a mention of it in an
+         edge line, which is the off-by-a-few-lines failure this has to see. */
+      opens: `${node.id}:`,
+    })),
+    ...diagram.edges.map((edge) => ({
+      what: `edge ${diagram.id}/${edge.id}`,
+      span: spans.edges.get(spanKey(diagram.id, edge.id)),
+      opens: `${edge.source} `,
+    })),
+  ]);
+
+  check(
+    "the fixture has members to locate, and every one has a span",
+    members.length > 0 && members.every((m) => m.span !== undefined),
+    `missing: ${members
+      .filter((m) => m.span === undefined)
+      .map((m) => m.what)
+      .join(", ")}`,
+  );
+
+  const mislocated = members.filter(
+    (m) =>
+      m.span === undefined ||
+      !(lines[m.span.start - 1] ?? "").trimStart().startsWith(m.opens),
+  );
+  check(
+    "every span's start line is the line that declares that member",
+    mislocated.length === 0,
+    mislocated
+      .map(
+        (m) =>
+          `${m.what} -> line ${m.span?.start}: ${JSON.stringify(lines[m.span?.start - 1])}`,
+      )
+      .join("; "),
+  );
+
+  /* A SPAN COVERS THE CONTINUATIONS AND NOTHING ELSE, asserted as the
+     relationship (indent 4 inside, not indent 4 immediately after) rather than
+     as line numbers. A span that stopped at the declaration would leave a
+     `desc` line orphaned by a delete, and the file would stop parsing with
+     "this continuation line has no node or edge line above it". */
+  const isContinuation = (i) => /^ {4}\S/.test(lines[i] ?? "");
+  const badTail = members.filter((m) => {
+    if (m.span === undefined) return true;
+    for (let i = m.span.start; i < m.span.end; i += 1) {
+      if (!isContinuation(i)) return true; // a gap inside the block
+    }
+    return isContinuation(m.span.end); // a continuation left outside it
+  });
+  check(
+    "every span covers exactly its own continuation lines",
+    badTail.length === 0,
+    badTail
+      .map((m) => `${m.what} spans ${m.span?.start}-${m.span?.end}`)
+      .join("; "),
+  );
+
+  /* THE SINGLE-NODE EMITTER AGREES WITH THE WHOLE-FILE ONE. This is the
+     assertion that keeps a patched line honest: `canonicalNodeLine` computes
+     the default layout and the `^ref` name lookup for itself, and if either
+     disagreed with the full serialise the patched line would be text the rest
+     of the file contradicts. Compared against the serialiser's OWN output for
+     every node in the fixture, never against a hand-written string. */
+  const emitted = serializeArchText(file).split("\n");
+  const disagreeing = file.diagrams.flatMap((diagram) =>
+    diagram.nodes.flatMap((node) => {
+      const one = canonicalNodeLine(file, diagram.id, node.id);
+      return emitted.includes(one) ? [] : [`${diagram.id}/${node.id}: ${one}`];
+    }),
+  );
+  check(
+    "canonicalNodeLine emits a line the full serialiser also emits, for every node",
+    disagreeing.length === 0,
+    disagreeing.join("; "),
+  );
+  check(
+    "canonicalNodeLine returns null for a member that is not there",
+    canonicalNodeLine(file, "no-such-diagram", "x") === null &&
+      canonicalNodeLine(file, file.diagrams[0].id, "no-such-node") === null,
+    "it returned a line for something that does not exist",
+  );
+}
 
 /* --- all-or-nothing: a failing parse never returns a partial model --- */
 

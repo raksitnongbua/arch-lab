@@ -139,7 +139,7 @@ function SourcePane({
         </div>
       </div>
 
-      {/* NUMBERED, and on this page more than on any other. `/view` and
+      {/* NUMBERED, and on this page more than on any other. `/live` and
           `/syntax` gained a gutter first and this pane was left with a plain
           textarea, which had it backwards: the whole product of this page is a
           verdict that says "line 12, column 4", and until now a reader holding
@@ -296,7 +296,7 @@ function ValidCard({ result }: { result: CheckOk }): React.JSX.Element {
           <p className="rounded-md border border-accent/30 bg-accent/8 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             {MERMAID_CAVEAT}{" "}
             <Link
-              href="/view/c4"
+              href="/live"
               className="font-medium text-primary hover:underline"
             >
               Open it in the playground to get the .alab
@@ -304,10 +304,14 @@ function ValidCard({ result }: { result: CheckOk }): React.JSX.Element {
           </p>
         ) : null}
 
+        {/* BARE `/live`, like the syntax page's `TryItLink`: `/live/c4` is a
+            trampoline, so handing a fragment to it spent a client-side bounce
+            on every click and put the payload through a second forward for
+            nothing. */}
         <HandoffLink
           alabText={result.aftText}
-          path="/view/c4"
-          label="Open in view mode"
+          path="/live"
+          label="Open in the playground"
         />
       </div>
 

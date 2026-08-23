@@ -202,7 +202,7 @@ export function ViewerShell({
   canEdit?: boolean;
   /**
    * Start in immersive mode. For a page that exists only to show one model
-   * (`/view/[modelId]`) — where the diagram IS the page, so the site chrome is
+   * (`/live/[modelId]`) — where the diagram IS the page, so the site chrome is
    * a frame around nothing else. Left off when the shell is embedded in a
    * larger page: fixing it over the viewport would cover its own host.
    */
@@ -220,11 +220,11 @@ export function ViewerShell({
   /**
    * Heading level for the model's title.
    *
-   * `h1` is right where this shell IS the page — `/view/[modelId]`, whose
+   * `h1` is right where this shell IS the page — `/live/[modelId]`, whose
    * only heading is the model's name. It is wrong inside the playground,
    * which has its own `h1` above it: two `h1`s on one document leaves both
    * a screen reader's heading list and a crawler's topic signal with no
-   * primary, and `/view` and `/view/c4` were shipping exactly that.
+   * primary, and `/live` and `/live/c4` were shipping exactly that.
    */
   titleAs?: "h1" | "h2";
 }): React.JSX.Element {
@@ -431,7 +431,7 @@ export function ViewerShell({
               <ShareButton
                 share={share}
                 documentTitle={frozenModel.title}
-                route="/view"
+                route="/live"
                 noun="model"
                 diagram={currentDiagram}
                 rootDiagramId={frozenModel.rootDiagramId}

@@ -1,6 +1,6 @@
 /**
  * The example the playground opens with when seeded for sequence
- * (`/view/sequence`). Same philosophy as the C4 seed's SEED_MODEL
+ * (`/live/sequence`). Same philosophy as the C4 seed's SEED_MODEL
  * (`viewer/input/sync.ts`): an empty canvas teaches
  * nobody the format, so the seed is a realistic flow that demonstrates every
  * headline construct — both participant kinds, technologies, all three arrow

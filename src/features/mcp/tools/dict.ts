@@ -7,7 +7,7 @@
  * structure, a flow or a schema graph — it is a CONTRACT ON DATA, so what a
  * reviewer wants to know is how much of it is actually documented.
  *
- * The reader is `parseDictInput` — the same one `/view?d=dict` uses — so "the
+ * The reader is `parseDictInput` — the same one `/live?d=dict` uses — so "the
  * MCP server accepted it" means the playground renders it too.
  */
 

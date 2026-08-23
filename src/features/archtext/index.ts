@@ -12,6 +12,14 @@
  *     `parseArchText(serializeArchText(file))` reproduces every field,
  *     including geometry, viewports, `realizes`, `externalRef`, `childRef`,
  *     tags, `tagColors`, and unknown forward-compatible fields in position.
+ *   - `parseArchTextWithSpans(source)` — the same parse, plus the LINE SPAN
+ *     each node and edge came from, and `canonicalNodeLine(file, …)` — the
+ *     one declaration line the serializer would write for a node. Together
+ *     these let a caller splice a single line into the author's own text
+ *     instead of re-emitting the file, which is lossy in a way canonical text
+ *     hides: it has no `//` comments, no author blank lines and no field the
+ *     author wrote out that canonical form omits at its default. The editable
+ *     C4 canvas is the caller (`playground/input/canvas-edit.ts`).
  *   - `ArchTextParseError` / `ArchTextIssue` — the error contract, shaped
  *     like the Mermaid feature's `MermaidParseError` so a UI can treat both
  *     uniformly.
@@ -32,6 +40,15 @@
  *
  *   - `parseSequenceText` / `serializeSequenceText` — `.alab` sequence
  *     text ⇄ `SequenceLabFile`, lossless both ways, same error contract.
+ *   - `parseSequenceTextWithSpans(source)` — the same sequence parse, plus
+ *     the LINE SPAN each participant and item came from, and
+ *     `canonicalParticipantBlock` / `canonicalMessageBlock` — the lines the
+ *     serializer would write for one of them. Together these let a caller
+ *     splice one element's own block into the author's own text instead of
+ *     re-emitting the file, which is lossy in a way canonical text hides: no
+ *     `//` comments, no author blank lines, and no field written out that
+ *     canonical form omits at its default. The editable sequence canvas is
+ *     the caller (`playground/input/sequence-edit.ts`).
  *   - `parseFlowchartText` / `serializeFlowchartText` — `.alab` flowchart
  *     text ⇄ `FlowchartLabFile`, same lossless and error contract.
  *   - `parseUseCaseText` / `serializeUseCaseText` — `.alab` use-case
@@ -47,8 +64,9 @@
  *     "archlab 1.0 dict" = data dictionary).
  */
 
-export { parseArchText } from "./lib/parse";
-export { serializeArchText } from "./lib/serialize";
+export { parseArchText, parseArchTextWithSpans, spanKey } from "./lib/parse";
+export type { ArchTextSpans, LineSpan } from "./lib/parse";
+export { canonicalNodeLine, serializeArchText } from "./lib/serialize";
 export { ArchTextParseError } from "./lib/errors";
 export type { ArchTextIssue } from "./lib/errors";
 export {
@@ -62,8 +80,16 @@ export {
   defaultSizeFor,
 } from "./lib/defaults";
 export type { DefaultLayoutEdge } from "./lib/defaults";
-export { parseSequenceText } from "./lib/sequence/parse";
-export { serializeSequenceText } from "./lib/sequence/serialize";
+export {
+  parseSequenceText,
+  parseSequenceTextWithSpans,
+} from "./lib/sequence/parse";
+export type { SequenceSpans } from "./lib/sequence/parse";
+export {
+  canonicalMessageBlock,
+  canonicalParticipantBlock,
+  serializeSequenceText,
+} from "./lib/sequence/serialize";
 export { detectAlabKind } from "./lib/sequence/detect";
 export type { AlabDocumentKind } from "./lib/sequence/detect";
 export {

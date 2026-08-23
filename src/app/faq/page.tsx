@@ -211,7 +211,7 @@ export default function FaqPage(): React.JSX.Element {
         </p>
 
         <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-          <Link href="/view?d=seq" className={buttonClasses({ size: "md" })}>
+          <Link href="/live?d=seq" className={buttonClasses({ size: "md" })}>
             Open a live diagram
             <ArrowRight aria-hidden="true" />
           </Link>

@@ -32,14 +32,14 @@ import { ShareButton } from "@/features/viewer/share/share-button";
 /**
  * Where a sequence share link lands: the SHORT alias, not the playground's
  * own address. The playground is ONE route now, so a link mints against bare
- * `/view`: the seed that used to be in the path is a query param, and a share
+ * `/live`: the seed that used to be in the path is a query param, and a share
  * link needs no seed at all — it carries its own document, and the reader
  * detects C4 or sequence from the text. Every character the route does not
  * spend goes to the payload, which competes with the codec's ceiling.
  * URL, budgeted against the codec's hard length ceiling. Links minted
  * against the long route before this alias existed still open unchanged.
  */
-const SHARE_ROUTE = "/view";
+const SHARE_ROUTE = "/live";
 
 export function SequenceShareButton({
   /** The document to pack — the pane's current text, verbatim. */

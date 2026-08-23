@@ -59,28 +59,53 @@ export interface BooleanPreference {
  * THREE-VALUED state survives: on, off, and never set. "Never set" is what
  * lets a default change later without overriding readers who chose the old
  * default deliberately.
+ *
+ * `whenUnset` is that promise being collected. It answers the third state and
+ * ONLY the third state: a value that is neither spelling — absent, empty,
+ * stale, or written by a different version of this site — is not a choice
+ * anybody made, so it falls to the default. Inverting the meaning of a stored
+ * spelling instead would have silently reversed every reader who had already
+ * chosen, which is the one outcome a remembered preference must never
+ * produce. The canvas lock moved its default this way; see `canvas-lock.ts`.
+ *
+ * Both reads share one `decide`, because the failure mode of two copies here
+ * is a server that renders locked and a client that hydrates unlocked — a
+ * flash of the wrong state, which is the whole reason this module is a cookie
+ * and not localStorage.
  */
 export function booleanPreference({
   cookie,
   onValue,
   offValue,
+  whenUnset = false,
 }: {
   cookie: string;
   onValue: string;
   offValue: string;
+  whenUnset?: boolean;
 }): BooleanPreference {
   const listeners = new Set<() => void>();
 
+  const decide = (value: string | undefined) =>
+    value === onValue ? true : value === offValue ? false : whenUnset;
+
   return {
     cookie,
-    fromCookie: (value) => value === onValue,
+    fromCookie: decide,
     read: () => {
       try {
-        return document.cookie
+        const prefix = `${cookie}=`;
+        const stored = document.cookie
           .split(";")
-          .some((part) => part.trim() === `${cookie}=${onValue}`);
+          .map((part) => part.trim())
+          .find((part) => part.startsWith(prefix));
+        return decide(stored?.slice(prefix.length));
       } catch {
-        return false;
+        // A browser that refuses to hand over cookies has told us nothing
+        // about what the reader chose, so this is the unset case too — not
+        // `false`, which would disagree with the server for a preference
+        // whose default is on.
+        return whenUnset;
       }
     },
     /**

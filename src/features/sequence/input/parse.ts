@@ -11,7 +11,7 @@
  *   - `sequenceDiagram`      → the Mermaid importer (one-way; the caveat is
  *                              carried on the result so the UI states the loss)
  *   - `archlab 1.0` (C4) or a Mermaid C4 header → a typed redirect error
- *     pointing at /view instead of a misleading "line 1" parse error
+ *     pointing at /live instead of a misleading "line 1" parse error
  *   - `archlab 1.0 flowchart`, or a Mermaid `flowchart` / `graph` header →
  *     a typed `flowchart-detected` verdict; the merged playground consumes
  *     it as routing into the flowchart reader
@@ -69,7 +69,7 @@ export interface SequenceParseErrorDetail {
   lineText: string | null;
 }
 
-/** The text is a recognisable C4 document — belongs on `/view/c4`. */
+/** The text is a recognisable C4 document — belongs on `/live`. */
 export interface WrongDocumentDetail {
   kind: "c4-detected";
   message: string;
@@ -154,7 +154,7 @@ export function parseSequenceInput(text: string): SequenceParseResult {
       error: {
         kind: "c4-detected",
         message:
-          "This is a C4 model, not a sequence diagram — the C4 playground at /view/c4 renders it.",
+          "This is a C4 model, not a sequence diagram — the playground at /live renders it.",
       },
     };
   }
@@ -167,7 +167,7 @@ export function parseSequenceInput(text: string): SequenceParseResult {
       error: {
         kind: "flowchart-detected",
         message:
-          "This is a flowchart document, not a sequence diagram — the /view playground renders it.",
+          "This is a flowchart document, not a sequence diagram — the /live playground renders it.",
       },
     };
   }
@@ -180,7 +180,7 @@ export function parseSequenceInput(text: string): SequenceParseResult {
       error: {
         kind: "usecase-detected",
         message:
-          "This is a use-case document (`archlab 1.0 usecase`), not a sequence diagram — the /view playground renders it.",
+          "This is a use-case document (`archlab 1.0 usecase`), not a sequence diagram — the /live playground renders it.",
       },
     };
   }

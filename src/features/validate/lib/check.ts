@@ -4,7 +4,7 @@
  *
  * Nothing here parses anything itself. Every format is pushed through the
  * SAME reader the rest of the app uses, so a document that passes here is a
- * document `/view`, the share codec and a saved file all accept:
+ * document `/live`, the share codec and a saved file all accept:
  *
  *   - `.alab`       → `parsePane("aft", …)` → the real `parseArchText`
  *   - arch-lab JSON → `parsePane("json", …)` → the editor's `deserializeModel`

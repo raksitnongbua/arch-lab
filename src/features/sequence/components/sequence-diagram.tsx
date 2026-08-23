@@ -40,7 +40,7 @@
  * the backdrop clears focus.
  */
 
-import { useId } from "react";
+import { useId, useRef, useState } from "react";
 
 // Cross-feature on purpose: the tag-fill rebuild is the ONE definition of
 // "a hue at our validated card lightness" (node-colors.ts carries the full
@@ -58,6 +58,7 @@ import type {
   SequenceLayout,
 } from "../lib/layout";
 import { estimateTextWidth, SEQ } from "../lib/layout";
+import { CANVAS_DRAG_THRESHOLD } from "../lib/reorder";
 
 /**
  * A point on a message's colour ramp: the sender's lane at `t` 0, the
@@ -116,6 +117,112 @@ export function resolveFocusSteps(
   }
 }
 
+/**
+ * Which gesture the armed lifeline picker is serving. ONE PICKER, TWO ERRANDS —
+ * inserting a message needs two lifelines named, and repointing one needs
+ * exactly the same two, so a second picker would be a second set of hit
+ * columns, a second modal state and a second Escape rung for no new mechanic.
+ * The purpose only changes the words: what the reader is choosing is identical,
+ * so the affordance is identical, and only the sentence a screen reader hears
+ * says whether the arrow is new or being moved.
+ */
+export type SequencePickPurpose = "insert" | "repoint";
+
+/**
+ * The armed state of the two-click lifeline picker, and the sink for the clicks.
+ *
+ * WHY THE INDICATOR'S Y ARRIVES FROM THE VIEWER rather than being worked out
+ * here: which row the gesture is about is a MODEL fact (after the focused step,
+ * at the end, or the focused message's own row), and the viewer is what holds
+ * the focus. Re-deriving it from `focus` inside the renderer would be a second
+ * answer to "where does it go", free to disagree with the answer the edit
+ * actually uses.
+ */
+export interface SequenceLifelinePick {
+  purpose: SequencePickPurpose;
+  /** The sender already picked; `null` while the first click is still owed. */
+  from: string | null;
+  /** Y of the row the gesture is about, in SVG user units. */
+  atY: number;
+  onPick: (participantId: string) => void;
+}
+
+/**
+ * WHAT A DRAG ON THIS CANVAS MAY MOVE, and where the two halves of it live.
+ *
+ * A sequence document has no coordinates, so a drag here is not a move — it is
+ * an array reorder (`lib/reorder.ts` argues the whole model). That splits the
+ * gesture cleanly in two, and the split is the reason this prop is shaped the
+ * way it is rather than as a pair of callbacks:
+ *
+ *   - THE VIEWER decides WHETHER, because the answer is about the document (a
+ *     note in the way, a `box` boundary, an activation flag, a fold), and it is
+ *     the side that can speak a refusal into the live region.
+ *   - THIS COMPONENT decides WHERE, because the answer is geometry: only the
+ *     drawing knows which row a pointer at `clientY` is nearest.
+ *
+ * SO THE RANGE COMES DOWN AND ONLY A COMPLETED DROP GOES BACK UP. A drag can
+ * therefore never end in a refusal: the slot the reader is offered is one the
+ * edit has already agreed to. The alternative — let the drop happen and refuse
+ * it afterwards — was rejected because a drop indicator that leads to "no" is a
+ * control that lies, and this canvas has twice been reported broken for exactly
+ * that class of thing.
+ *
+ * NEAREST SCREEN SLOT, not pointer arithmetic. The candidate rows' positions
+ * are read through `getScreenCTM()` once per move and the nearest is chosen, so
+ * the same code is correct in fit mode (where the drawing is letterboxed at
+ * whatever scale "meet" produced) and at any numeric zoom. Converting a pointer
+ * delta into SVG units instead would need the scale, which is the thing fit
+ * mode does not tell anyone.
+ */
+export interface SequenceReorder {
+  /**
+   * The step numbers the message drawn at `step` may be dropped on, or `null`
+   * when it cannot be dragged at all. Inclusive; `min === max` means the only
+   * legal slot is the one it is already in, and no drag surface is offered.
+   */
+  messageRange: (step: number) => { min: number; max: number } | null;
+  /** The same, as column indices into `layout.participants`. */
+  participantRange: (id: string) => { min: number; max: number } | null;
+  onDropMessage: (step: number, toStep: number) => void;
+  onDropParticipant: (id: string, toIndex: number) => void;
+}
+
+/**
+ * A drag in flight: what is moving, and the slot it would land in.
+ *
+ * A DISCRIMINATED UNION rather than one shape with optional fields, for the
+ * same reason `Arming` in the viewer is one: the two axes need different things
+ * to be true — a message drag lands on a STEP, a lifeline drag on a COLUMN
+ * INDEX — and an optional-field shape would let a message drag compile with a
+ * column in it.
+ */
+type Drag =
+  | { axis: "message"; step: number; toStep: number }
+  | { axis: "participant"; id: string; toIndex: number };
+
+/**
+ * What a draggable element spreads onto its own hit target. `null` from
+ * `dragSurface` means "this one cannot move", which is what withholds the
+ * resize cursor as well as the handlers — an affordance for a gesture that
+ * would be refused is the failure this whole design is arranged to avoid.
+ */
+interface DragSurface {
+  cursor: "ns-resize" | "ew-resize";
+  /** True while THIS element is the one under the pointer's drag. */
+  active: boolean;
+  onPointerDown: (event: React.PointerEvent<SVGElement>) => void;
+  onPointerMove: (event: React.PointerEvent<SVGElement>) => void;
+  onPointerUp: (event: React.PointerEvent<SVGElement>) => void;
+  /**
+   * Whether the click now arriving is the tail of a drag that MOVED, and must
+   * therefore not also focus the element. Reading it clears it, so one drag
+   * swallows exactly one click — the same contract `panSuppressesClick` has in
+   * the viewer, and for the same reason.
+   */
+  swallowsClick: () => boolean;
+}
+
 export interface SequenceDiagramProps {
   layout: SequenceLayout;
   title: string;
@@ -157,6 +264,20 @@ export interface SequenceDiagramProps {
   collapsed: ReadonlySet<string>;
   dependencyCount: ReadonlyMap<string, number>;
   onToggleCollapse: (id: string) => void;
+  /**
+   * Non-null only while a two-click lifeline gesture is armed — inserting a
+   * message or repointing one. Absent by default, which is what keeps every
+   * host that only READS a diagram — the example view, the chooser previews —
+   * free of editing chrome without passing a flag to say so.
+   */
+  pick?: SequenceLifelinePick | null;
+  /**
+   * Non-null only when the host can WRITE a reorder back AND nothing is folded
+   * — see `SequenceReorder`. Absent by default for the same reason `pick` is:
+   * a host that only reads a diagram renders no drag surface without being
+   * told not to.
+   */
+  reorder?: SequenceReorder | null;
   /*
    * There is NO onClearFocus here, deliberately. Clearing is what happens when
    * a click lands on nothing, and "nothing" is bigger than this component: in
@@ -186,7 +307,190 @@ export function SequenceDiagram({
   collapsed,
   dependencyCount,
   onToggleCollapse,
+  pick = null,
+  reorder = null,
 }: SequenceDiagramProps): React.JSX.Element {
+  /* ---- drag to reorder ------------------------------------------------------
+   * THE PROBLEM THIS SOLVES IS NOT THE MOVE, IT IS THE OTHER TWO GESTURES ON
+   * THE SAME BUTTON. Primary-button drag on this canvas already meant PAN, and
+   * a press on a message already meant FOCUS. Three meanings, one button, and
+   * `SequenceLifelinePick` records the previous verdict: a drag was rejected
+   * for the endpoint gesture precisely because it would have made both
+   * ambiguous. What makes it unambiguous now is WHERE the press starts, and the
+   * pan handler already draws that line for its own reasons — it returns early
+   * on anything inside `.af-seq-chrome-hit` (`handlePointerDown`, limit two).
+   * So this layer only ever sees presses the pan layer has already declined,
+   * and neither steals from the other.
+   *
+   * THE CLICK IS THE THIRD ONE, and it is settled the same way panning settles
+   * it: a press that MOVED swallows its trailing click, so dragging a message
+   * does not also focus it, while a press that did not move focuses exactly as
+   * it always did. The threshold is the pan handler's own 4px, imported rather
+   * than retyped — one number for "sloppy click versus deliberate drag" across
+   * the whole canvas.
+   *
+   * MOUSE ONLY, on the same reasoning as panning: touch has no hover, a
+   * long-press reorder competes with the platform's own text selection and
+   * scroll, and the keyboard route (Alt + arrows) is the one this gesture is
+   * derived from anyway.
+   */
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const dragOrigin = useRef<{ x: number; y: number; moved: boolean } | null>(
+    null,
+  );
+  const dragSuppressesClick = useRef(false);
+
+  /**
+   * The screen y of each step in `[min, max]`, and the screen x of each column
+   * — read through the live CTM so one code path is right in fit mode and at
+   * every zoom. Recomputed per pointer move rather than cached at drag start:
+   * a drag can scroll the pane (the pointer reaches its edge), and a cached
+   * table would then point at rows that have moved under the cursor.
+   */
+  const nearestSlot = (
+    range: { min: number; max: number },
+    pointer: number,
+    positionOf: (slot: number) => number,
+    axis: "x" | "y",
+  ): number => {
+    const ctm = svgRef.current?.getScreenCTM() ?? null;
+    if (ctm === null) return range.min;
+    let best = range.min;
+    let bestGap = Number.POSITIVE_INFINITY;
+    for (let slot = range.min; slot <= range.max; slot += 1) {
+      const local = positionOf(slot);
+      const screen =
+        axis === "y" ? ctm.f + local * ctm.d : ctm.e + local * ctm.a;
+      const gap = Math.abs(screen - pointer);
+      if (gap < bestGap) {
+        bestGap = gap;
+        best = slot;
+      }
+    }
+    return best;
+  };
+
+  /** The y a step's arrow is drawn at — the same table the pick indicator and
+   * the layout's own focus arithmetic read, so the rule the reader sees and the
+   * row the edit is about are one answer. */
+  const yOfStep = (step: number): number =>
+    layout.yByStep[step - 1] ?? layout.lifelineTop;
+  const xOfColumn = (index: number): number =>
+    layout.participants[index]?.x ?? layout.minX;
+
+  /**
+   * The event props a draggable element spreads onto its own hit target, or
+   * `null` when this element cannot be reordered — which is what removes the
+   * cursor affordance too, so a surface that cannot move never advertises that
+   * it can.
+   */
+  const dragSurface = (
+    axis: "message" | "participant",
+    key: number | string,
+  ): DragSurface | null => {
+    if (reorder === null) return null;
+    const range =
+      axis === "message"
+        ? reorder.messageRange(key as number)
+        : reorder.participantRange(key as string);
+    // `min === max` is "already the only slot it can take" — a real answer, and
+    // one that must not grow a handle: a drag that can only put the element
+    // back is a control that does nothing.
+    if (range === null || range.min === range.max) return null;
+    return {
+      cursor: axis === "message" ? "ns-resize" : "ew-resize",
+      active:
+        drag === null
+          ? false
+          : drag.axis === "message"
+            ? axis === "message" && drag.step === key
+            : axis === "participant" && drag.id === key,
+      onPointerDown: (event) => {
+        if (event.pointerType !== "mouse" || event.button !== 0) return;
+        event.stopPropagation();
+        dragOrigin.current = {
+          x: event.clientX,
+          y: event.clientY,
+          moved: false,
+        };
+        setDrag(
+          axis === "message"
+            ? { axis, step: key as number, toStep: key as number }
+            : {
+                axis,
+                id: key as string,
+                toIndex: layout.participants.findIndex((p) => p.id === key),
+              },
+        );
+        // Capture so a drag that leaves the element — which every drag does,
+        // immediately — keeps reporting to it, and so the gesture always ends
+        // in a pointerup this layer hears.
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      },
+      onPointerMove: (event) => {
+        const origin = dragOrigin.current;
+        if (origin === null) return;
+        if (
+          !origin.moved &&
+          Math.abs(event.clientX - origin.x) +
+            Math.abs(event.clientY - origin.y) >
+            CANVAS_DRAG_THRESHOLD
+        ) {
+          origin.moved = true;
+        }
+        if (!origin.moved) return;
+        /* SET ONLY WHEN THE SLOT CHANGES. A pointer move fires per frame and
+           per pixel; re-rendering the whole drawing for a slot it is already
+           showing would put the diagram's paint on the pointer's clock, which
+           is the hitch the C4 canvas needed a projection cache to fix. */
+        if (axis === "message") {
+          const toStep = nearestSlot(range, event.clientY, yOfStep, "y");
+          setDrag((prev) =>
+            prev !== null && prev.axis === "message" && prev.toStep === toStep
+              ? prev
+              : { axis, step: key as number, toStep },
+          );
+          return;
+        }
+        const toIndex = nearestSlot(range, event.clientX, xOfColumn, "x");
+        setDrag((prev) =>
+          prev !== null &&
+          prev.axis === "participant" &&
+          prev.toIndex === toIndex
+            ? prev
+            : { axis, id: key as string, toIndex },
+        );
+      },
+      onPointerUp: (event) => {
+        const origin = dragOrigin.current;
+        dragOrigin.current = null;
+        const landed = drag;
+        setDrag(null);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        if (origin === null || !origin.moved || landed === null) return;
+        dragSuppressesClick.current = true;
+        if (landed.axis === "message" && landed.toStep !== landed.step) {
+          reorder.onDropMessage(landed.step, landed.toStep);
+        } else if (
+          landed.axis === "participant" &&
+          landed.toIndex !==
+            layout.participants.findIndex((p) => p.id === landed.id)
+        ) {
+          reorder.onDropParticipant(landed.id, landed.toIndex);
+        }
+      },
+      swallowsClick: () => {
+        if (!dragSuppressesClick.current) return false;
+        dragSuppressesClick.current = false;
+        return true;
+      },
+    };
+  };
+
   /**
    * Every dim decision below derives from THIS set (see resolveFocusSteps):
    * a focus is a set of steps, and everything else — which participants
@@ -302,6 +606,7 @@ export function SequenceDiagram({
 
   return (
     <svg
+      ref={svgRef}
       viewBox={`${layout.minX} 0 ${layout.width} ${layout.height}`}
       // Fit mode fills the pane on BOTH axes and lets preserveAspectRatio
       // "meet" letterbox the drawing inside — the whole flow is visible at
@@ -512,6 +817,7 @@ export function SequenceDiagram({
           onToggleCollapse={() => onToggleCollapse(participant.id)}
           onFocus={() => onFocusParticipant(participant.id)}
           onKeyDown={keyActivate(() => onFocusParticipant(participant.id))}
+          drag={dragSurface("participant", participant.id)}
         />
       ))}
 
@@ -747,8 +1053,124 @@ export function SequenceDiagram({
           toLane={laneById.get(message.to) ?? null}
           onFocus={() => onFocusMessage(message.step)}
           onKeyDown={keyActivate(() => onFocusMessage(message.step))}
+          drag={dragSurface("message", message.step)}
         />
       ))}
+
+      {/* ---- the drop indicator ----
+          WHERE THE DRAGGED THING WILL LAND, in the same visual language the
+          insert indicator already uses — a static dashed rule in `--primary`.
+          Deliberately the SAME language: both answer "the thing goes here", and
+          a second idiom for one question would read as a second kind of event.
+          Horizontal for a message (it moves in time, down the page), vertical
+          for a lifeline (it moves across the column order).
+
+          NO ANIMATION, and this is not a style choice: `check:sequence-motion`
+          allows exactly one animation rule, on the drawing root, and forbids
+          per-element motion. A pulsing drop line would fail it, and the check
+          is right — the reader is choosing a slot, and a diagram that moves
+          while they choose is fighting the choice. The DRAGGED element is dimmed
+          instead (`Message`/`ParticipantColumn` read `drag.active`), which is
+          opacity only and therefore inside the same rule.
+
+          `af-seq-chrome-drop` so the exporter strips it by prefix: a drag holds
+          pointer capture, so an export cannot physically overlap one, but the
+          convention is a prefix rather than a judgement about reachability —
+          `chrome.ts` says why — and `check:sequence-export` reads it. */}
+      {drag === null ? null : (
+        <g className="af-seq-chrome-drop" pointerEvents="none">
+          {drag.axis === "message" ? (
+            <line
+              x1={layout.minX + 4}
+              x2={layout.minX + layout.width - 4}
+              y1={yOfStep(drag.toStep)}
+              y2={yOfStep(drag.toStep)}
+              stroke="var(--primary)"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+            />
+          ) : (
+            <line
+              x1={xOfColumn(drag.toIndex)}
+              x2={xOfColumn(drag.toIndex)}
+              y1={layout.headerTop}
+              y2={layout.lifelineBottom}
+              stroke="var(--primary)"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+            />
+          )}
+        </g>
+      )}
+
+      {/* ---- the lifeline picker's arming layer ----
+          LAST IN DOCUMENT ORDER, and that is the only place it can be: SVG
+          has no z-index, so a per-lifeline hit column drawn any earlier would
+          sit UNDER the message hit boxes and the reader would arm the gesture,
+          click a lifeline, and focus a message instead.
+
+          It is also why this is a separate layer rather than a prop on
+          `ParticipantColumn`: `check:sequence-layout` reads that component's
+          source text and pins what is in it, and a column that grew a
+          conditional hit rect would break those assertions while rendering
+          correctly — the "two halves, each self-consistent" failure in its
+          cheapest form.
+
+          NO ANIMATION on any of it, deliberately. `check:sequence-motion`
+          allows exactly one animation rule on the drawing root and forbids
+          per-element motion; a pulsing insertion line would fail it, and the
+          check is right — a diagram that animates while you are choosing where
+          to put something is a diagram fighting the choice. The indicator is a
+          static dashed rule, which is the same visual language every editor
+          uses for "the thing goes here". */}
+      {pick === null ? null : (
+        <g className="af-seq-chrome-pick">
+          <line
+            x1={layout.minX + 4}
+            x2={layout.minX + layout.width - 4}
+            y1={pick.atY}
+            y2={pick.atY}
+            stroke="var(--primary)"
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+            pointerEvents="none"
+          />
+          {layout.participants.map((participant) => (
+            <rect
+              key={`pick-${participant.id}`}
+              /* Literal class list, chrome-prefixed: `check:sequence-export`
+                 reads the className off the markup and fails a control it
+                 cannot strip, which is how this rect stays out of every
+                 exported SVG, PNG and GIF frame. */
+              className="af-seq-chrome-hit af-seq-chrome-hit-region af-seq-chrome-pick-target"
+              x={participant.x - participant.headerWidth / 2}
+              y={layout.lifelineTop}
+              width={participant.headerWidth}
+              height={Math.max(0, layout.footerTop - layout.lifelineTop)}
+              role="button"
+              tabIndex={0}
+              /* The SENTENCE is the only thing the purpose changes. "the new
+                 message" and "this message" are the difference between adding
+                 an arrow and moving one, and a reader who cannot see the
+                 dashed rule has nothing else to tell them which they are in. */
+              aria-label={
+                pick.purpose === "insert"
+                  ? pick.from === null
+                    ? `Send the new message from ${participant.name}`
+                    : `Send the new message to ${participant.name}`
+                  : pick.from === null
+                    ? `Send this message from ${participant.name} instead`
+                    : `Send this message to ${participant.name} instead`
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                pick.onPick(participant.id);
+              }}
+              onKeyDown={keyActivate(() => pick.onPick(participant.id))}
+            />
+          ))}
+        </g>
+      )}
     </svg>
   );
 }
@@ -787,7 +1209,7 @@ function FragmentControl({
     <g className="af-seq-frag-ctl">
       <g className="pointer-events-none">{children}</g>
       <rect
-        className="af-seq-hit af-seq-hit-region"
+        className="af-seq-chrome-hit af-seq-chrome-hit-region"
         x={hitX}
         y={hitY}
         width={hitWidth}
@@ -825,6 +1247,7 @@ function ParticipantColumn({
   onToggleCollapse,
   onFocus,
   onKeyDown,
+  drag,
 }: {
   participant: LaidParticipant;
   layout: SequenceLayout;
@@ -837,6 +1260,8 @@ function ParticipantColumn({
   onToggleCollapse: () => void;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Non-null when this column can be dragged to another position. */
+  drag: DragSurface | null;
 }): React.JSX.Element {
   const { x, headerWidth } = participant;
   // From the LAYOUT's header top, not `SEQ.marginTop`: the heading block above
@@ -901,6 +1326,9 @@ function ParticipantColumn({
         "af-seq-participant af-seq-dimmable",
         dimmed && "af-seq-dim",
       )}
+      // Same verdict as the dragged arrow's: dim the source, mark the slot.
+      // A column translated sideways would leave its own lifeline behind.
+      opacity={drag?.active === true ? 0.35 : undefined}
     >
       {/* The lifeline wears the lane at reduced strength: it must mark the
           column all the way down without out-shouting the --edge message
@@ -1040,10 +1468,10 @@ function ParticipantColumn({
         </text>
       ) : null}
       {/* The whole header is the participant's click/keyboard target —
-          `af-seq-hit-region` makes the rect's INTERIOR hit-testable
+          `af-seq-chrome-hit-region` makes the rect's INTERIOR hit-testable
           (pointer-events: all), not just an 18px stroke band around it. */}
       <rect
-        className="af-seq-hit af-seq-hit-region"
+        className="af-seq-chrome-hit af-seq-chrome-hit-region"
         x={x - headerWidth / 2}
         y={layout.headerTop}
         width={headerWidth}
@@ -1051,12 +1479,25 @@ function ParticipantColumn({
         fill="transparent"
         role="button"
         tabIndex={0}
-        aria-label={`Focus participant ${participant.name}`}
+        /* The keys, in the name, for the same reason the arrow's says them: a
+           drag is the discoverable route and the keyboard is the reachable
+           one, and only the second can be spoken. */
+        aria-label={
+          drag === null
+            ? `Focus participant ${participant.name}`
+            : `Focus participant ${participant.name}. Hold Alt and press the left or right arrow to move this column`
+        }
+        style={drag === null ? undefined : { cursor: drag.cursor }}
         onClick={(event) => {
           event.stopPropagation();
+          if (drag?.swallowsClick() === true) return;
           onFocus();
         }}
         onKeyDown={onKeyDown}
+        onPointerDown={drag?.onPointerDown}
+        onPointerMove={drag?.onPointerMove}
+        onPointerUp={drag?.onPointerUp}
+        onPointerCancel={drag?.onPointerUp}
       />
 
       {/* ---- the dependency FOLD control ----
@@ -1085,7 +1526,7 @@ function ParticipantColumn({
           target stays 24×18 regardless of how small the glyph is, because a
           minimal control must be quiet, not hard to hit. */}
       {dependencies > 0 ? (
-        <g className="af-seq-fold">
+        <g className="af-seq-chrome-fold">
           <text
             x={x + headerWidth / 2 - 9}
             y={boxTop + 16}
@@ -1097,7 +1538,7 @@ function ParticipantColumn({
             {collapsed ? `+${dependencies}` : "−"}
           </text>
           <rect
-            className="af-seq-hit af-seq-hit-region"
+            className="af-seq-chrome-hit af-seq-chrome-hit-region"
             x={x + headerWidth / 2 - 24}
             y={boxTop + 3}
             width={24}
@@ -1182,7 +1623,7 @@ function ParticipantColumn({
           {participant.name}
         </text>
         <rect
-          className="af-seq-hit af-seq-hit-region"
+          className="af-seq-chrome-hit af-seq-chrome-hit-region"
           x={x - headerWidth / 2}
           y={layout.footerTop}
           width={headerWidth}
@@ -1213,6 +1654,7 @@ function Message({
   toLane,
   onFocus,
   onKeyDown,
+  drag,
 }: {
   message: LaidMessage;
   autonumber: boolean;
@@ -1228,6 +1670,8 @@ function Message({
   toLane: number | null;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** Non-null when this arrow can be dragged to another row. */
+  drag: DragSurface | null;
 }): React.JSX.Element {
   const { y, fromX, toX, kind, self } = message;
   const dir = toX >= fromX ? 1 : -1;
@@ -1251,7 +1695,7 @@ function Message({
    * ONE hit target per message, covering the arrow AND its label — a user's
    * instinct is to click the words, and two separate targets would double
    * the tab stops and split the accessible name. Built as closed rect
-   * subpaths (hit-tested by fill via `.af-seq-hit-region`, no stroke) so the
+   * subpaths (hit-tested by fill via `.af-seq-chrome-hit-region`, no stroke) so the
    * bounds are EXACT — the old 18px-stroke trick would halo 9px past every
    * edge and let a label box steal clicks from its neighbour.
    *
@@ -1293,6 +1737,18 @@ function Message({
   return (
     <g
       className={cn("af-seq-msg af-seq-dimmable", dimmed && "af-seq-dim")}
+      /* THE DRAGGED ARROW DIMS AND STAYS PUT. It does NOT follow the cursor,
+         and that was the tempting version: an arrow translated down the page
+         detaches from both lifelines, drags its label and its activation bar
+         out of alignment, and reads as a broken drawing rather than a moving
+         one — everything here is layout-solved, so there is no "just this
+         element" to move. Dim-the-source, mark-the-slot is the standard list
+         reorder language and it is honest about what a drop does: the element
+         takes a slot, it is not placed at a point.
+         Opacity, inline, and deliberately not eased: `check:sequence-motion`
+         keeps entrance motion to one rule on the drawing root, and per-message
+         motion would fail it. */
+      opacity={drag?.active === true ? 0.35 : undefined}
       data-focused={focused || undefined}
       data-animate={animateRank !== null ? animateToken : undefined}
       // The kind picks which dash pattern marches (the stylesheet's march
@@ -1457,27 +1913,42 @@ function Message({
           <tspan className="af-seq-label-meta"> [{message.technology}]</tspan>
         ) : null}
         {/* The footnote mark for a message that carries a `desc` — see
-            .af-seq-label-more. aria-hidden because the accessible name below
+            .af-seq-chrome-more. aria-hidden because the accessible name below
             says it in words; a screen reader announcing "bullet" would be
             noise, not an affordance. */}
         {message.description !== undefined ? (
-          <tspan className="af-seq-label-more" aria-hidden="true">
+          <tspan className="af-seq-chrome-more" aria-hidden="true">
             {" •"}
           </tspan>
         ) : null}
       </text>
 
       <path
-        className="af-seq-hit af-seq-hit-region"
+        className="af-seq-chrome-hit af-seq-chrome-hit-region"
         d={hitPath}
         role="button"
         tabIndex={0}
-        aria-label={ariaLabel}
+        /* THE ACCESSIBLE NAME GAINS THE GESTURE, not a second control. A drag
+           is unreachable by keyboard and unmentionable by a cursor, so the
+           only place a screen-reader user can learn the arrow moves is the
+           name of the thing that moves — and the sentence names the KEYS,
+           because that is the route they have. */
+        aria-label={
+          drag === null
+            ? ariaLabel
+            : `${ariaLabel}. Hold Alt and press the up or down arrow to move this step earlier or later`
+        }
+        style={drag === null ? undefined : { cursor: drag.cursor }}
         onClick={(event) => {
           event.stopPropagation();
+          if (drag?.swallowsClick() === true) return;
           onFocus();
         }}
         onKeyDown={onKeyDown}
+        onPointerDown={drag?.onPointerDown}
+        onPointerMove={drag?.onPointerMove}
+        onPointerUp={drag?.onPointerUp}
+        onPointerCancel={drag?.onPointerUp}
       />
     </g>
   );

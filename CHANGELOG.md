@@ -5,6 +5,217 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- An old `/view` link carrying a query now keeps it. `/view?e=atlas-shop`
+  forwarded to `/live` with the example id dropped, so the reader arrived at the
+  seed rather than the diagram they asked for; `?e=` and `?d=` now travel with
+  the fragment, merged with whatever the alias itself sets.
+
+### Changed
+
+- **The playground moved from `/view` to `/live`, and the header entry now
+  reads "Live".** The page had not only viewed for two releases — the C4 and
+  sequence canvases answer a drag and rewrite your source text under you — so
+  a URL and a menu item promising a viewer taught a reader the one thing about
+  the page that was no longer true. Everything under the old path moved with
+  it: `/live`, `/live/c4`, `/live/seq`, `/live/sequence`, `/live/flow`,
+  `/live/uc`, `/live/er`, `/live/dict`, the bundled-model viewer at
+  `/live/<model>` and every example page at `/live/<kind>/<example>`. New
+  share links, from the Share button and from the MCP `create_share_link`
+  alike, are minted against `/live`.
+
+  **Nothing you already hold stops working, and this is not a breaking
+  change.** `changelog.md` says a renamed route normally bumps the major
+  version, so the reasoning is worth stating rather than asserting: every old
+  URL is still served. Each `/view` path is a page that forwards to its `/live`
+  equivalent **carrying the query string and the URL fragment with it**, which
+  is what makes the difference — a share link's whole document lives in the
+  fragment, the fragment never reaches a server, and so a server redirect
+  would have delivered `/live` an empty document. Forwarding in the browser
+  keeps the payload. A retired path also keeps a preview card, so a `/view#m=…`
+  link already pasted in a review still previews as a diagram rather than as
+  this product's landing page. What you lose is one client-side hop on an old
+  link; what would have been breaking is a 404 or a dropped document, and
+  neither happens.
+
+  The retired paths are `noindex` and name `/live` as canonical, so search
+  consolidates on the new URL rather than ranking a trampoline against the page
+  it forwards to.
+
+- The "Open in the playground" button on `/validate` and the playground links
+  on `/syntax` now go straight to `/live` instead of bouncing through a
+  seeded alias, so a click costs no redirect.
+- The home page hero is 31 words instead of 136. The list of what each notation
+  draws moved to the notation cards, which already name all six in their own
+  vocabulary, and the full two-ways-to-edit passage moved down to "How you
+  actually use it" — still on the page, just no longer between you and the first
+  button.
+
+### Fixed
+
+- Turning step numbering off no longer removes an `autonumber false` line you
+  wrote yourself, and no longer moves a flag you had written above a comment
+  down below it. Pressing the numbering button twice now leaves the file byte
+  for byte where it was, from any of the three states the field has.
+
+### Added
+
+- **The sequence canvas is editable.** Click a message or a lifeline and the
+  details panel gains a pencil: a message's label, arrow kind, `[technology]`
+  and `desc` detail, and a participant's display name, kind and
+  `[technology]`, are all editable in place. Applying a change rewrites only
+  that element's own lines in your source text — your comments, blank lines,
+  spacing and any field you wrote out that canonical form omits at its default
+  survive untouched.
+- **Add a message with a button and two clicks.** `+` in the canvas strip arms
+  the gesture; click the sending lifeline, then the receiving one, and one line
+  is inserted after the focused step (or at the end of the flow when nothing is
+  focused). A dashed rule shows where it will land, the lifelines are tab
+  stops so the mouse is not the only route, and Escape cancels. Exactly one
+  line is added and nothing else in the file is renormalised.
+- **Move an arrow to different lifelines.** The message editor carries From and
+  To menus listing the diagram's own lifelines by name, and changing either one
+  moves the arrow straight away. "Repoint on the canvas" is still there beside
+  them: it arms a two-click lifeline picker, which is the quicker route at the
+  far end of a long flow. Only the message's declaration line changes; its
+  `desc` and any `!` lines come back byte-identical.
+- **Remove a message or a lifeline.** The details panel gains a Remove control
+  for whatever is focused. A message goes with its `desc` and `!` continuation
+  lines and nothing else — a note beside it is kept, not deleted with it, and
+  later `autonumber` steps renumber as they should. There is no confirmation
+  step because Cmd/Ctrl + Z with the diagram focused brings it back.
+- **Add a lifeline.** The figure button beside `+` in the canvas strip appends
+  a placeholder lifeline at the end of the order, ready to rename in the
+  details panel. It lands outside any `box`, and it works on a document that
+  declares no lifelines at all.
+- Two removals are refused rather than allowed to break your file, and both say
+  why: a lifeline that messages or notes still point at names how many (delete
+  those first), or that it is the only member of a `box`; and a message
+  carrying an activation `+`/`-` says so, because removing or moving one end of
+  an unpaired flag changes a bar rows away from where you pressed. Take the
+  flag off in the source pane first.
+- Every gesture shares the canvas lock and the canvas undo ring with the C4
+  canvas: locking the diagram removes the editing controls entirely, and
+  Cmd/Ctrl + Z with the diagram focused steps back through canvas edits.
+- **Number the steps from the canvas.** The numbered-list icon in the canvas
+  strip turns `autonumber` on and off without opening the source pane. Turning
+  it on writes one line at the head of the block, past any comment you opened
+  it with; turning it off removes that line rather than writing
+  `autonumber false`, so switching it on and back off leaves your file exactly
+  as it was. An explicit `autonumber false` you typed yourself is replaced when
+  you turn numbering on, and does not come back when you turn it off again.
+- **Drag a message to move it in time, or a lifeline card to move its column.**
+  A sequence diagram has no coordinates, so this is a reorder rather than a
+  move: the element you drop takes a neighbour's place in the order, and the
+  layout re-solves around it. The dragged element dims, a dashed rule marks the
+  row or column it will land in, and the rule only ever appears on a slot the
+  edit will accept — so a drop cannot end in a refusal. Dragging bare canvas
+  still pans the view, and a drag that moved no longer also selects what it
+  moved. Only the two elements that traded places change in your source text;
+  a message's `desc` and `!` lines travel with it, byte for byte, and comments,
+  blank lines and everything between them stay exactly where you put them.
+  Dragging a step down and back up leaves the file unchanged.
+- **Reorder from the keyboard, one slot per press.** With a step focused,
+  `Alt` + `↑`/`↓` moves it earlier or later; with a lifeline focused,
+  `Alt` + `←`/`→` moves its column. This is the precise route — a press is
+  counted where a drag is aimed — and it produces byte-identical text to the
+  equivalent drag.
+- Reordering is refused, with a reason, wherever it would change more than the
+  order: across a note (a note is anchored by where it sits, so a message
+  crossing it would re-aim your prose), across a fragment (that would change
+  which branch the step is inside), past a message carrying an activation
+  `+`/`-`, and across a `box` boundary — a box brackets a run of neighbouring
+  lifelines, and the sentence names the box. Nothing can be reordered while
+  lifelines are folded, because the rows and columns on screen are renumbered
+  over what is visible; the affordance disappears rather than misfiring.
+- **A mouse guide under the canvas.** While editing is on, a row under the
+  diagram carries one compact affordance per gesture — the glyph its real
+  control wears, plus two or three words. The full instruction is the item's
+  accessible name and its hover text, and the viewer's tour card still reads
+  the whole list as prose. It replaces the single long sentence that was there
+  before, which was a paragraph doing a toolbar's job.
+- **The site now says a diagram is edited two ways.** The home page hero, the
+  `/view` page title and description, `/llms.txt`, `/llms-full.txt` and a new
+  `/faq` answer all carry one sentence: every notation is edited as source
+  text, two of them are also editable on the canvas, a C4 node drags to a
+  position while a sequence message or lifeline drags into a new order. It is
+  the same wording on all five surfaces, assembled from the table that decides
+  which canvas offers what — so it cannot describe a capability the app does
+  not have. Until now no page outside the playground mentioned the canvas at
+  all, and the two plain-text documents an assistant reads first did not
+  contain the word.
+- **Each notation card on the home page says how that kind is edited** — "text"
+  or "text or canvas" — so the answer to "can I drag this one" is on the page
+  that ranks rather than only inside the app.
+
+### Changed
+
+- **The canvas now starts locked, and the lock's button offers "Edit" instead
+  of reporting "Locked".** Editable used to be the default, which was right
+  when the only canvas gesture was nudging a C4 box; the canvas can now create,
+  remove, repoint, rename and reorder, and the common visit is reading a
+  diagram somebody sent. A locked canvas shows "Read-only" beside a pencil
+  button labelled Edit — one click turns everything on, and the button becomes
+  Lock. Not a breaking change: your saved choice is kept, so if you ever
+  pressed Editable you still get an editable canvas, and if you pressed Locked
+  nothing changes. Only readers who never touched the control see a different
+  default, and no file, link or route is affected.
+- The share-link notice above the source pane is now one line — "Share link —
+  nothing uploaded, nothing stored." — with how a share link carries the
+  document folded away behind it, next to a link to the full answer in `/faq`.
+  It was a three-sentence card, which is interesting exactly once and was above
+  the pane on every visit.
+- The guide's caveat now says what dragging actually does, which changed under
+  it: dragging an element reorders it, dragging bare canvas pans, and nothing
+  here is positioned — a dragged element takes a neighbour's place rather than
+  staying where you drop it. `/faq`'s "Why can't I drag my ER diagram?" answer
+  says the same, and now distinguishes a sequence diagram (no coordinates, but
+  an order) from the four kinds that solve their layout outright.
+- A sequence document's "cannot be dragged" message now names the edit it
+  _does_ offer instead of being a dead end. A Mermaid `sequenceDiagram` pane
+  refuses these edits by name: Mermaid cannot hold a message's `desc` or
+  `[technology]`, so the change would be lost on the next round trip — switch
+  the pane to `.alab` to edit on the canvas.
+- The playground's own description of the canvas now names what you can do to a
+  sequence diagram on it — add, edit, repoint, number, remove — rather than only
+  that it is editable. The viewer's tour card says the same.
+- **The site description names six notations instead of four, and says the
+  canvas is editable.** It listed C4, sequence, flowchart and use case — two
+  short, from before ER diagrams and data dictionaries shipped, with no room
+  inside the 160 characters a search result shows to add them. The count
+  replaces the list, which bought the space for the editing claim; the six
+  names are still on the home page, in its structured data and in `/llms.txt`.
+  The `README`, `/demo`, both social cards and three `/faq` answers said "four
+  kinds" for the same reason and now do not.
+- The `/view` page is titled "write the text or edit the canvas" rather than
+  "write it, see it rendered live", which described a viewer. Its description
+  names the two notations you can edit on the canvas.
+- The social card for `/` and for `/view` — the card every share link previews
+  with — no longer lists four of the six notations. Both name the count and the
+  two ways in.
+- **An armed insert or repoint now tells you on screen what to click next.** It
+  only ever said so to a screen reader, so pressing "Repoint on the canvas"
+  looked like a control that closed the editor and did nothing. A prompt now
+  appears over the diagram naming the click you owe and that Escape cancels,
+  and it is the same sentence the announcement carries. It never appears in an
+  exported SVG, PNG or GIF frame.
+
+### Fixed
+
+- **A canvas edit no longer deletes the comments in your `.alab` file.** Since
+  the editable canvas shipped, one drag rewrote the whole document from the
+  model — and the canonical form the writer emits has no `//` comment lines, so
+  every comment in the file was gone on the first gesture. A drag or a Delete
+  now patches only the lines it is about, leaving comments, your own blank
+  lines and spacing, and any field you wrote out that canonical form omits at
+  its default, exactly as you typed them.
+- A drag while the source pane holds arch-lab JSON, or text that has not
+  parsed yet, still rewrites the whole document — there is no line to patch in
+  either case. Nothing is lost in the JSON pane, which has no comments.
+
 ## [2.0.0] - 2026-08-23
 
 **This release contains a breaking change and bumps the MAJOR version:

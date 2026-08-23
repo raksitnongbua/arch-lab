@@ -5,35 +5,20 @@ import { AliasForward } from "@/components/share/alias-forward";
 export const metadata: Metadata = {
   title: "Sequence diagram playground",
   // An alias must not compete with the page it forwards to: canonical names
-  // the real playground, and noindex keeps the trampoline itself out of
-  // search results entirely.
-  alternates: { canonical: "/view" },
+  // the real playground, and noindex keeps the trampoline out of results.
+  alternates: { canonical: "/live" },
   robots: { index: false },
 };
 
 /**
- * `/view/sequence` — the LONG alias, forwarding to `/view/seq` with the
- * fragment intact. The two swapped roles: the short route is where share
- * links are minted and therefore where people actually arrive, so it is the
- * real page now and this is the trampoline (the argument is on
- * `../seq/page.tsx`).
+ * `/view/sequence` — a forwarding alias for `/live?d=seq`, kept when the route family
+ * was renamed `/live`. The oldest sequence links of all point here — this was the real page before
+ * `/view/seq` was, and an alias ever since.
  *
- * IT CANNOT BE A `redirects()` RULE, and that is the whole reason this file
- * renders a component instead of being three lines of config: the payload
- * lives in the URL fragment, the fragment never reaches the server, and a
- * server redirect would drop the document on the floor. Only a client can
- * carry it across.
- *
- * WHY THE PAGE STAYS AT ALL: every sequence link minted before the alias
- * existed points here, and a share link is a URL someone else is holding —
- * deleting the route orphans a generation of them. `pnpm check:share-capacity`
- * asserts this file keeps existing for exactly that reason.
- *
- * `/view/sequence/[exampleId]` is unaffected — a nested segment resolves on
- * its own and never touches this page — which is also why the sequence social
- * card is re-exported from here: those example routes inherit the nearest
- * `opengraph-image`, and the card itself now lives beside the real page.
+ * The family's reasoning — why this cannot be a `redirects()` rule, why it
+ * skips `/live/sequence` and lands in one hop, and why it is `noindex` with a
+ * canonical on `/live` — is on `../page.tsx`.
  */
-export default function ViewSequencePage(): React.JSX.Element {
-  return <AliasForward to="/view?d=seq" label="the playground" />;
+export default function LegacyViewSequencePage(): React.JSX.Element {
+  return <AliasForward to="/live?d=seq" label="the playground" />;
 }

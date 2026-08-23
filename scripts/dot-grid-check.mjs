@@ -521,7 +521,7 @@ check("the header does not re-blacken the field it now sits over", () => {
   );
   /* The blur is the legibility device, not the tint. The tint thinned to /45
      at the midline (2026-08) on the strength of the blur averaging busy canvas
-     content — /view can scroll an accent-coloured node straight under the nav,
+     content — /live can scroll an accent-coloured node straight under the nav,
      where raw content measures 3.6:1 against `--foreground` in `dark`. That
      only holds while the blur's solid stop clears the text band, which ends at
      ~66% of the 64px row: a mask that releases the blur earlier (the old 45%

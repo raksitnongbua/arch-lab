@@ -460,12 +460,12 @@
  * the rest of the message on focus, where the dock is already showing what it
  * pointed at. It stays inside the label's reserved width (the +24 padding in
  * messageLabelWidth covers it), so it can never push a column. */
-.af-seq-label-more {
+.af-seq-chrome-more {
   fill: var(--muted-foreground);
   font-weight: 600;
 }
 
-.af-seq-msg[data-focused="true"] .af-seq-label-more {
+.af-seq-msg[data-focused="true"] .af-seq-chrome-more {
   fill: var(--primary);
 }
 
@@ -492,7 +492,7 @@
 }
 
 /* Clickable hit areas — generous, invisible, and honest about being buttons. */
-.af-seq-hit {
+.af-seq-chrome-hit {
   stroke: transparent;
   fill: none;
   stroke-width: 18;
@@ -504,25 +504,25 @@
  * target. `pointer-events: all` hit-tests the interior regardless of paint;
  * `stroke: none` matters just as much — the 18px stroke above would halo
  * 9px past every edge, which is exactly how a label box would steal clicks
- * from the message one row up. Declared after .af-seq-hit so it wins.
+ * from the message one row up. Declared after .af-seq-chrome-hit so it wins.
  * stroke-width must be ZEROED too, not just the paint: pointer-events: all
  * hit-tests the stroke REGION whether or not it is painted, so an inherited
  * 18px width would quietly resurrect the halo. */
-.af-seq-hit-region {
+.af-seq-chrome-hit-region {
   stroke: none;
   stroke-width: 0;
   fill: transparent;
   pointer-events: all;
 }
 
-.af-seq-hit:focus-visible {
+.af-seq-chrome-hit:focus-visible {
   outline: none;
 }
 
 /* Keyboard focus ring for in-SVG buttons: a stroke on the element itself,
  * since CSS outline does not follow an SVG path's shape. */
-.af-seq-msg:has(.af-seq-hit:focus-visible) .af-seq-line,
-.af-seq-participant:has(.af-seq-hit:focus-visible) .af-seq-header-box {
+.af-seq-msg:has(.af-seq-chrome-hit:focus-visible) .af-seq-line,
+.af-seq-participant:has(.af-seq-chrome-hit:focus-visible) .af-seq-header-box {
   stroke: var(--ring);
 }
 
@@ -533,14 +533,14 @@
  * pointer-events-none and the invisible hit rect is what actually hovers.
  * These are state changes, not motion — nothing here needs a reduced-motion
  * branch. */
-.af-seq-frag-ctl:has(.af-seq-hit:hover) .af-seq-chip,
-.af-seq-frag-ctl:has(.af-seq-hit:focus-visible) .af-seq-chip {
+.af-seq-frag-ctl:has(.af-seq-chrome-hit:hover) .af-seq-chip,
+.af-seq-frag-ctl:has(.af-seq-chrome-hit:focus-visible) .af-seq-chip {
   stroke: var(--ring);
   stroke-width: 1.5;
 }
 
-.af-seq-frag-ctl:has(.af-seq-hit:hover) .af-seq-guard,
-.af-seq-frag-ctl:has(.af-seq-hit:focus-visible) .af-seq-guard {
+.af-seq-frag-ctl:has(.af-seq-chrome-hit:hover) .af-seq-guard,
+.af-seq-frag-ctl:has(.af-seq-chrome-hit:focus-visible) .af-seq-guard {
   fill: var(--primary);
   text-decoration: underline;
 }
@@ -561,23 +561,23 @@
  * :has() on the group because the painted line is not the element being
  * hovered — the invisible hit region is (the same indirection the fragment
  * rules above rely on). */
-.af-seq-msg:has(.af-seq-hit:hover) .af-seq-line {
+.af-seq-msg:has(.af-seq-chrome-hit:hover) .af-seq-line {
   stroke-width: 2;
 }
 
-.af-seq-msg:has(.af-seq-hit:hover) .af-seq-label {
+.af-seq-msg:has(.af-seq-chrome-hit:hover) .af-seq-label {
   font-weight: 600;
 }
 
 /* The head is a filled or stroked triangle depending on kind, so hover has to
  * reach both paint channels to keep an arrowhead in step with its line. */
-.af-seq-msg:has(.af-seq-hit:hover) .af-seq-head-line {
+.af-seq-msg:has(.af-seq-chrome-hit:hover) .af-seq-head-line {
   stroke-width: 2;
 }
 
 /* Participant cards — header and footer alike, since the footer is a real
  * pointer target for the same action. */
-.af-seq-participant:has(.af-seq-hit:hover) .af-seq-header-box {
+.af-seq-participant:has(.af-seq-chrome-hit:hover) .af-seq-header-box {
   stroke-width: 2.25;
 }
 
@@ -587,7 +587,8 @@
  * This overrides that: hovering the pill lifts the PILL, and the card stays put.
  * Same treatment for keyboard focus, which is a separate tab stop from the card
  * precisely because it is a separate action. */
-.af-seq-participant:has(.af-seq-fold .af-seq-hit:hover) .af-seq-header-box {
+.af-seq-participant:has(.af-seq-chrome-fold .af-seq-chrome-hit:hover)
+  .af-seq-header-box {
   stroke-width: 1.5;
 }
 
@@ -596,12 +597,35 @@
  * and the ring colour respectively. That is the whole affordance, which is what
  * "minimal" costs: it relies on the pointer cursor and this state change rather
  * than on a permanent frame. */
-.af-seq-fold:has(.af-seq-hit:hover) text {
+.af-seq-chrome-fold:has(.af-seq-chrome-hit:hover) text {
   fill: var(--foreground);
 }
 
-.af-seq-fold:has(.af-seq-hit:focus-visible) text {
+.af-seq-chrome-fold:has(.af-seq-chrome-hit:focus-visible) text {
   fill: var(--ring);
+}
+
+/* ---- the lifeline picker's targets ------------------------------------------
+ * While a two-click lifeline gesture is armed — inserting a message or
+ * repointing one — every lifeline becomes a full-height button. A hit region with no paint at all would leave the reader guessing
+ * which part of the canvas is now a target — the gesture is modal, and a modal
+ * state that looks identical to the resting one is how a reader ends up
+ * clicking a message and wondering why nothing happened. So the columns carry
+ * a faint standing wash while armed, and full tint on hover or keyboard focus.
+ *
+ * `fill` overrides `.af-seq-chrome-hit-region`'s transparent fill and must be
+ * declared after it, which it is. NO ANIMATION anywhere in here on purpose —
+ * `check:sequence-motion` permits one animation rule on the drawing root and
+ * this is not it, and a pulsing target would compete with the diagram the
+ * reader is trying to read.
+ */
+.af-seq-chrome-pick-target {
+  fill: color-mix(in oklch, var(--primary) 7%, transparent);
+}
+
+.af-seq-chrome-pick-target:hover,
+.af-seq-chrome-pick-target:focus-visible {
+  fill: color-mix(in oklch, var(--primary) 20%, transparent);
 }
 
 /* ---- reduced motion ---------------------------------------------------------

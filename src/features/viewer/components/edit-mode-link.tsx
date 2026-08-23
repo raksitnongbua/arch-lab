@@ -12,7 +12,7 @@
  * access to this page's state. It is the whole file, not a reconstruction: see
  * `archLabFileFrom`.
  *
- * IT USED TO POINT AT `/editor`, which is now a forwarding alias for `/view`.
+ * IT USED TO POINT AT `/editor`, which is now a forwarding alias for `/live`.
  * The destination changed rather than the mechanism: the playground reads a
  * `#m=…` payload on mount exactly as the editor did, and its C4 canvas is
  * editable in place, so "edit this diagram" arrives somewhere that can both
@@ -86,12 +86,12 @@ export function EditModeLink({
     // synchronous setState there is a cascading render.
     void encodeShareFragment(text, diagramId).then((fragment) => {
       if (cancelled) return;
-      /* `/view`, not `/editor`: the editor route is retired and the
+      /* `/live`, not `/editor`: the editor route is retired and the
          playground reads the payload in the fragment exactly as the editor
          did. Pointing at the alias would work — it forwards the fragment on
          purpose — but sending a reader through a trampoline they never asked
          for costs a render and a history entry for nothing. */
-      const target = `/view#${fragment}`;
+      const target = `/live#${fragment}`;
       if (
         `${window.location.origin}${target}`.length > MAX_HANDOFF_URL_LENGTH
       ) {

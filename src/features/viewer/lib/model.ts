@@ -20,7 +20,7 @@ import type {
 /* -------------------------------------------------------------------------- */
 
 export interface ViewerModel {
-  /** Service-registry id — also the `/view/[modelId]` route segment. */
+  /** Service-registry id — also the `/live/[modelId]` route segment. */
   id: string;
   title: string;
   description: string;

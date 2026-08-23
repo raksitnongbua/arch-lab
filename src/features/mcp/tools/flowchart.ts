@@ -12,7 +12,7 @@
  * unguarded branches) have no counterpart in either of the other two. Three
  * document kinds, three tools, each with an honest summary.
  *
- * The reader is `parseFlowchartInput` — the SAME one the `/view?d=flow`
+ * The reader is `parseFlowchartInput` — the SAME one the `/live?d=flow`
  * playground uses, itself a thin shell over `parseFlowchartText` and
  * `parseMermaidFlowchart`. So "the MCP server accepted it" means the
  * playground renders it too, which is the guarantee `lib/read.ts` makes for C4

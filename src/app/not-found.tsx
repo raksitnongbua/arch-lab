@@ -9,8 +9,8 @@ import { APP_NAME } from "@/lib/constants";
  * The 404 page.
  *
  * WRITTEN FOR THE 404s THIS SITE ACTUALLY SERVES, which are mostly not typos.
- * Five routes call `notFound()` — `/view/[modelId]` and the three
- * `/view/<kind>/[exampleId]` routes, plus `/demo` — so the common arrival is a
+ * Five routes call `notFound()` — `/live/[modelId]` and the three
+ * `/live/<kind>/[exampleId]` routes, plus `/demo` — so the common arrival is a
  * reader who followed a link to a specific EXAMPLE OR MODEL that is not there:
  * an id that was renamed, a bookmark from before a rename, a URL somebody typed
  * from memory. That reader does not need to be told the internet is fallible;
@@ -20,7 +20,7 @@ import { APP_NAME } from "@/lib/constants";
  * SHARE LINKS DO NOT LAND HERE, and that distinction is why this page says
  * nothing about them. A `#m=…` payload lives in the URL fragment, which never
  * reaches the server, so a broken or expired share link resolves as a perfectly
- * valid `/view` and is answered by `components/share/share-link-failure.tsx` —
+ * valid `/live` and is answered by `components/share/share-link-failure.tsx` —
  * which can say *why* it failed. Mentioning share links here would send the one
  * reader who cannot be helped by this page looking in the wrong place.
  *
@@ -70,7 +70,7 @@ export default function NotFound() {
             <ArrowRight aria-hidden="true" />
           </Link>
           <Link
-            href="/view"
+            href="/live"
             className={buttonClasses({ variant: "outline", size: "md" })}
           >
             Open the playground

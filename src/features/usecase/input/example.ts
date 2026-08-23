@@ -1,6 +1,6 @@
 /**
  * The example the playground opens with when seeded for use case
- * (`/view?d=uc`). Same philosophy as the C4 seed's SEED_MODEL
+ * (`/live?d=uc`). Same philosophy as the C4 seed's SEED_MODEL
  * (`viewer/input/sync.ts`), the sequence seed (`sequence/input/example.ts`)
  * and the flowchart seed (`flowchart/input/example.ts`): an empty canvas
  * teaches nobody the format, so the seed is a realistic diagram that

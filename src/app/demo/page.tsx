@@ -14,14 +14,19 @@ import { listDictExamples } from "@/features/dict/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 
 export const metadata: Metadata = {
-  title: "Examples — C4 models, sequence diagrams, flowcharts and use cases",
+  /* NAMES THE COUNT, NOT FOUR OF THE SIX. The title listed four notations in 63
+     characters — three over what a result shows, and two notations out of date
+     the day ER and the data dictionary shipped, with no room to add them. The
+     sections on this page name all six in prose, which is where a crawler reads
+     them. 48 characters. */
+  title: "Examples — finished diagrams in six notations",
   description:
-    "Bundled example documents of all four kinds, each parsed by the real reader. Open one in the playground and edit it as text.",
+    "Bundled example documents of all six kinds — C4, sequence, flowchart, use case, ER, data dictionary — each parsed by the real reader. Open one and edit it.",
   alternates: { canonical: "/demo" },
 };
 
 /**
- * The example index: four kinds, two showcased documents each.
+ * The example index: six kinds, two showcased documents each.
  *
  * IT WAS A LANDING PAGE and did not need to be. Each card carried a gradient
  * hover wash, an icon tile, a "View-only" badge, four count statistics, a row
@@ -178,7 +183,7 @@ export default function DemoPage(): React.JSX.Element {
             `${listing.summary.nodeCount} elements`,
             `${listing.summary.edgeCount} relationships`,
           ],
-          readOnlyHref: `/view/${listing.summary.id}`,
+          readOnlyHref: `/live/${listing.summary.id}`,
         },
   );
 
@@ -194,7 +199,7 @@ export default function DemoPage(): React.JSX.Element {
             `${listing.summary.participantCount} participants`,
             `${listing.summary.messageCount} messages`,
           ],
-          readOnlyHref: `/view/sequence/${listing.summary.id}`,
+          readOnlyHref: `/live/sequence/${listing.summary.id}`,
         },
   );
 
@@ -211,7 +216,7 @@ export default function DemoPage(): React.JSX.Element {
             `${listing.summary.edgeCount} arrows`,
             `${listing.summary.decisionCount} decisions`,
           ],
-          readOnlyHref: `/view/flowchart/${listing.summary.id}`,
+          readOnlyHref: `/live/flowchart/${listing.summary.id}`,
         },
   );
 
@@ -230,7 +235,7 @@ export default function DemoPage(): React.JSX.Element {
               ? "1 boundary"
               : `${listing.summary.boundaryCount} boundaries`,
           ],
-          readOnlyHref: `/view/usecase/${listing.summary.id}`,
+          readOnlyHref: `/live/usecase/${listing.summary.id}`,
         },
   );
 
@@ -249,7 +254,7 @@ export default function DemoPage(): React.JSX.Element {
               ? "1 relationship"
               : `${listing.summary.relationshipCount} relationships`,
           ],
-          readOnlyHref: `/view/er/${listing.summary.id}`,
+          readOnlyHref: `/live/er/${listing.summary.id}`,
         },
   );
 
@@ -268,7 +273,7 @@ export default function DemoPage(): React.JSX.Element {
                an example is a dictionary or a schema dump. */
             `${listing.summary.describedCount} described`,
           ],
-          readOnlyHref: `/view/dict/${listing.summary.id}`,
+          readOnlyHref: `/live/dict/${listing.summary.id}`,
         },
   );
 
@@ -327,9 +332,9 @@ export default function DemoPage(): React.JSX.Element {
         className="af-demo-row mt-3 max-w-2xl text-muted-foreground"
         style={{ "--row": 1 } as React.CSSProperties}
       >
-        Real documents of all four kinds, parsed by the same reader the app
-        uses. Click a row to open it in the playground, where its text is yours
-        to edit — or take the read-only page beside it, which is the one to send
+        Real documents of all six kinds, parsed by the same reader the app uses.
+        Click a row to open it in the playground, where its text is yours to
+        edit — or take the read-only page beside it, which is the one to send
         someone who only wants to look.
       </p>
 
@@ -596,7 +601,7 @@ function ExampleRowItem({
       <div className="group relative flex flex-col gap-1 rounded-md px-3 py-4 transition-colors hover:bg-secondary/40">
         <div className="flex items-baseline justify-between gap-4">
           <Link
-            href={`/view?${VIEW_EXAMPLE_PARAM}=${row.id}`}
+            href={`/live?${VIEW_EXAMPLE_PARAM}=${row.id}`}
             aria-label={`${row.title} — open in the playground`}
             className="rounded-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >

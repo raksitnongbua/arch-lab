@@ -56,18 +56,36 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeftRight,
+  ArrowUpDown,
+  Check,
+  Columns3,
   EyeOff,
   HelpCircle,
+  ListOrdered,
   MousePointerClick,
+  Pencil,
+  Plus,
   Scan,
   SquareMinus,
+  Trash2,
+  UserMinus,
+  UserPlus,
   Waves,
   X,
   ZoomIn,
   ZoomOut,
+  type LucideIcon,
 } from "lucide-react";
 
-import type { SequenceLabFile } from "@/types";
+import type {
+  SequenceItemPath,
+  SequenceLabFile,
+  SequenceMessageKind,
+  SequenceMessageRevision,
+  SequenceParticipantKind,
+  SequenceParticipantRevision,
+} from "@/types";
 import {
   readIdleMotion,
   useIdleMotion,
@@ -89,6 +107,26 @@ import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
+import { messagePathForStep } from "../lib/address";
+import {
+  armingCancelled,
+  armingPrompt,
+  ARMING_PROMPT_CLASS,
+} from "../lib/arming-prompt";
+import {
+  SEQUENCE_MOUSE_GESTURES,
+  SEQUENCE_MOUSE_GUIDE,
+  SEQUENCE_MOUSE_GUIDE_CAVEAT,
+  SEQUENCE_READ_ONLY_HINT,
+  type SequenceGuideIcon,
+} from "../lib/mouse-guide";
+import {
+  CANVAS_DRAG_THRESHOLD,
+  messageReorderRange,
+  messageReorderStepRange,
+  messageSlotForStep,
+  participantReorderRange,
+} from "../lib/reorder";
 import {
   collapseSequence,
   dependenciesOf,
@@ -96,8 +134,104 @@ import {
 } from "../lib/collapse";
 import { layoutSequence } from "../lib/layout";
 import { sequenceMarchState, sequenceMotionVars } from "../lib/motion";
-import type { SequenceFocus } from "./sequence-diagram";
+import type {
+  SequenceFocus,
+  SequenceLifelinePick,
+  SequenceReorder,
+} from "./sequence-diagram";
 import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
+
+/* -------------------------------------------------------------------------- */
+/* Editing                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a host must be able to do for this viewer to offer editing at all.
+ *
+ * ADDRESSES, NOT STEP NUMBERS, cross this boundary. A step is a layout ordinal
+ * over whatever is being DRAWN, which is the collapsed file while a lifeline is
+ * folded — so a step number does not name a line in the reader's document.
+ * `lib/address.ts` resolves the one into the other, on this side of the
+ * boundary, and the host receives something it can splice by.
+ *
+ * NOTHING HERE RETURNS ANYTHING. The viewer does not learn whether an edit
+ * landed; the host re-parses the patched text and hands back a new `file`, and
+ * this component re-renders from it. That is the same one-model rule the C4
+ * canvas follows — the text is the authority, not the gesture's intent.
+ */
+export interface SequenceEditHandlers {
+  onReviseMessage: (
+    path: SequenceItemPath,
+    revision: SequenceMessageRevision,
+  ) => void;
+  onReviseParticipant: (
+    participantId: string,
+    revision: SequenceParticipantRevision,
+  ) => void;
+  /** `after === null` appends to the end of the flow. */
+  onInsertMessage: (
+    after: SequenceItemPath | null,
+    from: string,
+    to: string,
+  ) => void;
+  /** Send an existing message between two other lifelines. */
+  onRepointMessage: (path: SequenceItemPath, from: string, to: string) => void;
+  /**
+   * Move a message EARLIER OR LATER, to `toIndex` among its own siblings.
+   *
+   * AN INDEX, NOT A DELTA, and not a step number. A delta would make the host
+   * re-derive where it landed, giving two answers to "which slot"; a step
+   * number is a depth-first ordinal over the whole tree and does not name a
+   * position in one branch. `messageSlotForStep` is the one conversion, and it
+   * lives beside the range the drag was offered so the two cannot disagree.
+   */
+  onReorderMessage: (path: SequenceItemPath, toIndex: number) => void;
+  onDeleteMessage: (path: SequenceItemPath) => void;
+  /** Move a lifeline's COLUMN, to `toIndex` in the declaration order. */
+  onReorderParticipant: (participantId: string, toIndex: number) => void;
+  onDeleteParticipant: (participantId: string) => void;
+  /** Appends a placeholder lifeline; the host picks its id and name. */
+  onInsertParticipant: () => void;
+  /**
+   * Turn step numbering on or off — the diagram's one drawing flag, and the
+   * only gesture here that is about the WHOLE document rather than an element
+   * in it. No argument: the host reads the current state off the text it owns
+   * and writes the other one, which keeps the "is it on" question with the
+   * document rather than with a control that could disagree with it.
+   */
+  onToggleAutonumber: () => void;
+  /*
+   * WHY NO `canDelete`, AND NO DISABLED STATE FOR THE REMOVE CONTROLS. Both
+   * deletes can be refused — a message carrying an activation flag, a lifeline
+   * messages still point at — and the refusal has a SENTENCE with a count in
+   * it. That sentence is the host's to say: it is the host that owns the
+   * document, the refusal predicates and the one live region, and asking this
+   * component to mirror the predicate so it could grey a button out would be a
+   * second authority on "is this deletable" free to disagree with the one that
+   * decides. So the control is always live, and pressing it either deletes or
+   * explains. That is the same verdict the C4 canvas reached for a node that
+   * owns a child diagram.
+   */
+}
+
+/**
+ * The armed two-click gesture, as the viewer holds it.
+ *
+ * A DISCRIMINATED UNION rather than one shape with an optional `path`, because
+ * the two purposes need different things to be true: an insert may legitimately
+ * have no anchor (it appends), while a repoint without an address is not a
+ * repoint. Making `path` optional would let the second case compile.
+ */
+type Arming =
+  | { purpose: "insert"; from: string | null }
+  | {
+      purpose: "repoint";
+      from: string | null;
+      /** The message being moved, captured when the gesture was armed. */
+      path: SequenceItemPath;
+      /** Its step at arm time — for the indicator's row and the wording. */
+      step: number;
+    };
 
 /* -------------------------------------------------------------------------- */
 /* The viewer                                                                   */
@@ -108,6 +242,7 @@ export function SequenceViewer({
   onAnnounce,
   extraTourSteps,
   tour: tourEnabled = true,
+  edit,
 }: {
   file: SequenceLabFile;
   /**
@@ -139,6 +274,21 @@ export function SequenceViewer({
    * it does not apply.
    */
   tour?: boolean;
+  /**
+   * Present only when this host can WRITE the document back — the playground
+   * with an `.alab` sequence document and the canvas lock off. Absent is the
+   * default and is what every read-only host gets, so a viewer embedded as
+   * evidence renders no editing chrome without being told not to.
+   *
+   * PRESENCE IS "EDITING IS ON RIGHT NOW", not "editing is possible here", and
+   * the two are different questions — PR #69 landed that distinction on
+   * `ViewerShell` after a locked diagram grew a button offering to edit it
+   * somewhere the reader already was. The CAPABILITY question is the host's:
+   * the playground answers it with `canvasEditability(doc, "revise")` and
+   * withholds this prop while the canvas is locked. Do not reconflate them by
+   * passing handlers plus a disabled flag.
+   */
+  edit?: SequenceEditHandlers;
 }): React.JSX.Element {
   /**
    * COLLAPSED PARTICIPANTS — the ones whose private dependencies are folded
@@ -291,10 +441,11 @@ export function SequenceViewer({
     () => [
       FOCUS_TOUR_STEP,
       ...(dependencyCount.size > 0 ? [FOLD_TOUR_STEP] : []),
+      ...(edit !== undefined ? [EDIT_TOUR_STEP] : []),
       ZOOM_TOUR_STEP,
       ...(extraTourSteps ?? []),
     ],
-    [dependencyCount, extraTourSteps],
+    [dependencyCount, extraTourSteps, edit],
   );
 
   const handleFocusMessage = useCallback(
@@ -465,14 +616,18 @@ export function SequenceViewer({
    *     pointer-down. In fit mode, and at a zoom small enough that the drawing
    *     fits anyway, a drag must do nothing rather than fake resistance.
    *   - A MOVED drag swallows its trailing click, so panning away from a
-   *     focused message does not also clear the focus. The 4px threshold is
-   *     what separates a sloppy click from a deliberate drag.
+   *     focused message does not also clear the focus. The threshold comes from
+   *     `CANVAS_DRAG_THRESHOLD` rather than a literal, because the reorder drag
+   *     in `sequence-diagram.tsx` has to draw the same line between a sloppy
+   *     click and a deliberate drag — see the constant for what two numbers
+   *     would cost.
    */
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
       // Interactive targets keep their own behaviour — see the limits above.
-      if ((event.target as Element).closest?.(".af-seq-hit") != null) return;
+      if ((event.target as Element).closest?.(".af-seq-chrome-hit") != null)
+        return;
       const pane = event.currentTarget;
       const scrollable =
         pane.scrollWidth > pane.clientWidth ||
@@ -501,7 +656,9 @@ export function SequenceViewer({
       if (state === null) return;
       const dx = event.clientX - state.x;
       const dy = event.clientY - state.y;
-      if (!state.moved && Math.abs(dx) + Math.abs(dy) > 4) state.moved = true;
+      if (!state.moved && Math.abs(dx) + Math.abs(dy) > CANVAS_DRAG_THRESHOLD) {
+        state.moved = true;
+      }
       const pane = event.currentTarget;
       // Inverted: the content follows the hand, so dragging left reveals what
       // is to the right — grabbing the canvas, not dragging a scrollbar.
@@ -774,7 +931,9 @@ export function SequenceViewer({
     } else if (raw.kind === "participant") {
       const name = nameById.get(raw.id) ?? raw.id;
       target =
-        [...pane.querySelectorAll(".af-seq-participant .af-seq-hit")].find(
+        [
+          ...pane.querySelectorAll(".af-seq-participant .af-seq-chrome-hit"),
+        ].find(
           (el) => el.getAttribute("aria-label") === `Focus participant ${name}`,
         ) ?? null;
     }
@@ -814,15 +973,52 @@ export function SequenceViewer({
    * Form fields are exempt: Escape inside the source textarea belongs to its
    * Tab-escape-hatch (see sequence-playground.tsx), not to diagram focus.
    */
+  /**
+   * The armed two-click gesture: `null` when disarmed, `from: null` while the
+   * sender click is owed, `from: id` while the receiver click is owed.
+   *
+   * A BUTTON THEN TWO CLICKS, not a drag. A drag from lifeline to lifeline was
+   * the obvious alternative and is unavailable: the canvas already owns
+   * primary-button drag for panning (four deliberate limits on it in
+   * `handlePointerDown`), so a second meaning for the same gesture would make
+   * both ambiguous. The modal arm is also the only shape that is reachable
+   * from the keyboard, since the lifeline targets become tab stops.
+   *
+   * TWO PURPOSES, ONE MACHINE. `"repoint"` carries the ADDRESS of the message
+   * being moved, captured when the gesture was armed rather than re-read from
+   * `focus` when the second click lands. Focus is not frozen while the picker
+   * is up — the reader can click bare canvas, which clears it — so a repoint
+   * that re-read it would find `null` and silently do nothing, having taken two
+   * deliberate clicks. Capturing the address at arm time means the gesture
+   * finishes what the reader started or is refused with a reason, never
+   * quietly abandoned.
+   */
+  const [arming, setArming] = useState<Arming | null>(null);
+
+  const disarm = useCallback(
+    (announcement: string | null) => {
+      setArming(null);
+      if (announcement !== null) onAnnounce(announcement);
+    },
+    [onAnnounce],
+  );
+
   const focusRef = useRef<SequenceFocus>(null);
   const clearFocusRef = useRef(handleClearFocus);
+  /* ARMING IS A NEW RUNG, above clearing focus. Escape means "back out of the
+     thing I am in the middle of", and while the insert gesture is armed that
+     thing is the gesture, not the selection — cancelling both at once would
+     lose the step the insert was anchored to along with the mode. */
+  const disarmRef = useRef<(() => void) | null>(null);
   // The "latest ref" update lives in an effect (not in render — the
   // react-hooks/refs rule forbids that), which is still always ahead of any
   // keydown: effects flush before the user can press another key.
   useEffect(() => {
     focusRef.current = focus;
     clearFocusRef.current = handleClearFocus;
-  }, [focus, handleClearFocus]);
+    disarmRef.current =
+      arming === null ? null : () => disarm(armingCancelled(arming.purpose));
+  }, [focus, handleClearFocus, arming, disarm]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -836,6 +1032,11 @@ export function SequenceViewer({
       ) {
         return;
       }
+      if (disarmRef.current !== null) {
+        event.preventDefault();
+        disarmRef.current();
+        return;
+      }
       if (focusRef.current === null) return; // nothing to clear — rung 3 may act
       event.preventDefault();
       clearFocusRef.current();
@@ -843,6 +1044,160 @@ export function SequenceViewer({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  /* ---- editing ------------------------------------------------------------- */
+
+  /**
+   * The MODEL ADDRESS of the focused message, or `null` when it has none.
+   *
+   * `null` is a real state and the dock renders it as a refusal rather than
+   * hiding the form: a fold can leave a drawn message whose object the
+   * unfiltered tree no longer holds (see `lib/address.ts`), and a reader who
+   * clicked an arrow and got no editor with no explanation would reasonably
+   * conclude editing is broken.
+   */
+  const focusedMessagePath = useMemo(
+    () =>
+      focus?.kind === "message"
+        ? messagePathForStep(file, shown, focus.step)
+        : null,
+    [file, shown, focus],
+  );
+
+  /**
+   * WHAT THIS CANVAS WILL LET A DRAG MOVE, or `null` for "nothing".
+   *
+   * TWO GATES, and the second is the interesting one.
+   *
+   *   - `edit === undefined` is a read-only or locked canvas; the same gate
+   *     every other gesture here rides.
+   *   - `shown !== file` is A FOLD IN EFFECT, and reordering must refuse then.
+   *     `collapseSequence` renumbers 1..n over the VISIBLE subset, so step 4 of
+   *     a folded view and step 4 of the file are different messages, and the
+   *     COLUMN indices diverge outright — a hidden lifeline is simply not in
+   *     `shown.participants`, so column 2 on screen is column 3 in the
+   *     document. `messagePathForStep` rescues a message address by object
+   *     identity, but there is no equivalent rescue for a column index, and one
+   *     rule for both axes beats two. So the affordance disappears entirely
+   *     rather than being offered and refused — which is the same verdict
+   *     `focusedMessagePath` reaches for the edit form, said with a control
+   *     rather than a sentence.
+   *
+   *     `shown === file` is the exact predicate rather than a count of hidden
+   *     participants, because `collapseSequence` returns its ARGUMENT
+   *     UNCHANGED when nothing is folded — the identity IS the fold state, and
+   *     a second reading of it could disagree.
+   */
+  const reorder = useMemo<SequenceReorder | null>(() => {
+    if (edit === undefined || shown !== file) return null;
+    return {
+      messageRange: (step) => {
+        const path = messagePathForStep(file, shown, step);
+        if (path === null) return null;
+        const range = messageReorderStepRange(file, path);
+        return range === null ? null : { min: range.min, max: range.max };
+      },
+      participantRange: (id) => {
+        const range = participantReorderRange(file, id);
+        return range === null ? null : { min: range.min, max: range.max };
+      },
+      onDropMessage: (step, toStep) => {
+        const path = messagePathForStep(file, shown, step);
+        if (path === null) return;
+        /* THE ONE CONVERSION from a drawn row to a slot in the model, and it
+           lives beside the range the drag was offered so a drop can only ever
+           name a slot that range contained. */
+        const slot = messageSlotForStep(file, path, toStep);
+        if (slot === null) return;
+        edit.onReorderMessage(path, slot);
+      },
+      onDropParticipant: (id, toIndex) => {
+        edit.onReorderParticipant(id, toIndex);
+      },
+    };
+  }, [edit, file, shown]);
+
+  /**
+   * `⌥` + an arrow, on whatever is focused: up/down moves a MESSAGE in time,
+   * left/right moves a LIFELINE'S COLUMN. One slot per press.
+   *
+   * ONE SLOT AND NOT A JUMP, because that is what makes this the precise route.
+   * A drag is aimed and lands wherever the pointer is nearest; a press is
+   * counted. Both go through the same handler with a target INDEX, so there is
+   * one operation with two ways in rather than two implementations.
+   *
+   * AT THE END OF THE RUN IT SAYS SO. Pressing up on the first legal slot could
+   * do nothing silently, and a key that silently does nothing is
+   * indistinguishable from a key that is not wired up — which is the exact
+   * report this canvas has already had twice. The sentence names the boundary
+   * the reader has reached, and `messageReorderRange` is where "legal slot" is
+   * defined, so it cannot disagree with what the drag offers.
+   *
+   * A FOLD REFUSES HERE, with the fold's own sentence, because `reorder` is
+   * `null` then and the viewer is the side that knows why. Every OTHER refusal
+   * — a note in the way, a `box` boundary, an activation flag — belongs to the
+   * host, which owns the document and already speaks them for the delete and
+   * the repoint. One authority per kind of refusal.
+   */
+  const handleReorderKey = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const axis =
+        event.key === "ArrowUp" || event.key === "ArrowDown"
+          ? "message"
+          : event.key === "ArrowLeft" || event.key === "ArrowRight"
+            ? "participant"
+            : null;
+      if (axis === null || edit === undefined) return;
+      const delta =
+        event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
+
+      if (axis === "message") {
+        if (focus?.kind !== "message") return;
+        event.preventDefault();
+        if (reorder === null) {
+          onAnnounce(FOLDED_REORDER_REFUSAL);
+          return;
+        }
+        const path = messagePathForStep(file, shown, focus.step);
+        const range = path === null ? null : messageReorderRange(file, path);
+        if (path === null || range === null) {
+          onAnnounce(
+            "This step cannot be moved — its place in the file is ambiguous, or it carries an activation flag. The details panel says which.",
+          );
+          return;
+        }
+        const target = range.at + delta;
+        if (target < range.min || target > range.max) {
+          onAnnounce(
+            delta < 0
+              ? "This step is already as early as it can go — a note, a fragment or an activation flag is above it."
+              : "This step is already as late as it can go — a note, a fragment or an activation flag is below it.",
+          );
+          return;
+        }
+        edit.onReorderMessage(path, target);
+        return;
+      }
+
+      if (focus?.kind !== "participant") return;
+      event.preventDefault();
+      if (reorder === null) {
+        onAnnounce(FOLDED_REORDER_REFUSAL);
+        return;
+      }
+      const range = participantReorderRange(file, focus.id);
+      if (range === null) return;
+      const target = range.at + delta;
+      if (target < range.min || target > range.max) {
+        onAnnounce(
+          "This lifeline is already at the edge of its box — a box brackets a run of neighbouring lifelines, so moving it further is an edit for the source text.",
+        );
+        return;
+      }
+      edit.onReorderParticipant(focus.id, target);
+    },
+    [edit, file, focus, onAnnounce, reorder, shown],
+  );
 
   /**
    * Arrows walk focus through the messages in model order — the keyboard
@@ -855,6 +1210,22 @@ export function SequenceViewer({
    */
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      /* ALT + ARROWS REORDER, and it is checked before the plain arrows for the
+         obvious reason: the modifier changes what the key MEANS, so a switch
+         that fell through to "walk focus" would move the selection instead of
+         the step and the reader would never learn the gesture exists.
+         Alt (⌥ on a Mac) rather than the platform mod key, deliberately:
+         Cmd/Ctrl + Z is already the canvas undo, and Cmd + arrow is a
+         line/document jump the OS and the browser both claim.
+
+         THE PRECISE ROUTE, and the one the drag is derived FROM rather than an
+         afterthought to it: one press is one slot, so a reader who knows
+         exactly where a step belongs never has to aim. `check:sequence` asserts
+         a drag of three rows is byte-identical to three presses. */
+      if (event.altKey) {
+        handleReorderKey(event);
+        return;
+      }
       if (layout.stepCount === 0) return;
       const current = focus?.kind === "message" ? focus.step : 0;
       switch (event.key) {
@@ -872,8 +1243,237 @@ export function SequenceViewer({
           break;
       }
     },
-    [focus, layout.stepCount, handleFocusMessage],
+    [focus, layout.stepCount, handleFocusMessage, handleReorderKey],
   );
+
+  /**
+   * Which element the dock is currently EDITING rather than describing.
+   *
+   * Keyed by the target rather than a bare boolean so moving focus to another
+   * message closes the form instead of pointing it at something new: an open
+   * form holds the reader's half-typed text, and silently re-aiming it would
+   * commit that text to a message they were not looking at.
+   */
+  const [editing, setEditing] = useState<
+    | { kind: "message"; step: number }
+    | { kind: "participant"; id: string }
+    | null
+  >(null);
+  const editingMessage =
+    editing?.kind === "message" &&
+    focus?.kind === "message" &&
+    focus.step === editing.step;
+  const editingParticipant =
+    editing?.kind === "participant" &&
+    focus?.kind === "participant" &&
+    focus.id === editing.id;
+
+  /* THE ANNOUNCEMENT AND THE ON-SCREEN PROMPT ARE ONE SENTENCE, from
+     `armingPrompt`. Writing it here as well as in the render is what left a
+     mouse user with no instruction at all for a release — the module's header
+     carries the whole story. The handlers cannot read the rendered value
+     (`arming` is set in the same tick), so both call the same function. */
+  const handleArmInsert = useCallback(() => {
+    setArming({ purpose: "insert", from: null });
+    onAnnounce(
+      armingPrompt({
+        purpose: "insert",
+        step: focus?.kind === "message" ? focus.step : null,
+        fromName: null,
+      }),
+    );
+  }, [focus, onAnnounce]);
+
+  /**
+   * Arm the picker to MOVE the focused message's endpoints.
+   *
+   * Closes the edit form as it arms, deliberately. The two cannot both be the
+   * reader's attention: the form's fields describe the message's wording and
+   * the picker is about to change something the form does not show, so leaving
+   * the form open would invite an Apply that submits stale wording over the
+   * repointed line. Reopening it afterwards is one press of the pencil.
+   */
+  const handleArmRepoint = useCallback(() => {
+    if (focus?.kind !== "message" || focusedMessagePath === null) return;
+    setEditing(null);
+    setArming({
+      purpose: "repoint",
+      from: null,
+      path: focusedMessagePath,
+      step: focus.step,
+    });
+    onAnnounce(
+      armingPrompt({
+        purpose: "repoint",
+        step: focus.step,
+        fromName: null,
+      }),
+    );
+  }, [focus, focusedMessagePath, onAnnounce]);
+
+  /**
+   * Change one endpoint from the FORM, without arming anything.
+   *
+   * THE DISCOVERABLE HALF of the same gesture, and the reason it exists is that
+   * the other half was not discoverable at all: the two-click picker is the
+   * better gesture once you know it, and a mouse user had no way to find out it
+   * was there. Two menus in the panel the reader already has open need no mode,
+   * no prompt and no second click.
+   *
+   * IT ACTS IMMEDIATELY rather than on Apply, and that is not a shortcut — it
+   * is what keeps "one text change per gesture" true. Apply submits the
+   * message's WORDING through `onReviseMessage`; if endpoints rode along, one
+   * press would be two patches, and the second would be computed against a
+   * document the first had already replaced. Firing here leaves Apply meaning
+   * exactly what it meant before, and the form is not remounted by a repoint
+   * (its `key` is the step, which endpoints do not change), so half-typed text
+   * in the fields survives.
+   *
+   * The selects show `message.from` / `message.to` and hold no state of their
+   * own, so a refusal simply leaves them reading the document — the host says
+   * why in the live region, as it does for the picker.
+   */
+  const handleRepointFromForm = useCallback(
+    (from: string, to: string) => {
+      if (edit === undefined || focusedMessagePath === null) return;
+      edit.onRepointMessage(focusedMessagePath, from, to);
+    },
+    [edit, focusedMessagePath],
+  );
+
+  /**
+   * One lifeline click, for either purpose. The first supplies the sender, the
+   * second the receiver and fires the edit — a SELF-message when they are the
+   * same lifeline, which is a legal and useful thing to draw, so it is not
+   * refused for either gesture.
+   *
+   * For an INSERT the new message is FOCUSED and opened for editing, at the
+   * step it will occupy once the host's re-parse arrives (`after + 1`, or the
+   * end). Focus is validated at read time against the new layout, so pointing
+   * at a step that does not exist yet costs nothing if the edit is refused — it
+   * reads as no focus rather than as a wrong selection.
+   */
+  const handlePickEnd = useCallback(
+    (participantId: string) => {
+      if (edit === undefined || arming === null) return;
+      if (arming.from === null) {
+        setArming({ ...arming, from: participantId });
+        onAnnounce(
+          armingPrompt({
+            purpose: arming.purpose,
+            step: arming.purpose === "repoint" ? arming.step : null,
+            fromName: nameById.get(participantId) ?? participantId,
+          }),
+        );
+        return;
+      }
+      /* REPOINT COMPLETES HERE and returns: it has its own address from arm
+         time, so none of the focus reasoning below applies to it. The message
+         it moves keeps its step number — endpoints do not reorder anything —
+         so the focus and the open dock stay pointed at the same step, and the
+         reader watches the arrow move under a panel that is still describing
+         it. */
+      if (arming.purpose === "repoint") {
+        const { path, from } = arming;
+        setArming(null);
+        edit.onRepointMessage(path, from, participantId);
+        return;
+      }
+      /* A MESSAGE FOCUS WITH NO ADDRESS IS REFUSED, not quietly appended.
+         `null` means both "nothing is focused" and "the focused step has no
+         resolvable address" (a fold; see `focusedMessagePath`), and passing it
+         through would put the message at the END of the flow while the reader
+         watched an indicator drawn beside the step they had selected. */
+      if (focus?.kind === "message" && focusedMessagePath === null) {
+        setArming(null);
+        onAnnounce(
+          "The message was not inserted — the focused step's place in the file is ambiguous while lifelines are folded. Press “Show all”, then try again.",
+        );
+        return;
+      }
+      const after = focusedMessagePath;
+      const nextStep =
+        focus?.kind === "message" ? focus.step + 1 : layout.stepCount + 1;
+      setArming(null);
+      edit.onInsertMessage(after, arming.from, participantId);
+      setRawFocus((prev) => ({
+        focus: { kind: "message", step: nextStep },
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
+      setEditing({ kind: "message", step: nextStep });
+    },
+    [
+      arming,
+      edit,
+      focus,
+      focusedMessagePath,
+      layout.stepCount,
+      nameById,
+      onAnnounce,
+    ],
+  );
+
+  /**
+   * Y of the indicator, and the two purposes want different rows.
+   *
+   * An INSERT points at the midpoint of the gap the new row will open — the
+   * space between two existing steps, because that is where the message goes. A
+   * REPOINT points at the row of the message being moved, because nothing new
+   * opens: the arrow the reader is about to redirect is already drawn there, and
+   * a rule in the gap below it would say the wrong thing.
+   *
+   * Both read out of `layout.yByStep` rather than recomputing anything, so the
+   * line the reader sees and the row the edit is about are one answer.
+   */
+  const indicatorY =
+    arming?.purpose === "repoint"
+      ? (layout.yByStep[arming.step - 1] ?? layout.lifelineTop)
+      : focus?.kind === "message"
+        ? ((layout.yByStep[focus.step - 1] ?? layout.lifelineTop) +
+            (layout.yByStep[focus.step] ?? layout.lifelineBottom)) /
+          2
+        : ((layout.yByStep[layout.stepCount - 1] ?? layout.lifelineTop) +
+            layout.lifelineBottom) /
+          2;
+
+  const lifelinePick: SequenceLifelinePick | null =
+    arming === null
+      ? null
+      : {
+          purpose: arming.purpose,
+          from: arming.from,
+          atY: indicatorY,
+          onPick: handlePickEnd,
+        };
+
+  /**
+   * The armed gesture's instruction, ON SCREEN. Non-null exactly when something
+   * is armed, so the render needs no second condition.
+   *
+   * For an insert the step comes from `focus`, which is where the anchor comes
+   * from too — the reader can clear focus mid-gesture and the prompt follows,
+   * which is honest: the message really would go to the end of the flow.
+   */
+  const armingPromptText =
+    arming === null
+      ? null
+      : armingPrompt({
+          purpose: arming.purpose,
+          step:
+            arming.purpose === "repoint"
+              ? arming.step
+              : focus?.kind === "message"
+                ? focus.step
+                : null,
+          fromName:
+            arming.from === null
+              ? null
+              : (nameById.get(arming.from) ?? arming.from),
+        });
+
+  /** Whether the file numbers its steps — read once, used by the canvas and by
+   * the control that writes it, so the glyph and the drawing cannot disagree. */
+  const numbered = shown.autonumber === true;
 
   /* ---- render -------------------------------------------------------------- */
 
@@ -1093,7 +1693,7 @@ export function SequenceViewer({
             <SequenceDiagram
               layout={layout}
               title={shown.metadata.title}
-              autonumber={shown.autonumber === true}
+              autonumber={numbered}
               focus={focus}
               focusNonce={rawFocus?.nonce ?? 0}
               zoom={zoom}
@@ -1103,9 +1703,45 @@ export function SequenceViewer({
               collapsed={collapsed}
               dependencyCount={dependencyCount}
               onToggleCollapse={handleToggleCollapse}
+              pick={lifelinePick}
+              reorder={reorder}
             />
           </div>
         </div>
+
+        {/* ---- the armed gesture's prompt, ON SCREEN ----
+            THE BUG THIS FIXES: pressing “Repoint on the canvas” closed the edit
+            form, drew a dashed rule, and said what to do next only into the
+            playground's `sr-only` live region. A mouse user saw a panel vanish
+            and concluded the feature was broken — which is what was reported.
+            The announcement stays; this is an addition, and both come from
+            `armingPrompt` so they cannot drift into saying different things.
+
+            TOP CENTRE, over the canvas, not in the pill that armed it: the
+            reader's next action is a click on a lifeline HEADER, and those run
+            along the top of the drawing. Absolutely positioned so it cannot
+            reflow the pane — in fit mode a bar that took layout height would
+            re-fit and rescale the whole diagram the instant a gesture armed.
+            `pointer-events-none` because it sits over the very lifelines it is
+            telling the reader to click.
+
+            NO ANIMATION, deliberately: appearing is a state change, and
+            `check:sequence-motion` keeps entrance motion to one rule on the
+            drawing root. It is also outside the `<svg>` the exporter clones, so
+            it cannot reach an SVG, PNG or GIF frame; it carries the chrome
+            class anyway — see `ARMING_PROMPT_CLASS`. */}
+        {armingPromptText === null ? null : (
+          <p
+            className={cn(
+              "pointer-events-none absolute top-3 left-1/2 z-20 max-w-[min(32rem,90%)]",
+              "-translate-x-1/2 rounded-full border border-primary/50 bg-card/95 px-3 py-1.5",
+              "text-center text-xs font-medium text-foreground shadow-lg backdrop-blur-sm",
+              ARMING_PROMPT_CLASS,
+            )}
+          >
+            {armingPromptText}
+          </p>
+        )}
 
         {/* ---- zoom controls (bottom-left, the C4 viewer's pill pattern) ----
             The hand-rolled fitView/zoomTo: FIT is the default and the reset
@@ -1199,6 +1835,99 @@ export function SequenceViewer({
               entirely when the host opted out — a button that teaches this
               view's controls has no business on a page that embeds the view
               as a preview of something else. */}
+          {/* ---- insert a message ----
+              In the view-level strip beside zoom and idle motion, because that
+              is where controls that change the whole view already live, and
+              because the arming state it enters is view-level too.
+
+              Rendered only when the host passed handlers — i.e. editing is on
+              right now. Not disabled-when-locked: a permanently dead control
+              is a promise the page cannot keep, and the lock's own affordance
+              already says why editing is off. */}
+          {edit === undefined ? null : (
+            <button
+              type="button"
+              onClick={
+                arming === null
+                  ? handleArmInsert
+                  : () => disarm(armingCancelled(arming.purpose))
+              }
+              aria-pressed={arming !== null}
+              aria-label={
+                arming === null
+                  ? "Insert a message"
+                  : "Cancel inserting a message"
+              }
+              title={
+                arming === null
+                  ? focus?.kind === "message"
+                    ? `Insert a message after step ${focus.step}`
+                    : "Insert a message at the end of the flow"
+                  : arming.from === null
+                    ? "Click the sending lifeline — Escape cancels"
+                    : "Click the receiving lifeline — Escape cancels"
+              }
+              className={`${ZOOM_BUTTON_CLASSES} aria-pressed:text-primary`}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+            </button>
+          )}
+          {/* ---- add a lifeline ----
+              BESIDE the insert-message control, in the same strip, on the same
+              "editing is on right now" condition — the two are the canvas's
+              only CREATE gestures and a reader looking for one will look where
+              the other is.
+
+              NO ARMING, unlike its neighbour, and the asymmetry is the honest
+              one: an inserted message needs two lifelines named before it can
+              exist, while a lifeline needs nothing but a place, and its place
+              is decided (the end of the order — and once it is there, its
+              column is dragged or Alt-arrowed into position, so this control
+              has nothing to ask about placement either). Arming a gesture that
+              has nothing to ask would be a modal state with one legal
+              answer. */}
+          {edit === undefined ? null : (
+            <button
+              type="button"
+              onClick={edit.onInsertParticipant}
+              aria-label="Add a lifeline"
+              title="Add a lifeline at the end of the flow"
+              className={ZOOM_BUTTON_CLASSES}
+            >
+              <UserPlus aria-hidden="true" className="size-4" />
+            </button>
+          )}
+          {/* ---- number the steps ----
+              THE FLAG HAD NO CONTROL AT ALL. `autonumber` has been in the
+              format, the serializer and the renderer since 1.0.0, and the only
+              way to reach it was to type the word into the source pane — which
+              a reader who came to the canvas to read a diagram has no reason to
+              know about. It was asked for as a missing feature; it was a missing
+              button.
+
+              IN THIS STRIP because it is the one editing gesture that changes
+              how the WHOLE diagram is drawn rather than what one element says,
+              which is exactly what the toggles above it do (icon style, idle
+              motion). A pressed state rather than two glyphs, matching the
+              idle-motion toggle beside it.
+
+              Gated on `edit` like its neighbours: it writes a line into the
+              document, so on a locked or read-only canvas it is not a control
+              that should be disabled — it is one that has nothing to write. */}
+          {edit === undefined ? null : (
+            <button
+              type="button"
+              onClick={edit.onToggleAutonumber}
+              aria-pressed={numbered}
+              aria-label={
+                numbered ? "Turn off step numbers" : "Number every step"
+              }
+              title={numbered ? "Step numbers: on" : "Step numbers: off"}
+              className={`${ZOOM_BUTTON_CLASSES} aria-pressed:text-foreground`}
+            >
+              <ListOrdered aria-hidden="true" className="size-4" />
+            </button>
+          )}
           {tourEnabled ? (
             <button
               type="button"
@@ -1266,6 +1995,44 @@ export function SequenceViewer({
                     ? "Participant details"
                     : "Fragment details"}
               </h2>
+              {/* ---- the edit toggle ----
+                  IN THE DOCK, not on the canvas. The dock is already the one
+                  place that shows every field a message has, including the
+                  `desc` that is deliberately not drawn on the wire — so it is
+                  the only surface where "edit this" can mean "edit all of it".
+                  A pencil on the arrow itself would have to open something,
+                  and that something is this panel.
+
+                  Absent for a fragment focus: a fragment's own wording is its
+                  guard labels and its kind, which are branch-level lines this
+                  gesture does not address (see `SequenceSpans` — fragments
+                  carry no line span). Offering a disabled pencil there would
+                  advertise an editor that does not exist. */}
+              {edit !== undefined &&
+              !editingMessage &&
+              !editingParticipant &&
+              (focusedMessage !== null || focusedParticipant !== null) ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditing(
+                      focusedMessage !== null && focus?.kind === "message"
+                        ? { kind: "message", step: focus.step }
+                        : focusedParticipant !== null
+                          ? { kind: "participant", id: focusedParticipant.id }
+                          : null,
+                    )
+                  }
+                  aria-label={
+                    focusedMessage !== null
+                      ? "Edit this message"
+                      : "Edit this participant"
+                  }
+                  className="ml-auto rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <Pencil aria-hidden="true" className="size-4" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={handleCloseDock}
@@ -1277,7 +2044,38 @@ export function SequenceViewer({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-              {focusedMessage !== null ? (
+              {focusedMessage !== null && editingMessage ? (
+                focusedMessagePath === null ? (
+                  /* The one case the form cannot serve, stated rather than
+                     hidden — see `focusedMessagePath`. */
+                  <p className="text-sm text-muted-foreground">
+                    This message cannot be edited while lifelines are folded:
+                    its place in the file is ambiguous. Press “Show all”, then
+                    try again.
+                  </p>
+                ) : (
+                  <MessageForm
+                    key={`msg-form-${focusedMessage.step}`}
+                    message={focusedMessage}
+                    /* THE DRAWN participants, not the parsed ones, and the
+                       same set the two-click picker can reach: a folded-away
+                       lifeline has no column to point at, so offering it in a
+                       menu would let the reader send an arrow somewhere they
+                       cannot see it arrive. One rule for both halves of the
+                       gesture. */
+                    participants={shown.participants}
+                    onRepoint={handleArmRepoint}
+                    onRepointTo={handleRepointFromForm}
+                    onCancel={() => setEditing(null)}
+                    onSubmit={(revision) => {
+                      setEditing(null);
+                      edit?.onReviseMessage(focusedMessagePath, revision);
+                    }}
+                  />
+                )
+              ) : null}
+
+              {focusedMessage !== null && !editingMessage ? (
                 <dl className="flex flex-col gap-2.5">
                   <DockRow
                     term="Message"
@@ -1334,7 +2132,42 @@ export function SequenceViewer({
                 </dl>
               ) : null}
 
-              {focusedParticipant !== null ? (
+              {/* ---- remove this message ----
+                  BELOW the facts, not beside the pencil in the header. The
+                  header already holds Close, and a destructive control one
+                  misclick from "put this panel away" is a trap; down here it is
+                  the last thing in the panel and reads as the end of the list
+                  of things you can do to a message.
+
+                  Gated on the message having an ADDRESS. A drawn message whose
+                  object the unfiltered tree no longer holds (a fold; see
+                  `focusedMessagePath`) has nothing to delete BY, and the same
+                  fold already replaces the edit form with the sentence
+                  explaining it — so the reader is told why, once, rather than
+                  offered a second control that would refuse. */}
+              {edit !== undefined &&
+              focusedMessage !== null &&
+              !editingMessage &&
+              focusedMessagePath !== null ? (
+                <DockRemoveButton
+                  label="Remove this message"
+                  onRemove={() => edit.onDeleteMessage(focusedMessagePath)}
+                />
+              ) : null}
+
+              {focusedParticipant !== null && editingParticipant ? (
+                <ParticipantForm
+                  key={`p-form-${focusedParticipant.id}`}
+                  participant={focusedParticipant}
+                  onCancel={() => setEditing(null)}
+                  onSubmit={(revision) => {
+                    setEditing(null);
+                    edit?.onReviseParticipant(focusedParticipant.id, revision);
+                  }}
+                />
+              ) : null}
+
+              {focusedParticipant !== null && !editingParticipant ? (
                 <>
                   <dl className="flex flex-col gap-2.5">
                     <DockRow
@@ -1366,6 +2199,17 @@ export function SequenceViewer({
                     nameById={nameById}
                     onFocusMessage={handleFocusMessage}
                   />
+                  {/* Directly under the message list, which is the panel's own
+                      answer to why a removal may be refused: the count in that
+                      heading is the same count the refusal will quote back. */}
+                  {edit !== undefined ? (
+                    <DockRemoveButton
+                      label="Remove this lifeline"
+                      onRemove={() =>
+                        edit.onDeleteParticipant(focusedParticipant.id)
+                      }
+                    />
+                  ) : null}
                 </>
               ) : null}
 
@@ -1435,6 +2279,97 @@ export function SequenceViewer({
         ) : null}
       </p>
 
+      {/* ---- the editing affordances ----
+          A SECOND ROW, only while editing is on, and the reason it is a row of
+          its own rather than more clauses on the one above: the bar above is
+          about READING the diagram and applies to every reader, while this is
+          the list of things a reader can CHANGE, which most hosts of this
+          viewer cannot offer at all.
+
+          IT USED TO BE A PARAGRAPH, and it was reported as too much to read —
+          one sentence naming eight gestures plus a caveat, a paragraph doing a
+          toolbar's job. What a reader scanning it actually wants is the GLYPH,
+          because the glyph is what they have to find on screen; the sentence is
+          what they want once they are lost. So the glyph leads, two or three
+          words name the effect, and the full mouse path is the item's
+          accessible name and its hover text. Nothing was cut: the same
+          sentences, assembled by the same module, are read out in full by the
+          tour card, which is the surface a reader opens to be TAUGHT rather
+          than reminded.
+
+          NOT BUTTONS, deliberately. Half of these gestures need something
+          focused before they mean anything, and a chip that armed the insert or
+          opened the pencil would be a SECOND control for a gesture that already
+          has one — a second authority on arming, free to disagree with the
+          pill. These are a legend: they show the glyph the real control
+          carries, and `check:canvas-edit` pins each name to the table below so
+          the legend cannot show a glyph the canvas does not.
+
+          The entries come from `lib/mouse-guide.ts`, which derives them from
+          `SequenceEditHandlers` — so a gesture added to the canvas cannot ship
+          without an entry, an icon and a name. Twice on this branch a correct,
+          shipped gesture was reported as broken because no surface named it. */}
+      {/* ---- THE LEGEND'S HEIGHT IS FIXED, and that is the whole point ----
+
+          The drawing is PANE-FITTED: `fit` scales by
+          `min(paneW/vbW, paneH/vbH)`, so anything that changes this strip's
+          height re-fits the entire diagram at a different scale. The dock is an
+          overlay for exactly that reason, and its comment names the failure —
+          "precisely the reflow-jump the overlay was chosen to avoid". This
+          strip was a layout sibling and reintroduced it twice over:
+
+            - `flex-wrap` let the row count follow the pane width, so the
+              caveat's `basis-full` took a second row at some widths and not
+              others. Resizing the window rescaled the drawing.
+            - It rendered only while editing was ON, so once the canvas started
+              LOCKED by default, pressing Edit both revealed the legend and
+              quietly shrank the diagram — the reader's first act on the canvas
+              resized it.
+
+          So: one row that never wraps, scrolling sideways when the glyphs do
+          not fit, and PRESENT WHETHER OR NOT EDITING IS ON. `h-7` is stated
+          rather than left to the content because a fixed height is the property
+          being defended; `check:sequence-layout` pins all three.
+
+          A read-only canvas gets the one sentence that is true of it instead of
+          a legend of gestures it does not offer — same row, same height, so the
+          toggle changes what the strip SAYS and never what it occupies. */}
+      <div className="hidden h-7 shrink-0 items-center gap-x-3 overflow-x-auto border-t border-border bg-card px-4 text-xs whitespace-nowrap text-muted-foreground sm:flex">
+        {edit === undefined ? (
+          <span>{SEQUENCE_READ_ONLY_HINT}</span>
+        ) : (
+          <>
+            {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
+              const Glyph = GUIDE_GLYPH[gesture.icon];
+              return (
+                <span
+                  key={gesture.handler}
+                  /* The full path on hover for a mouse user, and as the item's
+                     accessible name for everyone else — the long half is
+                     demoted, never dropped. */
+                  title={gesture.mouse}
+                  className="inline-flex shrink-0 items-center gap-1"
+                >
+                  <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
+                  <span>{gesture.label}</span>
+                  <span className="sr-only">— {gesture.mouse}</span>
+                </span>
+              );
+            })}
+            {/* THE CAVEAT STAYS, and stays last — it is the only entry about
+                what dragging does NOT do, so it has no glyph to lead with, and
+                it is what a reader arriving from a drawing tool needs before
+                their first drag. It rides the same scroll rather than taking a
+                row of its own, which is what used to make the strip two lines
+                tall at some widths; the tour card still reads it out in full to
+                a reader who opens it to be taught. */}
+            <span className="shrink-0 text-muted-foreground/80">
+              {SEQUENCE_MOUSE_GUIDE_CAVEAT}
+            </span>
+          </>
+        )}
+      </div>
+
       {/* Text alternative: the whole story as an ordered list, for readers
           the SVG serves poorly — with playback gone this is the only LINEAR
           reading of the diagram. Kept in sync for free — it reads the same
@@ -1474,6 +2409,48 @@ const ZOOM_MAX = 4;
  * Versioned so a rewritten tour can re-show itself: bump `v1` and every
  * browser that dismissed the old one sees the new one once.
  */
+/**
+ * The guide's icon names, resolved to the glyphs the real controls carry.
+ *
+ * A TOTAL `Record<SequenceGuideIcon, LucideIcon>`, which is the load-bearing
+ * half: a new gesture in `mouse-guide.ts` needing a glyph this table does not
+ * have is a MISSING PROPERTY here — a type error before it is a failing check.
+ * The names live there rather than the components because that module is loaded
+ * by `check:canvas-edit` through Node's type stripping, which cannot have a
+ * React package on its path.
+ *
+ * EVERY GLYPH IS ONE THE CANVAS ALREADY RENDERS on the control it describes
+ * (`Plus` on the insert button, `ListOrdered` on the numbering toggle,
+ * `Trash2` in the dock's remove row, and so on). A legend showing a glyph the
+ * screen does not carry is worse than no legend — it is a control the reader
+ * will hunt for and never find.
+ */
+const GUIDE_GLYPH: Record<SequenceGuideIcon, LucideIcon> = {
+  pencil: Pencil,
+  "arrow-left-right": ArrowLeftRight,
+  "arrow-up-down": ArrowUpDown,
+  columns: Columns3,
+  trash: Trash2,
+  "user-minus": UserMinus,
+  plus: Plus,
+  "user-plus": UserPlus,
+  "list-ordered": ListOrdered,
+};
+
+/**
+ * Why a reorder is unavailable while a lifeline is folded, in one sentence with
+ * the fix in it.
+ *
+ * A CONSTANT because both keyboard routes say it and both must say the SAME
+ * thing — a message reorder and a column reorder are refused by the identical
+ * condition (`shown !== file`), so two wordings would be two accounts of one
+ * fact. It ends with the control that clears the fold, for the same reason the
+ * insert's fold refusal does: "Show all" is the next thing to press, and a
+ * refusal that does not say so is a dead end.
+ */
+const FOLDED_REORDER_REFUSAL =
+  "Nothing can be reordered while lifelines are folded — the rows and columns on screen are renumbered over what is visible, so a move would land somewhere else in the file. Press “Show all”, then try again.";
+
 const SEQUENCE_TOUR_KEY = "arch-lab:tour:sequence:v1";
 
 /*
@@ -1493,6 +2470,32 @@ const FOCUS_TOUR_STEP: TourStep = {
     "order. Escape, or a click on empty canvas, clears the focus.",
   icon: MousePointerClick,
 };
+/* Offered only when the host passed edit handlers, on the same condition the
+   fold step rides: a tour step naming a control that is not on screen sends the
+   reader hunting for it. */
+/* THE BODY IS DERIVED, not written here, and that is the point: it is the same
+   `lib/mouse-guide.ts` list the hint bar under the canvas renders. Two hand-kept
+   copies of "how to edit this" is how the endpoint gesture came to be mentioned
+   in one place, in the past tense of a control that had moved, while a reader
+   hunted for it — and how the numbering flag was mentioned in neither. */
+/**
+ * THE LONG PROSE'S HOME, now that the strip under the canvas leads with glyphs
+ * instead. The tour is where a reader goes to be taught, so it gets every
+ * sentence in full; the strip is where they go to be reminded, so it gets the
+ * icon. Both read `lib/mouse-guide.ts` — writing either one by hand is how the
+ * tour came to describe the endpoint gesture in words the panel no longer used.
+ */
+const EDIT_TOUR_STEP: TourStep = {
+  title: "Edit the flow on the canvas",
+  body:
+    `With a mouse alone: ${SEQUENCE_MOUSE_GUIDE}. ` +
+    `${SEQUENCE_MOUSE_GUIDE_CAVEAT} Hold Alt with the arrow keys to move the ` +
+    "focused step or lifeline one slot at a time, which is the precise route. " +
+    "Every change is written into the source " +
+    "text beside the diagram, one line at a time, and Cmd or Ctrl + Z undoes it.",
+  icon: Pencil,
+};
+
 const FOLD_TOUR_STEP: TourStep = {
   title: "Fold a card's helpers",
   body:
@@ -1563,6 +2566,372 @@ function DockCodeRow({
         />
       </dd>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The dock's edit forms                                                       */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * TWO FORMS, NOT ONE GENERIC ONE. They share three of their four fields, and
+ * merging them was tried on paper and rejected: the shared part is the
+ * PRESENTATION (a label, an input, the same classes), which is what
+ * `DockField` below carries, while the differences are the fields' meanings —
+ * a message has a `kind` with three values and a title drawn on the wire, a
+ * participant has a `kind` with three STATES including "unstated" and a
+ * display name. A generic form would take a schema describing all of that,
+ * which is more code than both forms and harder to read than either.
+ *
+ * THEY ARE PLAIN <form> ELEMENTS so Enter submits and the browser's own focus
+ * order applies. The dock is deliberately not a modal (see the file header),
+ * so nothing traps focus here either: Tab leaves the form and reaches the
+ * diagram, which is the click-around-while-reading behaviour the dock exists
+ * for.
+ *
+ * EMPTY MEANS ABSENT. A cleared technology or detail field submits
+ * `undefined`, not `""` — `.alab` can spell an empty string, and a document
+ * carrying `[""]` or `desc ""` would render a blank field the reader cannot
+ * tell from a missing one. The one exception is the message LABEL, which the
+ * model requires: an empty label submits as the empty string it already
+ * permits, and the arrow simply draws without one.
+ */
+
+/** Blank string -> `undefined`, so clearing a field removes it. */
+function orAbsent(value: string): string | undefined {
+  return value.trim() === "" ? undefined : value;
+}
+
+const FIELD_CLASSES =
+  "mt-1 w-full rounded-md border border-border bg-card px-2 py-1 text-sm " +
+  "text-foreground focus-visible:ring-2 focus-visible:ring-ring " +
+  "focus-visible:outline-none";
+
+/** One labelled control. The <label> WRAPS its control rather than using
+ * `htmlFor`: the dock renders several of these and an id would have to be
+ * unique per focused element, which is a name to keep in step for nothing. */
+function DockField({
+  term,
+  children,
+}: {
+  term: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-muted-foreground">{term}</span>
+      {children}
+    </label>
+  );
+}
+
+/**
+ * The dock's one destructive control.
+ *
+ * NO CONFIRMATION DIALOG, deliberately, and undo is the reason: every canvas
+ * edit lands on the playground's 50-deep ring, so Cmd/Ctrl + Z with the diagram
+ * focused puts a deleted element back — text, wording, continuation lines and
+ * all. A confirm step would tax every deletion to protect against one, and the
+ * page already says so in the announcement it makes. This is the same trade the
+ * C4 canvas's Delete key takes.
+ *
+ * IT MAY ALSO REFUSE. Both removals can be declined with a reason (an
+ * activation flag, a lifeline still referred to), and the host says that reason
+ * in the live region rather than this button greying itself out —
+ * `SequenceEditHandlers` argues why the predicate stays on one side.
+ */
+function DockRemoveButton({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <button
+        type="button"
+        onClick={onRemove}
+        className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <Trash2 aria-hidden="true" className="size-3.5" />
+        {label}
+      </button>
+    </div>
+  );
+}
+
+/** Apply / Cancel, in that order — the primary action nearest the fields. */
+function DockFormActions({
+  onCancel,
+}: {
+  onCancel: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <button
+        type="submit"
+        className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <Check aria-hidden="true" className="size-3.5" />
+        Apply
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The message editor. `key`ed on the step by its caller, so focusing a
+ * different message REMOUNTS it — which is how the fields start from the new
+ * message's values rather than from an effect that syncs them (the same
+ * no-setState-in-an-effect rule this file's header states).
+ */
+function MessageForm({
+  message,
+  participants,
+  onRepoint,
+  onRepointTo,
+  onSubmit,
+  onCancel,
+}: {
+  message: LaidMessage;
+  /** The lifelines an endpoint may name — the drawn ones; the caller says why. */
+  participants: readonly { id: string; name: string }[];
+  onRepoint: () => void;
+  /** Both endpoints, whole, for whichever menu the reader just changed. */
+  onRepointTo: (from: string, to: string) => void;
+  onSubmit: (revision: SequenceMessageRevision) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [label, setLabel] = useState(message.label);
+  const [kind, setKind] = useState<SequenceMessageKind>(message.kind);
+  const [technology, setTechnology] = useState(message.technology ?? "");
+  const [description, setDescription] = useState(message.description ?? "");
+
+  /* The label takes focus on mount rather than through `autoFocus`, which
+     jsx-a11y flags and which cannot be scoped to "this remount". It also
+     completes the insert gesture: press +, click, click, type. */
+  const labelRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    labelRef.current?.select();
+  }, []);
+
+  return (
+    <form
+      className="flex flex-col gap-2.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({
+          label,
+          kind,
+          technology: orAbsent(technology),
+          description: orAbsent(description),
+        });
+      }}
+    >
+      <DockField term="Label">
+        <input
+          ref={labelRef}
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      {/* ---- the endpoints ----
+          TWO MENUS AND A CANVAS GESTURE, and it took both to make this
+          reachable. The row used to STATE the endpoints and offer only
+          “Repoint on the canvas”, on the reasoning that an endpoint is pointed
+          at rather than typed — a typo in a hand-spelled participant id is a
+          document the parser refuses. That reasoning was right about typing and
+          wrong about the conclusion: a MENU cannot be mistyped, it lists the
+          document's own lifelines by display name, and the two-click picker it
+          replaced as the first thing a reader finds was invisible to anyone who
+          could not hear the live region. "I cannot change from and to" is what
+          that cost.
+
+          So the menus are the discoverable route and the canvas picker stays
+          for the reader who now knows it is there — it is the better gesture at
+          the far end of a long flow, where the lifeline is easier to point at
+          than to find in a list.
+
+          THE MENUS FIRE ON CHANGE, not on Apply; `handleRepointFromForm` is
+          where that is argued. They are `DockField`s because a select IS this
+          form's input in the ordinary sense, unlike the button below them,
+          which leaves the form (see `handleArmRepoint`) so a stale Apply cannot
+          land on top of the repointed line. */}
+      <div className="rounded-md border border-border bg-secondary/40 px-2 py-1.5">
+        <span className="block text-xs font-medium text-muted-foreground">
+          Endpoints
+        </span>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <DockField term="From">
+            <select
+              value={message.from}
+              onChange={(event) => onRepointTo(event.target.value, message.to)}
+              className={FIELD_CLASSES}
+            >
+              {participants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.name}
+                </option>
+              ))}
+            </select>
+          </DockField>
+          <DockField term="To">
+            <select
+              value={message.to}
+              onChange={(event) =>
+                onRepointTo(message.from, event.target.value)
+              }
+              className={FIELD_CLASSES}
+            >
+              {participants.map((participant) => (
+                <option key={participant.id} value={participant.id}>
+                  {participant.name}
+                </option>
+              ))}
+            </select>
+          </DockField>
+        </div>
+        <button
+          type="button"
+          onClick={onRepoint}
+          className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <ArrowLeftRight aria-hidden="true" className="size-3.5" />
+          Repoint on the canvas
+        </button>
+      </div>
+      <DockField term="Kind">
+        <select
+          value={kind}
+          onChange={(event) =>
+            setKind(event.target.value as SequenceMessageKind)
+          }
+          className={FIELD_CLASSES}
+        >
+          <option value="sync">sync — a call the sender waits on</option>
+          <option value="async">async — fire and forget</option>
+          <option value="reply">reply — a return</option>
+        </select>
+      </DockField>
+      <DockField term="Technology">
+        <input
+          value={technology}
+          onChange={(event) => setTechnology(event.target.value)}
+          placeholder="HTTPS, gRPC — blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      {/* A TEXTAREA, because this field is the one that may hold newlines and
+          viewers must honour them (`SequenceMessage.description`). A single
+          input would silently make multi-line detail unenterable in the only
+          place it is editable. */}
+      <DockField term="Details">
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={4}
+          placeholder="Endpoint, payload, failure modes — blank to remove"
+          className={`${FIELD_CLASSES} font-mono text-xs`}
+        />
+      </DockField>
+      <DockFormActions onCancel={onCancel} />
+    </form>
+  );
+}
+
+/** The participant editor. Remounted per participant for the same reason. */
+function ParticipantForm({
+  participant,
+  onSubmit,
+  onCancel,
+}: {
+  participant: {
+    name: string;
+    kind?: SequenceParticipantKind;
+    technology?: string;
+    description?: string;
+  };
+  onSubmit: (revision: SequenceParticipantRevision) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [name, setName] = useState(participant.name);
+  /* THREE STATES, not two. Absent, `participant` and `actor` are distinct and
+     all three round-trip (`SequenceParticipantKind`), so the select carries an
+     explicit "unstated" option rather than defaulting the empty case to
+     `participant` — which would rewrite a document that never said either. */
+  const [kind, setKind] = useState<SequenceParticipantKind | "">(
+    participant.kind ?? "",
+  );
+  const [technology, setTechnology] = useState(participant.technology ?? "");
+  const [description, setDescription] = useState(participant.description ?? "");
+
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    nameRef.current?.select();
+  }, []);
+
+  return (
+    <form
+      className="flex flex-col gap-2.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({
+          name,
+          kind: kind === "" ? undefined : kind,
+          technology: orAbsent(technology),
+          description: orAbsent(description),
+        });
+      }}
+    >
+      <DockField term="Name">
+        <input
+          ref={nameRef}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      <DockField term="Kind">
+        <select
+          value={kind}
+          onChange={(event) =>
+            setKind(event.target.value as SequenceParticipantKind | "")
+          }
+          className={FIELD_CLASSES}
+        >
+          <option value="">unstated — drawn as a box</option>
+          <option value="participant">participant — a box</option>
+          <option value="actor">actor — a stick figure</option>
+        </select>
+      </DockField>
+      <DockField term="Technology">
+        <input
+          value={technology}
+          onChange={(event) => setTechnology(event.target.value)}
+          placeholder="Next.js, PostgreSQL 16 — blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      <DockField term="Description">
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={3}
+          placeholder="Blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      <DockFormActions onCancel={onCancel} />
+    </form>
   );
 }
 

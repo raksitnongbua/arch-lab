@@ -5,7 +5,7 @@
  * THE HAZARD IS THE ONE `lib/source-text.ts` ALREADY EXISTS FOR. Its own header
  * records that four modules had each privately written `split("\n")` before
  * `sourceLineAt` was extracted. Line NUMBERING then repeated the mistake
- * immediately: `/view`'s editable gutter and `/syntax`'s read-only one each
+ * immediately: `/live`'s editable gutter and `/syntax`'s read-only one each
  * carried their own copy of "drop the trailing newline, then count", and the
  * copies had already diverged — the read-only one had lost the floor of 1, so an
  * empty snippet drew no number at all. Meanwhile `/validate`, the one page whose
@@ -59,7 +59,7 @@ const GUTTERS = [
 /** Every pane a reader types a whole document into. */
 const DOCUMENT_PANES = [
   {
-    label: "/view",
+    label: "/live",
     file: "src/features/playground/components/view-playground.tsx",
   },
   {
@@ -138,7 +138,7 @@ check("every pane a document is typed into is numbered", () => {
       `${label} takes a whole document but has no line-number gutter — a parse ` +
         `error's "line 12" is unusable against rows nobody can count`,
     );
-    /* A bare `Textarea` here is how `/validate` came to differ from `/view` in
+    /* A bare `Textarea` here is how `/validate` came to differ from `/live` in
        the first place: the shared component was added, two surfaces adopted it,
        and the third kept the plain control it already had. */
     assert.ok(

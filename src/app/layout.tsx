@@ -31,12 +31,14 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-/* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and four document
+/* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and six document
    kinds will not fit in them. So it names the two categories people search by
    name ("C4 diagram tool", "sequence diagram as text") and then a general
-   phrase that covers all four, rather than truncating a list of four mid-way.
-   The full set is named in APP_DESCRIPTION, in the page copy and in the
-   structured data, where there is room for it.
+   phrase that covers the rest, rather than truncating a list of six mid-way.
+   The full set is named in the home page's notation cards, in the JSON-LD
+   `featureList` derived from them, and in `/llms.txt`, where there is room for
+   it — NOT in `APP_DESCRIPTION`, which used to carry it and gave the
+   enumeration up to stay inside its own budget (see the note there).
 
    IT ALSO HAS TO SELL, which the previous wording did not. "C4, sequence and
    flowchart editor" was three of four kinds and a category noun — a true
@@ -169,7 +171,7 @@ export default function RootLayout({
             for what they were sent.
 
             IT LIVES HERE, in the root layout, and that is the whole point. It
-            used to sit inside `/view/page.tsx`, where React 19 logged
+            used to sit inside `/live/page.tsx`, where React 19 logged
             "Encountered a script tag while rendering React component" on every
             client navigation to the route: a client render inserts the tag
             without executing it, so the warning was correct and the script was
@@ -192,7 +194,7 @@ export default function RootLayout({
             rendering React component" for ANY script element it renders on the
             client, and the root layout does get re-rendered client-side — a
             Fast Refresh in dev is enough, and the warning fired on
-            `/view/sequence` with no share link in sight. The warning is also
+            `/live/sequence` with no share link in sight. The warning is also
             correct: a client-rendered script tag is inserted and never
             executed, so on that path the tag was pure noise.
             `strategy="beforeInteractive"` is the sanctioned way to say what

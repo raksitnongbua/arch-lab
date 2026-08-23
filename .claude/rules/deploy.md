@@ -44,10 +44,18 @@ Set in the Vercel project, never in the repo:
 ## What a deploy must not break
 
 - **Existing share links.** `check:share-capacity` proves every URL a link was
-  ever minted against still opens. Sequence links are minted against `/view/seq`
-  specifically, because the short path leaves more characters for the payload.
+  ever minted against still opens. **Every minting site mints bare `/live`** —
+  the sequence, flowchart and use-case Share wrappers and the MCP
+  `create_share_link` — and `check:share-capacity` asserts each one does, plus
+  that none of them mints an alias. The short paths (`/live/seq`, `/live/flow`,
+  `/live/uc`, …) are a **legacy compatibility surface**, not a minting target:
+  minting against a trampoline would put a client-side bounce on the most
+  common arrival and preview it with whatever card the alias happens to carry.
   Do not rename these routes casually.
-- **Routes that are load-bearing for SEO.** `/view/c4` exists as its own route
-  so old `#m=…` links, the sitemap and the OG image keep working.
+- **Routes that are load-bearing for SEO.** The whole `/view/*` family exists
+  as forwarding trampolines so old `#m=…` links and the OG image keep working
+  after the rename to `/live`. They are deliberately **absent from the
+  sitemap** and `noindex` with a canonical on `/live` — `check:seo` fails if a
+  route that canonicals elsewhere appears in the sitemap.
 - `/api/mcp` is stateless, unauthenticated and read-only. Keep it that way, or
   the serverless deployment stops being correct.

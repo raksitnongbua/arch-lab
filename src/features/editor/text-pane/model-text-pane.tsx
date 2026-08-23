@@ -32,7 +32,7 @@
  *
  * The `.archlab.json` view is read-only: it is the same model through the
  * editor's file serializer, offered for copying and diffing, not as a second
- * editable surface (that pane exists at `/view`).
+ * editable surface (that pane exists at `/live`).
  */
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";

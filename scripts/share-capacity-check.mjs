@@ -10,17 +10,24 @@
  *      else is holding. Frozen fragments minted with the real codec (one
  *      legacy-style C4, one long-route sequence, and a flowchart and a
  *      use-case diagram each frozen the day its playground shipped) must
- *      decode to their exact original text
- *      forever, and the long `/view/sequence` route must keep existing even
- *      though new links mint against `/view/seq`.
+ *      decode to their exact original text forever, and every route any link
+ *      was ever minted against must keep existing — including the whole
+ *      `/view/*` family, which is what this route family was CALLED before it
+ *      was renamed `/live`.
  *
- *   2. **The short route is real, agreed on, and round-trips.** `/view/seq`
- *      exists to spend 5 fewer characters on the route so the payload gets
- *      them (the whole URL competes against `MAX_SHARE_URL_LENGTH`). Both
- *      minting sites — the sequence Share button wrapper and the MCP
- *      `create_share_link` — must mint the SAME short route (two sites that
- *      can drift, will), the forward page must exist and carry the fragment,
- *      and a link minted there must decode back to the document verbatim.
+ *   2. **New links mint the REAL page, and it is bare `/live`.** This header
+ *      said the opposite for a release — that links mint `/live/seq` because
+ *      the short path leaves more characters for the payload — while the
+ *      assertions 250 lines below required bare `/live` and forbade minting
+ *      any alias. A check whose documentation contradicts its assertions is
+ *      worse than an undocumented one, so: **`/live` is shorter than every
+ *      seeded path and is the real page**, a share link carries its own
+ *      document and the reader detects the kind, so no minted URL needs a kind
+ *      in it at all. Every minting site — the sequence, flowchart and use-case
+ *      Share wrappers and the MCP `create_share_link` — must mint that same
+ *      bare route (sites that can drift, will), must mint no alias, each alias
+ *      must still exist and carry the fragment, and a minted link must decode
+ *      back to the document verbatim.
  *
  *   3. **At the limit, the answer is the `.alab` file — offered, not just
  *      named.** Every refusal path (the shared Share panel's too-long and
@@ -102,10 +109,10 @@ const readSource = (relative) =>
  * to — found by walking `src/app` for a `page.tsx` rendering `AliasForward`.
  *
  * DERIVED, because this file listed its aliases by hand in three places and
- * the lists were already incomplete: `/view/er` and `/view/dict` had shipped
+ * the lists were already incomplete: `/live/er` and `/live/dict` had shipped
  * without being added, so no assertion here proved a link minted against
  * either still opened. The retirement of `/editor` is the case that settles
- * the argument — it is not under `src/app/view`, so a fourth hand-written list
+ * the argument — it is not under `src/app/live`, so a fourth hand-written list
  * would have been needed, and `EditModeLink` minted `/editor#m=…` for every
  * "Edit this diagram" click. A hardcoded list cannot notice a route it has
  * never heard of; the filesystem can. Same predicate `check:seo` uses.
@@ -135,6 +142,29 @@ function aliasRoutes() {
 }
 
 const ALIASES = aliasRoutes();
+
+/**
+ * The paths this route family answered on before it was renamed `/live`, and
+ * therefore the paths links exist against. FROZEN LITERALS, for the same
+ * reason the fragments below are: the tree can tell you what routes exist
+ * TODAY, and nothing in it can tell you what a URL in someone's bookmark bar
+ * says. A derivation from `src/app/live` would also demand a legacy twin for
+ * every route added AFTER the rename, which no link can possibly name.
+ *
+ * `/view` was the whole product's playground for the entire life of the share
+ * link before the rename, so this is the single largest set of live URLs in
+ * the wild the repo has ever had to keep working.
+ */
+const LEGACY_VIEW_ROUTES = [
+  "/view",
+  "/view/c4",
+  "/view/seq",
+  "/view/sequence",
+  "/view/flow",
+  "/view/uc",
+  "/view/er",
+  "/view/dict",
+];
 
 let failures = 0;
 let assertions = 0;
@@ -268,16 +298,57 @@ await check(
 await check(
   "the long routes old links point at still exist as pages",
   async () => {
-    // `/view/sequence` is where pre-alias sequence links land, and `/view`
-    // is where pre-chooser C4 links land — removing either page orphans a
-    // generation of links no matter how healthy the codec is.
-    assert.ok(existsSync(path.join(ROOT, "src/app/view/sequence/page.tsx")));
-    assert.ok(existsSync(path.join(ROOT, "src/app/view/page.tsx")));
+    // The two long-lived paths, under whichever name they answer on: the
+    // `/…/sequence` route is where pre-alias sequence links land and the bare
+    // playground is where pre-chooser C4 links land, so removing either page
+    // orphans a generation of links no matter how healthy the codec is. Their
+    // `/view` twins are asserted separately below — this pair is about the
+    // pages themselves still being pages.
+    assert.ok(existsSync(path.join(ROOT, "src/app/live/sequence/page.tsx")));
+    assert.ok(existsSync(path.join(ROOT, "src/app/live/page.tsx")));
+  },
+);
+
+await check(
+  "every path from before the /live rename still forwards, with its payload",
+  async () => {
+    /* THE RENAME IS THE LARGEST ROUTE CHANGE THIS REPO HAS MADE, because the
+       path it renamed is the one every share link was minted against. A 308
+       could not do it: the document lives in the fragment, the fragment never
+       reaches the server, and the redirect would deliver `/live` a bare URL —
+       so each old path is a client trampoline, and this is the assertion that
+       it exists and carries the payload. Walked with the SHIPPED destination
+       and the real `normalizeShareFragment`, never a description of them. */
+    const payload = FROZEN_C4_FRAGMENT;
+    const byRoute = new Map(ALIASES.map((alias) => [alias.route, alias]));
+    for (const route of LEGACY_VIEW_ROUTES) {
+      const alias = byRoute.get(route);
+      assert.ok(
+        alias !== undefined,
+        `${route} no longer forwards anywhere — every link minted against it is now a 404`,
+      );
+      assert.ok(alias.to, `${route} must name a destination`);
+      assert.ok(
+        alias.to.startsWith("/live"),
+        `${route} must land on the renamed playground, got ${alias.to}`,
+      );
+      /* ONE HOP. Forwarding `/view/seq` to `/live/seq` would bounce a reader
+         through a second trampoline; it must go where `/live/seq` goes. */
+      assert.ok(
+        !byRoute.has(alias.to.split("?")[0]),
+        `${route} forwards to ${alias.to}, which is itself a trampoline — one hop, not two`,
+      );
+      const body = normalizeShareFragment(`#${payload}`);
+      const landed = `${alias.to}${body === "" ? "" : `#${body}`}`;
+      const decoded = await decodeShareFragment(`#${landed.split("#")[1]}`);
+      assert.equal(decoded.status, "ok", `${route} payload failed to decode`);
+      assert.equal(decoded.aftText, FROZEN_C4_TEXT);
+    }
   },
 );
 
 /* ----------------------------------------------------------------------- */
-/* 2. The short route is real, agreed on, and round-trips                   */
+/* 2. New links mint the real page, and it is bare `/live`                   */
 /* ----------------------------------------------------------------------- */
 
 await check(
@@ -289,31 +360,31 @@ await check(
     );
     const ucWrapper = readSource("src/features/usecase/share/share-button.tsx");
     const mcp = readSource("src/features/mcp/tools/share.ts");
-    /* Bare `/view`. The seeded paths were three routes mounting one
+    /* Bare `/live`. The seeded paths were three routes mounting one
        component; the seed is `?d=` now and a share link needs none of it,
        because it carries the document and the reader detects the kind.
        Minting sites that can drift, will, so they are asserted together. */
     assert.ok(
-      wrapper.includes('SHARE_ROUTE = "/view"'),
-      "the sequence Share wrapper must mint bare /view",
+      wrapper.includes('SHARE_ROUTE = "/live"'),
+      "the sequence Share wrapper must mint bare /live",
     );
-    /* The flowchart wrapper must NOT mint `/view/flow`: that route is an
+    /* The flowchart wrapper must NOT mint `/live/flow`: that route is an
        AliasForward trampoline, and minting against a trampoline is the exact
        mistake the "REAL page" check below records — a client-side bounce on
        the most common arrival, previewing with whatever card the alias has. */
     assert.ok(
-      flowWrapper.includes('SHARE_ROUTE = "/view"'),
-      "the flowchart Share wrapper must mint bare /view",
+      flowWrapper.includes('SHARE_ROUTE = "/live"'),
+      "the flowchart Share wrapper must mint bare /live",
     );
-    /* `/view/uc` is an AliasForward trampoline like `/view/flow` — minting
+    /* `/live/uc` is an AliasForward trampoline like `/live/flow` — minting
        against it would put a client-side bounce on every use-case link. */
     assert.ok(
-      ucWrapper.includes('SHARE_ROUTE = "/view"'),
-      "the use-case Share wrapper must mint bare /view",
+      ucWrapper.includes('SHARE_ROUTE = "/live"'),
+      "the use-case Share wrapper must mint bare /live",
     );
     assert.ok(
-      mcp.includes("/view#${fragment}"),
-      "create_share_link must mint bare /view",
+      mcp.includes("/live#${fragment}"),
+      "create_share_link must mint bare /live",
     );
     /* Derived from the aliases on disk: minting against a TRAMPOLINE spends
        characters on a route that only forwards, and the payload competes for
@@ -328,10 +399,65 @@ await check(
 );
 
 await check(
+  "no shipped code names a /view path except the trampolines themselves",
+  () => {
+    /* THE OLD NAME SURVIVING IN A FILE NOBODY OPENED is the failure this
+       exists for, and it is the shape that has gone wrong repeatedly here: a
+       route was renamed, most callers followed, and one `href` or one minting
+       constant kept pointing at the previous path. A stale LINK is not a 404
+       — it lands on a trampoline and bounces — so nothing reports it, and the
+       reader pays a redirect on every click forever.
+       WALKED, never listed: a hand-written set of files to inspect cannot
+       notice the surface it has never heard of (`codebase.md` habit 4).
+       Scoped to `src`, which is what ships. `.claude/rules/*` and `README.md`
+       are DISCUSSION and must stay free to name the old paths — explaining
+       why the trampolines exist requires writing them down, and forbidding
+       that would delete the reason.
+       Comments stripped for the same reason and in the same way as
+       `og-cards-check.mjs` and `seo-check.mjs`: a comment recording that this
+       family used to be called `/view` is the institutional memory, not a
+       defect. What is left is the strings, hrefs and JSX a reader meets. */
+    const files = [];
+    const walk = (relative) => {
+      for (const entry of readdirSync(path.join(ROOT, relative))) {
+        const child = path.join(relative, entry);
+        if (statSync(path.join(ROOT, child)).isDirectory()) {
+          walk(child);
+          continue;
+        }
+        if (/\.tsx?$/.test(entry)) files.push(child);
+      }
+    };
+    walk("src");
+    assert.ok(
+      files.length > 200,
+      `only ${files.length} files walked — a broken walk passes this forever`,
+    );
+    const offenders = [];
+    for (const file of files) {
+      // The trampolines are the one place a `/view` path belongs.
+      if (file.startsWith(path.join("src", "app", "view"))) continue;
+      const code = readSource(file)
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/^\s*\/\/.*$/gm, " ");
+      /* `(?![\w-])` so `/viewer`, `/view-playground` and `/viewBox` are not
+         hits: this is about the ROUTE, and the feature directory that shares
+         its first four letters is not going anywhere. */
+      if (/\/view(?![\w-])/.test(code)) offenders.push(file);
+    }
+    assert.equal(
+      offenders.length,
+      0,
+      `these point at the retired route family instead of /live: ${offenders.join(", ")}`,
+    );
+  },
+);
+
+await check(
   "every route a link was ever minted against still delivers its payload",
   async () => {
     /* The payload format is one compatibility surface and the ROUTES are the
-       other. Merging the seeded playgrounds into `/view` made three of them
+       other. Merging the seeded playgrounds into `/live` made three of them
        forwarding aliases, so this walks the hop each old link now takes —
        using the shipped `to` and the real `normalizeShareFragment`, not a
        description of them — and asserts the fragment arrives intact.
@@ -341,12 +467,18 @@ await check(
        that. Both must open forever. */
     /* EVERY alias on disk, not the five that used to be typed here. Each one
        joins this compatibility surface the day it ships, and the two that
-       shipped without being added (`/view/er`, `/view/dict`) are exactly why
+       shipped without being added (`/live/er`, `/live/dict`) are exactly why
        the list is now read rather than written. `/editor` is in it too: it was
        the minting target for every "Edit this diagram" click. */
     const payload = FROZEN_SEQ_FRAGMENT;
+    /* THE NUMBER IS A FLOOR ON A BROKEN WALK, not an inventory: a walk that
+       returns nothing passes every assertion in this loop and reads exactly
+       like a clean tree. It doubled at the `/view` → `/live` rename, because
+       each seeded path now answers under BOTH names — 8 legacy `/view` paths,
+       the 7 seeded `/live` aliases, and `/editor` = 16. Raise it when a
+       genuinely new alias ships; never lower it to make a deletion pass. */
     assert.ok(
-      ALIASES.length >= 7,
+      ALIASES.length >= 16,
       `expected the known aliases and more, found ${ALIASES.length} — a broken walk makes this vacuous`,
     );
     for (const { route, to } of ALIASES) {
@@ -355,7 +487,7 @@ await check(
       const body = normalizeShareFragment(`#${payload}`);
       const landed = `${to}${body === "" ? "" : `#${body}`}`;
       assert.ok(
-        landed.startsWith("/view"),
+        landed.startsWith("/live"),
         `${route} must land on the playground, got ${landed}`,
       );
       assert.ok(
@@ -373,18 +505,18 @@ await check(
 await check("the minted route is the REAL page, not a trampoline", async () => {
   /* The lesson this encodes survived the merge intact, only the route
      changed: whatever links are minted against must be the REAL page and must
-     own a social card. It was learned when `/view/seq` was briefly a forward,
+     own a social card. It was learned when `/live/seq` was briefly a forward,
      which put a bounce on the most common way anyone arrives from outside and
-     left those links previewing with the wrong card. `/view` is that route
+     left those links previewing with the wrong card. `/live` is that route
      now; the seeded paths forward to it for links minted before the merge,
      and keep their own cards so those links keep their previews. */
-  const view = readSource("src/app/view/page.tsx");
+  const view = readSource("src/app/live/page.tsx");
   assert.ok(
     view.includes("<ViewPlayground"),
-    "src/app/view/page.tsx must mount the playground",
+    "src/app/live/page.tsx must mount the playground",
   );
   assert.ok(
-    existsSync(path.join(ROOT, "src/app/view/opengraph-image.tsx")),
+    existsSync(path.join(ROOT, "src/app/live/opengraph-image.tsx")),
     "the route share links carry must own a social card",
   );
   /* Derived: every alias found on disk forwards. Listing four names proved
@@ -404,7 +536,7 @@ await check(
     /* A bundled model registered as "seq", "flow" or "uc" would build fine
        and silently shadow the static alias route — the build-time throw in
        [modelId]/page.tsx only fires if the name is in this set. */
-    const modelPage = readSource("src/app/view/[modelId]/page.tsx");
+    const modelPage = readSource("src/app/live/[modelId]/page.tsx");
     assert.match(modelPage, /RESERVED_MODEL_IDS = new Set\(\[[^\]]*"seq"/);
     assert.match(modelPage, /RESERVED_MODEL_IDS = new Set\(\[[^\]]*"flow"/);
     assert.match(modelPage, /RESERVED_MODEL_IDS = new Set\(\[[^\]]*"uc"/);
@@ -423,22 +555,22 @@ await check("a minted link round-trips the document", async () => {
     .split("\n")
     .find((line) => line.startsWith("http"));
   assert.ok(url !== undefined, "no URL in the tool's answer");
-  assert.match(url, /\/view#m=AF1\./);
+  assert.match(url, /\/live#m=AF1\./);
   const decoded = await decodeShareFragment(new URL(url).hash);
   assert.equal(decoded.status, "ok");
   assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
 });
 
 await check("merging the playground shortened every minted URL", async () => {
-  /* `/view/seq` existed to spend 5 fewer characters than `/view/sequence`
+  /* `/live/seq` existed to spend 5 fewer characters than `/live/sequence`
        so the payload got them. Merging the routes goes further: a link needs
-       no seed at all, so the route is `/view` — 4 shorter again, and 9
+       no seed at all, so the route is `/live` — 4 shorter again, and 9
        shorter than the long route links used to be minted against. Framed as
        route length so the check still says WHY if someone reintroduces a
        seeded path for share links. */
-  assert.ok("/view".length < "/view/seq".length);
-  assert.equal("/view/seq".length - "/view".length, 4);
-  assert.equal("/view/sequence".length - "/view".length, 9);
+  assert.ok("/live".length < "/live/seq".length);
+  assert.equal("/live/seq".length - "/live".length, 4);
+  assert.equal("/live/sequence".length - "/live".length, 9);
 });
 
 /* ----------------------------------------------------------------------- */
@@ -568,9 +700,9 @@ await check("a fragment repeated five times still decodes", async () => {
 });
 
 await check(
-  "every /view* payload opens by READING it, on the route it landed on",
+  "every /live* payload opens by READING it, on the route it landed on",
   () => {
-    /* A sequence fragment on `/view` used to be handed to the C4 playground,
+    /* A sequence fragment on `/live` used to be handed to the C4 playground,
        which refused a valid document for being the wrong kind; a chooser then
        decoded and sniffed the fragment to forward it. The merged playground
        deleted the forwarding entirely — every route mounts the ONE component,
@@ -584,7 +716,7 @@ await check(
     /* ONE route mounts it now. The aliases forward instead, so the thing to
        assert about them is that they carry the fragment across — which
        `check:seo` and the trampoline assertion above both cover. */
-    for (const route of ["src/app/view/page.tsx"]) {
+    for (const route of ["src/app/live/page.tsx"]) {
       assert.ok(
         readSource(route).includes("<ViewPlayground"),
         `${route} must mount the merged playground`,
@@ -626,6 +758,45 @@ await check(
     );
   },
 );
+
+/* ----------------------------------------------------------------------- */
+/* The trampoline carries BOTH halves of the address                        */
+/* ----------------------------------------------------------------------- */
+
+/* A trampoline that forwards the fragment and drops the query is a half-kept
+   promise, and it shipped that way. `/view?e=atlas-shop` landed on `/live`
+   with the example id gone — and `?e=` is how every demo card and every
+   crawlable example page addresses a document, so the reader arrived at the
+   seed instead of the diagram they asked for. The fragment was carried because
+   the SHARE payload lives there; the query is the other half of the same
+   compatibility surface.
+
+   Asserted on the SOURCE because the merge runs in a browser: `router.replace`
+   and `window.location` have no harness here. So this pins the two things that
+   were actually wrong — that the incoming query is read at all, and that it is
+   MERGED rather than appended (five of six destinations carry their own `?d=`,
+   and `?d=seq?e=x` makes `d` read as `seq?e=x`, matching no kind). */
+await check("the trampoline reads the incoming query at all", () => {
+  const forward = readSource("src/components/share/alias-forward.tsx");
+  assert.ok(
+    /searchParams/.test(forward),
+    "dropping the query loses every ?e= and ?d= link ever shared",
+  );
+});
+await check("the trampoline MERGES the query rather than appending it", () => {
+  const forward = readSource("src/components/share/alias-forward.tsx");
+  assert.ok(
+    /searchParams\.has\(/.test(forward),
+    "?d=seq?e=x makes d read as seq?e=x, which matches no kind",
+  );
+});
+await check("the forward emits the query and the normalized fragment", () => {
+  const forward = readSource("src/components/share/alias-forward.tsx");
+  assert.ok(
+    /\.search\b/.test(forward) && /normalizeShareFragment/.test(forward),
+    "one half emitted without the other is the bug this section records",
+  );
+});
 
 if (failures > 0) {
   console.error(

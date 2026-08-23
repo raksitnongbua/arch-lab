@@ -6,26 +6,18 @@ export const metadata: Metadata = {
   title: "C4 diagram playground",
   // An alias must not compete with the page it forwards to: canonical names
   // the real playground, and noindex keeps the trampoline out of results.
-  alternates: { canonical: "/view" },
+  alternates: { canonical: "/live" },
   robots: { index: false },
 };
 
 /**
- * `/view/c4` — a forwarding alias for `/view`.
+ * `/view/c4` — a forwarding alias for `/live`, kept when the route family
+ * was renamed `/live`. Every `/view/c4#m=…` link minted before the rename lands here.
  *
- * The playground is one route now (the seed is a query param, `?d=`, not a path). This page
- * stays because a share link is a URL SOMEONE ELSE IS HOLDING: every link
- * minted against it before the merge must keep opening, and
- * `check:share-capacity` treats the routes as a compatibility surface.
- *
- * IT CANNOT BE A `redirects()` RULE, which is the whole reason it renders a
- * component instead of being three lines of config: the payload lives in the
- * URL fragment, the fragment never reaches the server, and a server redirect
- * would drop the document on the floor. Only a client can carry it across.
- *
- * Its `opengraph-image` stays beside it too, so a link already in circulation
- * keeps the preview card it was minted with.
+ * The family's reasoning — why this cannot be a `redirects()` rule, why it
+ * skips `/live/c4` and lands in one hop, and why it is `noindex` with a
+ * canonical on `/live` — is on `../page.tsx`.
  */
-export default function ViewC4Page(): React.JSX.Element {
-  return <AliasForward to="/view" label="the playground" />;
+export default function LegacyViewC4Page(): React.JSX.Element {
+  return <AliasForward to="/live" label="the playground" />;
 }

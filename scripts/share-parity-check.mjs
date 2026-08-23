@@ -43,7 +43,7 @@ const WRAPPER = "src/features/sequence/share/share-button.tsx";
 const FLOW_WRAPPER = "src/features/flowchart/share/share-button.tsx";
 const UC_WRAPPER = "src/features/usecase/share/share-button.tsx";
 const C4_SHELL = "src/features/viewer/components/viewer-shell.tsx";
-// The ONE merged playground every /view* route mounts. It shares C4
+// The ONE merged playground every /live* route mounts. It shares C4
 // documents through the shell's panel and the other three kinds through
 // their wrappers, so every mount point below is inside the same page now.
 const PLAYGROUND = "src/features/playground/components/view-playground.tsx";
@@ -191,26 +191,26 @@ check(
    so they are asserted to agree rather than each asserted separately. */
 check(
   "all four viewers share onto the one playground route",
-  c4Shell.includes('route="/view"') &&
-    wrapper.includes('"/view"') &&
-    flowWrapper.includes('"/view"') &&
-    ucWrapper.includes('"/view"'),
+  c4Shell.includes('route="/live"') &&
+    wrapper.includes('"/live"') &&
+    flowWrapper.includes('"/live"') &&
+    ucWrapper.includes('"/live"'),
 );
 check(
-  // Bare `/view`, not a seeded path: the seed moved to `?d=` and a share link
+  // Bare `/live`, not a seeded path: the seed moved to `?d=` and a share link
   // does not carry one — it supplies the document and the reader detects the
   // kind. share-capacity-check.mjs owns the deeper assertions about the
   // budget this route shares with the payload.
   "the sequence wrapper mints no seed into the link",
-  !wrapperCode.includes("/view/seq") && !wrapperCode.includes("?d="),
+  !wrapperCode.includes("/live/seq") && !wrapperCode.includes("?d="),
 );
 check(
   "the flowchart wrapper mints no seed into the link",
-  !flowWrapperCode.includes("/view/flow") && !flowWrapperCode.includes("?d="),
+  !flowWrapperCode.includes("/live/flow") && !flowWrapperCode.includes("?d="),
 );
 check(
   "the use-case wrapper mints no seed into the link",
-  !ucWrapperCode.includes("/view/uc") && !ucWrapperCode.includes("?d="),
+  !ucWrapperCode.includes("/live/uc") && !ucWrapperCode.includes("?d="),
 );
 check(
   "the sequence wrapper omits the diagram pointer (no sub-diagrams to point at)",
@@ -228,7 +228,7 @@ check(
 /* --- 4. every route honours the same expiry semantics on OPEN ------------- */
 
 /* Minting an expiring link is only honest if the opening route refuses an
-   expired one. One merged playground opens links on every /view* route, so
+   expired one. One merged playground opens links on every /live* route, so
    ONE component branching on the codec's "expired" status covers them all —
    this check keeps that branch from being "simplified" away. */
 check(
@@ -255,9 +255,9 @@ check(
  * `data-share-forward` hides the playground's seeded example while a `#m=…`
  * payload decodes. The script that stamps it runs ONCE per document load and a
  * client-side navigation never reloads — so opening any url with `#m=…` and
- * then navigating to a /view* route would leave the attribute set and the page
+ * then navigating to a /live* route would leave the attribute set and the page
  * display:none: blank, for the rest of the session (this bit the retired
- * `/view` chooser first). Whoever knows the payload is resolved must clear it.
+ * `/live` chooser first). Whoever knows the payload is resolved must clear it.
  * These three assertions keep the stamp, the clear and the stylesheet on ONE
  * spelling, and keep the clear from being "simplified" away as dead code. */
 {
