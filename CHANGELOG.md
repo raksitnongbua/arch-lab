@@ -9,6 +9,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- An old `/view` link no longer shows "Opening the playground…" on the way to
+  `/live`. The forward now happens while the page is still being parsed instead
+  of waiting for the app to load, so there is nothing to read before the address
+  changes.
+
+### Fixed
+
 - On a phone, a rail folded on a wider screen no longer hides the editor with no
   way back. The remembered fold now applies only at the widths that render a
   control to undo it.
