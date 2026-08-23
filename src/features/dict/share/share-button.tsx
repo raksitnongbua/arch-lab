@@ -14,7 +14,7 @@
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { ShareButton } from "@/features/viewer/share/share-button";
 
-const SHARE_ROUTE = "/view";
+const SHARE_ROUTE = "/live";
 
 export function DictShareButton({
   text,

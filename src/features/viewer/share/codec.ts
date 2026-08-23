@@ -46,7 +46,7 @@ export const SHARE_PARAM_MODEL = "m";
  * The `<html>` attribute a page about to forward a share payload wears, so CSS
  * can hide the copy it is forwarding away from before the first paint. Stamped
  * by the root layout's pre-paint script and CLEARED by whoever decides there is
- * nothing to forward — see `app/view/view-chooser.tsx` for why clearing is not
+ * nothing to forward — see `app/live/view-chooser.tsx` for why clearing is not
  * optional. Named here, beside the parameter that triggers it, so the script,
  * the clearing effect and the stylesheet cannot drift to two spellings.
  * (`globals.css` repeats the literal; CSS cannot import.)
@@ -320,7 +320,7 @@ async function checkExpiry(
  * involved: the app appended its own fragment onto a URL that already had one.
  *
  * Every route that forwards a share link builds its target by concatenation
- * (`/view/c4` + the current hash), so any path that runs a forward twice
+ * (`/live/c4` + the current hash), so any path that runs a forward twice
  * doubles the fragment, and `#a#a#a#a#a` was reachable by clicking around.
  * Both ends are fixed: forwarders hand on the normalized body, and decoding
  * accepts a doubled one rather than blaming the messenger.

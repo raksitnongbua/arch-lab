@@ -9,7 +9,7 @@
  * to `features/mermaid`. This feature consumes both and owns only layout,
  * the focus interaction, and the sequence-specific controls.
  *
- * The playground UI no longer lives here either — the merged `/view` page is
+ * The playground UI no longer lives here either — the merged `/live` page is
  * `features/playground`, which is why the input layer, the share wrapper and
  * the export button are exported below rather than staying internal.
  */

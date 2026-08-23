@@ -788,7 +788,7 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
   /* READ ON THE SERVER, for the reason the source fold already established:
      a preference applied after hydration shows one frame of the wrong state,
      and for a lock that frame is one in which a drag can land. */
-  const route = read("src/app/view/page.tsx");
+  const route = read("src/app/live/page.tsx");
   check(
     "the route passes the stored lock into the playground",
     /initialCanvasLocked=\{isLockedCookie\(/.test(route) &&

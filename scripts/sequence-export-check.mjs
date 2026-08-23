@@ -110,7 +110,7 @@ check("the properties that make a diagram visible are all carried", () => {
 
 check("an absolutised paint reference is rewritten to a fragment", () => {
   assert.equal(
-    normalisePaintUrl('url("http://localhost:3000/view/sequence#g1")'),
+    normalisePaintUrl('url("http://localhost:3000/live/sequence#g1")'),
     "url(#g1)",
   );
 });

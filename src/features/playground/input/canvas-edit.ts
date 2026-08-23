@@ -471,7 +471,7 @@ export const CANVAS_EDITING_PASSAGE: string = (() => {
  * cannot disagree about the answer — only about how much of it they have room
  * for.
  *
- * `/view`'s description is the caller. `/faq` and the two `llms*.txt` documents
+ * `/live`'s description is the caller. `/faq` and the two `llms*.txt` documents
  * have room for the whole passage and use that instead.
  */
 export const CANVAS_EDITABLE_SUMMARY: string = (() => {

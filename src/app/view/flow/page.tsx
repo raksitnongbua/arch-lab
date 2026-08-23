@@ -6,31 +6,19 @@ export const metadata: Metadata = {
   title: "Flowchart playground",
   // An alias must not compete with the page it forwards to: canonical names
   // the real playground, and noindex keeps the trampoline out of results.
-  alternates: { canonical: "/view" },
+  alternates: { canonical: "/live" },
   robots: { index: false },
 };
 
 /**
- * `/view/flow` — a forwarding alias for `/view?d=flow`, minted alongside the
- * flowchart document type so the third kind has the same short, memorable
- * door as `/view/seq` (`check:seo` and `check:share-capacity` both treat it
- * as one of the alias set now).
+ * `/view/flow` — a forwarding alias for `/live?d=flow`, kept when the route family
+ * was renamed `/live`. A bookmark and typed-URL door for flowcharts; nothing was ever minted
+ * against it.
  *
- * Unlike `/view/seq` it never had a pre-merge life as a real page: it exists
- * for bookmarks and typed URLs, and — like every alias — it must carry a
- * `#m=…` fragment across intact, because share links opened here must keep
- * opening forever. (New flowchart share links mint against bare `/view`, the
- * same route as the other two kinds: the minted route must be the REAL page,
- * not a trampoline — `share-capacity-check.mjs` owns that lesson.)
- *
- * IT CANNOT BE A `redirects()` RULE, which is the whole reason it renders a
- * component instead of being three lines of config: a payload lives in the
- * URL fragment, the fragment never reaches the server, and a server redirect
- * would drop the document on the floor. Only a client can carry it across.
- *
- * Its `opengraph-image` sits beside it so a link to this route previews as
- * the flowchart playground, not as the product's landing page.
+ * The family's reasoning — why this cannot be a `redirects()` rule, why it
+ * skips `/live/flow` and lands in one hop, and why it is `noindex` with a
+ * canonical on `/live` — is on `../page.tsx`.
  */
-export default function ViewFlowPage(): React.JSX.Element {
-  return <AliasForward to="/view?d=flow" label="the playground" />;
+export default function LegacyViewFlowPage(): React.JSX.Element {
+  return <AliasForward to="/live?d=flow" label="the playground" />;
 }

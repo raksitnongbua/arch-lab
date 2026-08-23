@@ -769,10 +769,10 @@ check("create_share_link mints a use-case link that decodes back", async () => {
   );
   const url = text.split("\n").find((line) => line.startsWith("http"));
   assert.ok(url !== undefined, `no URL in:\n${text}`);
-  // Bare /view, never the /view/uc trampoline — a share link must land on the
+  // Bare /live, never the /live/uc trampoline — a share link must land on the
   // real page, which check:share-capacity also pins.
-  assert.match(url, /\/view#m=AF1\./);
-  assert.doesNotMatch(url, /\/view\/(uc|usecase|flow|seq|sequence|c4)/);
+  assert.match(url, /\/live#m=AF1\./);
+  assert.doesNotMatch(url, /\/live\/(uc|usecase|flow|seq|sequence|c4)/);
   const decoded = await decodeShareFragment(new URL(url).hash);
   assert.equal(decoded.status, "ok");
   assert.equal(
@@ -1085,12 +1085,12 @@ check(
     );
     const url = text.split("\n").find((line) => line.startsWith("http"));
     assert.ok(url !== undefined, `no URL in:\n${text}`);
-    /* Bare `/view` — the playground is one route, and a share link carries
+    /* Bare `/live` — the playground is one route, and a share link carries
        no seed because it carries the document. The seeded paths still forward,
        so links minted before the merge keep opening; new ones must not spend
        characters on a hop the payload could have had. */
-    assert.match(url, /\/view#m=AF1\./);
-    assert.doesNotMatch(url, /\/view\/(c4|seq)/);
+    assert.match(url, /\/live#m=AF1\./);
+    assert.doesNotMatch(url, /\/live\/(c4|seq)/);
 
     const decoded = await decodeShareFragment(new URL(url).hash);
     assert.equal(decoded.status, "ok");
@@ -1208,7 +1208,7 @@ check("create_share_link refuses past the hard ceiling, usefully", async () => {
 /*
  * The end-to-end path an agent actually walks for a sequence flow: author →
  * validate_sequence → format_sequence (canonical .alab) → create_share_link.
- * The link must land on bare /view — the one playground, which detects the
+ * The link must land on bare /live — the one playground, which detects the
  * document kind from the payload, so no route carries a seed — and decode back
  * to the SAME canonical text format_sequence hands out, so the shared flow and
  * the committed file cannot disagree.
@@ -1223,8 +1223,8 @@ check("create_share_link mints a sequence link that decodes back", async () => {
   );
   const url = text.split("\n").find((line) => line.startsWith("http"));
   assert.ok(url !== undefined, `no URL in:\n${text}`);
-  assert.match(url, /\/view#m=AF1\./);
-  assert.doesNotMatch(url, /\/view\/(seq|sequence|c4)/);
+  assert.match(url, /\/live#m=AF1\./);
+  assert.doesNotMatch(url, /\/live\/(seq|sequence|c4)/);
 
   const decoded = await decodeShareFragment(new URL(url).hash);
   assert.equal(decoded.status, "ok");
@@ -1249,10 +1249,10 @@ check("create_share_link mints a flowchart link that decodes back", async () => 
   );
   const url = text.split("\n").find((line) => line.startsWith("http"));
   assert.ok(url !== undefined, `no URL in:\n${text}`);
-  // Minted against bare `/view`, never the `/view/flow` trampoline: a share
+  // Minted against bare `/live`, never the `/live/flow` trampoline: a share
   // link must land on the real page, which check:share-capacity also pins.
-  assert.match(url, /\/view#m=AF1\./);
-  assert.doesNotMatch(url, /\/view\/(flow|seq|sequence|c4)/);
+  assert.match(url, /\/live#m=AF1\./);
+  assert.doesNotMatch(url, /\/live\/(flow|seq|sequence|c4)/);
 
   const decoded = await decodeShareFragment(new URL(url).hash);
   assert.equal(decoded.status, "ok");
@@ -1286,7 +1286,7 @@ check(
         undefined,
       ),
     );
-    assert.match(text, /\/view#m=AF1\./);
+    assert.match(text, /\/live#m=AF1\./);
     assert.match(text, /one-way|lossy|dropped/i);
   },
 );

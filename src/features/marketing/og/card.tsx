@@ -217,7 +217,7 @@ export function OgC4Stack(): React.ReactElement {
  * exchange.
  *
  * It exists because two routes have to speak for all six document kinds at
- * once — the site root, and `/view`, which is the single playground every share
+ * once — the site root, and `/live`, which is the single playground every share
  * link is minted against. A card can carry one image, so neither can show "the"
  * diagram; what they can show is that there is more than one kind of diagram
  * here, without becoming a collage. Six full miniatures competing for the same
@@ -230,7 +230,7 @@ export function OgC4Stack(): React.ReactElement {
  * reasoning is on `app/opengraph-image.tsx`.
  *
  * IT IS SHARED RATHER THAN COPIED because the two cards had drifted already:
- * `/view` was previewing a three-node C4 stack, so a use-case or flowchart link
+ * `/live` was previewing a three-node C4 stack, so a use-case or flowchart link
  * — the exact failure the per-kind cards were built to fix — previewed as an
  * advert for C4.
  */

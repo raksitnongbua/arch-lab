@@ -79,7 +79,7 @@ mutation API — you edit \`.alab\` files yourself.
 ## Pages
 
 - ${origin}/ — what this is, in one screen
-- ${origin}/view — the playground: paste or write any of the six kinds and see
+- ${origin}/live — the playground: paste or write any of the six kinds and see
   it rendered live, and the one page where a canvas gesture is available.
   \`?d=seq\` starts from a sequence example and \`?d=er\` from an ER one,
   \`?e=<id>\` opens a bundled one (ids are listed on /demo)

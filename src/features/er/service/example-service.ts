@@ -9,7 +9,7 @@
  *     in this repo, and filtering it out is how it stays a bug.
  *   - Every number on a demo card is COUNTED from the parsed document, never
  *     written by hand, so a card can never overstate what its example holds.
- *   - Ids are the `/view/er/[exampleId]` route segment AND the `?e=` value, in
+ *   - Ids are the `/live/er/[exampleId]` route segment AND the `?e=` value, in
  *     ONE flat namespace shared with the other four registries.
  *     `check:view-input` asserts the sets do not collide, because the day they
  *     do, `?e=` silently resolves the wrong document.
@@ -31,7 +31,7 @@ import { ER_EXAMPLE } from "../input/example";
 /* -------------------------------------------------------------------------- */
 
 export interface ErExampleSource {
-  /** Stable id — doubles as the `/view/er/[exampleId]` route segment. */
+  /** Stable id — doubles as the `/live/er/[exampleId]` route segment. */
   id: string;
   /** One line on what the diagram shows, for the demo card. */
   blurb: string;

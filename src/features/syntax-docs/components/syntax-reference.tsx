@@ -415,7 +415,7 @@ export function SyntaxReference(): React.JSX.Element {
           the payload, the failure modes: whatever would turn the arrow into a
           paragraph. Only the label is ever drawn on the wire, so a{" "}
           <Code>desc</Code> costs no width and widens no column; the{" "}
-          <Link href="/view/sequence" className="underline">
+          <Link href="/live?d=seq" className="underline">
             playground
           </Link>{" "}
           marks a message that has one with a small dot and shows the text when
@@ -484,7 +484,7 @@ export function SyntaxReference(): React.JSX.Element {
         />
         <P>
           Render any of these in the{" "}
-          <Link href="/view/sequence" className="underline">
+          <Link href="/live?d=seq" className="underline">
             sequence playground
           </Link>
           , which also imports pasted Mermaid <Code>sequenceDiagram</Code> code
@@ -576,10 +576,10 @@ export function SyntaxReference(): React.JSX.Element {
         <P>
           The fastest way to learn the format is to write it live:{" "}
           <Link
-            href="/view/c4"
+            href="/live"
             className="font-medium text-primary hover:underline"
           >
-            view mode
+            the playground
           </Link>{" "}
           is a two-pane editor with <Code>.alab</Code> on one side and{" "}
           <Code>.archlab.json</Code> on the other — each pane regenerates the

@@ -9,7 +9,7 @@ export const APP_NAME = "arch-lab";
 /*
  * `EDITOR_ENABLED` WAS HERE and is deliberately gone rather than left at
  * `false`. It gated `/editor`, a second page whose job was "a canvas you can
- * move things on"; that route is now a forwarding alias for `/view`, whose own
+ * move things on"; that route is now a forwarding alias for `/live`, whose own
  * C4 canvas is editable in place, so there is no separate editor for a flag to
  * ship or withhold. Its four consumers — the navbar entry, the site default
  * title, the landing page's closing CTA and the viewer's edit link — read
@@ -21,7 +21,7 @@ export const APP_NAME = "arch-lab";
  */
 
 /**
- * Makes the C4 canvas on `/view` directly editable — select a node, drag it,
+ * Makes the C4 canvas on `/live` directly editable — select a node, drag it,
  * nudge it with the arrow keys, delete it — with every change written back
  * into the source pane as text.
  *

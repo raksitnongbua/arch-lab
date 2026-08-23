@@ -66,7 +66,7 @@ export function ViewModeLink(): React.JSX.Element {
       }
       void encodeShareFragment(text, activeDiagramId).then((fragment) => {
         if (cancelled) return;
-        const target = `/view#${fragment}`;
+        const target = `/live#${fragment}`;
         // The HANDOFF ceiling, not the share tiers: this link is same-origin
         // navigation the user clicks in their own browser, so the carrier
         // truncation the share limits guard against cannot happen to it.

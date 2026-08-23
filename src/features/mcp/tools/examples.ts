@@ -9,7 +9,7 @@
  *
  * They come from the viewer's own registry (`listViewerModelSources`) and go
  * through the same reader as caller input, so what an agent is shown is
- * byte-identical to what `/view/<id>` renders — and a broken example would
+ * byte-identical to what `/live/<id>` renders — and a broken example would
  * fail here loudly instead of being served as a good pattern to copy.
  */
 
@@ -51,7 +51,7 @@ export function listExampleModels(): McpTextResult {
   return textResult(
     joinSections(
       "Example models bundled with arch-lab (each also viewable at " +
-        "/view/<id> on the deployed site):",
+        "/live/<id> on the deployed site):",
       entries.join("\n"),
       'Fetch one with get_example_model, e.g. { "id": "shopflow", ' +
         '"format": "alab" }.',

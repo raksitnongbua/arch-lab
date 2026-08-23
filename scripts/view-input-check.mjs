@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The merged `/view` playground's READER: one pane, nine accepted shapes,
+ * The merged `/live` playground's READER: one pane, nine accepted shapes,
  * one rendered document.
  *
  * This exists because the merge collapsed two pages into one and detection is
@@ -470,7 +470,7 @@ for (const [label, text] of [
   );
   check(
     "the route feeds ?e= to the playground server-side",
-    read("src/app/view/page.tsx").includes("exampleTextFor"),
+    read("src/app/live/page.tsx").includes("exampleTextFor"),
     "resolving after hydration would show the seed, then replace it",
   );
 }
@@ -485,7 +485,7 @@ for (const [label, text] of [
      does not support) — its whole import graph is pure `.ts`. So its
      documents are asserted to parse directly: a registered example that
      stops parsing still SHIPS — as a visible `invalid` card on /demo and a
-     parse-error page on /view/usecase/<id>, by design — but a green suite
+     parse-error page on /live/usecase/<id>, by design — but a green suite
      must not claim every bundled document opens while one renders an error.
      `pnpm build` cannot catch this; the routes render the failure rather
      than throwing. */

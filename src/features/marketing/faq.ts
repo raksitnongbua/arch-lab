@@ -65,14 +65,14 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "into level by level, a sequence flow you can click through message by message, a " +
           "flowchart, a use-case diagram, an ER model or a data dictionary. The text is a file you " +
           "own, and git is the collaboration layer.",
-        links: [{ href: "/view?d=seq", label: "Open a live diagram" }],
+        links: [{ href: "/live?d=seq", label: "Open a live diagram" }],
       },
       {
         question: "Do I need an account?",
         answer:
           "No. There is no sign-up, no login and no user record. Open the playground and start " +
           "typing — the worked example is already on screen.",
-        links: [{ href: "/view", label: "The playground" }],
+        links: [{ href: "/live", label: "The playground" }],
       },
       {
         question: "Is my diagram uploaded anywhere?",
@@ -117,7 +117,7 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "draws. It is not an either/or, though: Mermaid pastes straight into the playground. " +
           "C4Context, sequenceDiagram and flowchart or graph sources are converted on paste, and " +
           "you can export back to Mermaid.",
-        links: [{ href: "/view", label: "Paste Mermaid into the playground" }],
+        links: [{ href: "/live", label: "Paste Mermaid into the playground" }],
       },
       {
         question: "Can I get my work back out?",
@@ -159,7 +159,7 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           `${CANVAS_EDITING_PASSAGE} Which notations answer a drag is a ` +
           "property of their grammars rather than a roadmap — the next answer " +
           "explains why an ER diagram cannot.",
-        links: [{ href: "/view", label: "The playground" }],
+        links: [{ href: "/live", label: "The playground" }],
       },
       {
         /* Asked because the canvas answers a drag on one notation and ignores

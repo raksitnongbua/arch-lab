@@ -8,17 +8,17 @@ export const metadata: Metadata = {
     "The canvas editor is now part of the playground: write .alab text or drag the diagram, in one page. This URL forwards there and carries your document with it.",
   // An alias must not compete with the page it forwards to: canonical names
   // the real playground, and noindex keeps the trampoline out of results.
-  alternates: { canonical: "/view" },
+  alternates: { canonical: "/live" },
   robots: { index: false },
 };
 
 /**
- * `/editor` — a forwarding alias for `/view`.
+ * `/editor` — a forwarding alias for `/live`.
  *
  * THIS IS A BREAKING CHANGE and the entry in `CHANGELOG.md` says so: a route
  * links were minted against no longer serves its own page. It is retired
  * rather than kept because there is no longer a second thing for it to be. The
- * playground's C4 canvas is editable in place, so `/editor` and `/view` were
+ * playground's C4 canvas is editable in place, so `/editor` and `/live` were
  * two pages for one job, and the one that survives is the one that can also
  * hold the text, every other notation, share links and the JSON twin.
  *
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
  * `/editor#m=…` URLs whose whole document lives in the fragment, the fragment
  * never reaches the server, and a server redirect would drop the document on
  * the floor. Only a client can carry it across — the same argument
- * `src/app/view/c4/page.tsx` makes, and `check:share-capacity` treats these
+ * `src/app/live/c4/page.tsx` makes, and `check:share-capacity` treats these
  * routes as a compatibility surface for exactly this reason.
  *
  * It gains an `opengraph-image` it never had, because it is now a URL people
@@ -36,5 +36,5 @@ export const metadata: Metadata = {
  * the diagram inside the link.
  */
 export default function EditorPage(): React.JSX.Element {
-  return <AliasForward to="/view" label="the playground" />;
+  return <AliasForward to="/live" label="the playground" />;
 }

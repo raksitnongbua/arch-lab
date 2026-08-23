@@ -10,8 +10,8 @@
  *      running 230–341, so the half that persuades a click was never shown.
  *      A long description is not a small mistake — it is copy written for
  *      nobody.
- *   2. **No two routes self-canonicalising to the same content.** `/view` and
- *      `/view/c4` rendered the identical playground with the identical seed
+ *   2. **No two routes self-canonicalising to the same content.** `/live` and
+ *      `/live/c4` rendered the identical playground with the identical seed
  *      and each named itself canonical, which is two URLs competing and a
  *      search engine picking the winner on signals nobody chose.
  *   3. **The sitemap does not list a URL that canonicals elsewhere** — two
@@ -74,13 +74,13 @@ const { CANVAS_EDITING_PASSAGE, CANVAS_EDITABLE_SUMMARY, CANVAS_EDIT_OFFERS } =
  * source.
  *
  * THIS USED TO BE THREE HAND-WRITTEN LISTS in this file, and they were already
- * wrong: `/view/er` and `/view/dict` had been aliases for a release and were
+ * wrong: `/live/er` and `/live/dict` had been aliases for a release and were
  * named in none of them, so their canonicals and their descriptions went
  * unchecked. That is the exact failure `codebase.md` describes — "a hardcoded
  * list cannot notice the thing it has never heard of" — and three checks in
  * this repo have passed for that reason while the feature under them was
  * broken. Reading the directory means the next alias is covered the day it
- * exists, wherever in the tree it lands (`/editor` is not under `src/app/view`
+ * exists, wherever in the tree it lands (`/editor` is not under `src/app/live`
  * and would have needed a fourth list).
  *
  * The predicate is the same one `check:share-capacity` uses to prove a route
@@ -155,7 +155,7 @@ const PAGES = [
   ["/ (and the site default)", "src/lib/constants.ts", "APP_DESCRIPTION"],
   ["/demo", "src/app/demo/page.tsx", null],
   ["/mcp", "src/app/mcp/page.tsx", null],
-  ["/view", "src/app/view/page.tsx", null],
+  ["/live", "src/app/live/page.tsx", null],
   ["/validate", "src/app/validate/page.tsx", null],
   ["/syntax", "src/app/syntax/page.tsx", null],
   ["/faq", "src/app/faq/page.tsx", null],
@@ -178,7 +178,7 @@ console.log("meta descriptions (the budget is what a SERP renders)");
  *
  * A DESCRIPTION MAY BE A TEMPLATE LITERAL, and until it was, this loop only
  * knew how to read a quoted string — so the first route to interpolate a
- * derived clause (`/view`, whose tail is `CANVAS_EDITABLE_SUMMARY` from the
+ * derived clause (`/live`, whose tail is `CANVAS_EDITABLE_SUMMARY` from the
  * capability grid) stopped matching, `continue`d, and its budget went
  * UNMEASURED while the check still reported a pass. That is the same silent
  * coverage hole the sitemap assertion below was written for, arriving through
@@ -227,7 +227,7 @@ for (const [route, file, constantName] of ROUTES) {
 }
 
 /* A route whose description this loop could not FIND reads exactly like a route
-   that passed. `/view` spent a run in that state. */
+   that passed. `/live` spent a run in that state. */
 check(
   "every indexable route's description was actually located and measured",
   unmeasured.length === 0,
@@ -272,17 +272,17 @@ for (const [route, file] of ROUTES) {
   check(`${route}: names a canonical`, canonicalOf(file) !== null);
 }
 
-/* The arrow reversed when the three playground routes became one. `/view` is
-   the page; `/view/c4` and `/view/seq` are forwarding aliases that must point
+/* The arrow reversed when the three playground routes became one. `/live` is
+   the page; `/live/c4` and `/live/seq` are forwarding aliases that must point
    AT it, which is the same rule as before — one URL claims the content — with
    the roles the other way round. */
 check(
-  "/view claims the playground rather than canonicalising away",
-  canonicalOf("src/app/view/page.tsx") === "/view",
-  `expected "/view", got ${JSON.stringify(canonicalOf("src/app/view/page.tsx"))}`,
+  "/live claims the playground rather than canonicalising away",
+  canonicalOf("src/app/live/page.tsx") === "/live",
+  `expected "/live", got ${JSON.stringify(canonicalOf("src/app/live/page.tsx"))}`,
 );
 /* One assertion per alias found on disk, and each one compares the canonical
-   against THAT alias's own destination rather than a constant `/view` — so an
+   against THAT alias's own destination rather than a constant `/live` — so an
    alias pointing somewhere new is checked against where it actually points. */
 check(
   "there are forwarding aliases to check",
@@ -317,7 +317,7 @@ for (const { route, file, target } of ALIASES) {
   );
   check(
     "the sitemap lists the one playground",
-    listed.includes("/view"),
+    listed.includes("/live"),
     `listed: ${listed.join(", ")}`,
   );
 }

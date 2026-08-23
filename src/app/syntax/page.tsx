@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 /**
  * `/syntax` — the `.alab` text-format reference. Chosen as a top-level route
- * because the format is a first-class product surface (it is what `/view`
+ * because the format is a first-class product surface (it is what `/live`
  * asks you to write), not a docs subtree.
  */
 export default function SyntaxPage(): React.JSX.Element {

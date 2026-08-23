@@ -1841,7 +1841,7 @@
  * outcome, "no payload" included. That clearing is load-bearing, not
  * tidiness: the script runs once per document load and a client-side
  * navigation never reloads, so without it the flag would outlive the URL that
- * set it and blank the route for the rest of the session (this bit `/view`'s
+ * set it and blank the route for the rest of the session (this bit `/live`'s
  * retired chooser first). See `components/share/share-opening.tsx`. The
  * attribute is `SHARE_FORWARD_ATTRIBUTE` and the classes `SHARE_PENDING_CLASS`
  * in TS; they are spelled literally here only because CSS cannot import. */

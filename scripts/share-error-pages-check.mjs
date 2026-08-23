@@ -2,7 +2,7 @@
 /**
  * Share-link failure-page check: EVERY decode status the share codec can
  * return must map to a full-page outcome in the playground (the ONE merged
- * component every `/view*` route mounts) through the ONE shared failure page.
+ * component every `/live*` route mounts) through the ONE shared failure page.
  *
  * The history this guards against: PR #19 gave the C4 playground a full-page
  * takeover for links that will not open, while the sequence playground kept

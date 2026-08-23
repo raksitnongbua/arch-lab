@@ -32,8 +32,8 @@
  * preference, and it is confined to the three playground routes; nothing else
  * on the site reads it.
  *
- * ONE KEY FOR ALL THREE PLAYGROUND ROUTES. `/view`, `/view/c4` and
- * `/view/seq` mount the same workbench, and "give me more canvas" is about
+ * ONE KEY FOR ALL THREE PLAYGROUND ROUTES. `/live`, `/live/c4` and
+ * `/live/seq` mount the same workbench, and "give me more canvas" is about
  * how you read a diagram rather than which kind you opened. (Same argument as
  * `lib/idle-motion.ts`, whose key is unscoped for the same reason.)
  *

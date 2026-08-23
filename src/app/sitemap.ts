@@ -12,10 +12,9 @@ import { listViewerModelIds } from "@/features/viewer";
  * Every page a crawler should know about. The static routes are written out
  * by hand — there are seven and they change with the router, not with data —
  * and `check:seo` measures the description of every one of them, plus every
- * forwarding alias it finds on disk.
- * while the `/view/[modelId]` entries come from the same registry that feeds
- * `generateStaticParams`, so a bundled example added there appears here
- * without anyone remembering a second list.
+ * forwarding alias it finds on disk. The `/live/[modelId]` entries come from
+ * the same registry that feeds `generateStaticParams`, so a bundled example
+ * added there appears here without anyone remembering a second list.
  *
  * `/api/*` is deliberately absent (robots.ts disallows it), and no
  * lastModified is claimed: deploys touch every prerendered page at once, so a
@@ -30,12 +29,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/syntax",
     "/validate",
     /* ONE playground URL, and `/editor` is no longer beside it. The C4 canvas
-       on `/view` is editable in place, so the two were one job on two pages;
+       on `/live` is editable in place, so the two were one job on two pages;
        `/editor` is a forwarding alias now, and listing a route that canonicals
-       elsewhere asks a crawler to index a trampoline. Same reason `/view/c4`
-       and `/view/seq` are absent. The seed lives in `?d=`, which a sitemap has
-       no reason to enumerate — it changes the starting text, not the page. */
-    "/view",
+       elsewhere asks a crawler to index a trampoline. Same reason `/live/c4`
+       and `/live/seq` are absent — and the same reason the ENTIRE retired
+       `/view` family is, trampolines and example pages alike: this route
+       family was called `/view` until the page stopped being only a viewer,
+       and every old path still forwards, but a trampoline is not a page and
+       asking a crawler to index sixteen of them would spend the site's crawl
+       budget on redirects. `check:seo` fails if one appears here. The seed
+       lives in `?d=`, which a sitemap has no reason to enumerate — it changes
+       the starting text, not the page. */
+    "/live",
     "/mcp",
     "/faq",
   ];
@@ -43,17 +48,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // All SIX example registries, so a new example is in the sitemap the moment
   // it is registered — the same reason the model routes are derived rather than
   // typed out above.
-  const modelRoutes = listViewerModelIds().map((id) => `/view/${id}`);
+  const modelRoutes = listViewerModelIds().map((id) => `/live/${id}`);
   const sequenceRoutes = listSequenceExampleIds().map(
-    (id) => `/view/sequence/${id}`,
+    (id) => `/live/sequence/${id}`,
   );
   const flowchartRoutes = listFlowchartExampleIds().map(
-    (id) => `/view/flowchart/${id}`,
+    (id) => `/live/flowchart/${id}`,
   );
-  const erRoutes = listErExampleIds().map((id) => `/view/er/${id}`);
-  const dictRoutes = listDictExampleIds().map((id) => `/view/dict/${id}`);
+  const erRoutes = listErExampleIds().map((id) => `/live/er/${id}`);
+  const dictRoutes = listDictExampleIds().map((id) => `/live/dict/${id}`);
   const usecaseRoutes = listUseCaseExampleIds().map(
-    (id) => `/view/usecase/${id}`,
+    (id) => `/live/usecase/${id}`,
   );
 
   return [

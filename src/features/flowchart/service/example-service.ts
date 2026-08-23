@@ -10,7 +10,7 @@
  *     in this repo, and filtering it out is how it stays a bug.
  *   - Every number on a demo card is COUNTED from the parsed document, never
  *     written by hand, so a card can never overstate what its example holds.
- *   - Ids are the `/view/flowchart/[exampleId]` route segment AND the `?e=`
+ *   - Ids are the `/live/flowchart/[exampleId]` route segment AND the `?e=`
  *     value, in ONE flat namespace shared with the other two registries.
  *     `check:view-input` asserts the three sets do not collide, because the day
  *     they do, `?e=` silently resolves the wrong document.
@@ -32,7 +32,7 @@ import { FLOWCHART_EXAMPLE } from "../input/example";
 /* -------------------------------------------------------------------------- */
 
 export interface FlowchartExampleSource {
-  /** Stable id — doubles as the `/view/flowchart/[exampleId]` route segment. */
+  /** Stable id — doubles as the `/live/flowchart/[exampleId]` route segment. */
   id: string;
   /** One line on what the flow shows, for the demo card. */
   blurb: string;

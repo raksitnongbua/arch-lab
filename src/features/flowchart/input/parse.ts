@@ -128,7 +128,7 @@ export function parseFlowchartInput(text: string): FlowchartParseResult {
       error: {
         kind: "unknown-format",
         message:
-          "This is a use-case document (`archlab 1.0 usecase`), not a flowchart — the /view playground renders it.",
+          "This is a use-case document (`archlab 1.0 usecase`), not a flowchart — the /live playground renders it.",
       },
     };
   }

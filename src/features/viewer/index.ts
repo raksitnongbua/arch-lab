@@ -3,7 +3,7 @@
  * `src/features/viewer` imports from here and nowhere deeper.
  *
  * The playground UI itself no longer lives in this feature — the merged
- * `/view` page is `features/playground`, which consumes the C4 machinery
+ * `/live` page is `features/playground`, which consumes the C4 machinery
  * below (the pane sync engine, the share codec, the download helpers)
  * through this barrel. That is why this file exports more than components:
  * the alternative was the playground deep-importing `viewer/input/*` and

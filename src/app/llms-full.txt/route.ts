@@ -99,7 +99,7 @@ notation.
   direction, and the app states exactly what each drops. A Mermaid shape with no
   arch-lab counterpart is refused by name rather than approximated.
 
-Paste any of them into ${origin}/view and the format is detected for you — one
+Paste any of them into ${origin}/live and the format is detected for you — one
 page for all six document kinds, and the one page a canvas gesture is available
 on. \`?d=\` chooses which example it starts from (\`c4\`, \`seq\`, \`flow\`, \`uc\`,
 \`er\`, \`dict\`), and \`?e=<id>\` opens a bundled one.

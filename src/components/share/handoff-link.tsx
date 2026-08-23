@@ -41,7 +41,7 @@ export function HandoffLink({
 }: {
   /** Canonical `.alab` text to carry. */
   alabText: string;
-  /** Destination route, without a fragment (`/view/c4`). */
+  /** Destination route, without a fragment (`/live`) — never a trampoline. */
   path: string;
   label: string;
 }): React.JSX.Element | null {

@@ -13,7 +13,7 @@
  *
  * EVERY DOCUMENT KIND — C4, sequence, flowchart and use case. The codec compresses
  * arbitrary text, so nothing in a link says which grammar wrote it; every kind
- * mints against bare `/view`, because the playground is one route and a share
+ * mints against bare `/live`, because the playground is one route and a share
  * link needs no seed in its URL — it carries the document, and the reader
  * detects the kind from the text. Detection here is by the first meaningful
  * line, the same sniff the playground uses, so an agent that authored a
@@ -187,7 +187,7 @@ async function scopedOffers(
       diagram.id === file.rootDiagramId ? null : diagram.id,
       expiry,
     );
-    const url = `${origin}/view#${fragment}`;
+    const url = `${origin}/live#${fragment}`;
     if (url.length > MAX_SHARE_URL_LENGTH) continue;
     offers.push({ diagramId: diagram.id, title: diagram.title, url });
   }
@@ -283,7 +283,7 @@ interface SingleDocumentShare {
 /**
  * The non-C4 half of `create_share_link`, shared by the sequence and flowchart
  * branches. Same codec, same tiers, same privacy as the C4 path — the
- * differences are that these documents mint against bare `/view` and have no
+ * differences are that these documents mint against bare `/live` and have no
  * sub-diagram to scope a smaller link to, so an oversize refusal offers the
  * canonical text and nothing else.
  *
@@ -318,13 +318,15 @@ async function singleDocumentShareLink(
   if (minted.status === "error") return errorResult(minted.message);
 
   const fragment = await encodeShareFragment(payload, null, minted.expiry);
-  // Minted against bare `/view`. The route shares the payload's length
+  // Minted against bare `/live`. The route shares the payload's length
   // budget, and the seed that used to sit in the path is a query param the
   // link does not need: it carries its own document, and the reader detects
-  // the kind. `/view/seq` and `/view/sequence` still forward, so links minted
-  // before this keep opening.
-  // the playground's address did not move, only what NEW links say.
-  const url = `${publicOrigin()}/view#${fragment}`;
+  // the kind. Every route this ever minted still forwards here carrying the
+  // fragment — the seeded paths (`/live/seq`, `/live/sequence`, …) and the
+  // whole `/view/*` family this one was called before the rename — so links
+  // minted at any point keep opening. A link already sent is not editable;
+  // only what NEW links say can change.
+  const url = `${publicOrigin()}/live#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
     return errorResult(
@@ -336,7 +338,7 @@ async function singleDocumentShareLink(
           `past which enough carrier apps truncate that the link would fail ` +
           `silently for whoever receives it. ${spec.indivisibleBecause}`,
         "To share it, save the canonical `.alab` text below as a file and " +
-          "send that — the playground at /view accepts it by paste:",
+          "send that — the playground at /live accepts it by paste:",
         fence("", payload),
       ),
     );
@@ -533,9 +535,9 @@ export async function createShareLink(
     diagramId ?? null,
     expiry,
   );
-  // Minted against bare `/view` — see the sequence tool above for why the
+  // Minted against bare `/live` — see the sequence tool above for why the
   // route carries no seed.
-  const url = `${publicOrigin()}/view#${fragment}`;
+  const url = `${publicOrigin()}/live#${fragment}`;
 
   if (url.length > MAX_SHARE_URL_LENGTH) {
     // Refuse — but leave the caller holding something actionable in THIS
@@ -572,7 +574,7 @@ export async function createShareLink(
               anyOfferOverSafe ? EMAIL_CAVEAT : null,
             ),
         "To share the WHOLE model, save the canonical `.alab` text below as " +
-          "a `.alab` file and send that — the two-pane editor at /view/c4 " +
+          "a `.alab` file and send that — the playground at /live " +
           "accepts it by paste or drop:",
         fence("", aftText),
       ),

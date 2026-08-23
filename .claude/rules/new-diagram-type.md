@@ -3,7 +3,7 @@ paths:
   - "src/features/archtext/**"
   - "src/features/mermaid/**"
   - "src/features/mcp/**"
-  - "src/app/view/**"
+  - "src/app/live/**"
   - "src/app/demo/**"
   - "scripts/**/*.mjs"
 ---
@@ -43,7 +43,7 @@ half-parsed.
 
 ## 1. The view page first, and Mermaid before anything else
 
-Start at `/view`, not at the parser. The view page is where a reader meets the
+Start at `/live`, not at the parser. The view page is where a reader meets the
 diagram, and building it first stops you shipping a grammar nothing can draw.
 
 **This is the most-skipped step in the file, and skipping it is seductive**
@@ -80,10 +80,14 @@ Then build, in this order:
 - `src/features/<kind>/` — the feature, following the shape both new kinds
   already use: `components/`, `input/`, `lib/`, `export/`, `share/`, `service/`,
   `styles/`, and an `index.ts` barrel. Nothing outside imports past that barrel.
-- Routes: `src/app/view/<short>/` and `src/app/view/<kind>/`. **Mint links
-  against the short path.** Share links carry the model inside the URL and a
-  shorter route leaves more characters for the payload — that is why sequence
-  links use `/view/seq`.
+- Routes: `src/app/live/<short>/` and `src/app/live/<kind>/`. **Mint links
+  against bare `/live`, never the short path.** A share link carries its own
+  document and the reader detects the kind from the text, so the kind belongs
+  nowhere in the URL: `/live` is the shortest route there is, which leaves the
+  most characters for the payload, and it is the REAL page rather than a
+  trampoline. The short paths are aliases for bookmarks and typed URLs;
+  `check:share-capacity` asserts that no minting site ever spends characters
+  on one.
 - `pnpm check:roundtrip` and a new `check:<kind>` are not optional. Open a file,
   change nothing, save: the bytes must be identical.
 
@@ -176,7 +180,7 @@ Three surfaces, all of which have been forgotten at least once:
   purpose: two copies would be two answers to "what is this kind for" on one
   site.
 - **Demo** (`src/app/demo/page.tsx`) — at least two bundled examples with
-  crawlable read-only pages at `/view/<kind>/[exampleId]`. Rows are clickable end
+  crawlable read-only pages at `/live/<kind>/[exampleId]`. Rows are clickable end
   to end and honour reduced motion.
 - **Validate** (`/validate`) must accept the new kind, and its samples are pinned
   by `pnpm check:validate-samples`.
@@ -196,7 +200,7 @@ See `deploy.md` for why routes are load-bearing.
   expectation from that array, so a route missing here fails the check.
 - Route-level `metadata`: a title under ~60 characters, a description under 160,
   and `alternates.canonical`. Alias routes canonical to the page they forward to.
-- An OG card. Every share link previews through `/view`, so that card must name
+- An OG card. Every share link previews through `/live`, so that card must name
   the new kind — a shared diagram previewing as an advert for C4 is a bug that
   already shipped once. `pnpm check:og-cards`.
 - Structured data on the routes that carry it.
@@ -295,8 +299,8 @@ touched; an unticked box is a decision, not an oversight.
 
 **1. View and format**
 
-- [ ] `/view?d=<kind>` renders a real canvas
-- [ ] `/view/<short>` alias route
+- [ ] `/live?d=<kind>` renders a real canvas
+- [ ] `/live/<short>` alias route
 - [ ] `src/features/archtext/lib/<kind>/` — keywords, schema, parse, serialize
 - [ ] header word registered in `sequence/detect.ts`
 - [ ] `src/features/mermaid/lib/<kind>{,-mapping,-emit}.ts`, two-way or a named
@@ -331,7 +335,7 @@ touched; an unticked box is a decision, not an oversight.
       `globals.css` + `check:hero`)
 - [ ] `/syntax` snippets + `check:syntax-docs`, VS Code grammar
 - [ ] playground starter, seed, `?d=` value, `kind-copy.ts` blurb
-- [ ] `/demo` section, example registry, `/view/<kind>/[exampleId]` pages
+- [ ] `/demo` section, example registry, `/live/<kind>/[exampleId]` pages
 - [ ] `/validate` accepts it + `check:validate-samples`
 - [ ] every "four kinds" sentence on the site now says five
 

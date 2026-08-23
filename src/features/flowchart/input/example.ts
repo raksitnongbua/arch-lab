@@ -1,6 +1,6 @@
 /**
  * The example the playground opens with when seeded for flowchart
- * (`/view?d=flow`). Same philosophy as the C4 seed's SEED_MODEL
+ * (`/live?d=flow`). Same philosophy as the C4 seed's SEED_MODEL
  * (`viewer/input/sync.ts`) and the sequence seed (`sequence/input/example.ts`):
  * an empty canvas teaches nobody the format, so the seed is a realistic flow
  * that demonstrates every headline construct — all six shapes (terminators,

@@ -9,6 +9,38 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The playground moved from `/view` to `/live`, and the header entry now
+  reads "Live".** The page had not only viewed for two releases — the C4 and
+  sequence canvases answer a drag and rewrite your source text under you — so
+  a URL and a menu item promising a viewer taught a reader the one thing about
+  the page that was no longer true. Everything under the old path moved with
+  it: `/live`, `/live/c4`, `/live/seq`, `/live/sequence`, `/live/flow`,
+  `/live/uc`, `/live/er`, `/live/dict`, the bundled-model viewer at
+  `/live/<model>` and every example page at `/live/<kind>/<example>`. New
+  share links, from the Share button and from the MCP `create_share_link`
+  alike, are minted against `/live`.
+
+  **Nothing you already hold stops working, and this is not a breaking
+  change.** `changelog.md` says a renamed route normally bumps the major
+  version, so the reasoning is worth stating rather than asserting: every old
+  URL is still served. Each `/view` path is a page that forwards to its `/live`
+  equivalent **carrying the query string and the URL fragment with it**, which
+  is what makes the difference — a share link's whole document lives in the
+  fragment, the fragment never reaches a server, and so a server redirect
+  would have delivered `/live` an empty document. Forwarding in the browser
+  keeps the payload. A retired path also keeps a preview card, so a `/view#m=…`
+  link already pasted in a review still previews as a diagram rather than as
+  this product's landing page. What you lose is one client-side hop on an old
+  link; what would have been breaking is a 404 or a dropped document, and
+  neither happens.
+
+  The retired paths are `noindex` and name `/live` as canonical, so search
+  consolidates on the new URL rather than ranking a trampoline against the page
+  it forwards to.
+
+- The "Open in the playground" button on `/validate` and the playground links
+  on `/syntax` now go straight to `/live` instead of bouncing through a
+  seeded alias, so a click costs no redirect.
 - The home page hero is 31 words instead of 136. The list of what each notation
   draws moved to the notation cards, which already name all six in their own
   vocabulary, and the full two-ways-to-edit passage moved down to "How you

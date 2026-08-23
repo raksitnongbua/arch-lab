@@ -64,7 +64,7 @@ export const metadata: Metadata = {
  * So the page now answers three questions in order, and stops:
  *
  *   1. WHAT IS THIS — one sentence, then a button that puts a real diagram on
- *      screen. The primary CTA goes to `/view/sequence` rather than `/view`
+ *      screen. The primary CTA goes to `/live/sequence` rather than `/live`
  *      deliberately: the chooser asks a question ("C4 or sequence?") that a
  *      newcomer has no basis to answer, while the sequence playground opens
  *      seeded with a working flow they can click immediately.
@@ -190,7 +190,7 @@ const KINDS: readonly {
     notation: "c4",
     feature: "C4 models",
     body: "Context, container and component levels in one file — zoom in and drill from a box into what it contains.",
-    href: "/view?d=c4",
+    href: "/live?d=c4",
   },
   {
     icon: MessagesSquare,
@@ -198,7 +198,7 @@ const KINDS: readonly {
     notation: "sequence",
     feature: "Sequence diagrams",
     body: "Lifelines, activation, loops and alt fragments — clickable message by message, with the payload beside each one.",
-    href: "/view?d=seq",
+    href: "/live?d=seq",
   },
   {
     icon: Workflow,
@@ -206,7 +206,7 @@ const KINDS: readonly {
     notation: "flowchart",
     feature: "Flowcharts",
     body: "Terminators, guarded decisions, io and call symbols, and loops that hook back — traced end to end as it draws.",
-    href: "/view?d=flow",
+    href: "/live?d=flow",
   },
   {
     icon: Users,
@@ -214,7 +214,7 @@ const KINDS: readonly {
     notation: "usecase",
     feature: "Use case diagrams",
     body: "Actors outside a system boundary, associations into it, and «include» or «extend» between cases.",
-    href: "/view?d=uc",
+    href: "/live?d=uc",
   },
   {
     icon: Table2,
@@ -222,7 +222,7 @@ const KINDS: readonly {
     notation: "er",
     feature: "Entity-relationship diagrams",
     body: "Tables with their columns, primary and foreign keys, and crow's-foot cardinality on every relationship.",
-    href: "/view?d=er",
+    href: "/live?d=er",
   },
   {
     icon: TableProperties,
@@ -230,7 +230,7 @@ const KINDS: readonly {
     notation: "dict",
     feature: "Data dictionaries",
     body: "Every field with what it means, where its value comes from, which values are legal, and whether it is personal data.",
-    href: "/view?d=dict",
+    href: "/live?d=dict",
   },
 ];
 
@@ -450,7 +450,7 @@ export default function Home() {
                   here at all. An icon alone next to nothing would be a riddle;
                   `aria-describedby` already tied the two together. */}
               <Link
-                href="/view?d=seq"
+                href="/live?d=seq"
                 aria-describedby="cta-note"
                 className={buttonClasses({
                   size: "lg",
@@ -752,14 +752,14 @@ export default function Home() {
               >
                 See finished examples
               </Link>
-              {/* `/view`, not the retired `/editor`: the canvas you can drag
+              {/* `/live`, not the retired `/editor`: the canvas you can drag
                   on is the playground's, and the claim is sourced from the flag
                   that ships it rather than written in the present tense. */}
               {CANVAS_EDIT_ENABLED ? (
                 <>
                   {" · "}
                   <Link
-                    href="/view"
+                    href="/live"
                     className="font-medium text-primary hover:underline"
                   >
                     Drag it on the canvas
@@ -785,7 +785,7 @@ export default function Home() {
               objection the page never addressed. */}
           <div className="mt-12 flex flex-col items-start gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center">
             <Link
-              href="/view?d=seq"
+              href="/live?d=seq"
               className={buttonClasses({
                 size: "lg",
                 className: "group gap-2.5",

@@ -10,7 +10,7 @@
  * were sent. The same misreading is already on record for links that fail to
  * open, which is why those take over the whole page.
  *
- * THE FIX is the one `/view` already uses for the chooser: an inline script in
+ * THE FIX is the one `/live` already uses for the chooser: an inline script in
  * the root layout stamps `data-share-forward` on <html> BEFORE first paint when
  * the URL carries a payload, and CSS in `globals.css` swaps the seeded content
  * for this component while it is set. React cannot do this job — the fragment is

@@ -4,7 +4,7 @@ import type { SeedKind } from "../input/parse";
  * Which example fills the playground when no share link supplies a document.
  *
  * A QUERY PARAM rather than a route, because that is what it describes: the
- * starting text, not a different page. `/view`, `/view/c4` and `/view/seq`
+ * starting text, not a different page. `/live`, `/live/c4` and `/live/seq`
  * were three routes mounting one component with one difference between them.
  *
  * SHORT ON PURPOSE — `?d=seq`, not `?document=sequence`. The whole URL
@@ -18,8 +18,8 @@ export const VIEW_SEED_PARAM = "d";
 /** `?d=seq`/`?d=sequence` seed the sequence example, `?d=flow`/`?d=flowchart`
  * the flowchart one, `?d=uc`/`?d=usecase` the use-case one, `?d=er`/`?d=erd`
  * the ER one; anything else seeds C4. Both spellings per kind because the
- * short one is what gets minted (`/view/seq`, `/view/flow`, `/view/uc`,
- * `/view/er` forward to it) and the long one is what gets typed from
+ * short one is what gets minted (`/live/seq`, `/live/flow`, `/live/uc`,
+ * `/live/er` forward to it) and the long one is what gets typed from
  * memory. */
 export function seedFromParam(value: string | string[] | undefined): SeedKind {
   const first = Array.isArray(value) ? value[0] : value;

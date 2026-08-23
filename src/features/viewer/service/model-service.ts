@@ -35,7 +35,7 @@ import shopflowFile from "./data/shopflow.archlab.json";
 /* -------------------------------------------------------------------------- */
 
 export interface ModelSource {
-  /** Stable id — doubles as the `/view/[modelId]` route segment. */
+  /** Stable id — doubles as the `/live/[modelId]` route segment. */
   id: string;
   /**
    * The raw `.archlab.json` document. Typed `unknown` on purpose: nothing

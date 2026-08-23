@@ -13,7 +13,7 @@
  * the real readers; nothing is parsed twice or differently here.
  *
  * This file replaced the two separate playgrounds (`viewer-playground.tsx`,
- * `sequence-playground.tsx`) and the `/view` chooser between them. The merge
+ * `sequence-playground.tsx`) and the `/live` chooser between them. The merge
  * kept both pages' contracts:
  *
  *   - Same 300 ms debounce, same "last good document keeps rendering" rule:
@@ -616,7 +616,7 @@ export function ViewPlayground({
          EVERY outcome, "no payload after all" included, because a client-side
          navigation never reloads the document and the flag would otherwise
          outlive the URL that set it and blank this route for the rest of the
-         session. (The retired chooser owned this clearing for `/view`; the
+         session. (The retired chooser owned this clearing for `/live`; the
          playground owns it everywhere now.) Before the state writes, and in
          the same tick as them, so the next paint carries both the real
          document and the un-hidden page. */
@@ -2119,7 +2119,7 @@ export function ViewPlayground({
                 <ViewerShell
                   key={shellEpoch}
                   /* The page owns the `h1`; the model's title is a level
-                     below it here. Two `h1`s left `/view` and `/view/c4`
+                     below it here. Two `h1`s left `/live` and `/live/c4`
                      with no primary topic for a crawler and no primary
                      heading for a screen reader. */
                   titleAs="h2"

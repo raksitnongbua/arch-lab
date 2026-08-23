@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The mounted ER canvas — what `/view` renders once the pane's text has parsed
+ * The mounted ER canvas — what `/live` renders once the pane's text has parsed
  * as an ER document. Layout and focus, composed around the pure `ErDiagram`.
  *
  * WHY THERE IS A DETAIL PANEL AT ALL. The first cut had none, on the argument

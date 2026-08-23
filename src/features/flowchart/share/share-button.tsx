@@ -12,12 +12,12 @@
  * NOTHING MAKES IT A FLOWCHART LINK, and nothing needs to. The shared codec
  * compresses arbitrary text and the playground detects the kind from what it
  * decodes, so all three document kinds mint the same URL. That is also why
- * the route is bare `/view` and NOT `/view/flow`: the minted route must be
+ * the route is bare `/live` and NOT `/live/flow`: the minted route must be
  * the real page (minting against a trampoline puts a client-side bounce on
  * the most common way anyone arrives — the lesson `share-capacity-check.mjs`
  * encodes), and a share link carries its own document, so it needs no seed —
  * every character the route does not spend goes to the payload competing
- * against the codec's ceiling. `/view/flow` exists for `?d=flow` bookmarks
+ * against the codec's ceiling. `/live/flow` exists for `?d=flow` bookmarks
  * and forwards any fragment across intact.
  *
  * Like a sequence document, a flowchart has no sub-diagrams, so the
@@ -34,8 +34,8 @@
 import { ARCHTEXT_EXTENSION } from "@/features/archtext";
 import { ShareButton } from "@/features/viewer/share/share-button";
 
-/** Bare `/view` — the one route share links mint against (see the header). */
-const SHARE_ROUTE = "/view";
+/** Bare `/live` — the one route share links mint against (see the header). */
+const SHARE_ROUTE = "/live";
 
 export function FlowchartShareButton({
   /** The document to pack — the pane's current text, verbatim. */

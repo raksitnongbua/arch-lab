@@ -11,7 +11,7 @@
  *     in this repo, and filtering it out is how it stays a bug.
  *   - Every number on a demo card is COUNTED from the parsed document, never
  *     written by hand, so a card can never overstate what its example holds.
- *   - Ids are the `/view/usecase/[exampleId]` route segment AND the `?e=`
+ *   - Ids are the `/live/usecase/[exampleId]` route segment AND the `?e=`
  *     value, in ONE flat namespace shared with the other three registries.
  *     `check:view-input` asserts the four sets do not collide, because the day
  *     they do, `?e=` silently resolves the wrong document.
@@ -33,7 +33,7 @@ import { USECASE_EXAMPLE } from "../input/example";
 /* -------------------------------------------------------------------------- */
 
 export interface UseCaseExampleSource {
-  /** Stable id — doubles as the `/view/usecase/[exampleId]` route segment. */
+  /** Stable id — doubles as the `/live/usecase/[exampleId]` route segment. */
   id: string;
   /** One line on what the diagram shows, for the demo card. */
   blurb: string;

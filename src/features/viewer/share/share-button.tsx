@@ -13,7 +13,7 @@
  * A button beside Export opening a small non-modal dialog. What it offers
  * depends on where the document came from:
  *
- *   - BUNDLED models (`/view/atlas-shop` …) already live at a URL, so the
+ *   - BUNDLED models (`/live/atlas-shop` …) already live at a URL, so the
  *     plain page address is the share link — short and clean, no payload —
  *     and the panel says so instead of needlessly embedding one.
  *   - PASTED / edited documents are encoded into the link itself: canonical
@@ -157,7 +157,7 @@ export interface ShareButtonProps {
   /** Used for the Web Share sheet's title and the download's file name. */
   documentTitle: string;
   /**
-   * The route a payload link opens on — `/view/c4` or `/view/sequence`. The
+   * The route a payload link opens on — `/live/c4` or `/live/sequence`. The
    * payload format is shared (one codec); the ROUTE is what decides which
    * parser receives the decoded text, so each viewer names its own.
    */
@@ -279,7 +279,7 @@ export function ShareButton({
         // payload to expire, so the TTL control is not offered for these.
         setLink({
           status: "ready",
-          url: `${window.location.origin}/view/${share.modelId}${suffix}`,
+          url: `${window.location.origin}/live/${share.modelId}${suffix}`,
           expiresAt: null,
           overSafeLength: false,
         });
@@ -333,8 +333,8 @@ export function ShareButton({
           expiry,
         );
         if (token !== buildTokenRef.current) return;
-        // Minted against the viewer's own route (`/view/c4`, `/view/sequence`)
-        // rather than the legacy `/view#m=` — the chooser still forwards old
+        // Minted against the viewer's own route (`/live/c4`, `/live/sequence`)
+        // rather than the legacy `/live#m=` — the chooser still forwards old
         // links, but new links skip that hop and land on their parser directly.
         const url = `${window.location.origin}${route}#${fragment}`;
         const tooLong = url.length > MAX_SHARE_URL_LENGTH;

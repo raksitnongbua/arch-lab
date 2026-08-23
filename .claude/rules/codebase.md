@@ -63,7 +63,7 @@ deploy.
 ## Feature flags and constants
 
 - `CANVAS_EDIT_ENABLED` in `src/lib/constants.ts` gates the editable C4 canvas
-  on `/view`, and every CTA and capability claim reads from it so they downgrade
+  on `/live`, and every CTA and capability claim reads from it so they downgrade
   honestly on their own. If you add a claim about editing, source it from the
   flag rather than hardcoding the present tense. (It replaced `EDITOR_ENABLED`,
   which gated the retired `/editor` route.)

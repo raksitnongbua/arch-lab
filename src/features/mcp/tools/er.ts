@@ -11,7 +11,7 @@
  * facts worth reporting are tables, their keys, and whether the joins between
  * them are actually spelled out.
  *
- * The reader is `parseErInput` — the SAME one the `/view?d=er` playground
+ * The reader is `parseErInput` — the SAME one the `/live?d=er` playground
  * uses, itself a thin shell over `parseErText` and `parseMermaidEr`. So "the
  * MCP server accepted it" means the playground renders it too, which is the
  * guarantee `lib/read.ts` makes for C4 and the reason no second grammar is

@@ -78,7 +78,7 @@ root ctx-root
 `,
 };
 
-/** A diagram header with every attribute, plus the desc/view body lines. */
+/** A diagram header with every attribute, plus the desc/live body lines. */
 export const DIAGRAM_EXAMPLE: DocSnippet = {
   id: "diagram-header",
   code: `archlab 1.0

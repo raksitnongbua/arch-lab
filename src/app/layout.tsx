@@ -171,7 +171,7 @@ export default function RootLayout({
             for what they were sent.
 
             IT LIVES HERE, in the root layout, and that is the whole point. It
-            used to sit inside `/view/page.tsx`, where React 19 logged
+            used to sit inside `/live/page.tsx`, where React 19 logged
             "Encountered a script tag while rendering React component" on every
             client navigation to the route: a client render inserts the tag
             without executing it, so the warning was correct and the script was
@@ -194,7 +194,7 @@ export default function RootLayout({
             rendering React component" for ANY script element it renders on the
             client, and the root layout does get re-rendered client-side — a
             Fast Refresh in dev is enough, and the warning fired on
-            `/view/sequence` with no share link in sight. The warning is also
+            `/live/sequence` with no share link in sight. The warning is also
             correct: a client-rendered script tag is inserted and never
             executed, so on that path the tag was pure noise.
             `strategy="beforeInteractive"` is the sanctioned way to say what

@@ -183,7 +183,7 @@ export default function DemoPage(): React.JSX.Element {
             `${listing.summary.nodeCount} elements`,
             `${listing.summary.edgeCount} relationships`,
           ],
-          readOnlyHref: `/view/${listing.summary.id}`,
+          readOnlyHref: `/live/${listing.summary.id}`,
         },
   );
 
@@ -199,7 +199,7 @@ export default function DemoPage(): React.JSX.Element {
             `${listing.summary.participantCount} participants`,
             `${listing.summary.messageCount} messages`,
           ],
-          readOnlyHref: `/view/sequence/${listing.summary.id}`,
+          readOnlyHref: `/live/sequence/${listing.summary.id}`,
         },
   );
 
@@ -216,7 +216,7 @@ export default function DemoPage(): React.JSX.Element {
             `${listing.summary.edgeCount} arrows`,
             `${listing.summary.decisionCount} decisions`,
           ],
-          readOnlyHref: `/view/flowchart/${listing.summary.id}`,
+          readOnlyHref: `/live/flowchart/${listing.summary.id}`,
         },
   );
 
@@ -235,7 +235,7 @@ export default function DemoPage(): React.JSX.Element {
               ? "1 boundary"
               : `${listing.summary.boundaryCount} boundaries`,
           ],
-          readOnlyHref: `/view/usecase/${listing.summary.id}`,
+          readOnlyHref: `/live/usecase/${listing.summary.id}`,
         },
   );
 
@@ -254,7 +254,7 @@ export default function DemoPage(): React.JSX.Element {
               ? "1 relationship"
               : `${listing.summary.relationshipCount} relationships`,
           ],
-          readOnlyHref: `/view/er/${listing.summary.id}`,
+          readOnlyHref: `/live/er/${listing.summary.id}`,
         },
   );
 
@@ -273,7 +273,7 @@ export default function DemoPage(): React.JSX.Element {
                an example is a dictionary or a schema dump. */
             `${listing.summary.describedCount} described`,
           ],
-          readOnlyHref: `/view/dict/${listing.summary.id}`,
+          readOnlyHref: `/live/dict/${listing.summary.id}`,
         },
   );
 
@@ -601,7 +601,7 @@ function ExampleRowItem({
       <div className="group relative flex flex-col gap-1 rounded-md px-3 py-4 transition-colors hover:bg-secondary/40">
         <div className="flex items-baseline justify-between gap-4">
           <Link
-            href={`/view?${VIEW_EXAMPLE_PARAM}=${row.id}`}
+            href={`/live?${VIEW_EXAMPLE_PARAM}=${row.id}`}
             aria-label={`${row.title} — open in the playground`}
             className="rounded-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
