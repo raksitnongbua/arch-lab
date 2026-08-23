@@ -5,6 +5,14 @@
  * `CANVAS_EDIT_ENABLED`): drag a node and it moves. This module is what makes
  * that a text edit rather than a second place the diagram lives.
  *
+ * It also holds the CAPABILITY MODEL for both editable canvases —
+ * `CANVAS_EDIT_OFFERS`, the notation-against-ability grid, and
+ * `canvasEditability`, its one reader. The sequence canvas's own gestures live
+ * in `sequence-edit.ts` but ask this module whether they may run, so that
+ * "which notations can be edited, and how" has exactly one answer.
+ * `.claude/rules/canvas-editing.md` is the guideline for adding a notation to
+ * that grid.
+ *
  * THE ONE MODEL RULE. The page already holds exactly one authority for what is
  * on screen — the `ViewDocument` from the last good parse — and the source pane
  * is its text. A canvas edit therefore does not mutate anything: it derives a
@@ -58,16 +66,17 @@ import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
 import { sourceTextFor, type ViewDocument } from "./parse";
 
 /* -------------------------------------------------------------------------- */
-/* Which documents a canvas may edit                                           */
+/* The capability model: which notation offers which canvas edit               */
 /* -------------------------------------------------------------------------- */
 
 /**
  * Whether the canvas showing `doc` can write its changes back, and — when it
  * cannot — the sentence explaining why, in the reader's terms.
  *
- * The refusals are not gaps to fill in later. Each one is a document the
- * gesture has nowhere to be written into, so it would be undone by the very
- * next render; saying so is the honest answer.
+ * The refusals are not a to-do list. Each says which of the two things below
+ * is missing, and neither is filled in by deciding to; saying so is the honest
+ * answer. `.claude/rules/canvas-editing.md` is the guideline a new notation
+ * follows to answer this, and names the checks that fail until it has.
  */
 export type CanvasEditability =
   { editable: true } | { editable: false; reason: string };
@@ -79,85 +88,264 @@ export type CanvasEditability =
  *   - `"move"` — write GEOMETRY. Needs a per-element position in the grammar,
  *     which only the C4 model has: every other notation solves its own layout
  *     from the text, so a drag has nowhere to land.
- *   - `"revise"` — rewrite one element's own FIELDS in place. Needs a grammar
- *     whose elements each occupy a knowable line range, which on the canvas
- *     side today means the sequence document (`sequence-edit.ts`).
+ *   - `"revise"` — rewrite one element's own FIELDS in place. Needs both a
+ *     grammar whose elements each occupy a knowable line range AND a place on
+ *     the canvas to type into, which together today mean the sequence document
+ *     (`sequence-edit.ts`).
  *
  * A document can therefore refuse one and allow the other, and the C4 and
- * sequence canvases genuinely do exactly that in opposite directions.
- * `check:canvas-edit` runs the seed table twice, once per ability, so a
- * seventh notation is covered for both the day it exists.
+ * sequence canvases genuinely do exactly that in opposite directions. That is
+ * why the answers live in a TABLE below rather than in a chain of
+ * `doc.kind !== …` tests: a chain states each notation's answer as the negation
+ * of another's, which reads backwards and leaves the grid a reader wants —
+ * notation against ability — nowhere on the page.
+ *
+ * A THIRD ABILITY IS A REAL POSSIBILITY and this union is the place for it, not
+ * a per-gesture verdict. The nine sequence gestures share one ability because
+ * they gate on the same two facts (an `.alab` sequence pane, the canvas
+ * unlocked); a new ability is owed only when a gesture gates on something the
+ * existing two do not ask about. Adding one makes `CANVAS_EDIT_OFFERS`
+ * incomplete, which is a type error before it is a check failure.
  */
 export type CanvasEditAbility = "move" | "revise";
+
+/**
+ * The notations a `ViewDocument` can be — the key of the capability table.
+ *
+ * Keyed off the DOCUMENT UNION rather than off `SeedKind`, even though the two
+ * hold the same six names today, because this one is the set that reaches this
+ * module: a notation added to `ViewDocument` fails to compile here until it has
+ * an answer for every ability. `check:canvas-edit` pins the two sets equal so a
+ * notation added to the seed table is caught as well.
+ */
+type Notation = ViewDocument["kind"];
+
+/**
+ * WHY A REFUSAL IS REFUSED — and there are exactly two answers, because they
+ * mean different things to whoever reads them next.
+ *
+ *   - `"grammar"` — the notation's text has nowhere to write this. A sequence
+ *     document has no coordinates at all (a participant's column IS its index
+ *     in `participants`, a message's time IS its index in `items`), so a drag
+ *     would be undone by the next render. This does not change by building
+ *     anything; it changes only if the grammar gains a field, which is a
+ *     format change with everything that implies.
+ *   - `"surface"` — the grammar could hold the edit; this canvas has nothing to
+ *     make it with. That is a smaller statement and the honest one for the four
+ *     text-laid-out notations under `"revise"`: nothing about a flowchart's
+ *     grammar forbids retyping a step's label, there is simply no dock on that
+ *     canvas to type it into. Calling it a grammar property would be a claim
+ *     the format does not support.
+ *
+ * Both are legitimate shipped answers. The distinction is not a to-do marker —
+ * it is what tells the next reader whether the refusal is theirs to change.
+ */
+type RefusalGround = "grammar" | "surface";
+
+/** One notation's answer for one ability. */
+type CanvasEditOffer =
+  | {
+      offers: true;
+      /**
+       * How this notation reads mid-sentence inside ANOTHER notation's refusal
+       * ("Only C4 diagrams can be dragged on the canvas"). Plural, and lower
+       * case except where the name is a proper one.
+       */
+      noun: string;
+      /**
+       * A pane LANGUAGE this notation cannot honour the ability in, even though
+       * its grammar can. It lives in the cell rather than in a separate switch
+       * so that everything about one (notation, ability) pair is readable in one
+       * place — the format guard used to be reachable only by knowing which
+       * branch it sat in.
+       */
+      unlessPane?: { format: string; because: string };
+    }
+  | {
+      offers: false;
+      ground: RefusalGround;
+      /** Why, as one sentence about THIS notation. */
+      because: string;
+      /**
+       * A gesture this notation DOES have, when there is one. It replaces the
+       * derived "Only … " tail, because naming what the reader can do beats
+       * naming the notations they are not looking at.
+       */
+      instead?: string;
+    };
+
+/* The sentences more than one cell needs, named so that rewording one cannot
+   reword four of five places. They are constants rather than a per-ability
+   default because a DEFAULT is exactly how a seventh notation would inherit an
+   answer nobody wrote for it: every cell below is spelled out, and that
+   repetition is the point. */
+
+/** The `"grammar"` refusal for every notation that solves its own layout. */
+const NO_POSITION_IN_THE_TEXT =
+  "This notation works out its own layout from the text, so there is no " +
+  "position to move.";
+
+/** The `"surface"` refusal for a canvas that draws a notation but cannot edit
+ *  it. It points at the pane in the same breath, because a refusal with no
+ *  destination is a dead end. */
+const NO_EDITOR_ON_THIS_CANVAS =
+  "This canvas has no editor on it, so edit this notation in the source pane.";
+
+/**
+ * WHICH NOTATION OFFERS WHICH CANVAS EDIT — the whole capability model, as the
+ * grid it is.
+ *
+ * Read a row as "what the sequence canvas can write back"; read a column as
+ * "which notations answer a drag". Every cell is written out, including the
+ * four that say the same thing, so that adding a notation is a compile error
+ * with six blanks rather than a silent inheritance.
+ *
+ * `canvasEditability` is the only reader; nothing branches on `doc.kind` for
+ * this question any more. Exported because `check:canvas-edit` asserts the
+ * table and the function agree, and because a reader looking for "can my
+ * notation be edited" should find one object rather than two functions.
+ */
+export const CANVAS_EDIT_OFFERS: Record<
+  CanvasEditAbility,
+  Record<Notation, CanvasEditOffer>
+> = {
+  move: {
+    c4: {
+      offers: true,
+      noun: "C4 diagrams",
+      unlessPane: {
+        format: "mermaid",
+        // Measured, not assumed: `serializeMermaidC4` emits no geometry at all,
+        // so a move would round-trip straight back to where it started.
+        because:
+          "Mermaid carries no geometry, so a moved node would snap back. " +
+          "Switch the pane to .alab to edit on the canvas.",
+      },
+    },
+    /* The one notation with a DIFFERENT canvas edit to offer, so its refusal
+       names that instead of the derived tail. A dead end on the one notation
+       that CAN be edited another way sends the reader away from a feature that
+       is right there. */
+    sequence: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+      instead: "Click a message or a lifeline to edit its wording instead.",
+    },
+    flowchart: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+    },
+    usecase: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+    },
+    er: { offers: false, ground: "grammar", because: NO_POSITION_IN_THE_TEXT },
+    dict: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+    },
+  },
+  revise: {
+    sequence: {
+      offers: true,
+      noun: "sequence diagrams",
+      unlessPane: {
+        format: "mermaid",
+        /* Measured against the emitter, not assumed: the fields this gesture
+           edits are `label`, `kind`, `technology` and `desc`, and
+           `MERMAID_SEQUENCE_EXPORT_CAVEAT` in `mermaid/lib/sequence-emit.ts`
+           records that Mermaid holds none of the last two. Writing an edit back
+           through a pane that cannot spell it would show the change once and
+           lose it on the next round trip, which is worse than refusing. */
+        because:
+          "Mermaid sequenceDiagram cannot hold a message's desc detail or its " +
+          "[technology], so those edits would be lost. Switch the pane to " +
+          ".alab to edit on the canvas.",
+      },
+    },
+    /* `"surface"`, not `"grammar"`: the C4 grammar holds every field a node
+       has. The refusal is a DECISION — that canvas offers move and delete, and
+       a second, weaker field editor on it would be two authoring surfaces for
+       one model. */
+    c4: {
+      offers: false,
+      ground: "surface",
+      because: "The C4 canvas moves and deletes.",
+      instead: "A node's wording is edited in the source pane beside it.",
+    },
+    flowchart: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    usecase: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    er: { offers: false, ground: "surface", because: NO_EDITOR_ON_THIS_CANVAS },
+    dict: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+  },
+};
 
 export function canvasEditability(
   doc: ViewDocument,
   ability: CanvasEditAbility = "move",
 ): CanvasEditability {
-  if (ability === "revise") return reviseEditability(doc);
-  if (doc.kind !== "c4") {
+  const offer = CANVAS_EDIT_OFFERS[ability][doc.kind];
+  if (!offer.offers) {
     return {
       editable: false,
-      // Not "not supported yet": these notations SOLVE their geometry from the
-      // text (the ER layout derives its columns from the relationships, a
-      // dictionary is a table, a sequence diagram's columns are the order the
-      // participants are declared in), so there is no per-node position in the
-      // grammar to write a drag into. The sequence case gets the extra clause
-      // because it is the one notation with a DIFFERENT canvas edit to offer,
-      // and a refusal that names the thing you can do beats a dead end.
-      reason:
-        "This notation works out its own layout from the text, so there is no " +
-        "position to move." +
-        (doc.kind === "sequence"
-          ? " Click a message or a lifeline to edit its wording instead."
-          : " Only C4 diagrams can be dragged on the canvas."),
+      reason: `${offer.because} ${offer.instead ?? onlyTheseNotations(ability)}`,
     };
   }
-  if (doc.format === "mermaid") {
-    return {
-      editable: false,
-      // Measured, not assumed: `serializeMermaidC4` emits no geometry at all,
-      // so a move would round-trip straight back to where it started.
-      reason:
-        "Mermaid carries no geometry, so a moved node would snap back. Switch " +
-        "the pane to .alab to edit on the canvas.",
-    };
+  if (
+    offer.unlessPane !== undefined &&
+    doc.format === offer.unlessPane.format
+  ) {
+    return { editable: false, reason: offer.unlessPane.because };
   }
   return { editable: true };
 }
 
-function reviseEditability(doc: ViewDocument): CanvasEditability {
-  if (doc.kind !== "sequence") {
-    return {
-      editable: false,
-      /* The C4 clause is not a gap either, and it is worth stating rather than
-         leaving as silence: that canvas offers move and delete, and a node's
-         wording is edited in the pane beside it. Offering a second, weaker
-         field editor there would be two authoring surfaces for one model. */
-      reason:
-        doc.kind === "c4"
-          ? "The C4 canvas moves and deletes; a node's wording is edited in " +
-            "the source pane beside it."
-          : "Only sequence diagrams can be edited on the canvas. Edit this " +
-            "notation in the source pane.",
-    };
-  }
-  if (doc.format === "mermaid") {
-    return {
-      editable: false,
-      /* Measured against the emitter, not assumed: the fields this gesture
-         edits are `label`, `kind`, `technology` and `desc`, and
-         `MERMAID_SEQUENCE_EXPORT_CAVEAT` in `mermaid/lib/sequence-emit.ts`
-         records that Mermaid holds none of the last two. Writing an edit back
-         through a pane that cannot spell it would show the change once and
-         lose it on the next round trip, which is worse than refusing. */
-      reason:
-        "Mermaid sequenceDiagram cannot hold a message's desc detail or its " +
-        "[technology], so those edits would be lost. Switch the pane to .alab " +
-        "to edit on the canvas.",
-    };
-  }
-  return { editable: true };
+/** How each ability reads in the derived tail of another notation's refusal. */
+const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
+  move: "dragged on the canvas",
+  revise: "edited on the canvas",
+};
+
+/**
+ * "Only C4 diagrams can be dragged on the canvas." — built from the table that
+ * decides it, which is the whole reason this function exists rather than five
+ * copies of the sentence.
+ *
+ * The failure it removes has already happened three times on this branch in
+ * other files: a claim about which canvas is editable, hand-written, surviving
+ * the day it stopped being true, with every check still green (`codebase.md`
+ * habit 4). Here it would have been a refusal telling four notations that only
+ * C4 can be dragged, on the day a fifth learned to be. `check:canvas-edit`
+ * proves the derivation by flipping a cell and reading the sentence back.
+ *
+ * Joined by hand rather than with `Intl.ListFormat`: this is a contract string,
+ * and it must not vary with the ICU data a runtime happens to ship.
+ */
+function onlyTheseNotations(ability: CanvasEditAbility): string {
+  const nouns = Object.values(CANVAS_EDIT_OFFERS[ability])
+    .filter((offer) => offer.offers)
+    .map((offer) => offer.noun);
+  const list =
+    nouns.length <= 2
+      ? nouns.join(" and ")
+      : `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}`;
+  return `Only ${list} can be ${ABILITY_PAST_PARTICIPLE[ability]}.`;
 }
 
 /* -------------------------------------------------------------------------- */

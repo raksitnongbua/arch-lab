@@ -41,7 +41,19 @@
  *      thing (it fails for a reason that has nothing to do with geometry).
  *   5. A NO-OP MOVE IS REFUSED. A press that lands where it began must not
  *      rewrite the pane, or it costs the reader an undo entry for nothing.
- *   6. THE REFUSALS ARE COMPLETE, derived from the seed table rather than a
+ *   6. THE CAPABILITY MODEL IS COMPLETE AND IS THE ONE AUTHORITY.
+ *      `CANVAS_EDIT_OFFERS` is a notation-against-ability grid, and three
+ *      separate things are proved about it: its keys are exactly the notations
+ *      the seed table can produce (a notation added to either side fails here);
+ *      the function agrees with the table cell for every pair, so the table is
+ *      the answer rather than a comment beside it; and each refusal points
+ *      somewhere the reader can go instead of ending. The refusal PROSE is
+ *      proved DERIVED rather than typed, by flipping a cell to offer and reading
+ *      the sentence back — the failure that buys this is a hand-written "only
+ *      C4 diagrams can be dragged" outliving the day a second notation could
+ *      be, which is the same shape as the three stale claims section 15 exists
+ *      for and would have been just as green.
+ *      THE REFUSALS ARE COMPLETE, derived from the seed table rather than a
  *      hand-listed set of kinds: every non-C4 document the playground can hold
  *      reports itself uneditable with a reason. A hardcoded list cannot notice
  *      a seventh notation the day it is added; the table can. The table is
@@ -157,8 +169,13 @@ const { defaultPositions, defaultSizeFor } = await load(
   "src/features/archtext/index.ts",
 );
 const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
-const { canvasEditability, deletedNodeEdit, movedNodeEdit, ownsChildDiagram } =
-  await load("src/features/playground/input/canvas-edit.ts");
+const {
+  CANVAS_EDIT_OFFERS,
+  canvasEditability,
+  deletedNodeEdit,
+  movedNodeEdit,
+  ownsChildDiagram,
+} = await load("src/features/playground/input/canvas-edit.ts");
 const {
   revisedMessageEdit,
   revisedParticipantEdit,
@@ -838,6 +855,196 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
 /* ----------------------------------------------------------------------- */
 /* 6. Refusals, derived from the seed table                                */
 /* ----------------------------------------------------------------------- */
+
+console.log("\nThe capability grid answers every notation for every ability");
+
+{
+  /* THE TABLE IS THE MODEL, so these assertions are about the table itself
+     before any document is parsed. What they are worth over the loops below:
+     those ask whether the FUNCTION refuses a document, which stays true even
+     if the table has rotted into a decoration nothing reads. These ask whether
+     the grid a returning implementer will read is the grid the app obeys. */
+  const abilities = Object.keys(CANVAS_EDIT_OFFERS);
+  const seededKinds = Object.keys(VIEW_SEED_TEXT).sort();
+  check(
+    "the grid names both abilities and nothing else",
+    abilities.length === 2 &&
+      abilities.includes("move") &&
+      abilities.includes("revise"),
+    `abilities: ${abilities.join(", ")}`,
+  );
+
+  for (const ability of abilities) {
+    /* KEY-SET EQUALITY, BOTH DIRECTIONS. The type system already fails a
+       notation added to `ViewDocument` with no cell here, but it cannot see the
+       SEED table — so a notation reachable in the playground and absent from
+       the grid, or a cell left behind by a notation that was removed, is this
+       assertion's to catch. Sorted and compared whole rather than by
+       `every(includes)`, which passes on a stale extra key. */
+    const cells = Object.keys(CANVAS_EDIT_OFFERS[ability]).sort();
+    check(
+      `every notation the playground can hold has a "${ability}" answer, and no others`,
+      cells.join(",") === seededKinds.join(","),
+      `grid: ${cells.join(", ")} / seeds: ${seededKinds.join(", ")}`,
+    );
+
+    /* NON-VACUITY. An ability no notation offers would make every assertion
+       below pass while the derived "Only … can be …" sentence named nobody. */
+    const offering = cells.filter(
+      (kind) => CANVAS_EDIT_OFFERS[ability][kind].offers,
+    );
+    check(
+      `at least one notation offers "${ability}"`,
+      offering.length >= 1,
+      "no notation offers it — the derived refusal would name nobody",
+    );
+
+    for (const kind of cells) {
+      const cell = CANVAS_EDIT_OFFERS[ability][kind];
+      const parsed = parseViewSource(VIEW_SEED_TEXT[kind]);
+      if (parsed.status !== "ok") continue; // reported by the loops below
+
+      /* THE FUNCTION ANSWERS FROM THE TABLE. Without this the grid could drift
+         into documentation — right in the file and wrong in the app, which is
+         the failure `codebase.md` habit 4 names and the one this refactor
+         exists to make impossible. Compared cell by cell rather than by
+         spot-checking C4 and sequence, because the pair that drifts is always
+         the one nobody thought to name. */
+      check(
+        `canvasEditability agrees with the grid for ${kind} / ${ability}`,
+        canvasEditability(parsed.value, ability).editable === cell.offers,
+        `grid says ${cell.offers}, function says ${canvasEditability(parsed.value, ability).editable}`,
+      );
+
+      if (cell.offers) {
+        check(
+          `the ${kind} cell for "${ability}" carries the noun its refusals need`,
+          typeof cell.noun === "string" && cell.noun.length > 2,
+          "an offering cell with no noun leaves other notations' refusals " +
+            "naming nothing",
+        );
+        continue;
+      }
+
+      /* `?? ""` so that a function DISAGREEING with the grid fails the two
+         assertions below instead of throwing. The assertion above already
+         reports the disagreement; a crash here would take the remaining two
+         hundred assertions in this file with it, which is the difference
+         between one red line and a run that proves nothing. */
+      const reason = canvasEditability(parsed.value, ability).reason ?? "";
+
+      /* A REFUSAL IS A PROPERTY OR A DECISION, NEVER A PROMISE. Gap language is
+         what turns a refusal into a to-do the reader waits for: every one of
+         these six is a shipped answer, and `ground` already records which of
+         the two reasons it is. */
+      check(
+        `the ${kind} / ${ability} refusal does not read as an unfinished feature`,
+        !/\b(?:not supported|coming soon|not yet|yet|for now|todo)\b/i.test(
+          reason,
+        ),
+        `reason: ${reason}`,
+      );
+
+      /* AND IT POINTS SOMEWHERE. A refusal that only says no sends the reader
+         looking for a control that does not exist; the sequence move refusal is
+         the case that proves the rule is worth having, because the thing it
+         points at is a whole feature one click away. Either the cell names a
+         gesture this notation does have, or the sentence names a notation that
+         does offer the ability. */
+      const namesAnAlternative =
+        typeof cell.instead === "string" && reason.includes(cell.instead);
+      const namesAnOfferingNotation = offering.some((other) =>
+        reason.includes(CANVAS_EDIT_OFFERS[ability][other].noun),
+      );
+      check(
+        `the ${kind} / ${ability} refusal is not a dead end`,
+        namesAnAlternative || namesAnOfferingNotation,
+        `reason: ${reason}`,
+      );
+
+      check(
+        `the ${kind} / ${ability} refusal says which of the two grounds it is`,
+        cell.ground === "grammar" || cell.ground === "surface",
+        `ground: ${JSON.stringify(cell.ground)}`,
+      );
+    }
+  }
+
+  /* THE PROSE FOLLOWS THE TABLE, proved by moving the table.
+
+     This is the one assertion here that cannot be satisfied by restating the
+     implementation, and it is the reason the sentence is derived at all. "Only
+     C4 diagrams can be dragged on the canvas" was hand-written into four
+     refusals; on the day a second notation learned to be dragged, all four
+     would have gone on saying otherwise with every check green — the same shape
+     as the three stale claims section 15 exists for.
+
+     So: make the flowchart offer `move`, and the ER document's refusal must
+     name it. Restored immediately, and the restoration is itself asserted, or
+     every section after this one would run against a mutated grid. */
+  const erSeed = parseViewSource(VIEW_SEED_TEXT.er);
+  const moveRefusal = () =>
+    erSeed.status === "ok"
+      ? canvasEditability(erSeed.value, "move").reason
+      : "";
+  const before = moveRefusal();
+  check(
+    "the move refusal names C4 and does not name a notation that cannot be dragged",
+    before.includes("C4 diagrams") && !before.includes("flowchart diagrams"),
+    `reason: ${before}`,
+  );
+  const original = CANVAS_EDIT_OFFERS.move.flowchart;
+  CANVAS_EDIT_OFFERS.move.flowchart = {
+    offers: true,
+    noun: "flowchart diagrams",
+  };
+  const after = moveRefusal();
+  CANVAS_EDIT_OFFERS.move.flowchart = original;
+  check(
+    "a notation that starts offering `move` appears in every other notation's refusal",
+    after.includes("flowchart diagrams") && after.includes("C4 diagrams"),
+    `reason after flipping the flowchart cell: ${after}`,
+  );
+  check(
+    "the grid was restored, so the sections after this one see the real answers",
+    moveRefusal() === before,
+    "the flipped cell leaked into the rest of the run",
+  );
+
+  /* THE PANE-LANGUAGE EXCEPTIONS ARE REAL, derived from the cells that declare
+     one rather than from the two Mermaid cases somebody remembered to write
+     below. A cell claiming a format it cannot reach would be a refusal nothing
+     can trigger — coverage that is not there. */
+  const { convertedSourceText } = await load(
+    "src/features/playground/input/parse.ts",
+  );
+  for (const ability of abilities) {
+    for (const kind of Object.keys(CANVAS_EDIT_OFFERS[ability])) {
+      const cell = CANVAS_EDIT_OFFERS[ability][kind];
+      if (!cell.offers || cell.unlessPane === undefined) continue;
+      const seed = parseViewSource(VIEW_SEED_TEXT[kind]);
+      const converted =
+        seed.status === "ok"
+          ? parseViewSource(
+              convertedSourceText(seed.value, cell.unlessPane.format),
+            )
+          : seed;
+      check(
+        `${kind} in a ${cell.unlessPane.format} pane refuses "${ability}", with the cell's own sentence`,
+        converted.status === "ok" &&
+          converted.value.kind === kind &&
+          converted.value.format === cell.unlessPane.format &&
+          canvasEditability(converted.value, ability).reason ===
+            cell.unlessPane.because,
+        `verdict: ${JSON.stringify(
+          converted.status === "ok"
+            ? canvasEditability(converted.value, ability)
+            : converted.error,
+        )}`,
+      );
+    }
+  }
+}
 
 console.log("\nEvery notation that cannot carry geometry says so");
 

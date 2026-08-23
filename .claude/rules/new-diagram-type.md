@@ -122,6 +122,17 @@ that is a defect, not a follow-up.
   no check: it reports coverage it does not have.
 - SVG and PNG export, GIF export of the trace, and share links, matching what
   the other kinds offer. Anything you leave out is a gap a user will find.
+- **Answer whether the canvas can be EDITED, in the capability grid.** Two of
+  the six notations can be, and the other four refuse for reasons that are
+  written down rather than left blank — so a new kind owes an answer either way.
+  `CANVAS_EDIT_OFFERS` is a total table over the document kinds, so it will not
+  compile until yours has one. Read
+  [`canvas-editing.md`](canvas-editing.md) before you write it: it is the
+  difference between a drag that becomes text and a drag that springs back with
+  no explanation, and it carries the four bugs that bought its rules — a lock
+  rendered in the wrong branch for a whole release, a re-emit that ate the
+  author's comments, a toggle that deleted a hand-written default, and a page
+  claiming C4 was the only editable canvas long after it was not.
 
 ## 3. Update MCP for the new capability
 
@@ -302,6 +313,9 @@ touched; an unticked box is a decision, not an oversight.
 - [ ] complete in every theme, and `check:<kind>-palette` **if the kind assigns
       colour by type** (see step 2 — not every kind has a palette)
 - [ ] SVG/PNG export, GIF where there is a trace, share button
+- [ ] a `CANVAS_EDIT_OFFERS` cell per ability — offered, or refused with a
+      reason and a `ground` ([`canvas-editing.md`](canvas-editing.md)); a lock
+      and a heading sentence if any is offered
 
 **3. MCP**
 
