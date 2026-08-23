@@ -9,6 +9,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Changing a sequence message's arrow style now takes effect when you pick it.
+  The From and To menus beside it already did, so the kind menu looked like a
+  control that did nothing; every menu in the details panel acts at once, and
+  Apply belongs to the typing. A lifeline's kind had the same defect.
+
+### Fixed
+
 - An old `/view` link no longer shows "Opening the playground…" on the way to
   `/live`. The forward now happens while the page is still being parsed instead
   of waiting for the app to load, so there is nothing to read before the address

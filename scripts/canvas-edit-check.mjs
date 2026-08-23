@@ -3252,6 +3252,87 @@ console.log("\nNo surface still claims the sequence canvas has no drag");
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* 18. Every menu in the dock acts at once                                     */
+/* -------------------------------------------------------------------------- */
+
+/* REPORTED AS "I cannot change the style of the line". The reader could — the
+   gesture writes `~>` and `..>` correctly — but the arrow-kind menu only called
+   `setKind`, so nothing happened until an Apply nobody knew was owed, while the
+   From and To menus one row above committed on change. Two semantics in one
+   panel with no signal which was which.
+
+   DERIVED FROM THE FORMS, not from a list of the two menus that were wrong: the
+   failure a hand-listed pair cannot notice is the THIRD menu somebody adds. So
+   this finds every `<select>` in the viewer and requires each one's `onChange`
+   to reach a commit — `onSubmit`, `onRepointTo`, or another handler prop — and
+   not merely a `setX`. A text input is deliberately exempt: typing is
+   mid-thought until its author says otherwise, which is what Apply is for. */
+{
+  const viewer = read("src/features/sequence/components/sequence-viewer.tsx");
+
+  /* Each select's onChange body, taken from the tag to its closing brace. A
+     count guard first, because a regex that matched nothing would make every
+     assertion below vacuously true — the way three checks on this branch passed
+     while the feature under them was broken. */
+  /* Sliced from each `<select` to the next one (or the end), rather than
+     matched with a closing anchor: the first spelling ended on
+     `}\n<spaces>className`, which prettier's reflow moved, so it found two of
+     the four and the loop below passed on a sample that excluded both menus
+     that were broken. A count guard alone would not have caught that — 2 is
+     also >= 2 — which is why the guard now knows how many selects exist. */
+  /* THE onChange EXPRESSION ONLY, brace-matched. Two earlier spellings were
+     both wrong in the same direction — too greedy — and the second passed while
+     the reported bug was reintroduced:
+
+       - anchoring the end on `}\n<spaces>className` found two of the four,
+         because prettier's reflow moved that shape;
+       - slicing from one `<select` to the NEXT swallowed everything between,
+         including the Apply button's own `onSubmit`, so a menu that only called
+         `setKind` still matched a commit that belonged to its neighbour.
+
+     Counting braces from the `{` after `onChange=` cannot do either. */
+  const onChangeBodies = (source) => {
+    const bodies = [];
+    for (const tag of [...source.matchAll(/<select\b/g)]) {
+      const at = source.indexOf("onChange={", tag.index ?? 0);
+      if (at === -1) {
+        bodies.push("");
+        continue;
+      }
+      let depth = 0;
+      let index = at + "onChange=".length;
+      const from = index;
+      for (; index < source.length; index += 1) {
+        if (source[index] === "{") depth += 1;
+        else if (source[index] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      bodies.push(source.slice(from, index + 1));
+    }
+    return bodies;
+  };
+  const selects = onChangeBodies(viewer);
+  for (const [index, body] of selects.entries()) {
+    check(
+      `select ${index + 1} commits on change rather than waiting for Apply`,
+      /onSubmit\(|onRepointTo\(|onToggle|onPick/.test(body),
+      "a menu that only sets state reads as a control that does nothing",
+    );
+  }
+  /* AND THE COMMIT CARRIES THE WHOLE FORM, which is what makes acting at once
+     safe. A select that submitted only its own field would discard whatever the
+     reader had typed and not yet applied — trading a control that appears
+     broken for one that silently destroys an edit in progress. */
+  check(
+    "an immediate commit carries the rest of the form with it",
+    (viewer.match(/revisionWith\(/g) ?? []).length >= 4,
+    "a partial revision would drop label and detail typed but not applied",
+  );
+}
+
 console.log(
   `\n${failures === 0 ? "PASS" : "FAIL"} — ${assertions - failures}/${assertions} assertions\n`,
 );

@@ -2723,17 +2723,45 @@ function MessageForm({
     labelRef.current?.select();
   }, []);
 
+  /**
+   * The form's state as a whole revision, with an override for the field that
+   * just changed.
+   *
+   * WHY A SELECT COMMITS ON CHANGE AND TEXT WAITS FOR APPLY. This panel had
+   * both semantics and no way to tell which was which: the From and To menus
+   * fired `onRepointTo` immediately, while the arrow-kind menu only called
+   * `setKind`. So a reader changed the arrow's style, watched the diagram not
+   * change, and reported that the style could not be changed at all. It could —
+   * `revisedMessageEdit` writes `~>` and `..>` correctly — but nothing said an
+   * Apply was owed, and the menu beside it needed none.
+   *
+   * A select is a decision, complete the moment it is made; a text field is
+   * mid-thought until its author says otherwise. So every menu here now acts at
+   * once and Apply belongs to the typing — which is also the rule the endpoint
+   * menus were already following.
+   *
+   * NOTHING TYPED IS LOST, because `SequenceMessageRevision` is a WHOLE value:
+   * committing the arrow kind carries the label and detail currently in the
+   * fields along with it. That is what makes acting immediately safe here,
+   * where a partial patch would have made it a way to discard an edit in
+   * progress.
+   */
+  const revisionWith = (
+    over: Partial<SequenceMessageRevision>,
+  ): SequenceMessageRevision => ({
+    label,
+    kind,
+    technology: orAbsent(technology),
+    description: orAbsent(description),
+    ...over,
+  });
+
   return (
     <form
       className="flex flex-col gap-2.5"
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit({
-          label,
-          kind,
-          technology: orAbsent(technology),
-          description: orAbsent(description),
-        });
+        onSubmit(revisionWith({}));
       }}
     >
       <DockField term="Label">
@@ -2812,9 +2840,13 @@ function MessageForm({
       <DockField term="Kind">
         <select
           value={kind}
-          onChange={(event) =>
-            setKind(event.target.value as SequenceMessageKind)
-          }
+          onChange={(event) => {
+            const next = event.target.value as SequenceMessageKind;
+            setKind(next);
+            // Acts at once, like the endpoint menus beside it — see
+            // `revisionWith` for why a select does and a text field does not.
+            onSubmit(revisionWith({ kind: next }));
+          }}
           className={FIELD_CLASSES}
         >
           <option value="sync">sync — a call the sender waits on</option>
@@ -2874,6 +2906,20 @@ function ParticipantForm({
   const [technology, setTechnology] = useState(participant.technology ?? "");
   const [description, setDescription] = useState(participant.description ?? "");
 
+  /** The same rule the message form follows, for the same reason: a menu is a
+   * decision and acts at once, typing waits for Apply. `revisionWith` in that
+   * form carries the argument; the participant kind had the identical defect —
+   * a reader chose "actor" and nothing on the canvas moved. */
+  const revisionWith = (
+    over: Partial<SequenceParticipantRevision>,
+  ): SequenceParticipantRevision => ({
+    name,
+    kind: kind === "" ? undefined : kind,
+    technology: orAbsent(technology),
+    description: orAbsent(description),
+    ...over,
+  });
+
   const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     nameRef.current?.select();
@@ -2884,12 +2930,7 @@ function ParticipantForm({
       className="flex flex-col gap-2.5"
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit({
-          name,
-          kind: kind === "" ? undefined : kind,
-          technology: orAbsent(technology),
-          description: orAbsent(description),
-        });
+        onSubmit(revisionWith({}));
       }}
     >
       <DockField term="Name">
@@ -2903,9 +2944,12 @@ function ParticipantForm({
       <DockField term="Kind">
         <select
           value={kind}
-          onChange={(event) =>
-            setKind(event.target.value as SequenceParticipantKind | "")
-          }
+          onChange={(event) => {
+            const next = event.target.value as SequenceParticipantKind | "";
+            setKind(next);
+            // Acts at once — see `revisionWith`.
+            onSubmit(revisionWith({ kind: next === "" ? undefined : next }));
+          }}
           className={FIELD_CLASSES}
         >
           <option value="">unstated — drawn as a box</option>
