@@ -7,6 +7,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- An old `/view` link carrying a query now keeps it. `/view?e=atlas-shop`
+  forwarded to `/live` with the example id dropped, so the reader arrived at the
+  seed rather than the diagram they asked for; `?e=` and `?d=` now travel with
+  the fragment, merged with whatever the alias itself sets.
+
 ### Changed
 
 - **The playground moved from `/view` to `/live`, and the header entry now

@@ -759,6 +759,45 @@ await check(
   },
 );
 
+/* ----------------------------------------------------------------------- */
+/* The trampoline carries BOTH halves of the address                        */
+/* ----------------------------------------------------------------------- */
+
+/* A trampoline that forwards the fragment and drops the query is a half-kept
+   promise, and it shipped that way. `/view?e=atlas-shop` landed on `/live`
+   with the example id gone — and `?e=` is how every demo card and every
+   crawlable example page addresses a document, so the reader arrived at the
+   seed instead of the diagram they asked for. The fragment was carried because
+   the SHARE payload lives there; the query is the other half of the same
+   compatibility surface.
+
+   Asserted on the SOURCE because the merge runs in a browser: `router.replace`
+   and `window.location` have no harness here. So this pins the two things that
+   were actually wrong — that the incoming query is read at all, and that it is
+   MERGED rather than appended (five of six destinations carry their own `?d=`,
+   and `?d=seq?e=x` makes `d` read as `seq?e=x`, matching no kind). */
+await check("the trampoline reads the incoming query at all", () => {
+  const forward = readSource("src/components/share/alias-forward.tsx");
+  assert.ok(
+    /searchParams/.test(forward),
+    "dropping the query loses every ?e= and ?d= link ever shared",
+  );
+});
+await check("the trampoline MERGES the query rather than appending it", () => {
+  const forward = readSource("src/components/share/alias-forward.tsx");
+  assert.ok(
+    /searchParams\.has\(/.test(forward),
+    "?d=seq?e=x makes d read as seq?e=x, which matches no kind",
+  );
+});
+await check("the forward emits the query and the normalized fragment", () => {
+  const forward = readSource("src/components/share/alias-forward.tsx");
+  assert.ok(
+    /\.search\b/.test(forward) && /normalizeShareFragment/.test(forward),
+    "one half emitted without the other is the bug this section records",
+  );
+});
+
 if (failures > 0) {
   console.error(
     `\nshare-capacity-check: ${failures} of ${assertions} check(s) failed.`,
