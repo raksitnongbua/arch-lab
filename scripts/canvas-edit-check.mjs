@@ -651,34 +651,121 @@ console.log("\nThe canvas undo ring is bounded and stays out of the pane");
 }
 
 /* ----------------------------------------------------------------------- */
-/* 10. The lock: editable by default, decided by the server                 */
+/* 10. The lock: locked by default, decided by the server                   */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nThe canvas lock defaults to editable and is read server-side");
+console.log("\nThe canvas lock defaults to locked and is read server-side");
 
 {
-  const { isLockedCookie, CANVAS_LOCK_COOKIE } = await load(
-    "src/features/playground/lib/canvas-lock.ts",
+  const { isLockedCookie, CANVAS_LOCK_COOKIE, CANVAS_LOCKED_BY_DEFAULT } =
+    await load("src/features/playground/lib/canvas-lock.ts");
+  const lock = read("src/features/playground/lib/canvas-lock.ts");
+
+  /* LOCKED IS THE DEFAULT, and this assertion reversed when that default did.
+     It used to read "no cookie means editable", on the argument that a stray
+     drag costs nothing and a read-only default would hide the feature. The
+     first half stopped being true when the canvas learned to create, remove,
+     repoint, rename and reorder — the common visit is READING a diagram
+     somebody sent, and a mis-aimed press on it is now an edit you have to
+     notice before you can undo it. The second half is answered by the control
+     rather than by the default: the locked face offers "Edit" with a pencil,
+     asserted below and in section 8, and if that regresses this default is
+     wrong again. `canvas-lock.ts` carries the full argument. */
+  check(
+    "no cookie means locked",
+    isLockedCookie(undefined) === true,
+    "an absent cookie left the canvas editable — a diagram a reader opened " +
+      "from someone else's link takes edits from a mis-aimed press",
+  );
+  /* NOT A SECOND LITERAL. A `true` written here would keep passing while the
+     module's own default moved under it, which is the exact shape of the
+     server-and-prop disagreement `CANVAS_LOCKED_BY_DEFAULT` exists to stop. */
+  check(
+    "the default the server reads is the module's own",
+    isLockedCookie(undefined) === CANVAS_LOCKED_BY_DEFAULT,
+    "the cookie read and the exported default disagree — a host that omits " +
+      "the prop would render the state the server did not",
+  );
+  check(
+    "an unrecognised cookie value falls to the default, not to editable",
+    isLockedCookie("") === CANVAS_LOCKED_BY_DEFAULT &&
+      isLockedCookie("true") === CANVAS_LOCKED_BY_DEFAULT,
+    "a stale or foreign value decided the lock on its own — only the two " +
+      "spellings the reader's own press writes are choices",
+  );
+  /* THE STORED SPELLINGS ARE PINNED IN SOURCE, deliberately as a literal
+     twin, because they are not internal names: they are already written into
+     cookie jars on readers' machines, and renaming one forgets every reader
+     who set it. This replaced a behavioural `isLockedCookie("locked") === true`
+     that the flip above made unfalsifiable — with locked as the default, an
+     unrecognised value answers `true` as well, so the assertion passed
+     whatever the on-value became. The `unlocked` half is still asserted
+     behaviourally below, where the default no longer masks it. */
+  check(
+    "the stored spellings are the ones already in readers' cookie jars",
+    /onValue: "locked"/.test(lock) && /offValue: "unlocked"/.test(lock),
+    "a stored spelling was renamed — every reader carrying the old one is " +
+      "read as never having chosen, and silently gets the default",
+  );
+  /* THE ONE THAT PROTECTS AN EXISTING READER. The default moved by changing
+     what an ABSENT cookie means; a reader who deliberately chose Editable
+     under the old default has `unlocked` on disk and must still get an
+     editable canvas. Inverting the cookie's MEANING instead — or dropping the
+     off-value branch so the opt-out falls to the now-locked default — would
+     pass every other assertion in this block and silently reverse everyone who
+     had already decided. */
+  check(
+    "a reader who chose Editable keeps it across the default change",
+    isLockedCookie("unlocked") === false,
+    "the stored opt-out no longer unlocks — every reader who had chosen " +
+      "Editable was silently reversed",
   );
 
-  /* EDITABLE IS THE DEFAULT, and this is the assertion that keeps it so. A
-     reader with no cookie must get the editable canvas; flipping the stored
-     sense (storing "editable" instead of "locked") would silently make every
-     first-time reader read-only and hide the feature entirely. */
-  check(
-    "no cookie means editable",
-    isLockedCookie(undefined) === false,
-    "an absent cookie locked the canvas — the feature would be invisible",
+  /* WHAT PAYS FOR THE DEFAULT. A locked canvas withdraws the pencil, the
+     insert buttons, the drag-to-reorder and the numbering toggle, so the lock
+     is the only thing left on screen that can say the diagram is editable.
+     These three assertions are the price of the flip above, and each names a
+     way the old control failed to say it. */
+  const control = read(
+    "src/features/playground/components/canvas-lock-button.tsx",
   );
   check(
-    "an unrecognised cookie value means editable, not locked",
-    isLockedCookie("") === false && isLockedCookie("true") === false,
-    "a stale or foreign value locked the canvas",
+    "the locked face offers the edit action rather than reporting the state",
+    /<Pencil\b/.test(control) && /locked \? "Edit"/.test(control),
+    'the locked face is a padlock labelled "Locked" again — it names what the ' +
+      "reader can already see and leaves them to guess that pressing is allowed",
   );
+  /* NEVER ICON-ONLY. `hidden sm:inline` was on the only text this control had,
+     so on a phone the whole affordance was one padlock glyph — on the notation
+     whose canvas had just learned five new gestures. Matched as a `className`
+     attribute, not as bare text: the module's header quotes the class it
+     replaced, and a grep for the words alone fails on the explanation. */
   check(
-    "the stored lock reads back as locked",
-    isLockedCookie("locked") === true,
-    "the lock does not survive a reload",
+    "the label survives a narrow viewport",
+    !/className="[^"]*\bhidden\b/.test(control),
+    "the lock's label is hidden below the sm breakpoint — a bare icon is the " +
+      "control nobody thinks to look for",
+  );
+  /* MEASURED, not asserted by eye: WCAG 2.5.3 wants the visible words to OPEN
+     the accessible name, so a voice-control user saying "click Edit" reaches
+     the control they can see. Comparing the two strings catches the drift that
+     a pair of separate regexes would not — either one being rewritten alone. */
+  const namedLocked = /const name = locked\s*\?\s*`([^`]*)`/.exec(control)?.[1];
+  const namedUnlocked = /const name = locked[\s\S]*?:\s*"([^"]*)"/.exec(
+    control,
+  )?.[1];
+  const faceLabels = /\{locked \? "([^"]+)" : "([^"]+)"\}/.exec(control);
+  check(
+    "each face's visible label opens its accessible name",
+    namedLocked !== undefined &&
+      namedUnlocked !== undefined &&
+      faceLabels !== null &&
+      namedLocked.startsWith(faceLabels[1]) &&
+      namedUnlocked.startsWith(faceLabels[2]),
+    `visible ${JSON.stringify(faceLabels?.slice(1))} against names ` +
+      `${JSON.stringify([namedLocked, namedUnlocked])} — a control whose ` +
+      "spoken name does not start with its printed one cannot be reached by " +
+      "the word on it",
   );
 
   /* READ ON THE SERVER, for the reason the source fold already established:
@@ -703,7 +790,6 @@ console.log("\nThe canvas lock defaults to editable and is read server-side");
   /* ONE MECHANISM FOR BOTH PREFERENCES. The failure this prevents is the one
      `dry.md` calls a copy-paste fingerprint: two cookie modules with the same
      bodies, one of which later learns a fix the other does not. */
-  const lock = read("src/features/playground/lib/canvas-lock.ts");
   const fold = read("src/features/playground/lib/source-fold.ts");
   check(
     "both preferences are built from the one cookie mechanism",
@@ -1902,6 +1988,32 @@ console.log("\nLocking never offers a link to somewhere you already are");
     "the playground holds no inline lock button beside the component",
     !/aria-pressed=\{canvasLocked\}/.test(playground),
     "an inline copy is how the two branches drifted apart the first time",
+  );
+  /* AND THE SAME SENTINEL, FORWARDS. The line above greps for the shape the
+     inline copy actually had; the control has since dropped `aria-pressed`
+     (an action-labelled button must not claim a pressed state), so on its own
+     that grep can no longer catch tomorrow's copy. A copy must spell the
+     lock's own sentence, and the sentence lives only in the module that owns
+     the control. */
+  check(
+    "the lock's own wording lives only in the control module",
+    !playground.includes("unlock the canvas") &&
+      !playground.includes("Lock the canvas"),
+    "the playground writes the lock's sentence itself — an inline copy of the " +
+      "control, which is how the two branches drifted apart the first time",
+  );
+
+  /* ONE STATE WORD PER LOCK. The control's faces are ACTIONS ("Edit",
+     "Lock"), which is what makes a locked-by-default canvas findable — and it
+     is also why the state has to be said somewhere. `canvasStateLabel` is
+     that word, and a strip that renders the lock without it leaves a reader
+     pressing to find out which state they were in. Counted against the
+     renders rather than against the literal 2, for the same reason as above. */
+  const stateWords = playground.match(/canvasStateLabel\(/g) ?? [];
+  check(
+    "every rendered lock has the canvas state named beside it",
+    stateWords.length === renders.length,
+    `${stateWords.length} canvasStateLabel() uses for ${renders.length} lock renders`,
   );
 
   /* THE HEADING'S CLAIM MATCHES WHAT SHIPS. It said "C4 diagrams can also be

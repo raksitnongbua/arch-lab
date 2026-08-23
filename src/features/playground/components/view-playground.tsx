@@ -75,7 +75,8 @@ import {
   FileText,
   ChevronDown,
   Info,
-  LockOpen,
+  Link2,
+  Pencil,
   Repeat2,
   Shrink,
   X,
@@ -83,7 +84,11 @@ import {
 import Link from "next/link";
 
 import { buttonClasses, Button } from "@/components/ui/button";
-import { CANVAS_LOCK_COPY, CanvasLockButton } from "./canvas-lock-button";
+import {
+  CANVAS_LOCK_COPY,
+  CanvasLockButton,
+  canvasStateLabel,
+} from "./canvas-lock-button";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -207,6 +212,7 @@ import {
   toggledAutonumberEdit,
   INSERTED_PARTICIPANT_NAME,
 } from "../input/sequence-edit";
+import { CANVAS_LOCKED_BY_DEFAULT } from "../lib/canvas-lock";
 import { KIND_BLURB } from "../lib/kind-copy";
 import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
 
@@ -257,19 +263,20 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
     icon: FileText,
   },
   /* THE LOCK GETS A STEP because it is the one control that takes every other
-     one away. A reader who pressed it to present, came back later and found the
-     pencil and the pill's editing buttons gone has no way to connect the two —
-     the button that did it reads “Locked” at the top of the pane, several
-     hundred pixels from the controls it withdrew. The tour is where that
-     connection can be made once. It teaches the SEQUENCE canvas's wording
-     because this is the sequence viewer's tour; the C4 shell carries its own. */
+     one away, and since the canvas locks by default (`lib/canvas-lock.ts`) it
+     is now the step that explains why there is nothing to press on the diagram
+     yet. The strip's own “Edit” is meant to answer that without help; this is
+     the second chance, and it is the place to say that the editing controls
+     APPEAR with it, which the button alone cannot. It teaches the SEQUENCE
+     canvas's wording because this is the sequence viewer's tour; the C4 shell
+     carries its own. */
   {
-    title: "Lock it to present",
+    title: "Press Edit to change it",
     body:
-      "“Editable” at the top of this pane turns the canvas read-only, so a " +
-      "stray click cannot change the diagram while you are talking over it. " +
-      "The editing controls go with it, and press it again to bring them back.",
-    icon: LockOpen,
+      "The canvas starts read-only, so a stray click cannot move anything " +
+      "while you read or present. “Edit” at the top of this pane turns it on " +
+      "and the editing controls appear with it; “Lock” puts them away again.",
+    icon: Pencil,
   },
 ];
 
@@ -311,7 +318,7 @@ export function ViewPlayground({
   seed,
   initialText,
   initialSourceCollapsed = false,
-  initialCanvasLocked = false,
+  initialCanvasLocked = CANVAS_LOCKED_BY_DEFAULT,
 }: {
   /** Which example fills the pane when no share payload does. */
   seed: SeedKind;
@@ -336,8 +343,10 @@ export function ViewPlayground({
    * one frame of editable canvas through, and one frame is enough for a press
    * to land.
    *
-   * Defaults to `false` — EDITABLE. See `lib/canvas-lock.ts` for why the
-   * permissive state is the default and who the lock is for.
+   * Defaults to the module's own default rather than a second literal, so a
+   * host that omits the prop cannot disagree with the server's read of the
+   * cookie. See `lib/canvas-lock.ts` for why locked is that default and what
+   * the control does about the risk it carries.
    */
   initialCanvasLocked?: boolean;
 }): React.JSX.Element {
@@ -1635,16 +1644,53 @@ export function ViewPlayground({
               {/* ---- share-link outcome ---------------------------------- */}
               {/* Success only. Failure never reaches here — it took over the
                   page. */}
+              {/* ONE LINE, with the mechanism folded away — the same
+                  progressive disclosure the Mermaid notice above uses, and
+                  the same border, tint and icon-led summary, because a second
+                  notice shape in one rail reads as two unrelated warnings. It
+                  was a three-sentence card explaining that the document
+                  travelled inside the link; that is the interesting part
+                  exactly once, and it sat above the pane on every visit.
+
+                  WHAT MUST NOT SHRINK OUT is "nothing uploaded, nothing
+                  stored". It is not reassurance, it is the product's claim
+                  (`purpose.md`), and it is the one thing a reader who arrived
+                  from someone else's link cannot deduce from the page. The
+                  crawlable, full-length statement lives where crawlers read
+                  it — `/faq#sharing`, `llms.txt` and `llms-full.txt` — and
+                  the link below goes there rather than restating it here. */}
               {openedFromShare ? (
-                <div className="flex shrink-0 items-start justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3">
-                  <p className="text-sm leading-relaxed text-foreground">
-                    <span className="font-semibold">
-                      Opened from a share link.
-                    </span>{" "}
-                    The document below travelled inside the link itself —
-                    nothing was uploaded, and nothing is stored. Any edits stay
-                    in your browser.
-                  </p>
+                <div className="flex shrink-0 items-start gap-1">
+                  <details className="group min-w-0 flex-1 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-sm text-foreground">
+                    <summary className="flex cursor-pointer list-none items-center gap-2">
+                      <Link2
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-accent"
+                      />
+                      {/* WRAPS RATHER THAN TRUNCATES, unlike the strip labels
+                          above: this is the claim itself, and a rail narrow
+                          enough to clip it would clip "nothing stored" — the
+                          half that is the point. */}
+                      <span className="min-w-0">
+                        Share link — nothing uploaded, nothing stored.
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground underline-offset-2 group-hover:underline">
+                        how
+                      </span>
+                    </summary>
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      The document travelled inside the link itself, in the part
+                      after the <span className="font-mono">#</span> that
+                      browsers never send to a server. Any edits you make stay
+                      in this browser.{" "}
+                      <Link
+                        href="/faq#sharing"
+                        className="font-medium text-primary hover:underline"
+                      >
+                        More on share links
+                      </Link>
+                    </p>
+                  </details>
                   <button
                     type="button"
                     onClick={() => setOpenedFromShare(false)}
@@ -2053,12 +2099,21 @@ export function ViewPlayground({
                         copy={CANVAS_LOCK_COPY.c4}
                       />
                     ) : null}
+                    {/* THE STATE THE CONTROL DOES NOT REPORT. Its faces are
+                        actions ("Edit", "Lock"), so this word is where a
+                        reader learns which one they are in — one word, read
+                        left to right with the button: "Read-only ✏ Edit". A
+                        refusal outranks it: a C4 document the canvas cannot
+                        edit at all has a reason to give, and no lock beside
+                        it to need a state for. */}
                     <span className="truncate text-xs text-muted-foreground">
                       {CANVAS_EDIT_ENABLED &&
                       doc.kind === "c4" &&
                       !editability.editable
                         ? editability.reason
-                        : "Diagram"}
+                        : showCanvasLock
+                          ? canvasStateLabel(canvasLocked)
+                          : "Diagram"}
                     </span>
                   </span>
                 </div>
@@ -2130,10 +2185,16 @@ export function ViewPlayground({
                         sourceLabel="document source"
                       />
                     )}
+                    {/* Same one word as the C4 strip, from the same helper —
+                        see the note there. Immersive outranks it: the way out
+                        is the only thing a reader needs from this slot while
+                        the diagram covers the viewport. */}
                     <span className="truncate text-xs text-muted-foreground">
                       {isImmersive
                         ? "Immersive — Escape exits (a focused message clears first)"
-                        : "Diagram"}
+                        : showSequenceCanvasLock
+                          ? canvasStateLabel(canvasLocked)
+                          : "Diagram"}
                     </span>
                   </span>
                   {/* Share and Export live in the CANVAS strip, matching the

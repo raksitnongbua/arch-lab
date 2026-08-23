@@ -24,17 +24,45 @@
  * edit to a message's wording. A reader pressing this wants to know what it
  * just stopped, so the sentence names the gesture — and the announcement is
  * what a screen-reader user gets instead of the icon change.
+ *
+ * EACH FACE OFFERS THE ACTION IT PERFORMS; NEITHER REPORTS THE STATE. This is
+ * the part that carries the locked-by-default change in `canvas-lock.ts`, and
+ * it is not a decoration on it — the default is only defensible while this
+ * holds. A locked canvas withdraws the pencil, the insert buttons, the
+ * drag-to-reorder and the numbering toggle, so the control is the ONLY thing
+ * left on screen that can say the diagram is editable at all. A padlock
+ * labelled "Locked" does not say it: it names the state a reader can already
+ * see and leaves them to guess that pressing it is allowed, let alone what it
+ * would give them. So the locked face is a PENCIL labelled "Edit" — the same
+ * icon the sequence canvas puts on the gesture itself — and the unlocked face
+ * is a padlock labelled "Lock". The state is not lost; it is one word away in
+ * `canvasStateLabel`, which the strip shows beside this, so the pair reads
+ * "Read-only ✏ Edit" or "Editable 🔒 Lock" with nothing to hover and nothing
+ * to read twice.
+ *
+ * THE LABEL IS NEVER HIDDEN, and the `hidden sm:inline` it replaced is why
+ * that is written down: on a phone the whole affordance was one 16px padlock
+ * glyph, on the notation whose canvas had just learned five new gestures. An
+ * icon-only face is exactly the "control nobody would think to look for" the
+ * old default existed to avoid.
+ *
+ * NO `aria-pressed`, deliberately, and it was there before. A button whose
+ * name is the action it performs cannot also carry a pressed state without
+ * contradicting itself — "Edit, toggle button, pressed" tells a screen-reader
+ * user the opposite of what pressing it does. State reaches assistive tech
+ * through the two announcements instead, which are full sentences and say
+ * what changed rather than which control moved.
  */
 
 "use client";
 
-import { Lock, LockOpen } from "lucide-react";
+import { Lock, Pencil } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 
 export interface CanvasLockCopy {
   /** What unlocking lets the reader do, as a verb phrase completing
-   * "Unlock the canvas — …". Lower case, no trailing stop. */
+   * "Edit — unlock the canvas to …". Lower case, no trailing stop. */
   unlockHint: string;
   /** Announced on unlocking. A full sentence: a screen-reader user gets this
    * instead of watching the icon change. */
@@ -54,6 +82,14 @@ export function CanvasLockButton({
   onAnnounce: (message: string) => void;
   copy: CanvasLockCopy;
 }) {
+  /* The visible label is the FIRST WORDS of the accessible name, not a
+     different string beside it: a voice-control user says "click Edit", and a
+     name that begins somewhere else is a control they cannot reach by the word
+     they can see (WCAG 2.5.3). The rest of the name is the hint that used to
+     live only in a `title` — a tooltip no touch device shows. */
+  const name = locked
+    ? `Edit — unlock the canvas to ${copy.unlockHint}`
+    : "Lock the canvas — make the diagram read-only to present it";
   return (
     <button
       type="button"
@@ -63,18 +99,48 @@ export function CanvasLockButton({
           locked ? copy.unlockedAnnouncement : copy.lockedAnnouncement,
         );
       }}
-      aria-pressed={locked}
-      title={
+      aria-label={name}
+      title={name}
+      className={buttonClasses(
         locked
-          ? `Unlock the canvas — ${copy.unlockHint}`
-          : "Lock the canvas — make the diagram read-only to present it"
-      }
-      className={buttonClasses({ variant: "ghost", size: "sm" })}
+          ? {
+              /* The one emphasised control in the strip, and only while
+                 locked. An outline with a primary tint reads as "you may
+                 press this"; the ghost the unlocked face keeps reads as
+                 "chrome", which is right once the reader is already editing
+                 and the canvas itself carries the affordances. The tint is
+                 the `primary` token, so every theme supplies its own — and
+                 the LABEL rather than the tint is what carries the meaning,
+                 so a theme whose primary is quiet still reads. */
+              variant: "outline",
+              size: "sm",
+              className:
+                "border-primary/40 hover:border-primary/70 hover:bg-primary/10",
+            }
+          : { variant: "ghost", size: "sm" },
+      )}
     >
-      {locked ? <Lock aria-hidden="true" /> : <LockOpen aria-hidden="true" />}
-      <span className="hidden sm:inline">{locked ? "Locked" : "Editable"}</span>
+      {locked ? (
+        <Pencil aria-hidden="true" className="text-primary" />
+      ) : (
+        <Lock aria-hidden="true" />
+      )}
+      <span>{locked ? "Edit" : "Lock"}</span>
     </button>
   );
+}
+
+/**
+ * The one word the canvas strip shows beside the control, naming the state the
+ * control deliberately does not.
+ *
+ * Here rather than at either call site because there are two strips — the C4
+ * branch and the shared sequence/flowchart/use-case branch — and a canvas
+ * reading "Locked" beside a control offering "Edit" while the other reads
+ * "Read-only" is the drift this module was written to end.
+ */
+export function canvasStateLabel(locked: boolean) {
+  return locked ? "Read-only" : "Editable";
 }
 
 /**

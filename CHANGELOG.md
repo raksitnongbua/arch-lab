@@ -93,6 +93,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The canvas now starts locked, and the lock's button offers "Edit" instead
+  of reporting "Locked".** Editable used to be the default, which was right
+  when the only canvas gesture was nudging a C4 box; the canvas can now create,
+  remove, repoint, rename and reorder, and the common visit is reading a
+  diagram somebody sent. A locked canvas shows "Read-only" beside a pencil
+  button labelled Edit — one click turns everything on, and the button becomes
+  Lock. Not a breaking change: your saved choice is kept, so if you ever
+  pressed Editable you still get an editable canvas, and if you pressed Locked
+  nothing changes. Only readers who never touched the control see a different
+  default, and no file, link or route is affected.
+- The share-link notice above the source pane is now one line — "Share link —
+  nothing uploaded, nothing stored." — with how a share link carries the
+  document folded away behind it, next to a link to the full answer in `/faq`.
+  It was a three-sentence card, which is interesting exactly once and was above
+  the pane on every visit.
 - The guide's caveat now says what dragging actually does, which changed under
   it: dragging an element reorders it, dragging bare canvas pans, and nothing
   here is positioned — a dragged element takes a neighbour's place rather than
