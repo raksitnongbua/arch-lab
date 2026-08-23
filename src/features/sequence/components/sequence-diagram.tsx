@@ -116,6 +116,23 @@ export function resolveFocusSteps(
   }
 }
 
+/**
+ * The armed state of the two-click insert gesture, and the sink for the clicks.
+ *
+ * WHY THE INDICATOR'S Y ARRIVES FROM THE VIEWER rather than being worked out
+ * here: where the new message lands is a MODEL fact (after the focused step,
+ * or at the end), and the viewer is what holds the focus. Re-deriving it from
+ * `focus` inside the renderer would be a second answer to "where does it go",
+ * free to disagree with the answer the edit actually uses.
+ */
+export interface SequenceInsertArming {
+  /** The sender already picked; `null` while the first click is still owed. */
+  from: string | null;
+  /** Y of the row the new message will occupy, in SVG user units. */
+  atY: number;
+  onPick: (participantId: string) => void;
+}
+
 export interface SequenceDiagramProps {
   layout: SequenceLayout;
   title: string;
@@ -157,6 +174,13 @@ export interface SequenceDiagramProps {
   collapsed: ReadonlySet<string>;
   dependencyCount: ReadonlyMap<string, number>;
   onToggleCollapse: (id: string) => void;
+  /**
+   * Non-null only while the INSERT-A-MESSAGE gesture is armed. Absent by
+   * default, which is what keeps every host that only READS a diagram — the
+   * example view, the chooser previews — free of editing chrome without
+   * passing a flag to say so.
+   */
+  insert?: SequenceInsertArming | null;
   /*
    * There is NO onClearFocus here, deliberately. Clearing is what happens when
    * a click lands on nothing, and "nothing" is bigger than this component: in
@@ -186,6 +210,7 @@ export function SequenceDiagram({
   collapsed,
   dependencyCount,
   onToggleCollapse,
+  insert = null,
 }: SequenceDiagramProps): React.JSX.Element {
   /**
    * Every dim decision below derives from THIS set (see resolveFocusSteps):
@@ -749,6 +774,67 @@ export function SequenceDiagram({
           onKeyDown={keyActivate(() => onFocusMessage(message.step))}
         />
       ))}
+
+      {/* ---- the insert gesture's arming layer ----
+          LAST IN DOCUMENT ORDER, and that is the only place it can be: SVG
+          has no z-index, so a per-lifeline hit column drawn any earlier would
+          sit UNDER the message hit boxes and the reader would arm the gesture,
+          click a lifeline, and focus a message instead.
+
+          It is also why this is a separate layer rather than a prop on
+          `ParticipantColumn`: `check:sequence-layout` reads that component's
+          source text and pins what is in it, and a column that grew a
+          conditional hit rect would break those assertions while rendering
+          correctly — the "two halves, each self-consistent" failure in its
+          cheapest form.
+
+          NO ANIMATION on any of it, deliberately. `check:sequence-motion`
+          allows exactly one animation rule on the drawing root and forbids
+          per-element motion; a pulsing insertion line would fail it, and the
+          check is right — a diagram that animates while you are choosing where
+          to put something is a diagram fighting the choice. The indicator is a
+          static dashed rule, which is the same visual language every editor
+          uses for "the thing goes here". */}
+      {insert === null ? null : (
+        <g className="af-seq-chrome-insert">
+          <line
+            x1={layout.minX + 4}
+            x2={layout.minX + layout.width - 4}
+            y1={insert.atY}
+            y2={insert.atY}
+            stroke="var(--primary)"
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+            pointerEvents="none"
+          />
+          {layout.participants.map((participant) => (
+            <rect
+              key={`insert-${participant.id}`}
+              /* Literal class list, chrome-prefixed: `check:sequence-export`
+                 reads the className off the markup and fails a control it
+                 cannot strip, which is how this rect stays out of every
+                 exported SVG, PNG and GIF frame. */
+              className="af-seq-chrome-hit af-seq-chrome-hit-region af-seq-chrome-insert-target"
+              x={participant.x - participant.headerWidth / 2}
+              y={layout.lifelineTop}
+              width={participant.headerWidth}
+              height={Math.max(0, layout.footerTop - layout.lifelineTop)}
+              role="button"
+              tabIndex={0}
+              aria-label={
+                insert.from === null
+                  ? `Send the new message from ${participant.name}`
+                  : `Send the new message to ${participant.name}`
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                insert.onPick(participant.id);
+              }}
+              onKeyDown={keyActivate(() => insert.onPick(participant.id))}
+            />
+          ))}
+        </g>
+      )}
     </svg>
   );
 }

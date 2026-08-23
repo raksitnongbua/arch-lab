@@ -318,3 +318,140 @@ export const MAX_BRANCHES_BY_FRAGMENT_KIND: Record<
 export function isMultiBranch(kind: SequenceFragmentKind): boolean {
   return MAX_BRANCHES_BY_FRAGMENT_KIND[kind] > 1;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Addressing one item                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The address of one item in the fragment tree — the sequence document's
+ * answer to the id a C4 node has.
+ *
+ * WHY THERE IS NO ID TO USE INSTEAD. Nothing in this file gives an item an
+ * `id`, and adding one is not a small change: it would appear in the `.alab`
+ * grammar, in every Mermaid import, and in every file already on disk (which
+ * would have to be assigned ids on read, i.e. two readings of the same
+ * document disagreeing about what to call a step). Position IS the identity
+ * here — `items` is execution order and "order is data", per this file's
+ * header — so the address is the position.
+ *
+ * A JSON-POINTER-STYLE INDEX PATH, alternating item index and branch index
+ * and therefore always ODD in length. `[3]` is `items[3]`; `[3, 1, 2]` is
+ * `items[3].branches[1].items[2]`. It is a homogeneous path of indices rather
+ * than the object-per-segment shape `comments.md` prefers for positional
+ * tuples, because every segment means the same kind of thing — "the nth child"
+ * — and the alternation is the tree's own shape, not two fields crammed into
+ * one slot. Nothing indexes it by hand: `sequenceItemAt` is the only reader.
+ */
+export type SequenceItemPath = readonly number[];
+
+/**
+ * The item `path` addresses, or `undefined` when the path does not land on one
+ * — a stale path (the document was re-parsed with that branch shorter) reads
+ * as "no item" rather than throwing, because every caller here is resolving an
+ * address a user gesture captured a moment ago.
+ */
+export function sequenceItemAt(
+  items: readonly SequenceItem[],
+  path: SequenceItemPath,
+): SequenceItem | undefined {
+  if (path.length === 0 || path.length % 2 === 0) return undefined;
+  let list = items;
+  for (let at = 0; at < path.length; at += 2) {
+    const item = list[path[at]];
+    if (item === undefined) return undefined;
+    if (at + 1 === path.length) return item;
+    if (item.step !== "fragment") return undefined;
+    const branch = item.branches[path[at + 1]];
+    if (branch === undefined) return undefined;
+    list = branch.items;
+  }
+  return undefined;
+}
+
+/**
+ * Every MESSAGE address in document order — fragments walked depth-first,
+ * branches in order, which is the order a reader's eye takes down the page.
+ *
+ * This is what turns a layout STEP NUMBER into a model address:
+ * `sequenceMessagePaths(file.items)[step - 1]`. The layout numbers messages
+ * 1..n as it walks, and it walks this order; `check:sequence` pins the two
+ * walks against each other rather than trusting the coincidence, because the
+ * failure mode is silent — an edit landing on a neighbouring message.
+ */
+export function sequenceMessagePaths(
+  items: readonly SequenceItem[],
+): SequenceItemPath[] {
+  const out: SequenceItemPath[] = [];
+  const walk = (list: readonly SequenceItem[], prefix: number[]): void => {
+    list.forEach((item, index) => {
+      if (item.step === "message") out.push([...prefix, index]);
+      else if (item.step === "fragment") {
+        item.branches.forEach((branch, branchIndex) => {
+          walk(branch.items, [...prefix, index, branchIndex]);
+        });
+      }
+    });
+  };
+  walk(items, []);
+  return out;
+}
+
+/**
+ * A `SequenceItemPath` as a map key. Dots are unambiguous because every
+ * segment is a decimal index — no segment can contain one — so no pair of
+ * paths can forge another's key.
+ */
+export function sequenceItemKey(path: SequenceItemPath): string {
+  return path.join(".");
+}
+
+/* -------------------------------------------------------------------------- */
+/* The editable subset of an element                                           */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * These two are the CONTRACT BETWEEN THE CANVAS AND THE TEXT: the sequence
+ * viewer's detail dock collects them, and `playground/input/sequence-edit.ts`
+ * turns them into a line patch. They live here rather than beside either half
+ * because the viewer must not import from the playground — the repo's import
+ * layering runs editor -> viewer -> sequence and the playground consumes all
+ * three — and this file is the neutral ground both already share.
+ */
+
+/**
+ * The editable subset of a message, given WHOLE rather than as a diff:
+ * `undefined` means the field is absent from the document, not "leave it as it
+ * was". The dock's form shows all four at once and submits all four, so a diff
+ * would only add a way for the form and the model to disagree.
+ *
+ * `from`, `to`, `activate` and `deactivate` are deliberately NOT here.
+ * Rewriting an endpoint is a different gesture (it moves the arrow), and the
+ * activation flags are half of an unvalidated open/close pairing — offering a
+ * checkbox on one message that can unbalance the bars several rows below it
+ * would be a control whose effect is invisible from where you press it.
+ */
+export interface SequenceMessageRevision {
+  label: string;
+  kind: SequenceMessageKind;
+  technology?: string;
+  description?: string;
+}
+
+/**
+ * The editable subset of a participant, on the same whole-value contract.
+ *
+ * `id` is absent because it is the name every message refers to: renaming it
+ * on the canvas would mean rewriting every line that mentions it, which is a
+ * refactor rather than an edit and belongs in the pane where the reader can
+ * see all of them. `icon` is absent because there is no icon picker on this
+ * canvas to change it with.
+ */
+export interface SequenceParticipantRevision {
+  name: string;
+  /** `undefined` keeps the document's "unstated", which is a third state
+   * distinct from an explicit `participant` — see `SequenceParticipantKind`. */
+  kind?: SequenceParticipantKind;
+  technology?: string;
+  description?: string;
+}

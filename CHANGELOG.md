@@ -7,6 +7,33 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **The sequence canvas is editable.** Click a message or a lifeline and the
+  details panel gains a pencil: a message's label, arrow kind, `[technology]`
+  and `desc` detail, and a participant's display name, kind and
+  `[technology]`, are all editable in place. Applying a change rewrites only
+  that element's own lines in your source text — your comments, blank lines,
+  spacing and any field you wrote out that canonical form omits at its default
+  survive untouched.
+- **Add a message with a button and two clicks.** `+` in the canvas strip arms
+  the gesture; click the sending lifeline, then the receiving one, and one line
+  is inserted after the focused step (or at the end of the flow when nothing is
+  focused). A dashed rule shows where it will land, the lifelines are tab
+  stops so the mouse is not the only route, and Escape cancels. Exactly one
+  line is added and nothing else in the file is renormalised.
+- Both gestures share the canvas lock and the canvas undo ring with the C4
+  canvas: locking the diagram removes the editing controls entirely, and
+  Cmd/Ctrl + Z with the diagram focused steps back through canvas edits.
+
+### Changed
+
+- A sequence document's "cannot be dragged" message now names the edit it
+  _does_ offer instead of being a dead end. A Mermaid `sequenceDiagram` pane
+  refuses these edits by name: Mermaid cannot hold a message's `desc` or
+  `[technology]`, so the change would be lost on the next round trip — switch
+  the pane to `.alab` to edit on the canvas.
+
 ### Fixed
 
 - **A canvas edit no longer deletes the comments in your `.alab` file.** Since

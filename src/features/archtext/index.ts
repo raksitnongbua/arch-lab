@@ -40,6 +40,15 @@
  *
  *   - `parseSequenceText` / `serializeSequenceText` — `.alab` sequence
  *     text ⇄ `SequenceLabFile`, lossless both ways, same error contract.
+ *   - `parseSequenceTextWithSpans(source)` — the same sequence parse, plus
+ *     the LINE SPAN each participant and item came from, and
+ *     `canonicalParticipantBlock` / `canonicalMessageBlock` — the lines the
+ *     serializer would write for one of them. Together these let a caller
+ *     splice one element's own block into the author's own text instead of
+ *     re-emitting the file, which is lossy in a way canonical text hides: no
+ *     `//` comments, no author blank lines, and no field written out that
+ *     canonical form omits at its default. The editable sequence canvas is
+ *     the caller (`playground/input/sequence-edit.ts`).
  *   - `parseFlowchartText` / `serializeFlowchartText` — `.alab` flowchart
  *     text ⇄ `FlowchartLabFile`, same lossless and error contract.
  *   - `parseUseCaseText` / `serializeUseCaseText` — `.alab` use-case
@@ -71,8 +80,16 @@ export {
   defaultSizeFor,
 } from "./lib/defaults";
 export type { DefaultLayoutEdge } from "./lib/defaults";
-export { parseSequenceText } from "./lib/sequence/parse";
-export { serializeSequenceText } from "./lib/sequence/serialize";
+export {
+  parseSequenceText,
+  parseSequenceTextWithSpans,
+} from "./lib/sequence/parse";
+export type { SequenceSpans } from "./lib/sequence/parse";
+export {
+  canonicalMessageBlock,
+  canonicalParticipantBlock,
+  serializeSequenceText,
+} from "./lib/sequence/serialize";
 export { detectAlabKind } from "./lib/sequence/detect";
 export type { AlabDocumentKind } from "./lib/sequence/detect";
 export {

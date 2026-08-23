@@ -44,7 +44,12 @@
  *   6. THE REFUSALS ARE COMPLETE, derived from the seed table rather than a
  *      hand-listed set of kinds: every non-C4 document the playground can hold
  *      reports itself uneditable with a reason. A hardcoded list cannot notice
- *      a seventh notation the day it is added; the table can.
+ *      a seventh notation the day it is added; the table can. The table is
+ *      looped TWICE, once per `CanvasEditAbility`, because there are two things
+ *      a canvas can write back and the notations answer them in opposite
+ *      directions — C4 allows `move` and refuses `revise`, a sequence document
+ *      does the reverse. The one-argument default must keep meaning `move`, or
+ *      a sequence document silently reports itself draggable.
  *   7. A NUDGE STAYS ON THE GRID, and four of them round a square return the
  *      text to byte-identical — a nudge that rounds or double-applies its
  *      delta would leave a residue the reader cannot see and cannot undo by
@@ -154,6 +159,9 @@ const { defaultPositions, defaultSizeFor } = await load(
 const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
 const { canvasEditability, deletedNodeEdit, movedNodeEdit, ownsChildDiagram } =
   await load("src/features/playground/input/canvas-edit.ts");
+const { revisedMessageEdit } = await load(
+  "src/features/playground/input/sequence-edit.ts",
+);
 const { parseViewSource, VIEW_SEED_TEXT, sourceTextFor } = await load(
   "src/features/playground/input/parse.ts",
 );
@@ -698,16 +706,34 @@ console.log("\nThe canvas lock defaults to editable and is read server-side");
   );
 
   /* THE LOCK EXISTS ONLY WHERE IT CAN ACT. `showCanvasLock` is gated on the
-     document being editable, not on the flag alone — the five text-laid-out
-     notations must get no control, not a disabled one. */
+     document being editable, not on the flag alone — the text-laid-out
+     notations must get no control, not a disabled one.
+
+     EITHER ABILITY COUNTS, and that clause arrived with the editable sequence
+     canvas. There are now two things a canvas can write back (see
+     `CanvasEditAbility`), and the notations answer them differently: C4 allows
+     `move` and refuses `revise`, a sequence document does the opposite. A lock
+     gated on `move` alone would have left the sequence canvas editable with no
+     way to lock it — a diagram someone is presenting, still taking edits. */
   const page = read("src/features/playground/components/view-playground.tsx");
   check(
-    "the lock renders only for a document the canvas can edit",
-    /const showCanvasLock =\s*CANVAS_EDIT_ENABLED && editability\.editable;/.test(
+    "the lock renders only for a document one of the canvases can edit",
+    /const showCanvasLock =\s*CANVAS_EDIT_ENABLED &&\s*\(editability\.editable \|\| wordingEditability\.editable\);/.test(
       page,
     ),
     "the lock's condition no longer requires an editable document — a " +
       "notation with nothing to lock would get a control that cannot act",
+  );
+  /* And the lock must reach BOTH canvases. The sequence viewer renders editing
+     chrome iff it was handed handlers, so the lock only works there if the
+     handlers are withheld while locked — the `canEdit` / `edit` distinction PR
+     #69 landed, one canvas over. */
+  check(
+    "the sequence canvas's handlers are withheld while the lock is on",
+    /const sequenceEditable =\s*CANVAS_EDIT_ENABLED && wordingEditability\.editable && !canvasLocked;/.test(
+      page,
+    ),
+    "locking the canvas would leave the sequence dock editable",
   );
   check(
     "the lock is never rendered as a disabled button",
@@ -766,6 +792,116 @@ console.log("\nEvery notation that cannot carry geometry says so");
       "expected null",
     );
   }
+
+  /* THE SAME TABLE, THE OTHER ABILITY. There are two things a canvas can write
+     back (`CanvasEditAbility`) and the notations answer them differently: C4
+     allows `move` and refuses `revise`, a sequence document does the opposite.
+     Looping the seed table a second time is what makes that a COVERAGE claim
+     rather than two hand-checked cases — the failure a hardcoded pair cannot
+     notice is a seventh notation whose dock grows an editor that writes into a
+     grammar with nowhere to put it. */
+  for (const kind of kinds) {
+    const parsed = parseViewSource(VIEW_SEED_TEXT[kind]);
+    if (parsed.status !== "ok") continue; // already reported above
+    const verdict = canvasEditability(parsed.value, "revise");
+    if (kind === "sequence") {
+      check(
+        "a sequence document can have its wording revised",
+        verdict.editable === true,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+      continue;
+    }
+    check(
+      `a ${kind} document refuses "revise", with a reason a reader can act on`,
+      verdict.editable === false &&
+        typeof verdict.reason === "string" &&
+        verdict.reason.length > 20,
+      `verdict: ${JSON.stringify(verdict)}`,
+    );
+    /* And the refusal is REAL, not advisory: the gesture itself declines, or a
+       caller that forgot to ask would splice into a grammar whose line numbers
+       mean something else. */
+    check(
+      `revisedMessageEdit declines a ${kind} document`,
+      revisedMessageEdit(parsed.value, "", [0], {
+        label: "x",
+        kind: "sync",
+      }) === null,
+      "expected null",
+    );
+  }
+
+  /* DEFAULTING TO `"move"` IS LOAD-BEARING. Every existing caller — and the
+     first loop in this section — asks the one-argument question, and it has to
+     keep meaning geometry. A default that flipped to the union would silently
+     report a sequence document as draggable. */
+  const sequenceSeed = parseViewSource(VIEW_SEED_TEXT.sequence);
+  check(
+    "the default ability is still `move`, so a sequence document is not draggable",
+    sequenceSeed.status === "ok" &&
+      canvasEditability(sequenceSeed.value).editable === false &&
+      canvasEditability(sequenceSeed.value, "move").editable === false,
+    `verdict: ${JSON.stringify(
+      sequenceSeed.status === "ok"
+        ? canvasEditability(sequenceSeed.value)
+        : sequenceSeed.error,
+    )}`,
+  );
+  /* THE REFUSAL NAMES THE OTHER GESTURE. A dead end ("this cannot be edited")
+     on the one notation that CAN be edited a different way sends the reader
+     away from a feature that is right there. */
+  check(
+    "a sequence document's move refusal points at the gesture it does have",
+    sequenceSeed.status === "ok" &&
+      /edit its wording/.test(canvasEditability(sequenceSeed.value).reason),
+    "the refusal is a dead end",
+  );
+
+  /* MERMAID SEQUENCE REFUSES `revise`, and this one is measured against the
+     emitter rather than asserted from taste. `MERMAID_SEQUENCE_EXPORT_CAVEAT`
+     records that the emitter drops `desc`, `[technology]` and `@icon` — three
+     of the four fields the dock's message form edits — so an edit written back
+     through a Mermaid pane would show once and vanish on the round trip.
+     Converted with the app's own converter so this cannot drift from what the
+     pane toggle actually produces. */
+  const asMermaidSeq = parseViewSource(
+    (await load("src/features/playground/input/parse.ts")).convertedSourceText(
+      sequenceSeed.value,
+      "mermaid",
+    ),
+  );
+  check(
+    "a sequence document sitting in the pane as Mermaid refuses `revise`",
+    asMermaidSeq.status === "ok" &&
+      asMermaidSeq.value.kind === "sequence" &&
+      asMermaidSeq.value.format === "mermaid" &&
+      canvasEditability(asMermaidSeq.value, "revise").editable === false,
+    `verdict: ${JSON.stringify(
+      asMermaidSeq.status === "ok"
+        ? canvasEditability(asMermaidSeq.value, "revise")
+        : asMermaidSeq.error,
+    )}`,
+  );
+  check(
+    "the Mermaid refusal names the fields that would be lost, not just the format",
+    asMermaidSeq.status === "ok" &&
+      /desc/.test(canvasEditability(asMermaidSeq.value, "revise").reason) &&
+      /technology/.test(canvasEditability(asMermaidSeq.value, "revise").reason),
+    "a reader cannot tell what switching the pane would buy them",
+  );
+  /* The caveat is the EVIDENCE for the refusal above, so it has to keep saying
+     what the refusal claims it says. If the emitter learns to carry `desc`,
+     this fails and the refusal should be revisited rather than left standing. */
+  const { MERMAID_SEQUENCE_EXPORT_CAVEAT } = await load(
+    "src/features/mermaid/lib/sequence-emit.ts",
+  );
+  check(
+    "the emitter still documents dropping the fields the refusal cites",
+    /desc/.test(MERMAID_SEQUENCE_EXPORT_CAVEAT) &&
+      /technology/.test(MERMAID_SEQUENCE_EXPORT_CAVEAT),
+    "the caveat no longer supports the refusal that cites it",
+  );
 
   /* Mermaid C4 is the case that is C4 and still cannot be edited — the pane's
      language carries no geometry, so a move would round-trip back. Converted

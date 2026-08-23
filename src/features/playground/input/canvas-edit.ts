@@ -13,16 +13,11 @@
  * nothing here holds state.
  *
  * AN EDIT IS A LINE PATCH, NOT A RE-EMIT, and that is the whole reason this
- * module is shaped the way it is. As shipped in v2.0.0 an edit derived a new
- * `ArchLabFile` and serialised the WHOLE document. Canonical text is a
- * different file from the author's: the C4 parser drops `//` comment lines with
- * no capture and the serializer has nothing to write back, blank lines are
- * reflowed, and any field the author wrote out that canonical form omits at its
- * default is normalised away. So one drag on a commented `.alab` file deleted
- * every comment in it — silently, and the reader's only signal was the pane
- * changing, which a drag is supposed to do.
+ * module is shaped the way it is. The bug that bought the rule, and the splice
+ * itself, are in `line-patch.ts` — shared with the sequence canvas, which
+ * needed the identical fix for the identical reason.
  *
- * The fix is to touch only the lines the gesture is about.
+ * Here the rule means: touch only the lines the gesture is about.
  * `parseArchTextWithSpans` gives the line range every node and edge came from;
  * `canonicalNodeLine` gives the one line the serializer would have written for
  * a node. Splice one into the other and every byte the gesture did not concern
@@ -56,10 +51,10 @@ import {
   serializeArchText,
   spanKey,
   type ArchTextSpans,
-  type LineSpan,
 } from "@/features/archtext";
 import { parsePane } from "@/features/viewer/input/sync";
 
+import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
 import { sourceTextFor, type ViewDocument } from "./parse";
 
 /* -------------------------------------------------------------------------- */
@@ -70,24 +65,52 @@ import { sourceTextFor, type ViewDocument } from "./parse";
  * Whether the canvas showing `doc` can write its changes back, and — when it
  * cannot — the sentence explaining why, in the reader's terms.
  *
- * The refusals are not gaps to fill in later. Each one is a document whose
- * geometry has nowhere to be written, so a drag would be undone by the very
+ * The refusals are not gaps to fill in later. Each one is a document the
+ * gesture has nowhere to be written into, so it would be undone by the very
  * next render; saying so is the honest answer.
  */
 export type CanvasEditability =
   { editable: true } | { editable: false; reason: string };
 
-export function canvasEditability(doc: ViewDocument): CanvasEditability {
+/**
+ * The two things a canvas can write back, and they are NOT the same question —
+ * which is why this is a parameter rather than one verdict per document.
+ *
+ *   - `"move"` — write GEOMETRY. Needs a per-element position in the grammar,
+ *     which only the C4 model has: every other notation solves its own layout
+ *     from the text, so a drag has nowhere to land.
+ *   - `"revise"` — rewrite one element's own FIELDS in place. Needs a grammar
+ *     whose elements each occupy a knowable line range, which on the canvas
+ *     side today means the sequence document (`sequence-edit.ts`).
+ *
+ * A document can therefore refuse one and allow the other, and the C4 and
+ * sequence canvases genuinely do exactly that in opposite directions.
+ * `check:canvas-edit` runs the seed table twice, once per ability, so a
+ * seventh notation is covered for both the day it exists.
+ */
+export type CanvasEditAbility = "move" | "revise";
+
+export function canvasEditability(
+  doc: ViewDocument,
+  ability: CanvasEditAbility = "move",
+): CanvasEditability {
+  if (ability === "revise") return reviseEditability(doc);
   if (doc.kind !== "c4") {
     return {
       editable: false,
-      // Not "not supported yet": these five notations SOLVE their geometry
-      // from the text (the ER layout derives its columns from the
-      // relationships, a dictionary is a table), so there is no per-node
-      // position in the grammar to write a drag into.
+      // Not "not supported yet": these notations SOLVE their geometry from the
+      // text (the ER layout derives its columns from the relationships, a
+      // dictionary is a table, a sequence diagram's columns are the order the
+      // participants are declared in), so there is no per-node position in the
+      // grammar to write a drag into. The sequence case gets the extra clause
+      // because it is the one notation with a DIFFERENT canvas edit to offer,
+      // and a refusal that names the thing you can do beats a dead end.
       reason:
-        "Only C4 diagrams can be edited on the canvas. This notation works out " +
-        "its own layout from the text, so there is no position to move.",
+        "This notation works out its own layout from the text, so there is no " +
+        "position to move." +
+        (doc.kind === "sequence"
+          ? " Click a message or a lifeline to edit its wording instead."
+          : " Only C4 diagrams can be dragged on the canvas."),
     };
   }
   if (doc.format === "mermaid") {
@@ -103,32 +126,45 @@ export function canvasEditability(doc: ViewDocument): CanvasEditability {
   return { editable: true };
 }
 
+function reviseEditability(doc: ViewDocument): CanvasEditability {
+  if (doc.kind !== "sequence") {
+    return {
+      editable: false,
+      /* The C4 clause is not a gap either, and it is worth stating rather than
+         leaving as silence: that canvas offers move and delete, and a node's
+         wording is edited in the pane beside it. Offering a second, weaker
+         field editor there would be two authoring surfaces for one model. */
+      reason:
+        doc.kind === "c4"
+          ? "The C4 canvas moves and deletes; a node's wording is edited in " +
+            "the source pane beside it."
+          : "Only sequence diagrams can be edited on the canvas. Edit this " +
+            "notation in the source pane.",
+    };
+  }
+  if (doc.format === "mermaid") {
+    return {
+      editable: false,
+      /* Measured against the emitter, not assumed: the fields this gesture
+         edits are `label`, `kind`, `technology` and `desc`, and
+         `MERMAID_SEQUENCE_EXPORT_CAVEAT` in `mermaid/lib/sequence-emit.ts`
+         records that Mermaid holds none of the last two. Writing an edit back
+         through a pane that cannot spell it would show the change once and
+         lose it on the next round trip, which is worse than refusing. */
+      reason:
+        "Mermaid sequenceDiagram cannot hold a message's desc detail or its " +
+        "[technology], so those edits would be lost. Switch the pane to .alab " +
+        "to edit on the canvas.",
+    };
+  }
+  return { editable: true };
+}
+
 /* -------------------------------------------------------------------------- */
 /* The edits                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/**
- * How an edit produced its text. Returned on every edit so the caller — and
- * `check:canvas-edit` — can tell the safe path from the lossy one by name
- * rather than by inspecting the output.
- *
- *   - `"patch"` — whole lines were spliced into the author's own text. Every
- *     byte outside the spliced lines is untouched: comments, blank lines,
- *     spacing, fields written out that canonical form omits at their default.
- *   - `"reemit"` — the document was serialised from the model, which DROPS all
- *     of the above. Reached only when the pane cannot be patched at all; the
- *     two cases that force it are named on `patchablePane`.
- */
-export type CanvasEditPath = "patch" | "reemit";
-
-/** One canvas gesture, resolved into text the page can adopt. */
-export interface CanvasEdit {
-  /** The document to render — the product of re-parsing `text`. */
-  doc: ViewDocument;
-  /** The text the source pane must hold. */
-  text: string;
-  path: CanvasEditPath;
-}
+export type { CanvasEdit, CanvasEditPath } from "./line-patch";
 
 /**
  * Which path an edit against `doc` with pane content `sourceText` will take,
@@ -339,43 +375,6 @@ export function ownsChildDiagram(
 /* -------------------------------------------------------------------------- */
 /* Internals                                                                   */
 /* -------------------------------------------------------------------------- */
-
-/** One line range of the source, and what replaces it — nothing, to remove it. */
-interface LinePatch {
-  span: LineSpan;
-  lines: readonly string[];
-}
-
-/**
- * Apply `patches` to `source`, leaving every line no patch names byte-identical.
- *
- * Spans are 1-based and inclusive, sorted here rather than by the caller, and
- * must not overlap — the parser cannot produce overlapping node or edge blocks,
- * so an overlap would be a bug in the caller rather than input to tolerate.
- *
- * The trailing newline survives because the split and the join use the same
- * separator the serializer writes: a final empty element stays a final empty
- * element.
- */
-function applyPatches(source: string, patches: readonly LinePatch[]): string {
-  const ordered = [...patches].sort((a, b) => a.span.start - b.span.start);
-  const lines = source.split("\n");
-  const out: string[] = [];
-  let cursor = 0; // 0-based index of the next line to copy
-  for (const patch of ordered) {
-    while (cursor < patch.span.start - 1) {
-      out.push(lines[cursor]);
-      cursor += 1;
-    }
-    out.push(...patch.lines);
-    cursor = patch.span.end;
-  }
-  while (cursor < lines.length) {
-    out.push(lines[cursor]);
-    cursor += 1;
-  }
-  return out.join("\n");
-}
 
 /**
  * Read `text` back through the REAL pane parser, so the returned document's

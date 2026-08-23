@@ -35,7 +35,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import { isMultiBranch } from "@/types";
+import { isMultiBranch, sequenceItemKey } from "@/types";
 import type {
   SequenceFragmentKind,
   SequenceLabFile,
@@ -62,7 +62,7 @@ import {
   readTechnology,
   segString,
 } from "../parse";
-import type { Loc, Pend } from "../parse";
+import type { LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import {
   BOX_KEYWORD,
@@ -96,7 +96,25 @@ import {
 /* Pending structures collected during the line pass                          */
 /* -------------------------------------------------------------------------- */
 
-interface PendParticipant extends Loc {
+/**
+ * A declaration that can own indent-`+2` continuation lines (`desc`, `!`).
+ * `endLine` is the last line of the block — the declaration line itself when
+ * it has none.
+ *
+ * Tracked so `parseSequenceTextWithSpans` can hand a caller the LINE RANGE a
+ * participant or an item occupies. That is what lets the sequence canvas
+ * splice one block into the author's own text instead of re-emitting the whole
+ * document, which is lossy in a way canonical text hides: this parser drops
+ * `//` comment lines and blank lines with no capture, so the serializer has
+ * nothing to write back and the reader's file quietly loses both. The C4
+ * grammar's `PendingBlock` in `../parse.ts` exists for the same reason and
+ * bought the same fix (commit `0a9cbf1`).
+ */
+interface PendBlock extends Loc {
+  endLine: number;
+}
+
+interface PendParticipant extends PendBlock {
   id: string;
   kind?: SequenceParticipantKind;
   name: string;
@@ -107,7 +125,7 @@ interface PendParticipant extends Loc {
   unknowns: Pend[];
 }
 
-interface PendMessage extends Loc {
+interface PendMessage extends PendBlock {
   step: "message";
   from: string;
   fromLoc: Loc;
@@ -123,7 +141,7 @@ interface PendMessage extends Loc {
   unknowns: Pend[];
 }
 
-interface PendNote extends Loc {
+interface PendNote extends PendBlock {
   step: "note";
   placement: SequenceNotePlacement;
   participants: { id: string; loc: Loc }[];
@@ -207,11 +225,56 @@ const NOTE_KEYS_SET: ReadonlySet<string> = new Set(NOTE_KEYS);
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Where each participant and each ITEM of a parse sits in the source text.
+ *
+ * Participants are keyed by their own id, which is unique per file. Items have
+ * no id to key by — position IS an item's identity, argued at
+ * `SequenceItemPath` — so they are keyed by `sequenceItemKey(path)`.
+ *
+ * FRAGMENTS AND BOXES CARRY NO SPAN, and that is a scope decision rather than
+ * an oversight. A message or a participant block ends at its last continuation
+ * line, which the line loop knows for free. A fragment ends only at a DEDENT,
+ * so its span would need a `lastContentLine` tracked past every skipped blank
+ * and comment line, written inside the pop loop, plus a post-loop drain for a
+ * fragment still open at end of file. No gesture addresses a fragment, so that
+ * bookkeeping would be untested code guarding nothing; add it with the first
+ * gesture that needs it.
+ *
+ * The point of this is to make a text edit possible where a re-emit is lossy:
+ * `serializeSequenceText` writes canonical text, which has no `//` comments,
+ * no author blank lines and no field the author wrote out that canonical form
+ * omits at its default (`updated`, `:participant`, `autonumber false`).
+ * Splicing by span keeps every byte the edit did not touch.
+ */
+export interface SequenceSpans {
+  participants: ReadonlyMap<string, LineSpan>;
+  items: ReadonlyMap<string, LineSpan>;
+}
+
+interface SpanCollector {
+  participants: Map<string, LineSpan>;
+  items: Map<string, LineSpan>;
+}
+
+/**
  * Parses `.alab` sequence source into a `SequenceLabFile`. Pure and
  * deterministic. Throws `ArchTextParseError` (line + column) on any problem
  * — all-or-nothing.
  */
 export function parseSequenceText(source: string): SequenceLabFile {
+  return parseSequenceTextWithSpans(source).file;
+}
+
+/**
+ * `parseSequenceText`, plus where every participant and item came from — the
+ * SAME parse, so the spans cannot describe a different reading of the text
+ * than the model does. Callers that only want the model use
+ * `parseSequenceText`.
+ */
+export function parseSequenceTextWithSpans(source: string): {
+  file: SequenceLabFile;
+  spans: SequenceSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -371,6 +434,10 @@ export function parseSequenceText(source: string): SequenceLabFile {
       (cursor.peek() === "!" || /^desc(\s|$)/.test(text.slice(indent)))
     ) {
       parseContinuation(cursor, lastItem);
+      // The block now reaches this line. Recorded in the LOOP rather than
+      // inside `parseContinuation`, which is handed a cursor and a target and
+      // never a line number — the same division the C4 parser draws.
+      lastItem.item.endLine = lineNo;
       continue;
     }
 
@@ -420,14 +487,20 @@ export function parseSequenceText(source: string): SequenceLabFile {
     );
   }
 
-  return resolve(
+  const spans: SpanCollector = {
+    participants: new Map(),
+    items: new Map(),
+  };
+  const file = resolve(
     header,
     participants,
     participantById,
     boxes,
     rootBranch,
     autonumber,
+    spans,
   );
+  return { file, spans };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -811,6 +884,7 @@ function parseParticipantLine(
 
   const participant: PendParticipant = {
     ...loc,
+    endLine: loc.line,
     id,
     kind,
     name,
@@ -929,6 +1003,7 @@ function parseMessageLine(
 
   const message: PendMessage = {
     ...loc,
+    endLine: loc.line,
     step: "message",
     from,
     fromLoc: loc,
@@ -1002,6 +1077,7 @@ function parseNoteLine(
 
   const note: PendNote = {
     ...loc,
+    endLine: loc.line,
     step: "note",
     placement,
     participants: ids,
@@ -1464,6 +1540,11 @@ function resolve(
   boxes: PendBox[],
   rootBranch: PendBranch,
   autonumber: boolean | undefined,
+  /* Filled as each participant and item is assembled, so a span is only ever
+     recorded for one that SURVIVED this pass — `requireParticipant` and the
+     empty-box refusal both fail here, and a span into a file that does not
+     parse would point a caller at a line that is about to move. */
+  spans: SpanCollector,
 ): SequenceLabFile {
   if (header.title === undefined) {
     failAt(1, 1, 'the file has no title — add a line like: title "Checkout"');
@@ -1510,6 +1591,10 @@ function resolve(
       "description",
       pick(participant.description, participant.raw, "description"),
     );
+    spans.participants.set(participant.id, {
+      start: participant.line,
+      end: participant.endLine,
+    });
     return assemble(pairs, participant.unknowns);
   });
 
@@ -1542,8 +1627,17 @@ function resolve(
     }
   };
 
-  const finalizeItems = (items: PendItem[]): Record<string, unknown>[] =>
-    items.map((item) => {
+  /* `path` is the index path to `items` itself — the caller's prefix — so a
+     child's address is `[...path, index]`. Threaded through the recursion
+     because this closure is the only place that knows an item's position in
+     the finished tree: the line pass only ever `push`es into a branch whose
+     own position it does not know. */
+  const finalizeItems = (
+    items: PendItem[],
+    path: readonly number[],
+  ): Record<string, unknown>[] =>
+    items.map((item, index) => {
+      const at = [...path, index];
       if (item.step === "message") {
         requireParticipant(item.from, item.fromLoc, "message source");
         requireParticipant(item.to, item.toLoc, "message target");
@@ -1560,12 +1654,20 @@ function resolve(
         add("description", pick(item.description, item.raw, "description"));
         add("activate", pick(item.activate, item.raw, "activate"));
         add("deactivate", pick(item.deactivate, item.raw, "deactivate"));
+        spans.items.set(sequenceItemKey(at), {
+          start: item.line,
+          end: item.endLine,
+        });
         return assemble(pairs, item.unknowns);
       }
       if (item.step === "note") {
         for (const entry of item.participants) {
           requireParticipant(entry.id, entry.loc, "note participant");
         }
+        spans.items.set(sequenceItemKey(at), {
+          start: item.line,
+          end: item.endLine,
+        });
         return assemble(
           [
             ["step", "note"],
@@ -1576,11 +1678,14 @@ function resolve(
           item.unknowns,
         );
       }
-      const branches = item.branches.map((branch) => {
+      const branches = item.branches.map((branch, branchIndex) => {
         const pairs: (readonly [string, unknown])[] = [];
         const label = pick(branch.label, branch.raw, "label");
         if (label !== undefined) pairs.push(["label", label]);
-        pairs.push(["items", finalizeItems(branch.items)]);
+        pairs.push([
+          "items",
+          finalizeItems(branch.items, [...at, branchIndex]),
+        ]);
         return assemble(pairs, branch.unknowns);
       });
       const fragmentPairs: (readonly [string, unknown])[] = [
@@ -1593,7 +1698,7 @@ function resolve(
       return assemble(fragmentPairs, item.unknowns);
     });
 
-  const items = finalizeItems(rootBranch.items);
+  const items = finalizeItems(rootBranch.items, []);
 
   /* -------------------------------- file --------------------------------- */
   const file: Record<string, unknown> = {};

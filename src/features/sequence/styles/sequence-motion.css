@@ -605,6 +605,29 @@
   fill: var(--ring);
 }
 
+/* ---- the insert gesture's lifeline targets ----------------------------------
+ * While the two-click insert is armed, every lifeline becomes a full-height
+ * button. A hit region with no paint at all would leave the reader guessing
+ * which part of the canvas is now a target — the gesture is modal, and a modal
+ * state that looks identical to the resting one is how a reader ends up
+ * clicking a message and wondering why nothing happened. So the columns carry
+ * a faint standing wash while armed, and full tint on hover or keyboard focus.
+ *
+ * `fill` overrides `.af-seq-chrome-hit-region`'s transparent fill and must be
+ * declared after it, which it is. NO ANIMATION anywhere in here on purpose —
+ * `check:sequence-motion` permits one animation rule on the drawing root and
+ * this is not it, and a pulsing target would compete with the diagram the
+ * reader is trying to read.
+ */
+.af-seq-chrome-insert-target {
+  fill: color-mix(in oklch, var(--primary) 7%, transparent);
+}
+
+.af-seq-chrome-insert-target:hover,
+.af-seq-chrome-insert-target:focus-visible {
+  fill: color-mix(in oklch, var(--primary) 20%, transparent);
+}
+
 /* ---- reduced motion ---------------------------------------------------------
  * The `--seq-*` properties are already 0ms (lib/motion.ts zeroes them), and
  * the global backstop in globals.css collapses anything that slips through.

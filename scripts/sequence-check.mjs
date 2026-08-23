@@ -29,6 +29,20 @@
  *   6. A C4 document is never mistaken for a sequence document, nor vice
  *      versa — in `.alab` (both parsers and the sniffing helper) and in
  *      Mermaid (both importers).
+ *   7. THE EDITABLE CANVAS IS A LINE PATCH, so the author's own bytes survive
+ *      it. This section exists because the alternative — re-serialising the
+ *      document — passes every assertion 1-6 while silently deleting every
+ *      `//` comment and every author blank line in the file, and canonical
+ *      text cannot catch it (a re-emit of canonical text IS canonical text).
+ *      So the gestures are driven from deliberately NON-canonical text and
+ *      every line the gesture is not about is compared byte for byte. The
+ *      patched block itself is compared against what a FULL serialise emits,
+ *      because a patch that writes almost-canonical text trades a silent loss
+ *      for a worse one. And the STEP-TO-ADDRESS resolution is pinned against
+ *      the layout's own walk and across a fold, because a step number is a
+ *      layout ordinal over what is DRAWN — an edit fired against one while a
+ *      lifeline is folded would land on a neighbouring message, silently, with
+ *      the pane visibly changing either way.
  *
  * Exits non-zero on any failure. Run with: pnpm check:sequence
  */
@@ -79,6 +93,38 @@ const {
   ArchTextParseError,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+const {
+  parseSequenceTextWithSpans,
+  canonicalMessageBlock,
+  canonicalParticipantBlock,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+const { sequenceItemAt, sequenceItemKey, sequenceMessagePaths } = await import(
+  pathToFileURL(path.join(ROOT, "src/types/index.ts")).href
+);
+const { layoutSequence } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/layout.ts")).href
+);
+const { collapseSequence, hiddenParticipants } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/collapse.ts")).href
+);
+const { messagePathForStep } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/address.ts")).href
+);
+const { parseViewSource, VIEW_SEED_TEXT } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/playground/input/parse.ts")).href
+);
+const {
+  INSERTED_MESSAGE_LABEL,
+  insertedMessageEdit,
+  revisedMessageEdit,
+  revisedParticipantEdit,
+} = await import(
+  pathToFileURL(
+    path.join(ROOT, "src/features/playground/input/sequence-edit.ts"),
+  ).href
 );
 const {
   parseMermaidC4,
@@ -1414,6 +1460,619 @@ check(
   "a fragment with no payload decodes as `none`, not as an error",
   (await decodeShareFragment("#nothing-here")).status === "none",
 );
+
+/* ----------------------------------------------------------------------- */
+/* 7. The editable canvas: a line patch, not a re-emit                      */
+/* ----------------------------------------------------------------------- */
+
+console.log(
+  "\nThe editable sequence canvas patches lines, it does not re-emit",
+);
+
+{
+  const canonical = VIEW_SEED_TEXT.sequence;
+
+  /* NON-CANONICAL ON PURPOSE, and every deviation is one the serializer would
+     erase. A `//` comment and a blank line the parser drops with no capture;
+     `updated` and `:participant` and `autonumber false` written out at values
+     canonical form omits. If a gesture re-emits, this text is what it destroys
+     — and only THIS text can show it, because a re-emit of canonical text is
+     canonical text. */
+  const authored = canonical
+    .replace(
+      "@sequence\n",
+      "@sequence\n  // Reviewed 2026-08-01 — do not reorder these lines.\n\n",
+    )
+    .replace('title "', 'updated 2026-08-01T00:00:00.000Z\ntitle "');
+  check(
+    "the deliberately non-canonical fixture still parses",
+    (() => {
+      try {
+        parseSequenceText(authored);
+        return true;
+      } catch {
+        return false;
+      }
+    })(),
+    "the fixture is broken, so everything below it would be vacuous",
+  );
+  check(
+    "the fixture really is non-canonical — otherwise this section proves nothing",
+    serializeSequenceText(parseSequenceText(authored)) !== authored,
+    "canonical input cannot show a re-emit destroying anything",
+  );
+
+  const doc = parseViewSource(authored);
+  check(
+    "the pane reader accepts it as an editable .alab sequence document",
+    doc.status === "ok" &&
+      doc.value.kind === "sequence" &&
+      doc.value.format === "alab",
+    `status: ${doc.status}`,
+  );
+  const file = doc.value.file;
+  const paths = sequenceMessagePaths(file.items);
+
+  /* ---- spans -------------------------------------------------------------- */
+
+  const { spans } = parseSequenceTextWithSpans(authored);
+  const lines = authored.split("\n");
+
+  /* A SPAN MUST POINT AT ITS OWN DECLARATION. The cheap way for this to be
+     wrong is an off-by-one that patches the line above — which for a message
+     inside a fragment is a `desc` or an `else`, so the file stops parsing and
+     the edit is dropped with no explanation. Measured by reading the line back
+     and finding the element's own text on it. */
+  for (const [id, span] of spans.participants) {
+    check(
+      `the span for participant "${id}" points at its declaration line`,
+      lines[span.start - 1].trim().startsWith(id) && span.end >= span.start,
+      `line ${span.start}: ${lines[span.start - 1]}`,
+    );
+  }
+  let blockSpanChecked = 0;
+  for (const path of paths) {
+    const message = sequenceItemAt(file.items, path);
+    const span = spans.items.get(sequenceItemKey(path));
+    check(
+      `the span for message [${path}] contains its label`,
+      span !== undefined && lines[span.start - 1].includes(message.label),
+      `span: ${JSON.stringify(span)}`,
+    );
+    /* AND THE BLOCK REACHES ITS CONTINUATIONS. `endLine` exists for exactly
+       this: a message owns its `desc` line, and a patch that replaces only the
+       declaration line would leave an orphaned `desc` indented under a
+       message that no longer claims it. */
+    if (message.description !== undefined) {
+      check(
+        `the span for message [${path}] reaches past its desc line`,
+        span.end > span.start && lines[span.end - 1].trim().startsWith("desc"),
+        `span: ${JSON.stringify(span)}, last line: ${lines[span.end - 1]}`,
+      );
+      blockSpanChecked += 1;
+    }
+  }
+  check(
+    "the fixture has messages with a desc, so the block rule was exercised",
+    blockSpanChecked >= 2,
+    `only ${blockSpanChecked} message(s) with a desc — the endLine rule is untested`,
+  );
+
+  /* NO SPAN FOR A LINE THE PARSE REJECTED. The C4 parser fills its collector
+     inside `resolve` for this reason and so does this one: a span recorded for
+     an element the resolve threw out points a caller at a line of a file that
+     does not parse. */
+  check(
+    "a document the resolve rejects yields no spans at all",
+    (() => {
+      try {
+        parseSequenceTextWithSpans(
+          authored.replace(
+            'cust -> web : "Clicks Place order"',
+            'ghost -> web : "x"',
+          ),
+        );
+        return false;
+      } catch {
+        return true;
+      }
+    })(),
+    "an unresolvable participant did not fail the parse",
+  );
+
+  /* ---- step -> address ---------------------------------------------------- */
+
+  /* THE TWO WALKS AGREE. The layout numbers messages 1..n as it walks its own
+     recursion; `sequenceMessagePaths` walks the model. Nothing makes them one
+     function, so this is the pin: if either walk changes its order, an edit
+     starts landing on the wrong message and nothing else notices. */
+  const laid = layoutSequence(file);
+  check(
+    "every layout step resolves to the message the layout drew",
+    laid.stepCount === paths.length &&
+      laid.messages.every(
+        (m) => sequenceItemAt(file.items, paths[m.step - 1]).label === m.label,
+      ),
+    `stepCount ${laid.stepCount} vs ${paths.length} paths`,
+  );
+
+  /* ACROSS A FOLD, which is the case a step number cannot survive on its own:
+     `collapseSequence` renumbers, so step 4 of the folded view and step 4 of
+     the file are different messages. Resolution is by OBJECT IDENTITY (see
+     `lib/address.ts`), and this is what pins that contract. */
+  let foldChecked = 0;
+  for (const participant of file.participants) {
+    const hidden = hiddenParticipants(file, new Set([participant.id]));
+    if (hidden.size === 0) continue;
+    const shown = collapseSequence(file, hidden);
+    const folded = layoutSequence(shown);
+    if (folded.stepCount === laid.stepCount) continue; // nothing renumbered
+    check(
+      `folding ${participant.id} renumbers the steps, so the fixture is real`,
+      folded.stepCount < laid.stepCount,
+      `${folded.stepCount} vs ${laid.stepCount}`,
+    );
+    check(
+      `every step of the ${participant.id}-folded view resolves to the message it draws`,
+      folded.messages.every((m) => {
+        const resolved = messagePathForStep(file, shown, m.step);
+        return (
+          resolved !== null &&
+          sequenceItemAt(file.items, resolved).label === m.label
+        );
+      }),
+      "a folded step resolved to a different message — an edit would land on it",
+    );
+    /* AND THE NUMBERS REALLY DID MOVE, so the assertion above is not passing
+       because the fold happened to change nothing: at least one step must
+       resolve to a DIFFERENT address than the unfolded view gives it. */
+    /* `?? "none"` rather than indexing the result: an unresolvable step is a
+       real outcome (see `lib/address.ts`) and this assertion must REPORT it,
+       not crash the script — a thrown check is a check that cannot tell you
+       which of its clauses broke. */
+    const addressOf = (step) => {
+      const resolved = messagePathForStep(file, shown, step);
+      return resolved === null ? "none" : sequenceItemKey(resolved);
+    };
+    check(
+      `folding ${participant.id} moves at least one step's address`,
+      folded.messages.some(
+        (m) => addressOf(m.step) !== sequenceItemKey(paths[m.step - 1]),
+      ),
+      "no step moved — this fold cannot show the renumbering bug",
+    );
+    foldChecked += 1;
+    break;
+  }
+  check(
+    "a fold that renumbers was found, so the address rule was exercised",
+    foldChecked === 1,
+    "no participant in the seed folds anything — the fold rule is untested",
+  );
+
+  /* THE IDENTITY CONTRACT ITSELF, stated at `filterItems`. Cloning a surviving
+     message there would break every fold resolution above with nothing on
+     screen to show it, so it is asserted directly rather than only through its
+     consequence. */
+  {
+    const target = file.participants.find(
+      (p) => hiddenParticipants(file, new Set([p.id])).size > 0,
+    );
+    const shown = collapseSequence(
+      file,
+      hiddenParticipants(file, new Set([target.id])),
+    );
+    const survivors = sequenceMessagePaths(shown.items).map((p) =>
+      sequenceItemAt(shown.items, p),
+    );
+    const originals = new Set(paths.map((p) => sequenceItemAt(file.items, p)));
+    check(
+      "a collapsed view holds the SAME message objects, not copies",
+      survivors.length > 0 && survivors.every((m) => originals.has(m)),
+      "filterItems cloned a message — every fold-time edit would refuse",
+    );
+  }
+
+  /* ---- revise: the patch keeps every other byte ---------------------------- */
+
+  /** Lines of `a` that differ from `b`, as 1-based numbers. */
+  const changedLines = (a, b) => {
+    const la = a.split("\n");
+    const lb = b.split("\n");
+    const out = [];
+    for (let i = 0; i < Math.max(la.length, lb.length); i += 1) {
+      if (la[i] !== lb[i]) out.push(i + 1);
+    }
+    return out;
+  };
+
+  const withDesc = paths.find(
+    (p) => sequenceItemAt(file.items, p).description !== undefined,
+  );
+  const before = sequenceItemAt(file.items, withDesc);
+  const revision = {
+    label: "Place the order, revised",
+    kind: before.kind,
+    technology: before.technology,
+    description: before.description,
+  };
+  const revised = revisedMessageEdit(doc.value, authored, withDesc, revision);
+  check(
+    "a revision reports the patch path, never a re-emit",
+    revised !== null && revised.path === "patch",
+    `edit: ${JSON.stringify(revised && revised.path)}`,
+  );
+  check(
+    "the author's comment survives a revision",
+    revised.text.includes(
+      "// Reviewed 2026-08-01 — do not reorder these lines.",
+    ),
+    "the comment was deleted — this is the whole bug this section exists for",
+  );
+  check(
+    "the author's blank line survives a revision",
+    /do not reorder these lines\.\n\n/.test(revised.text),
+    "blank lines were reflowed",
+  );
+  check(
+    "a field written out that canonical form omits at its default survives",
+    revised.text.includes("updated 2026-08-01T00:00:00.000Z") &&
+      revised.text.includes("autonumber") &&
+      revised.text.includes(":participant"),
+    "an omitted-at-default field was normalised away",
+  );
+  /* ONLY THE ELEMENT'S OWN BLOCK CHANGED. Measured as a line set rather than
+     by eye: a patch that quietly reflowed a neighbour would still contain the
+     comment and still parse. */
+  {
+    const span = spans.items.get(sequenceItemKey(withDesc));
+    const touched = changedLines(authored, revised.text);
+    check(
+      "a revision changes only the lines of its own block",
+      touched.length > 0 &&
+        touched.every((line) => line >= span.start && line <= span.end),
+      `changed lines ${touched.join(",")} vs span ${JSON.stringify(span)}`,
+    );
+  }
+  /* THE PATCHED LINES ARE CANONICAL, and derived from the serializer rather
+     than compared against a hand-written expected string — a hand-written
+     expectation is a second serializer, free to disagree with the real one. */
+  {
+    const span = spans.items.get(sequenceItemKey(withDesc));
+    const patched = revised.text
+      .split("\n")
+      .slice(span.start - 1, span.start - 1 + (span.end - span.start + 1));
+    /* The pad is read off the block being replaced — the same rule the patch
+       itself uses, and the only source that cannot be wrong about the fragment
+       depth indentation encodes. A hardcoded pad here would be a second answer
+       to the question the patch already answers. */
+    const emitted = canonicalMessageBlock(
+      revised.doc.file,
+      withDesc,
+      /^ */.exec(lines[span.start - 1])[0],
+    );
+    check(
+      "the patched block is byte-identical to what a full serialise would write",
+      emitted !== null && patched.join("\n") === emitted.join("\n"),
+      `patched:\n${patched.join("\n")}\nemitted:\n${(emitted ?? []).join("\n")}`,
+    );
+  }
+  check(
+    "the revision survives the round trip — the label read back is the label written",
+    sequenceItemAt(revised.doc.file.items, withDesc).label === revision.label,
+    "the patched text does not mean what the edit intended",
+  );
+  check(
+    "a revision that changes nothing is refused, so it costs no undo entry",
+    revisedMessageEdit(doc.value, authored, withDesc, {
+      label: before.label,
+      kind: before.kind,
+      technology: before.technology,
+      description: before.description,
+    }) === null,
+    "an unchanged form rewrote the pane",
+  );
+  /* CLEARING A FIELD REMOVES IT rather than writing an empty one. `desc ""`
+     and `[""]` are spellable, and both render as a blank the reader cannot
+     tell from an absence. */
+  {
+    const cleared = revisedMessageEdit(doc.value, authored, withDesc, {
+      label: before.label,
+      kind: before.kind,
+    });
+    const readBack = sequenceItemAt(cleared.doc.file.items, withDesc);
+    check(
+      "clearing technology and details removes the fields, never blanks them",
+      readBack.technology === undefined && readBack.description === undefined,
+      `read back: ${JSON.stringify(readBack)}`,
+    );
+  }
+
+  /* A PARTICIPANT'S BLOCK, same rules. Its own case because a participant can
+     sit inside a `box` at four spaces rather than two, and a patch that
+     re-derived the pad from the model would dedent it out of the box. */
+  {
+    const participant = file.participants[1];
+    const edit = revisedParticipantEdit(doc.value, authored, participant.id, {
+      name: "Store Front",
+      kind: "actor",
+      technology: participant.technology,
+      description: "The public site.",
+    });
+    const span = spans.participants.get(participant.id);
+    check(
+      "a participant revision is a patch that keeps the comment",
+      edit !== null &&
+        edit.path === "patch" &&
+        edit.text.includes("// Reviewed 2026-08-01"),
+      `edit: ${JSON.stringify(edit && edit.path)}`,
+    );
+    check(
+      "a participant revision changes only its own block, and grows it by the desc",
+      changedLines(authored, edit.text).every((line) => line >= span.start),
+      "a line above the participant moved",
+    );
+    check(
+      "the participant revision reads back as written",
+      (() => {
+        const read = edit.doc.file.participants.find(
+          (p) => p.id === participant.id,
+        );
+        return (
+          read.name === "Store Front" &&
+          read.kind === "actor" &&
+          read.description === "The public site."
+        );
+      })(),
+      "the patched text does not mean what the edit intended",
+    );
+    check(
+      "the patched participant block matches what a full serialise would write",
+      (() => {
+        const emitted = canonicalParticipantBlock(
+          edit.doc.file,
+          participant.id,
+          "  ",
+        );
+        const patched = edit.text
+          .split("\n")
+          .slice(span.start - 1, span.start - 1 + emitted.length);
+        return patched.join("\n") === emitted.join("\n");
+      })(),
+      "the patch wrote almost-canonical text",
+    );
+  }
+
+  /* ---- insert: exactly one line -------------------------------------------- */
+
+  const anchor = paths[1];
+  const inserted = insertedMessageEdit(
+    doc.value,
+    authored,
+    anchor,
+    file.participants[0].id,
+    file.participants[1].id,
+  );
+  check(
+    "an insert adds exactly one line",
+    inserted !== null &&
+      inserted.text.split("\n").length === authored.split("\n").length + 1,
+    `delta ${inserted === null ? "null" : inserted.text.split("\n").length - authored.split("\n").length}`,
+  );
+  check(
+    "an insert reports the patch path and keeps the comment",
+    inserted.path === "patch" &&
+      inserted.text.includes("// Reviewed 2026-08-01"),
+    "the insert re-emitted",
+  );
+  /* IT LANDS AFTER THE ANCHOR'S WHOLE BLOCK, not after its declaration line.
+     The anchor here carries a `desc`; inserting between the two would put a
+     continuation line under a message that does not own it, and the document
+     would stop parsing. */
+  {
+    const span = spans.items.get(sequenceItemKey(anchor));
+    check(
+      "the new line lands after the anchor's last continuation line",
+      inserted.text.split("\n")[span.end].includes(INSERTED_MESSAGE_LABEL),
+      `line ${span.end + 1}: ${inserted.text.split("\n")[span.end]}`,
+    );
+  }
+  /* AND AS A SIBLING AT THE ANCHOR'S OWN DEPTH. Indentation IS fragment
+     membership in this grammar, so a wrong pad silently moves the message into
+     or out of the fragment the reader was looking at. */
+  {
+    const span = spans.items.get(sequenceItemKey(anchor));
+    const anchorIndent = /^ */.exec(authored.split("\n")[span.start - 1])[0];
+    const newLine = inserted.text.split("\n")[span.end];
+    check(
+      "the new message sits at the anchor's own indentation",
+      /^ */.exec(newLine)[0] === anchorIndent,
+      `anchor "${anchorIndent}" vs new "${/^ */.exec(newLine)[0]}"`,
+    );
+    const siblingPath = [...anchor.slice(0, -1), anchor[anchor.length - 1] + 1];
+    check(
+      "the new message is the anchor's next sibling in the model",
+      sequenceItemAt(inserted.doc.file.items, siblingPath).label ===
+        INSERTED_MESSAGE_LABEL,
+      `at ${siblingPath}: ${JSON.stringify(sequenceItemAt(inserted.doc.file.items, siblingPath))}`,
+    );
+  }
+  /* NESTED, which is the case a root-only insert would pass while breaking:
+     an anchor inside a fragment must keep the new message inside it. */
+  {
+    const nested = paths.find((p) => p.length > 1);
+    const edit = insertedMessageEdit(
+      doc.value,
+      authored,
+      nested,
+      file.participants[0].id,
+      file.participants[0].id,
+    );
+    const siblingPath = [...nested.slice(0, -1), nested[nested.length - 1] + 1];
+    check(
+      "an insert anchored inside a fragment stays inside that fragment",
+      edit !== null &&
+        edit.text.split("\n").length === authored.split("\n").length + 1 &&
+        sequenceItemAt(edit.doc.file.items, siblingPath).label ===
+          INSERTED_MESSAGE_LABEL,
+      `nested anchor ${nested} produced ${JSON.stringify(edit && sequenceItemAt(edit.doc.file.items, siblingPath))}`,
+    );
+    /* A SELF-MESSAGE IS LEGAL and this is the case that proves the two clicks
+       may name the same lifeline — refusing it would forbid a construct the
+       grammar and the layout both draw. */
+    check(
+      "the two clicks may name the same lifeline (a self-message)",
+      sequenceItemAt(edit.doc.file.items, siblingPath).from ===
+        sequenceItemAt(edit.doc.file.items, siblingPath).to,
+      "a self-message insert was mangled",
+    );
+  }
+  /* APPEND, and it must land after the last thing the PARSER saw rather than
+     at the end of the file: a document ending in a comment would otherwise
+     have the new message pushed past prose written about the flow. */
+  {
+    const trailing = `${authored}// A closing note about the whole flow.\n`;
+    const trailingDoc = parseViewSource(trailing);
+    const edit = insertedMessageEdit(
+      trailingDoc.value,
+      trailing,
+      null,
+      file.participants[0].id,
+      file.participants[1].id,
+    );
+    const out = edit.text.split("\n");
+    check(
+      "an append adds one line and leaves the trailing comment last",
+      edit !== null &&
+        out.length === trailing.split("\n").length + 1 &&
+        out[out.length - 2].startsWith("// A closing note"),
+      `tail: ${JSON.stringify(out.slice(-3))}`,
+    );
+    check(
+      "an appended message is the last root item of the model",
+      (() => {
+        const items = edit.doc.file.items;
+        return items[items.length - 1].label === INSERTED_MESSAGE_LABEL;
+      })(),
+      "the append did not land at the end of the flow",
+    );
+    check(
+      "an appended root message sits at the grammar's body indentation",
+      /^ {2}\S/.test(out.find((l) => l.includes(INSERTED_MESSAGE_LABEL))),
+      `appended line: ${JSON.stringify(out.find((l) => l.includes(INSERTED_MESSAGE_LABEL)))}`,
+    );
+  }
+
+  /* ROOT_ITEM_INDENT MEASURED, not trusted, and it needs a document with NO
+     items to reach: with a sibling to copy, an append takes the sibling's
+     indentation and the constant is never consulted. That is exactly the shape
+     an untested fallback hides in — the first person to append to an empty
+     flow would get a line the parser refuses. */
+  {
+    const empty = [
+      "archlab 1.0 sequence",
+      'title "Empty"',
+      "",
+      "@sequence",
+      '  cust:actor "Customer"',
+      '  web "Storefront"',
+      "",
+    ].join("\n");
+    const emptyDoc = parseViewSource(empty);
+    check(
+      "the items-less fixture parses, so the append fallback is reachable",
+      emptyDoc.status === "ok" && emptyDoc.value.file.items.length === 0,
+      `status: ${emptyDoc.status}`,
+    );
+    const edit = insertedMessageEdit(
+      emptyDoc.value,
+      empty,
+      null,
+      "cust",
+      "web",
+    );
+    const line = edit?.text
+      .split("\n")
+      .find((l) => l.includes(INSERTED_MESSAGE_LABEL));
+    check(
+      "the first message appended to an empty flow lands at the body indent",
+      line !== undefined && /^ {2}\S/.test(line),
+      `appended line: ${JSON.stringify(line)}`,
+    );
+    check(
+      "…and the document it produces re-parses with that message in it",
+      edit !== null &&
+        edit.doc.file.items.length === 1 &&
+        edit.doc.file.items[0].label === INSERTED_MESSAGE_LABEL,
+      "the append did not survive the re-parse",
+    );
+  }
+  /* AN UNDECLARED ENDPOINT IS REFUSED. The parser rejects a message naming a
+     participant that does not exist, so accepting one would hand the reader a
+     parse error over a diagram they could no longer edit. */
+  check(
+    "an insert naming an undeclared participant is refused",
+    insertedMessageEdit(
+      doc.value,
+      authored,
+      null,
+      "ghost",
+      file.participants[0].id,
+    ) === null,
+    "an undeclared endpoint was accepted",
+  );
+
+  /* ---- there is no re-emit path at all ------------------------------------- */
+
+  /* THE SHARPEST DIFFERENCE FROM THE C4 CANVAS, and the one most likely to be
+     "fixed" back: when the pane cannot be patched, these gestures REFUSE.
+     The C4 canvas falls back to a whole-document re-emit because its JSON pane
+     has no comments to lose; a sequence document has no JSON pane, so the
+     fallback would only ever eat the reader's comments. */
+  const stale = `${authored}  cust -> web : "typed but not parsed yet"\n`;
+  for (const [name, edit] of [
+    [
+      "a revision",
+      revisedMessageEdit(doc.value, stale, withDesc, {
+        label: "x",
+        kind: "sync",
+      }),
+    ],
+    [
+      "a participant revision",
+      revisedParticipantEdit(doc.value, stale, file.participants[0].id, {
+        name: "x",
+      }),
+    ],
+    [
+      "an insert",
+      insertedMessageEdit(
+        doc.value,
+        stale,
+        null,
+        file.participants[0].id,
+        file.participants[1].id,
+      ),
+    ],
+  ]) {
+    check(
+      `${name} against a pane that disagrees with the canvas is refused, not re-emitted`,
+      edit === null,
+      `got ${JSON.stringify(edit && edit.path)}`,
+    );
+  }
+  check(
+    "no sequence gesture can report the lossy path",
+    [
+      revised,
+      inserted,
+      revisedParticipantEdit(doc.value, authored, file.participants[0].id, {
+        name: "Renamed",
+      }),
+    ].every((edit) => edit !== null && edit.path === "patch"),
+    "a sequence edit re-emitted, which would delete the reader's comments",
+  );
+}
 
 /* ----------------------------------------------------------------------- */
 

@@ -56,9 +56,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   EyeOff,
   HelpCircle,
   MousePointerClick,
+  Pencil,
+  Plus,
   Scan,
   SquareMinus,
   Waves,
@@ -67,7 +70,14 @@ import {
   ZoomOut,
 } from "lucide-react";
 
-import type { SequenceLabFile } from "@/types";
+import type {
+  SequenceItemPath,
+  SequenceLabFile,
+  SequenceMessageKind,
+  SequenceMessageRevision,
+  SequenceParticipantKind,
+  SequenceParticipantRevision,
+} from "@/types";
 import {
   readIdleMotion,
   useIdleMotion,
@@ -89,6 +99,7 @@ import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
+import { messagePathForStep } from "../lib/address";
 import {
   collapseSequence,
   dependenciesOf,
@@ -96,8 +107,43 @@ import {
 } from "../lib/collapse";
 import { layoutSequence } from "../lib/layout";
 import { sequenceMarchState, sequenceMotionVars } from "../lib/motion";
-import type { SequenceFocus } from "./sequence-diagram";
+import type { SequenceFocus, SequenceInsertArming } from "./sequence-diagram";
 import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
+
+/* -------------------------------------------------------------------------- */
+/* Editing                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a host must be able to do for this viewer to offer editing at all.
+ *
+ * ADDRESSES, NOT STEP NUMBERS, cross this boundary. A step is a layout ordinal
+ * over whatever is being DRAWN, which is the collapsed file while a lifeline is
+ * folded — so a step number does not name a line in the reader's document.
+ * `lib/address.ts` resolves the one into the other, on this side of the
+ * boundary, and the host receives something it can splice by.
+ *
+ * NOTHING HERE RETURNS ANYTHING. The viewer does not learn whether an edit
+ * landed; the host re-parses the patched text and hands back a new `file`, and
+ * this component re-renders from it. That is the same one-model rule the C4
+ * canvas follows — the text is the authority, not the gesture's intent.
+ */
+export interface SequenceEditHandlers {
+  onReviseMessage: (
+    path: SequenceItemPath,
+    revision: SequenceMessageRevision,
+  ) => void;
+  onReviseParticipant: (
+    participantId: string,
+    revision: SequenceParticipantRevision,
+  ) => void;
+  /** `after === null` appends to the end of the flow. */
+  onInsertMessage: (
+    after: SequenceItemPath | null,
+    from: string,
+    to: string,
+  ) => void;
+}
 
 /* -------------------------------------------------------------------------- */
 /* The viewer                                                                   */
@@ -108,6 +154,7 @@ export function SequenceViewer({
   onAnnounce,
   extraTourSteps,
   tour: tourEnabled = true,
+  edit,
 }: {
   file: SequenceLabFile;
   /**
@@ -139,6 +186,21 @@ export function SequenceViewer({
    * it does not apply.
    */
   tour?: boolean;
+  /**
+   * Present only when this host can WRITE the document back — the playground
+   * with an `.alab` sequence document and the canvas lock off. Absent is the
+   * default and is what every read-only host gets, so a viewer embedded as
+   * evidence renders no editing chrome without being told not to.
+   *
+   * PRESENCE IS "EDITING IS ON RIGHT NOW", not "editing is possible here", and
+   * the two are different questions — PR #69 landed that distinction on
+   * `ViewerShell` after a locked diagram grew a button offering to edit it
+   * somewhere the reader already was. The CAPABILITY question is the host's:
+   * the playground answers it with `canvasEditability(doc, "revise")` and
+   * withholds this prop while the canvas is locked. Do not reconflate them by
+   * passing handlers plus a disabled flag.
+   */
+  edit?: SequenceEditHandlers;
 }): React.JSX.Element {
   /**
    * COLLAPSED PARTICIPANTS — the ones whose private dependencies are folded
@@ -291,10 +353,11 @@ export function SequenceViewer({
     () => [
       FOCUS_TOUR_STEP,
       ...(dependencyCount.size > 0 ? [FOLD_TOUR_STEP] : []),
+      ...(edit !== undefined ? [EDIT_TOUR_STEP] : []),
       ZOOM_TOUR_STEP,
       ...(extraTourSteps ?? []),
     ],
-    [dependencyCount, extraTourSteps],
+    [dependencyCount, extraTourSteps, edit],
   );
 
   const handleFocusMessage = useCallback(
@@ -817,15 +880,43 @@ export function SequenceViewer({
    * Form fields are exempt: Escape inside the source textarea belongs to its
    * Tab-escape-hatch (see sequence-playground.tsx), not to diagram focus.
    */
+  /**
+   * The armed insert gesture: `null` when disarmed, `{ from: null }` while the
+   * sender click is owed, `{ from: id }` while the receiver click is owed.
+   *
+   * A BUTTON THEN TWO CLICKS, not a drag. A drag from lifeline to lifeline was
+   * the obvious alternative and is unavailable: the canvas already owns
+   * primary-button drag for panning (four deliberate limits on it in
+   * `handlePointerDown`), so a second meaning for the same gesture would make
+   * both ambiguous. The modal arm is also the only shape that is reachable
+   * from the keyboard, since the lifeline targets become tab stops.
+   */
+  const [arming, setArming] = useState<{ from: string | null } | null>(null);
+
+  const disarm = useCallback(
+    (announcement: string | null) => {
+      setArming(null);
+      if (announcement !== null) onAnnounce(announcement);
+    },
+    [onAnnounce],
+  );
+
   const focusRef = useRef<SequenceFocus>(null);
   const clearFocusRef = useRef(handleClearFocus);
+  /* ARMING IS A NEW RUNG, above clearing focus. Escape means "back out of the
+     thing I am in the middle of", and while the insert gesture is armed that
+     thing is the gesture, not the selection — cancelling both at once would
+     lose the step the insert was anchored to along with the mode. */
+  const disarmRef = useRef<(() => void) | null>(null);
   // The "latest ref" update lives in an effect (not in render — the
   // react-hooks/refs rule forbids that), which is still always ahead of any
   // keydown: effects flush before the user can press another key.
   useEffect(() => {
     focusRef.current = focus;
     clearFocusRef.current = handleClearFocus;
-  }, [focus, handleClearFocus]);
+    disarmRef.current =
+      arming === null ? null : () => disarm("Insert cancelled.");
+  }, [focus, handleClearFocus, arming, disarm]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -837,6 +928,11 @@ export function SequenceViewer({
           target.tagName === "INPUT" ||
           target.isContentEditable)
       ) {
+        return;
+      }
+      if (disarmRef.current !== null) {
+        event.preventDefault();
+        disarmRef.current();
         return;
       }
       if (focusRef.current === null) return; // nothing to clear — rung 3 may act
@@ -877,6 +973,134 @@ export function SequenceViewer({
     },
     [focus, layout.stepCount, handleFocusMessage],
   );
+
+  /* ---- editing ------------------------------------------------------------- */
+
+  /**
+   * The MODEL ADDRESS of the focused message, or `null` when it has none.
+   *
+   * `null` is a real state and the dock renders it as a refusal rather than
+   * hiding the form: a fold can leave a drawn message whose object the
+   * unfiltered tree no longer holds (see `lib/address.ts`), and a reader who
+   * clicked an arrow and got no editor with no explanation would reasonably
+   * conclude editing is broken.
+   */
+  const focusedMessagePath = useMemo(
+    () =>
+      focus?.kind === "message"
+        ? messagePathForStep(file, shown, focus.step)
+        : null,
+    [file, shown, focus],
+  );
+
+  /**
+   * Which element the dock is currently EDITING rather than describing.
+   *
+   * Keyed by the target rather than a bare boolean so moving focus to another
+   * message closes the form instead of pointing it at something new: an open
+   * form holds the reader's half-typed text, and silently re-aiming it would
+   * commit that text to a message they were not looking at.
+   */
+  const [editing, setEditing] = useState<
+    | { kind: "message"; step: number }
+    | { kind: "participant"; id: string }
+    | null
+  >(null);
+  const editingMessage =
+    editing?.kind === "message" &&
+    focus?.kind === "message" &&
+    focus.step === editing.step;
+  const editingParticipant =
+    editing?.kind === "participant" &&
+    focus?.kind === "participant" &&
+    focus.id === editing.id;
+
+  const handleArmInsert = useCallback(() => {
+    setArming({ from: null });
+    onAnnounce(
+      focus?.kind === "message"
+        ? `Inserting a message after step ${focus.step}. Click or tab to the sending lifeline, then the receiving one. Escape cancels.`
+        : "Inserting a message at the end of the flow. Click or tab to the sending lifeline, then the receiving one. Escape cancels.",
+    );
+  }, [focus, onAnnounce]);
+
+  /**
+   * One lifeline click. The first supplies the sender, the second the receiver
+   * and fires the edit — a SELF-message when they are the same lifeline, which
+   * is a legal and useful thing to draw, so it is not refused.
+   *
+   * The new message is FOCUSED and opened for editing, at the step it will
+   * occupy once the host's re-parse arrives (`after + 1`, or the end). Focus is
+   * validated at read time against the new layout, so pointing at a step that
+   * does not exist yet costs nothing if the edit is refused — it reads as no
+   * focus rather than as a wrong selection.
+   */
+  const handlePickInsertEnd = useCallback(
+    (participantId: string) => {
+      if (edit === undefined || arming === null) return;
+      if (arming.from === null) {
+        setArming({ from: participantId });
+        onAnnounce(
+          `Sending from ${nameById.get(participantId) ?? participantId}. Now choose the receiving lifeline.`,
+        );
+        return;
+      }
+      /* A MESSAGE FOCUS WITH NO ADDRESS IS REFUSED, not quietly appended.
+         `null` means both "nothing is focused" and "the focused step has no
+         resolvable address" (a fold; see `focusedMessagePath`), and passing it
+         through would put the message at the END of the flow while the reader
+         watched an indicator drawn beside the step they had selected. */
+      if (focus?.kind === "message" && focusedMessagePath === null) {
+        setArming(null);
+        onAnnounce(
+          "The message was not inserted — the focused step's place in the file is ambiguous while lifelines are folded. Press “Show all”, then try again.",
+        );
+        return;
+      }
+      const after = focusedMessagePath;
+      const nextStep =
+        focus?.kind === "message" ? focus.step + 1 : layout.stepCount + 1;
+      setArming(null);
+      edit.onInsertMessage(after, arming.from, participantId);
+      setRawFocus((prev) => ({
+        focus: { kind: "message", step: nextStep },
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
+      setEditing({ kind: "message", step: nextStep });
+    },
+    [
+      arming,
+      edit,
+      focus,
+      focusedMessagePath,
+      layout.stepCount,
+      nameById,
+      onAnnounce,
+    ],
+  );
+
+  /**
+   * Y of the insertion indicator: the midpoint of the gap the new row will
+   * open. Read out of `layout.yByStep` rather than recomputed, so the line the
+   * reader sees and the place the message lands are one answer.
+   */
+  const insertIndicatorY =
+    focus?.kind === "message"
+      ? ((layout.yByStep[focus.step - 1] ?? layout.lifelineTop) +
+          (layout.yByStep[focus.step] ?? layout.lifelineBottom)) /
+        2
+      : ((layout.yByStep[layout.stepCount - 1] ?? layout.lifelineTop) +
+          layout.lifelineBottom) /
+        2;
+
+  const insertArming: SequenceInsertArming | null =
+    arming === null
+      ? null
+      : {
+          from: arming.from,
+          atY: insertIndicatorY,
+          onPick: handlePickInsertEnd,
+        };
 
   /* ---- render -------------------------------------------------------------- */
 
@@ -1106,6 +1330,7 @@ export function SequenceViewer({
               collapsed={collapsed}
               dependencyCount={dependencyCount}
               onToggleCollapse={handleToggleCollapse}
+              insert={insertArming}
             />
           </div>
         </div>
@@ -1202,6 +1427,43 @@ export function SequenceViewer({
               entirely when the host opted out — a button that teaches this
               view's controls has no business on a page that embeds the view
               as a preview of something else. */}
+          {/* ---- insert a message ----
+              In the view-level strip beside zoom and idle motion, because that
+              is where controls that change the whole view already live, and
+              because the arming state it enters is view-level too.
+
+              Rendered only when the host passed handlers — i.e. editing is on
+              right now. Not disabled-when-locked: a permanently dead control
+              is a promise the page cannot keep, and the lock's own affordance
+              already says why editing is off. */}
+          {edit === undefined ? null : (
+            <button
+              type="button"
+              onClick={
+                arming === null
+                  ? handleArmInsert
+                  : () => disarm("Insert cancelled.")
+              }
+              aria-pressed={arming !== null}
+              aria-label={
+                arming === null
+                  ? "Insert a message"
+                  : "Cancel inserting a message"
+              }
+              title={
+                arming === null
+                  ? focus?.kind === "message"
+                    ? `Insert a message after step ${focus.step}`
+                    : "Insert a message at the end of the flow"
+                  : arming.from === null
+                    ? "Click the sending lifeline — Escape cancels"
+                    : "Click the receiving lifeline — Escape cancels"
+              }
+              className={`${ZOOM_BUTTON_CLASSES} aria-pressed:text-primary`}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+            </button>
+          )}
           {tourEnabled ? (
             <button
               type="button"
@@ -1269,6 +1531,44 @@ export function SequenceViewer({
                     ? "Participant details"
                     : "Fragment details"}
               </h2>
+              {/* ---- the edit toggle ----
+                  IN THE DOCK, not on the canvas. The dock is already the one
+                  place that shows every field a message has, including the
+                  `desc` that is deliberately not drawn on the wire — so it is
+                  the only surface where "edit this" can mean "edit all of it".
+                  A pencil on the arrow itself would have to open something,
+                  and that something is this panel.
+
+                  Absent for a fragment focus: a fragment's own wording is its
+                  guard labels and its kind, which are branch-level lines this
+                  gesture does not address (see `SequenceSpans` — fragments
+                  carry no line span). Offering a disabled pencil there would
+                  advertise an editor that does not exist. */}
+              {edit !== undefined &&
+              !editingMessage &&
+              !editingParticipant &&
+              (focusedMessage !== null || focusedParticipant !== null) ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditing(
+                      focusedMessage !== null && focus?.kind === "message"
+                        ? { kind: "message", step: focus.step }
+                        : focusedParticipant !== null
+                          ? { kind: "participant", id: focusedParticipant.id }
+                          : null,
+                    )
+                  }
+                  aria-label={
+                    focusedMessage !== null
+                      ? "Edit this message"
+                      : "Edit this participant"
+                  }
+                  className="ml-auto rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <Pencil aria-hidden="true" className="size-4" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={handleCloseDock}
@@ -1280,7 +1580,29 @@ export function SequenceViewer({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-              {focusedMessage !== null ? (
+              {focusedMessage !== null && editingMessage ? (
+                focusedMessagePath === null ? (
+                  /* The one case the form cannot serve, stated rather than
+                     hidden — see `focusedMessagePath`. */
+                  <p className="text-sm text-muted-foreground">
+                    This message cannot be edited while lifelines are folded:
+                    its place in the file is ambiguous. Press “Show all”, then
+                    try again.
+                  </p>
+                ) : (
+                  <MessageForm
+                    key={`msg-form-${focusedMessage.step}`}
+                    message={focusedMessage}
+                    onCancel={() => setEditing(null)}
+                    onSubmit={(revision) => {
+                      setEditing(null);
+                      edit?.onReviseMessage(focusedMessagePath, revision);
+                    }}
+                  />
+                )
+              ) : null}
+
+              {focusedMessage !== null && !editingMessage ? (
                 <dl className="flex flex-col gap-2.5">
                   <DockRow
                     term="Message"
@@ -1337,7 +1659,19 @@ export function SequenceViewer({
                 </dl>
               ) : null}
 
-              {focusedParticipant !== null ? (
+              {focusedParticipant !== null && editingParticipant ? (
+                <ParticipantForm
+                  key={`p-form-${focusedParticipant.id}`}
+                  participant={focusedParticipant}
+                  onCancel={() => setEditing(null)}
+                  onSubmit={(revision) => {
+                    setEditing(null);
+                    edit?.onReviseParticipant(focusedParticipant.id, revision);
+                  }}
+                />
+              ) : null}
+
+              {focusedParticipant !== null && !editingParticipant ? (
                 <>
                   <dl className="flex flex-col gap-2.5">
                     <DockRow
@@ -1496,6 +1830,19 @@ const FOCUS_TOUR_STEP: TourStep = {
     "order. Escape, or a click on empty canvas, clears the focus.",
   icon: MousePointerClick,
 };
+/* Offered only when the host passed edit handlers, on the same condition the
+   fold step rides: a tour step naming a control that is not on screen sends the
+   reader hunting for it. */
+const EDIT_TOUR_STEP: TourStep = {
+  title: "Change what a step says",
+  body:
+    "Click a message or a lifeline, then the pencil in the details panel, to " +
+    "rewrite its wording. The + in this strip adds a message: press it, click " +
+    "the sending lifeline, then the receiving one. Every change is written " +
+    "into the source text beside the diagram, one line at a time.",
+  icon: Pencil,
+};
+
 const FOLD_TOUR_STEP: TourStep = {
   title: "Fold a card's helpers",
   body:
@@ -1566,6 +1913,263 @@ function DockCodeRow({
         />
       </dd>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The dock's edit forms                                                       */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * TWO FORMS, NOT ONE GENERIC ONE. They share three of their four fields, and
+ * merging them was tried on paper and rejected: the shared part is the
+ * PRESENTATION (a label, an input, the same classes), which is what
+ * `DockField` below carries, while the differences are the fields' meanings —
+ * a message has a `kind` with three values and a title drawn on the wire, a
+ * participant has a `kind` with three STATES including "unstated" and a
+ * display name. A generic form would take a schema describing all of that,
+ * which is more code than both forms and harder to read than either.
+ *
+ * THEY ARE PLAIN <form> ELEMENTS so Enter submits and the browser's own focus
+ * order applies. The dock is deliberately not a modal (see the file header),
+ * so nothing traps focus here either: Tab leaves the form and reaches the
+ * diagram, which is the click-around-while-reading behaviour the dock exists
+ * for.
+ *
+ * EMPTY MEANS ABSENT. A cleared technology or detail field submits
+ * `undefined`, not `""` — `.alab` can spell an empty string, and a document
+ * carrying `[""]` or `desc ""` would render a blank field the reader cannot
+ * tell from a missing one. The one exception is the message LABEL, which the
+ * model requires: an empty label submits as the empty string it already
+ * permits, and the arrow simply draws without one.
+ */
+
+/** Blank string -> `undefined`, so clearing a field removes it. */
+function orAbsent(value: string): string | undefined {
+  return value.trim() === "" ? undefined : value;
+}
+
+const FIELD_CLASSES =
+  "mt-1 w-full rounded-md border border-border bg-card px-2 py-1 text-sm " +
+  "text-foreground focus-visible:ring-2 focus-visible:ring-ring " +
+  "focus-visible:outline-none";
+
+/** One labelled control. The <label> WRAPS its control rather than using
+ * `htmlFor`: the dock renders several of these and an id would have to be
+ * unique per focused element, which is a name to keep in step for nothing. */
+function DockField({
+  term,
+  children,
+}: {
+  term: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-muted-foreground">{term}</span>
+      {children}
+    </label>
+  );
+}
+
+/** Apply / Cancel, in that order — the primary action nearest the fields. */
+function DockFormActions({
+  onCancel,
+}: {
+  onCancel: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      <button
+        type="submit"
+        className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <Check aria-hidden="true" className="size-3.5" />
+        Apply
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The message editor. `key`ed on the step by its caller, so focusing a
+ * different message REMOUNTS it — which is how the fields start from the new
+ * message's values rather than from an effect that syncs them (the same
+ * no-setState-in-an-effect rule this file's header states).
+ */
+function MessageForm({
+  message,
+  onSubmit,
+  onCancel,
+}: {
+  message: LaidMessage;
+  onSubmit: (revision: SequenceMessageRevision) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [label, setLabel] = useState(message.label);
+  const [kind, setKind] = useState<SequenceMessageKind>(message.kind);
+  const [technology, setTechnology] = useState(message.technology ?? "");
+  const [description, setDescription] = useState(message.description ?? "");
+
+  /* The label takes focus on mount rather than through `autoFocus`, which
+     jsx-a11y flags and which cannot be scoped to "this remount". It also
+     completes the insert gesture: press +, click, click, type. */
+  const labelRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    labelRef.current?.select();
+  }, []);
+
+  return (
+    <form
+      className="flex flex-col gap-2.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({
+          label,
+          kind,
+          technology: orAbsent(technology),
+          description: orAbsent(description),
+        });
+      }}
+    >
+      <DockField term="Label">
+        <input
+          ref={labelRef}
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      <DockField term="Kind">
+        <select
+          value={kind}
+          onChange={(event) =>
+            setKind(event.target.value as SequenceMessageKind)
+          }
+          className={FIELD_CLASSES}
+        >
+          <option value="sync">sync — a call the sender waits on</option>
+          <option value="async">async — fire and forget</option>
+          <option value="reply">reply — a return</option>
+        </select>
+      </DockField>
+      <DockField term="Technology">
+        <input
+          value={technology}
+          onChange={(event) => setTechnology(event.target.value)}
+          placeholder="HTTPS, gRPC — blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      {/* A TEXTAREA, because this field is the one that may hold newlines and
+          viewers must honour them (`SequenceMessage.description`). A single
+          input would silently make multi-line detail unenterable in the only
+          place it is editable. */}
+      <DockField term="Details">
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={4}
+          placeholder="Endpoint, payload, failure modes — blank to remove"
+          className={`${FIELD_CLASSES} font-mono text-xs`}
+        />
+      </DockField>
+      <DockFormActions onCancel={onCancel} />
+    </form>
+  );
+}
+
+/** The participant editor. Remounted per participant for the same reason. */
+function ParticipantForm({
+  participant,
+  onSubmit,
+  onCancel,
+}: {
+  participant: {
+    name: string;
+    kind?: SequenceParticipantKind;
+    technology?: string;
+    description?: string;
+  };
+  onSubmit: (revision: SequenceParticipantRevision) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [name, setName] = useState(participant.name);
+  /* THREE STATES, not two. Absent, `participant` and `actor` are distinct and
+     all three round-trip (`SequenceParticipantKind`), so the select carries an
+     explicit "unstated" option rather than defaulting the empty case to
+     `participant` — which would rewrite a document that never said either. */
+  const [kind, setKind] = useState<SequenceParticipantKind | "">(
+    participant.kind ?? "",
+  );
+  const [technology, setTechnology] = useState(participant.technology ?? "");
+  const [description, setDescription] = useState(participant.description ?? "");
+
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    nameRef.current?.select();
+  }, []);
+
+  return (
+    <form
+      className="flex flex-col gap-2.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({
+          name,
+          kind: kind === "" ? undefined : kind,
+          technology: orAbsent(technology),
+          description: orAbsent(description),
+        });
+      }}
+    >
+      <DockField term="Name">
+        <input
+          ref={nameRef}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      <DockField term="Kind">
+        <select
+          value={kind}
+          onChange={(event) =>
+            setKind(event.target.value as SequenceParticipantKind | "")
+          }
+          className={FIELD_CLASSES}
+        >
+          <option value="">unstated — drawn as a box</option>
+          <option value="participant">participant — a box</option>
+          <option value="actor">actor — a stick figure</option>
+        </select>
+      </DockField>
+      <DockField term="Technology">
+        <input
+          value={technology}
+          onChange={(event) => setTechnology(event.target.value)}
+          placeholder="Next.js, PostgreSQL 16 — blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      <DockField term="Description">
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={3}
+          placeholder="Blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </DockField>
+      <DockFormActions onCancel={onCancel} />
+    </form>
   );
 }
 

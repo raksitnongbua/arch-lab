@@ -27,8 +27,8 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import { isMultiBranch } from "@/types";
-import type { SequenceLabFile } from "@/types";
+import { isMultiBranch, sequenceItemAt } from "@/types";
+import type { SequenceItemPath, SequenceLabFile } from "@/types";
 
 import { isNormalizedTint } from "@/lib/tint";
 
@@ -186,6 +186,89 @@ export function serializeSequenceText(file: SequenceLabFile): string {
   emitItems(lines, items, 1);
 
   return `${lines.join("\n")}\n`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Canonical blocks — one element's own lines, for a text patch               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * WHY THESE TWO EXIST. A canvas edit to a sequence document used to mean
+ * re-serialising the whole file, which is a different file from the author's:
+ * the parser drops `//` comments and blank lines with no capture, and any
+ * field written out that canonical form omits at its default (`updated`,
+ * `:participant`, `autonumber false`) is normalised away. So one edit deleted
+ * every comment in the file, silently. An edit is now a splice of the changed
+ * element's OWN lines into the author's own text, and these are where the
+ * replacement lines come from — derived from `emitParticipant` / `emitMessage`
+ * rather than assembled a second time, so a patched block cannot be
+ * non-canonical. `playground/input/sequence-edit.ts` is the caller; the C4
+ * grammar's `canonicalNodeLine` is the same idea one file over.
+ *
+ * A BLOCK, NOT A LINE, and this is the one place the sequence side differs
+ * from C4. A drag changes a node's position, which lives on the declaration
+ * line alone, so C4 patches one line. The sequence gestures change `desc` —
+ * a CONTINUATION line, which may be added, removed or replaced — so the unit
+ * has to be the element's whole block. The cost is real and bounded: `!`
+ * escape lines and `desc` inside the edited block come back in canonical
+ * ORDER even if the author wrote them the other way round. Every byte outside
+ * the block is untouched, which is the guarantee that matters.
+ */
+
+/**
+ * The canonical lines for one participant — declaration plus its `desc` and
+ * `!` continuations — at `pad` indentation, or `null` when `participantId` is
+ * not in `file`.
+ *
+ * `pad` IS THE CALLER'S, deliberately: a participant nested in a `box` sits at
+ * four spaces and one outside a box at two, and this function cannot tell
+ * which from the model alone without re-deriving the box walk. The caller
+ * takes it from the leading whitespace of the block it is replacing, so the
+ * patched block keeps the indentation the file already had.
+ */
+export function canonicalParticipantBlock(
+  file: SequenceLabFile,
+  participantId: string,
+  pad: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const participants = file.participants;
+  if (!Array.isArray(participants)) invalid("participants", participants);
+  const participant = participants.find(
+    (candidate) => isRecord(candidate) && candidate.id === participantId,
+  );
+  if (participant === undefined) return null;
+  const lines: string[] = [];
+  emitParticipant(lines, participant, pad);
+  return lines;
+}
+
+/**
+ * The canonical lines for one message — declaration plus its `desc` and `!`
+ * continuations — at `pad` indentation, or `null` when `path` does not land on
+ * a message in `file`.
+ *
+ * `pad` is the caller's for the same reason as above, and here it carries more:
+ * a message's indentation is its fragment DEPTH, and getting it wrong moves
+ * the message into or out of a fragment. Reading it off the block being
+ * replaced is the only source that cannot be wrong about depth.
+ */
+export function canonicalMessageBlock(
+  file: SequenceLabFile,
+  path: SequenceItemPath,
+  pad: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  if (!Array.isArray(file.items)) invalid("items", file.items);
+  /* `sequenceItemAt` rather than a defensive walk of its own: a second path
+     walker is exactly the "two halves, each self-consistent, that disagree"
+     failure, and it already answers `undefined` for every path that does not
+     land — which is the answer this function needs. */
+  const item = sequenceItemAt(file.items, path);
+  if (item === undefined || item.step !== "message") return null;
+  const lines: string[] = [];
+  emitMessage(lines, item as unknown as Record<string, unknown>, pad);
+  return lines;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -92,6 +92,12 @@ import {
   SourceRailToggle,
   SplitWorkbench,
 } from "@/components/ui/split-workbench";
+import type {
+  SequenceItemPath,
+  SequenceMessageRevision,
+  SequenceParticipantRevision,
+} from "@/types";
+
 import type { TourStep } from "@/components/ui/tour";
 import {
   ShareLinkFailurePage,
@@ -132,6 +138,7 @@ import {
   SequenceExportButton,
   SequenceShareButton,
   SequenceViewer,
+  type SequenceEditHandlers,
 } from "@/features/sequence";
 import {
   canEncodeShare,
@@ -176,6 +183,11 @@ import {
   ownsChildDiagram,
   type CanvasEdit,
 } from "../input/canvas-edit";
+import {
+  insertedMessageEdit,
+  revisedMessageEdit,
+  revisedParticipantEdit,
+} from "../input/sequence-edit";
 import { KIND_BLURB } from "../lib/kind-copy";
 import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
 
@@ -851,6 +863,15 @@ export function ViewPlayground({
    */
   const editability = canvasEditability(doc);
   /**
+   * The same question for the OTHER canvas gesture — rewriting an element's
+   * wording, which the sequence canvas offers and the C4 canvas does not (see
+   * `CanvasEditAbility`). Named for what it edits rather than for the ability,
+   * because `reviseEditability` is already the name of the function inside
+   * `canvas-edit.ts` that answers it and one identifier must not mean two
+   * things in neighbouring modules.
+   */
+  const wordingEditability = canvasEditability(doc, "revise");
+  /**
    * Whether the canvas is editable RIGHT NOW: the deploy flag, the document's
    * own answer, and the reader's lock, in that order. Any one of the three
    * says no and the canvas is the read-only surface it has always been.
@@ -864,7 +885,19 @@ export function ViewPlayground({
    * disabled button and no tooltip explaining an absence — there is nothing
    * there to lock, so the strip simply does not mention it.
    */
-  const showCanvasLock = CANVAS_EDIT_ENABLED && editability.editable;
+  const showCanvasLock =
+    CANVAS_EDIT_ENABLED &&
+    (editability.editable || wordingEditability.editable);
+
+  /**
+   * Whether the SEQUENCE canvas may be edited right now — the same three-part
+   * answer `canvasEditable` gives the C4 canvas, against the other ability.
+   * The lock is deliberately shared rather than per-canvas: it is the reader's
+   * statement "I am presenting this, do not let me change it", which is about
+   * the page and not about which notation happens to be open.
+   */
+  const sequenceEditable =
+    CANVAS_EDIT_ENABLED && wordingEditability.editable && !canvasLocked;
 
   /**
    * Previous source texts, newest last — the undo history for CANVAS edits.
@@ -968,6 +1001,83 @@ export function ViewPlayground({
       );
     },
     [doc, text, applyCanvasEdit],
+  );
+
+  /* ---- the sequence canvas's own gestures --------------------------------
+     Routed through `applyCanvasEdit` exactly as the C4 drag is, so both
+     canvases share one undo ring, one "the pane just written is never rewritten
+     from the model" rule and one announcement channel. A second pathway for
+     the second canvas is the "two halves, each self-consistent" failure this
+     module's neighbours already warn about. */
+
+  const handleReviseMessage = useCallback(
+    (path: SequenceItemPath, revision: SequenceMessageRevision) => {
+      const next = revisedMessageEdit(doc, text, path, revision);
+      // null covers "nothing changed" as well as every refusal, so submitting
+      // an untouched form costs no text change and no undo entry.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Message updated to “${revision.label}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReviseParticipant = useCallback(
+    (participantId: string, revision: SequenceParticipantRevision) => {
+      const next = revisedParticipantEdit(doc, text, participantId, revision);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `${participantId} updated to “${revision.name}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleInsertMessage = useCallback(
+    (after: SequenceItemPath | null, from: string, to: string) => {
+      const next = insertedMessageEdit(doc, text, after, from, to);
+      if (next === null) {
+        /* SAID, not swallowed. The refusals here are all "the pane and the
+           canvas disagree" (a keystroke not yet parsed, or text that does not
+           parse at all), and a two-click gesture that silently does nothing
+           reads as a broken control rather than as a busy moment. */
+        setAnnouncement(
+          "The message was not inserted — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `Message inserted from ${from} to ${to} — the source text follows. Its wording is open for editing; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  /**
+   * The handler bundle the sequence viewer takes — PRESENT only while editing
+   * is on, absent otherwise. Presence is the signal: the viewer renders no
+   * editing chrome without it, which is what keeps a locked canvas free of
+   * controls rather than showing disabled ones.
+   */
+  const sequenceEdit = useMemo<SequenceEditHandlers | undefined>(
+    () =>
+      sequenceEditable
+        ? {
+            onReviseMessage: handleReviseMessage,
+            onReviseParticipant: handleReviseParticipant,
+            onInsertMessage: handleInsertMessage,
+          }
+        : undefined,
+    [
+      sequenceEditable,
+      handleReviseMessage,
+      handleReviseParticipant,
+      handleInsertMessage,
+    ],
   );
 
   /** Put the previous source text back and parse it — see `canvasUndoRef`. */
@@ -1874,6 +1984,7 @@ export function ViewPlayground({
                     file={doc.file}
                     onAnnounce={setAnnouncement}
                     extraTourSteps={PLAYGROUND_TOUR_STEPS}
+                    edit={sequenceEdit}
                   />
                 ) : doc.kind === "flowchart" ? (
                   <FlowchartViewer

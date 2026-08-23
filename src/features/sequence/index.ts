@@ -15,6 +15,7 @@
  */
 
 export { SequenceViewer } from "./components/sequence-viewer";
+export type { SequenceEditHandlers } from "./components/sequence-viewer";
 export { layoutSequence, SEQ } from "./lib/layout";
 export type { SequenceLayout } from "./lib/layout";
 export { SEQUENCE_EXAMPLE } from "./input/example";
