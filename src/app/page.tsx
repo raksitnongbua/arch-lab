@@ -30,6 +30,15 @@ import {
 } from "@/features/mcp/catalog";
 import { CopySnippet } from "@/features/mcp/components/copy-snippet";
 import { publicOrigin } from "@/features/mcp/lib/origin";
+/* The capability GRID, not a sentence about it. Reached at its own pure module
+   rather than through `@/features/playground`, whose barrel exports the
+   playground component — importing that here would put the whole editor's
+   client chunk on the landing page. `view/page.tsx` deep-imports the same
+   feature's pure modules for the same reason. */
+import {
+  CANVAS_EDITING_PASSAGE,
+  CANVAS_EDIT_OFFERS,
+} from "@/features/playground/input/canvas-edit";
 import {
   APP_DESCRIPTION,
   APP_NAME,
@@ -58,9 +67,10 @@ export const metadata: Metadata = {
  *      deliberately: the chooser asks a question ("C4 or sequence?") that a
  *      newcomer has no basis to answer, while the sequence playground opens
  *      seeded with a working flow they can click immediately.
- *   2. WHAT IT DRAWS and WHO CAN WRITE IT — the four notations, one link
- *      each into the playground, then the MCP server that lets an agent author
- *      any of them. Both sections end in a link that does the thing.
+ *   2. WHAT IT DRAWS and WHO CAN WRITE IT — the six notations, one link
+ *      each into the playground and a label saying whether that kind answers a
+ *      canvas gesture, then the MCP server that lets an agent author any of
+ *      them. Both sections end in a link that does the thing.
  *
  *      This used to be a PRESENTATION section instead of the notations one: a
  *      half-page animated sequence preview with three gesture rows (click,
@@ -113,6 +123,29 @@ const STEPS: readonly Step[] = [
 ];
 
 /**
+ * The document kinds, as the capability grid keys them. Declared as the grid's
+ * own key type so a notation renamed there stops this file compiling rather
+ * than dropping a card's edit label to a silent fallback.
+ */
+type Notation = keyof typeof CANVAS_EDIT_OFFERS.move;
+
+/**
+ * How a notation is edited, for the label on its card — DERIVED, because this
+ * is the exact claim that went stale five times on this branch.
+ *
+ * Two words, not a sentence: the cards are a grid a reader scans to answer "can
+ * I drag this one", and `CANVAS_EDITING_PASSAGE` in the hero above has already
+ * said what a canvas gesture writes. A card that repeated it six times would
+ * bury the difference it exists to show.
+ */
+function editedHow(notation: Notation): { label: string; onCanvas: boolean } {
+  const onCanvas = Object.values(CANVAS_EDIT_OFFERS).some(
+    (cells) => cells[notation].offers,
+  );
+  return { label: onCanvas ? "text or canvas" : "text", onCanvas };
+}
+
+/**
  * The six notations, in the order the docs and the playground list them.
  *
  * A FOUR-CARD GRID OF DIAGRAM KINDS USED TO BE THE FIRST THING ON THIS PAGE
@@ -138,6 +171,8 @@ const STEPS: readonly Step[] = [
 const KINDS: readonly {
   icon: LucideIcon;
   name: string;
+  /** The grid's key, so `editedHow` answers for this card from the table. */
+  notation: Notation;
   /* What this kind is called in a LIST of capabilities, which is not its
      heading: the headings are singular ("Sequence diagram") because each one
      labels one card, and appending "diagrams" to those to build the structured
@@ -151,6 +186,7 @@ const KINDS: readonly {
   {
     icon: Layers,
     name: "C4 model",
+    notation: "c4",
     feature: "C4 models",
     body: "Context, container and component levels in one file — zoom in and drill from a box into what it contains.",
     href: "/view?d=c4",
@@ -158,6 +194,7 @@ const KINDS: readonly {
   {
     icon: MessagesSquare,
     name: "Sequence diagram",
+    notation: "sequence",
     feature: "Sequence diagrams",
     body: "Lifelines, activation, loops and alt fragments — clickable message by message, with the payload beside each one.",
     href: "/view?d=seq",
@@ -165,6 +202,7 @@ const KINDS: readonly {
   {
     icon: Workflow,
     name: "Flowchart",
+    notation: "flowchart",
     feature: "Flowcharts",
     body: "Terminators, guarded decisions, io and call symbols, and loops that hook back — traced end to end as it draws.",
     href: "/view?d=flow",
@@ -172,6 +210,7 @@ const KINDS: readonly {
   {
     icon: Users,
     name: "Use case",
+    notation: "usecase",
     feature: "Use case diagrams",
     body: "Actors outside a system boundary, associations into it, and «include» or «extend» between cases.",
     href: "/view?d=uc",
@@ -179,6 +218,7 @@ const KINDS: readonly {
   {
     icon: Table2,
     name: "ER diagram",
+    notation: "er",
     feature: "Entity-relationship diagrams",
     body: "Tables with their columns, primary and foreign keys, and crow's-foot cardinality on every relationship.",
     href: "/view?d=er",
@@ -186,6 +226,7 @@ const KINDS: readonly {
   {
     icon: TableProperties,
     name: "Data dictionary",
+    notation: "dict",
     feature: "Data dictionaries",
     body: "Every field with what it means, where its value comes from, which values are legal, and whether it is personal data.",
     href: "/view?d=dict",
@@ -226,12 +267,29 @@ function homeJsonLd(): string {
         applicationCategory: "DeveloperApplication",
         operatingSystem: "Web browser",
         /* DERIVED FROM KINDS, never typed out beside it. This is the machine
-           half of the section that names the four notations, and the failure
+           half of the section that names the six notations, and the failure
            mode of a hand-written copy is the worst kind: a fifth kind ships,
            the page shows it, the structured data keeps claiming four, and an
            assistant answering "what can arch-lab draw" reads the stale half. */
         featureList: [
           ...KINDS.map((kind) => kind.feature),
+          /* THE CAPABILITY, not just the notations. `featureList` is the one
+             part of this graph an assistant reads as "what can it do", and
+             until now every entry answered "what can it draw" — so the two-way
+             editing the page leads with was absent from the machine half.
+             Derived from the same grid the cards' labels are, and phrased with
+             the notation's own noun so the entry is legible alone. */
+          ...Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
+            Object.values(cells)
+              .filter((offer) => offer.offers)
+              /* The grid's `noun` rather than `KINDS[].feature`, because it is
+                 the spelling written for exactly this position — mid-sentence,
+                 lower case unless the name is a proper one. `feature` is a list
+                 heading and would read "Canvas editing for Sequence
+                 diagrams". */
+              .map((offer) => `Canvas editing for ${offer.noun}`),
+          ),
+          "Text editing for every notation",
           "Mermaid import and export",
           `MCP server for AI agents (${MCP_TOOLS.length} read-only tools)`,
         ],
@@ -318,8 +376,8 @@ export default function Home() {
               plain text. Describe a system in a few lines and it draws it — a
               beautiful, zoomable C4 model you can drill into level by level, a
               sequence flow you can click through message by message, a
-              flowchart, or a use-case diagram. Your AI agent can write that
-              text for you, over MCP.
+              flowchart, a use-case diagram, an ER model or a data dictionary.
+              Your AI agent can write that text for you, over MCP.
             </p>
 
             {/* THE ONE PLACE THIS SENTENCE APPEARS on the home page, and it is
@@ -327,14 +385,20 @@ export default function Home() {
                 objection a reader arrives with — "I do not want to learn a
                 grammar to move a box". Sourced from the flag: while the canvas
                 is not shipped the sentence is ABSENT, not written in a hopeful
-                present tense (`codebase.md`, feature flags). C4 is named,
-                because the other five kinds derive their layout from the text
-                and there is nothing on them to drag. */}
+                present tense (`codebase.md`, feature flags).
+
+                AND IT IS NO LONGER WRITTEN HERE. It used to read "a C4 diagram
+                is editable both ways", with a comment explaining that the other
+                five kinds have nothing to drag — true when written, and still on
+                the page for a release after the sequence canvas learned to
+                reorder messages and lifelines. It is now
+                `CANVAS_EDITING_PASSAGE`, assembled from the capability grid, and
+                it is the SAME STRING that `/llms.txt`, `/llms-full.txt` and
+                `/faq` serve: an assistant quotes a passage rather than a page,
+                so four paraphrases would be four chances to be quoted wrongly. */}
             {CANVAS_EDIT_ENABLED ? (
               <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground sm:text-xl">
-                Write it as text or drag it on the canvas — a C4 diagram is
-                editable both ways, and either way the file is the same one
-                line-per-element text you can review in a pull request.
+                {CANVAS_EDITING_PASSAGE}
               </p>
             ) : null}
 
@@ -414,7 +478,7 @@ export default function Home() {
           comment says a newcomer should reach "what do I do with it" fast.
 
           What the page did NOT have anywhere was the plain sentence "it draws
-          these four kinds". That is the thing a search result and an assistant
+          these six kinds". That is the thing a search result and an assistant
           summary both need, so the space went to saying it once, in prose, with
           a link per kind. */}
       <section
@@ -433,6 +497,7 @@ export default function Home() {
         <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
           The same editor, viewer, share link and export for all of them — and
           Mermaid pastes into five of the six — it has no dictionary notation.
+          Each card says how that kind is edited.
         </p>
 
         {/* Three columns at `lg`, not five: five cards across put each one
@@ -442,6 +507,7 @@ export default function Home() {
         <ul className="mt-9 grid grid-cols-1 gap-x-8 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
           {KINDS.map((kind) => {
             const Icon = kind.icon;
+            const edited = editedHow(kind.notation);
             return (
               <li key={kind.name}>
                 {/* The WHOLE card is the link, so the target is the size of the
@@ -451,12 +517,48 @@ export default function Home() {
                   <span className="grid size-10 place-items-center rounded-lg border border-border bg-secondary/60 text-primary transition-colors group-hover:border-primary/40 group-hover:bg-primary/10">
                     <Icon aria-hidden="true" className="size-5" />
                   </span>
-                  <span className="flex items-center gap-1.5 text-base font-medium text-foreground">
-                    {kind.name}
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="size-3.5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary"
-                    />
+                  {/* THE EDIT LABEL RIDES THE NAME ROW, right-aligned, which is
+                      what turns six cards into the grid a reader came for: four
+                      say "text", two say "text or canvas", and "can I drag this
+                      one" is answered without opening any of them. Six labels
+                      pinned to the card's right edge read as a column.
+
+                      IT SITS AFTER THE NAME rather than up on the icon row, and
+                      that is an accessibility decision, not a visual one: the
+                      whole card is one link, so its accessible name is
+                      everything inside it in DOM order. On the icon row the link
+                      announced as "Edited as text or canvas, C4 model" — the
+                      qualifier before the thing it qualifies. Here it is "C4
+                      model, Edited as text or canvas", and the badge still lands
+                      in the same column.
+
+                      The two that offer a canvas gesture are the ones tinted: a
+                      label with no colour on it is a caption, and the difference
+                      between the two values is the whole point of printing them.
+                      A tint and a border, never a second icon — the slot above
+                      already carries the notation's own mark. */}
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5 text-base font-medium text-foreground">
+                      {kind.name}
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="size-3.5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-primary"
+                      />
+                    </span>
+                    {/* Spelled out for a screen reader, abbreviated for the eye:
+                        "text or canvas" beside five other two-word labels reads
+                        as a column of one measurement, but read aloud on its own
+                        it is a fragment. */}
+                    <span
+                      className={
+                        edited.onCanvas
+                          ? "shrink-0 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 font-mono text-[0.6875rem] tracking-wide text-primary"
+                          : "shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[0.6875rem] tracking-wide text-muted-foreground"
+                      }
+                    >
+                      <span className="sr-only">Edited as </span>
+                      {edited.label}
+                    </span>
                   </span>
                   <span className="text-sm leading-relaxed text-muted-foreground">
                     {kind.body}

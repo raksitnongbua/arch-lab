@@ -216,14 +216,18 @@ export function OgC4Stack(): React.ReactElement {
  * The KIND-AGNOSTIC illustration: a C4 container pair over a two-message
  * exchange.
  *
- * It exists because two routes have to speak for all four document kinds at
+ * It exists because two routes have to speak for all six document kinds at
  * once — the site root, and `/view`, which is the single playground every share
  * link is minted against. A card can carry one image, so neither can show "the"
  * diagram; what they can show is that there is more than one kind of diagram
- * here, without becoming a collage. Four full miniatures competing for the same
- * 400px would be unreadable at 1200x630; two fragments read instantly. The
- * FOOTER names all four instead — a strip of text scales to a fourth entry
- * where artwork does not.
+ * here, without becoming a collage. Six full miniatures competing for the same
+ * 400px would be unreadable at 1200x630; two fragments read instantly.
+ *
+ * AND THE COPY NAMES THE COUNT RATHER THAN THE KINDS. The footer used to list
+ * them, on the argument that a strip of text scales where artwork does not — it
+ * does not scale to six at 28px in a 620px column, which is why both cards now
+ * say "six notations" and spend the rest of the line on the capability. The
+ * reasoning is on `app/opengraph-image.tsx`.
  *
  * IT IS SHARED RATHER THAN COPIED because the two cards had drifted already:
  * `/view` was previewing a three-node C4 stack, so a use-case or flowchart link

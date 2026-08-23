@@ -1,9 +1,12 @@
 # arch-lab
 
-**Architecture diagrams as plain text.** C4 models and UML-style sequence
-diagrams, written in a small text format, rendered live in the browser. No
-account, nothing uploaded — a diagram is a file you own, and git is the
-collaboration layer.
+**Architecture diagrams as plain text.** Six notations — C4 models, UML-style
+sequence diagrams, flowcharts, use-case diagrams, entity-relationship diagrams
+and data dictionaries — written in a small text format and rendered live in the
+browser. Two of the six can also be edited on the canvas; which two, and what a
+gesture writes, is one table and one guideline
+([`canvas-editing.md`](.claude/rules/canvas-editing.md)). No account, nothing
+uploaded — a diagram is a file you own, and git is the collaboration layer.
 
 Open source under the [MIT licence](LICENSE). Contributions welcome; the
 conventions below are worth five minutes before your first pull request,
@@ -29,20 +32,20 @@ Then open <http://localhost:3000>.
 
 ## Routes
 
-| Route                        | What it is                                                                                                                                                                                                                                                              |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                          | Landing page, written for someone who has not seen this before: what it is, the two things it does that a drawing tool does not (present, and be written by an agent), and how to start. The hero CTA opens `/view/sequence` seeded with a worked flow.                 |
-| `/demo`                      | Example index, sectioned by document kind: C4 models and sequence diagrams, each card's numbers counted from the parsed document rather than hand-written.                                                                                                              |
-| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.                                                                                             |
-| `/view`                      | **The playground.** One pane that takes any supported text — C4 `.alab`, sequence `.alab`, arch-lab JSON, Mermaid C4 or a Mermaid `sequenceDiagram` — detects it and renders the matching diagram. Also where any `/view#m=…` share link lands.                         |
-| `/view/c4`                   | The same playground, seeded with a C4 example. Kept as its own route so existing `#m=…` share links, the sitemap and the OG image keep working.                                                                                                                         |
-| `/view/seq`                  | The sequence playground, and **the route every sequence share link is minted against** — the short path spends fewer URL characters so more are left for the payload. `/view/sequence` forwards here with the fragment intact, for links made before the alias existed. |
-| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                                                                                                         |
-| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                                                                                                         |
-| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus C4 review notes on a valid model (the rules live in `features/validate/lib/advisories.ts`, each citing its source).                                 |
-| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.                                                                                     |
-| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                                                                                                             |
-| `/editor`                    | Retired: a forwarding alias for `/view`, carrying any `#m=` payload across. The C4 canvas on `/view` is editable in place (gated by `CANVAS_EDIT_ENABLED`).                                                                                                             |
+| Route                        | What it is                                                                                                                                                                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                          | Landing page, written for someone who has not seen this before: what it is, the two things it does that a drawing tool does not (present, and be written by an agent), and how to start. The hero CTA opens `/view/sequence` seeded with a worked flow.                       |
+| `/demo`                      | Example index, sectioned by document kind, each card's numbers counted from the parsed document rather than hand-written.                                                                                                                                                     |
+| `/view/[modelId]`            | Read-only viewer for a registered model (`/view/shopflow`, `/view/order-shop`). Invalid JSON is reported with the validator's JSON-path messages instead of a blank canvas.                                                                                                   |
+| `/view`                      | **The playground.** One pane that takes any supported text — `.alab` in any of the six notations, arch-lab JSON, or Mermaid — detects it and renders the matching diagram, and the one page where a canvas gesture is available. Also where any `/view#m=…` share link lands. |
+| `/view/c4`                   | The same playground, seeded with a C4 example. Kept as its own route so existing `#m=…` share links, the sitemap and the OG image keep working.                                                                                                                               |
+| `/view/seq`                  | The sequence playground, and **the route every sequence share link is minted against** — the short path spends fewer URL characters so more are left for the payload. `/view/sequence` forwards here with the fragment intact, for links made before the alias existed.       |
+| `/view/sequence/[exampleId]` | A registered example sequence document, read-only (`/view/sequence/checkout`, `/view/sequence/password-reset`). Statically generated from the example registry.                                                                                                               |
+| `/syntax`                    | The `.alab` syntax reference — every construct with working examples; each snippet on the page is verified against the real parser by `pnpm check:syntax-docs`.                                                                                                               |
+| `/validate`                  | The model checker: paste `.alab`, arch-lab JSON or Mermaid C4 and get a located verdict from the real parsers, plus C4 review notes on a valid model (the rules live in `features/validate/lib/advisories.ts`, each citing its source).                                       |
+| `/mcp`                       | How to connect an AI agent (**beta**). Every tool it documents is read from the same catalogue the server registers from, so the page cannot describe a server that does not exist.                                                                                           |
+| `/api/mcp`                   | The MCP server itself (**beta**; Streamable HTTP, stateless, unauthenticated, read-only). See `src/features/mcp/README.md`.                                                                                                                                                   |
+| `/editor`                    | Retired: a forwarding alias for `/view`, carrying any `#m=` payload across. The C4 canvas on `/view` is editable in place (gated by `CANVAS_EDIT_ENABLED`).                                                                                                                   |
 
 ## How the code is arranged
 

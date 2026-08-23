@@ -14,14 +14,19 @@ import { listDictExamples } from "@/features/dict/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 
 export const metadata: Metadata = {
-  title: "Examples — C4 models, sequence diagrams, flowcharts and use cases",
+  /* NAMES THE COUNT, NOT FOUR OF THE SIX. The title listed four notations in 63
+     characters — three over what a result shows, and two notations out of date
+     the day ER and the data dictionary shipped, with no room to add them. The
+     sections on this page name all six in prose, which is where a crawler reads
+     them. 48 characters. */
+  title: "Examples — finished diagrams in six notations",
   description:
-    "Bundled example documents of all four kinds, each parsed by the real reader. Open one in the playground and edit it as text.",
+    "Bundled example documents of all six kinds — C4, sequence, flowchart, use case, ER, data dictionary — each parsed by the real reader. Open one and edit it.",
   alternates: { canonical: "/demo" },
 };
 
 /**
- * The example index: four kinds, two showcased documents each.
+ * The example index: six kinds, two showcased documents each.
  *
  * IT WAS A LANDING PAGE and did not need to be. Each card carried a gradient
  * hover wash, an icon tile, a "View-only" badge, four count statistics, a row
@@ -327,9 +332,9 @@ export default function DemoPage(): React.JSX.Element {
         className="af-demo-row mt-3 max-w-2xl text-muted-foreground"
         style={{ "--row": 1 } as React.CSSProperties}
       >
-        Real documents of all four kinds, parsed by the same reader the app
-        uses. Click a row to open it in the playground, where its text is yours
-        to edit — or take the read-only page beside it, which is the one to send
+        Real documents of all six kinds, parsed by the same reader the app uses.
+        Click a row to open it in the playground, where its text is yours to
+        edit — or take the read-only page beside it, which is the one to send
         someone who only wants to look.
       </p>
 

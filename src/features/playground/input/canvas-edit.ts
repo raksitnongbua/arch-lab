@@ -13,6 +13,12 @@
  * `.claude/rules/canvas-editing.md` is the guideline for adding a notation to
  * that grid.
  *
+ * AND IT HOLDS THE OUTWARD-FACING SENTENCE, `CANVAS_EDITING_PASSAGE`, which the
+ * landing page, both `llms*.txt` documents and `/faq` all quote verbatim. It is
+ * assembled from the grid for the same reason the refusals are: the site said
+ * "a C4 diagram is editable both ways" for a whole release after that stopped
+ * being the whole answer.
+ *
  * THE ONE MODEL RULE. The page already holds exactly one authority for what is
  * on screen — the `ViewDocument` from the last good parse — and the source pane
  * is its text. A canvas edit therefore does not mutate anything: it derives a
@@ -61,6 +67,7 @@ import {
   type ArchTextSpans,
 } from "@/features/archtext";
 import { parsePane } from "@/features/viewer/input/sync";
+import { APP_NAME } from "@/lib/constants";
 
 import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
 import { sourceTextFor, type ViewDocument } from "./parse";
@@ -153,6 +160,21 @@ type CanvasEditOffer =
        */
       noun: string;
       /**
+       * What a gesture on this canvas WRITES, as a clause that can be dropped
+       * into `CANVAS_EDITING_PASSAGE` below — the sentence the home page, both
+       * `llms*.txt` documents and `/faq` all quote.
+       *
+       * Required on every offering cell, and that is the point: the site's
+       * claim about which canvases can be edited is then assembled from this
+       * table, so a seventh notation that learns a gesture cannot ship with the
+       * pages still describing six. The clause must name the notation and say
+       * what lands in the text, because REORDER AND POSITION ARE DIFFERENT
+       * CLAIMS and a reader arriving from a drawing tool assumes the second —
+       * see the `RefusalGround` note above and the `/faq` answer that draws the
+       * same distinction.
+       */
+      onCanvas: string;
+      /**
        * A pane LANGUAGE this notation cannot honour the ability in, even though
        * its grammar can. It lives in the cell rather than in a separate switch
        * so that everything about one (notation, ability) pair is readable in one
@@ -213,6 +235,7 @@ export const CANVAS_EDIT_OFFERS: Record<
     c4: {
       offers: true,
       noun: "C4 diagrams",
+      onCanvas: "a C4 node drags to a position the text records",
       unlessPane: {
         format: "mermaid",
         // Measured, not assumed: `serializeMermaidC4` emits no geometry at all,
@@ -253,6 +276,13 @@ export const CANVAS_EDIT_OFFERS: Record<
     sequence: {
       offers: true,
       noun: "sequence diagrams",
+      /* "into a new order", never "to a new position". This clause is the one
+         the pages quote, and the whole reason the passage is derived from here
+         is that a hand-written version of it said "drag" and left a reader
+         expecting the box to stay where they dropped it. */
+      onCanvas:
+        "a sequence message or lifeline drags into a new order, its wording " +
+        "edited in place",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: the fields this gesture
@@ -334,19 +364,128 @@ const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
  * C4 can be dragged, on the day a fifth learned to be. `check:canvas-edit`
  * proves the derivation by flipping a cell and reading the sentence back.
  *
- * Joined by hand rather than with `Intl.ListFormat`: this is a contract string,
- * and it must not vary with the ICU data a runtime happens to ship.
+ * The list itself is `joinNouns`, shared with the budgeted summary below.
  */
 function onlyTheseNotations(ability: CanvasEditAbility): string {
   const nouns = Object.values(CANVAS_EDIT_OFFERS[ability])
     .filter((offer) => offer.offers)
     .map((offer) => offer.noun);
-  const list =
-    nouns.length <= 2
-      ? nouns.join(" and ")
-      : `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}`;
-  return `Only ${list} can be ${ABILITY_PAST_PARTICIPLE[ability]}.`;
+  return `Only ${joinNouns(nouns)} can be ${ABILITY_PAST_PARTICIPLE[ability]}.`;
 }
+
+/**
+ * "C4 diagrams and sequence diagrams", or a comma list ending in "and" once
+ * there are three.
+ *
+ * Joined by hand rather than with `Intl.ListFormat` for the reason above: every
+ * caller is a contract string, and none of them may vary with the ICU data a
+ * runtime happens to ship.
+ */
+function joinNouns(nouns: readonly string[]): string {
+  return nouns.length <= 2
+    ? nouns.join(" and ")
+    : `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The same capability, said outwards: the passage the site quotes             */
+/* -------------------------------------------------------------------------- */
+
+/** Small counts as words, because prose reads them and a digit in a sentence
+ *  about notations looks like a version number. Falls back to the numeral
+ *  rather than `undefined` if this table is ever outrun. */
+const NUMBER_WORD: readonly string[] = [
+  "no",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+];
+
+const inWords = (count: number): string => NUMBER_WORD[count] ?? String(count);
+
+/**
+ * THE ONE PASSAGE THE SITE QUOTES about editing, and the reason it is built
+ * here rather than typed on each page.
+ *
+ * It answers, in one place, the question a reader and an assistant both ask —
+ * "can I edit an arch-lab diagram on the canvas, and which kinds" — and it
+ * appears in the SAME WORDS on the landing page, in `/llms.txt`, in
+ * `/llms-full.txt` and in `/faq`, because an assistant quotes a passage rather
+ * than a page and four paraphrases are four chances to be quoted wrongly.
+ *
+ * EVERY FACT IN IT COMES FROM THE GRID ABOVE: the number of notations, how many
+ * answer a canvas gesture, and what each of those gestures writes. Nothing here
+ * is hand-counted. That is not tidiness — the claim "a C4 diagram is editable
+ * both ways", hand-written in the hero, was the FIFTH stale sentence on this
+ * branch: correct when written, and still on the page the day the sequence
+ * canvas learned to reorder. A sentence assembled from the table cannot outlive
+ * the table.
+ *
+ * IT LEADS WITH THE TEXT, not with the canvas, and that ordering is the honest
+ * one: text editing is the universal answer and canvas editing is the exception
+ * two notations offer. Opening with the canvas would sell a drawing tool and
+ * then take it back.
+ *
+ * The clauses are joined with "and" rather than by `Intl.ListFormat`, for the
+ * same reason `onlyTheseNotations` is: this is a contract string, and it must
+ * not vary with the ICU data a runtime happens to ship.
+ */
+export const CANVAS_EDITING_PASSAGE: string = (() => {
+  const notations = Object.keys(CANVAS_EDIT_OFFERS.move) as Notation[];
+  const clauses = Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
+    Object.values(cells)
+      .filter((offer) => offer.offers)
+      .map((offer) => offer.onCanvas),
+  );
+  const editable = new Set(
+    notations.filter((notation) =>
+      Object.values(CANVAS_EDIT_OFFERS).some((cells) => cells[notation].offers),
+    ),
+  );
+  return (
+    `An ${APP_NAME} diagram is edited two ways. All ${inWords(notations.length)} ` +
+    `notations are edited as source text; ${inWords(editable.size)} of them are ` +
+    `also editable on the canvas — ${clauses.join(", and ")}. Either way the ` +
+    `change lands in the same one-line-per-element text you review in a pull ` +
+    `request.`
+  );
+})();
+
+/**
+ * The same claim at a fraction of the length, for a BUDGETED surface — a route
+ * description has 160 characters for everything it says, and
+ * `CANVAS_EDITING_PASSAGE` spends more than twice that.
+ *
+ * It is a second string rather than a truncation of the first because the two
+ * are cut differently: the passage keeps the reorder-versus-position
+ * distinction and drops nothing, this keeps only WHICH notations and drops the
+ * distinction, and a substring of the passage would have kept whichever half
+ * happened to come first. Both are still derived from the same cells, so they
+ * cannot disagree about the answer — only about how much of it they have room
+ * for.
+ *
+ * `/view`'s description is the caller. `/faq` and the two `llms*.txt` documents
+ * have room for the whole passage and use that instead.
+ */
+export const CANVAS_EDITABLE_SUMMARY: string = (() => {
+  const nouns = [
+    ...new Set(
+      Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
+        Object.values(cells)
+          .filter((offer) => offer.offers)
+          .map((offer) => offer.noun),
+      ),
+    ),
+  ];
+  return `Canvas editing for ${joinNouns(nouns)}.`;
+})();
 
 /* -------------------------------------------------------------------------- */
 /* The edits                                                                   */

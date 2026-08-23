@@ -26,6 +26,18 @@
  *      JavaScript; and `/llms-full.txt` embeds the SHARED syntax reference
  *      rather than a copy, since the only thing worse than no machine-readable
  *      grammar is a stale one.
+ *   7. **The site description describes the site that shipped.** It named four
+ *      notations while six shipped, at 157 of its 160 characters — so it was
+ *      not fixable without cutting something. The count is now pinned to
+ *      `CANVAS_EDIT_OFFERS`, so a seventh notation fails here.
+ *   8. **No copy claims the canvas is C4-only.** "A C4 diagram is editable both
+ *      ways" was in the hero for a release after the sequence canvas learned to
+ *      reorder. Swept from the filesystem, judged against the capability grid.
+ *   9. **The passage an assistant would quote exists, and is served from one
+ *      constant.** Neither `llms.txt` nor `llms-full.txt` contained the word
+ *      "canvas", so "can I edit an arch-lab diagram by dragging" had nothing on
+ *      this site to cite and a model would answer from the grammar — which
+ *      describes a text format and implies no.
  *
  * Source-level, deliberately: it runs in CI with no network and no browser,
  * and every one of these is decided in the source rather than at runtime.
@@ -37,8 +49,20 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { registerTsResolution } from "./lib/resolve-ts.mjs";
+
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
+
+/* THE CAPABILITY GRID, loaded rather than described. Sections 8-10 below are
+   about the site's claims regarding canvas editing, and every one of them has
+   to be measured against the table that decides it — `codebase.md` habit 4: a
+   check written from a hand-listed set of names cannot notice the thing it has
+   never heard of, and three checks in this repo passed for exactly that reason
+   while the feature under them was broken. */
+const load = registerTsResolution(ROOT);
+const { CANVAS_EDITING_PASSAGE, CANVAS_EDITABLE_SUMMARY, CANVAS_EDIT_OFFERS } =
+  await load("src/features/playground/input/canvas-edit.ts");
 
 /* ----------------------------------------------------------------------- */
 /* Forwarding aliases, DERIVED FROM THE FILESYSTEM                          */
@@ -148,22 +172,67 @@ const ROUTES = [
 
 console.log("meta descriptions (the budget is what a SERP renders)");
 
+/**
+ * The interpolations a route description is allowed to contain, resolved to
+ * what they actually render.
+ *
+ * A DESCRIPTION MAY BE A TEMPLATE LITERAL, and until it was, this loop only
+ * knew how to read a quoted string — so the first route to interpolate a
+ * derived clause (`/view`, whose tail is `CANVAS_EDITABLE_SUMMARY` from the
+ * capability grid) stopped matching, `continue`d, and its budget went
+ * UNMEASURED while the check still reported a pass. That is the same silent
+ * coverage hole the sitemap assertion below was written for, arriving through
+ * the regex instead of through the list, so both are now guarded: unmatched
+ * routes are collected rather than skipped, and an interpolation this table
+ * does not know is a failure rather than a blank.
+ */
+const INTERPOLATIONS = { CANVAS_EDITABLE_SUMMARY };
+
+const unmeasured = [];
 for (const [route, file, constantName] of ROUTES) {
   if (!existsSync(path.join(ROOT, file))) continue;
   const source = read(file);
   const pattern =
     constantName === null
-      ? /description:\s*\n?\s*"((?:[^"\\]|\\.)*)"/
+      ? /description:\s*\n?\s*(?:"((?:[^"\\]|\\.)*)"|`((?:[^`\\]|\\.)*)`)/
       : new RegExp(`${constantName}\\s*=\\s*\\n?\\s*"((?:[^"\\\\]|\\\\.)*)"`);
   const match = pattern.exec(source);
-  if (match === null) continue;
-  const length = match[1].length;
+  if (match === null) {
+    /* A forwarding alias sets no description of its own and is `noindex`
+       besides, so there is nothing for a result to truncate. Only a real page
+       going unmeasured is a coverage hole. */
+    if (PAGES.some(([label]) => label === route)) unmeasured.push(route);
+    continue;
+  }
+  const raw = match[1] ?? match[2];
+  const unknown = [];
+  const rendered = raw.replace(/\$\{(\w+)\}/g, (whole, name) => {
+    if (typeof INTERPOLATIONS[name] !== "string") {
+      unknown.push(name);
+      return whole;
+    }
+    return INTERPOLATIONS[name];
+  });
+  check(
+    `${route}: every interpolation in the description is resolved`,
+    unknown.length === 0,
+    `not in INTERPOLATIONS, so its real length is unknown: ${unknown.join(", ")}`,
+  );
+  const length = rendered.length;
   check(
     `${route}: ${length} chars`,
     length <= DESCRIPTION_LIMIT,
     `over the ${DESCRIPTION_LIMIT}-character budget — the tail is written for nobody`,
   );
 }
+
+/* A route whose description this loop could not FIND reads exactly like a route
+   that passed. `/view` spent a run in that state. */
+check(
+  "every indexable route's description was actually located and measured",
+  unmeasured.length === 0,
+  `matched no description pattern (an oddly quoted or formatted one?): ${unmeasured.join(", ")}`,
+);
 
 /* The list above is only as good as its coverage, and coverage is exactly what
    went wrong: a route can be in the sitemap, be crawled, and never have its
@@ -419,6 +488,325 @@ console.log("\nGEO (what an assistant can reach and quote)");
       read("src/features/mcp/components/mcp-guide.tsx"),
     ),
     "the heading is the first thing both a search result and a cited answer show",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 8. The site description names what actually ships                        */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * `APP_DESCRIPTION` spent a release naming FOUR notations while six shipped,
+ * and it was not a slip: the string was 157 characters of a 160-character
+ * budget, so there was no room to add the two that were missing even once
+ * somebody noticed. The enumeration has gone and the COUNT has stayed, which
+ * makes the claim checkable — and this is the check.
+ *
+ * DERIVED FROM `CANVAS_EDIT_OFFERS`, which is a total `Record` over the
+ * document kinds, so it is the one place in the app that cannot be out of date
+ * about how many notations there are: a seventh is a compile error there before
+ * it is a failure here. A hardcoded `6` in this file would have been the same
+ * mistake one level up.
+ */
+console.log("\nthe site description describes the site that shipped");
+
+{
+  const notations = Object.keys(CANVAS_EDIT_OFFERS.move);
+  const NUMBER_WORD = [
+    "no",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+  ];
+  const expected = NUMBER_WORD[notations.length] ?? String(notations.length);
+  const description = /APP_DESCRIPTION\s*=\s*\n?\s*"((?:[^"\\]|\\.)*)"/.exec(
+    read("src/lib/constants.ts"),
+  )?.[1];
+  check(
+    "APP_DESCRIPTION was found to measure",
+    typeof description === "string",
+    "the pattern stopped matching, which would make every assertion here vacuous",
+  );
+  check(
+    `APP_DESCRIPTION says "${expected} notations", the number the grid holds`,
+    description?.includes(`${expected} notations`) === true,
+    `it names a different count from the ${notations.length} in CANVAS_EDIT_OFFERS ` +
+      `(${notations.join(", ")}) — the failure that let it advertise four of six`,
+  );
+  /* THE REPO'S OWN FRONT DOOR, pinned to the same number. `README.md` cannot
+     import the grid, so this is the `check:*` half of the rule in
+     `codebase.md` habit 4 — where two halves cannot share, a script pins the
+     pair. Its opening paragraph described a C4-and-sequence tool for two
+     notations longer than the site did, because nothing measured it. */
+  {
+    const readme = read("README.md");
+    /* EVERY "N notations" IN THE FILE, not the first one. Testing only for the
+       right phrase passed on a DIFFERENT paragraph that happened to carry it
+       while the opening said "Four notations" — so the wrong counts are what is
+       hunted, and the right one is required in addition. */
+    const wrong = [...readme.matchAll(/\b(\w+) notations\b/gi)]
+      .map((match) => match[1].toLowerCase())
+      .filter((word) => word !== expected && NUMBER_WORD.includes(word));
+    check(
+      `README.md says "${expected} notations" and no other count`,
+      readme.includes(`${expected} notations`) && wrong.length === 0,
+      wrong.length > 0
+        ? `it also says: ${[...new Set(wrong)].join(", ")} notations`
+        : `the repo front door never states the ${notations.length} the grid holds`,
+    );
+  }
+
+  /* THE OTHER HALF OF THE SAME BUDGET. Naming the count is what bought the room
+     for the capability, so losing the capability again would make the trade
+     pointless. Kept as its own assertion because the two are edited
+     independently: somebody trimming for length will cut the clause, not the
+     number. */
+  check(
+    "APP_DESCRIPTION still says the canvas can be edited",
+    /edited on the canvas/.test(description ?? ""),
+    "the clause the notation list was cut to make room for",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 9. No surface claims the canvas is C4-only                               */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * THE SIXTH STALE CLAIM ON THIS BRANCH would have been this one. The hero read
+ * "a C4 diagram is editable both ways" with a comment explaining that the other
+ * five kinds have nothing to drag — correct when written, and still on the page
+ * after the sequence canvas learned to reorder messages and lifelines.
+ * `check:canvas-edit` section 19 already sweeps for the NEGATIVE version of the
+ * claim ("the sequence canvas cannot be dragged"); this sweeps for the
+ * EXCLUSIVE one, which is the shape a marketing sentence takes.
+ *
+ * DERIVED TWICE OVER, because a hand-written version of either half is how this
+ * check would pass while the page was wrong:
+ *
+ *   - WHICH FILES: walked from the filesystem, not listed. A list cannot notice
+ *     the surface it has never heard of, and the whole failure mode is a
+ *     sentence surviving in a file nobody thought to open.
+ *   - WHAT MAKES IT FALSE: the notations other than C4 that the grid says
+ *     answer a canvas gesture. If the grid ever went back to C4-only the
+ *     assertion disables itself rather than demanding a lie — which is why the
+ *     guard below is an assertion of its own instead of an `if`.
+ *
+ * STRINGS, NOT COMMENTS, and that boundary is the difference between a useful
+ * rule and one that generates work forever. Written against the raw source this
+ * failed seventeen times on its first run, and every hit but one was a comment
+ * doing its job: the note in `view-playground.tsx` recording that the heading
+ * USED to name C4 as the only editable canvas, the guideline in
+ * `.claude/rules/canvas-editing.md` quoting the bad sentence as the shape to
+ * avoid, `canvas-edit.ts`'s own doc comment showing what the derived refusal
+ * reads like. Forbidding a comment from discussing the claim would delete the
+ * institutional memory of why the rule exists (`codebase.md` habit 5: when a
+ * rule keeps producing work nobody asked for, suspect the rule). So comments
+ * are stripped first — the same treatment and the same reason as
+ * `og-cards-check.mjs` — and what is left is the strings and JSX a reader
+ * actually meets. Markdown is out of the walk for the same reason: `README.md`
+ * is copy and is included, the rules files are the discussion and are not.
+ *
+ * A sentence is an offender when it is about editing on a canvas, claims
+ * exclusivity FOR C4 specifically, and names none of the other notations the
+ * grid says can be edited. The last condition is what keeps `/faq`'s true
+ * answer legal.
+ */
+console.log("\nno surface claims the canvas is C4-only");
+
+{
+  const otherEditable = [
+    ...new Set(
+      Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
+        Object.entries(cells)
+          .filter(([kind, offer]) => offer.offers && kind !== "c4")
+          .map(([, offer]) => offer.noun),
+      ),
+    ),
+  ];
+  check(
+    "the grid says a notation other than C4 answers a canvas gesture",
+    otherEditable.length > 0,
+    "if this is ever false the sweep below is vacuous and must be retired, " +
+      "not left passing",
+  );
+
+  const files = [];
+  const walk = (relative) => {
+    const absolute = path.join(ROOT, relative);
+    if (!existsSync(absolute)) return;
+    if (statSync(absolute).isFile()) {
+      files.push(relative);
+      return;
+    }
+    for (const entry of readdirSync(absolute)) {
+      if (entry === "node_modules") continue;
+      const child = path.join(relative, entry);
+      if (statSync(path.join(ROOT, child)).isFile() && !/\.tsx?$/.test(entry)) {
+        continue;
+      }
+      walk(child);
+    }
+  };
+  walk("src");
+  walk("README.md");
+  /* A BROKEN WALK IS THE FAILURE MODE OF A CHECK LIKE THIS: an empty file list
+     passes the assertion below forever, and reads identically to a clean tree. */
+  check(
+    "the sweep found the source tree it is meant to walk",
+    files.length > 200,
+    `only ${files.length} files walked`,
+  );
+
+  /** Claims of exclusivity FOR C4, in the shapes a page actually writes. */
+  const C4_ONLY = [
+    /\bonly C4\b/i,
+    /\bC4 is the only\b/i,
+    /\bthe only (?:editable |draggable )?canvas\b/i,
+    /\bC4\b[^.]{0,80}\bboth ways\b/i,
+    /\bboth ways\b[^.]{0,80}\bC4\b/i,
+    /\bC4\b[^.]{0,80}\beither way\b/i,
+  ];
+  const ABOUT_CANVAS_EDITING = /\bcanvas\b|\bdrag/i;
+  const offenders = [];
+  for (const relative of files) {
+    /* Comments out, in the same way and for the same reason as
+       `og-cards-check.mjs`: the prose explaining a rule must be allowed to
+       quote the sentence the rule forbids. */
+    const copy = /\.tsx?$/.test(relative)
+      ? read(relative)
+          .replace(/\/\*[\s\S]*?\*\//g, " ")
+          .replace(/^\s*\/\/.*$/gm, " ")
+      : read(relative);
+    for (const sentence of copy.split(/(?<=[.!?])\s+/)) {
+      if (!ABOUT_CANVAS_EDITING.test(sentence)) continue;
+      if (!C4_ONLY.some((pattern) => pattern.test(sentence))) continue;
+      if (otherEditable.some((noun) => sentence.includes(noun))) continue;
+      offenders.push(`${relative} — ${sentence.trim().slice(0, 200)}`);
+    }
+  }
+  check(
+    `no copy says C4 is the only canvas that can be edited (${otherEditable.join(", ")} can too)`,
+    offenders.length === 0,
+    offenders.join("\n    "),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 10. The passage an assistant would quote is actually reachable           */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * GEO is passage-level: an assistant quotes one self-contained passage, not a
+ * page. `CANVAS_EDITING_PASSAGE` is that passage for "can I edit an arch-lab
+ * diagram on the canvas, and which kinds" — and before it existed the answer
+ * was reachable NOWHERE. Neither `llms.txt` nor `llms-full.txt` contained the
+ * word "canvas", so a model answering from this site's own documents would
+ * answer from the grammar, which describes a text format and implies no.
+ *
+ * Three things have to hold, and each fails on its own:
+ *
+ *   1. the passage says what the question asks — which notations, and what a
+ *      gesture writes — measured against the grid rather than read;
+ *   2. it is on a SERVER-RENDERED page, because AI crawlers do not run JS (the
+ *      assertion in section 7 keeps `/` a server component; this one keeps the
+ *      passage on it);
+ *   3. the plain-text documents an assistant reaches FIRST carry it too.
+ */
+console.log("\nthe canvas-editing passage is reachable and quotable");
+
+{
+  const editable = Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
+    Object.values(cells).filter((offer) => offer.offers),
+  );
+  for (const offer of editable) {
+    /* NAMED, not merely included. `CANVAS_EDITING_PASSAGE.includes(onCanvas)`
+       was the first version of this and it was VACUOUS — the passage is built
+       by joining those very clauses, so it passed for any clause at all,
+       including "you can move things around". What has to hold is that a reader
+       can tell WHICH notation the gesture belongs to, so the assertion measures
+       the notation's own name (the first word of the grid's mid-sentence
+       `noun`, which is where the identity lives: "C4 diagrams", "sequence
+       diagrams"). */
+    const named = offer.noun.split(" ")[0];
+    check(
+      `the passage names ${named} as a notation you can edit on the canvas`,
+      CANVAS_EDITING_PASSAGE.includes(named),
+      `the ${offer.noun} clause is in the passage but does not say it is about ` +
+        `${named} — a capability an assistant cannot attribute is one it will ` +
+        "not quote",
+    );
+  }
+  /* THE DISTINCTION IS THE POINT OF THE PASSAGE. A reader arriving from a
+     drawing tool assumes a drag lands where they drop it; for five of the six
+     notations that is wrong, and for the sequence canvas it is a REORDER. A
+     passage that said "draggable" without saying which would be quoted into
+     exactly that misunderstanding. */
+  check(
+    "the passage separates a position from an order",
+    /\bposition\b/.test(CANVAS_EDITING_PASSAGE) &&
+      /\border\b/.test(CANVAS_EDITING_PASSAGE),
+    "both words are load-bearing — see the REORDER-versus-POSITION note in " +
+      ".claude/rules/canvas-editing.md and the /faq answer",
+  );
+  /* BOTH PRESENT, THEN ORDERED, and the second half without the first was the
+     bug in the first draft of this assertion: `indexOf` returns -1 for a phrase
+     that is absent, and -1 is less than everything, so deleting "source text"
+     from the passage entirely PASSED a check whose whole subject is that the
+     passage mentions it first. */
+  const leads = CANVAS_EDITING_PASSAGE.indexOf("source text");
+  const canvas = CANVAS_EDITING_PASSAGE.indexOf("canvas");
+  check(
+    "the passage leads with text editing, not with the canvas",
+    leads >= 0 && canvas > leads,
+    "text editing is the universal answer and the canvas is the exception two " +
+      "notations offer; the other order sells a drawing tool and takes it back",
+  );
+
+  /* SERVED FROM THE SERVER, and by the constant rather than a copy of its
+     words. A page that pasted the sentence would pass a `includes(passage)`
+     test on the day it was pasted and drift on the next wording change, which
+     is the whole failure this constant exists to end. */
+  for (const [route, file] of [
+    ["/", "src/app/page.tsx"],
+    ["/faq", "src/features/marketing/faq.ts"],
+    ["/llms.txt", "src/app/llms.txt/route.ts"],
+    ["/llms-full.txt", "src/app/llms-full.txt/route.ts"],
+  ]) {
+    const source = read(file);
+    /* THE CLOSING BRACE IS THE ASSERTION. Testing for the bare identifier
+       passed on the IMPORT line: deleting the passage from the body of all
+       three files and pasting a paraphrase in its place left the import behind
+       and every one of these green. `${CANVAS_EDITING_PASSAGE}` in a template
+       literal and `{CANVAS_EDITING_PASSAGE}` in JSX both end with the brace,
+       and an import never does. */
+    check(
+      `${route} serves the passage from the constant, not a copy of its words`,
+      source.includes("CANVAS_EDITING_PASSAGE}"),
+      "a surface that pastes the sentence passes on the day it is pasted and " +
+        "drifts on the next wording change — the whole failure the constant ends",
+    );
+  }
+  /* THE PASSAGE DOWNGRADES WITH THE FLAG. `CANVAS_EDIT_ENABLED` gates whether
+     a canvas in this app can be edited at all, and `codebase.md` is explicit
+     that a capability claim reads from the flag rather than being written in a
+     hopeful present tense. This is the assertion that the site's most quotable
+     sentence about editing is not the one exception — a page advertising a
+     gesture the deploy does not ship is worse than a page that says nothing. */
+  check(
+    "/ renders the passage only while the canvas is actually editable",
+    /CANVAS_EDIT_ENABLED \?[\s\S]{0,600}?CANVAS_EDITING_PASSAGE\}/.test(
+      read("src/app/page.tsx"),
+    ),
+    "the passage renders outside the flag branch, so it would keep promising a " +
+      "canvas gesture after the flag turned it off",
   );
 }
 

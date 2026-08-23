@@ -64,15 +64,32 @@ export const CANVAS_EDIT_ENABLED: boolean = true;
  * What survives leads with what the thing does and names the two features
  * people arrive for.
  */
-/* NAMES EVERY DOCUMENT KIND, and that is the reason it is right up against the
-   160-character budget the search snippet allows. This one string is the meta
-   description on every route that does not set its own, the OG description, and
-   the sentence an assistant asked "what is arch-lab" is most likely to quote —
-   so a kind missing from here is a kind the product supports and nothing
-   outside the app ever says it supports. "No account." was the phrase that gave
-   way to make room; the pages that need it say it in their own copy. */
+/* WHAT THIS 160 BUYS, and what it stopped buying, because the previous version
+   spent 157 of them NAMING EVERY DOCUMENT KIND and had run out of room to be
+   true. It read "C4, sequence, flowchart and use-case diagrams" — four of six,
+   since ER and the data dictionary shipped after it was written — and there
+   were three characters left to fix that with, let alone to say that a diagram
+   here is now edited two ways.
+
+   SO THE ENUMERATION WENT AND THE COUNT STAYED. "six notations" is one word
+   where six names were sixty characters, and it is the half a reader can act on:
+   the names are in the `<title>` (which already leads with "beautiful C4 and
+   sequence"), in the notation cards on the home page, in the JSON-LD
+   `featureList` derived from those cards, and in `/llms.txt` — four places with
+   room, none of which is truncated at 160. What no other budgeted surface said
+   at all was that the canvas is editable, which is why that clause got the
+   space the list gave up.
+
+   `check:seo` PINS THE COUNT to `CANVAS_EDIT_OFFERS`, the total grid over the
+   document kinds, so a seventh notation fails this string rather than quietly
+   making it wrong — the exact failure the enumeration suffered.
+
+   This one string is the meta description on every route that does not set its
+   own, the OG and Twitter description, the home page's JSON-LD `description`,
+   and the sentence an assistant asked "what is arch-lab" is most likely to
+   quote. */
 export const APP_DESCRIPTION =
-  "Beautiful, zoomable C4, sequence, flowchart and use-case diagrams written as plain text, rendered live in your browser. An AI agent can author them over MCP.";
+  "Beautiful architecture diagrams in six notations, written as plain text or edited on the canvas, live in your browser. An AI agent can author them over MCP.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

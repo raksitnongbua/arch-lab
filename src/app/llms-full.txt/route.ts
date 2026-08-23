@@ -5,6 +5,7 @@ import {
 } from "@/features/mcp/catalog";
 import { syntaxReferenceMarkdown } from "@/features/mcp/content/syntax-sections";
 import { publicOrigin } from "@/features/mcp/lib/origin";
+import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
 /**
@@ -22,6 +23,14 @@ import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
  * arrives as one document with headings, which is the shape that gets quoted
  * accurately rather than paraphrased into something that will not parse — and
  * a wrong grammar in an answer is worse for a reader than no answer.
+ *
+ * THE EDITING SECTION IS THE ONE THING HERE THAT IS NOT GRAMMAR, and it is
+ * here because it was nowhere: neither this document nor `/llms.txt` contained
+ * the word "canvas", so an assistant asked "can I edit an arch-lab diagram by
+ * dragging" had nothing to quote and would answer from the grammar — which
+ * describes a text format and implies the answer is no. The passage is
+ * `CANVAS_EDITING_PASSAGE`, derived from the capability grid and served in the
+ * same words by the landing page, `/llms.txt` and `/faq`.
  *
  * NOTHING IS WRITTEN TWICE. The grammar is `syntaxReferenceMarkdown()`, the
  * exact document the MCP server hands agents through `archlab://syntax` and
@@ -61,11 +70,22 @@ Source: ${origin} · Index: ${origin}/llms.txt
 ## What ${APP_NAME} is
 
 ${APP_NAME} is a browser-based tool for writing software architecture diagrams
-as plain text. It reads four kinds of document — C4 models (context, container,
-component and code levels), UML-style sequence diagrams, flowcharts, and
-use-case diagrams — and renders every one of them live. Nothing is uploaded and
-no account is required: a document is a file you keep, and git is the
-collaboration layer.
+as plain text. It reads six kinds of document — C4 models (context, container,
+component and code levels), UML-style sequence diagrams, flowcharts, use-case
+diagrams, entity-relationship diagrams and data dictionaries — and renders every
+one of them live. Nothing is uploaded and no account is required: a document is
+a file you keep, and git is the collaboration layer.
+
+## Editing a diagram: as text, or on the canvas
+
+${CANVAS_EDITING_PASSAGE}
+
+A canvas gesture is not a second place the diagram lives: it derives new source
+text, re-parses it and patches only the lines it concerns, so comments and
+spacing elsewhere in the file survive. The notations that answer no gesture
+solve their layout from the text itself, so there is no coordinate in those
+grammars for a drag to write — ${origin}/faq answers that one in full, per
+notation.
 
 ## Formats it reads
 
@@ -73,15 +93,16 @@ collaboration layer.
   and lossless in both directions against the JSON form. The grammar is below.
 - \`.archlab.json\` — the same C4 model as JSON, for tools that would rather not
   implement a grammar. Converts losslessly to and from \`.alab\`.
-- Mermaid \`C4Context\`/\`C4Container\`/\`C4Component\`, \`sequenceDiagram\`, and
-  \`flowchart\`/\`graph\` (which also carries the actor-and-use-case convention) —
-  imported, and exported back. Import and export are each lossy in their own
+- Mermaid \`C4Context\`/\`C4Container\`/\`C4Component\`, \`sequenceDiagram\`,
+  \`erDiagram\`, and \`flowchart\`/\`graph\` (which also carries the
+  actor-and-use-case convention) — imported, and exported back. Import and export are each lossy in their own
   direction, and the app states exactly what each drops. A Mermaid shape with no
   arch-lab counterpart is refused by name rather than approximated.
 
 Paste any of them into ${origin}/view and the format is detected for you — one
-page for all four document kinds. \`?d=\` chooses which example it starts from
-(\`c4\`, \`seq\`, \`flow\`, \`uc\`), and \`?e=<id>\` opens a bundled one.
+page for all six document kinds, and the one page a canvas gesture is available
+on. \`?d=\` chooses which example it starts from (\`c4\`, \`seq\`, \`flow\`, \`uc\`,
+\`er\`, \`dict\`), and \`?e=<id>\` opens a bundled one.
 
 ## Using it from an AI agent (MCP)
 

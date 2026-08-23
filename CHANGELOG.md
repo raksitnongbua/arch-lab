@@ -90,6 +90,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   accessible name and its hover text, and the viewer's tour card still reads
   the whole list as prose. It replaces the single long sentence that was there
   before, which was a paragraph doing a toolbar's job.
+- **The site now says a diagram is edited two ways.** The home page hero, the
+  `/view` page title and description, `/llms.txt`, `/llms-full.txt` and a new
+  `/faq` answer all carry one sentence: every notation is edited as source
+  text, two of them are also editable on the canvas, a C4 node drags to a
+  position while a sequence message or lifeline drags into a new order. It is
+  the same wording on all five surfaces, assembled from the table that decides
+  which canvas offers what — so it cannot describe a capability the app does
+  not have. Until now no page outside the playground mentioned the canvas at
+  all, and the two plain-text documents an assistant reads first did not
+  contain the word.
+- **Each notation card on the home page says how that kind is edited** — "text"
+  or "text or canvas" — so the answer to "can I drag this one" is on the page
+  that ranks rather than only inside the app.
 
 ### Changed
 
@@ -122,6 +135,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The playground's own description of the canvas now names what you can do to a
   sequence diagram on it — add, edit, repoint, number, remove — rather than only
   that it is editable. The viewer's tour card says the same.
+- **The site description names six notations instead of four, and says the
+  canvas is editable.** It listed C4, sequence, flowchart and use case — two
+  short, from before ER diagrams and data dictionaries shipped, with no room
+  inside the 160 characters a search result shows to add them. The count
+  replaces the list, which bought the space for the editing claim; the six
+  names are still on the home page, in its structured data and in `/llms.txt`.
+  The `README`, `/demo`, both social cards and three `/faq` answers said "four
+  kinds" for the same reason and now do not.
+- The `/view` page is titled "write the text or edit the canvas" rather than
+  "write it, see it rendered live", which described a viewer. Its description
+  names the two notations you can edit on the canvas.
+- The social card for `/` and for `/view` — the card every share link previews
+  with — no longer lists four of the six notations. Both name the count and the
+  two ways in.
 - **An armed insert or repoint now tells you on screen what to click next.** It
   only ever said so to a screen reader, so pressing "Repoint on the canvas"
   looked like a control that closed the editor and did nothing. A prompt now

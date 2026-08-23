@@ -1,4 +1,5 @@
 import { MCP_TOOLS } from "@/features/mcp/catalog";
+import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
 import { APP_NAME } from "@/lib/constants";
 
 /**
@@ -62,8 +63,8 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           `${APP_NAME} is a browser-based editor for architecture diagrams written as plain text. ` +
           "You describe a system in a few lines and it draws it: a zoomable C4 model you can drill " +
           "into level by level, a sequence flow you can click through message by message, a " +
-          "flowchart, or a use-case diagram. The text is a file you own, and git is the " +
-          "collaboration layer.",
+          "flowchart, a use-case diagram, an ER model or a data dictionary. The text is a file you " +
+          "own, and git is the collaboration layer.",
         links: [{ href: "/view?d=seq", label: "Open a live diagram" }],
       },
       {
@@ -136,6 +137,31 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
         links: [{ href: "/demo", label: "Finished examples" }],
       },
       {
+        /* THE POSITIVE FRAMING, and it is a different question from the one
+           below rather than a duplicate of it. "Why can't I drag my ER
+           diagram?" is asked by somebody already inside the app whose drag did
+           nothing; this one is asked by somebody deciding whether to open it at
+           all — and by an assistant, which is the reason it exists. Neither
+           `/llms.txt` nor `/llms-full.txt` contained the word "canvas", so
+           "can I edit an arch-lab diagram by dragging?" had nothing anywhere on
+           this site to quote, and a model answering from the grammar alone
+           would say no.
+
+           THE ANSWER IS THE SHARED PASSAGE VERBATIM, not a paraphrase of it.
+           `CANVAS_EDITING_PASSAGE` is assembled from the capability grid and
+           served in these same words by the landing page hero and both
+           `llms*.txt` documents, because an assistant quotes a passage rather
+           than a page and four wordings would be four chances to be quoted
+           wrongly. The follow-on sentence is this page's own, since a link is
+           the one thing an FAQ answer may not be. */
+        question: "Can I edit the diagram on the canvas, or only as text?",
+        answer:
+          `${CANVAS_EDITING_PASSAGE} Which notations answer a drag is a ` +
+          "property of their grammars rather than a roadmap — the next answer " +
+          "explains why an ER diagram cannot.",
+        links: [{ href: "/view", label: "The playground" }],
+      },
+      {
         /* Asked because the canvas answers a drag on one notation and ignores
            it on four, which reads as a bug rather than as a property of the
            notations. Written as one self-contained passage: an assistant
@@ -173,11 +199,13 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
       {
         question: `Which diagram kinds can ${APP_NAME} draw?`,
         answer:
-          "Four, all in the same text format and the same editor: C4 models across the context, " +
+          "Six, all in the same text format and the same editor: C4 models across the context, " +
           "container and component levels; UML-style sequence diagrams with lifelines, activation, " +
           "loops and alt fragments; flowcharts with terminators, guarded decisions and loops that " +
-          "hook back; and use-case diagrams with actors, a system boundary and include or extend " +
-          "relationships.",
+          "hook back; use-case diagrams with actors, a system boundary and include or extend " +
+          "relationships; entity-relationship diagrams with keys and crow's-foot cardinality; and " +
+          "data dictionaries of every field with its meaning, source and whether it is personal " +
+          "data.",
       },
       {
         question: "What is a .alab file?",
@@ -242,7 +270,7 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "Yes, and it is half of why the format is plain text. Point Claude Code, Cursor or any " +
           "MCP client at the server and the agent gets the two things it cannot guess: the exact " +
           `grammar, and the real parser's verdict on what it just wrote. There are ${MCP_TOOLS.length} ` +
-          "tools, covering all four document kinds.",
+          "tools, covering all six document kinds.",
         links: [{ href: "/mcp", label: "Connect your agent" }],
       },
       {

@@ -6,6 +6,7 @@ import {
   isCollapsedCookie,
   SOURCE_FOLD_COOKIE,
 } from "@/features/playground/lib/source-fold";
+import { CANVAS_EDITABLE_SUMMARY } from "@/features/playground/input/canvas-edit";
 import {
   CANVAS_LOCK_COOKIE,
   isLockedCookie,
@@ -17,9 +18,20 @@ import {
 import { seedFromParam, VIEW_SEED_PARAM } from "@/features/playground/lib/seed";
 
 export const metadata: Metadata = {
-  title: "Diagram playground — write it, see it rendered live",
-  description:
-    "Write .alab, arch-lab JSON or Mermaid — C4, sequence, flowchart, use case, ER or data dictionary. Detected automatically, rendered live in your browser.",
+  /* THE TITLE NAMES BOTH WAYS IN, because this is the page they are both on and
+     it said neither. "write it, see it rendered live" described a viewer, and a
+     reader deciding whether to click had no way to learn from a result that the
+     canvas answers a drag at all. 54 characters against the ~60 a result
+     shows. */
+  title: "Diagram playground — write the text or edit the canvas",
+  /* DERIVED TAIL. `CANVAS_EDITABLE_SUMMARY` is built from the capability grid,
+     so the two notations named here are the two the page actually lets you
+     edit — a hand-typed "C4 and sequence" is the shape that went stale five
+     times on this branch. The head keeps all six notation names because this is
+     the route that ranks for them; "arch-lab JSON" lost its qualifier and
+     "detected automatically" went, to buy the tail its 53 characters inside the
+     160. Measured at 152. */
+  description: `C4, sequence, flowchart, use case, ER or data dictionary in .alab, JSON or Mermaid, rendered live. ${CANVAS_EDITABLE_SUMMARY}`,
   // Self-canonical now. `/view/c4` and `/view/seq` used to be the real pages
   // and this one canonicalised INTO them; they are forwarding aliases now, so
   // the arrow points the other way and only one URL claims the content.

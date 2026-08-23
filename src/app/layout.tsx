@@ -31,12 +31,14 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-/* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and four document
+/* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and six document
    kinds will not fit in them. So it names the two categories people search by
    name ("C4 diagram tool", "sequence diagram as text") and then a general
-   phrase that covers all four, rather than truncating a list of four mid-way.
-   The full set is named in APP_DESCRIPTION, in the page copy and in the
-   structured data, where there is room for it.
+   phrase that covers the rest, rather than truncating a list of six mid-way.
+   The full set is named in the home page's notation cards, in the JSON-LD
+   `featureList` derived from them, and in `/llms.txt`, where there is room for
+   it — NOT in `APP_DESCRIPTION`, which used to carry it and gave the
+   enumeration up to stay inside its own budget (see the note there).
 
    IT ALSO HAS TO SELL, which the previous wording did not. "C4, sequence and
    flowchart editor" was three of four kinds and a category noun — a true
