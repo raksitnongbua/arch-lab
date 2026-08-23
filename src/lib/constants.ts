@@ -30,12 +30,22 @@ export const APP_NAME = "arch-lab";
  * every affordance reads from this flag rather than being commented out, so
  * neither state can ship half-built.
  *
- * C4 ONLY, and that is a property of the notations rather than a gap here.
- * The other five kinds SOLVE their geometry from the text — `layoutEr` derives
- * columns from the relationships, the dictionary is a table — so a dragged
- * node would be moved back by the next render, and there is nowhere in those
- * grammars to write the position down. The C4 grammar is the one that carries
- * per-node geometry (`(x,y wxh)`), so it is the one a canvas can author.
+ * C4 ONLY FOR A POSITION, and that is a property of the notations rather than a
+ * gap here. The other five kinds SOLVE their geometry from the text —
+ * `layoutEr` derives columns from the relationships, the dictionary is a table
+ * — so a dragged node would be moved back by the next render, and there is
+ * nowhere in those grammars to write the position down. The C4 grammar is the
+ * one that carries per-node geometry (`(x,y wxh)`), so it is the one a canvas
+ * can author positions for.
+ *
+ * A SEQUENCE DIAGRAM IS STILL NOT A COUNTER-EXAMPLE, and the distinction is
+ * worth keeping straight because this flag's name invites the confusion: its
+ * canvas does answer a drag, but a drag there is an ORDER change, not a
+ * position — a dragged message takes a neighbour's slot in `items` and a
+ * dragged lifeline takes a neighbour's slot in `participants`
+ * (`sequence/lib/reorder.ts`). No coordinate is written, which is exactly why
+ * `canvasEditability(doc, "move")` still refuses every sequence document while
+ * `"revise"` allows it.
  *
  * Typed `boolean`, not the literal, for the reason above.
  */

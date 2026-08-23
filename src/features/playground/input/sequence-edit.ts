@@ -23,9 +23,10 @@
  *      and a message's time is its index in `items`. So the gesture set is not
  *      "move" and "delete" but: REVISE (rewrite one element's own wording),
  *      REPOINT (send a message between two other lifelines), INSERT (a message
- *      or a participant), REMOVE (a message or a participant) and TOGGLE the
+ *      or a participant), REMOVE (a message or a participant), REORDER (a
+ *      message in time, a lifeline in the column order) and TOGGLE the
  *      diagram's one drawing flag, `autonumber`.
- *      `canvasEditability(doc, "revise")` answers for all seven — deliberately
+ *      `canvasEditability(doc, "revise")` answers for all nine — deliberately
  *      one ability rather than one per gesture, because they gate on the same
  *      two facts (an `.alab` sequence pane, and the canvas unlocked) and a
  *      second ability would be a second thing for `check:canvas-edit` to
@@ -67,6 +68,13 @@
  * note is carried rather than eaten, an emptied fragment branch is left empty
  * because the grammar permits one, and renumbering is correct behaviour rather
  * than damage. None of those is a guess; `check:sequence` measures each.
+ *
+ * The REORDERS are the newest, and they are the only gesture that changes
+ * NOTHING about the elements it touches — the two blocks come back byte for
+ * byte, in each other's places. Their whole difficulty is in deciding whether a
+ * swap may happen at all, which is why that half lives in
+ * `sequence/lib/reorder.ts`: the drag has to be offered exactly where the edit
+ * would accept it, and one authority is the only way that stays true.
  */
 
 import type {
@@ -76,7 +84,11 @@ import type {
   SequenceMessageKind,
   SequenceParticipant,
 } from "@/types";
-import { sequenceItemAt, sequenceItemKey } from "@/types";
+import {
+  sequenceActivationFlags,
+  sequenceItemAt,
+  sequenceItemKey,
+} from "@/types";
 import type {
   SequenceMessageRevision,
   SequenceParticipantRevision,
@@ -87,6 +99,7 @@ import {
   canonicalParticipantBlock,
   parseSequenceTextWithSpans,
   serializeSequenceText,
+  type LineSpan,
   type SequenceSpans,
 } from "@/features/archtext";
 /* PAST THE BARREL, deliberately, and for the same reason its sibling
@@ -95,6 +108,16 @@ import {
    `check:sequence` loads through type stripping, which cannot read `.tsx` at
    all. The input layer below is pure by construction. */
 import { parseSequenceInput } from "@/features/sequence/input/parse";
+/* PAST THE BARREL for the same reason, and this one is also the reason
+   `lib/reorder.ts` exists at all: the VIEWER needs the legal drop range and
+   this module needs the refusal, and both have to be the same answer. The
+   module is pure by construction — its own header says so. */
+import {
+  messageReorderRange,
+  messageReorderRefusal,
+  participantReorderRange,
+  participantReorderRefusal,
+} from "@/features/sequence/lib/reorder";
 
 import { canvasEditability } from "./canvas-edit";
 import {
@@ -541,6 +564,221 @@ export function insertedParticipantEdit(
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Reordering — the one gesture that changes nothing about an element          */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * A REORDER IS A TEXT SWAP, NOT A MOVE, and every decision below follows from
+ * that. There is no coordinate to rewrite (this file's header, point 1): a
+ * message's time is its index in `items` and a lifeline's column is its index
+ * in `participants`, so the edit a drag has to become is two blocks of the
+ * AUTHOR'S OWN LINES trading places.
+ *
+ * VERBATIM LINES, NOT CANONICAL ONES, and this is the one gesture where that is
+ * the stronger choice rather than a shortcut. Every other edit here rewrites an
+ * element's wording, so it must ask the serializer what that element's block
+ * looks like. A reorder changes no element's content at all — so lifting the
+ * exact bytes preserves a `desc` the author wrapped their own way, a `!` escape,
+ * and the spacing inside the line, none of which canonical form would return.
+ * The result is still measured AGAINST the serializer: `check:sequence` asserts
+ * the patched document canonicalises to exactly what `serializeSequenceText`
+ * emits for `fileWithMessageMoved`, which is what stops the swap from writing a
+ * document that means something other than the reorder.
+ *
+ * ONE SWAP AT A TIME, chained. A drop several rows away is `|to - from|`
+ * adjacent swaps, each one a patch and a re-parse, because bubbling an element
+ * through single swaps IS `splice`-move semantics. That is what makes the
+ * keyboard route (one step) and a drag (several) the same operation rather than
+ * two implementations free to disagree — `check:sequence` asserts a three-row
+ * drag is byte-identical to three keypresses.
+ *
+ * WHAT STAYS PUT: anything BETWEEN the two blocks. A comment or a blank line
+ * the author wrote between two steps does not travel with either of them,
+ * because nothing in the file says which step it belongs to — the parser drops
+ * comment lines with no capture at all. Guessing would move the author's prose
+ * on the strength of a guess; leaving it is the same verdict `placeAfter`
+ * already reached for a trailing comment ("the author's, and belongs where they
+ * put it"). The cost is honest and on screen: a comment can end up above the
+ * wrong arrow, in front of a reader looking at the source pane.
+ *
+ * WHY THE REFUSALS ARE NOT HERE. `sequence/lib/reorder.ts` owns them, because
+ * the VIEWER needs the same answer to decide which slots a drag may be dropped
+ * into — and a drop indicator offering a slot this module would refuse is the
+ * "two halves that disagree" failure in its most visible form. The one
+ * exception is the dragged message's OWN activation flag, whose sentence
+ * `activationRefusal` has spoken for every other gesture since the canvas
+ * shipped; both read the same fact from `sequenceActivationFlags`.
+ *
+ * FOLDING IS NOT THIS MODULE'S REFUSAL EITHER, and cannot be: a path is a path,
+ * and the collapse only exists in the viewer. `collapseSequence` renumbers 1..n
+ * over the visible subset, so a reorder addressed while a lifeline is folded
+ * would move a different message from the one the reader dragged. The viewer
+ * therefore withholds the gesture entirely while anything is folded — the same
+ * verdict `focusedMessagePath` reaches for the same reason — and
+ * `check:canvas-edit` pins that gate on the component's source.
+ */
+
+/**
+ * `doc` with the message at `path` moved to `toIndex` among its own siblings,
+ * or `null` when the edit cannot apply.
+ *
+ * `toIndex` is an index in the message's PARENT BRANCH, not a step number: a
+ * step is a depth-first ordinal over the whole tree, and the two only agree
+ * inside a run with no fragment in it. `messageSlotForStep` is the conversion,
+ * and it lives beside the range so a drop cannot land on a slot the range never
+ * offered.
+ */
+export function reorderedMessageEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  path: SequenceItemPath,
+  toIndex: number,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
+    return null;
+  }
+  if (activationRefusal(doc, path) !== null) return null;
+  if (messageReorderRefusal(doc.file, path, toIndex) !== null) return null;
+  const range = messageReorderRange(doc.file, path);
+  if (range === null || toIndex === range.at) return null;
+  // Belt and braces against a caller that computed a slot some other way: the
+  // range is what the drag was offered, so a drop outside it is a bug here
+  // rather than a document to patch.
+  if (toIndex < range.min || toIndex > range.max) return null;
+
+  const branch = path.slice(0, -1);
+  return chainSwaps(doc, sourceText, range.at, toIndex, (from, to, spans) => {
+    const first = spans.items.get(sequenceItemKey([...branch, from]));
+    const second = spans.items.get(sequenceItemKey([...branch, to]));
+    return first === undefined || second === undefined
+      ? null
+      : { first, second };
+  });
+}
+
+/**
+ * `doc` with `participantId` moved to column `toIndex`, or `null` when the edit
+ * cannot apply.
+ *
+ * THE SAME SWAP, on the participant section, and the box rule is what makes it
+ * safe: `participantReorderRange` only ever offers a neighbour with the SAME
+ * `box` membership, so the two declaration lines are already at the same
+ * indentation and trading them verbatim cannot move either one in or out of a
+ * bracket. `serialize.ts` refuses a box that is not a contiguous run, which is
+ * the failure that rule prevents — and it also covers the one case the
+ * serializer would wave through, a box of exactly one member whose bracket
+ * would be left wrapped around nothing.
+ */
+export function reorderedParticipantEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  participantId: string,
+  toIndex: number,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "sequence") {
+    return null;
+  }
+  if (participantReorderRefusal(doc.file, participantId, toIndex) !== null) {
+    return null;
+  }
+  const range = participantReorderRange(doc.file, participantId);
+  if (range === null || toIndex === range.at) return null;
+  if (toIndex < range.min || toIndex > range.max) return null;
+
+  return chainSwaps(doc, sourceText, range.at, toIndex, (from, to, spans) => {
+    /* Addressed by the id at each INDEX of the live parse rather than by
+       carrying ids in from the caller: after a swap the two lines have moved,
+       so re-reading the order the parser just produced is the only source that
+       cannot be one step behind. */
+    const ids = [...spans.participants.keys()];
+    const first = spans.participants.get(ids[from]);
+    const second = spans.participants.get(ids[to]);
+    return first === undefined || second === undefined
+      ? null
+      : { first, second };
+  });
+}
+
+/**
+ * Walk `from` to `to` one index at a time, swapping the two blocks `locate`
+ * names at each step and re-parsing between them.
+ *
+ * RE-PARSING EVERY STEP is the point, not overhead: after a swap the spans of
+ * both blocks — and of anything a multi-line block pushed up or down — are
+ * different numbers, and computing the next swap against the previous parse is
+ * how a chain writes into the middle of a `desc`. The document is small enough
+ * that the cost is invisible and the gesture fires once, on release.
+ *
+ * ALL OR NOTHING. A step that cannot be made abandons the whole chain and
+ * returns `null`, rather than committing a partial move: half a reorder is a
+ * document the reader did not ask for and cannot name, and the undo ring would
+ * hold it as one entry either way.
+ */
+function chainSwaps(
+  doc: SequenceDocument,
+  sourceText: string,
+  from: number,
+  to: number,
+  locate: (
+    from: number,
+    to: number,
+    spans: SequenceSpans,
+  ) => { first: LineSpan; second: LineSpan } | null,
+): CanvasEdit | null {
+  const direction = to > from ? 1 : -1;
+  let current = doc;
+  let text = sourceText;
+  for (let at = from; at !== to; at += direction) {
+    const patchable = patchablePane(current, text);
+    if (patchable === null) return null;
+    const found = locate(at, at + direction, patchable.spans);
+    if (found === null) return null;
+    const swapped = swappedBlocks(text, found.first, found.second);
+    if (swapped === null) return null;
+    const step = adopt(current, swapped);
+    if (step === null || step.doc.kind !== "sequence") return null;
+    current = step.doc;
+    text = step.text;
+  }
+  return text === sourceText ? null : { doc: current, text, path: "patch" };
+}
+
+/**
+ * `source` with the lines of `a` and `b` exchanged, or `null` when the two
+ * cannot be exchanged without changing what either one means.
+ *
+ * TWO REFUSALS, both measured rather than assumed:
+ *
+ *   - OVERLAPPING SPANS. Neither parser can produce two blocks that overlap, so
+ *     this is a bug in the caller's addressing rather than input to tolerate —
+ *     and `applyPatches` explicitly does not accept overlapping patches.
+ *   - DIFFERENT INDENTATION. Indentation IS structure in this grammar: a
+ *     message's indent is its fragment depth and a participant two spaces
+ *     deeper is inside a `box`. Two blocks the parser reported as siblings are
+ *     at the same indent by construction, so a mismatch means the address is
+ *     wrong — and swapping across it would move an element into or out of a
+ *     bracket it was never dragged out of. Refusing beats writing that.
+ */
+function swappedBlocks(
+  source: string,
+  a: LineSpan,
+  b: LineSpan,
+): string | null {
+  const lines = source.split("\n");
+  const [first, second] = a.start <= b.start ? [a, b] : [b, a];
+  if (first.end >= second.start) return null;
+  if (indentOf(lines[first.start - 1]) !== indentOf(lines[second.start - 1])) {
+    return null;
+  }
+  const block = (span: LineSpan): string[] =>
+    lines.slice(span.start - 1, span.end);
+  return applyPatches(source, [
+    { span: first, lines: block(second) },
+    { span: second, lines: block(first) },
+  ]);
+}
+
 /**
  * `doc` with step numbering turned on or off, or `null` when the edit cannot
  * apply.
@@ -702,12 +940,13 @@ export function activationRefusal(
   if (doc.kind !== "sequence") return null;
   const item = sequenceItemAt(doc.file.items, path);
   if (item === undefined || item.step !== "message") return null;
-  const flags = [
-    item.activate === true ? "+" : null,
-    item.deactivate === true ? "-" : null,
-  ].filter((flag) => flag !== null);
+  /* The FACT comes from `@/types`, shared with `lib/reorder.ts`, which needs
+     the same predicate to decide which slots a drag may be dropped into. Only
+     the wording below is this function's own — see
+     `sequenceActivationFlags` for why the two are split that way. */
+  const flags = sequenceActivationFlags(item);
   if (flags.length === 0) return null;
-  return `This message carries an activation flag (${flags.join(" and ")}), which opens or closes a bar on another row. Remove it in the source text first, then delete or repoint the message.`;
+  return `This message carries an activation flag (${flags.join(" and ")}), which opens or closes a bar on another row. Remove it in the source text first, then delete, repoint or reorder the message.`;
 }
 
 /**

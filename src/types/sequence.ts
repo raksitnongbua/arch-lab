@@ -298,6 +298,29 @@ export function isSelfMessage(message: SequenceMessage): boolean {
   return message.from === message.to;
 }
 
+/**
+ * The activation flags a message carries, as the glyphs the author wrote —
+ * `[]` for a message that opens and closes nothing.
+ *
+ * ONE FACT, TWO CALLERS, and that is the whole reason it is a function here
+ * rather than two `item.activate === true` tests. `activationRefusal`
+ * (`playground/input/sequence-edit.ts`) turns it into the sentence a reader
+ * hears when a delete, a repoint or a reorder declines; `lib/reorder.ts` reads
+ * it to decide which slots a drag may even be offered. Those two must never
+ * come to different conclusions — a drag that offers a slot the edit refuses is
+ * exactly the "two halves, each self-consistent" failure — so they share the
+ * fact and only the wording is the refusal's own.
+ *
+ * The glyphs rather than a boolean because the sentence quotes them: "carries
+ * an activation flag (+ and -)" tells the reader what to go and delete.
+ */
+export function sequenceActivationFlags(message: SequenceMessage): string[] {
+  return [
+    message.activate === true ? "+" : null,
+    message.deactivate === true ? "-" : null,
+  ].filter((flag): flag is string => flag !== null);
+}
+
 /** How many branches each fragment kind may carry: `alt`/`par`/`critical`
  * grow one per `else`/`and`/`option`; the rest are single-branch. One table,
  * no duplicated rules — the parser and any future editor both read this. */

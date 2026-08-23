@@ -60,15 +60,45 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `autonumber false`, so switching it on and back off leaves your file exactly
   as it was. An explicit `autonumber false` you typed yourself is replaced when
   you turn numbering on, and does not come back when you turn it off again.
+- **Drag a message to move it in time, or a lifeline card to move its column.**
+  A sequence diagram has no coordinates, so this is a reorder rather than a
+  move: the element you drop takes a neighbour's place in the order, and the
+  layout re-solves around it. The dragged element dims, a dashed rule marks the
+  row or column it will land in, and the rule only ever appears on a slot the
+  edit will accept — so a drop cannot end in a refusal. Dragging bare canvas
+  still pans the view, and a drag that moved no longer also selects what it
+  moved. Only the two elements that traded places change in your source text;
+  a message's `desc` and `!` lines travel with it, byte for byte, and comments,
+  blank lines and everything between them stay exactly where you put them.
+  Dragging a step down and back up leaves the file unchanged.
+- **Reorder from the keyboard, one slot per press.** With a step focused,
+  `Alt` + `↑`/`↓` moves it earlier or later; with a lifeline focused,
+  `Alt` + `←`/`→` moves its column. This is the precise route — a press is
+  counted where a drag is aimed — and it produces byte-identical text to the
+  equivalent drag.
+- Reordering is refused, with a reason, wherever it would change more than the
+  order: across a note (a note is anchored by where it sits, so a message
+  crossing it would re-aim your prose), across a fragment (that would change
+  which branch the step is inside), past a message carrying an activation
+  `+`/`-`, and across a `box` boundary — a box brackets a run of neighbouring
+  lifelines, and the sentence names the box. Nothing can be reordered while
+  lifelines are folded, because the rows and columns on screen are renumbered
+  over what is visible; the affordance disappears rather than misfiring.
 - **A mouse guide under the canvas.** While editing is on, a row under the
-  diagram names every gesture the canvas offers and what to click for it, and
-  says what dragging does instead — it pans the view; nothing on this canvas is
-  moved by dragging, and notes and fragments are edited in the source text. The
-  viewer's tour card carries the same list, and the tour now also explains that
-  the lock takes the editing controls away.
+  diagram carries one compact affordance per gesture — the glyph its real
+  control wears, plus two or three words. The full instruction is the item's
+  accessible name and its hover text, and the viewer's tour card still reads
+  the whole list as prose. It replaces the single long sentence that was there
+  before, which was a paragraph doing a toolbar's job.
 
 ### Changed
 
+- The guide's caveat now says what dragging actually does, which changed under
+  it: dragging an element reorders it, dragging bare canvas pans, and nothing
+  here is positioned — a dragged element takes a neighbour's place rather than
+  staying where you drop it. `/faq`'s "Why can't I drag my ER diagram?" answer
+  says the same, and now distinguishes a sequence diagram (no coordinates, but
+  an order) from the four kinds that solve their layout outright.
 - A sequence document's "cannot be dragged" message now names the edit it
   _does_ offer instead of being a dead end. A Mermaid `sequenceDiagram` pane
   refuses these edits by name: Mermaid cannot hold a message's `desc` or

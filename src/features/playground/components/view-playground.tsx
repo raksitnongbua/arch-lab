@@ -97,6 +97,15 @@ import type {
   SequenceMessageRevision,
   SequenceParticipantRevision,
 } from "@/types";
+import { sequenceItemKey, sequenceMessagePaths } from "@/types";
+/* PAST THE BARREL, as `input/sequence-edit.ts` does and for the reason its
+   comment gives: the refusals a reorder can hit are the sequence feature's own
+   (a note in the way, a `box` boundary), and this page is the one surface that
+   speaks them. */
+import {
+  messageReorderRefusal,
+  participantReorderRefusal,
+} from "@/features/sequence/lib/reorder";
 
 import type { TourStep } from "@/components/ui/tour";
 import {
@@ -190,6 +199,8 @@ import {
   insertedMessageEdit,
   insertedParticipantEdit,
   participantRemovalRefusal,
+  reorderedMessageEdit,
+  reorderedParticipantEdit,
   repointedMessageEdit,
   revisedMessageEdit,
   revisedParticipantEdit,
@@ -1154,6 +1165,73 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleReorderMessage = useCallback(
+    (path: SequenceItemPath, toIndex: number) => {
+      /* THE ACTIVATION SENTENCE FIRST, exactly as the delete and the repoint do
+         it, and from the same function: a flag on the dragged message is the
+         one refusal with a cause the reader can act on, and it must not be
+         reported as "the pane does not match yet". */
+      const blocked =
+        activationRefusal(doc, path) ??
+        (doc.kind === "sequence"
+          ? messageReorderRefusal(doc.file, path, toIndex)
+          : null);
+      if (blocked !== null) {
+        setAnnouncement(blocked);
+        return;
+      }
+      const next = reorderedMessageEdit(doc, text, path, toIndex);
+      if (next === null) {
+        setAnnouncement(
+          "The step was not moved — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      /* THE NEW POSITION IS READ OFF THE RE-PARSED DOCUMENT for the same reason
+         the numbering toggle reads its state back: a screen-reader user does
+         not watch the arrow travel, so the sentence is the whole of the
+         feedback and it has to be right about where the step ended up. */
+      const landed =
+        next.doc.kind === "sequence"
+          ? sequenceMessagePaths(next.doc.file.items).findIndex(
+              (candidate) =>
+                sequenceItemKey(candidate) ===
+                sequenceItemKey([...path.slice(0, -1), toIndex]),
+            ) + 1
+          : 0;
+      applyCanvasEdit(
+        next,
+        `Step moved to position ${landed} — the source text follows, and numbered steps renumber. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReorderParticipant = useCallback(
+    (participantId: string, toIndex: number) => {
+      const blocked =
+        doc.kind === "sequence"
+          ? participantReorderRefusal(doc.file, participantId, toIndex)
+          : null;
+      if (blocked !== null) {
+        setAnnouncement(blocked);
+        return;
+      }
+      const next = reorderedParticipantEdit(doc, text, participantId, toIndex);
+      if (next === null) {
+        setAnnouncement(
+          "The lifeline was not moved — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `${participantId} moved to column ${toIndex + 1} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleDeleteParticipant = useCallback(
     (participantId: string) => {
       /* SAID WITH A COUNT, never swallowed. Refusing to remove a lifeline is
@@ -1263,6 +1341,8 @@ export function ViewPlayground({
             onInsertMessage: handleInsertMessage,
             onRepointMessage: handleRepointMessage,
             onDeleteMessage: handleDeleteMessage,
+            onReorderMessage: handleReorderMessage,
+            onReorderParticipant: handleReorderParticipant,
             onDeleteParticipant: handleDeleteParticipant,
             onInsertParticipant: handleInsertParticipant,
             onToggleAutonumber: handleToggleAutonumber,
@@ -1275,6 +1355,8 @@ export function ViewPlayground({
       handleInsertMessage,
       handleRepointMessage,
       handleDeleteMessage,
+      handleReorderMessage,
+      handleReorderParticipant,
       handleDeleteParticipant,
       handleInsertParticipant,
       handleToggleAutonumber,
@@ -1429,8 +1511,9 @@ export function ViewPlayground({
             {CANVAS_EDIT_ENABLED ? (
               <>
                 C4 nodes can be dragged on the canvas, and sequence messages and
-                lifelines added, edited, repointed, numbered and removed on it;
-                the other kinds lay themselves out from the text.{" "}
+                lifelines added, edited, repointed, reordered, numbered and
+                removed on it; the other kinds lay themselves out from the
+                text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}

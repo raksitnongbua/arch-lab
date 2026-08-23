@@ -1950,6 +1950,11 @@ console.log("\nLocking never offers a link to somewhere you already are");
        the derived answer to that, but the two ask different questions: this one
        is about the sentence a reader meets BEFORE they open the canvas. */
     "numbered",
+    /* Added with the reorder drag, and this one had to be here rather than only
+       in section 16: a reader who has used a drawing tool arrives ASKING
+       whether they can move things, and the sentence they meet first is the
+       page's own. */
+    "reordered",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
@@ -2265,21 +2270,32 @@ console.log("\nAn armed gesture says the same thing on screen and out loud");
 }
 
 /* ----------------------------------------------------------------------- */
-/* 16. The guide NAMES every gesture the canvas offers                     */
+/* 16. The guide gives every gesture an ICON and an ACCESSIBLE NAME         */
 /* ----------------------------------------------------------------------- */
 
 /* THE FOURTH TIME THE SAME SHAPE. Section 8 asks whether the page's heading
    names the gestures; it does that against a hand-listed set of verbs, which
    cannot notice the gesture it has never heard of. Section 14 fixed that for
    reachability by deriving the list from `SequenceEditHandlers`. This does it
-   for the thing a reader actually reads: the mouse guide under the canvas and
-   the tour step built from the same list.
+   for the thing a reader actually reads: the affordance strip under the canvas
+   and the tour step built from the same list.
 
    Twice on this branch a shipped, correct gesture was reported as missing —
    the endpoint change, and step numbering, which had no control at all. Both
-   would have failed here. Adding a handler to `SequenceEditHandlers` adds one
-   assertion below and it fails until the guide grows a line for it. */
-console.log("\nThe mouse guide names every gesture, and claims no others");
+   would have failed here. Adding a handler to `SequenceEditHandlers` adds three
+   assertions below and they fail until the guide grows an entry, an icon and a
+   name for it.
+
+   THE STRIP USED TO BE A PARAGRAPH and was rebuilt as icon-led affordances,
+   which is why the assertions are STRONGER here rather than merely different.
+   The old shape only had to contain a sentence per gesture. An icon strip can
+   fail in a way prose cannot: an icon-only control with no accessible name is a
+   regression for a screen-reader user, and an icon the canvas does not actually
+   render sends a reader hunting for a glyph that is not there. So every entry
+   must carry an icon AND a name, the icon must resolve in the viewer's own
+   glyph table, and the table must be total. "An icon exists somewhere" would
+   pass while both of those were broken. */
+console.log("\nThe guide gives every gesture an icon and an accessible name");
 {
   const {
     SEQUENCE_MOUSE_GESTURES,
@@ -2301,67 +2317,161 @@ console.log("\nThe mouse guide names every gesture, and claims no others");
     ),
   ];
   check(
-    "the guide has a line for each of the gestures the contract declares",
-    handlers.length >= 7 && SEQUENCE_MOUSE_GESTURES.length === handlers.length,
-    `${SEQUENCE_MOUSE_GESTURES.length} guide lines for ${handlers.length} gestures`,
+    "the guide has an entry for each of the gestures the contract declares",
+    handlers.length >= 10 && SEQUENCE_MOUSE_GESTURES.length === handlers.length,
+    `${SEQUENCE_MOUSE_GESTURES.length} guide entries for ${handlers.length} gestures`,
   );
+
+  /* THE GLYPH TABLE IS READ OUT OF THE COMPONENT, not listed here. The pair
+     that has to agree is (icon name in a pure module) ↔ (lucide component in a
+     `.tsx` the harness cannot load), which is exactly the TypeScript/TypeScript
+     split `dry.md` requires a check to pin. A hand-listed set of names here
+     could not notice the tenth icon the day it was added. */
+  const glyphTable = /const GUIDE_GLYPH: Record<[\s\S]*?\n\};/.exec(viewer);
+  const glyphKeys = new Set(
+    [
+      ...(glyphTable?.[0] ?? "").matchAll(/^\s{2}"?([a-z-]+)"?:\s*[A-Z]\w*,/gm),
+    ].map((m) => m[1]),
+  );
+  check(
+    "the viewer's glyph table was found and is not empty",
+    glyphTable !== null && glyphKeys.size > 0,
+    "GUIDE_GLYPH is gone or has been reshaped — the assertions below measure nothing",
+  );
+
   const taught = new Set(SEQUENCE_MOUSE_GESTURES.map((g) => g.handler));
   for (const handler of handlers) {
+    const entry = SEQUENCE_MOUSE_GESTURES.find((g) => g.handler === handler);
     check(
-      `the guide tells a mouse user how to reach ${handler}`,
-      taught.has(handler) &&
-        (SEQUENCE_MOUSE_GESTURES.find((g) => g.handler === handler)?.mouse
-          .length ?? 0) > 12,
-      "a gesture the canvas offers that no surface on the page names",
+      `the guide gives ${handler} an icon the viewer can draw`,
+      entry !== undefined && glyphKeys.has(entry.icon),
+      /* THE FAILURE THIS PREVENTS: a legend showing a glyph the screen does not
+         carry is worse than no legend — it is a control the reader will look
+         for and never find. */
+      `icon ${JSON.stringify(entry?.icon)} is not in GUIDE_GLYPH`,
+    );
+    check(
+      `the guide gives ${handler} an accessible name`,
+      /* BOTH HALVES. `label` is the visible two or three words and `mouse` is
+         the sr-only sentence, and the strip renders the icon `aria-hidden` —
+         so an entry missing either one is an icon with no name, which is the
+         regression this redesign could most easily have shipped. */
+      entry !== undefined &&
+        typeof entry.label === "string" &&
+        entry.label.length > 3 &&
+        typeof entry.mouse === "string" &&
+        entry.mouse.length > 12,
+      `label ${JSON.stringify(entry?.label)}, name ${JSON.stringify(entry?.mouse)}`,
     );
   }
-  /* AND NOTHING ELSE. A line for a handler that no longer exists teaches a
-     control that has been removed, which sends a reader hunting exactly as an
-     unmentioned one does. */
+  /* AND NOTHING ELSE, in either direction. An entry for a handler that no
+     longer exists teaches a control that has been removed, which sends a reader
+     hunting exactly as an unmentioned one does; an icon in the table that no
+     entry names is dead weight that hides the next omission. */
   check(
     "the guide teaches no gesture the contract does not declare",
     [...taught].every((handler) => handlers.includes(handler)),
     `${[...taught].filter((h) => !handlers.includes(h)).join(", ")} is taught but not declared`,
   );
-
-  /* IT MUST NOT CLAIM A GESTURE THAT DOES NOT EXIST, and there are exactly
-     three of those worth naming. There is no drag on this canvas (the pointer
-     owns panning), and notes and fragments carry no line span at all
-     (`SequenceSpans`) so nothing can edit them here. A guide that implied
-     otherwise would be worse than silence: the reader would try it, get
-     nothing, and conclude the working gestures are broken too. */
+  const iconsUsed = new Set(SEQUENCE_MOUSE_GESTURES.map((g) => g.icon));
   check(
-    "the gesture list promises no drag",
-    !/\bdrag/i.test(SEQUENCE_MOUSE_GUIDE),
-    "there is no drag-to-edit on this canvas",
+    "the glyph table carries no icon the guide never names",
+    [...glyphKeys].every((key) => iconsUsed.has(key)),
+    `${[...glyphKeys].filter((k) => !iconsUsed.has(k)).join(", ")} is in the table but unused`,
   );
+
+  /* IT MUST NOT CLAIM A GESTURE THAT DOES NOT EXIST — and the set of those has
+     CHANGED, which is why this block is rewritten rather than tightened. There
+     IS a drag now: a message drags to another row, a lifeline card drags to
+     another column. What there is not is notes and fragments (neither carries a
+     line span — `SequenceSpans`), and what there is REALLY not is
+     POSITIONING. The old assertion was `!/drag/` on the gesture list, and it
+     was the shipped-stale-claim failure waiting to happen: it would have kept
+     passing on a page that still said the canvas has no drag. */
   check(
     "the gesture list promises no note or fragment editing",
     !/\bnote|\bfragment/i.test(SEQUENCE_MOUSE_GUIDE),
     "neither has a span to patch, so neither has a canvas gesture",
   );
-  /* THE CAVEAT SAYS SO OUT LOUD, which is the other half: a reader arriving
-     from a drawing tool tries to drag a message first, and the canvas pans
-     instead. Silence there reads as a broken canvas. */
+  /* THE REORDER GESTURES ARE NAMED AS DRAGS, in the entries themselves. A
+     gesture whose only route a mouse user can discover is a drag, described in
+     words that never say "drag", is undiscoverable by exactly the reader it was
+     built for. */
+  for (const handler of ["onReorderMessage", "onReorderParticipant"]) {
+    const entry = SEQUENCE_MOUSE_GESTURES.find((g) => g.handler === handler);
+    check(
+      `${handler} is taught as a drag AND as a key`,
+      entry !== undefined &&
+        /\bdrag/i.test(entry.mouse) &&
+        /\balt\b/i.test(entry.mouse),
+      /* BOTH ROUTES IN ONE SENTENCE because they are one gesture: the drag is
+         the discoverable half and the keyboard is the precise half, and a
+         reader told only about the drag cannot reach it without a mouse. */
+      `${JSON.stringify(entry?.mouse)} names only one route`,
+    );
+  }
+
+  /* THE CAVEAT IS THE SUBTLE ONE NOW. It used to say "nothing on the canvas is
+     moved by dragging", which was true until a message could be dragged to
+     another row — the exact class of stale claim this branch has already
+     shipped twice. Its three clauses each answer an assumption a reader
+     arriving from a drawing tool brings with them, so all three are pinned:
+     dragging an element REORDERS, dragging bare canvas PANS, and nothing is
+     POSITIONED (a dropped element takes a slot; it does not stay under the
+     cursor). The third is the one that stops a first drag reading as a canvas
+     that snaps back. */
   check(
-    "the caveat says what dragging does instead",
-    /\bdrag/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT) &&
-      /pan/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT),
-    "the one gesture a reader tries first is unexplained",
+    "the caveat says a drag on an element reorders it",
+    /\bdrag\w*\b[^.]*\breorder/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT),
+    "a reader is left to guess what dragging a message does",
+  );
+  check(
+    "the caveat still says a drag on bare canvas pans",
+    /\bpan/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT),
+    "the gesture a reader tries first on empty canvas is unexplained",
+  );
+  check(
+    "the caveat says nothing here is POSITIONED",
+    /\bposition/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT) &&
+      /\border\b|\bplace\b/i.test(SEQUENCE_MOUSE_GUIDE_CAVEAT),
+    "a reader from a drawing tool will expect their box to stay where they drop it",
   );
 
-  /* BOTH SURFACES RENDER THE ONE LIST. The hint bar is where a reader already
-     looks for affordances; the tour is what opens itself on a first visit.
-     Neither is allowed to be a second hand-kept copy — that is how the tour
-     came to describe the endpoint gesture in words the panel no longer used. */
+  /* BOTH SURFACES RENDER THE ONE LIST, and now they render DIFFERENT SHAPES of
+     it — the strip takes the entries (icon-led), the tour takes the joined
+     prose. That is the point of the redesign, and it is also the new risk:
+     two shapes is one more chance for one of them to be written by hand. So
+     each is pinned to its own derived export. */
   check(
-    "the hint bar and the tour step both read the derived guide",
-    (viewer.match(/SEQUENCE_MOUSE_GUIDE\b/g) ?? []).length >= 2,
-    "one of the two surfaces is writing its own copy of the list",
+    "the affordance strip is built from the derived entry list",
+    /SEQUENCE_MOUSE_GESTURES\.map\(/.test(viewer),
+    "the strip is writing its own copy of the gesture list",
   );
   check(
-    "the hint bar's editing row is gated on the edit handlers being present",
-    /edit === undefined \? null : \([\s\S]{0,600}?SEQUENCE_MOUSE_GUIDE/.test(
+    "the strip renders each entry's icon, its label and its full name",
+    /GUIDE_GLYPH\[gesture\.icon\]/.test(viewer) &&
+      /\{gesture\.label\}/.test(viewer) &&
+      /sr-only[^>]*>—? ?\{gesture\.mouse\}/.test(viewer),
+    /* AN ICON WITH NO NAME is the regression an icon strip ships. The visible
+       label is short by design, so the sr-only sentence is what makes the item
+       findable by a screen-reader user at all. */
+    "an entry is rendered without one of its three parts",
+  );
+  check(
+    "the icons are aria-hidden, so the name comes from the text and not from a filename",
+    /<Glyph aria-hidden="true"/.test(viewer),
+    "a lucide glyph with no aria-hidden is announced as an unnamed graphic",
+  );
+  check(
+    "the tour step still reads the joined prose",
+    /SEQUENCE_MOUSE_GUIDE\b/.test(
+      /const EDIT_TOUR_STEP[\s\S]*?\n\};/.exec(viewer)?.[0] ?? "",
+    ),
+    "the long prose has no home left — nothing on the page teaches the list in full",
+  );
+  check(
+    "the affordance strip is gated on the edit handlers being present",
+    /edit === undefined \? null : \([\s\S]{0,900}?SEQUENCE_MOUSE_GESTURES/.test(
       viewer,
     ),
     "a locked or read-only canvas would list gestures it does not offer",
@@ -2425,6 +2535,299 @@ console.log("\nThe mouse guide names every gesture, and claims no others");
       playground,
     ),
     "a two-argument call takes the default and cannot restore anything",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 18. A drag to reorder cannot steal a pan, a click, or an export             */
+/* -------------------------------------------------------------------------- */
+
+/* THE GESTURE THIS SECTION GUARDS IS THREE MEANINGS ON ONE BUTTON. Primary
+   drag on this canvas already meant PAN, and a press on a message already meant
+   FOCUS; reordering is the third, and every one of them is invisible in a diff.
+   The C4 canvas needed a whole pull request to separate a drag from a pan WITH
+   xyflow's help (section 12); this canvas has no library to lean on, so the
+   separation is four source facts and each one is a silent bug if it goes.
+
+   These are SOURCE assertions, in the manner of sections 9, 12 and 14, because
+   the machinery lives in `.tsx` that type stripping cannot load. What is
+   asserted is the RELATIONSHIP between two files, not the presence of a string:
+   one threshold shared, one gate on the fold, one prefix on the chrome. */
+console.log("\nA reorder drag steals neither a pan, a click, nor an export");
+{
+  const viewer = read("src/features/sequence/components/sequence-viewer.tsx");
+  const diagram = read("src/features/sequence/components/sequence-diagram.tsx");
+  const { CANVAS_DRAG_THRESHOLD } = await load(
+    "src/features/sequence/lib/reorder.ts",
+  );
+  const { SEQUENCE_CHROME_CLASS_PREFIX } = await load(
+    "src/features/sequence/lib/chrome.ts",
+  );
+
+  /* ONE THRESHOLD, NOT TWO. Both gestures decide "was this a sloppy click or a
+     deliberate drag" and they must decide it identically: with two numbers, a
+     press of three pixels could pan without swallowing its trailing click while
+     a press of five reordered, so the same press would read as two different
+     intents depending on which surface it started on. Asserted by requiring
+     BOTH files to name the constant and NEITHER to carry the bare number in the
+     comparison — a literal is how the pair silently drifts. */
+  check(
+    "the pan gesture reads the shared drag threshold",
+    /Math\.abs\(dx\) \+ Math\.abs\(dy\) >\s*CANVAS_DRAG_THRESHOLD/s.test(
+      viewer,
+    ),
+    "the pan handler is back to its own literal, so the two gestures can disagree",
+  );
+  check(
+    "the reorder gesture reads the same shared threshold",
+    /CANVAS_DRAG_THRESHOLD/.test(diagram),
+    "the drag surface has its own idea of when a press became a drag",
+  );
+  check(
+    `neither file retypes the number (${CANVAS_DRAG_THRESHOLD})`,
+    typeof CANVAS_DRAG_THRESHOLD === "number" &&
+      !new RegExp(`\\)\\s*>\\s*${CANVAS_DRAG_THRESHOLD}\\b`).test(
+        viewer + diagram,
+      ),
+    "a literal comparison against the threshold is how the pair drifts apart",
+  );
+
+  /* THE PAN LAYER IS WHAT KEEPS THE TWO APART, and it does so by WHERE the
+     press starts rather than by what it hits later — its own limit two. So the
+     reorder surfaces must live inside the hit regions the pan handler already
+     declines, and that early return must still be there. Remove it and a drag
+     on a message would pan the view AND reorder the step. */
+  check(
+    "the pan handler still declines a press that starts on an interactive target",
+    new RegExp(
+      `closest\\?\\.\\(\"\\.${SEQUENCE_CHROME_CLASS_PREFIX}hit\"\\)`,
+    ).test(viewer.replace(/\\/g, "")) ||
+      /closest\?\.\(["'`]\.af-seq-chrome-hit["'`]\)/.test(viewer),
+    "the pan gesture would fire on top of a reorder drag",
+  );
+  /* AND THE REORDER PRESS STOPS PROPAGATING, which is the other half: the pane
+     is an ancestor of the SVG, so a press that reached it would start a pan
+     even though the pan handler declined to read it as one. */
+  check(
+    "a reorder press stops propagating to the pane",
+    /onPointerDown: \(event\) => \{[\s\S]{0,220}?event\.stopPropagation\(\)/.test(
+      diagram,
+    ),
+    "the press would reach the pane's own pointer handler as well",
+  );
+
+  /* THE CLICK IS THE THIRD MEANING. A drag that moved must swallow its trailing
+     click or dragging a message also focuses it — and, worse, a drag that did
+     NOT move must NOT swallow it, or clicking an arrow stops focusing it
+     entirely. Both halves come from one predicate, read-and-clear, which is the
+     same contract `panSuppressesClick` has. */
+  check(
+    "a moved drag swallows exactly one trailing click",
+    /swallowsClick: \(\) => \{[\s\S]{0,200}?dragSuppressesClick\.current = false;[\s\S]{0,40}?return true;/.test(
+      diagram,
+    ),
+    "reading the flag does not clear it, so one drag would eat every later click",
+  );
+  const swallowSites = [...diagram.matchAll(/swallowsClick\(\) === true/g)];
+  check(
+    "both draggable elements consult it before focusing",
+    swallowSites.length === 2,
+    /* TWO: the message hit path and the participant header rect. One of them
+       missing is a drag that also focuses, on one axis only — the kind of
+       asymmetry that gets reported as "sometimes it selects". */
+    `found ${swallowSites.length} focus paths guarded by the drag flag`,
+  );
+
+  /* THE DROP INDICATOR CANNOT REACH AN EXPORT. A sequence export CLONES THE
+     LIVE SVG (`export/render-svg.ts`), so anything on screen is in the file
+     unless the chrome prefix takes it out. A drag holds pointer capture, so an
+     export cannot physically overlap one — but the convention is a PREFIX
+     rather than a judgement about reachability (`chrome.ts`), and the first
+     insertion indicator to be spelled any other way would serialise into every
+     SVG, PNG and all twenty GIF frames with no check going red. Derived from
+     the prefix constant, never from the class name written out here. */
+  const dropLayer = /<g className="([^"]*)"[^>]*>\s*\{drag\.axis/.exec(
+    diagram.replace(/\s+/g, " ").replace(/> \{/g, ">\n          {"),
+  );
+  const dropClass = /className="(af-seq-chrome-[a-z-]*drop[a-z-]*)"/.exec(
+    diagram,
+  );
+  check(
+    "the drop indicator carries the chrome prefix, so the exporter strips it",
+    dropClass !== null &&
+      dropClass[1].includes(SEQUENCE_CHROME_CLASS_PREFIX) &&
+      dropLayer !== null,
+    "a dashed drop rule would be baked into every exported SVG, PNG and GIF frame",
+  );
+  check(
+    "the drop indicator takes no pointer events",
+    /className="af-seq-chrome-drop"[\s\S]{0,60}?pointerEvents="none"/.test(
+      diagram,
+    ),
+    /* It is drawn LAST, over the lifelines the reader is dragging across; a
+       hit-testable rule would swallow the pointer mid-gesture. */
+    "the indicator would intercept the drag it is describing",
+  );
+
+  /* NO PER-ELEMENT ANIMATION on the drag feedback, which is `check:sequence-
+     motion`'s rule and is right: the reader is choosing a slot, and a diagram
+     that moves while they choose is fighting the choice. The dragged element
+     dims — opacity only, inline, no transition and no keyframes. Asserted here
+     as well as there because THIS is the file where the temptation lives. */
+  const dimSites = [...diagram.matchAll(/opacity=\{drag\?\.active === true/g)];
+  check(
+    "the dragged element dims rather than animating or following the cursor",
+    dimSites.length === 2 &&
+      !/transition[^:]*:\s*[^;]*opacity/.test(diagram) &&
+      !/af-seq-drag/.test(
+        read("src/features/sequence/styles/sequence-motion.css"),
+      ),
+    /* FOLLOWING THE CURSOR was the tempting version and is wrong: everything
+       here is layout-solved, so a translated arrow detaches from both lifelines
+       and drags its label out of alignment — a broken drawing, not a moving
+       one. */
+    `${dimSites.length} of 2 axes dim the source element`,
+  );
+
+  /* THE FOLD GATE. `collapseSequence` renumbers 1..n over the VISIBLE subset
+     and drops hidden participants from `shown.participants` outright, so a
+     reorder addressed while anything is folded moves a DIFFERENT element from
+     the one the reader dragged — silently, because both are plausible. The
+     affordance therefore disappears entirely rather than being offered and
+     refused, and the predicate is the identity `shown === file` because
+     `collapseSequence` returns its argument unchanged when nothing is folded:
+     the identity IS the fold state, and a count of hidden participants would be
+     a second reading of it. */
+  check(
+    "the reorder bundle is withheld while anything is folded",
+    /if \(edit === undefined \|\| shown !== file\) return null;/.test(viewer),
+    "a drag while lifelines are folded would move a different element",
+  );
+  check(
+    "the keyboard route says why, rather than doing nothing",
+    /if \(reorder === null\) \{\s*onAnnounce\(FOLDED_REORDER_REFUSAL\);/.test(
+      viewer,
+    ),
+    "a key that silently does nothing is indistinguishable from one that is unwired",
+  );
+  check(
+    "the fold refusal names the control that clears the fold",
+    /const FOLDED_REORDER_REFUSAL =[\s\S]{0,400}?Show all/.test(viewer),
+    "a refusal with no next step is a dead end",
+  );
+
+  /* THE KEYBOARD IS PARITY, NOT A CONSOLATION. Alt + arrows must be checked
+     BEFORE the plain arrows, or the modifier falls through to "walk focus" and
+     the gesture is unreachable from the keyboard while looking wired. */
+  check(
+    "Alt + arrow is handled before the plain arrow keys",
+    /if \(event\.altKey\) \{\s*handleReorderKey\(event\);\s*return;\s*\}[\s\S]{0,400}?case "ArrowRight":/.test(
+      viewer,
+    ),
+    "the modifier would fall through and move the selection instead of the step",
+  );
+  check(
+    "both axes are reachable from the keyboard",
+    /ArrowUp[\s\S]{0,120}?"message"[\s\S]{0,200}?ArrowLeft[\s\S]{0,120}?"participant"/.test(
+      viewer,
+    ),
+    "one of the two reorder axes has no keyboard route at all",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 19. No surface still claims this canvas has no drag                        */
+/* -------------------------------------------------------------------------- */
+
+/* THIS IS THE THIRD STALE CLAIM ON ONE BRANCH. A heading said C4 was the only
+   editable canvas after the sequence canvas became editable (section 8); the
+   FAQ said the same; and the mouse guide's own header and caveat said "there is
+   no drag on this canvas" right up to the release that added one. Each time the
+   code was correct, every check passed, and the page was wrong.
+
+   SO THE ASSERTION IS DERIVED FROM THE FILES, not from a hand-listed set of
+   them. A list of surfaces cannot notice the surface it has never heard of —
+   `codebase.md` habit 4 — and the whole failure mode here is a claim surviving
+   in a file nobody thought to open. Every `.ts`, `.tsx`, `.md` and `.mjs` under
+   the repo's own source, docs and check scripts is walked, and any sentence
+   asserting the sequence canvas cannot be dragged or reordered fails.
+
+   WHAT IS DELIBERATELY STILL ALLOWED, because it is still true: "there is no
+   POSITION to move" (`canvasEditability`'s refusal, `constants.ts`, `/faq`).
+   A sequence document genuinely has no coordinates — that is why a reorder is
+   an array move and not a drag-to-place — and the refusal that says so now sits
+   beside a canvas that does reorder on drag, which is a subtler sentence rather
+   than a false one. The pattern below is written to catch the FALSE claim
+   ("nothing is moved by dragging", "cannot be reordered", "no drag on this
+   canvas") and to leave the true one alone. */
+console.log("\nNo surface still claims the sequence canvas has no drag");
+{
+  const STALE = [
+    /there is no drag on this canvas/i,
+    /nothing (?:on the canvas )?is moved by dragging/i,
+    /no drag(?:-to-\w+)? (?:on|for) (?:this|the sequence) canvas/i,
+    /(?:column|lifeline|message|step)s? cannot be reordered/i,
+    /a participant's column cannot be reordered/i,
+    /there is no drag on this canvas to move it with/i,
+  ];
+  /* WALKED, not listed. `src` carries the app and every user-facing string,
+     `scripts` carries the checks (one of which asserted the false claim and
+     would have kept passing), and the two root documents are what a reader
+     outside the app reads. */
+  const roots = ["src", "scripts", "skills", "CHANGELOG.md", "README.md"];
+  const EXTENSIONS = new Set([".ts", ".tsx", ".md", ".mjs", ".css"]);
+  const files = [];
+  const walk = (relative) => {
+    const absolute = path.join(ROOT, relative);
+    if (!existsSync(absolute)) return;
+    if (statSync(absolute).isFile()) {
+      if (EXTENSIONS.has(path.extname(relative))) files.push(relative);
+      return;
+    }
+    for (const entry of readdirSync(absolute)) {
+      if (entry === "node_modules" || entry.startsWith(".")) continue;
+      walk(path.join(relative, entry));
+    }
+  };
+  for (const root of roots) walk(root);
+  check(
+    "the sweep found the source tree it is meant to walk",
+    files.length > 200,
+    /* A BROKEN WALK IS THE FAILURE MODE OF A CHECK LIKE THIS: an empty file
+       list passes every assertion below forever. */
+    `only ${files.length} files walked`,
+  );
+  const offenders = [];
+  for (const relative of files) {
+    /* THE ASSERTION ITSELF IS EXEMPT, and it has to be by NAME rather than by
+       "skip the scripts directory": this file necessarily contains the very
+       sentences it is looking for, and skipping every check script would blind
+       the sweep to the next check that asserts a stale claim — which is exactly
+       what happened here. */
+    if (relative === path.join("scripts", "canvas-edit-check.mjs")) continue;
+    const body = read(relative);
+    for (const pattern of STALE) {
+      if (pattern.test(body)) offenders.push(`${relative} — ${pattern}`);
+    }
+  }
+  check(
+    "no shipped surface says the sequence canvas cannot be dragged or reordered",
+    offenders.length === 0,
+    offenders.join("\n    "),
+  );
+  /* AND THE CLAIM THAT IS STILL TRUE IS STILL MADE. The refusal a reader gets
+     when they drag a NON-sequence canvas has to keep naming the real reason —
+     there is no position in those grammars to write one into — or the sweep
+     above would be satisfied by deleting the honest sentence along with the
+     false one, which is the cheapest possible way to pass this section. */
+  const refusal = canvasEditability(
+    { kind: "sequence", format: "alab", file: null },
+    "move",
+  );
+  check(
+    "the move refusal still explains that a sequence document has no position",
+    /no position to move/i.test(refusal.reason ?? ""),
+    "the honest half of the claim was deleted to satisfy the sweep above",
   );
 }
 

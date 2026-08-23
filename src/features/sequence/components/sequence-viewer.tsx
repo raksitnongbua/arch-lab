@@ -57,7 +57,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
+  ArrowUpDown,
   Check,
+  Columns3,
   EyeOff,
   HelpCircle,
   ListOrdered,
@@ -67,11 +69,13 @@ import {
   Scan,
   SquareMinus,
   Trash2,
+  UserMinus,
   UserPlus,
   Waves,
   X,
   ZoomIn,
   ZoomOut,
+  type LucideIcon,
 } from "lucide-react";
 
 import type {
@@ -110,9 +114,18 @@ import {
   ARMING_PROMPT_CLASS,
 } from "../lib/arming-prompt";
 import {
+  SEQUENCE_MOUSE_GESTURES,
   SEQUENCE_MOUSE_GUIDE,
   SEQUENCE_MOUSE_GUIDE_CAVEAT,
+  type SequenceGuideIcon,
 } from "../lib/mouse-guide";
+import {
+  CANVAS_DRAG_THRESHOLD,
+  messageReorderRange,
+  messageReorderStepRange,
+  messageSlotForStep,
+  participantReorderRange,
+} from "../lib/reorder";
 import {
   collapseSequence,
   dependenciesOf,
@@ -120,7 +133,11 @@ import {
 } from "../lib/collapse";
 import { layoutSequence } from "../lib/layout";
 import { sequenceMarchState, sequenceMotionVars } from "../lib/motion";
-import type { SequenceFocus, SequenceLifelinePick } from "./sequence-diagram";
+import type {
+  SequenceFocus,
+  SequenceLifelinePick,
+  SequenceReorder,
+} from "./sequence-diagram";
 import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
 
 /* -------------------------------------------------------------------------- */
@@ -158,7 +175,19 @@ export interface SequenceEditHandlers {
   ) => void;
   /** Send an existing message between two other lifelines. */
   onRepointMessage: (path: SequenceItemPath, from: string, to: string) => void;
+  /**
+   * Move a message EARLIER OR LATER, to `toIndex` among its own siblings.
+   *
+   * AN INDEX, NOT A DELTA, and not a step number. A delta would make the host
+   * re-derive where it landed, giving two answers to "which slot"; a step
+   * number is a depth-first ordinal over the whole tree and does not name a
+   * position in one branch. `messageSlotForStep` is the one conversion, and it
+   * lives beside the range the drag was offered so the two cannot disagree.
+   */
+  onReorderMessage: (path: SequenceItemPath, toIndex: number) => void;
   onDeleteMessage: (path: SequenceItemPath) => void;
+  /** Move a lifeline's COLUMN, to `toIndex` in the declaration order. */
+  onReorderParticipant: (participantId: string, toIndex: number) => void;
   onDeleteParticipant: (participantId: string) => void;
   /** Appends a placeholder lifeline; the host picks its id and name. */
   onInsertParticipant: () => void;
@@ -586,8 +615,11 @@ export function SequenceViewer({
    *     pointer-down. In fit mode, and at a zoom small enough that the drawing
    *     fits anyway, a drag must do nothing rather than fake resistance.
    *   - A MOVED drag swallows its trailing click, so panning away from a
-   *     focused message does not also clear the focus. The 4px threshold is
-   *     what separates a sloppy click from a deliberate drag.
+   *     focused message does not also clear the focus. The threshold comes from
+   *     `CANVAS_DRAG_THRESHOLD` rather than a literal, because the reorder drag
+   *     in `sequence-diagram.tsx` has to draw the same line between a sloppy
+   *     click and a deliberate drag — see the constant for what two numbers
+   *     would cost.
    */
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -623,7 +655,9 @@ export function SequenceViewer({
       if (state === null) return;
       const dx = event.clientX - state.x;
       const dy = event.clientY - state.y;
-      if (!state.moved && Math.abs(dx) + Math.abs(dy) > 4) state.moved = true;
+      if (!state.moved && Math.abs(dx) + Math.abs(dy) > CANVAS_DRAG_THRESHOLD) {
+        state.moved = true;
+      }
       const pane = event.currentTarget;
       // Inverted: the content follows the hand, so dragging left reveals what
       // is to the right — grabbing the canvas, not dragging a scrollbar.
@@ -1010,37 +1044,6 @@ export function SequenceViewer({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  /**
-   * Arrows walk focus through the messages in model order — the keyboard
-   * equivalent of clicking each arrow in turn. From nothing (or from a
-   * participant focus, which has no position in the story), both directions
-   * land on the FIRST message: "start reading" is the only honest answer to
-   * "previous" when there is no current position. (Escape is NOT handled
-   * here — it lives on window, above, so the page's Escape ladder works
-   * wherever DOM focus sits.)
-   */
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (layout.stepCount === 0) return;
-      const current = focus?.kind === "message" ? focus.step : 0;
-      switch (event.key) {
-        case "ArrowRight":
-        case "ArrowDown":
-          event.preventDefault();
-          handleFocusMessage(Math.min(current + 1, layout.stepCount));
-          break;
-        case "ArrowLeft":
-        case "ArrowUp":
-          event.preventDefault();
-          handleFocusMessage(current === 0 ? 1 : Math.max(1, current - 1));
-          break;
-        default:
-          break;
-      }
-    },
-    [focus, layout.stepCount, handleFocusMessage],
-  );
-
   /* ---- editing ------------------------------------------------------------- */
 
   /**
@@ -1058,6 +1061,188 @@ export function SequenceViewer({
         ? messagePathForStep(file, shown, focus.step)
         : null,
     [file, shown, focus],
+  );
+
+  /**
+   * WHAT THIS CANVAS WILL LET A DRAG MOVE, or `null` for "nothing".
+   *
+   * TWO GATES, and the second is the interesting one.
+   *
+   *   - `edit === undefined` is a read-only or locked canvas; the same gate
+   *     every other gesture here rides.
+   *   - `shown !== file` is A FOLD IN EFFECT, and reordering must refuse then.
+   *     `collapseSequence` renumbers 1..n over the VISIBLE subset, so step 4 of
+   *     a folded view and step 4 of the file are different messages, and the
+   *     COLUMN indices diverge outright — a hidden lifeline is simply not in
+   *     `shown.participants`, so column 2 on screen is column 3 in the
+   *     document. `messagePathForStep` rescues a message address by object
+   *     identity, but there is no equivalent rescue for a column index, and one
+   *     rule for both axes beats two. So the affordance disappears entirely
+   *     rather than being offered and refused — which is the same verdict
+   *     `focusedMessagePath` reaches for the edit form, said with a control
+   *     rather than a sentence.
+   *
+   *     `shown === file` is the exact predicate rather than a count of hidden
+   *     participants, because `collapseSequence` returns its ARGUMENT
+   *     UNCHANGED when nothing is folded — the identity IS the fold state, and
+   *     a second reading of it could disagree.
+   */
+  const reorder = useMemo<SequenceReorder | null>(() => {
+    if (edit === undefined || shown !== file) return null;
+    return {
+      messageRange: (step) => {
+        const path = messagePathForStep(file, shown, step);
+        if (path === null) return null;
+        const range = messageReorderStepRange(file, path);
+        return range === null ? null : { min: range.min, max: range.max };
+      },
+      participantRange: (id) => {
+        const range = participantReorderRange(file, id);
+        return range === null ? null : { min: range.min, max: range.max };
+      },
+      onDropMessage: (step, toStep) => {
+        const path = messagePathForStep(file, shown, step);
+        if (path === null) return;
+        /* THE ONE CONVERSION from a drawn row to a slot in the model, and it
+           lives beside the range the drag was offered so a drop can only ever
+           name a slot that range contained. */
+        const slot = messageSlotForStep(file, path, toStep);
+        if (slot === null) return;
+        edit.onReorderMessage(path, slot);
+      },
+      onDropParticipant: (id, toIndex) => {
+        edit.onReorderParticipant(id, toIndex);
+      },
+    };
+  }, [edit, file, shown]);
+
+  /**
+   * `⌥` + an arrow, on whatever is focused: up/down moves a MESSAGE in time,
+   * left/right moves a LIFELINE'S COLUMN. One slot per press.
+   *
+   * ONE SLOT AND NOT A JUMP, because that is what makes this the precise route.
+   * A drag is aimed and lands wherever the pointer is nearest; a press is
+   * counted. Both go through the same handler with a target INDEX, so there is
+   * one operation with two ways in rather than two implementations.
+   *
+   * AT THE END OF THE RUN IT SAYS SO. Pressing up on the first legal slot could
+   * do nothing silently, and a key that silently does nothing is
+   * indistinguishable from a key that is not wired up — which is the exact
+   * report this canvas has already had twice. The sentence names the boundary
+   * the reader has reached, and `messageReorderRange` is where "legal slot" is
+   * defined, so it cannot disagree with what the drag offers.
+   *
+   * A FOLD REFUSES HERE, with the fold's own sentence, because `reorder` is
+   * `null` then and the viewer is the side that knows why. Every OTHER refusal
+   * — a note in the way, a `box` boundary, an activation flag — belongs to the
+   * host, which owns the document and already speaks them for the delete and
+   * the repoint. One authority per kind of refusal.
+   */
+  const handleReorderKey = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const axis =
+        event.key === "ArrowUp" || event.key === "ArrowDown"
+          ? "message"
+          : event.key === "ArrowLeft" || event.key === "ArrowRight"
+            ? "participant"
+            : null;
+      if (axis === null || edit === undefined) return;
+      const delta =
+        event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
+
+      if (axis === "message") {
+        if (focus?.kind !== "message") return;
+        event.preventDefault();
+        if (reorder === null) {
+          onAnnounce(FOLDED_REORDER_REFUSAL);
+          return;
+        }
+        const path = messagePathForStep(file, shown, focus.step);
+        const range = path === null ? null : messageReorderRange(file, path);
+        if (path === null || range === null) {
+          onAnnounce(
+            "This step cannot be moved — its place in the file is ambiguous, or it carries an activation flag. The details panel says which.",
+          );
+          return;
+        }
+        const target = range.at + delta;
+        if (target < range.min || target > range.max) {
+          onAnnounce(
+            delta < 0
+              ? "This step is already as early as it can go — a note, a fragment or an activation flag is above it."
+              : "This step is already as late as it can go — a note, a fragment or an activation flag is below it.",
+          );
+          return;
+        }
+        edit.onReorderMessage(path, target);
+        return;
+      }
+
+      if (focus?.kind !== "participant") return;
+      event.preventDefault();
+      if (reorder === null) {
+        onAnnounce(FOLDED_REORDER_REFUSAL);
+        return;
+      }
+      const range = participantReorderRange(file, focus.id);
+      if (range === null) return;
+      const target = range.at + delta;
+      if (target < range.min || target > range.max) {
+        onAnnounce(
+          "This lifeline is already at the edge of its box — a box brackets a run of neighbouring lifelines, so moving it further is an edit for the source text.",
+        );
+        return;
+      }
+      edit.onReorderParticipant(focus.id, target);
+    },
+    [edit, file, focus, onAnnounce, reorder, shown],
+  );
+
+  /**
+   * Arrows walk focus through the messages in model order — the keyboard
+   * equivalent of clicking each arrow in turn. From nothing (or from a
+   * participant focus, which has no position in the story), both directions
+   * land on the FIRST message: "start reading" is the only honest answer to
+   * "previous" when there is no current position. (Escape is NOT handled
+   * here — it lives on window, above, so the page's Escape ladder works
+   * wherever DOM focus sits.)
+   */
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      /* ALT + ARROWS REORDER, and it is checked before the plain arrows for the
+         obvious reason: the modifier changes what the key MEANS, so a switch
+         that fell through to "walk focus" would move the selection instead of
+         the step and the reader would never learn the gesture exists.
+         Alt (⌥ on a Mac) rather than the platform mod key, deliberately:
+         Cmd/Ctrl + Z is already the canvas undo, and Cmd + arrow is a
+         line/document jump the OS and the browser both claim.
+
+         THE PRECISE ROUTE, and the one the drag is derived FROM rather than an
+         afterthought to it: one press is one slot, so a reader who knows
+         exactly where a step belongs never has to aim. `check:sequence` asserts
+         a drag of three rows is byte-identical to three presses. */
+      if (event.altKey) {
+        handleReorderKey(event);
+        return;
+      }
+      if (layout.stepCount === 0) return;
+      const current = focus?.kind === "message" ? focus.step : 0;
+      switch (event.key) {
+        case "ArrowRight":
+        case "ArrowDown":
+          event.preventDefault();
+          handleFocusMessage(Math.min(current + 1, layout.stepCount));
+          break;
+        case "ArrowLeft":
+        case "ArrowUp":
+          event.preventDefault();
+          handleFocusMessage(current === 0 ? 1 : Math.max(1, current - 1));
+          break;
+        default:
+          break;
+      }
+    },
+    [focus, layout.stepCount, handleFocusMessage, handleReorderKey],
   );
 
   /**
@@ -1518,6 +1703,7 @@ export function SequenceViewer({
               dependencyCount={dependencyCount}
               onToggleCollapse={handleToggleCollapse}
               pick={lifelinePick}
+              reorder={reorder}
             />
           </div>
         </div>
@@ -1694,10 +1880,11 @@ export function SequenceViewer({
               NO ARMING, unlike its neighbour, and the asymmetry is the honest
               one: an inserted message needs two lifelines named before it can
               exist, while a lifeline needs nothing but a place, and its place
-              is decided (the end of the order — a column can be moved in the
-              source pane, and there is no drag on this canvas to move it
-              with). Arming a gesture that has nothing to ask would be a modal
-              state with one legal answer. */}
+              is decided (the end of the order — and once it is there, its
+              column is dragged or Alt-arrowed into position, so this control
+              has nothing to ask about placement either). Arming a gesture that
+              has nothing to ask would be a modal state with one legal
+              answer. */}
           {edit === undefined ? null : (
             <button
               type="button"
@@ -2091,22 +2278,63 @@ export function SequenceViewer({
         ) : null}
       </p>
 
-      {/* ---- the mouse guide ----
+      {/* ---- the editing affordances ----
           A SECOND ROW, only while editing is on, and the reason it is a row of
           its own rather than more clauses on the one above: the bar above is
           about READING the diagram and applies to every reader, while this is
           the list of things a reader can CHANGE, which most hosts of this
           viewer cannot offer at all.
 
-          The sentences come from `lib/mouse-guide.ts`, which derives them from
+          IT USED TO BE A PARAGRAPH, and it was reported as too much to read —
+          one sentence naming eight gestures plus a caveat, a paragraph doing a
+          toolbar's job. What a reader scanning it actually wants is the GLYPH,
+          because the glyph is what they have to find on screen; the sentence is
+          what they want once they are lost. So the glyph leads, two or three
+          words name the effect, and the full mouse path is the item's
+          accessible name and its hover text. Nothing was cut: the same
+          sentences, assembled by the same module, are read out in full by the
+          tour card, which is the surface a reader opens to be TAUGHT rather
+          than reminded.
+
+          NOT BUTTONS, deliberately. Half of these gestures need something
+          focused before they mean anything, and a chip that armed the insert or
+          opened the pencil would be a SECOND control for a gesture that already
+          has one — a second authority on arming, free to disagree with the
+          pill. These are a legend: they show the glyph the real control
+          carries, and `check:canvas-edit` pins each name to the table below so
+          the legend cannot show a glyph the canvas does not.
+
+          The entries come from `lib/mouse-guide.ts`, which derives them from
           `SequenceEditHandlers` — so a gesture added to the canvas cannot ship
-          without a line here. Twice on this branch a correct, shipped gesture
-          was reported as broken because no surface named it. */}
+          without an entry, an icon and a name. Twice on this branch a correct,
+          shipped gesture was reported as broken because no surface named it. */}
       {edit === undefined ? null : (
-        <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
-          <span className="font-medium text-foreground">With a mouse:</span>{" "}
-          {SEQUENCE_MOUSE_GUIDE} · {SEQUENCE_MOUSE_GUIDE_CAVEAT}
-        </p>
+        <ul className="hidden flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:flex">
+          {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
+            const Glyph = GUIDE_GLYPH[gesture.icon];
+            return (
+              <li
+                key={gesture.handler}
+                /* The full path on hover for a mouse user, and as the item's
+                   accessible name for everyone else — the long half is demoted,
+                   never dropped. */
+                title={gesture.mouse}
+                className="inline-flex items-center gap-1"
+              >
+                <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
+                <span>{gesture.label}</span>
+                <span className="sr-only">— {gesture.mouse}</span>
+              </li>
+            );
+          })}
+          {/* THE CAVEAT STAYS PROSE, and stays last. It is the only line here
+              that is about what dragging does NOT do, so it has no glyph to
+              lead with — and it is the sentence a reader arriving from a
+              drawing tool needs before their first drag, not after it. */}
+          <li className="basis-full text-muted-foreground/80 sm:basis-auto">
+            {SEQUENCE_MOUSE_GUIDE_CAVEAT}
+          </li>
+        </ul>
       )}
 
       {/* Text alternative: the whole story as an ordered list, for readers
@@ -2148,6 +2376,48 @@ const ZOOM_MAX = 4;
  * Versioned so a rewritten tour can re-show itself: bump `v1` and every
  * browser that dismissed the old one sees the new one once.
  */
+/**
+ * The guide's icon names, resolved to the glyphs the real controls carry.
+ *
+ * A TOTAL `Record<SequenceGuideIcon, LucideIcon>`, which is the load-bearing
+ * half: a new gesture in `mouse-guide.ts` needing a glyph this table does not
+ * have is a MISSING PROPERTY here — a type error before it is a failing check.
+ * The names live there rather than the components because that module is loaded
+ * by `check:canvas-edit` through Node's type stripping, which cannot have a
+ * React package on its path.
+ *
+ * EVERY GLYPH IS ONE THE CANVAS ALREADY RENDERS on the control it describes
+ * (`Plus` on the insert button, `ListOrdered` on the numbering toggle,
+ * `Trash2` in the dock's remove row, and so on). A legend showing a glyph the
+ * screen does not carry is worse than no legend — it is a control the reader
+ * will hunt for and never find.
+ */
+const GUIDE_GLYPH: Record<SequenceGuideIcon, LucideIcon> = {
+  pencil: Pencil,
+  "arrow-left-right": ArrowLeftRight,
+  "arrow-up-down": ArrowUpDown,
+  columns: Columns3,
+  trash: Trash2,
+  "user-minus": UserMinus,
+  plus: Plus,
+  "user-plus": UserPlus,
+  "list-ordered": ListOrdered,
+};
+
+/**
+ * Why a reorder is unavailable while a lifeline is folded, in one sentence with
+ * the fix in it.
+ *
+ * A CONSTANT because both keyboard routes say it and both must say the SAME
+ * thing — a message reorder and a column reorder are refused by the identical
+ * condition (`shown !== file`), so two wordings would be two accounts of one
+ * fact. It ends with the control that clears the fold, for the same reason the
+ * insert's fold refusal does: "Show all" is the next thing to press, and a
+ * refusal that does not say so is a dead end.
+ */
+const FOLDED_REORDER_REFUSAL =
+  "Nothing can be reordered while lifelines are folded — the rows and columns on screen are renumbered over what is visible, so a move would land somewhere else in the file. Press “Show all”, then try again.";
+
 const SEQUENCE_TOUR_KEY = "arch-lab:tour:sequence:v1";
 
 /*
@@ -2175,11 +2445,20 @@ const FOCUS_TOUR_STEP: TourStep = {
    copies of "how to edit this" is how the endpoint gesture came to be mentioned
    in one place, in the past tense of a control that had moved, while a reader
    hunted for it — and how the numbering flag was mentioned in neither. */
+/**
+ * THE LONG PROSE'S HOME, now that the strip under the canvas leads with glyphs
+ * instead. The tour is where a reader goes to be taught, so it gets every
+ * sentence in full; the strip is where they go to be reminded, so it gets the
+ * icon. Both read `lib/mouse-guide.ts` — writing either one by hand is how the
+ * tour came to describe the endpoint gesture in words the panel no longer used.
+ */
 const EDIT_TOUR_STEP: TourStep = {
   title: "Edit the flow on the canvas",
   body:
     `With a mouse alone: ${SEQUENCE_MOUSE_GUIDE}. ` +
-    `${SEQUENCE_MOUSE_GUIDE_CAVEAT} Every change is written into the source ` +
+    `${SEQUENCE_MOUSE_GUIDE_CAVEAT} Hold Alt with the arrow keys to move the ` +
+    "focused step or lifeline one slot at a time, which is the precise route. " +
+    "Every change is written into the source " +
     "text beside the diagram, one line at a time, and Cmd or Ctrl + Z undoes it.",
   icon: Pencil,
 };

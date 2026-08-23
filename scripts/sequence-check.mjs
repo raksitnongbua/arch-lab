@@ -110,6 +110,15 @@ const { layoutSequence } = await import(
 const { collapseSequence, hiddenParticipants } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/lib/collapse.ts")).href
 );
+const {
+  fileWithMessageMoved,
+  fileWithParticipantMoved,
+  messageReorderRange,
+  messageReorderRefusal,
+  participantReorderRefusal,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/reorder.ts")).href
+);
 const { messagePathForStep } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/lib/address.ts")).href
 );
@@ -125,6 +134,8 @@ const {
   insertedMessageEdit,
   insertedParticipantEdit,
   participantRemovalRefusal,
+  reorderedMessageEdit,
+  reorderedParticipantEdit,
   repointedMessageEdit,
   revisedMessageEdit,
   revisedParticipantEdit,
@@ -3120,6 +3131,494 @@ console.log(
     ].every((edit) => edit !== null && edit.path === "patch"),
     "a sequence edit re-emitted, which would delete the reader's comments",
   );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 9. Reordering: a swap of two blocks, and nothing else moves              */
+/* ----------------------------------------------------------------------- */
+
+/* WHY THIS SECTION IS BYTE-LEVEL RATHER THAN MODEL-LEVEL. A reorder is the one
+   gesture on this canvas that changes NOTHING about the elements it touches, so
+   every model-level assertion about it is trivially satisfied by a whole-
+   document re-emit — which is exactly the failure `line-patch.ts` exists to
+   prevent, and which passed every assertion in this file for a release while
+   deleting every `//` comment on the first drag. The only thing that can catch
+   it is: which BYTES changed, measured against text the serializer would
+   normalise.
+
+   AND THE MEANING IS DERIVED FROM THE SERIALIZER, never from a hand-written
+   expectation. `fileWithMessageMoved` is the model-level description of the
+   move; the assertion is that the patched text canonicalises to exactly what
+   the serializer emits for that model. A hand-typed expected block would be a
+   second authority on what a reorder means, free to agree with a bug. */
+console.log("\nA reorder swaps two blocks and moves nothing else");
+
+{
+  /* NON-CANONICAL IN FIVE WAYS, each one something the serializer erases: a
+     leading `//` comment, blank lines, a comment BETWEEN two steps, a written-
+     out `updated`, and an explicit `:participant`. A multi-line `desc` on the
+     message being moved is the sixth, and the one that separates "swaps the
+     block" from "swaps the line". */
+  const spansOf = (text) => parseSequenceTextWithSpans(text).spans;
+  const REORDER = [
+    "archlab 1.0 sequence",
+    "updated 2026-08-01T00:00:00.000Z",
+    'title "Reorder"',
+    "",
+    "@sequence",
+    "  // The cast, in reading order.",
+    "",
+    '  cust:actor "Customer"',
+    '  web:participant "Storefront"',
+    '  api "Order API"',
+    "",
+    '  cust -> web : "Clicks buy" [HTTPS]',
+    '    desc "POST /cart\\nreturns 200"',
+    "    ! x-trace after label : true",
+    '  web -> api : "Place the order"',
+    "",
+    "  // Everything below is the happy path.",
+    '  api ..> web : "201 Created"',
+    '  web ..> cust : "Shows the receipt"',
+    "",
+  ].join("\n");
+  const doc = parseViewSource(REORDER);
+  check(
+    "the reorder fixture parses, is non-canonical, and its first message owns a 4-line block",
+    doc.status === "ok" &&
+      serializeSequenceText(parseSequenceText(REORDER)) !== REORDER &&
+      spansOf(REORDER).items.get(sequenceItemKey([0])).end -
+        spansOf(REORDER).items.get(sequenceItemKey([0])).start ===
+        2,
+    `status ${doc.status}`,
+  );
+
+  /* ---- the block moves, and only the block ------------------------------- */
+
+  /* GUARDED, so a broken fixture FAILS the assertion above rather than
+     crashing the script three assertions later — one of these went in as a
+     crash once, which reports as a stack trace and no verdict. */
+  if (doc.status !== "ok") {
+    console.error("    the reorder fixture did not parse — section skipped");
+    failures += 1;
+    assertions += 1;
+  } else {
+    const moved = reorderedMessageEdit(doc.value, REORDER, [0], 1);
+    check(
+      "a message reorder reports the patch path, never a re-emit",
+      moved !== null && moved.path === "patch",
+      `path ${moved && moved.path}`,
+    );
+    /* THE WHOLE BLOCK TRAVELS. Moving only the declaration line would leave the
+     `desc` and the `!` escape behind, attached to whatever now sits above them
+     — a document that either refuses to parse or quietly re-attributes the
+     author's detail to a different step. Counted as a SET of lines rather than
+     positionally, because their positions are exactly what changed. */
+    const before = REORDER.split("\n");
+    const after = (moved?.text ?? "").split("\n");
+    check(
+      "the reorder changes no line COUNT — nothing is added or dropped",
+      after.length === before.length,
+      `${before.length} lines before, ${after.length} after`,
+    );
+    check(
+      "every line of the file is still present, byte for byte",
+      [...before].sort().join(" ") === [...after].sort().join(" "),
+      /* A reorder is a permutation of lines. Any line that gained or lost a byte
+       means a block was rewritten from the model rather than lifted — which is
+       how a `desc` the author wrapped their own way comes back canonicalised. */
+      "a line was rewritten rather than moved",
+    );
+    const movedRange = (text, first) => {
+      const lines = text.split("\n");
+      const at = lines.indexOf(first);
+      return at;
+    };
+    check(
+      "the moved message now sits BELOW the one it traded with",
+      movedRange(moved?.text ?? "", '  cust -> web : "Clicks buy" [HTTPS]') >
+        movedRange(moved?.text ?? "", '  web -> api : "Place the order"'),
+      "the swap went the wrong way, or did not happen",
+    );
+    check(
+      "its desc and its `!` escape came with it, still directly beneath it",
+      /  web -> api : "Place the order"\n  cust -> web : "Clicks buy" \[HTTPS\]\n    desc "POST \/cart\\nreturns 200"\n    ! x-trace after label : true\n/.test(
+        moved?.text ?? "",
+      ),
+      "the declaration line moved without the continuation lines it owns",
+    );
+
+    /* THE AUTHOR'S OWN BYTES OUTSIDE THE TWO BLOCKS ARE UNTOUCHED, which is the
+     assertion the re-emit this replaced could never have passed. */
+    for (const survivor of [
+      "  // The cast, in reading order.",
+      "  // Everything below is the happy path.",
+      "updated 2026-08-01T00:00:00.000Z",
+      '  web:participant "Storefront"',
+    ]) {
+      check(
+        `a reorder leaves ${JSON.stringify(survivor.trim().slice(0, 34))} exactly where it was`,
+        (moved?.text ?? "").split("\n").indexOf(survivor) ===
+          before.indexOf(survivor),
+        "the line survived but moved, so a block wider than the gesture was spliced",
+      );
+    }
+
+    /* ---- the patched text MEANS the model move ----------------------------- */
+
+    /* DERIVED FROM THE SERIALIZER. `fileWithMessageMoved` is the model-level
+     description of a reorder; canonicalising both sides is what proves the text
+     patch and the array move are the same operation. Without this the byte
+     assertions above would happily pass on a swap that landed in the wrong
+     slot. */
+    for (const [from, to] of [
+      [0, 1],
+      [0, 3],
+      [3, 0],
+      [2, 1],
+    ]) {
+      const edit = reorderedMessageEdit(doc.value, REORDER, [from], to);
+      const model = fileWithMessageMoved(doc.value.file, [from], to);
+      check(
+        `moving step ${from + 1} to slot ${to + 1} produces the canonical text of that array move`,
+        edit !== null &&
+          model !== null &&
+          serializeSequenceText(edit.doc.file) === serializeSequenceText(model),
+        "the text patch and the model move disagree about where the step landed",
+      );
+    }
+
+    /* ---- the keyboard and the drag are ONE operation ----------------------- */
+
+    /* THE ASSERTION THAT MAKES "PARITY" MEAN SOMETHING. A drag is aimed and lands
+     several slots away; a press is counted and lands one. If they were two
+     implementations, the long move would be the one nobody tested. Chained
+     single steps must produce the SAME BYTES as one multi-step call. */
+    const dragged = reorderedMessageEdit(doc.value, REORDER, [0], 3);
+    let keyDoc = doc.value;
+    let keyText = REORDER;
+    for (let at = 0; at < 3; at += 1) {
+      const step = reorderedMessageEdit(keyDoc, keyText, [at], at + 1);
+      if (step === null) break;
+      keyDoc = step.doc;
+      keyText = step.text;
+    }
+    check(
+      "a three-row drag is byte-identical to three single-slot keypresses",
+      dragged !== null && dragged.text === keyText,
+      firstDiff(dragged?.text ?? "", keyText),
+    );
+
+    /* ---- putting it back leaves the file where it started ------------------ */
+
+    /* THE LOSSLESS PAIR, on the same reasoning as the numbering toggle's
+     on-off-on: a reader who drags something and drags it back must get their
+     file, not a normalised version of it. This is the assertion a re-emit
+     cannot pass, and it is also what proves the comment-between-steps decision
+     is at least symmetrical. */
+    const there = reorderedMessageEdit(doc.value, REORDER, [0], 2);
+    const back =
+      there === null
+        ? null
+        : reorderedMessageEdit(there.doc, there.text, [2], 0);
+    check(
+      "moving a step down and back up returns the file byte for byte",
+      back !== null && back.text === REORDER,
+      firstDiff(back?.text ?? "", REORDER),
+    );
+
+    /* ---- a no-op costs nothing -------------------------------------------- */
+
+    check(
+      "dropping a step back on its own row is refused, so it costs no undo entry",
+      reorderedMessageEdit(doc.value, REORDER, [0], 0) === null,
+      "a drag that landed where it began would still rewrite the pane",
+    );
+
+    /* ---- the RANGE and the REFUSAL are one answer -------------------------- */
+
+    /* THE FAILURE THIS PREVENTS IS THE WORST ONE AVAILABLE HERE: the drag offers
+     a slot the edit declines, so the reader drops onto an indicator and gets a
+     refusal. The viewer draws its indicator from `messageReorderRange` and the
+     edit guards with `messageReorderRefusal`, so the two must agree on EVERY
+     slot of every document — walked exhaustively rather than sampled, because a
+     disagreement at one boundary is exactly the shape this would take. */
+    const BLOCKED = [
+      "archlab 1.0 sequence",
+      'title "Blocked"',
+      "",
+      "@sequence",
+      '  a "A"',
+      '  b "B"',
+      '  box "Core"',
+      '    c "C"',
+      '    d "D"',
+      '  e "E"',
+      "",
+      '  a -> b : "one"',
+      '  note over a : "an aside"',
+      '  a -> b : "two"',
+      '  a ->+ b : "three opens a bar"',
+      '  a -> b : "four"',
+      '  opt "maybe"',
+      '    a -> b : "inside"',
+      '  a -> b : "five"',
+      "",
+    ].join("\n");
+    const blocked = parseViewSource(BLOCKED);
+    check(
+      "the blocker fixture parses and holds all four kinds of blocker",
+      blocked.status === "ok" &&
+        blocked.value.file.items.length === 7 &&
+        blocked.value.file.items[1].step === "note" &&
+        blocked.value.file.items[3].activate === true &&
+        blocked.value.file.items[5].step === "fragment" &&
+        (blocked.value.file.boxes ?? []).length === 1,
+      `parsed ${blocked.status}`,
+    );
+
+    {
+      const file = blocked.value.file;
+      let disagreements = 0;
+      let probes = 0;
+      for (const path of sequenceMessagePaths(file.items)) {
+        const range = messageReorderRange(file, path);
+        const siblings =
+          path.length === 1
+            ? file.items
+            : sequenceItemAt(file.items, path.slice(0, -2)).branches[
+                path[path.length - 2]
+              ].items;
+        for (let to = 0; to < siblings.length; to += 1) {
+          probes += 1;
+          const inRange = range !== null && to >= range.min && to <= range.max;
+          const refused =
+            activationRefusal(blocked.value, path) !== null ||
+            messageReorderRefusal(file, path, to) !== null;
+          const edited = reorderedMessageEdit(blocked.value, BLOCKED, path, to);
+          /* THREE THINGS IN LOCKSTEP: the range the drag offers, the refusal the
+           host speaks, and whether the edit actually produces text. A slot in
+           range must not be refused, and a slot the edit accepted must have
+           been in range. */
+          if (inRange && to !== range.at && refused) disagreements += 1;
+          if (edited !== null && !inRange) disagreements += 1;
+          if (!inRange && to !== (range?.at ?? -1) && edited !== null) {
+            disagreements += 1;
+          }
+        }
+      }
+      check(
+        `the offered range and the refusal agree on all ${probes} message slots`,
+        probes > 20 && disagreements === 0,
+        `${disagreements} slot(s) where the drag and the edit disagree`,
+      );
+    }
+
+    /* ---- each refusal says WHAT is in the way ------------------------------ */
+
+    /* A REFUSAL WITHOUT A NOUN IS A DEAD CONTROL. `participantRemovalRefusal`
+     already sets this bar with its counts; these four have to clear it, and
+     each names the thing the reader has to go and move in the source pane. */
+    const REFUSALS = [
+      ["a note", [0], 2, /note/i],
+      ["an activation flag on the neighbour", [2], 3, /activation flag/i],
+      ["a fragment", [4], 6, /fragment/i],
+    ];
+    for (const [what, path, to, pattern] of REFUSALS) {
+      const reason = messageReorderRefusal(blocked.value.file, path, to);
+      check(
+        `crossing ${what} is refused, and the sentence names it`,
+        typeof reason === "string" &&
+          reason.length > 40 &&
+          pattern.test(reason),
+        `reason: ${JSON.stringify(reason)}`,
+      );
+      check(
+        `...and the edit itself declines, not just the predicate`,
+        reorderedMessageEdit(blocked.value, BLOCKED, path, to) === null,
+        "the refusal is advisory — the gesture went ahead anyway",
+      );
+    }
+    /* THE DRAGGED MESSAGE'S OWN FLAG belongs to `activationRefusal`, which every
+     other gesture on a message already speaks. Two wordings for one fact is how
+     two surfaces come to describe the same refusal differently, so this asserts
+     the split rather than a second sentence. */
+    check(
+      "a message carrying its own activation flag cannot be dragged at all",
+      messageReorderRange(blocked.value.file, [3]) === null &&
+        activationRefusal(blocked.value, [3]) !== null &&
+        reorderedMessageEdit(blocked.value, BLOCKED, [3], 2) === null,
+      "an unpaired +/- would be moved rows away from the bar it opens",
+    );
+
+    /* ---- lifelines: the box rule, cross-checked against the serializer ----- */
+
+    const boxed = reorderedParticipantEdit(blocked.value, BLOCKED, "c", 3);
+    check(
+      "two lifelines inside one box trade places, and the box block still parses",
+      boxed !== null &&
+        boxed.path === "patch" &&
+        parseViewSource(boxed.text).status === "ok" &&
+        boxed.doc.file.participants.map((p) => p.id).join() === "a,b,d,c,e",
+      `got ${JSON.stringify(boxed && boxed.doc.file.participants.map((p) => p.id))}`,
+    );
+    check(
+      "a box member keeps its two extra spaces, so it stays inside the bracket",
+      /  box "Core"\n    d "D"\n    c "C"\n  e "E"/.test(boxed?.text ?? ""),
+      "the swap changed an indent, which is what moves a lifeline in or out of a box",
+    );
+
+    /* THE RULE IS CROSS-CHECKED AGAINST `serialize.ts`, which is the authority on
+     what a `box` may bracket: a box whose members are not a contiguous run is a
+     model it refuses to spell. So every slot the box rule PERMITS must be a
+     model the serializer accepts. Walked exhaustively — this is the assertion
+     that would have caught a rule written from the model alone. */
+    {
+      const file = blocked.value.file;
+      let permittedButUnwritable = 0;
+      let probes = 0;
+      for (const participant of file.participants) {
+        for (let to = 0; to < file.participants.length; to += 1) {
+          probes += 1;
+          if (participantReorderRefusal(file, participant.id, to) !== null) {
+            continue;
+          }
+          const model = fileWithParticipantMoved(file, participant.id, to);
+          try {
+            serializeSequenceText(model);
+          } catch {
+            permittedButUnwritable += 1;
+          }
+        }
+      }
+      check(
+        `every column swap the box rule permits is one the serializer can write (${probes} probes)`,
+        probes > 20 && permittedButUnwritable === 0,
+        `${permittedButUnwritable} permitted move(s) produce a document serialize.ts refuses`,
+      );
+    }
+    /* AND THE ONE CASE THE SERIALIZER WOULD WAVE THROUGH. A box of exactly one
+     member stays trivially contiguous under any move, so a serializer-only
+     guard accepts it — while the text patch would leave the bracket wrapped
+     around nothing. This is why the rule is stated in `reorder.ts` rather than
+     delegated, and it is measured rather than argued. */
+    {
+      const SOLE = [
+        "archlab 1.0 sequence",
+        'title "Sole"',
+        "",
+        "@sequence",
+        '  a "A"',
+        '  box "Alone"',
+        '    b "B"',
+        '  c "C"',
+        "",
+        '  a -> b : "one"',
+        '  b -> c : "two"',
+        "",
+      ].join("\n");
+      const sole = parseViewSource(SOLE);
+      const model = fileWithParticipantMoved(sole.value.file, "b", 2);
+      let serialises = true;
+      try {
+        serializeSequenceText(model);
+      } catch {
+        serialises = false;
+      }
+      check(
+        "a one-member box is refused even though the serializer would accept the model",
+        sole.status === "ok" &&
+          serialises &&
+          participantReorderRefusal(sole.value.file, "b", 2) !== null &&
+          reorderedParticipantEdit(sole.value, SOLE, "b", 2) === null,
+        "the bracket would be left wrapped around nothing",
+      );
+    }
+    check(
+      "crossing a box boundary is refused, and the sentence names the box",
+      /Core/.test(
+        participantReorderRefusal(blocked.value.file, "e", 3) ?? "",
+      ) && reorderedParticipantEdit(blocked.value, BLOCKED, "e", 3) === null,
+      "a lifeline would be dragged into a bracket the reader never widened",
+    );
+
+    /* ---- autonumber renumbers, and no assertion pins a step number --------- */
+
+    /* EXPECTED, NOT A BUG: numbering is positional, so a reorder renumbers. What
+     this asserts is that the renumbering FOLLOWS THE TEXT rather than being
+     predicted — the count is stable and the moved message's own label is what
+     identifies it, never its step. */
+    {
+      const NUMBERED = REORDER.replace(
+        "@sequence\n",
+        "@sequence\n  autonumber\n",
+      );
+      const numbered = parseViewSource(NUMBERED);
+      const shuffled = reorderedMessageEdit(numbered.value, NUMBERED, [0], 2);
+      check(
+        "reordering a numbered flow keeps the flag, the step count and every label",
+        shuffled !== null &&
+          shuffled.doc.file.autonumber === true &&
+          shuffled.doc.file.items.length === numbered.value.file.items.length &&
+          sequenceMessagePaths(shuffled.doc.file.items)
+            .map((p) => sequenceItemAt(shuffled.doc.file.items, p).label)
+            .sort()
+            .join("|") ===
+            sequenceMessagePaths(numbered.value.file.items)
+              .map((p) => sequenceItemAt(numbered.value.file.items, p).label)
+              .sort()
+              .join("|"),
+        "a label was lost or duplicated by the swap",
+      );
+    }
+
+    /* ---- inside a fragment branch ----------------------------------------- */
+
+    /* A BRANCH IS A SIBLING LIST LIKE ANY OTHER, and the indent is what keeps it
+     one: two messages inside an `alt` lane sit four spaces deep, and a swap
+     that read the indent from the model instead of the source would lift one of
+     them out of the fragment. */
+    {
+      const NESTED = [
+        "archlab 1.0 sequence",
+        'title "Nested"',
+        "",
+        "@sequence",
+        '  a "A"',
+        '  b "B"',
+        "",
+        '  alt "card accepted"',
+        '    a -> b : "charge"',
+        '    b ..> a : "receipt"',
+        '  else "declined"',
+        '    b ..> a : "sorry"',
+        "",
+      ].join("\n");
+      const nested = parseViewSource(NESTED);
+      const swapped = reorderedMessageEdit(nested.value, NESTED, [0, 0, 0], 1);
+      check(
+        "two messages in one fragment branch trade places at their own indent",
+        swapped !== null &&
+          /    b \.\.> a : "receipt"\n    a -> b : "charge"\n/.test(
+            swapped.text,
+          ) &&
+          parseViewSource(swapped.text).value.file.items[0].branches[0].items
+            .length === 2,
+        `got ${JSON.stringify(swapped && swapped.text)}`,
+      );
+      check(
+        "a message cannot be dragged out of its branch into another one",
+        /* THE FRAGMENT DECISION, measured: an item's identity is a PATH, so
+         crossing a branch boundary changes the message's nesting rather than
+         its time — and `SequenceSpans` records no span for a fragment, so there
+         is nothing to trade lines with even if it were wanted. The range simply
+         does not reach outside the branch. */
+        messageReorderRange(nested.value.file, [0, 0, 0]).max === 1 &&
+          reorderedMessageEdit(nested.value, NESTED, [0, 0, 0], 2) === null,
+        "a drag reached into a sibling branch",
+      );
+    }
+  }
 }
 
 /* ----------------------------------------------------------------------- */

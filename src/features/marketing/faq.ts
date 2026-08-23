@@ -137,18 +137,30 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
       },
       {
         /* Asked because the canvas answers a drag on one notation and ignores
-           it on five, which reads as a bug rather than as a property of the
+           it on four, which reads as a bug rather than as a property of the
            notations. Written as one self-contained passage: an assistant
            quotes a passage, not a page, and this is the answer a reader
-           reaches for at the moment the drag does nothing. */
+           reaches for at the moment the drag does nothing.
+
+           THE SEQUENCE CLAUSE IS NEW AND IS THE POINT OF THE REWRITE. This
+           answer said "the other five kinds" for as long as a sequence message
+           could not be dragged; a sequence message can now be dragged to
+           another row and a lifeline card to another column, so leaving it
+           would have made this passage the third stale claim on one branch.
+           The distinction it draws instead — REORDER versus POSITION — is the
+           real one, and it is what a reader arriving from a drawing tool has
+           to be told before their first drag. */
         question: "Why can't I drag my ER diagram?",
         answer:
-          "Because only the C4 canvas has anywhere to write the position down. The C4 grammar " +
+          "Because only the C4 canvas has anywhere to write a POSITION down. The C4 grammar " +
           "carries per-element geometry, so dragging a box edits the text and the change survives " +
-          "a reload. The other five kinds — sequence, flowchart, use case, ER and data dictionary " +
-          "— work their layout out FROM the text: an ER diagram solves its columns from the " +
-          "relationships and a data dictionary is a table, so a dragged box would be put back by " +
-          "the next render and there would be no line to write it on. Change the text and the " +
+          "a reload. A sequence diagram is the halfway case: it has no coordinates either, but it " +
+          "does have an ORDER, so dragging a message up or down moves it in time and dragging a " +
+          "lifeline card sideways moves its column — the element takes a neighbour's place rather " +
+          "than staying where you drop it. The remaining four — flowchart, use case, ER and data " +
+          "dictionary — work their layout out FROM the text: an ER diagram solves its columns from " +
+          "the relationships and a data dictionary is a table, so a dragged box would be put back " +
+          "by the next render and there would be no line to write it on. Change the text and the " +
           "layout follows.",
         links: [{ href: "/syntax", label: "Syntax reference" }],
       },
