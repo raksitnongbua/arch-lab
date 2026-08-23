@@ -908,10 +908,9 @@ export function ViewPlayground({
   /**
    * The same question for the OTHER canvas gesture — rewriting an element's
    * wording, which the sequence canvas offers and the C4 canvas does not (see
-   * `CanvasEditAbility`). Named for what it edits rather than for the ability,
-   * because `reviseEditability` is already the name of the function inside
-   * `canvas-edit.ts` that answers it and one identifier must not mean two
-   * things in neighbouring modules.
+   * `CanvasEditAbility`). Named for what it edits rather than for the ability it
+   * asks about, so that the two `canvasEditability` calls on this page cannot be
+   * read as the same question.
    */
   const wordingEditability = canvasEditability(doc, "revise");
   /**

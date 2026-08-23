@@ -158,9 +158,9 @@ export const CANVAS_LOCK_COPY: Record<"c4" | "sequence", CanvasLockCopy> = {
       "Canvas locked — the diagram is read-only. Nothing on it can be moved or deleted.",
   },
   sequence: {
-    unlockHint: "edit a message or add one",
+    unlockHint: "edit, add, reorder or remove a step",
     unlockedAnnouncement:
-      "Canvas unlocked — click a message or a lifeline to edit its wording, and use the insert button to add one. Every change is written into the source text.",
+      "Canvas unlocked — click a message or a lifeline to edit it, drag either to reorder, and use the strip below to add one. Every change is written into the source text.",
     lockedAnnouncement:
       "Canvas locked — the diagram is read-only. Nothing on it can be edited or added.",
   },
