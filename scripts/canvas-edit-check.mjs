@@ -1783,6 +1783,103 @@ console.log("\nLocking never offers a link to somewhere you already are");
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* 8. The lock is REACHABLE from every canvas branch it gates                  */
+/* -------------------------------------------------------------------------- */
+
+/* WHY THIS SECTION EXISTS, because every assertion above passed while the bug
+   was live. They all ask whether the MODULE says a document is editable. None
+   asked whether the control that decides it is rendered in the branch that
+   document takes.
+
+   The lock was written inline inside `doc.kind === "c4" ? (…)`. When the
+   sequence canvas became editable it read the same `!canvasLocked`, so a
+   reader who had ever locked the canvas found the sequence canvas silently
+   uneditable with no control anywhere to unlock it — the pencil and the insert
+   button withdrawn, and the explanation in the branch not taken.
+
+   DERIVED FROM THE SEED TABLE, not from a list of kind names: the failure a
+   hardcoded pair cannot notice is a seventh notation that becomes editable and
+   renders in a third branch. Any kind the module reports editable under either
+   ability must have a lock rendered for it, and the count of `CanvasLockButton`
+   uses is checked against that number rather than against the literal 2. */
+{
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const lockCopy = read(
+    "src/features/playground/components/canvas-lock-button.tsx",
+  );
+  const kinds = Object.keys(VIEW_SEED_TEXT);
+
+  const lockable = kinds.filter((kind) => {
+    const parsed = parseViewSource(VIEW_SEED_TEXT[kind]);
+    if (parsed.status !== "ok") return false;
+    return (
+      canvasEditability(parsed.value, "move").editable === true ||
+      canvasEditability(parsed.value, "revise").editable === true
+    );
+  });
+
+  check(
+    "at least two notations are editable, so this section is not vacuous",
+    lockable.length >= 2,
+    `lockable: ${JSON.stringify(lockable)}`,
+  );
+
+  /* ONE RENDER PER LOCKABLE CANVAS. Fewer means a canvas the lock gates but
+     cannot be reached from; more would mean two locks racing one cookie. */
+  const renders = playground.match(/<CanvasLockButton\b/g) ?? [];
+  check(
+    "the lock is rendered once for each canvas branch that can be locked",
+    renders.length === lockable.length,
+    `${renders.length} <CanvasLockButton> renders for ${lockable.length} lockable kinds (${lockable.join(", ")})`,
+  );
+
+  /* THE WORDING IS COMPLETE for every lockable kind. A control that borrows
+     another notation's sentence tells the reader the wrong thing about what it
+     just stopped — and a `Record` keyed by kind makes the omission a type
+     error only if the key is actually there to omit. */
+  for (const kind of lockable) {
+    check(
+      `CANVAS_LOCK_COPY names the ${kind} canvas`,
+      lockCopy.includes(`\n  ${kind}: {`),
+      "a lockable canvas with no wording of its own",
+    );
+    check(
+      `the ${kind} lock is wired to that wording`,
+      playground.includes(`CANVAS_LOCK_COPY.${kind}`),
+      "the render exists but reads another canvas's sentence",
+    );
+  }
+
+  /* AND NO SECOND COPY. The bug was one control written twice — once inline,
+     and then not again where it was needed. An inline `aria-pressed` on a
+     lock-shaped button outside the component is how that comes back. */
+  check(
+    "the playground holds no inline lock button beside the component",
+    !/aria-pressed=\{canvasLocked\}/.test(playground),
+    "an inline copy is how the two branches drifted apart the first time",
+  );
+
+  /* THE HEADING'S CLAIM MATCHES WHAT SHIPS. It said "C4 diagrams can also be
+     edited on the canvas; the other kinds lay themselves out from the text"
+     for as long as the sequence canvas was editable, and it was still on the
+     page when a reader asked where the editing was. */
+  check(
+    "the heading does not still claim C4 is the only editable canvas",
+    !/C4 diagrams can also be edited on the canvas/.test(playground),
+    "the page contradicts the feature it is describing",
+  );
+  check(
+    "the heading names the sequence canvas",
+    /sequence messages\s*\n?\s*edited on it|sequence messages edited/.test(
+      playground,
+    ),
+    "a shipped editable canvas the page never mentions",
+  );
+}
+
 console.log(
   `\n${failures === 0 ? "PASS" : "FAIL"} — ${assertions - failures}/${assertions} assertions\n`,
 );

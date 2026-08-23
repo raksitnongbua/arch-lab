@@ -75,8 +75,6 @@ import {
   FileText,
   ChevronDown,
   Info,
-  Lock,
-  LockOpen,
   Repeat2,
   Shrink,
   X,
@@ -84,6 +82,7 @@ import {
 import Link from "next/link";
 
 import { buttonClasses, Button } from "@/components/ui/button";
+import { CANVAS_LOCK_COPY, CanvasLockButton } from "./canvas-lock-button";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -888,6 +887,16 @@ export function ViewPlayground({
   const showCanvasLock =
     CANVAS_EDIT_ENABLED &&
     (editability.editable || wordingEditability.editable);
+  /**
+   * The same offer for the sequence canvas, which renders in a DIFFERENT
+   * branch of this component — and that difference is why the lock was
+   * unreachable there. Gated on the wording ability alone: `showCanvasLock`
+   * is an or of both abilities because a C4 document in a Mermaid pane still
+   * wants the reason shown beside it, whereas this branch only ever holds a
+   * document whose one editable gesture is revision.
+   */
+  const showSequenceCanvasLock =
+    CANVAS_EDIT_ENABLED && wordingEditability.editable;
 
   /**
    * Whether the SEQUENCE canvas may be edited right now — the same three-part
@@ -1202,14 +1211,27 @@ export function ViewPlayground({
             C4, sequence, flowchart, use case, ER or dictionary —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
             JSON, or Mermaid, auto-detected and rendered live.{" "}
-            {/* WHERE THE C4-ONLY RULE IS NAMED, and it is named here because
-                this is the sentence a reader is on when they wonder why their
-                ER diagram will not move. Sourced from the flag, so the claim
-                is absent rather than false while the canvas is not shipped. */}
+            {/* WHERE THE CANVAS-EDITING RULE IS NAMED, and it is named here
+                because this is the sentence a reader is on when they wonder
+                why their ER diagram will not move. Sourced from the flag, so
+                the claim is absent rather than false while the canvas is not
+                shipped.
+
+                IT USED TO NAME C4 AS THE ONLY EDITABLE CANVAS, which went
+                false the moment the sequence canvas became editable and was
+                still on the page when a reader asked where the editing was.
+                The old sentence is deliberately not quoted here: an assertion
+                in `check:canvas-edit` searches this file for it, and prose
+                reproducing it would defeat the check that guards it.
+                The two abilities are named separately on purpose: they are
+                genuinely different, and collapsing them into "C4 and sequence
+                can be edited" would promise a sequence drag that does not
+                exist. */}
             {CANVAS_EDIT_ENABLED ? (
               <>
-                C4 diagrams can also be edited on the canvas; the other kinds
-                lay themselves out from the text.{" "}
+                C4 nodes can be dragged on the canvas and sequence messages
+                edited on it; the other kinds lay themselves out from the
+                text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}
@@ -1742,36 +1764,12 @@ export function ViewPlayground({
                       would do nothing. */}
                   <span className="flex min-w-0 items-center gap-2">
                     {showCanvasLock ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCanvasLocked(!canvasLocked);
-                          setAnnouncement(
-                            canvasLocked
-                              ? "Canvas unlocked — drag a node to move it; arrow keys nudge the selection. Every change is written into the source text."
-                              : "Canvas locked — the diagram is read-only. Nothing on it can be moved or deleted.",
-                          );
-                        }}
-                        aria-pressed={canvasLocked}
-                        title={
-                          canvasLocked
-                            ? "Unlock the canvas — drag nodes to move them"
-                            : "Lock the canvas — stop a stray drag moving a node"
-                        }
-                        className={buttonClasses({
-                          variant: "ghost",
-                          size: "sm",
-                        })}
-                      >
-                        {canvasLocked ? (
-                          <Lock aria-hidden="true" />
-                        ) : (
-                          <LockOpen aria-hidden="true" />
-                        )}
-                        <span className="hidden sm:inline">
-                          {canvasLocked ? "Locked" : "Editable"}
-                        </span>
-                      </button>
+                      <CanvasLockButton
+                        locked={canvasLocked}
+                        onToggle={setCanvasLocked}
+                        onAnnounce={setAnnouncement}
+                        copy={CANVAS_LOCK_COPY.c4}
+                      />
                     ) : null}
                     <span className="truncate text-xs text-muted-foreground">
                       {CANVAS_EDIT_ENABLED &&
@@ -1869,6 +1867,22 @@ export function ViewPlayground({
                       exit is one click away, and a menu that opened over a
                       fullscreen diagram would be covering the thing it exports. */}
                   <span className="flex shrink-0 items-center gap-1.5">
+                    {/* THE SAME LOCK, in the branch a sequence document
+                        actually renders in. It gates `sequenceEditable`, so
+                        leaving it in the C4 branch alone meant a reader who
+                        had locked the canvas once could never unlock this
+                        one — see the header of `canvas-lock-button.tsx`.
+                        Offered only for the notation whose canvas can act on
+                        it: the other four have nothing to lock, and a control
+                        that cannot change anything is worse than its absence. */}
+                    {showSequenceCanvasLock ? (
+                      <CanvasLockButton
+                        locked={canvasLocked}
+                        onToggle={setCanvasLocked}
+                        onAnnounce={setAnnouncement}
+                        copy={CANVAS_LOCK_COPY.sequence}
+                      />
+                    ) : null}
                     {isImmersive ? null : doc.kind === "sequence" ? (
                       <>
                         <SequenceShareButton
