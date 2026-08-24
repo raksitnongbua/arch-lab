@@ -180,6 +180,25 @@ export interface C4Node {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * What the details panel's colour control asks for. Colour is NOT a node
+ * field: the format spells it as a `#tag` on the node plus a `tagcolor` line
+ * in the file header, so the revision carries the INTENT and
+ * `playground/input/canvas-edit.ts` derives both writes from it — deriving
+ * them in the panel would split one decision across two modules.
+ *
+ *   - `"role"` — the type's own role colour: every colour-carrying tag comes
+ *     OFF the node (the header keeps its `tagcolor` lines, because other
+ *     nodes may wear them).
+ *   - `"tag"` — colour via `tag`, minting `tagcolor <tag> "<color>"` in the
+ *     header when the document does not already define it. When it does, the
+ *     document's own colour wins and `color` is ignored: rewriting an
+ *     existing `tagcolor` line would recolour every node wearing the tag,
+ *     a blast radius a single-element panel must not have.
+ */
+export type C4NodeColorChoice =
+  { kind: "role" } | { kind: "tag"; tag: string; color: string };
+
+/**
  * The editable subset of a node, given WHOLE rather than as a diff — the same
  * contract as `SequenceMessageRevision` one file over, and here for the same
  * reason: the viewer's details panel collects it and
@@ -187,7 +206,7 @@ export interface C4Node {
  * must not import from the playground (the repo's import layering runs
  * editor → viewer → sequence, and the playground consumes all three).
  * `undefined` means the field is absent from the document, not "leave it as it
- * was" — the panel's form shows all three at once and submits all three.
+ * was" — the panel's form shows every field at once and submits every field.
  *
  * `id` IS DELIBERATELY NOT HERE, and this is a decision rather than an
  * omission: the id is what every relationship line and every `^ref` in the
@@ -196,15 +215,29 @@ export interface C4Node {
  * the pane where the reader can see every line it touches. The display NAME is
  * the safe rename: nothing addresses a node by its name.
  *
- * `type`, `icon`, `tags`, frame membership and the drill-down pointers are
- * absent because the panel has no control for them yet; each arrives with the
- * control that edits it, so this type never promises a field the canvas cannot
- * write.
+ * `type`, `tags` as free text, frame membership and the drill-down pointers
+ * are absent because the panel has no control for them yet; each arrives with
+ * the control that edits it, so this type never promises a field the canvas
+ * cannot write.
  */
 export interface C4NodeRevision {
   name: string;
   technology?: string;
   description?: string;
+  /** Absent means the type's default icon — the same omission the format
+   *  writes, so clearing the picker genuinely removes the `@` token. */
+  icon?: string;
+  /** Present only when `icon` is, exactly as on `C4Node`. */
+  iconSource?: IconSource;
+  /**
+   * THE ONE FIELD THAT IS NOT WHOLE-VALUE, deliberately: colour is a pairing
+   * of the node's tags with the file header rather than a node field, and its
+   * cleared state already has a spelling (`{ kind: "role" }`), so `undefined`
+   * is free to mean "no claim — leave tags and header untouched". That is
+   * what lets a caller that edits only wording keep its hands off a tag
+   * vocabulary it never looked at.
+   */
+  color?: C4NodeColorChoice;
 }
 
 /* -------------------------------------------------------------------------- */

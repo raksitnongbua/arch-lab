@@ -168,6 +168,25 @@ export function tagFillCss(tagColor: string): string {
 }
 
 /**
+ * Every tag on this node that carries a `tagColors` entry, in the node's
+ * stored tag order. The FIRST one is the colour that wins (see
+ * `resolveTagColor`); the rest are the tags a colour edit must take OFF the
+ * node, or the new choice silently loses the precedence race — the details
+ * panel and `playground/input/canvas-edit.ts` both read this so the control
+ * and the gesture cannot disagree about which tags are "the colour".
+ */
+export function colorTagsOf(
+  node: Pick<C4Node, "tags">,
+  tagColors: Readonly<Record<string, string>> | undefined,
+): string[] {
+  if (tagColors === undefined || node.tags === undefined) return [];
+  return node.tags.filter((tag) => {
+    const color = tagColors[tag];
+    return typeof color === "string" && color !== "";
+  });
+}
+
+/**
  * The author's explicit colour for this node, or null. Precedence within a
  * node's tags: the FIRST tag (in stored order — tags are sorted lexically on
  * write, so this is deterministic and diff-stable) that has a `tagColors`
@@ -178,13 +197,42 @@ export function resolveTagColor(
   node: Pick<C4Node, "tags">,
   tagColors: Readonly<Record<string, string>> | undefined,
 ): string | null {
-  if (tagColors === undefined || node.tags === undefined) return null;
-  for (const tag of node.tags) {
-    const color = tagColors[tag];
-    if (typeof color === "string" && color !== "") return color;
-  }
-  return null;
+  const winner = colorTagsOf(node, tagColors)[0];
+  return winner === undefined ? null : (tagColors?.[winner] ?? null);
 }
+
+/**
+ * The named colours the details panel offers when the document defines none
+ * of its own — each becomes a `#<tag>` on the node and one shared
+ * `tagcolor <tag> "<hex>"` header line, so ten nodes coloured amber cost the
+ * header ONE line, not ten.
+ *
+ * A CURATED SET, NOT A FREE PICKER, for two reasons written down here because
+ * the alternative keeps looking easier. First, presentation is the product
+ * (`purpose.md`): a free picker mints one junk tag per node and can hand the
+ * author a stroke that vanishes on a theme — the on-screen FILL is safe by
+ * construction (`tagFillCss` pins its lightness), but the raw hex paints the
+ * BORDER, and nothing constructs that. Second, the promise the repo makes for
+ * every customisation surface is that every variant is measured: these five
+ * hexes are held to the role-border standard (stroke ≥3:1 against the
+ * constructed tag fill, node title ≥7:1 on it) on EVERY declared theme by
+ * `check:canvas-edit`, which is exactly what cannot be said of an arbitrary
+ * hex. Free colour stays available where it always was — a `tagcolor` line
+ * typed in the source pane.
+ *
+ * Hues deliberately avoid the four role families (violet 295, blue 250, teal
+ * 195, green 150): a palette colour is the author SINGLING a node out, and a
+ * near-role hue would read as a sixth role instead. Values are oklch
+ * L≈0.61 C 0.11–0.17 rendered to hex — the band the sweep in
+ * `check:canvas-edit`'s header found to clear every theme.
+ */
+export const NODE_TAG_PALETTE: readonly { tag: string; color: string }[] = [
+  { tag: "brick", color: "#bc6761" },
+  { tag: "orange", color: "#bd6b2a" },
+  { tag: "amber", color: "#a47c13" },
+  { tag: "plum", color: "#b25ec5" },
+  { tag: "rose", color: "#ca549d" },
+];
 
 /* -------------------------------------------------------------------------- */
 /* The per-node style                                                          */

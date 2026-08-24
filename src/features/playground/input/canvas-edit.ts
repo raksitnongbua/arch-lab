@@ -70,11 +70,17 @@ import type {
 import {
   canonicalNodeBlock,
   canonicalNodeLine,
+  canonicalTagColorLine,
   parseArchTextWithSpans,
   serializeArchText,
   spanKey,
   type ArchTextSpans,
 } from "@/features/archtext";
+// A deep import, but a PURE one (type-only imports, no component), which is
+// what this module's harness requires — and it is the one table that knows
+// which of a node's tags carry colour, so a second copy here would be the
+// "two halves of one thing" failure `codebase.md` names.
+import { colorTagsOf } from "@/features/editor/lib/node-colors";
 import { parsePane } from "@/features/viewer/input/sync";
 import { APP_NAME } from "@/lib/constants";
 
@@ -324,22 +330,25 @@ export const CANVAS_EDIT_OFFERS: Record<
          promising in-place typing would send a reader double-clicking a box
          that only drills down. */
       onCanvas:
-        "a C4 node's name, description and technology edited in the details " +
-        "panel beside it",
+        "a C4 node's name, description, technology, icon and colour edited " +
+        "in the details panel beside it",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: `serializeMermaidC4`
            gives `technology` an argument slot only on the Container/Component
            forms (`spec.argStyle === "tech"`), so on a person or a system the
-           field has nowhere to land — the "Known lossy spots" note in
-           `mermaid/lib/emit.ts` and `MERMAID_C4_EXPORT_CAVEAT` both record it.
-           Writing an edit back through a pane that cannot spell it would show
-           the change once and lose it on the next round trip, which is worse
-           than refusing. */
+           field has nowhere to land, and it emits NO argument at all for a
+           node's `icon`, its tags or the header's `tagColors` — its `emitNode`
+           reads tags solely for `boundary:` membership — so the panel's icon
+           and colour edits have nowhere to land on ANY element. The "Known
+           lossy spots" note in `mermaid/lib/emit.ts` and
+           `MERMAID_C4_EXPORT_CAVEAT` both record it. Writing an edit back
+           through a pane that cannot spell it would show the change once and
+           lose it on the next round trip, which is worse than refusing. */
         because:
-          "Mermaid C4 has no technology slot on person or system elements, " +
-          "so a [technology] edit there would be lost. Switch the pane to " +
-          ".alab to edit on the canvas.",
+          "Mermaid C4 has no slot for a node's icon or colour, and none for " +
+          "[technology] on person or system elements, so those edits would " +
+          "be lost. Switch the pane to .alab to edit on the canvas.",
       },
     },
     flowchart: {
@@ -655,6 +664,34 @@ export function movedNodeEdit(
  * referrer lines instead — see `deletedNodeEdit` — because there the source of
  * the derivation stops existing and the file would stop parsing.)
  *
+ * AN ICON EDIT IS PART OF THE SAME BLOCK: `@slug` lives on the declaration
+ * line, so the block patch already carries it. Absent `icon` means the type's
+ * default — the same omission the format writes — so clearing the picker
+ * removes the token rather than spelling a default out; `iconSource` travels
+ * only with an icon, exactly as `C4Node` states.
+ *
+ * A COLOUR EDIT IS TWO WRITES, because the format spells colour as a pairing:
+ * a `#tag` on the node and a `tagcolor` line in the header. The revision
+ * carries the INTENT (`C4NodeColorChoice`) and this gesture derives both
+ * writes, because the precedence trap lives between them: when a node wears
+ * several coloured tags, the FIRST in stored order wins (`resolveTagColor`),
+ * so naively appending a tag can lose the race and change nothing. A colour
+ * change therefore takes every OTHER colour-carrying tag off the node — on
+ * this node those tags were functioning as its colour, and the reader asked
+ * for a different one — while the header keeps their `tagcolor` lines, which
+ * other nodes may wear. A tag the document already colours is joined, never
+ * recoloured: rewriting its header line would repaint every node wearing it,
+ * a blast radius a single-element panel must not have. Only a tag the
+ * document does NOT define mints a header line, spliced after the last
+ * `tagcolor` line (or the header's end), so ten nodes coloured "amber" cost
+ * the header one line. `color: undefined` makes no claim at all — the one
+ * field of the revision that is not whole-value, argued at its declaration.
+ *
+ * ONE REFUSAL IS COLOUR'S OWN: a document whose `tagColors` live in a
+ * `! meta` escape line instead of `tagcolor` lines cannot take a minted line
+ * (the parser rejects the field spelled both ways), and re-emitting would eat
+ * the reader's comments over a colour change — so the mint is refused there.
+ *
  * The `id` is deliberately not editable here; `C4NodeRevision` carries the
  * argument.
  */
@@ -676,33 +713,102 @@ export function revisedNodeEdit(
   /* DESTRUCTURED, not spread from `revision` directly — the same "whole value"
      contract `revisedMessageEdit` argues at length: `{ ...current, ...revision }`
      cannot REMOVE a field, because an optional key the caller omitted is simply
-     not in the spread. Naming the three makes each present as a variable,
+     not in the spread. Naming each makes it present as a variable,
      `undefined` included, which is what overwrites the value the reader
      cleared — and `emitNode` writes an optional field only for a string, so an
      explicit `undefined` is simply not written. This destructure and
      `C4NodeRevision` are one unit: a field added there needs a name here or it
      is silently ignored. */
-  const { name, technology, description } = revision;
+  const { name, technology, description, icon, color } = revision;
+  // "Present only when `icon` is" (C4Node): a source marker on a cleared icon
+  // would be a `! iconSource` escape line describing nothing.
+  const iconSource = icon === undefined ? undefined : revision.iconSource;
+
+  /* The colour intent, resolved into the two writes it stands for. `worn` is
+     every colour-carrying tag in stored order; the choice is already in force
+     exactly when the chosen tag is the FIRST of them (or, for "role", when
+     there are none) — anything else and the tag list is rewritten. */
+  const tagColors = doc.synced.file.metadata.tagColors;
+  const worn = colorTagsOf(current, tagColors);
+  let tags = current.tags;
+  let minted: { tag: string; color: string } | null = null;
+  if (color !== undefined) {
+    const chosen = color.kind === "tag" ? color : null;
+    const inForce =
+      chosen === null ? worn.length === 0 : worn[0] === chosen.tag;
+    if (!inForce) {
+      const kept = (current.tags ?? []).filter((tag) => !worn.includes(tag));
+      const next = chosen === null ? kept : [...new Set([...kept, chosen.tag])];
+      // Sorted because that is the order the serializer writes and the
+      // re-parse will store; [] becomes absence, as everywhere in the format.
+      tags = next.length === 0 ? undefined : next.sort();
+      if (chosen !== null && (tagColors?.[chosen.tag] ?? "") === "") {
+        // A mint with no colour in it is not a colour choice.
+        if (chosen.color === "") return null;
+        minted = { tag: chosen.tag, color: chosen.color };
+      }
+    }
+  }
+
   if (
     current.name === name &&
     current.technology === technology &&
-    current.description === description
+    current.description === description &&
+    current.icon === icon &&
+    current.iconSource === iconSource &&
+    // Reference equality is the change test on purpose: `tags` is reassigned
+    // exactly when the colour choice computed a genuinely different list.
+    current.tags === tags &&
+    minted === null
   ) {
     return null;
   }
 
-  const edited = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
+  const withNode = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
     ...diagram,
     nodes: diagram.nodes.map((node) =>
-      node.id === nodeId ? { ...node, name, technology, description } : node,
+      node.id === nodeId
+        ? { ...node, name, technology, description, icon, iconSource, tags }
+        : node,
     ),
   }));
+  const edited: ArchLabFile =
+    minted === null
+      ? withNode
+      : {
+          ...withNode,
+          metadata: {
+            ...withNode.metadata,
+            tagColors: { ...tagColors, [minted.tag]: minted.color },
+          },
+        };
 
   const patchable = patchablePane(doc, sourceText);
   const span = patchable?.spans.nodes.get(spanKey(diagramId, nodeId));
   const lines = canonicalNodeBlock(edited, diagramId, nodeId);
-  if (span !== undefined && lines !== null) {
-    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines }]));
+  if (patchable !== null && span !== undefined && lines !== null) {
+    const patches: LinePatch[] = [{ span, lines }];
+    if (minted !== null) {
+      /* The mint refusal argued in the header: `tagcolor` lines the parser
+         recorded are the only proof the map is spelled as lines. An entry
+         with no line means a `! meta` escape holds it, and a minted line
+         beside that would fail the re-parse — refusing beats an edit that
+         silently applies nothing. */
+      const headerSpans = patchable.spans.header;
+      const placeable = Object.keys(tagColors ?? {}).every((tag) =>
+        headerSpans.tagColors.has(tag),
+      );
+      if (!placeable) return null;
+      const anchor =
+        headerSpans.tagColors.size > 0
+          ? Math.max(...headerSpans.tagColors.values())
+          : headerSpans.end;
+      patches.push({
+        span: { start: anchor + 1, end: anchor },
+        lines: [canonicalTagColorLine(minted.tag, minted.color)],
+      });
+    }
+    return adopt(doc, edited, applyPatches(sourceText, patches));
   }
   return adopt(doc, edited, null);
 }
