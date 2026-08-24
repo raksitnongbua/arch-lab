@@ -264,6 +264,7 @@ const {
   deletedNodeEdit,
   groupedNodesEdit,
   movedNodeEdit,
+  nestedNodeEdit,
   ownsChildDiagram,
   revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
@@ -1832,6 +1833,115 @@ console.log("\nA canvas edit re-projects only the node it changed");
     /useState\(createNodeProjectionCache\)/.test(canvasSource),
     "the cache is no longer created once per canvas — a cache built during " +
       "render remembers nothing and the projection is a plain map again",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 11a. A just-nested EMPTY child shows its zoom chip — on the editable      */
+/*      canvas only                                                          */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA fresh empty child offers its way in, without lying about it");
+
+{
+  /* THE BUG THIS PINS (reported): nest a node from the details panel and the
+     canvas showed no zoom chip, because the chip was gated on the child's
+     COUNT — a rule written for a READ-ONLY canvas, where an empty child is
+     nothing a reader can do anything with. The author who just minted the
+     child had nowhere on the canvas to enter the diagram they made. Both
+     rules are asserted here, per canvas state, so neither can quietly take
+     the other's place. */
+  const doc = c4Document(VIEW_SEED_TEXT.c4);
+  const rootId = doc.synced.model.rootDiagramId;
+  const root = doc.synced.model.diagrams[rootId];
+  const leaf = root.nodes.find(
+    (node) =>
+      !node.childDiagramId &&
+      node.childRef === undefined &&
+      node.externalRef === undefined,
+  );
+  check(
+    "the seed has a childless node to nest",
+    leaf !== undefined,
+    "no nestable node in the seed — the empty-child rule is untested",
+  );
+  const nested = nestedNodeEdit(doc, sourceTextFor(doc), rootId, leaf.id);
+  check(
+    "nesting the node yields the empty child this section is about",
+    nested !== null &&
+      nested.doc.synced.model.diagrams[
+        nested.doc.synced.model.diagrams[rootId].nodes.find(
+          (node) => node.id === leaf.id,
+        ).childDiagramId
+      ]?.nodes.length === 0,
+    "the nest gesture did not produce an empty child diagram",
+  );
+  const projectAs = (editable) =>
+    projectViewerNodes({
+      model: nested.doc.synced.model,
+      diagram: nested.doc.synced.model.diagrams[rootId],
+      editable,
+      cache: createNodeProjectionCache(),
+    }).find((node) => node.id === leaf.id);
+  const editableNode = projectAs(true);
+  check(
+    "the EDITABLE canvas offers the empty child's chip the moment it exists",
+    editableNode?.data.drill !== null &&
+      editableNode?.data.drill.childCount === 0,
+    `drill: ${JSON.stringify(editableNode?.data.drill)} — the author who ` +
+      "just nested this child has no way into it from the canvas",
+  );
+  check(
+    "the READ-ONLY canvas still refuses it — an empty child is not a reader's drill-down",
+    projectAs(false)?.data.drill === null,
+    "a read-only canvas grew a chip into an empty diagram — the rule the " +
+      "count gate existed for",
+  );
+  /* A DANGLING pointer offers nothing in either state: `drillInto` would
+     no-op, and a chip that does nothing is worse than none. Built by
+     deleting the child block from the nested text by hand. */
+  const childId = nested.doc.synced.model.diagrams[rootId].nodes.find(
+    (node) => node.id === leaf.id,
+  ).childDiagramId;
+  const dangling = c4Document(
+    nested.text
+      .split("\n")
+      .filter((line) => !line.startsWith(`@`) || !line.includes(` ${childId} `))
+      .join("\n"),
+  );
+  check(
+    "the dangling fixture really lost the child diagram",
+    dangling.synced.model.diagrams[childId] === undefined,
+    "the child block survived the filter — the assertion below is vacuous",
+  );
+  const danglingNode = projectViewerNodes({
+    model: dangling.synced.model,
+    diagram: dangling.synced.model.diagrams[rootId],
+    editable: true,
+    cache: createNodeProjectionCache(),
+  }).find((node) => node.id === leaf.id);
+  check(
+    "a dangling child pointer offers no chip even while editable",
+    danglingNode?.data.drill === null,
+    `drill: ${JSON.stringify(danglingNode?.data.drill)} — the chip would ` +
+      "navigate to a diagram the model does not hold",
+  );
+  /* THE WORDING IS THE OTHER HALF: a chip that appears for an empty child
+     must not COUNT to zero — "0 elements" reads as a broken count, and the
+     affordance is the way in, not the contents. Source assertions (the
+     section-9 tactic — the chip renders in a `.tsx`). */
+  const nodeSource = code("src/features/viewer/components/viewer-node.tsx");
+  check(
+    "the chip's face shows the count only when there is one",
+    /\{drill\.childCount > 0 \? drill\.childCount : null\}/.test(nodeSource),
+    "the chip face counts to zero — an affordance that lies about contents",
+  );
+  check(
+    "the chip's accessible name says 'empty' instead of counting to zero",
+    /empty — add elements there/.test(
+      read("src/features/viewer/components/viewer-node.tsx"),
+    ),
+    "the empty child's chip promises contents it does not have",
   );
 }
 

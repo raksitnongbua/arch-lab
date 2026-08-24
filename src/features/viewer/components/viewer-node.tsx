@@ -393,8 +393,22 @@ function ViewerNodeInner({
         <button
           type="button"
           data-child-badge
-          aria-label={`Zoom into ${node.name} — ${drill.childLevelLabel} view, ${drill.childCount} elements`}
-          title={`Zoom into ${node.name}`}
+          /* `childCount === 0` is reachable only on an EDITABLE canvas (the
+             projection's two-rules note, project-nodes.ts): the author just
+             nested this child and the chip is their way into it. The wording
+             says "empty" rather than counting to zero, because a chip
+             promising "0 elements" reads as a broken count — the affordance
+             is the way in, not the contents. */
+          aria-label={
+            drill.childCount > 0
+              ? `Zoom into ${node.name} — ${drill.childLevelLabel} view, ${drill.childCount} elements`
+              : `Zoom into ${node.name} — ${drill.childLevelLabel} view, empty — add elements there`
+          }
+          title={
+            drill.childCount > 0
+              ? `Zoom into ${node.name}`
+              : `Zoom into ${node.name} and fill it in`
+          }
           onClick={(event) => {
             event.stopPropagation();
             drillInto(node.id);
@@ -407,7 +421,9 @@ function ViewerNodeInner({
           )}
         >
           <ZoomIn aria-hidden="true" className="size-3" />
-          {drill.childCount}
+          {/* The count only when there is one — the icon alone is the honest
+              face for an empty child (see the aria-label note above). */}
+          {drill.childCount > 0 ? drill.childCount : null}
         </button>
       ) : null}
       {refSourceLevel !== null ? (
