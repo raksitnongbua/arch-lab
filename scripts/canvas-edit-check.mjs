@@ -155,6 +155,17 @@
  *      no throw), and the new node's box is MEASURED to overlap nothing —
  *      after the round trip, since inserting an id reflows the default
  *      layout, so the pre-insert picture is the wrong one to measure.
+ *      A CREATE ALSO NAMES WHAT IT CREATED (`CanvasEdit.createdNodeId`, on
+ *      the patch path and both re-emit fallbacks, and on the ref create),
+ *      and the id is FOLLOWED: the playground's create handlers hand it back
+ *      and the canvas centres on the new element and selects it — because
+ *      the element is placed below everything drawn, which on a tall diagram
+ *      is off screen, while the announcement tells the reader to rename it in
+ *      the details panel. Without the camera move and the selection that
+ *      sentence is a promise nothing keeps. The reference half of the Add
+ *      strip is a click-to-open MENU (its list grows with the model, unlike
+ *      the fixed type buttons), sharing the zoom menu's dismissal hook so
+ *      Escape closes the menu WITHOUT also clearing the canvas selection.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
@@ -210,6 +221,7 @@ const {
   canvasEditability,
   createdNodeEdit,
   createdNodeName,
+  createdRefEdit,
   deletedNodeEdit,
   movedNodeEdit,
   ownsChildDiagram,
@@ -3290,6 +3302,41 @@ console.log(
     `position: ${JSON.stringify(createdNode?.position)}`,
   );
 
+  /* --- the edit NAMES what it created ---------------------------------------
+     `createdNodeId` is how the canvas finds the newcomer to centre on and
+     select (the element lands below everything drawn — off screen on a tall
+     diagram, where the announcement's "rename it in the details panel" would
+     otherwise be a promise nothing keeps). Asserted against the RE-PARSED
+     document rather than against the id-minting convention, so the field can
+     never name a node the adopted document does not hold. */
+  check(
+    "a create reports the created node's id, and the id is real in the re-parsed document",
+    created !== null &&
+      created.createdNodeId === "new-person" &&
+      createdNode !== undefined,
+    `createdNodeId: ${JSON.stringify(created?.createdNodeId)}`,
+  );
+
+  /* The REF create reports its minted placeholder the same way — its id is
+     derived from the mirrored node's NAME rather than a type keyword, so the
+     expectation is read back from the document instead of retyped here. */
+  const refCreated = createdRefEdit(doc, authored, "backend", {
+    diagramId: "ctx",
+    nodeId: "cust",
+  });
+  const mintedRef =
+    refCreated === null
+      ? undefined
+      : refCreated.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "backend")
+          ?.nodes.find((node) => node.externalRef?.nodeId === "cust");
+  check(
+    "a ref create reports the id of the placeholder it minted",
+    refCreated !== null &&
+      mintedRef !== undefined &&
+      refCreated.createdNodeId === mintedRef.id,
+    `createdNodeId: ${JSON.stringify(refCreated?.createdNodeId)}, minted: ${JSON.stringify(mintedRef?.id)}`,
+  );
 
   /* --- the id: file-unique, deterministic ---------------------------------- */
 
@@ -3362,6 +3409,14 @@ console.log(
       inJson.text === inJson.doc.synced.jsonText,
     `path: ${inJson === null ? "refused" : inJson.path}`,
   );
+  /* The FALLBACK path names the newcomer too — the canvas's centring must not
+     depend on which path the text took, or a JSON-pane create would land off
+     screen while the patch path centres. */
+  check(
+    "the re-emit path still reports the created node's id",
+    inJson !== null && inJson.createdNodeId === "new-person",
+    `createdNodeId: ${JSON.stringify(inJson?.createdNodeId)}`,
+  );
   /* An EMPTY diagram is the create-specific forcing condition: the spans map
      holds node and edge lines only, so there is no line to sit after and the
      module falls back rather than growing a second parser to find the diagram
@@ -3401,6 +3456,11 @@ console.log(
         .find((diagram) => diagram.id === "backend")
         ?.nodes.some((node) => node.id === "new-container"),
     `verdict: ${intoEmpty === null ? "refused" : intoEmpty.path}`,
+  );
+  check(
+    "the empty-diagram fallback reports the created node's id too",
+    intoEmpty !== null && intoEmpty.createdNodeId === "new-container",
+    `createdNodeId: ${JSON.stringify(intoEmpty?.createdNodeId)}`,
   );
 
   /* --- the affordance renders in the editable branch only ------------------ */
@@ -3484,6 +3544,45 @@ console.log(
     "a trigger now renders with nothing to offer — it would open an empty menu",
   );
 
+  /* --- the created element is centred and selected -------------------------- */
+
+  /* Source assertions (section-9 tactic — the camera lives in a `.tsx`).
+     The module half above proves every create REPORTS its id; this half
+     proves the id is FOLLOWED, because the announcement promises a rename in
+     the details panel and the element lands below everything drawn — off
+     screen on a tall diagram. Each hop is pinned: the host hands the id back,
+     the canvas keeps it until the model containing the node arrives, and the
+     one effect both selects and centres. */
+  const playgroundSrc = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  check(
+    "both create handlers hand the created id back to the canvas",
+    (playgroundSrc.match(/return next\.createdNodeId \?\? null;/g) ?? [])
+      .length === 2,
+    "a create the canvas cannot follow — the new element stays off screen " +
+      "while the announcement promises a rename",
+  );
+  check(
+    "the canvas keeps the returned id until the model holding the node lands",
+    /focusWhenCreated\(edit\?\.onNodeCreate\(/.test(canvas) &&
+      /focusWhenCreated\(edit\?\.onRefCreate\(/.test(canvas) &&
+      /pendingFocusRef\.current = createdNodeId/.test(canvas),
+    "a returned id nothing stores — the camera would act on a model that " +
+      "does not hold the node yet, or never act at all",
+  );
+  /* Selected AND centred, in that one effect, and the camera goes through the
+     flow's own viewport pipe with the shared duration helper — `duration()`
+     is 0 under prefers-reduced-motion, so the pan is a cut for the reader who
+     asked for stillness, the same contract every level transition honours. */
+  check(
+    "the focus effect selects the new element and centres the camera on it",
+    /pendingFocusRef\.current = null;[\s\S]{0,900}?selectNode\(nodeId\);[\s\S]{0,1200}?setViewport\(centred, \{ duration: duration\("levelTransition"\) \}\)/.test(
+      canvas,
+    ),
+    "the created element is reported but not brought into view or not " +
+      "selected — the announcement's rename instruction has no state behind it",
+  );
 }
 
 /* ----------------------------------------------------------------------- */

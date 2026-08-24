@@ -28,6 +28,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   offering only ancestors' elements that are legal at this level and not
   already mirrored here; Escape closes the menu without also clearing the
   canvas selection.
+- Adding an element or a reference from the Add strip now brings the newcomer
+  into view: the canvas pans to centre on it (an instant cut under reduced
+  motion) and selects it, so the details panel is already open for the rename
+  the announcement suggests — previously the new element could land entirely
+  off screen below a tall diagram.
 
 - The details panel's edit form now also changes a C4 element's icon and its
   colour. The icon is picked from the same searchable picker the editor uses

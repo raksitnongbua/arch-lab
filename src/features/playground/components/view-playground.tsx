@@ -1091,7 +1091,7 @@ export function ViewPlayground({
   );
 
   const handleNodeCreate = useCallback(
-    (diagramId: string, type: C4NodeType) => {
+    (diagramId: string, type: C4NodeType): string | null => {
       const next = createdNodeEdit(doc, text, diagramId, type);
       /* SAID, not swallowed, unlike a refused move: a no-op drag left the
          canvas looking exactly as the reader expects, but a pressed Add
@@ -1102,31 +1102,39 @@ export function ViewPlayground({
         setAnnouncement(
           "The element was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
         );
-        return;
+        return null;
       }
       applyCanvasEdit(
         next,
-        `“${createdNodeName(type)}” added below the diagram — the source text follows. Select it to rename it in the details panel; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+        /* "and selected", because the id returned below is what the canvas
+           centres on and selects — the announcement describes the state the
+           reader ARRIVES in, so it says "rename it" rather than the old
+           "select it to rename it", which was an instruction the viewport
+           did not help them follow. */
+        `“${createdNodeName(type)}” added below the diagram and selected — the source text follows. Rename it in the details panel; press Cmd or Ctrl + Z with the diagram focused to undo.`,
       );
+      // The canvas owns the camera; the id is how it finds what to centre on.
+      return next.createdNodeId ?? null;
     },
     [doc, text, applyCanvasEdit],
   );
 
   const handleRefCreate = useCallback(
-    (diagramId: string, source: ExternalRef) => {
+    (diagramId: string, source: ExternalRef): string | null => {
       const next = createdRefEdit(doc, text, diagramId, source);
       /* Said for the Add strip's reason — this arrives from the same strip,
-         and a picker that silently does nothing reads as broken. */
+         and a menu choice that silently does nothing reads as broken. */
       if (next === null) {
         setAnnouncement(
           "The reference was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
         );
-        return;
+        return null;
       }
       applyCanvasEdit(
         next,
-        "Reference added below the diagram — the source text follows. It mirrors an element from a level above and is read-only here; press Cmd or Ctrl + Z with the diagram focused to undo.",
+        "Reference added below the diagram and selected — the source text follows. It mirrors an element from a level above and is read-only here; press Cmd or Ctrl + Z with the diagram focused to undo.",
       );
+      return next.createdNodeId ?? null;
     },
     [doc, text, applyCanvasEdit],
   );

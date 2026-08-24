@@ -984,9 +984,8 @@ export function revisedNodeEdit(
          because `applyPatches` sorts stably, so on a tied start the empty
          insert lands above the replaced block instead of below it. */
       const nodeStarts = (
-        doc.synced.file.diagrams.find(
-          (candidate) => candidate.id === diagramId,
-        )?.nodes ?? []
+        doc.synced.file.diagrams.find((candidate) => candidate.id === diagramId)
+          ?.nodes ?? []
       ).flatMap((node) => {
         const nodeSpan = patchable.spans.nodes.get(spanKey(diagramId, node.id));
         return nodeSpan === undefined ? [] : [nodeSpan.start];
@@ -1052,6 +1051,16 @@ export function createdNodeName(type: C4NodeType): string {
  */
 function freshNodeId(file: ArchLabFile, type: C4NodeType): string {
   return uniqueId(`new-${KEYWORD_BY_NODE_TYPE[type]}`, takenNodeIds(file));
+}
+
+/**
+ * `edit` carrying the id of the node a create gesture just minted, so the
+ * canvas can centre on it and select it — see `CanvasEdit.createdNodeId` for
+ * why the id rides the edit itself. `null` passes through untouched: a refused
+ * create created nothing to name.
+ */
+function asCreated(edit: CanvasEdit | null, nodeId: string): CanvasEdit | null {
+  return edit === null ? null : { ...edit, createdNodeId: nodeId };
 }
 
 /** Every node id in the file — the set a new node id de-collides against,
@@ -1174,16 +1183,19 @@ export function createdNodeEdit(
     });
     if (ends.length > 0) {
       const after = Math.max(...ends);
-      return adopt(
-        doc,
-        edited,
-        applyPatches(sourceText, [
-          { span: { start: after + 1, end: after }, lines: [line] },
-        ]),
+      return asCreated(
+        adopt(
+          doc,
+          edited,
+          applyPatches(sourceText, [
+            { span: { start: after + 1, end: after }, lines: [line] },
+          ]),
+        ),
+        id,
       );
     }
   }
-  return adopt(doc, edited, null);
+  return asCreated(adopt(doc, edited, null), id);
 }
 
 /**
@@ -1227,9 +1239,7 @@ export function createdRefEdit(
     return null;
   }
   const file = doc.synced.file;
-  const diagram = file.diagrams.find(
-    (candidate) => candidate.id === diagramId,
-  );
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
   const chosen = referenceableNodes(file.diagrams, diagramId).find(
     (candidate) =>
@@ -1267,16 +1277,19 @@ export function createdRefEdit(
     });
     if (ends.length > 0) {
       const after = Math.max(...ends);
-      return adopt(
-        doc,
-        edited,
-        applyPatches(sourceText, [
-          { span: { start: after + 1, end: after }, lines },
-        ]),
+      return asCreated(
+        adopt(
+          doc,
+          edited,
+          applyPatches(sourceText, [
+            { span: { start: after + 1, end: after }, lines },
+          ]),
+        ),
+        id,
       );
     }
   }
-  return adopt(doc, edited, null);
+  return asCreated(adopt(doc, edited, null), id);
 }
 
 /**
@@ -1445,15 +1458,16 @@ export function nestedNodeEdit(
     return null;
   }
   const file = doc.synced.file;
-  const diagram = file.diagrams.find(
-    (candidate) => candidate.id === diagramId,
-  );
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
   const current = findNode(file, diagramId, nodeId);
   if (current === null) return null;
   const childLevel = childLevelOf(diagram.level);
   if (childLevel === null) return null;
-  if (typeof current.childDiagramId === "string" && current.childDiagramId !== "") {
+  if (
+    typeof current.childDiagramId === "string" &&
+    current.childDiagramId !== ""
+  ) {
     return null;
   }
   if (current.childRef !== undefined) return null;
@@ -1487,7 +1501,12 @@ export function nestedNodeEdit(
   const span = patchable?.spans.nodes.get(spanKey(diagramId, nodeId));
   const line = canonicalNodeLine(edited, diagramId, nodeId);
   const block = canonicalDiagramBlock(edited, childId);
-  if (patchable !== null && span !== undefined && line !== null && block !== null) {
+  if (
+    patchable !== null &&
+    span !== undefined &&
+    line !== null &&
+    block !== null
+  ) {
     /* End-of-file arithmetic: a text ending in "\n" splits to a final empty
        element, and the block goes ABOVE it so the file keeps its final
        newline; a text the author left without one keeps that too. */

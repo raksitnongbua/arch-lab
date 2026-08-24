@@ -179,16 +179,24 @@ export interface CanvasEditHandlers {
    * (`createdNodeEdit`) and refuses a type the diagram's level cannot hold —
    * the canvas only reports the pressed button, which is itself already
    * filtered to the level's legal types (`creatableNodeTypes`).
+   *
+   * RETURNS THE CREATED NODE'S ID (`null` when the host refused), because the
+   * follow-up belongs to the canvas: the host owns the text but this component
+   * owns the camera and the selection, and the new node lands below everything
+   * drawn — off screen entirely on a tall diagram. The id comes back on the
+   * same call the gesture went out on (`CanvasEdit.createdNodeId` carries it
+   * host-side), so there is no second channel to fall out of step.
    */
-  onNodeCreate: (diagramId: string, type: C4NodeType) => void;
+  onNodeCreate: (diagramId: string, type: C4NodeType) => string | null;
   /**
    * Add a `^ref` boundary placeholder mirroring `source` — a node from an
-   * ancestor diagram — from the palette's reference picker. The picker's
+   * ancestor diagram — from the palette's reference menu. The menu's
    * candidate list and the host's guard (`createdRefEdit`) read the same
    * derivation (`referenceableNodes`), so the canvas can only report a choice
    * the host will honour or refuse for pane-lag reasons it can announce.
+   * Returns the created placeholder's id for the reason `onNodeCreate` does.
    */
-  onRefCreate: (diagramId: string, source: ExternalRef) => void;
+  onRefCreate: (diagramId: string, source: ExternalRef) => string | null;
   /**
    * Give the node a fresh, empty child diagram one level down, from the
    * details panel. The host mints the id, appends the block and refuses what
@@ -1060,21 +1068,67 @@ function ViewerCanvasInner({
   /** Editable is a property of the handlers' presence — see CanvasEditHandlers. */
   const editable = edit !== undefined;
 
+  /* ---- editing: bring a just-created element into view ---------------------
+   * The create gestures place the newcomer in a clear band BELOW everything
+   * drawn (`vacantPosition`), which on a tall diagram is off screen — and the
+   * announcement tells the reader to select it, a promise the camera has to
+   * help keep. The id the host hands back cannot be acted on synchronously:
+   * the node exists only after the host's state lands back here as a new
+   * `model`, so the id waits in a ref and the effect below runs on the model
+   * that contains the node. A ref, not state: nothing renders from it. */
+  const pendingFocusRef = useRef<string | null>(null);
+
+  const focusWhenCreated = useCallback((createdNodeId: string | null): void => {
+    if (createdNodeId !== null) pendingFocusRef.current = createdNodeId;
+  }, []);
+
+  useEffect(() => {
+    const nodeId = pendingFocusRef.current;
+    if (nodeId === null) return;
+    // Cleared whether or not the node is found: the id belongs to THIS model
+    // change, and a stale id must never re-aim the camera on a later edit.
+    pendingFocusRef.current = null;
+    const container = containerRef.current;
+    const rect = nodeRect(getDiagram(model, diagramIdRef.current), nodeId);
+    if (container === null || rect === null) return;
+    // Selected as well as centred: the announcement's next step is "rename it
+    // in the details panel", and selection is what opens that panel — arriving
+    // with it open turns the instruction into a state the reader is already in.
+    selectNode(nodeId);
+    /* Centred by PANNING AT THE CURRENT ZOOM — the same viewport pipe every
+       navigation uses (`setViewport`), never a second camera mover. Not
+       `fitViewportFor`: fitting the whole diagram would zoom out to answer a
+       question nobody asked, when the reader's next act is on this one node.
+       `duration()` is 0 under `prefers-reduced-motion`, so the reduced-motion
+       reader gets an instant cut, exactly as the level transitions do. */
+    const box = container.getBoundingClientRect();
+    const zoom = getViewport().zoom;
+    const centred: Viewport = {
+      x: box.width / 2 - (rect.x + rect.width / 2) * zoom,
+      y: box.height / 2 - (rect.y + rect.height / 2) * zoom,
+      zoom,
+    };
+    // Saved as this diagram's camera too, as `navigateTo` saves its own:
+    // climbing away and back should return to where the reader was left.
+    viewportsRef.current[diagramIdRef.current] = centred;
+    void setViewport(centred, { duration: duration("levelTransition") });
+  }, [model, getViewport, setViewport, selectNode]);
+
   /* Resolved to the CURRENT diagram here, exactly as the drag and the delete
      are: the palette describes one level's types and should not carry the
      diagram id around. */
   const handleNodeCreate = useCallback(
     (type: C4NodeType) => {
-      edit?.onNodeCreate(diagramIdRef.current, type);
+      focusWhenCreated(edit?.onNodeCreate(diagramIdRef.current, type) ?? null);
     },
-    [edit],
+    [edit, focusWhenCreated],
   );
 
   const handleRefCreate = useCallback(
     (source: ExternalRef) => {
-      edit?.onRefCreate(diagramIdRef.current, source);
+      focusWhenCreated(edit?.onRefCreate(diagramIdRef.current, source) ?? null);
     },
-    [edit],
+    [edit, focusWhenCreated],
   );
 
   /* What the palette's reference picker offers — the same derivation the

@@ -63,6 +63,18 @@ export interface CanvasEdit {
   /** The text the source pane must hold. */
   text: string;
   path: CanvasEditPath;
+  /**
+   * The id of the element this gesture CREATED, when it created one — set by
+   * the two C4 create gestures so the canvas can bring the newcomer into view
+   * and select it, keeping the promise the create announcement makes. Absent
+   * on every other gesture: a move, revise or delete has nothing new to show.
+   *
+   * It rides the edit rather than travelling in a second channel because the
+   * edit is the one object that already crosses from the gesture module to
+   * the page: a separate "what was just created" signal could name an id from
+   * a different document than the one being adopted, and nothing would notice.
+   */
+  createdNodeId?: string;
 }
 
 /** One line range of the source, and what replaces it — nothing, to remove it. */
