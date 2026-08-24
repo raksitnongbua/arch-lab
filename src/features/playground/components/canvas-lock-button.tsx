@@ -103,19 +103,24 @@ export function CanvasLockButton({
         onAnnounce(
           locked ? copy.unlockedAnnouncement : copy.lockedAnnouncement,
         );
-        /* POINTER ACTIVATION GIVES THE FOCUS BACK, and this is a bug fix with
-           a name: hold Space to pan, having just clicked this button, and the
-           canvas correctly declined to claim the key (a focused control keeps
-           its activation) — so every Space press toggled the lock instead of
-           panning. The reader was holding a key to drag and watching the
-           diagram lock and unlock under them.
+        /* POINTER ACTIVATION GIVES THE FOCUS BACK. This shipped as the fix
+           for hold-Space-to-pan toggling the lock on every key repeat; that
+           pan is gone from the viewer canvas (an explicit Select/Pan toggle
+           replaced it), but the hazard was never the pan's — it is the
+           browser's. A focused button activates on Space and Enter, and
+           after a click the reader's focus sits here without them having
+           chosen it, so one reflex keypress — Space scrolls pages, and this
+           canvas taught Space for a while — silently flips the lock they
+           only meant to press once. Handing focus back to the drawing also
+           re-aims the canvas's own keys (Escape, the nudge arrows) at what
+           the reader is actually working on.
 
            `event.detail > 0` is the discriminator, not a pointer listener:
            the browser reports 0 for a click synthesised from Enter or Space
            and a real click count for a press. So a POINTER activation drops
-           focus and hands Space back to the canvas, while a KEYBOARD user
-           keeps focus exactly where they put it — blurring them would throw
-           away their place in the tab order to fix a bug they never had. */
+           focus, while a KEYBOARD user keeps focus exactly where they put
+           it — blurring them would throw away their place in the tab order
+           to fix a bug they never had. */
         if (event.detail > 0) event.currentTarget.blur();
       }}
       aria-label={name}

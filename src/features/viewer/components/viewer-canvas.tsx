@@ -118,6 +118,7 @@ import {
   type ViewerFlowNode,
   type ViewerNodeActions,
 } from "./viewer-node";
+import { ViewerModeToggle, type CanvasDragMode } from "./viewer-mode-toggle";
 import { ViewerNodePalette } from "./viewer-node-palette";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
@@ -1218,22 +1219,19 @@ function ViewerCanvasInner({
   /** Editable is a property of the handlers' presence — see CanvasEditHandlers. */
   const editable = edit !== undefined;
 
-  /* ---- editing: hold Space to pan -------------------------------------------
-   * TRUE WHILE THE PAN KEY IS DOWN on an editable canvas. React Flow already
-   * pans on a held Space (`panActivationKeyCode` below) — this flag exists so
-   * the MARQUEE can yield the press to that pan, and so the pane's cursor can
-   * say the mode changed. Written only by the edit-keys listener (whose form
-   * -field and focus guards it inherits) and cleared by keyup, by the window
-   * losing focus, and by the effect's own cleanup when the canvas locks —
-   * each of those is a way a "space is down" flag has classically survived
-   * an alt-tab and left the canvas stuck refusing the lasso.
-   *
-   * State AND ref: the ref is for the pointer handlers, which must read it
-   * synchronously mid-gesture; the state is for the cursor class, which is
-   * the render's business (`react-hooks/refs` forbids reading the ref
-   * there). Both are written together in one place. */
-  const [spaceHeld, setSpaceHeld] = useState(false);
-  const spaceHeldRef = useRef(false);
+  /* ---- editing: what a bare drag on the pane does ----------------------------
+   * TWO MODES, CHOSEN BY AN EXPLICIT TOGGLE: Select (drag draws the marquee)
+   * or Pan (the handlers below are not attached at all, so the press reaches
+   * React Flow's own `panOnDrag` and pans exactly as a read-only canvas
+   * does). Select is the default — a reader who unlocked the canvas did so to
+   * edit. A visible mode replaced hold-Space-to-pan, which was reported
+   * broken three times and outlived two attempted fixes, because a held key
+   * depends on keyboard state and focus — a flag mirrored from window
+   * listeners, released by keyup and by blur, yielded to whichever control
+   * held focus — and never existed on touch, which has no Space key. Plain
+   * state, no ref twin: nothing reads it mid-gesture, because Pan mode works
+   * by DETACHMENT rather than by a per-press bail. */
+  const [dragMode, setDragMode] = useState<CanvasDragMode>("select");
 
   /* ---- editing: the marquee — several elements in one gesture ---------------
    * A BARE drag on the pane draws a selection box; release selects every
@@ -1242,16 +1240,18 @@ function ViewerCanvasInner({
    * so the gesture reads the way the library's marquee would have — a box
    * that merely clips a neighbour does not conscript it into a boundary.
    *
-   * BARE DRAG IS THE LASSO ONLY WHERE THE LASSO EXISTS. These handlers are
-   * attached only while `editable` (see the container's props), so on a
-   * read-only or locked canvas — every shared link, every presentation, and
-   * the DEFAULT, since the canvas locks by default — a bare drag still pans
-   * through React Flow's own `panOnDrag`, untouched by any of this. On an
-   * editable canvas the drawing-tool convention takes over: drag selects,
-   * and panning moves to HOLD SPACE and drag (`panActivationKeyCode` below),
-   * plus the scroll-pan and the pinch that never stopped working. The start
-   * handler yields the press while Space is held, so the two gestures cannot
-   * fight over one button.
+   * BARE DRAG IS THE LASSO ONLY WHERE THE LASSO EXISTS — AND ONLY IN SELECT
+   * MODE. These handlers are attached only while `marqueeMode` (see the
+   * container's props), so on a read-only or locked canvas — every shared
+   * link, every presentation, and the DEFAULT, since the canvas locks by
+   * default — a bare drag still pans through React Flow's own `panOnDrag`,
+   * untouched by any of this. On an editable canvas the drawing-tool
+   * convention takes over: drag selects, and panning is one press away on
+   * the Select/Pan toggle beside the zoom pill (plus the scroll-pan and the
+   * pinch that never stopped working). Pan mode DETACHES these handlers
+   * rather than bailing inside them, so the two gestures cannot fight over
+   * one button and the pan owes nothing to any keyboard or focus state —
+   * the dependency that broke the held-key pan this mode replaced.
    *
    * THIS IS NOT REACT FLOW'S RUBBER BAND, AND THAT IS THE CRASH GUARD — see
    * the note on `multiSelectedIds` for the loop (4fa7c36) this shape avoids
@@ -1284,11 +1284,6 @@ function ViewerCanvasInner({
       // The left button is the whole gesture; anything else stays React
       // Flow's (middle/right drag, pinch, a drag on a node moves it).
       if (event.button !== 0) return;
-      // Space + drag stays the PAN: while the pan key is held the press
-      // belongs to React Flow's `panActivationKeyCode` machinery, so the
-      // lasso must not capture-and-cancel it. Read from the ref because this
-      // is a pointer handler racing a key the reader is holding right now.
-      if (spaceHeldRef.current) return;
       // From the PANE only: a press that starts on a node, a panel or the
       // minimap means something else, and claiming it would eat that
       // gesture.
@@ -1297,10 +1292,10 @@ function ViewerCanvasInner({
          of `.react-flow__pane`, so every node and every edge is a descendant
          of it. A `closest(".react-flow__pane")` test therefore matched a press
          on a NODE, and the lasso claimed it — cancelling the press, which
-         cancels selecting the node, dragging it, and the focus move that
-         would have let Space pan afterwards. The background is the pane
-         ELEMENT ITSELF; anything with a node, an edge, a panel or a control
-         between it and the pointer belongs to that thing. */
+         cancels selecting the node, dragging it, and the focus move the
+         press owed the canvas. The background is the pane ELEMENT ITSELF;
+         anything with a node, an edge, a panel or a control between it and
+         the pointer belongs to that thing. */
       if (
         !(event.target instanceof Element) ||
         !event.target.classList.contains("react-flow__pane")
@@ -1319,12 +1314,13 @@ function ViewerCanvasInner({
          explicitly — and this is a bug fix, not tidying. Cancelling the press
          suppresses the compatibility mouse events, and moving focus is one of
          the things those events do. Without this the reader's focus stays on
-         whatever they last clicked, which on this canvas is usually a BUTTON
-         (the Add strip, the lock, the zoom chip) — and the edit-keys listener
-         deliberately will not take Space from a focused control, so holding
-         Space to pan did nothing at all. Pressing the pane is the gesture
-         that means "I am working on the drawing now"; it has to move focus
-         there like the click it replaced. */
+         whatever they last clicked — on this canvas usually a BUTTON (the Add
+         strip, the lock, the zoom chip), or the source textarea, whose
+         form-field exemption then keeps the nudge and delete keys away from
+         the diagram. Pressing the pane is the gesture that means "I am
+         working on the drawing now"; it has to move focus there like the
+         click it replaced, so Escape, the arrows and the next Tab aim at the
+         drawing rather than at the last control pressed. */
       container.focus({ preventScroll: true });
       const box = container.getBoundingClientRect();
       const x = event.clientX - box.left;
@@ -1438,6 +1434,24 @@ function ViewerCanvasInner({
     marqueeOriginRef.current = null;
     setMarquee(null);
   }, []);
+
+  /* Switching modes also puts an in-flight box away, exactly as a cancelled
+     press does. Pan mode works by detaching the handlers, so a flip that
+     lands mid-press (a second finger reaching the toggle) would otherwise
+     strand the overlay with no release handler left to clear it. */
+  const handleDragModeChange = useCallback(
+    (mode: CanvasDragMode) => {
+      handleMarqueeCancel();
+      setDragMode(mode);
+    },
+    [handleMarqueeCancel],
+  );
+
+  /* The lasso exists only on an editable canvas in SELECT mode. This gate is
+     what the container's four pointer props read, so Pan mode detaches the
+     marquee entirely and a bare drag reaches React Flow's `panOnDrag` — see
+     the marquee section note. */
+  const marqueeMode = editable && dragMode === "select";
 
   /* The card's Apply, resolved to the lassoed ids here for the reason the
      single revise is: the card describes a selection and should not carry ids
@@ -1810,53 +1824,6 @@ function ViewerCanvasInner({
         return;
       }
 
-      /* SPACE ARMS THE PAN (see `spaceHeld`), in THIS listener rather than a
-         third one so it inherits the two guards above — the focus scope and
-         the form-field exemption a Space typed into the panel's name field
-         needs. Space is not a free key, and the canvas is full of buttons
-         (the Add strip, the lock, the zoom chip, every node's body), so a
-         FOCUSED CONTROL KEEPS ITS ACTIVATION: the bail below runs before
-         `preventDefault`, leaving the browser to press the button the reader
-         is on. Everywhere else the default IS the claim — an unhandled Space
-         scrolls the page under the canvas. Auto-repeat keydowns re-arm
-         through the same idempotent write, which is what heals the flag if
-         this effect's cleanup cleared it mid-hold (a model change re-runs
-         the effect; erring stuck-OFF and re-arming beats erring stuck-on). */
-      if (event.key === " ") {
-        if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
-          return;
-        }
-        /* A KEYBOARD-FOCUSED CONTROL KEEPS SPACE; A POINTER-FOCUSED ONE DOES
-           NOT — and the distinction is the whole fix. The first version of
-           this guard yielded to any focused button, which sounded right and
-           was unusable: every node BODY on this canvas is a real <button>, so
-           clicking a node parked focus on one and Space stopped panning for
-           the rest of the session. The reader had done nothing but select an
-           element.
-
-           `:focus-visible` is exactly this question, answered by the browser's
-           own heuristic rather than by us tracking input modality: a control
-           reached by Tab matches it, one clicked with a mouse generally does
-           not. So a keyboard user's Space still presses the button they
-           navigated to — nothing regresses for them — while a pointer user
-           gets the pan, because after a click their focus is incidental
-           rather than intentional. Enter activates either way. */
-        if (
-          focused instanceof HTMLElement &&
-          focused.closest("button, a, select, summary, [role='button']") !==
-            null &&
-          focused.matches(":focus-visible")
-        ) {
-          return;
-        }
-        event.preventDefault();
-        if (!spaceHeldRef.current) {
-          spaceHeldRef.current = true;
-          setSpaceHeld(true);
-        }
-        return;
-      }
-
       /* UNDO FIRST, and before the selection check: the edit most likely to
          be undone is a delete, which leaves nothing selected. Shift+Cmd+Z
          (redo) is deliberately NOT bound — the ring is one-directional, and a
@@ -1903,32 +1870,8 @@ function ViewerCanvasInner({
       });
     };
 
-    /* THE RELEASE IS DELIBERATELY UNGUARDED — no focus scope, no form-field
-       exemption — because a release must fire WHEREVER the keyup lands, or
-       the flag survives focus moving mid-hold and the canvas is stuck in pan
-       mode with Space long since up. It lives in this effect because the flag
-       it clears is set by the keydown above: one owner, one lifetime. The
-       window `blur` is the alt-tab case (the keyup goes to another app), and
-       the cleanup is the lock: withdrawing `edit` mid-hold tears these
-       listeners down, so the flag must not outlive them. */
-    const releaseSpace = () => {
-      if (!spaceHeldRef.current) return;
-      spaceHeldRef.current = false;
-      setSpaceHeld(false);
-    };
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === " ") releaseSpace();
-    };
-
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", releaseSpace);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", releaseSpace);
-      releaseSpace();
-    };
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [edit, model]);
 
   /* ---- projection: frozen model diagram → fresh React Flow objects --------- */
@@ -2316,15 +2259,17 @@ function ViewerCanvasInner({
       // error 004). Absolute positioning tracks the wrapper's USED box —
       // min-height clamp included — so the graph always has real dimensions.
       className="viewer-canvas absolute inset-0 outline-none"
-      /* The marquee's four pointer handlers, present only while editable —
-         the gesture is an EDIT gesture (its product is the grouping card), so
-         a read-only or locked canvas never draws the box. Down is CAPTURE
-         phase to claim the press before React Flow's pane sees it; the other
-         three receive the captured pointer, so they are ordinary props. */
-      onPointerDownCapture={editable ? handleMarqueeStart : undefined}
-      onPointerMove={editable ? handleMarqueeMove : undefined}
-      onPointerUp={editable ? handleMarqueeEnd : undefined}
-      onPointerCancel={editable ? handleMarqueeCancel : undefined}
+      /* The marquee's four pointer handlers, present only while `marqueeMode`
+         (editable AND the Select mode) — the gesture is an EDIT gesture (its
+         product is the grouping card), so a read-only or locked canvas never
+         draws the box, and Pan mode detaches the handlers so the press pans
+         through React Flow instead. Down is CAPTURE phase to claim the press
+         before React Flow's pane sees it; the other three receive the
+         captured pointer, so they are ordinary props. */
+      onPointerDownCapture={marqueeMode ? handleMarqueeStart : undefined}
+      onPointerMove={marqueeMode ? handleMarqueeMove : undefined}
+      onPointerUp={marqueeMode ? handleMarqueeEnd : undefined}
+      onPointerCancel={marqueeMode ? handleMarqueeCancel : undefined}
     >
       <style>{EDGE_INTERACTION_CSS}</style>
       {detail !== null ? (
@@ -2375,35 +2320,32 @@ function ViewerCanvasInner({
           zoomOnScroll={false}
           zoomOnPinch
           zoomOnDoubleClick={false}
-          /* PAN IS TWO GESTURES, AND BOTH ARE SPELLED OUT ON PURPOSE.
-             `panOnDrag` and `panActivationKeyCode` are both React Flow
-             DEFAULTS (`panOnDrag = true`, `panActivationKeyCode = 'Space'`),
-             so leaving them off the element would behave identically today.
-             They are written anyway because both canvases depend on them:
+          /* PAN IS `panOnDrag`, A REACT FLOW DEFAULT SPELLED OUT ON PURPOSE,
+             because both canvas states depend on it:
 
                - READ-ONLY (every shared link and presentation, and the
-                 default — the canvas locks by default), `panOnDrag` is the
-                 whole story: no marquee handler is attached, so a bare drag
+                 default — the canvas locks by default), it is the whole
+                 story: no marquee handler is attached, so a bare drag
                  reaches React Flow and pans, exactly as it always has.
-               - EDITABLE, the marquee's capture handler claims the bare pane
-                 drag for the lasso, so `panActivationKeyCode` carries the
-                 pan: hold Space and drag, from anywhere — including over a
-                 node, where a bare drag MOVES it. The edit-keys listener
-                 mirrors the held key into `spaceHeld` so the lasso yields
-                 and the cursor says so; React Flow's own key tracking does
-                 the panning itself.
+               - EDITABLE, the Select/Pan toggle decides who owns a bare pane
+                 drag: in Select the marquee's capture handler claims it for
+                 the lasso; in Pan the handlers are not attached at all and
+                 this same `panOnDrag` pans. An explicit mode, not a held
+                 key: the hold-Space pan this replaced depended on keyboard
+                 state and focus and broke three times, and touch has no
+                 Space key. No `panActivationKeyCode` is declared here —
+                 the pan must owe nothing to any key.
 
              A default that a feature depends on is a default that must not
              be able to change under it silently, whether by a library
              upgrade or by someone adding `selectionOnDrag` here the way the
-             editor has it. `check:viewer-motion` pins the Space key to the
-             editor's, which is the one place the same gesture is already
-             declared. */
+             editor has it. `check:viewer-motion` pins this prop, and pins
+             that no pan key grows back beside the toggle. */
           panOnDrag
-          panActivationKeyCode="Space"
           /* The pan comment above is the other half of this line: with nodes
-             draggable, a drag STARTING ON A NODE moves it, and pan survives as
-             Space + drag (plus scroll and pinch). */
+             draggable, a drag STARTING ON A NODE moves it in either mode —
+             the toggle governs the pane, not the nodes — and pan survives as
+             the Pan mode (plus scroll and pinch). */
           nodesDraggable={editable}
           /* THE PAIR THAT MAKES A DRAG VISIBLE. `nodes` above makes this flow
              controlled, and a controlled flow that declares no `onNodesChange`
@@ -2430,14 +2372,12 @@ function ViewerCanvasInner({
           className={[
             "bg-canvas",
             /* THE PANE CURSOR IS THE MODE. Read-only, a bare drag pans, so
-               the pane wears grab/grabbing as it always has. Editable, a bare
-               drag draws the lasso — crosshair, the drawing-tool convention —
-               and the cursor flipping back to grab while Space is held is the
-               visible sign the pan mode is on; without it a reader holding
-               the key has no confirmation anything changed. `spaceHeld` is
-               state, not the ref, because the render reads it
-               (`react-hooks/refs`). */
-            editable && !spaceHeld
+               the pane wears grab/grabbing as it always has. Editable, the
+               toggle decides: crosshair while a drag draws the lasso (the
+               drawing-tool convention), grab in Pan mode — so the canvas
+               itself answers "which mode am I in" without the reader looking
+               back at the toggle. */
+            marqueeMode
               ? "[&_.react-flow__pane]:cursor-crosshair"
               : "[&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing",
             /* THE AFFORDANCE. Without this the node keeps the body button's
@@ -2538,7 +2478,27 @@ function ViewerCanvasInner({
             </div>
           </Panel>
           <Panel position="bottom-left">
-            <ViewerZoomControls />
+            <div className="flex flex-col items-start gap-2">
+              {/* The drag-mode toggle lives with the ZOOM PILL, because the
+                  bottom-left cluster is already the "how do I move around
+                  this canvas" chrome — the mode governs the same gesture the
+                  pill's scroll hints do — and it is the one corner with room:
+                  top-left grows with the breadcrumb and the palette, top-right
+                  is the lock + details column, bottom-centre is the hint bar.
+                  ABOVE the pill rather than inside it: the pill is shared
+                  chrome across three canvases (`zoom-pill.tsx`) and the mode
+                  exists on exactly one. Presence-gated like every edit
+                  affordance — a read-only or locked canvas always pans, so it
+                  shows NO control, never a disabled one offering a Select
+                  mode that does not exist there. */}
+              {editable ? (
+                <ViewerModeToggle
+                  mode={dragMode}
+                  onModeChange={handleDragModeChange}
+                />
+              ) : null}
+              <ViewerZoomControls />
+            </div>
           </Panel>
           {/* Not in a Panel: React Flow's MiniMap positions itself, and
               wrapping it would fight its own corner offsets. */}
@@ -2562,22 +2522,24 @@ function ViewerCanvasInner({
               {/* THE PAN CLAUSE SPLITS ON `editable`, because the gesture
                   does: a bare drag pans only the read-only canvas, and a hint
                   teaching it on an editable one would promise a pan and
-                  deliver a lasso. Space + drag is named in BOTH branches — on
-                  the editable canvas it is the pan a reader who knew
-                  drag-to-pan must now be taught, or they conclude panning
-                  broke. `check:viewer-motion` reads the sentence. */}
-              {editable ? null : "drag or "}
-              <kbd className="font-mono text-[10px]">Space</kbd> + drag to pan
-              {/* Editable canvases only: the marquee does not exist without
-                  the edit handlers, and advertising it on a read-only canvas
-                  would teach a gesture that does nothing. */}
+                  deliver a lasso. The editable branch names the Select/Pan
+                  toggle — the pan a reader who knew drag-to-pan must now be
+                  told where to find, or they conclude panning broke. The
+                  marquee half exists only there too: advertising a lasso on a
+                  read-only canvas would teach a gesture that does nothing.
+                  `check:viewer-motion` reads both sentences. */}
               {editable ? (
                 <>
-                  {" "}
-                  · <span className="font-medium text-primary">drag</span> to
-                  select or group elements
+                  <span className="font-medium text-primary">drag</span> to
+                  select or group elements · the{" "}
+                  <span className="font-medium text-primary">Select / Pan</span>{" "}
+                  toggle makes a drag pan instead
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <span className="font-medium text-primary">drag</span> to pan
+                </>
+              )}
             </p>
           </Panel>
         </ReactFlow>

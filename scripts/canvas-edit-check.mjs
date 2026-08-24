@@ -729,11 +729,31 @@ console.log("\nThe canvas undo ring is bounded and stays out of the pane");
     "the focus guard is gone — canvas keys would fire while the source " +
       "textarea had focus, and undo would revert the wrong history",
   );
+  /* COUNTED FROM COMMENT-STRIPPED SOURCE: a comment naming the listener call
+     while explaining it would be counted as a third listener otherwise — the
+     prose-versus-code trap that has now fired three times in this file. */
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
   check(
     "the nudge keys and the undo chord share one listener",
-    (canvas.match(/window\.addEventListener\("keydown"/g) ?? []).length === 2,
+    (canvasCode.match(/window\.addEventListener\("keydown"/g) ?? []).length ===
+      2,
     "expected exactly two keydown listeners in the canvas (the Escape ladder " +
       "and the edit keys); a third means a second guard to keep in step",
+  );
+  /* ZERO, not "fewer": the only keyup (and window blur) listener this canvas
+     ever had released the held-Space pan flag, and that machinery — key
+     state mirrored into React state — is what kept breaking and was replaced
+     by the Select/Pan mode toggle. A keyup listener reappearing means some
+     gesture is being keyed off held-key state again, which needs the same
+     release-everywhere plumbing that failed three times. */
+  check(
+    "no keyup or window-blur listener remains — nothing tracks a held key",
+    (canvasCode.match(/window\.addEventListener\("keyup"/g) ?? []).length ===
+      0 &&
+      (canvasCode.match(/window\.addEventListener\("blur"/g) ?? []).length ===
+        0,
+    "a held-key flag is back in the viewer canvas — the Select/Pan toggle " +
+      "exists precisely so no gesture depends on keyboard state",
   );
 
   /* React Flow must not delete nodes itself. Its delete would remove the node
@@ -868,14 +888,15 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
       "(editable) — one glyph for both states is the phone bug again, with " +
       "no viewport to blame",
   );
-  /* SPACE PANS, IT DOES NOT TOGGLE THE LOCK — a reported bug, and a subtle
-     one because both halves were behaving correctly. The canvas declines to
-     claim Space while a control has focus (a focused button must keep its
-     activation), and a pointer click leaves focus ON this button. Composed:
-     click the lock, then hold Space to pan, and every repeat toggled the lock
-     under the reader's hand. The fix is that a POINTER activation returns
-     focus to the canvas; a keyboard activation must NOT, or a keyboard user
-     loses their place in the tab order to fix a bug they never had. Pinning
+  /* A POINTER PRESS HANDS FOCUS BACK TO THE CANVAS. This shipped as the fix
+     for hold-Space-to-pan toggling the lock on every key repeat; that pan is
+     gone from the viewer (the Select/Pan toggle replaced it), and the guard
+     STAYS because the hazard was never the pan's — it is the browser's. A
+     focused button activates on Space and Enter, and after a click the
+     reader's focus sits on the lock without them having chosen it, so one
+     reflex keypress silently flips the lock they only meant to press once.
+     A keyboard activation must NOT blur, or a keyboard user loses their
+     place in the tab order to fix a bug they never had. Pinning
      `event.detail` specifically, because that is the only part that
      distinguishes the two — an unconditional blur would pass a laxer test
      and silently break keyboard use. MATCHED AS A STATEMENT, not as the bare
@@ -885,11 +906,11 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      The same trap has now caught two authors in this file — a regex over a
      source file must match syntax the compiler sees, never words. */
   check(
-    "a pointer press hands focus back, so a held Space pans instead of toggling",
+    "a pointer press hands focus back, so a stray keypress cannot re-toggle the lock",
     /if \(event\.detail > 0\)\s*event\.currentTarget\.blur\(\);/.test(control),
-    "clicking the lock then holding Space to pan would toggle the lock on " +
-      "every key repeat — the canvas rightly will not steal Space from a " +
-      "focused control, so the control has to stop being focused",
+    "clicking the lock leaves it focused, and a focused button activates on " +
+      "Space and Enter — the next reflex keypress would silently flip the " +
+      "lock, so a pointer activation has to stop being focused",
   );
   /* THE NAME IS THE ACTION. The old assertion pinned a visible label; the
      owner removed the words, so the accessible name is now the ONLY channel
@@ -3859,11 +3880,13 @@ console.log("\nLocking never offers a link to somewhere you already are");
      across source lines at arbitrary points and a phrase like "the other
      kinds" straddles a newline plus fourteen spaces of indentation. */
   const flowed = playground.replace(/\s+/g, " ");
-  /* The window grew from 240 to 340 when the sentence learned the grouping
-     clause — it measures how much claim can sit between the two anchors, and
-     the claim is longer now because the canvas does more. */
+  /* The window measures how much claim can sit between the two anchors. It
+     grew from 240 to 340 when the sentence learned the grouping clause, and
+     to 380 when the pan moved from a held key to the Select/Pan toggle —
+     naming a control takes more words than naming a keystroke, and the
+     sentence must name it or the reader concludes panning broke. */
   const claim =
-    /C4 nodes can be dragged.{0,340}?the other kinds lay themselves out/.exec(
+    /C4 nodes can be dragged.{0,380}?the other kinds lay themselves out/.exec(
       flowed,
     );
   check(
@@ -3902,15 +3925,17 @@ console.log("\nLocking never offers a link to somewhere you already are");
     /* Added with the marquee grouping. Two strings for the revise pair's
        reason — each half can go stale alone: the first is WHAT the gesture
        writes, the second is HOW it is made, and a reader who has used a
-       drawing tool arrives asking for exactly this gesture by its keystroke.
-       THE KEYSTROKE MOVED: a bare drag now draws the box and Space pans, so
-       the page must teach the pan as well as the lasso. A reader who has
-       panned this canvas for a release knows the OLD gesture, and a page that
-       names only the lasso leaves them thinking panning broke — which is why
-       the pan half is pinned here rather than left to the hint bar. */
+       drawing tool arrives asking for exactly this gesture. */
     "grouped into a boundary",
     "drag selection",
-    "hold Space to",
+    /* THE PAN MOVED, TWICE: a bare drag stopped panning when it became the
+       lasso, and the hold-Space pan that first replaced it broke three times
+       (keyboard state and focus) and gave way to the explicit Select/Pan
+       toggle. A reader who has panned this canvas by dragging knows the OLD
+       gesture, and a page that names only the lasso leaves them thinking
+       panning broke — which is why the pan's new home is pinned here rather
+       than left to the hint bar. */
+    "Select / Pan toggle",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
@@ -5183,24 +5208,89 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
     "the edges prop would gain a new identity per marquee frame — same loop, edge lane",
   );
   /* THE SHIPPED-LINK REGRESSION THIS SWAP COULD CAUSE. A bare drag now draws
-     the lasso — but the lasso exists only where the canvas is editable, and
-     the canvas is LOCKED BY DEFAULT: every shared link and every presentation
-     opens read-only. If the marquee ever claimed the press there, a reader who
-     opened a shared diagram could not move around it at all, and the gesture
-     they would reach for first is the one that broke. Two layers, both pinned,
-     because either alone would be enough to regress:
-       - the handler is not even ATTACHED unless `editable` (JSX gate), so
-         React Flow's own `panOnDrag` owns the press;
+     the lasso — but the lasso exists only where the canvas is editable AND
+     in Select mode, and the canvas is LOCKED BY DEFAULT: every shared link
+     and every presentation opens read-only. If the marquee ever claimed the
+     press there, a reader who opened a shared diagram could not move around
+     it at all, and the gesture they would reach for first is the one that
+     broke. Two layers, both pinned, because either alone would be enough to
+     regress:
+       - the handler is not even ATTACHED unless `marqueeMode` (JSX gate),
+         whose definition requires `editable`, so React Flow's own
+         `panOnDrag` owns the press;
        - and the handler itself bails on a missing `edit` before it captures
          the pointer, so a future caller that attaches it unconditionally still
          cannot steal the pan. */
   check(
     "a bare drag still pans a read-only canvas — the marquee is not attached there",
-    /onPointerDownCapture=\{editable \? handleMarqueeStart : undefined\}/.test(
+    /onPointerDownCapture=\{marqueeMode \? handleMarqueeStart : undefined\}/.test(
       canvas,
-    ),
+    ) &&
+      /const marqueeMode = editable && dragMode === "select";/.test(canvasCode),
     "the lasso is wired to a canvas that may be locked — a shared link would " +
       "stop panning, which is the one gesture every reader of one uses",
+  );
+  /* PAN MODE DETACHES THE MARQUEE, it does not bail inside it. The toggle's
+     whole argument over the held-Space pan it replaced is that the pan owes
+     nothing to any state a handler has to consult mid-gesture — the press
+     must reach React Flow untouched, so ALL FOUR handlers hang off the same
+     `marqueeMode` gate. One of them attached on bare `editable` would run in
+     Pan mode: the capture-phase down would cancel the press and the pan would
+     be broken again, in exactly the way three bug reports described. */
+  check(
+    "Pan mode does not attach the marquee — all four pointer handlers gate on the mode",
+    [
+      ["onPointerDownCapture", "handleMarqueeStart"],
+      ["onPointerMove", "handleMarqueeMove"],
+      ["onPointerUp", "handleMarqueeEnd"],
+      ["onPointerCancel", "handleMarqueeCancel"],
+    ].every(([prop, handler]) =>
+      new RegExp(`${prop}=\\{marqueeMode \\? ${handler} : undefined\\}`).test(
+        canvasCode,
+      ),
+    ),
+    "a marquee handler is attached outside `marqueeMode` — in Pan mode it " +
+      "would claim (or shadow) the press that is supposed to pan",
+  );
+  /* THE MODE CONTROL IS EDIT CHROME, presence-gated like the palette and the
+     grouping card: a read-only or locked canvas ALWAYS pans, so it must show
+     NO control — a disabled or ever-present toggle offers a Select mode that
+     does not exist there, and this canvas's rule (bought by the lock bug,
+     section 8's story) is that an affordance that cannot act does not
+     render. */
+  check(
+    "the mode toggle renders only while the canvas is editable",
+    /\{editable \? \(\s*<ViewerModeToggle/.test(canvas),
+    "a mode control on a read-only canvas — it always pans, so the toggle " +
+      "either lies (a Select option that does nothing) or ships disabled, " +
+      "and this canvas ships neither",
+  );
+  /* SELECT IS THE DEFAULT: the toggle exists only on an editable canvas, and
+     a reader who unlocked it did so to edit — defaulting to Pan would make
+     the unlock's first drag pan, which reads as the unlock not working. */
+  check(
+    "the drag mode defaults to Select",
+    /useState<CanvasDragMode>\("select"\)/.test(canvasCode),
+    "an unlocked canvas opens in Pan mode — the reader's first drag after " +
+      "unlocking pans, which reads as the unlock having done nothing",
+  );
+  /* THE ACTIVE MODE IS UNAMBIGUOUS TO A SCREEN READER. Two mutually
+     exclusive states, exactly one active, is what radio semantics SAY —
+     `aria-pressed` on two buttons was the runner-up, but "Select, toggle
+     button, not pressed" makes the listener infer the mode from the other
+     button. Checked on the group role plus aria-checked on the options,
+     because the visual highlight is the one channel a screen reader cannot
+     read. */
+  const modeToggle = code(
+    "src/features/viewer/components/viewer-mode-toggle.tsx",
+  );
+  check(
+    "the mode toggle is an honest radio group — role and checked state",
+    /role="radiogroup"/.test(modeToggle) &&
+      /role="radio"/.test(modeToggle) &&
+      /aria-checked=\{checked\}/.test(modeToggle),
+    "the toggle stopped reporting which mode is active as a checked state — " +
+      "a screen reader is left to infer the mode from styling it cannot see",
   );
   const marqueeStart =
     /const handleMarqueeStart = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
@@ -5211,20 +5301,21 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
     "the marquee would capture a pointer on a canvas with nothing to select",
   );
   /* THE TWO THINGS CANCELLING THE PRESS TOOK AWAY, both reported as bugs
-     ("cannot click focus everything", "cannot hold space + drag"), and both
+     ("cannot click focus everything", plus the pan of the day), and both
      from one cause. `preventDefault` on the pane pointerdown suppresses the
      compatibility mouse events, and those events were doing two jobs nobody
      had written down: moving focus, and delivering the plain background
-     click. Losing the first is what broke Space — the edit-keys listener
-     will not take Space from a focused control, so with focus stranded on
-     the last button pressed, holding Space to pan did nothing. A gesture
-     that claims a press owes back everything the press would have done. */
+     click. A press on the pane means "I am working on the drawing now" —
+     Escape, the nudge arrows and the next Tab must aim at the diagram, not
+     at the last control pressed (or stay locked out by the source
+     textarea's form-field exemption). A gesture that claims a press owes
+     back everything the press would have done. */
   check(
     "claiming the pane press hands focus to the canvas it suppressed",
     marqueeStart !== null &&
       /container\.focus\(\{ preventScroll: true \}\);/.test(marqueeStart[1]),
-    "focus stays on whatever was clicked last — usually a button, where the " +
-      "edit-keys listener rightly refuses to take Space, so pan silently dies",
+    "focus stays on whatever was clicked last — the canvas's own keys keep " +
+      "aiming at a control (or a textarea) the reader has moved on from",
   );
   const marqueeEnd =
     /const handleMarqueeEnd = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
@@ -5257,21 +5348,28 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
       ),
     "React Flow v12 renders the graph as CHILDREN of .react-flow__pane, so a " +
       "`closest` test matches a press on a NODE and the lasso cancels it — " +
-      "selecting, dragging and the focus move that lets Space pan all die",
+      "selecting, dragging and the focus handover the press owes all die",
   );
-  /* SPACE YIELDS TO A CONTROL THE KEYBOARD REACHED, NOT ONE A CLICK LANDED ON.
-     Every node body on this canvas is a real <button>, so yielding to any
-     focused button meant that selecting an element stopped Space panning for
-     the rest of the session — reported twice. `:focus-visible` is the browser
-     answering the only question that matters here (did the reader NAVIGATE to
-     this control, or merely click near it), so a Tab user keeps Space on their
-     button and a mouse user gets the pan. */
+  /* THE SPACE MACHINERY IS GONE, WHOLLY — not parked as a half-working
+     accelerator. Hold-Space-to-pan was reported broken three times and
+     outlived two attempted fixes, because it was a held-key flag mirrored
+     from window listeners: released by keyup, by window blur, by effect
+     cleanup, yielded to focused controls — every one of those a place the
+     flag and reality could disagree, and it never existed on touch at all.
+     The Select/Pan toggle replaced it, so any of these names reappearing in
+     the viewer means key-state plumbing is growing back BESIDE the toggle —
+     two gates for one gesture, the exact "two halves that disagree" shape
+     that produced the reports. `spaceHeld` is checked on the RAW source on
+     purpose: even a comment still describing the Space pan is a page
+     teaching a gesture that no longer exists. `panActivationKeyCode` is
+     matched as a PROP USE (`=`), because the pan-props comment rightly names
+     it while explaining why it is gone. */
   check(
-    "a pointer-focused control does not hold Space hostage; a tabbed-to one does",
-    /focused\.matches\(":focus-visible"\)/.test(canvasCode),
-    "Space yields to any focused button — and clicking a node focuses the " +
-      "node's own button, so panning dies the moment the reader selects " +
-      "anything",
+    "no Space-pan machinery remains in the viewer canvas",
+    !/spaceHeld/.test(canvas) && !/panActivationKeyCode=/.test(canvas),
+    "spaceHeld or a panActivationKeyCode prop is back in viewer-canvas.tsx — " +
+      "the pan is the Select/Pan toggle now, and a key beside it is a second " +
+      "gate that can disagree with the mode",
   );
 }
 

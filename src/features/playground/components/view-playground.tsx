@@ -1707,12 +1707,13 @@ export function ViewPlayground({
             {CANVAS_EDIT_ENABLED ? (
               <>
                 C4 nodes can be dragged on the canvas, added from its palette,
-                grouped into a boundary with a drag selection (hold Space to
-                pan instead), their wording, icon and colour edited in the
-                details panel — where a selected boundary is renamed too — and
-                sequence messages and lifelines added, edited, repointed,
-                reordered, numbered and removed on it; the other kinds lay
-                themselves out from the text.{" "}
+                grouped into a boundary with a drag selection (the Select / Pan
+                toggle by the zoom controls makes a drag pan instead), their
+                wording, icon and colour edited in the details panel — where a
+                selected boundary is renamed too — and sequence messages and
+                lifelines added, edited, repointed, reordered, numbered and
+                removed on it; the other kinds lay themselves out from the
+                text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}
