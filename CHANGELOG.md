@@ -24,9 +24,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The Add strip can mirror an element from a level above into the diagram
   you are looking at, as a read-only `^ref` placeholder — so a container
   diagram can show the person or system it talks to without redeclaring it.
-  One click on a button naming the element and its source level does it, and
-  the strip offers only ancestors' elements that are legal at this level and
-  not already mirrored here.
+  The strip's Reference menu lists each candidate by name and source level,
+  offering only ancestors' elements that are legal at this level and not
+  already mirrored here; Escape closes the menu without also clearing the
+  canvas selection.
 
 - The details panel's edit form now also changes a C4 element's icon and its
   colour. The icon is picked from the same searchable picker the editor uses

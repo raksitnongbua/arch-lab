@@ -4,13 +4,19 @@
  * The Add strip: one button per node type the CURRENT diagram level admits,
  * rendered under the breadcrumb while the canvas is editable.
  *
- * ALWAYS-VISIBLE BUTTONS, not a popover — for BOTH halves, the types and the
- * references. A menu is a second click and a dismissal contract
- * (outside-click, Escape) that would have to negotiate with the canvas's own
- * Escape ladder. A level offers at most five types, so that half fits in one
- * row of the chrome the toolbar already wears; the reference half's list
- * grows with the model instead, so it wraps and is capped — see the note on
- * the group below — rather than earning back the dropdown it replaced.
+ * THE TWO HALVES TAKE TWO SHAPES, and the split follows the size of what each
+ * offers. The TYPE half is always-visible buttons: a level offers at most five
+ * types, they fit in one row of the chrome the toolbar already wears, and a
+ * menu would spend a second click on a list that never grows. The REFERENCE
+ * half is a click-to-open menu, because its list grows with the model — a
+ * context diagram's every node is a candidate deeper down — and it shipped as
+ * inline buttons first: on a real model the wrapped rows (capped with their
+ * own scrollbar) crowded the strip, and the product owner asked for a menu.
+ * The dismissal contract a menu owes over this canvas is already solved one
+ * control away: `useMenuDismissal`, shared with the zoom menu, closes on
+ * outside pointerdown and CONSUMES Escape so one press closes the menu without
+ * also clearing the canvas selection — the negotiation with the canvas's
+ * Escape ladder that kept a menu out of this strip until the hook existed.
  *
  * THE LABELS ARE THE `.alab` KEYWORDS, in mono, on purpose: pressing
  * `database` makes the source pane gain a `:database` line, so the button
@@ -23,8 +29,10 @@
  * invalid document at this level.
  */
 
-import { ArrowUp, Plus } from "lucide-react";
+import { useCallback, useId, useRef, useState } from "react";
+import { ArrowUp, ChevronDown, Plus } from "lucide-react";
 
+import { useMenuDismissal } from "@/components/ui/menu-dismissal";
 import { LEVEL_LABEL } from "@/lib/constants";
 import type { C4Level, C4NodeType, ExternalRef } from "@/types";
 
@@ -50,17 +58,34 @@ export function ViewerNodePalette({
   /** Mirror `source` into this diagram as a boundary placeholder. */
   onCreateRef: (source: ExternalRef) => void;
 }): React.JSX.Element {
+  const [refsOpen, setRefsOpen] = useState(false);
+  const refWrapperRef = useRef<HTMLDivElement>(null);
+  const refMenuId = useId();
+  const closeRefs = useCallback(() => setRefsOpen(false), []);
+  useMenuDismissal(refsOpen, closeRefs, refWrapperRef);
+
+  const chooseRef = (source: ExternalRef): void => {
+    setRefsOpen(false);
+    onCreateRef(source);
+  };
+
   return (
     <div
       role="group"
       aria-label="Add an element to this diagram"
       className="flex flex-wrap items-center gap-0.5 rounded-lg border border-border/70 bg-card/80 p-1 shadow-sm backdrop-blur"
     >
-      {/* Not a heading, part of the group's visual name: the Plus glyph is
-          what makes the mono keywords read as actions rather than as a
-          legend of what is already on the canvas. */}
-      <span className="flex items-center gap-1 pr-1 pl-1.5 text-[11px] font-medium text-muted-foreground">
-        <Plus aria-hidden="true" className="size-3.5" />
+      {/* The group's visible NAME, not a control, and styled apart from the
+          buttons on purpose: same-size sentence-case text beside them read as
+          one more button (product-owner report). An uppercase micro-label with
+          no hover face and a divider is the register the details panel already
+          uses for its term labels, so it reads as "what this row is" — while
+          the Plus glyph still makes the mono keywords read as actions rather
+          than a legend of what is on the canvas. The word stays visible (never
+          icon-only) so the group's aria-label and what a sighted reader sees
+          begin with the same word. */}
+      <span className="flex items-center gap-1 border-r border-border/70 py-1 pr-2 pl-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase select-none">
+        <Plus aria-hidden="true" className="size-3" />
         Add
       </span>
       {creatableNodeTypes(level).map(({ keyword, type }) => (
@@ -74,53 +99,75 @@ export function ViewerNodePalette({
           {keyword}
         </button>
       ))}
-      {/* BUTTONS HERE TOO, replacing the dropdown this half shipped as, for
-          the header's reason: picking from a select was a second interaction
-          with its own dismissal contract, for a list that is usually two or
-          three names. Unlike the type half this list GROWS with the model —
-          a context diagram's every node is a candidate deeper down — so the
-          group WRAPS into rows and is CAPPED at about three of them with its
-          own scrollbar. The two alternatives were weighed and lose: unbounded
-          wrapping lets a large model's strip eat the canvas the palette sits
-          over, and a "+N more" popover reintroduces exactly the dismissal
-          contract buttons were chosen to avoid. The scrollbar is the honest
-          overflow affordance — every candidate stays visible or one scroll
-          away, none behind a click. The group disappears entirely when
-          nothing may be referenced (the root diagram, or a diagram that
-          already mirrors everything above it), because an empty group is a
-          promise the model cannot keep. */}
+      {/* A MENU, replacing the inline buttons this half wore last — see the
+          header for the split's argument. The whole group is still WITHHELD
+          when nothing may be referenced (the root diagram, or a diagram that
+          already mirrors everything above it): a trigger that opens an empty
+          menu is a promise the model cannot keep, and worse than no trigger. */}
       {references.length > 0 ? (
-        <div className="flex min-w-0 items-start gap-1 border-l border-border/70 pl-1.5">
-          <ArrowUp
-            aria-hidden="true"
-            className="mt-1.5 size-3.5 shrink-0 text-muted-foreground"
-          />
-          <div
-            role="group"
-            aria-label="Reference an element from a level above"
-            className="flex max-h-20 min-w-0 flex-wrap items-center gap-0.5 overflow-y-auto"
+        <div
+          ref={refWrapperRef}
+          className="relative ml-0.5 border-l border-border/70 pl-1"
+        >
+          <button
+            type="button"
+            onClick={() => setRefsOpen((value) => !value)}
+            aria-expanded={refsOpen}
+            aria-haspopup="menu"
+            aria-controls={refsOpen ? refMenuId : undefined}
+            title="Mirror an element from a level above into this diagram"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            {references.map(({ sourceDiagramId, sourceLevel, node }) => (
-              <button
-                key={`${sourceDiagramId}/${node.id}`}
-                type="button"
-                onClick={() =>
-                  onCreateRef({ diagramId: sourceDiagramId, nodeId: node.id })
-                }
-                title={`Mirror ${node.name} from the ${LEVEL_LABEL[sourceLevel]} view into this diagram`}
-                className="flex min-w-0 items-baseline gap-1 rounded-md px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                {/* The NAME is the choice; the level is its address. Muted
-                    and smaller so two same-named elements at different
-                    levels stay tellable apart without the address shouting
-                    over every button. */}
-                <span className="max-w-[9rem] truncate">{node.name}</span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">
-                  {LEVEL_LABEL[sourceLevel]}
-                </span>
-              </button>
-            ))}
-          </div>
+            <ArrowUp
+              aria-hidden="true"
+              className="size-3.5 text-muted-foreground"
+            />
+            {/* Sentence case and NOT mono, unlike the keyword buttons beside
+                it: this is not a word the source pane will gain (the text
+                gains a `^diagram/node` token), and a mono lowercase label here
+                would read as one more type. */}
+            Reference
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3 text-muted-foreground"
+            />
+          </button>
+          {refsOpen ? (
+            <div
+              id={refMenuId}
+              role="menu"
+              aria-label="Reference an element from a level above"
+              /* Opens DOWNWARD: the strip sits under the breadcrumb at the
+                 canvas's top, so down is where the room is — the zoom menu
+                 makes the opposite call from its bottom pill for the same
+                 reason. `max-h` + scroll is the menu's own overflow answer
+                 (the inline half's wrap-cap is retired with the wrapping):
+                 a model can offer more candidates than a canvas is tall. */
+              className="af-glass absolute top-full left-0 z-20 mt-1.5 max-h-64 min-w-44 overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg"
+            >
+              {references.map(({ sourceDiagramId, sourceLevel, node }) => (
+                <button
+                  key={`${sourceDiagramId}/${node.id}`}
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    chooseRef({ diagramId: sourceDiagramId, nodeId: node.id })
+                  }
+                  title={`Mirror ${node.name} from the ${LEVEL_LABEL[sourceLevel]} view into this diagram`}
+                  className="flex w-full items-baseline gap-2 px-2.5 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
+                >
+                  {/* The NAME is the choice; the level is its address. Muted
+                      and smaller so two same-named elements at different
+                      levels stay tellable apart without the address shouting
+                      over every row. */}
+                  <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {LEVEL_LABEL[sourceLevel]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

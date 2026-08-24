@@ -3290,6 +3290,7 @@ console.log(
     `position: ${JSON.stringify(createdNode?.position)}`,
   );
 
+
   /* --- the id: file-unique, deterministic ---------------------------------- */
 
   /* Node ids are unique across the FILE (`validate.ts`), not per diagram, so
@@ -3423,19 +3424,66 @@ console.log(
     /creatableNodeTypes\(level\)\.map\(/.test(palette),
     "a hand-listed strip is the drift this whole section exists to prevent",
   );
-  /* The REFERENCE half is buttons too, and derived. It shipped as a `<select>`
-     first; the product owner asked for one button per candidate (name plus
-     source level), and the strip header's no-popover argument now covers both
-     halves. What must not change with the widget is where the list comes
-     from: `referenceableNodes` is also what the gesture guard reads
+  /* The REFERENCE half is a click-to-open MENU. It has now worn three shapes —
+     a `<select>`, then inline buttons, now a menu at the product owner's
+     request — and two things survive every shape. WHERE THE LIST COMES FROM:
+     `referenceableNodes` is also what the gesture guard reads
      (`createdRefEdit`), so a hand-listed half would offer references the
-     guard then refuses. */
+     guard then refuses. AND NEVER A BARE `<select>`: a native dropdown brings
+     its own dismissal, so its Escape reaches the canvas ladder too — one
+     press would close the list AND clear the reader's selection — and its
+     rows cannot carry the name-plus-level layout the choice needs. */
   check(
-    "the reference half is derived buttons, not a dropdown",
-    /references\.map\(/.test(palette) && !/<select/.test(palette),
-    "the ref half stopped mapping the derived candidate list — or grew back " +
-      "the dropdown whose dismissal contract the strip's header rejects",
+    "the reference half is a menu of derived rows, never a <select>",
+    /role="menu"/.test(palette) &&
+      /role="menuitem"/.test(palette) &&
+      /references\.map\(/.test(palette) &&
+      !/<select/.test(palette),
+    "the ref half stopped being a real menu over the derived candidate list — " +
+      "or grew back the native dropdown whose Escape the canvas ladder also hears",
   );
+  /* The trigger SAYS a menu opens (`aria-haspopup`) and reports whether it is
+     open (`aria-expanded`) — an icon-plus-word button that silently sprouts a
+     list is a control a screen-reader user cannot predict. */
+  check(
+    "the menu trigger declares the popup and its open state",
+    /aria-haspopup="menu"/.test(palette) &&
+      /aria-expanded=\{refsOpen\}/.test(palette),
+    "the trigger no longer tells assistive tech a menu opens here",
+  );
+  /* THE ESCAPE CONTRACT IS THE ZOOM MENU'S, through ONE shared hook — the
+     precedent that already negotiates with this canvas's Escape ladder. Two
+     copies of the dismissal effect is how one of them later loses the consume
+     and a menu press starts clearing selections (`dry.md`, same body → one
+     definition). Asserted from both consumers AND from the hook's own source,
+     because the sharing is worthless if the shared code drops the clause. */
+  const dismissal = read("src/components/ui/menu-dismissal.ts");
+  const zoomMenu = read("src/components/ui/zoom-menu.tsx");
+  check(
+    "the reference menu and the zoom menu share one dismissal hook",
+    /useMenuDismissal\(/.test(palette) && /useMenuDismissal\(/.test(zoomMenu),
+    "a second dismissal implementation appeared — the copy that drifts is " +
+      "the one that forgets to consume Escape",
+  );
+  check(
+    "that hook consumes Escape, so closing a menu cannot also clear the canvas selection",
+    /event\.key !== "Escape"/.test(dismissal) &&
+      /event\.preventDefault\(\);/.test(dismissal) &&
+      /event\.stopPropagation\(\);/.test(dismissal) &&
+      /addEventListener\("keydown", onKeyDown, true\)/.test(dismissal),
+    "one Escape press would take two steps — close the menu AND run a rung " +
+      "of the canvas's own ladder",
+  );
+  /* The trigger stays HONEST about emptiness: `referenceableNodes` returns
+     empty on the root diagram and where everything above is already mirrored,
+     and a trigger that opens an empty menu is a promise the model cannot
+     keep — the whole group is withheld instead, as it always was. */
+  check(
+    "an empty candidate list withholds the reference group entirely",
+    /references\.length > 0 \?/.test(palette),
+    "a trigger now renders with nothing to offer — it would open an empty menu",
+  );
+
 }
 
 /* ----------------------------------------------------------------------- */
