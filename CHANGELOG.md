@@ -24,7 +24,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The Add strip can mirror an element from a level above into the diagram
   you are looking at, as a read-only `^ref` placeholder — so a container
   diagram can show the person or system it talks to without redeclaring it.
-  The picker offers only ancestors' elements that are legal at this level and
+  One click on a button naming the element and its source level does it, and
+  the strip offers only ancestors' elements that are legal at this level and
   not already mirrored here.
 
 - The details panel's edit form now also changes a C4 element's icon and its
@@ -73,6 +74,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The canvas lock changed shape and moved. It is now an icon-only padlock at
+  the diagram's own top-right corner — open while the canvas is editable,
+  closed while it is locked — instead of the labelled pencil/padlock button in
+  the strip above the canvas. Hovering it says what pressing will do, the
+  strip still names the state in words ("Read-only" / "Editable"), and on the
+  C4 canvas the lock now stays reachable in immersive mode, where the old
+  strip was covered.
 - **The playground moved from `/view` to `/live`, and the header entry now
   reads "Live".** The page had not only viewed for two releases — the C4 and
   sequence canvases answer a drag and rewrite your source text under you — so
