@@ -58,10 +58,11 @@
  *      reports itself uneditable with a reason. A hardcoded list cannot notice
  *      a seventh notation the day it is added; the table can. The table is
  *      looped TWICE, once per `CanvasEditAbility`, because there are two things
- *      a canvas can write back and the notations answer them in opposite
- *      directions — C4 allows `move` and refuses `revise`, a sequence document
- *      does the reverse. The one-argument default must keep meaning `move`, or
- *      a sequence document silently reports itself draggable.
+ *      a canvas can write back and the notations answer them differently — a
+ *      sequence document refuses `move` while offering `revise`, C4 answers
+ *      both, and the four text-laid-out notations refuse both. The
+ *      one-argument default must keep meaning `move`, or a sequence document
+ *      silently reports itself draggable.
  *   7. A NUDGE STAYS ON THE GRID, and four of them round a square return the
  *      text to byte-identical — a nudge that rounds or double-applies its
  *      delta would leave a residue the reader cannot see and cannot undo by
@@ -119,6 +120,25 @@
  *      JSON, and a pane whose text means a different document than the canvas
  *      is showing — each have an assertion, so the safe path cannot silently
  *      stop being taken.
+ *  14. A REVISE IS A BLOCK PATCH, and the whole ability is held to section
+ *      13's standard from the same kind of non-canonical text: only the
+ *      node's own block changes, the patched block equals what a full
+ *      serialise would emit for that node, a no-op or an unknown id refuses
+ *      (`null`, no undo entry) rather than throws, clearing an optional field
+ *      REMOVES it (never writes `[""]` or `desc ""`), an empty name and a
+ *      boundary placeholder refuse, and revise-then-revise-back restores the
+ *      AUTHORED bytes. What a rename deliberately carries is measured too: a
+ *      `^ref` name and a child-diagram title the author OMITTED derive from
+ *      this node's name and follow it, while ones written out stay put —
+ *      omission is the format's "same as the source", and rewriting those
+ *      lines would fork what the author's text says from what it said. The
+ *      gesture is also proved REACHABLE the way section 14 proves the
+ *      sequence dock's are: every handler `CanvasEditHandlers` declares is
+ *      invoked by the viewer and supplied by the playground, the panel's form
+ *      fields are exempt from the canvas's own keys (Backspace in the name
+ *      field must not delete the node), the pencil is withheld from a
+ *      read-only canvas and from a boundary placeholder, and the page's
+ *      heading names the gesture.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
@@ -175,6 +195,7 @@ const {
   deletedNodeEdit,
   movedNodeEdit,
   ownsChildDiagram,
+  revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
 const {
   revisedMessageEdit,
@@ -1093,8 +1114,9 @@ console.log("\nEvery notation that cannot carry geometry says so");
   }
 
   /* THE SAME TABLE, THE OTHER ABILITY. There are two things a canvas can write
-     back (`CanvasEditAbility`) and the notations answer them differently: C4
-     allows `move` and refuses `revise`, a sequence document does the opposite.
+     back (`CanvasEditAbility`) and the notations answer them differently: a
+     sequence document refuses `move` while offering `revise`, C4 answers both,
+     and the four text-laid-out notations refuse both.
      Looping the seed table a second time is what makes that a COVERAGE claim
      rather than two hand-checked cases — the failure a hardcoded pair cannot
      notice is a seventh notation whose dock grows an editor that writes into a
@@ -1111,16 +1133,38 @@ console.log("\nEvery notation that cannot carry geometry says so");
       );
       continue;
     }
-    check(
-      `a ${kind} document refuses "revise", with a reason a reader can act on`,
-      verdict.editable === false &&
-        typeof verdict.reason === "string" &&
-        verdict.reason.length > 20,
-      `verdict: ${JSON.stringify(verdict)}`,
-    );
+    if (kind === "c4") {
+      check(
+        "a C4 document can have a node's wording revised",
+        verdict.editable === true,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+    } else {
+      check(
+        `a ${kind} document refuses "revise", with a reason a reader can act on`,
+        verdict.editable === false &&
+          typeof verdict.reason === "string" &&
+          verdict.reason.length > 20,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+      /* THE C4 REVISER DECLINES EVERY GRAMMAR THAT IS NOT ITS OWN, the same
+         duty `movedNodeEdit` answers in the loop above: the refusal must be
+         real at the gesture, not advisory at the table, or a caller that
+         forgot to ask would splice by line numbers that mean something else.
+         (`sequence` is covered separately below the loop — its cell OFFERS
+         the ability, so this gesture's refusal there is the kind guard, not
+         the table.) */
+      check(
+        `revisedNodeEdit declines a ${kind} document`,
+        revisedNodeEdit(parsed.value, "", "any", "any", { name: "x" }) === null,
+        "expected null",
+      );
+    }
     /* And the refusal is REAL, not advisory: the gesture itself declines, or a
        caller that forgot to ask would splice into a grammar whose line numbers
-       mean something else.
+       mean something else. A C4 document runs through this list too — its cell
+       offers `revise`, but only to ITS OWN gesture, and a sequence gesture
+       pointed at a C4 pane would splice sequence lines into a C4 file.
 
        EVERY GESTURE IS LISTED, not just the first one written. Each of these is
        an independent entry point into the same splice, and the one that forgets
@@ -1165,6 +1209,20 @@ console.log("\nEvery notation that cannot carry geometry says so");
         "expected null",
       );
     }
+  }
+
+  /* THE ONE PAIR THE LOOP ABOVE CANNOT REACH: a sequence document offers
+     `revise` — to its OWN nine gestures — so the C4 reviser pointed at it is
+     refused by the kind guard rather than by the table, and skipping this
+     would leave exactly one grammar the gesture never proved it declines. */
+  {
+    const parsed = parseViewSource(VIEW_SEED_TEXT.sequence);
+    check(
+      "revisedNodeEdit declines a sequence document",
+      parsed.status === "ok" &&
+        revisedNodeEdit(parsed.value, "", "any", "any", { name: "x" }) === null,
+      "expected null",
+    );
   }
 
   /* DEFAULTING TO `"move"` IS LOAD-BEARING. Every existing caller — and the
@@ -1261,6 +1319,73 @@ console.log("\nEvery notation that cannot carry geometry says so");
         : asMermaid.error,
     )}`,
   );
+
+  /* MERMAID C4 ALSO REFUSES `revise`, and this one is MEASURED against the
+     emitter rather than asserted from taste, the same standard the sequence
+     Mermaid refusal above meets: `serializeMermaidC4` gives `technology` an
+     argument slot only on the Container/Component forms, so on a person or a
+     system — which is what a context diagram is made of — the field the panel
+     edits has nowhere to land, and an edit written back through that pane
+     would show once and vanish on the round trip. Driven through the app's
+     own converter both ways so it cannot drift from what the toggle does. */
+  {
+    const verdict = canvasEditability(asMermaid.value, "revise");
+    check(
+      "a C4 document sitting in the pane as Mermaid refuses `revise`",
+      asMermaid.status === "ok" && verdict.editable === false,
+      `verdict: ${JSON.stringify(verdict)}`,
+    );
+    check(
+      "the Mermaid refusal names the field that would be lost, not just the format",
+      /technology/.test(verdict.reason ?? ""),
+      "a reader cannot tell what switching the pane would buy them",
+    );
+    /* The EVIDENCE, measured: a system node's technology genuinely does not
+       survive alab → Mermaid → parse. If the emitter ever learns a slot for
+       it, this fails and the refusal should be revisited rather than left
+       standing — the same contract the sequence caveat assertion states. */
+    const techDoc = c4Document(
+      [
+        `archlab 1.0`,
+        `title "Tech probe"`,
+        ``,
+        `@context ctx "Context"`,
+        `  web:system "Web App" [Next.js]`,
+        ``,
+      ].join("\n"),
+    );
+    const probe = techDoc.synced.file.diagrams[0].nodes[0];
+    check(
+      "the probe genuinely carries a technology before the round trip",
+      probe.technology === "Next.js",
+      `technology: ${JSON.stringify(probe.technology)}`,
+    );
+    const roundTripped = parseViewSource(
+      (
+        await load("src/features/playground/input/parse.ts")
+      ).convertedSourceText(techDoc, "mermaid"),
+    );
+    const returned =
+      roundTripped.status === "ok" && roundTripped.value.kind === "c4"
+        ? roundTripped.value.synced.file.diagrams[0].nodes.find(
+            (node) => node.id === "web",
+          )
+        : undefined;
+    check(
+      "a system's technology is measured to be lost through the Mermaid pane",
+      returned !== undefined && returned.technology === undefined,
+      `technology after the round trip: ${JSON.stringify(returned?.technology)}`,
+    );
+    /* And the user-facing caveat still documents the loss the refusal cites. */
+    const { MERMAID_C4_EXPORT_CAVEAT } = await load(
+      "src/features/playground/input/parse.ts",
+    );
+    check(
+      "the C4 export caveat still documents dropping technology on people/systems",
+      /technology on people\/systems/.test(MERMAID_C4_EXPORT_CAVEAT),
+      "the caveat no longer supports the refusal that cites it",
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -2081,6 +2206,413 @@ console.log("\nAn edit keeps every byte it is not about");
 }
 
 /* ----------------------------------------------------------------------- */
+/* 14. A revise is a BLOCK patch, held to section 13's standard             */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA revise rewrites one node's block and nothing else");
+
+{
+  /* NON-CANONICAL FOR THE SAME REASON section 13's fixture is, plus the two
+     shapes only a REVISE can get wrong: a `^ref` in another diagram whose
+     name the author OMITTED (it derives from the edited node's), and a child
+     diagram head whose title the author omitted for the same reason. Both are
+     the format's "same as the source" — a rename must let them FOLLOW, and a
+     delete must not have taught this gesture to rewrite them. */
+  const authored = [
+    `archlab 1.0`,
+    `title "Revise probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // Who uses this thing.`,
+    `  cust:person "Customer" [human]`,
+    `    desc "The paying kind."`,
+    `  web:system "Web App" >backend`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go]`,
+    `  mirror:external ^ctx/web`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+
+  /* A gesture that THROWS on a bad address takes the page down with it, so
+     every refusal below is measured as "returns null without throwing". */
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the patch, and its blast radius ------------------------------------ */
+
+  const revision = {
+    name: "Shopper",
+    technology: "human",
+    description: "The paying kind, renamed.",
+  };
+  const revised = revisedNodeEdit(doc, authored, "ctx", "cust", revision);
+  check(
+    "a revise on authored text takes the PATCH path, by name",
+    revised !== null && revised.path === "patch",
+    `path: ${revised === null ? "refused" : revised.path}`,
+  );
+  /* ONLY THE NODE'S OWN BLOCK. The fixture's `cust` block is two lines
+     (declaration + desc), and this revision keeps it two — so exactly those
+     two lines may differ, and every comment, blank line and other node is
+     byte-identical. This is the canonical-diff minimality claim for a block
+     gesture: section 13 asserts "one line" for a move, this asserts "the
+     block and nothing else". */
+  const changed = changedLines(authored, revised?.text ?? "");
+  check(
+    "a revise changes exactly the node's own two lines",
+    changed.length === 2 &&
+      changed.every(
+        (line, i, all) => i === 0 || line.index === all[0].index + 1,
+      ),
+    `${changed.length} lines changed: ${changed.map((c) => `#${c.index + 1}`).join(", ")}`,
+  );
+  check(
+    "the comments and blank lines all survive a revise",
+    (revised?.text ?? "").split("\n").filter((l) => l.includes("//")).length ===
+      authored.split("\n").filter((l) => l.includes("//")).length &&
+      authored.split("\n").filter((l) => l.includes("//")).length === 2,
+    "an author comment was eaten — the whole reason edits are patches",
+  );
+  /* THE PATCHED BLOCK IS CANONICAL, proved against a FULL serialise of the
+     revised document rather than against lines assembled here — the same
+     derivation section 13 uses for the moved line, for the same reason: a
+     patch that wrote almost-canonical text would trade a silent comment loss
+     for a silent divergence. */
+  const canonicalAfter = sourceTextFor(revised?.doc ?? doc);
+  const blockAfter = canonicalAfter
+    .split("\n")
+    .filter(
+      (line) =>
+        line.trimStart().startsWith("cust:person") ||
+        line.includes(`desc "The paying kind, renamed."`),
+    );
+  check(
+    "the patched block is byte-identical to what the serializer would emit",
+    changed.length === 2 &&
+      JSON.stringify(changed.map((c) => c.after)) ===
+        JSON.stringify(blockAfter),
+    `patched:    ${JSON.stringify(changed.map((c) => c.after))}\n      ` +
+      `serialiser: ${JSON.stringify(blockAfter)}`,
+  );
+
+  /* --- what a revise refuses, and how -------------------------------------- */
+
+  check(
+    "a no-op revision is refused, so an untouched Apply costs no undo entry",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        technology: "human",
+        description: "The paying kind.",
+      }),
+    ),
+    "identical fields still rewrote the pane",
+  );
+  check(
+    "an unknown node id refuses rather than throws",
+    refuses(() => revisedNodeEdit(doc, authored, "ctx", "ghost", revision)),
+    "a stale selection would take the page down instead of doing nothing",
+  );
+  check(
+    "an unknown diagram id refuses rather than throws",
+    refuses(() => revisedNodeEdit(doc, authored, "ghost", "cust", revision)),
+    "a stale selection would take the page down instead of doing nothing",
+  );
+  check(
+    "an empty name is refused — the model requires one",
+    refuses(() => revisedNodeEdit(doc, authored, "ctx", "cust", { name: "" })),
+    "an empty name would reach the serializer, which throws on it",
+  );
+  /* A boundary placeholder's name is DERIVED from its target, and the panel
+     shows it read-only; the module must reach the same verdict or the two
+     halves disagree about one node. */
+  check(
+    "a boundary placeholder (^ref) is refused",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "backend", "mirror", { name: "Forked" }),
+    ),
+    "revising a mirror would fork it from the node it mirrors",
+  );
+
+  /* --- clearing a field removes it ----------------------------------------- */
+
+  /* `.alab` can spell `[""]` and `desc ""`, and both render as a blank the
+     reader cannot tell from a missing field — so a cleared field must vanish
+     from the text, not blank in place. The same contract the sequence dock's
+     forms state, measured here on the C4 side. */
+  const cleared = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+  });
+  check(
+    "clearing technology and description removes the fields, never blanks them",
+    cleared !== null &&
+      cleared.path === "patch" &&
+      !cleared.text.includes(`[""]`) &&
+      !cleared.text.includes(`desc ""`) &&
+      !cleared.text.includes("[human]") &&
+      !cleared.text.includes("The paying kind."),
+    `text still carries a cleared field: ${JSON.stringify(
+      (cleared?.text ?? "")
+        .split("\n")
+        .find((l) => l.includes("cust:person") || l.includes("desc")),
+    )}`,
+  );
+  /* And ADDING a description grows the block by one continuation line —
+     the case a one-line splice cannot serve and the reason a revise deals in
+     blocks. `web` has no desc in the fixture. */
+  const grown = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Web App",
+    description: "Serves the storefront.",
+  });
+  check(
+    "adding a description grows the node's block by its desc line",
+    grown !== null &&
+      grown.path === "patch" &&
+      grown.text.includes(`    desc "Serves the storefront."`),
+    "the new continuation line is missing or mis-indented",
+  );
+
+  /* --- what a rename carries, measured both ways --------------------------- */
+
+  const renamed = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Storefront",
+  });
+  const renamedFile =
+    renamed !== null && renamed.doc.kind === "c4"
+      ? renamed.doc.synced.file
+      : null;
+  check(
+    "an OMITTED ^ref name follows the rename — omission means 'same as the source'",
+    renamedFile !== null &&
+      renamedFile.diagrams
+        .find((d) => d.id === "backend")
+        .nodes.find((n) => n.id === "mirror").name === "Storefront",
+    "the mirror kept the old name — the patch rewrote a derivation the author never wrote",
+  );
+  check(
+    "an OMITTED child-diagram title follows the rename, for the same reason",
+    renamedFile !== null &&
+      renamedFile.diagrams.find((d) => d.id === "backend").title ===
+        "Storefront",
+    "the child diagram kept a title its own text never spells",
+  );
+  /* The other direction: the SAME name and title written OUT stay put. The
+     author spelled them, so they are the author's — following the rename here
+     would rewrite bytes the gesture was not about. */
+  const explicit = authored
+    .replace(`web:system "Web App" >backend`, `web:system "Web App" >backend`)
+    .replace(
+      `@container backend owner=web`,
+      `@container backend "Web App" owner=web`,
+    )
+    .replace(
+      `  mirror:external ^ctx/web`,
+      `  mirror:external "Web App" ^ctx/web`,
+    );
+  const explicitDoc = c4Document(explicit);
+  const renamedExplicit = revisedNodeEdit(explicitDoc, explicit, "ctx", "web", {
+    name: "Storefront",
+  });
+  const explicitFile =
+    renamedExplicit !== null && renamedExplicit.doc.kind === "c4"
+      ? renamedExplicit.doc.synced.file
+      : null;
+  check(
+    "a ^ref name the author wrote out stays exactly as written",
+    renamedExplicit !== null &&
+      renamedExplicit.path === "patch" &&
+      renamedExplicit.text.includes(`mirror:external "Web App" ^ctx/web`) &&
+      explicitFile !== null &&
+      explicitFile.diagrams
+        .find((d) => d.id === "backend")
+        .nodes.find((n) => n.id === "mirror").name === "Web App",
+    "an explicit local name was renamed along with its target",
+  );
+  check(
+    "a child-diagram title the author wrote out stays exactly as written",
+    renamedExplicit !== null &&
+      renamedExplicit.text.includes(`@container backend "Web App" owner=web`) &&
+      explicitFile !== null &&
+      explicitFile.diagrams.find((d) => d.id === "backend").title === "Web App",
+    "an explicit title was renamed along with the owner node",
+  );
+
+  /* --- round trip, and the named fallback ---------------------------------- */
+
+  const there = revisedNodeEdit(doc, authored, "ctx", "cust", revision);
+  const back =
+    there === null
+      ? null
+      : revisedNodeEdit(there.doc, there.text, "ctx", "cust", {
+          name: "Customer",
+          technology: "human",
+          description: "The paying kind.",
+        });
+  check(
+    "a revise and a revise back restore the AUTHORED bytes, not canonical ones",
+    back !== null && back.text === authored,
+    back === null
+      ? "the return revise was refused"
+      : firstDiff(back.text, authored),
+  );
+  const inJson = revisedNodeEdit(
+    { ...doc, format: "json" },
+    doc.synced.jsonText,
+    "ctx",
+    "cust",
+    revision,
+  );
+  check(
+    "a C4 document sitting in the pane as JSON re-emits, and says so",
+    inJson !== null &&
+      inJson.path === "reemit" &&
+      inJson.text === inJson.doc.synced.jsonText,
+    `path: ${inJson === null ? "refused" : inJson.path}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 14b. The revise gesture is REACHABLE, and the panel's keys stay its own  */
+/* ----------------------------------------------------------------------- */
+
+/* The same duty section 14 (sequence) discharges for the dock, derived the
+   same way: the gesture list comes from the viewer's own handler interface,
+   so a handler added to `CanvasEditHandlers` grows two assertions that fail
+   until something calls it and something supplies it. */
+console.log(
+  "\nEvery C4 canvas gesture is reachable, and the form keeps its keys",
+);
+{
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  const panel = read("src/features/viewer/components/viewer-node-detail.tsx");
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+
+  const contract = /export interface CanvasEditHandlers \{([\s\S]*?)\n\}/.exec(
+    canvas,
+  );
+  check(
+    "the viewer declares a handler contract this section can derive from",
+    contract !== null,
+    "CanvasEditHandlers not found — every assertion below would be vacuous",
+  );
+  const handlers = [
+    ...new Set(
+      [...(contract?.[1] ?? "").matchAll(/^\s{2}(on[A-Z]\w*)\s*[?:]/gm)].map(
+        (m) => m[1],
+      ),
+    ),
+  ];
+  check(
+    "the contract names at least the four gestures the canvas ships",
+    handlers.length >= 4,
+    `found ${handlers.length}: ${handlers.join(", ")}`,
+  );
+  for (const handler of handlers) {
+    check(
+      `the viewer reaches ${handler} from a control`,
+      new RegExp(`edit\\??\\.${handler}\\b`).test(canvas),
+      "the handler is declared but nothing in the viewer reaches it",
+    );
+    check(
+      `the playground wires ${handler} into the canvas bundle`,
+      new RegExp(`${handler}:\\s*handle`).test(playground),
+      "the viewer would render a control the host never answers",
+    );
+  }
+
+  /* THE HOST'S HANDLER LANDS ON THE UNDO RING and refuses the null quietly —
+     the same two facts section 14 pins for every destructive sequence
+     handler. */
+  const body = /const handleNodeRevise = useCallback\(([\s\S]*?)\n  \);/.exec(
+    playground,
+  );
+  check(
+    "handleNodeRevise routes through applyCanvasEdit, so it lands on the undo ring",
+    body !== null &&
+      body[1].includes("applyCanvasEdit(") &&
+      !body[1].includes("setText(") &&
+      body[1].includes("if (next === null) return;"),
+    "a canvas edit that cannot be undone, or a refusal that rewrites the pane",
+  );
+  check(
+    "handleNodeRevise tells the reader how to undo it",
+    body !== null && /Cmd or Ctrl \+ Z/.test(body[1]),
+    "a wording rewrite with no stated way back",
+  );
+
+  /* THE FORM'S KEYS ARE ITS OWN. The details panel renders INSIDE the canvas
+     container, so without the field exemption the edit-keys listener reads a
+     Backspace in the name field as "delete the selected node" — the reader
+     types one character over and the element vanishes. Positional, not just
+     present: the exemption has to sit between the focus guard and the delete
+     branch of the SAME listener, or it guards nothing. */
+  const guardAt = canvas.indexOf("if (!inCanvas) return;");
+  const exemptAt = canvas.indexOf('focused.tagName === "TEXTAREA"');
+  const deleteAt = canvas.indexOf("edit.onNodeDelete(");
+  check(
+    "form fields are exempt from the edit keys, before the delete branch",
+    guardAt !== -1 && guardAt < exemptAt && exemptAt < deleteAt,
+    "Backspace in the panel's name field would delete the node it describes",
+  );
+  /* And from the Escape ladder, the sequence rung's own rule: Escape typed
+     into a field must not deselect the element — deselection unmounts the
+     form with the reader's half-typed text in it. */
+  check(
+    "form fields are exempt from the Escape ladder",
+    /target\.tagName === "TEXTAREA"/.test(canvas),
+    "Escape in the edit form would unmount it, half-typed text and all",
+  );
+
+  /* THE PENCIL IS PRESENCE-GATED, both ways the sequence dock's is: a locked
+     or read-only canvas passes no `onRevise`, so no pencil renders (never a
+     disabled one), and a boundary placeholder is withheld for the reason the
+     module refuses it. */
+  check(
+    "the panel gates its editor on the handler being present and the node being real",
+    /const revisable = onRevise !== undefined && node\.externalRef === undefined;/.test(
+      panel,
+    ) && /revisable && !editing \? \(/.test(panel),
+    "a pencil on a read-only canvas, or on a mirror the module refuses to edit",
+  );
+  /* The form REMOUNTS per element and starts from the element's own values —
+     the sequence forms' rule; an effect syncing state would re-aim an open
+     form at whatever got selected next. */
+  check(
+    "the form is keyed by the node, so selecting another element cannot re-aim it",
+    /<NodeEditForm\s+key=\{node\.id\}/.test(panel),
+    "an open form would silently point at a node the reader was not editing",
+  );
+  /* Blank optional fields submit as ABSENT — the module-side assertion in
+     section 14 measures the text; this pins the form half of the same
+     contract. */
+  check(
+    "the form submits blank optional fields as absent",
+    /technology: orAbsent\(technology\)/.test(panel) &&
+      /description: orAbsent\(description\)/.test(panel),
+    'a cleared field would submit "" and write a blank the reader cannot see',
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("\nLocking never offers a link to somewhere you already are");
 
@@ -2274,6 +2806,12 @@ console.log("\nLocking never offers a link to somewhere you already are");
        whether they can move things, and the sentence they meet first is the
        page's own. */
     "reordered",
+    /* Added with the C4 revise. Two strings, because each half can go stale
+       alone: "wording edited" is the gesture, "details panel" is where — a
+       claim naming the first without the second sends the reader
+       double-clicking a box that only drills down. */
+    "wording edited",
+    "details panel",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
