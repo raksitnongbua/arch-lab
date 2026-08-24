@@ -455,6 +455,54 @@ export function canonicalTagColorLine(tag: string, color: string): string {
   return `tagcolor ${tagKeyToken(tag)} ${JSON.stringify(color)}`;
 }
 
+/**
+ * The canonical `frame` declaration for a TOP-LEVEL boundary — byte for byte
+ * the line `serializeArchText` writes for one with no `parentFrameId`, kept
+ * here for `canonicalTagColorLine`'s reason: the one place that knows when an
+ * id needs quoting is the one that spells the line. The boundary gesture in
+ * `playground/input/canvas-edit.ts` splices this into the diagram body when
+ * it mints a frame the document does not declare yet. Top-level only, on
+ * purpose: nesting is a statement about two frames the panel's single-element
+ * control never makes (`C4NodeFrameChoice`), so `emitDiagram` appends the
+ * three-valued `in=` itself.
+ */
+export function canonicalFrameLine(frameId: string, label: string): string {
+  return `  frame ${idToken(frameId)} ${JSON.stringify(label)}`;
+}
+
+/**
+ * The canonical BLOCK for one diagram — byte for byte the lines
+ * `serializeArchText` writes for it, its `@<level>` head first, WITHOUT the
+ * blank separator line (that line belongs to the file's join, and the caller
+ * decides whether the splice point already has one).
+ *
+ * Exists for the nest gesture: giving a node a child diagram appends a whole
+ * new diagram block to the text, and deriving those lines from the serializer
+ * is what keeps a patched block canonical — the same duty
+ * `canonicalNodeBlock` discharges one element down. For the freshly minted
+ * child the block is exactly one head line, but this returns whatever the
+ * serializer would write so the derivation cannot silently narrow.
+ *
+ * `null` when `diagramId` is not in `file`.
+ */
+export function canonicalDiagramBlock(
+  file: ArchLabFile,
+  diagramId: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const diagramsValue = file.diagrams;
+  if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
+  const diagrams = diagramsValue.map((diagram, i) => {
+    if (!isRecord(diagram)) invalid(`diagrams[${i}]`, diagram);
+    return diagram;
+  });
+  const diagram = diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  const lines: string[] = [];
+  emitDiagram(lines, diagram, buildNodeHome(diagrams));
+  return lines;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Diagram / node / edge emitters                                             */
 /* -------------------------------------------------------------------------- */
@@ -554,7 +602,7 @@ function emitDiagram(
       if (typeof label !== "string" || label === "") {
         invalid(`diagram "${id}".frames[${i}].label`, label);
       }
-      let line = `  frame ${idToken(frameId)} ${JSON.stringify(label)}`;
+      let line = canonicalFrameLine(frameId, label);
       // `parentFrameId` is three-valued and all three must survive: absent
       // (no attribute), explicit null (`in=null`) and an id. Writing absent
       // and null the same way would collapse them on the next read.

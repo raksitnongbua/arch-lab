@@ -61,7 +61,13 @@ import {
 
 import "@xyflow/react/dist/style.css";
 
-import type { C4Diagram, C4Edge, C4NodeRevision, C4NodeType } from "@/types";
+import type {
+  C4Diagram,
+  C4Edge,
+  C4NodeRevision,
+  C4NodeType,
+  ExternalRef,
+} from "@/types";
 import { childLevelOf, hasChildDiagram } from "@/types";
 
 import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
@@ -90,6 +96,7 @@ import {
 } from "../lib/drag-overlay";
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
+import { referenceableNodes } from "../lib/node-palette";
 import {
   createNodeProjectionCache,
   projectViewerNodes,
@@ -174,6 +181,29 @@ export interface CanvasEditHandlers {
    * filtered to the level's legal types (`creatableNodeTypes`).
    */
   onNodeCreate: (diagramId: string, type: C4NodeType) => void;
+  /**
+   * Add a `^ref` boundary placeholder mirroring `source` — a node from an
+   * ancestor diagram — from the palette's reference picker. The picker's
+   * candidate list and the host's guard (`createdRefEdit`) read the same
+   * derivation (`referenceableNodes`), so the canvas can only report a choice
+   * the host will honour or refuse for pane-lag reasons it can announce.
+   */
+  onRefCreate: (diagramId: string, source: ExternalRef) => void;
+  /**
+   * Give the node a fresh, empty child diagram one level down, from the
+   * details panel. The host mints the id, appends the block and refuses what
+   * cannot nest (`nestedNodeEdit`); the canvas only offers the button where
+   * the node has no child, no `childRef` and no `externalRef`, and the level
+   * has somewhere deeper to go.
+   */
+  onNodeNest: (diagramId: string, nodeId: string) => void;
+  /**
+   * Remove the node's EMPTY child diagram — the way back out of a nest that
+   * was never filled. The host is the authority on emptiness
+   * (`unnestedNodeEdit` refuses a child holding anything) and says so; the
+   * canvas offers the button only beside a child it can see is empty.
+   */
+  onNodeUnnest: (diagramId: string, nodeId: string) => void;
   /**
    * Undo the last canvas edit.
    *
@@ -1038,6 +1068,25 @@ function ViewerCanvasInner({
     [edit],
   );
 
+  const handleRefCreate = useCallback(
+    (source: ExternalRef) => {
+      edit?.onRefCreate(diagramIdRef.current, source);
+    },
+    [edit],
+  );
+
+  /* What the palette's reference picker offers — the same derivation the
+     host's guard reads (`referenceableNodes`), so the picker and the refusal
+     cannot disagree. Computed only while editable: a read-only canvas renders
+     no picker, so the walk would be work nobody sees. */
+  const refOptions = useMemo(
+    () =>
+      editable
+        ? referenceableNodes(Object.values(model.diagrams), diagramId)
+        : [],
+    [editable, model, diagramId],
+  );
+
   const climbTo = useCallback(
     (targetId: string) => {
       const anchorNodeId = climbAnchorNodeId(
@@ -1502,18 +1551,32 @@ function ViewerCanvasInner({
       }));
     const childLevel = childLevelOf(diagram.level);
     // Same rule as the canvas chip: an empty child diagram is not a drill-down.
-    const childCount =
+    // A CHILD THAT EXISTS BUT IS EMPTY is distinguished from "no child" below,
+    // because on an editable canvas it is a different situation: a workspace
+    // to open and fill, with a way back out (un-nest) — not a dead pointer.
+    const child =
       hasChildDiagram(node) && node.childDiagramId
-        ? getDiagram(model, node.childDiagramId).nodes.length
-        : 0;
+        ? (model.diagrams[node.childDiagramId] ?? null)
+        : null;
+    const childCount = child !== null ? child.nodes.length : 0;
     const drill =
       childCount > 0 && childLevel !== null ? { childCount, childLevel } : null;
     return {
       node,
       level: diagram.level,
+      childLevel,
       outgoing,
       incoming,
       drill,
+      // An empty (or dangling) child pointer, for the editable panel's
+      // open-or-remove affordances; read-only hosts render nothing from it.
+      emptyChild:
+        hasChildDiagram(node) && childCount === 0
+          ? { exists: child !== null }
+          : null,
+      // The diagram's own boundaries — what the edit form's boundary select
+      // offers, alongside "none" and a new label.
+      frames: diagram.frames ?? [],
       // The edit form's colour control reads these; the nodes already paint
       // with them (project-nodes), so the panel and the canvas see one map.
       tagColors: model.file.metadata.tagColors,
@@ -1544,6 +1607,38 @@ function ViewerCanvasInner({
             );
           },
     [edit],
+  );
+
+  /* Nest and un-nest, resolved to the selected node the way the revise is.
+     PRESENCE IS PER-NODE, not per-canvas: the panel renders whichever button
+     it is handed, so the decision "can THIS node nest" is made here, from the
+     same facts the module refuses on — a button the host would refuse every
+     time is a dead control, which is worse than none. */
+  const detailNode = nodeDetail?.node;
+  const handleDetailNest = useMemo(
+    () =>
+      edit === undefined ||
+      detailNode === undefined ||
+      nodeDetail?.childLevel === null ||
+      hasChildDiagram(detailNode) ||
+      detailNode.childRef !== undefined ||
+      detailNode.externalRef !== undefined
+        ? undefined
+        : () => {
+            if (selectedNodeIdRef.current === null) return;
+            edit.onNodeNest(diagramIdRef.current, selectedNodeIdRef.current);
+          },
+    [edit, detailNode, nodeDetail?.childLevel],
+  );
+  const handleDetailUnnest = useMemo(
+    () =>
+      edit === undefined || nodeDetail?.emptyChild == null
+        ? undefined
+        : () => {
+            if (selectedNodeIdRef.current === null) return;
+            edit.onNodeUnnest(diagramIdRef.current, selectedNodeIdRef.current);
+          },
+    [edit, nodeDetail?.emptyChild],
   );
 
   // Focus effect while an element is selected: the element and its direct
@@ -1721,6 +1816,8 @@ function ViewerCanvasInner({
                 <ViewerNodePalette
                   level={diagram.level}
                   onCreate={handleNodeCreate}
+                  references={refOptions}
+                  onCreateRef={handleRefCreate}
                 />
               ) : null}
             </div>

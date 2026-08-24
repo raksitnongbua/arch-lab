@@ -68,6 +68,8 @@
 export { parseArchText, parseArchTextWithSpans, spanKey } from "./lib/parse";
 export type { ArchTextSpans, HeaderSpans, LineSpan } from "./lib/parse";
 export {
+  canonicalDiagramBlock,
+  canonicalFrameLine,
   canonicalNodeBlock,
   canonicalNodeLine,
   canonicalTagColorLine,

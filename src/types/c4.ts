@@ -199,6 +199,30 @@ export type C4NodeColorChoice =
   { kind: "role" } | { kind: "tag"; tag: string; color: string };
 
 /**
+ * What the details panel's boundary control asks for. Membership IS a node
+ * field (`C4Node.frameId`), so unlike colour most of this is a plain value —
+ * but joining a boundary that does not exist yet has to CREATE it, and a
+ * `frame` line is a diagram-level declaration the panel must not spell
+ * itself. So the revision carries the intent and
+ * `playground/input/canvas-edit.ts` derives the writes, exactly as it does
+ * for colour.
+ *
+ *   - `"none"` — the node stands loose on the canvas: `in=` comes off its
+ *     line. The frame itself is left declared even if this empties it — an
+ *     empty frame is not drawn (`C4Frame`), other nodes may rejoin it, and
+ *     eating a declaration the author wrote over a membership change is the
+ *     blast radius the colour choice already refuses to have.
+ *   - `"existing"` — the node joins a frame the diagram already declares.
+ *   - `"new"` — a `frame` line is minted from `label` and the node joins it.
+ *     Always top-level: nesting a boundary is a statement about two frames,
+ *     not about this node, and belongs in the text.
+ */
+export type C4NodeFrameChoice =
+  | { kind: "none" }
+  | { kind: "existing"; frameId: string }
+  | { kind: "new"; label: string };
+
+/**
  * The editable subset of a node, given WHOLE rather than as a diff — the same
  * contract as `SequenceMessageRevision` one file over, and here for the same
  * reason: the viewer's details panel collects it and
@@ -215,10 +239,12 @@ export type C4NodeColorChoice =
  * the pane where the reader can see every line it touches. The display NAME is
  * the safe rename: nothing addresses a node by its name.
  *
- * `type`, `tags` as free text, frame membership and the drill-down pointers
- * are absent because the panel has no control for them yet; each arrives with
- * the control that edits it, so this type never promises a field the canvas
- * cannot write.
+ * `type` and `tags` as free text are absent because the panel has no control
+ * for them yet; each arrives with the control that edits it, so this type
+ * never promises a field the canvas cannot write. The drill-down pointers are
+ * absent for a different reason: giving a node a child diagram writes a whole
+ * diagram block as well as the node's own line, so it is its own gesture
+ * (`nestedNodeEdit`) rather than a form field.
  */
 export interface C4NodeRevision {
   name: string;
@@ -238,6 +264,13 @@ export interface C4NodeRevision {
    * vocabulary it never looked at.
    */
   color?: C4NodeColorChoice;
+  /**
+   * NOT WHOLE-VALUE EITHER, for colour's reason: the cleared state has its
+   * own spelling (`{ kind: "none" }`), so `undefined` means "no claim — leave
+   * membership and the diagram's frames untouched", which keeps a caller that
+   * edits only wording away from boundaries it never looked at.
+   */
+  frame?: C4NodeFrameChoice;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -364,6 +364,22 @@ export interface HeaderSpans {
 export interface ArchTextSpans {
   nodes: ReadonlyMap<string, LineSpan>;
   edges: ReadonlyMap<string, LineSpan>;
+  /**
+   * Each `frame` line, keyed by `spanKey(diagramId, frameId)`. Always a
+   * single line (`start === end`): the frame grammar has no continuation
+   * lines. Recorded so the boundary gesture can splice a minted `frame` line
+   * beside the existing ones instead of scanning the text for them — the
+   * second-parser move `codebase.md` bans.
+   */
+  frames: ReadonlyMap<string, LineSpan>;
+  /**
+   * The 1-based line of each diagram's `@<level>` head, keyed by diagram id.
+   * The HEAD only, not the block: a diagram's members already have their own
+   * spans above, and the one caller that removes a whole diagram
+   * (`unnestedNodeEdit`) refuses anything but an EMPTY one — whose block IS
+   * its head line.
+   */
+  diagramHeads: ReadonlyMap<string, number>;
   header: HeaderSpans;
 }
 
@@ -378,6 +394,8 @@ export function spanKey(diagramId: string, memberId: string): string {
 interface SpanCollector {
   nodes: Map<string, LineSpan>;
   edges: Map<string, LineSpan>;
+  frames: Map<string, LineSpan>;
+  diagramHeads: Map<string, number>;
   header: HeaderSpans;
 }
 
@@ -552,6 +570,8 @@ export function parseArchTextWithSpans(source: string): {
   const spans: SpanCollector = {
     nodes: new Map(),
     edges: new Map(),
+    frames: new Map(),
+    diagramHeads: new Map(),
     header: { end: headerEnd, tagColors: header.tagColorLines ?? new Map() },
   };
   const file = resolve(header, diagrams, diagramById, nodeHome, spans);
@@ -2103,6 +2123,11 @@ function resolve(
       if (frame.hasIn)
         pairs.push(["parentFrameId", frame.parentFrameId ?? null]);
       finalFrames.push(assemble(pairs, []));
+      // A frame line has no continuations, so its span is the one line.
+      spans.frames.set(spanKey(diagram.id, frame.id), {
+        start: frame.line,
+        end: frame.line,
+      });
     }
     // Walk each chain to its root. Cheap (frames per diagram are few) and it
     // reports the frame the author can actually see, not an internal cycle set.
@@ -2174,6 +2199,7 @@ function resolve(
     pairs.push(["nodes", finalNodes]);
     pairs.push(["edges", finalEdges]);
     finalDiagrams.push(assemble(pairs, diagram.unknowns));
+    spans.diagramHeads.set(diagram.id, diagram.line);
   }
 
   /* ------------------------------- root --------------------------------- */
