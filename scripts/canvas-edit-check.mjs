@@ -2046,7 +2046,7 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
   check(
     "and the canvas feeds the frames and the nodes the same diagram",
     /diagram: draggedDiagram/.test(canvas) &&
-      /<FrameLayer diagram=\{draggedDiagram\}/.test(canvas),
+      /<FrameLayer\b[^>]*\sdiagram=\{draggedDiagram\}/.test(canvas),
     "the projection and the frame layer are reading different diagrams — two " +
       "halves of one picture, each self-consistent, that disagree mid-press",
   );
@@ -3857,9 +3857,15 @@ console.log("\nLocking never offers a link to somewhere you already are");
     /* Added with the marquee grouping. Two strings for the revise pair's
        reason — each half can go stale alone: the first is WHAT the gesture
        writes, the second is HOW it is made, and a reader who has used a
-       drawing tool arrives asking for exactly this gesture by its keystroke. */
+       drawing tool arrives asking for exactly this gesture by its keystroke.
+       THE KEYSTROKE MOVED: a bare drag now draws the box and Space pans, so
+       the page must teach the pan as well as the lasso. A reader who has
+       panned this canvas for a release knows the OLD gesture, and a page that
+       names only the lasso leaves them thinking panning broke — which is why
+       the pan half is pinned here rather than left to the hint bar. */
     "grouped into a boundary",
-    "Shift + drag",
+    "drag selection",
+    "hold Space to",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
@@ -5130,6 +5136,34 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
       !/marquee|multiSelected|activeMulti/i.test(edgesMemo[0]),
     "the edges prop would gain a new identity per marquee frame — same loop, edge lane",
   );
+  /* THE SHIPPED-LINK REGRESSION THIS SWAP COULD CAUSE. A bare drag now draws
+     the lasso — but the lasso exists only where the canvas is editable, and
+     the canvas is LOCKED BY DEFAULT: every shared link and every presentation
+     opens read-only. If the marquee ever claimed the press there, a reader who
+     opened a shared diagram could not move around it at all, and the gesture
+     they would reach for first is the one that broke. Two layers, both pinned,
+     because either alone would be enough to regress:
+       - the handler is not even ATTACHED unless `editable` (JSX gate), so
+         React Flow's own `panOnDrag` owns the press;
+       - and the handler itself bails on a missing `edit` before it captures
+         the pointer, so a future caller that attaches it unconditionally still
+         cannot steal the pan. */
+  check(
+    "a bare drag still pans a read-only canvas — the marquee is not attached there",
+    /onPointerDownCapture=\{editable \? handleMarqueeStart : undefined\}/.test(
+      canvas,
+    ),
+    "the lasso is wired to a canvas that may be locked — a shared link would " +
+      "stop panning, which is the one gesture every reader of one uses",
+  );
+  const marqueeStart =
+    /const handleMarqueeStart = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
+  check(
+    "and it refuses the press outright when the canvas hands it no edit",
+    marqueeStart !== null &&
+      /if \(edit === undefined\) return;/.test(marqueeStart[1]),
+    "the marquee would capture a pointer on a canvas with nothing to select",
+  );
   const marqueeMove =
     /const handleMarqueeMove = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
   check(
@@ -5148,7 +5182,7 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
       /event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);\s*\n\s*container\.setPointerCapture\(/.test(
         canvas,
       ),
-    "Shift + drag would pan (or select text) instead of drawing the box",
+    "a bare drag would pan (or select text) instead of drawing the box",
   );
 }
 

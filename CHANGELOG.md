@@ -7,10 +7,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **Dragging on an editable C4 canvas now draws a selection box instead of
+  panning; hold Space to pan.** This is the convention drawing tools use,
+  and it is what makes the lasso reachable without a modifier — but it does
+  move a gesture you already know, so the canvas heading names both halves.
+  A locked or read-only canvas is unaffected: it has no selection to draw,
+  so dragging still pans there, which is what every shared link opens as.
+
 ### Added
 
-- Several C4 elements can be grouped into a boundary in one action: Shift +
-  drag on an editable canvas draws a selection box, and releasing it over two
+- Several C4 elements can be grouped into a boundary in one action: dragging
+  on an editable canvas draws a selection box, and releasing it over two
   or more elements opens a compact card offering the diagram's boundaries,
   "None", and a new boundary you name on the spot. The whole grouping lands as
   one change to your text — each member's line gains its `in=`, plus one
@@ -19,6 +28,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `^ref` placeholders group like anything else. The Mermaid pane refuses the
   gesture for the reason it refuses the single-element boundary edit: Mermaid
   C4 has nowhere to keep the membership.
+- A boundary itself can now be selected on the canvas and renamed: click its
+  border or its label band and a card offers the name, written back as a
+  patch of that `frame` line alone. Its members keep their membership — the
+  boundary's identity in the text does not change with its label.
 - A C4 element can now be put inside a boundary from the canvas: the details
   panel's edit form grows a Boundary select offering the diagram's own frames,
   "None", and a new boundary you name on the spot — written as `in=` on the
