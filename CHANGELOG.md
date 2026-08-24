@@ -9,6 +9,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Clicking the background of an editable C4 canvas works again, and holding
+  Space pans again. Making a bare drag draw the selection box meant the canvas
+  had to cancel the press it claimed, and cancelling a press also cancels the
+  two things it quietly did: moving focus, and delivering a plain click. Focus
+  stayed on whatever button was pressed last, and the canvas will not take
+  Space from a focused control — so panning did nothing. A press on the
+  background now moves focus to the diagram, and one that never travels is
+  treated as the click it is rather than an empty selection box.
+
 - Holding Space to pan no longer toggles the canvas lock. Clicking the lock
   left the button holding focus, and the canvas deliberately will not take
   Space from a focused control — so the next Space press activated the lock

@@ -5190,6 +5190,32 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
       /if \(edit === undefined\) return;/.test(marqueeStart[1]),
     "the marquee would capture a pointer on a canvas with nothing to select",
   );
+  /* THE TWO THINGS CANCELLING THE PRESS TOOK AWAY, both reported as bugs
+     ("cannot click focus everything", "cannot hold space + drag"), and both
+     from one cause. `preventDefault` on the pane pointerdown suppresses the
+     compatibility mouse events, and those events were doing two jobs nobody
+     had written down: moving focus, and delivering the plain background
+     click. Losing the first is what broke Space — the edit-keys listener
+     will not take Space from a focused control, so with focus stranded on
+     the last button pressed, holding Space to pan did nothing. A gesture
+     that claims a press owes back everything the press would have done. */
+  check(
+    "claiming the pane press hands focus to the canvas it suppressed",
+    marqueeStart !== null &&
+      /container\.focus\(\{ preventScroll: true \}\);/.test(marqueeStart[1]),
+    "focus stays on whatever was clicked last — usually a button, where the " +
+      "edit-keys listener rightly refuses to take Space, so pan silently dies",
+  );
+  const marqueeEnd =
+    /const handleMarqueeEnd = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
+  check(
+    "a press that never travelled is a click, not an empty selection box",
+    marqueeEnd !== null &&
+      /MARQUEE_CLICK_SLOP_PX/.test(marqueeEnd[1]) &&
+      /clearSelection\(!travelled\)/.test(marqueeEnd[1]),
+    "a plain background click reports 'no elements inside the selection box' " +
+      "— describing a gesture the reader never made",
+  );
   const marqueeMove =
     /const handleMarqueeMove = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
   check(

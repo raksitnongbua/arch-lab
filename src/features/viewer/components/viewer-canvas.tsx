@@ -256,6 +256,18 @@ export interface CanvasEditHandlers {
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
 
+/**
+ * How far a press may travel and still count as a CLICK rather than a lasso.
+ *
+ * The marquee claims every press on the pane, so the plain background click
+ * that used to reach React Flow's `onPaneClick` now arrives at the marquee's
+ * release as a box with no members. This is the number that tells the two
+ * apart. Generous enough to survive the hand tremor and the pixel or two a
+ * trackpad adds to a firm tap — a threshold of zero would turn most real
+ * clicks into empty selections and announce a gesture nobody made.
+ */
+const MARQUEE_CLICK_SLOP_PX = 4;
+
 /*
  * The resting marching dash, in `pathLength=100` units — so these are
  * PERCENTAGES of a connector, not pixels, and every edge shows the same
@@ -1294,6 +1306,17 @@ function ViewerCanvasInner({
       event.preventDefault();
       event.stopPropagation();
       container.setPointerCapture(event.pointerId);
+      /* THE FOCUS THE `preventDefault` ABOVE JUST SUPPRESSED, handed over
+         explicitly — and this is a bug fix, not tidying. Cancelling the press
+         suppresses the compatibility mouse events, and moving focus is one of
+         the things those events do. Without this the reader's focus stays on
+         whatever they last clicked, which on this canvas is usually a BUTTON
+         (the Add strip, the lock, the zoom chip) — and the edit-keys listener
+         deliberately will not take Space from a focused control, so holding
+         Space to pan did nothing at all. Pressing the pane is the gesture
+         that means "I am working on the drawing now"; it has to move focus
+         there like the click it replaced. */
+      container.focus({ preventScroll: true });
       const box = container.getBoundingClientRect();
       const x = event.clientX - box.left;
       const y = event.clientY - box.top;
@@ -1357,8 +1380,18 @@ function ViewerCanvasInner({
         .map((node) => node.id);
       const [first] = covered;
       if (first === undefined) {
-        clearSelection(false);
-        setAnnouncement("No elements inside the selection box.");
+        /* A PRESS THAT NEVER TRAVELLED IS A CLICK, and it must read as one.
+           The marquee claims every pane press, so the plain click that used
+           to reach `onPaneClick` now arrives here as a zero-area box. Told
+           apart by travel rather than by area, because a box can be a few
+           pixels wide and still be a real, if tiny, drag. Announcing "no
+           elements inside the selection box" at someone who simply clicked
+           the background describes a gesture they did not make. */
+        const travelled =
+          Math.abs(x - origin.x) > MARQUEE_CLICK_SLOP_PX ||
+          Math.abs(y - origin.y) > MARQUEE_CLICK_SLOP_PX;
+        clearSelection(!travelled);
+        if (travelled) setAnnouncement("No elements inside the selection box.");
         return;
       }
       if (covered.length === 1) {
@@ -2092,7 +2125,11 @@ function ViewerCanvasInner({
   const handleFrameRename = useCallback(
     (label: string) => {
       if (edit === undefined || selectedFrameIdRef.current === null) return;
-      edit.onFrameRename(diagramIdRef.current, selectedFrameIdRef.current, label);
+      edit.onFrameRename(
+        diagramIdRef.current,
+        selectedFrameIdRef.current,
+        label,
+      );
     },
     [edit],
   );
