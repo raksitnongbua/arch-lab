@@ -63,7 +63,9 @@
 import type {
   ArchLabFile,
   C4Diagram,
+  C4Frame,
   C4Node,
+  C4NodeFrameChoice,
   C4NodeRevision,
   C4NodeType,
   ExternalRef,
@@ -740,6 +742,84 @@ export function movedNodeEdit(
 }
 
 /**
+ * A boundary intent resolved into the membership it writes and, for
+ * `{ kind: "new" }`, the one `frame` declaration it mints. Shared by
+ * `revisedNodeEdit` (one node's boundary select) and `groupedNodesEdit` (the
+ * marquee's grouping), extracted so the two gestures cannot drift on what a
+ * choice means — the "two halves of one thing" failure `codebase.md` names.
+ *
+ * `null` refuses. An unknown existing frame: `in=` naming no frame is a
+ * document the parser rejects, and only a pane lagging the canvas can ask for
+ * one. A blank new label: the validator refuses an empty frame label, and
+ * inventing one would name a boundary nobody asked for. The minted id
+ * convention is the editor store's (`createFrame`), so every authoring
+ * surface mints the same id for the same label.
+ */
+function resolvedFrameChoice(
+  diagramFrames: readonly C4Frame[],
+  choice: C4NodeFrameChoice,
+): {
+  frameId: string | undefined;
+  mintedFrame: { id: string; label: string } | null;
+} | null {
+  if (choice.kind === "none") return { frameId: undefined, mintedFrame: null };
+  if (choice.kind === "existing") {
+    if (!diagramFrames.some((frame) => frame.id === choice.frameId)) {
+      return null;
+    }
+    return { frameId: choice.frameId, mintedFrame: null };
+  }
+  const label = choice.label.trim();
+  if (label === "") return null;
+  const id = uniqueId(
+    `f-${slugify(label, "frame")}`,
+    new Set(diagramFrames.map((frame) => frame.id)),
+  );
+  return { frameId: id, mintedFrame: { id, label } };
+}
+
+/**
+ * The insert patch for a minted `frame` line, or `null` when the mint must be
+ * refused — colour's escape refusal, for frames: a frame the parser did not
+ * read from a `frame` line has no span, which means the diagram spells its
+ * frames some other way a minted line would collide with.
+ *
+ * Spliced after the diagram's last `frame` line so frames stay together; a
+ * frameless diagram takes the line directly above its first node declaration
+ * — the canonical spot, since frames precede nodes. That anchor can BE a line
+ * another patch replaces: callers put this insert FIRST in their patch list,
+ * because `applyPatches` sorts stably, so on a tied start the empty insert
+ * lands above the replaced line instead of below it.
+ */
+function frameMintPatch(
+  spans: ArchTextSpans,
+  file: ArchLabFile,
+  diagramId: string,
+  minted: { id: string; label: string },
+): LinePatch | null {
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  const diagramFrames = diagram?.frames ?? [];
+  const frameSpans = diagramFrames.flatMap((frame) => {
+    const frameSpan = spans.frames.get(spanKey(diagramId, frame.id));
+    return frameSpan === undefined ? [] : [frameSpan.end];
+  });
+  if (frameSpans.length < diagramFrames.length) return null;
+  const nodeStarts = (diagram?.nodes ?? []).flatMap((node) => {
+    const nodeSpan = spans.nodes.get(spanKey(diagramId, node.id));
+    return nodeSpan === undefined ? [] : [nodeSpan.start];
+  });
+  if (frameSpans.length === 0 && nodeStarts.length === 0) return null;
+  const anchor =
+    frameSpans.length > 0
+      ? Math.max(...frameSpans) + 1
+      : Math.min(...nodeStarts);
+  return {
+    span: { start: anchor, end: anchor - 1 },
+    lines: [canonicalFrameLine(minted.id, minted.label)],
+  };
+}
+
+/**
  * `doc` with one node's own fields rewritten, or `null` when the edit cannot
  * apply — a document that refuses `"revise"`, an id that is not in it, a
  * revision that changes nothing, an empty name, or a boundary placeholder.
@@ -877,39 +957,18 @@ export function revisedNodeEdit(
     }
   }
 
-  /* The boundary intent, resolved into membership and at most one mint. An
-     unknown existing frame is refused rather than written: `in=` naming no
-     frame is a document the parser rejects, and the panel's select cannot
-     produce one unless the pane lagged the canvas — the refusal every gesture
-     already has for that state. */
+  /* The boundary intent, resolved into membership and at most one mint by the
+     helper the marquee's grouping shares — its header carries the refusals
+     (an unknown existing frame, a blank new label) and why each is refused. */
   const diagramFrames =
     doc.synced.file.diagrams.find((candidate) => candidate.id === diagramId)
       ?.frames ?? [];
   let frameId = current.frameId;
   let mintedFrame: { id: string; label: string } | null = null;
   if (revision.frame !== undefined) {
-    const choice = revision.frame;
-    if (choice.kind === "none") {
-      frameId = undefined;
-    } else if (choice.kind === "existing") {
-      if (!diagramFrames.some((frame) => frame.id === choice.frameId)) {
-        return null;
-      }
-      frameId = choice.frameId;
-    } else {
-      // A blank label is refused, not defaulted: the validator refuses an
-      // empty frame label, and inventing one would name a boundary nobody
-      // asked for. The id convention is the editor store's (`createFrame`),
-      // so both authoring surfaces mint the same id for the same label.
-      const label = choice.label.trim();
-      if (label === "") return null;
-      const id = uniqueId(
-        `f-${slugify(label, "frame")}`,
-        new Set(diagramFrames.map((frame) => frame.id)),
-      );
-      mintedFrame = { id, label };
-      frameId = id;
-    }
+    const resolved = resolvedFrameChoice(diagramFrames, revision.frame);
+    if (resolved === null) return null;
+    ({ frameId, mintedFrame } = resolved);
   }
 
   if (
@@ -967,38 +1026,18 @@ export function revisedNodeEdit(
   if (patchable !== null && span !== undefined && lines !== null) {
     const patches: LinePatch[] = [{ span, lines }];
     if (mintedFrame !== null) {
-      /* Colour's escape refusal, for frames: a frame the parser did not read
-         from a `frame` line has no span, which means the diagram spells its
-         frames some other way a minted line would collide with. */
-      const frameSpans = diagramFrames.flatMap((frame) => {
-        const frameSpan = patchable.spans.frames.get(
-          spanKey(diagramId, frame.id),
-        );
-        return frameSpan === undefined ? [] : [frameSpan.end];
-      });
-      if (frameSpans.length < diagramFrames.length) return null;
-      /* After the last `frame` line so frames stay together; a frameless
-         diagram takes the line directly above its first node declaration —
-         the canonical spot, since frames precede nodes. That anchor can BE
-         the edited node's own line: the insert is placed FIRST in `patches`
-         because `applyPatches` sorts stably, so on a tied start the empty
-         insert lands above the replaced block instead of below it. */
-      const nodeStarts = (
-        doc.synced.file.diagrams.find((candidate) => candidate.id === diagramId)
-          ?.nodes ?? []
-      ).flatMap((node) => {
-        const nodeSpan = patchable.spans.nodes.get(spanKey(diagramId, node.id));
-        return nodeSpan === undefined ? [] : [nodeSpan.start];
-      });
-      if (frameSpans.length === 0 && nodeStarts.length === 0) return null;
-      const anchor =
-        frameSpans.length > 0
-          ? Math.max(...frameSpans) + 1
-          : Math.min(...nodeStarts);
-      patches.unshift({
-        span: { start: anchor, end: anchor - 1 },
-        lines: [canonicalFrameLine(mintedFrame.id, mintedFrame.label)],
-      });
+      /* The mint's splice point and its escape refusal both live in
+         `frameMintPatch`, shared with the marquee's grouping. FIRST in
+         `patches`, for the tied-anchor rule its header states — the anchor
+         can BE the edited node's own line. */
+      const insert = frameMintPatch(
+        patchable.spans,
+        doc.synced.file,
+        diagramId,
+        mintedFrame,
+      );
+      if (insert === null) return null;
+      patches.unshift(insert);
     }
     if (minted !== null) {
       /* The mint refusal argued in the header: `tagcolor` lines the parser
@@ -1021,6 +1060,124 @@ export function revisedNodeEdit(
       });
     }
     return adopt(doc, edited, applyPatches(sourceText, patches));
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with EVERY node in `nodeIds` given one boundary — an existing frame,
+ * none, or a frame this edit mints — or `null` when the edit cannot apply.
+ * This is the marquee gesture's write: lasso several elements, name a
+ * boundary, and the grouping lands as ONE text and therefore ONE undo entry.
+ *
+ * PART OF `"revise"`, NOT A FOURTH ABILITY. The ability doc above says a new
+ * ability is owed only when a gesture gates on a fact the existing ones do
+ * not ask about; this gesture gates on exactly the two facts every revise
+ * gates on (an `.alab` C4 pane, the canvas unlocked) and writes exactly the
+ * field the panel's boundary select already writes — `frameId`, on each
+ * member's own declaration line — just for N members in one splice. The C4
+ * revise cell's Mermaid refusal covers it for the same measured reason: the
+ * Mermaid emitter never reads `C4Node.frameId`, so a membership written
+ * against that pane would be lost on the round trip.
+ *
+ * ONE PATCH LIST, ONE UNDO ENTRY, and that is the contract the gesture exists
+ * for: N declaration-line rewrites plus at most one minted `frame` line all
+ * go through `applyPatches` once, so the page adopts one text and Cmd/Ctrl+Z
+ * reverses the whole grouping. A grouping that took N undos to unwind would
+ * strand the reader halfway through a boundary state they never asked to see.
+ * `check:canvas-edit` pins both halves — the single edit here, the single
+ * `applyCanvasEdit` call in the host.
+ *
+ * A SELECTION NAMING AN UNKNOWN ID REFUSES WHOLLY — `null`, nothing partial.
+ * The only way the list can name a node the document lacks is the pane
+ * lagging the canvas (the marquee reads the same diagram the canvas draws),
+ * and grouping "what it legally can" would draw a boundary missing members
+ * the reader plainly lassoed — a half-applied gesture that looks like a bug.
+ * The caller announces the one cause the reader can act on.
+ *
+ * A `^ref` PLACEHOLDER IS A LEGAL MEMBER, and that is deliberately NOT
+ * `revisedNodeEdit`'s refusal: that gesture rewrites the mirror's OWN fields,
+ * which are derived from its target and would fork. Membership is not
+ * derived — `in=` is a fact about where the mirror sits in THIS diagram, the
+ * serializer writes it beside the `^` token, and a lasso that excluded
+ * placeholders would refuse exactly the drawings placeholders exist for: a
+ * boundary grouping local elements with the mirror of the system above them.
+ *
+ * EACH MEMBER'S PATCH IS ONE LINE — the declaration line, where `in=` lives —
+ * never the block: a grouping has no business near anyone's `desc`
+ * continuation lines, so they keep their bytes by never being spliced. A
+ * member already in the chosen frame is left byte-untouched (no patch, no new
+ * model object), and if EVERY member already has the chosen membership the
+ * whole edit refuses (`null`) so an idle Apply costs no undo entry — the
+ * contract every gesture in this module states.
+ */
+export function groupedNodesEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  nodeIds: readonly string[],
+  frame: C4NodeFrameChoice,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  const wanted = new Set(nodeIds);
+  if (wanted.size === 0) return null;
+  const members = diagram.nodes.filter((node) => wanted.has(node.id));
+  if (members.length !== wanted.size) return null;
+
+  const resolved = resolvedFrameChoice(diagram.frames ?? [], frame);
+  if (resolved === null) return null;
+  const { frameId, mintedFrame } = resolved;
+
+  const movers = members.filter((member) => member.frameId !== frameId);
+  if (movers.length === 0 && mintedFrame === null) return null;
+  const moving = new Set(movers.map((member) => member.id));
+
+  const edited = mapDiagram(file, diagramId, (current) => ({
+    ...current,
+    // Spread-guarded for `revisedNodeEdit`'s reason: absence is how the
+    // format spells "no boundaries".
+    ...(mintedFrame === null
+      ? {}
+      : { frames: [...(current.frames ?? []), mintedFrame] }),
+    // Only the movers get new objects: an untouched member keeps its
+    // identity, so the projection cache keeps its node and React Flow
+    // re-adopts nothing the gesture did not change.
+    nodes: current.nodes.map((node) =>
+      moving.has(node.id) ? { ...node, frameId } : node,
+    ),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable !== null) {
+    const rewrites = movers.map((member) => {
+      const span = patchable.spans.nodes.get(spanKey(diagramId, member.id));
+      const line = canonicalNodeLine(edited, diagramId, member.id);
+      return span === undefined || line === null
+        ? undefined
+        : { span: { start: span.start, end: span.start }, lines: [line] };
+    });
+    // Every patch or none — the delete's rule, for the grouping's reason: a
+    // partial splice would draw a boundary missing members the reader chose.
+    if (rewrites.every((patch) => patch !== undefined)) {
+      const patches = rewrites as LinePatch[];
+      if (mintedFrame !== null) {
+        const insert = frameMintPatch(
+          patchable.spans,
+          file,
+          diagramId,
+          mintedFrame,
+        );
+        if (insert === null) return null;
+        // FIRST, for the tied-anchor rule `frameMintPatch` states.
+        patches.unshift(insert);
+      }
+      return adopt(doc, edited, applyPatches(sourceText, patches));
+    }
   }
   return adopt(doc, edited, null);
 }
