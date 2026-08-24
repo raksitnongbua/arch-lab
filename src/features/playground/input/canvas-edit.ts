@@ -63,6 +63,7 @@
 import type {
   ArchLabFile,
   C4Diagram,
+  C4Edge,
   C4Frame,
   C4Node,
   C4NodeFrameChoice,
@@ -75,11 +76,13 @@ import { childLevelOf } from "@/types";
 
 import {
   canonicalDiagramBlock,
+  canonicalEdgeBlock,
   canonicalFrameDeclaration,
   canonicalFrameLine,
   canonicalNodeBlock,
   canonicalNodeLine,
   canonicalTagColorLine,
+  defaultEdgeId,
   defaultPositions,
   defaultSizeFor,
   KEYWORD_BY_NODE_TYPE,
@@ -147,25 +150,39 @@ export type CanvasEditability =
  *     adds messages and lifelines, but those land at an INDEX and write no
  *     coordinate, so they belong to `revise` with the other eight sequence
  *     gestures — see the sequence `create` cell, whose refusal points at them.
+ *   - `"connect"` — write a RELATIONSHIP between two elements: a new line in
+ *     the text that names a PAIR and carries no coordinate. Its own row
+ *     rather than a stretch of an existing one, by both of the tests this
+ *     union states: neither definition holds it (`revise` rewrites one
+ *     element's own fields in place — an edge is not a field of either
+ *     endpoint — and `create` is a placement, which a coordinate-free line
+ *     cannot be), and it gates on a fact no other ability asks about — the
+ *     diagram's own relationship set, because whether a pair may be connected
+ *     (the same element twice, a pair already related) is a question about
+ *     EDGES that move, revise and create never pose. The sequence canvas's
+ *     message insert is deliberately NOT this ability, for the reason its
+ *     cell states: a sequence relationship is an ordered EVENT that lands at
+ *     an index, which is `revise`'s territory with the other inserts.
  *
  * A document can therefore refuse one and allow the other — a sequence
  * document refuses `move` while offering `revise`, and the four text-laid-out
- * notations refuse all three. That is
+ * notations refuse all four. That is
  * why the answers live in a TABLE below rather than in a chain of
  * `doc.kind !== …` tests: a chain states each notation's answer as the negation
  * of another's, which reads backwards and leaves the grid a reader wants —
  * notation against ability — nowhere on the page.
  *
- * A FOURTH ABILITY IS A REAL POSSIBILITY and this union is the place for it,
+ * A FIFTH ABILITY IS A REAL POSSIBILITY and this union is the place for it,
  * not a per-gesture verdict. The nine sequence gestures share one ability
  * because they gate on the same two facts (an `.alab` sequence pane, the
  * canvas unlocked); a new ability is owed only when a gesture gates on
  * something the existing ones do not ask about — `create` earned its row by
- * gating on a third fact, the diagram level's own set of legal node types.
+ * gating on a third fact, the diagram level's own set of legal node types,
+ * and `connect` by gating on the relationship set (see its entry above).
  * Adding one makes `CANVAS_EDIT_OFFERS` incomplete, which is a type error
  * before it is a check failure.
  */
-export type CanvasEditAbility = "move" | "revise" | "create";
+export type CanvasEditAbility = "move" | "revise" | "create" | "connect";
 
 /**
  * The notations a `ViewDocument` can be — the key of the capability table.
@@ -487,6 +504,73 @@ export const CANVAS_EDIT_OFFERS: Record<
       because: NO_PLACE_IN_THE_TEXT,
     },
   },
+  connect: {
+    c4: {
+      offers: true,
+      noun: "C4 diagrams",
+      /* "a relationship line" is the ability's whole definition said outward:
+         what lands is a line naming a PAIR, never a coordinate — the claim
+         that separates this row from `create`. "or onto a new element added
+         with it" is the create-then-connect half, worded so the reader knows
+         one gesture yields both lines. */
+      onCanvas:
+        "a relationship drawn from one C4 element onto another — or onto a " +
+        "new element added with it — landing as a relationship line",
+      unlessPane: {
+        format: "mermaid",
+        /* Measured against the emitter, not assumed: `serializeMermaidC4`
+           writes ONE diagram (its `Rel`/`BiRel` lines carry only source,
+           target, label and technology — no slot for an edge's `id`), so a
+           relationship drawn on any other level is simply not in the pane's
+           text, and a second relationship on an already-related pair — which
+           this gesture may add, `connect-verdict.ts`'s duplicate caution —
+           comes back indistinguishable from the first. Writing an edit back
+           through a pane that cannot spell it would show the change once and
+           lose it on the next round trip, which is worse than refusing. */
+        because:
+          "Mermaid C4 holds a single diagram and gives a relationship no id, " +
+          "so an edge drawn on another level — or a second one on the same " +
+          "pair — would be lost. Switch the pane to .alab to edit on the " +
+          "canvas.",
+      },
+    },
+    /* The one notation whose relationships are EVENTS: a message has a place
+       in time (its index in `items`), so a bare pair-naming line is not in
+       the grammar — and the dock's insert, which does write messages, belongs
+       to `revise` for the reason the ability doc gives. The refusal points at
+       that control rather than at the derived tail, because it is one click
+       away. */
+    sequence: {
+      offers: false,
+      ground: "grammar",
+      because:
+        "In this notation a relationship is a message with a place in time, " +
+        "so there is no bare line between two elements to write.",
+      instead:
+        "Use the Add controls under the canvas to insert a message between two lifelines instead.",
+    },
+    flowchart: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    usecase: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    er: { offers: false, ground: "surface", because: NO_EDITOR_ON_THIS_CANVAS },
+    /* `"grammar"`, unlike its three neighbours: a dictionary's grammar holds
+       no relationship at all — sections and fields, no line between two
+       entries — so no dock could ever move this refusal. */
+    dict: {
+      offers: false,
+      ground: "grammar",
+      because:
+        "A data dictionary declares fields, not relationships, so there is " +
+        "no line between two entries to write.",
+    },
+  },
 };
 
 export function canvasEditability(
@@ -514,6 +598,7 @@ const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
   move: "dragged on the canvas",
   revise: "edited on the canvas",
   create: "given a new element on the canvas",
+  connect: "connected on the canvas",
 };
 
 /**
@@ -698,7 +783,6 @@ function patchablePane(
   doc: Extract<ViewDocument, { kind: "c4" }>,
   sourceText: string,
 ): { spans: ArchTextSpans } | null {
-  if (doc.format !== "alab") return null;
   let spans: ArchTextSpans;
   try {
     const parsed = parseArchTextWithSpans(sourceText);
@@ -1536,6 +1620,251 @@ export function createdRefEdit(
           edited,
           applyPatches(sourceText, [
             { span: { start: after + 1, end: after }, lines },
+          ]),
+        ),
+        id,
+      );
+    }
+  }
+  return asCreated(adopt(doc, edited, null), id);
+}
+
+/** Every edge id in the file — the set a new edge id de-collides against.
+ *  File-wide, matching the editor's `createEdge` (`collectEdgeIds`): edge ids
+ *  follow the node-id uniqueness convention, and a duplicate pair's second
+ *  edge needs a suffixed id the whole file agrees is free. */
+function takenEdgeIds(file: ArchLabFile): Set<string> {
+  return new Set(
+    file.diagrams.flatMap((diagram) => diagram.edges.map((edge) => edge.id)),
+  );
+}
+
+/**
+ * The insert patch for one new relationship line, or `null` when the pane
+ * cannot take the splice (a span the parser did not record) — the caller
+ * falls back to the re-emit path exactly as the create gestures do.
+ *
+ * SPLICED AFTER THE DIAGRAM'S LAST RELATIONSHIP LINE, so edges stay with
+ * edges — the create gesture's ordering argument, one section down. A diagram
+ * with no edge lines yet takes the line after its LAST node declaration, with
+ * the blank separator the serializer writes between the two sections
+ * (`emitDiagram`), so the first connect leaves the diagram spelled exactly as
+ * a full serialise would order it. That anchor can TIE with a node line
+ * another patch inserts (create-then-connect): callers put the node patch
+ * FIRST in their list, because `applyPatches` sorts stably, so the new node's
+ * declaration lands above the blank-plus-edge rather than below it.
+ */
+function edgeInsertPatch(
+  spans: ArchTextSpans,
+  diagram: C4Diagram,
+  edited: ArchLabFile,
+  diagramId: string,
+  edgeId: string,
+): LinePatch | null {
+  const lines = canonicalEdgeBlock(edited, diagramId, edgeId);
+  if (lines === null) return null;
+  const edgeEnds = diagram.edges.flatMap((edge) => {
+    const span = spans.edges.get(spanKey(diagramId, edge.id));
+    return span === undefined ? [] : [span.end];
+  });
+  if (edgeEnds.length < diagram.edges.length) return null;
+  if (edgeEnds.length > 0) {
+    const after = Math.max(...edgeEnds);
+    return { span: { start: after + 1, end: after }, lines };
+  }
+  const nodeEnds = diagram.nodes.flatMap((node) => {
+    const span = spans.nodes.get(spanKey(diagramId, node.id));
+    return span === undefined ? [] : [span.end];
+  });
+  if (nodeEnds.length === 0) return null;
+  const after = Math.max(...nodeEnds);
+  return { span: { start: after + 1, end: after }, lines: ["", ...lines] };
+}
+
+/**
+ * `doc` with one new relationship from `sourceId` to `targetId`, or `null`
+ * when the edit cannot apply — a document that refuses `"connect"`, an
+ * endpoint that is not in THIS diagram, or the same element twice.
+ *
+ * THE REFUSALS FOLLOW THE CONNECT-VERDICT MODEL (`editor/lib/
+ * connect-verdict.ts`), which the drag's preview already paints from, so the
+ * line under the cursor and this verdict cannot disagree:
+ *
+ *   - A SELF-EDGE REFUSES — the verdict model's `cancel`: returning to where
+ *     a gesture started is the universal abort, and the editor's `createEdge`
+ *     refuses the same pair for the same reason.
+ *   - AN UNKNOWN OR CROSS-DIAGRAM TARGET REFUSES. `C4Edge.source`/`target`
+ *     name nodes in the SAME diagram — an edge into another level is not in
+ *     the grammar — so an id this diagram does not hold is refused whether it
+ *     exists elsewhere in the file or nowhere at all. Only a pane lagging the
+ *     canvas can ask for one.
+ *   - A DUPLICATE PAIR IS ALLOWED, deliberately — the verdict model's
+ *     `duplicate` is "a caution, never a refusal": parallel relationships are
+ *     a real feature (`edge-geometry.ts` draws them as separate curves, A
+ *     "reads" B beside A "writes" B), and refusing them here would remove it
+ *     to paper over a discoverability problem. The id de-collides
+ *     (`e-a-b-2`), and the caller announces the caution.
+ *   - A `^ref` PLACEHOLDER IS A LEGAL ENDPOINT, either end — the grouping's
+ *     argument, not the field editor's refusal: an edge is a fact about THIS
+ *     diagram that the serializer writes beside the `^` token, and drawing
+ *     the outer system's mirror talking to local elements is what
+ *     placeholders exist for. Nothing derived is forked.
+ *
+ * WHAT THE LINE CARRIES, and deliberately no more: the pair and the format's
+ * defaults — direction `forward` (the editor's `createEdge` default), no
+ * label, no technology. The relationship's wording is the details panel's
+ * job, exactly as a created node's name is; a gesture that stopped to ask for
+ * a label would cost a form before the reader sees the line land.
+ *
+ * A CONNECT IS AN INSERT PATCH — one relationship line (plus the section's
+ * blank separator when this is the diagram's first), spliced by
+ * `edgeInsertPatch`; every other byte survives because nothing touched it.
+ */
+export function connectedNodesEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  sourceId: string,
+  targetId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "connect").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+
+  if (sourceId === targetId) return null;
+  if (
+    findNode(file, diagramId, sourceId) === null ||
+    findNode(file, diagramId, targetId) === null
+  ) {
+    return null;
+  }
+
+  const edge: C4Edge = {
+    id: uniqueId(defaultEdgeId(sourceId, targetId), takenEdgeIds(file)),
+    source: sourceId,
+    target: targetId,
+    direction: "forward",
+  };
+  const edited = mapDiagram(file, diagramId, (current) => ({
+    ...current,
+    edges: [...current.edges, edge],
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable !== null) {
+    const insert = edgeInsertPatch(
+      patchable.spans,
+      diagram,
+      edited,
+      diagramId,
+      edge.id,
+    );
+    if (insert !== null) {
+      return adopt(doc, edited, applyPatches(sourceText, [insert]));
+    }
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one new node of `type` AND the relationship from `sourceId` to
+ * it, or `null` when the edit cannot apply — the connect grip's "or a new
+ * element" half: the reader asked for "a new thing this one talks to", and
+ * this delivers both halves of that sentence.
+ *
+ * TWO ABILITIES ARE ASKED, because the gesture genuinely does both things:
+ * `"connect"` (its own row — the edge is the point) and `"create"` (it also
+ * places a node, so the placement ability's answer must hold too). For a C4
+ * document the two refuse in exactly the same case (a Mermaid pane), but each
+ * gate guards its own gesture the day the cells diverge — the rule every
+ * entry point in this module follows.
+ *
+ * ONE TEXT, ONE UNDO ENTRY, deliberately: the node line and the relationship
+ * line go through `applyPatches` together, so a single Cmd/Ctrl+Z takes both
+ * back. Splitting it into create-then-connect as two edits was rejected
+ * because the halfway state is one the reader never asked to see — undoing
+ * once would leave a stray unnamed node they did not press for, connected to
+ * nothing, and the announcement would have promised a relationship the undo
+ * quietly kept half of.
+ *
+ * NODE PATCH FIRST in the list, for `edgeInsertPatch`'s tied-anchor rule: on
+ * a diagram with no relationship lines yet, both inserts anchor after the
+ * same last node declaration, and the stable sort keeps list order there.
+ *
+ * The node itself is `createdNodeEdit`'s in every decision — placeholder name
+ * and deterministic id from the type, the clear band below everything drawn
+ * (`vacantPosition`), the type re-checked against `creatableNodeTypes` — so
+ * the two create gestures cannot drift on what a new element is born as.
+ */
+export function connectedNewNodeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  sourceId: string,
+  type: C4NodeType,
+): CanvasEdit | null {
+  if (
+    !canvasEditability(doc, "connect").editable ||
+    !canvasEditability(doc, "create").editable ||
+    doc.kind !== "c4"
+  ) {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  if (findNode(file, diagramId, sourceId) === null) return null;
+  if (!creatableNodeTypes(diagram.level).some((row) => row.type === type)) {
+    return null;
+  }
+
+  const id = freshNodeId(file, type);
+  const node: C4Node = {
+    id,
+    type,
+    name: createdNodeName(type),
+    position: vacantPosition(diagram, id),
+    size: defaultSizeFor(type),
+  };
+  const edge: C4Edge = {
+    id: uniqueId(defaultEdgeId(sourceId, id), takenEdgeIds(file)),
+    source: sourceId,
+    target: id,
+    direction: "forward",
+  };
+  const edited = mapDiagram(file, diagramId, (current) => ({
+    ...current,
+    nodes: [...current.nodes, node],
+    edges: [...current.edges, edge],
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const line = canonicalNodeLine(edited, diagramId, id);
+  if (patchable !== null && line !== null) {
+    const nodeEnds = diagram.nodes.flatMap((existing) => {
+      const span = patchable.spans.nodes.get(spanKey(diagramId, existing.id));
+      return span === undefined ? [] : [span.end];
+    });
+    const insert = edgeInsertPatch(
+      patchable.spans,
+      diagram,
+      edited,
+      diagramId,
+      edge.id,
+    );
+    if (nodeEnds.length > 0 && insert !== null) {
+      const after = Math.max(...nodeEnds);
+      return asCreated(
+        adopt(
+          doc,
+          edited,
+          applyPatches(sourceText, [
+            // FIRST, for the tied-anchor rule the header states.
+            { span: { start: after + 1, end: after }, lines: [line] },
+            insert,
           ]),
         ),
         id,

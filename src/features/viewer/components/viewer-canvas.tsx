@@ -95,9 +95,15 @@ import {
   NO_DRAG_OVERLAY,
   type DragOverlay,
 } from "../lib/drag-overlay";
+import { verdictFor } from "@/features/editor/lib/connect-verdict";
+
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
-import { referenceableNodes } from "../lib/node-palette";
+import {
+  connectTargets,
+  creatableNodeTypes,
+  referenceableNodes,
+} from "../lib/node-palette";
 import {
   createNodeProjectionCache,
   projectViewerNodes,
@@ -112,6 +118,7 @@ import {
   type ViewerFlowEdge,
 } from "./viewer-edge";
 import { FrameLayer } from "@/features/editor/components/frame-layer";
+import type { ViewerConnectActions } from "./viewer-connect-grip";
 import {
   ViewerNode,
   ViewerNodeActionsProvider,
@@ -241,6 +248,32 @@ export interface CanvasEditHandlers {
    * submitted form, exactly as `onNodeRevise` does for a node's fields.
    */
   onFrameRename: (diagramId: string, frameId: string, label: string) => void;
+  /**
+   * Write one relationship from `sourceId` to `targetId`, from the connect
+   * grip — a drag released on an element, or the menu's existing-element
+   * half. The host turns it into an insert patch (`connectedNodesEdit`) and
+   * refuses what cannot apply (the same element twice, an endpoint the pane
+   * no longer holds) with an announcement; a pair already related is a
+   * CAUTION, not a refusal — the verdict model's own call — and the host says
+   * a second relationship was added. The canvas only reports the pair.
+   */
+  onNodeConnect: (
+    diagramId: string,
+    sourceId: string,
+    targetId: string,
+  ) => void;
+  /**
+   * Add a new node of `type` ALREADY connected from `sourceId` — the connect
+   * menu's other half. One text edit and one undo entry
+   * (`connectedNewNodeEdit`); returns the created node's id for the reason
+   * `onNodeCreate` does — the newcomer lands below everything drawn and the
+   * canvas owns the camera that must go find it.
+   */
+  onConnectCreate: (
+    diagramId: string,
+    sourceId: string,
+    type: C4NodeType,
+  ) => string | null;
   /**
    * Undo the last canvas edit.
    *
@@ -1136,18 +1169,6 @@ function ViewerCanvasInner({
     [model, navigateTo],
   );
 
-  /* ---- what a node can navigate to -----------------------------------------
-   * CONTEXT, NOT NODE DATA, and the projection is the reason. Both handlers
-   * close over `model`, so both are new functions on every edit — and a node
-   * object carrying a new function is a new node object, which is the re-adopt
-   * the projection cache exists to avoid (see `lib/project-nodes.ts`). Through
-   * context they can change as freely as they like: a context change re-renders
-   * the node components and leaves the node OBJECTS alone. */
-  const nodeActions = useMemo<ViewerNodeActions>(
-    () => ({ drillInto, openReference }),
-    [drillInto, openReference],
-  );
-
   // Element selection routes through React Flow's onNodeClick, not a handler
   // inside the node component: with every interactive flag off (draggable /
   // selectable / connectable all false), React Flow sets `pointer-events:
@@ -1561,6 +1582,99 @@ function ViewerCanvasInner({
         ? referenceableNodes(Object.values(model.diagrams), diagramId)
         : [],
     [editable, model, diagramId],
+  );
+
+  /* ---- editing: the connect grip -------------------------------------------
+   * The grip's whole gesture is HAND-ROLLED in the grip component and resolved
+   * here from MODEL GEOMETRY, never through React Flow's connection machinery:
+   * `nodesConnectable` stays false on this flow, no `onConnect*` handler is
+   * declared, and the only per-frame state the drag produces is the grip's own
+   * ghost overlay — nothing the `nodes`/`edges` projections read, which is the
+   * marquee's 4fa7c36 loop-guard applied to the second drag that could have
+   * re-engaged the store. The press cannot fight the other two drags either:
+   * it starts on a `nodrag` button (so React Flow never starts a node drag)
+   * and never on the pane element itself (so the marquee never claims it). */
+
+  /** The element under a screen point, from the model's own geometry — the
+   *  marquee-release arithmetic, reused for the drag's target test. */
+  const nodeAtClientPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const container = containerRef.current;
+      if (container === null) return null;
+      const box = container.getBoundingClientRect();
+      const viewport = getViewport();
+      const x = (clientX - box.left - viewport.x) / viewport.zoom;
+      const y = (clientY - box.top - viewport.y) / viewport.zoom;
+      const current = getDiagram(model, diagramIdRef.current);
+      return (
+        current.nodes.find(
+          (node) =>
+            x >= node.position.x &&
+            x <= node.position.x + node.size.width &&
+            y >= node.position.y &&
+            y <= node.position.y + node.size.height,
+        ) ?? null
+      );
+    },
+    [model, getViewport],
+  );
+
+  const connectActions = useMemo<ViewerConnectActions | null>(() => {
+    if (edit === undefined) return null;
+    return {
+      // The menu's list and the host's guard read the same diagram, and the
+      // duplicate flag comes from the one verdict table (`connectTargets`).
+      targetsFor: (sourceNodeId) =>
+        connectTargets(getDiagram(model, diagramIdRef.current), sourceNodeId),
+      createTypes: creatableNodeTypes(diagram.level),
+      verdictAt: (sourceNodeId, clientX, clientY) => {
+        const hit = nodeAtClientPoint(clientX, clientY);
+        return {
+          verdict: verdictFor({
+            sourceNodeId,
+            targetNodeId: hit?.id ?? null,
+            diagram: getDiagram(model, diagramIdRef.current),
+          }),
+          targetName: hit?.name ?? null,
+        };
+      },
+      completeAt: (sourceNodeId, clientX, clientY) => {
+        const hit = nodeAtClientPoint(clientX, clientY);
+        if (hit === null) {
+          /* SAID, not swallowed — but not an error either: the ghost's
+             caption redirected the whole way, so this is the reminder, and
+             it names the gesture that does create. */
+          setAnnouncement(
+            "Nothing connected — release the connect handle on another element, or click it to add a new one.",
+          );
+          return;
+        }
+        // Back on the source is the universal abort (the verdict model's
+        // `cancel`): silent, exactly as an aborted marquee is.
+        if (hit.id === sourceNodeId) return;
+        edit.onNodeConnect(diagramIdRef.current, sourceNodeId, hit.id);
+      },
+      connectTo: (sourceNodeId, targetNodeId) =>
+        edit.onNodeConnect(diagramIdRef.current, sourceNodeId, targetNodeId),
+      // The created node's id is FOLLOWED, exactly as the Add strip's is:
+      // same ref, same effect, same camera move and selection.
+      createAndConnect: (sourceNodeId, type) =>
+        focusWhenCreated(
+          edit.onConnectCreate(diagramIdRef.current, sourceNodeId, type),
+        ),
+    };
+  }, [edit, model, diagram.level, nodeAtClientPoint, focusWhenCreated]);
+
+  /* ---- what a node can navigate to, and the grip's callbacks ----------------
+   * CONTEXT, NOT NODE DATA, and the projection is the reason. These close
+   * over `model`, so they are new functions on every edit — and a node
+   * object carrying a new function is a new node object, which is the re-adopt
+   * the projection cache exists to avoid (see `lib/project-nodes.ts`). Through
+   * context they can change as freely as they like: a context change re-renders
+   * the node components and leaves the node OBJECTS alone. */
+  const nodeActions = useMemo<ViewerNodeActions>(
+    () => ({ drillInto, openReference, connect: connectActions }),
+    [drillInto, openReference, connectActions],
   );
 
   const climbTo = useCallback(

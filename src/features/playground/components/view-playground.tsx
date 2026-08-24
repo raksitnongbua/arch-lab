@@ -196,6 +196,8 @@ import {
   CANVAS_EDITABLE_SUMMARY,
   CANVAS_GESTURE_CLAUSES,
   canvasEditability,
+  connectedNewNodeEdit,
+  connectedNodesEdit,
   createdNodeEdit,
   createdRefEdit,
   nestedNodeEdit,
@@ -1188,6 +1190,64 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleNodeConnect = useCallback(
+    (diagramId: string, sourceId: string, targetId: string) => {
+      /* THE DUPLICATE CAUTION IS READ BEFORE THE EDIT, from the same
+         unordered-pair fact the verdict model warns on: the module ALLOWS a
+         second relationship (parallel edges are a feature), so the sentence
+         is the only place the caution can land after the release. */
+      const already =
+        doc.kind === "c4" &&
+        (
+          doc.synced.file.diagrams.find((d) => d.id === diagramId)?.edges ?? []
+        ).some(
+          (e) =>
+            (e.source === sourceId && e.target === targetId) ||
+            (e.source === targetId && e.target === sourceId),
+        );
+      const next = connectedNodesEdit(doc, text, diagramId, sourceId, targetId);
+      /* SAID, not swallowed — the Add strip's rule: a completed drag that
+         changes nothing reads as a broken gesture. Two causes share the
+         sentence honestly: the same element twice, and the pane lagging the
+         canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The relationship was not added — an element cannot connect to itself, or the source pane and the diagram do not match yet.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        already
+          ? `A second relationship added from ${sourceId} to ${targetId} — they were already related, and the new line draws beside the old one. Press Cmd or Ctrl + Z with the diagram focused to undo.`
+          : `Relationship added from ${sourceId} to ${targetId} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleConnectCreate = useCallback(
+    (diagramId: string, sourceId: string, type: C4NodeType): string | null => {
+      const next = connectedNewNodeEdit(doc, text, diagramId, sourceId, type);
+      if (next === null) {
+        setAnnouncement(
+          "The element was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return null;
+      }
+      applyCanvasEdit(
+        next,
+        /* "one undo takes both back" is the gesture's whole contract said to
+           the reader: the node and its relationship are ONE text edit
+           (`connectedNewNodeEdit`), so the announcement must not read as two
+           steps. */
+        `“${createdNodeName(type)}” added below the diagram, connected from ${sourceId} and selected — the source text follows. Rename it in the details panel; one Cmd or Ctrl + Z with the diagram focused takes both back.`,
+      );
+      return next.createdNodeId ?? null;
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleNodeNest = useCallback(
     (diagramId: string, nodeId: string) => {
       const next = nestedNodeEdit(doc, text, diagramId, nodeId);
@@ -1566,6 +1626,8 @@ export function ViewPlayground({
             onNodeUnnest: handleNodeUnnest,
             onNodesGroup: handleNodesGroup,
             onFrameRename: handleFrameRename,
+            onNodeConnect: handleNodeConnect,
+            onConnectCreate: handleConnectCreate,
             onUndo: handleCanvasUndo,
           }
         : undefined,
@@ -1580,6 +1642,8 @@ export function ViewPlayground({
       handleNodeUnnest,
       handleNodesGroup,
       handleFrameRename,
+      handleNodeConnect,
+      handleConnectCreate,
       handleCanvasUndo,
     ],
   );

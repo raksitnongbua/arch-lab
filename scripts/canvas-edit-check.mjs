@@ -258,6 +258,8 @@ const {
   CANVAS_EDIT_OFFERS,
   CANVAS_EDITABLE_SUMMARY,
   canvasEditability,
+  connectedNewNodeEdit,
+  connectedNodesEdit,
   createdNodeEdit,
   createdNodeName,
   createdRefEdit,
@@ -268,7 +270,7 @@ const {
   ownsChildDiagram,
   revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
-const { creatableNodeTypes } = await load(
+const { connectTargets, creatableNodeTypes } = await load(
   "src/features/viewer/lib/node-palette.ts",
 );
 const {
@@ -1056,11 +1058,12 @@ console.log("\nThe capability grid answers every notation for every ability");
   const abilities = Object.keys(CANVAS_EDIT_OFFERS);
   const seededKinds = Object.keys(VIEW_SEED_TEXT).sort();
   check(
-    "the grid names the three abilities and nothing else",
-    abilities.length === 3 &&
+    "the grid names the four abilities and nothing else",
+    abilities.length === 4 &&
       abilities.includes("move") &&
       abilities.includes("revise") &&
-      abilities.includes("create"),
+      abilities.includes("create") &&
+      abilities.includes("connect"),
     `abilities: ${abilities.join(", ")}`,
   );
 
@@ -3786,9 +3789,9 @@ console.log(
     "src/features/playground/components/view-playground.tsx",
   );
   check(
-    "both create handlers hand the created id back to the canvas",
+    "all three create handlers hand the created id back to the canvas",
     (playgroundSrc.match(/return next\.createdNodeId \?\? null;/g) ?? [])
-      .length === 2,
+      .length === 3,
     "a create the canvas cannot follow — the new element stays off screen " +
       "while the announcement promises a rename",
   );
@@ -5536,6 +5539,435 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
     "spaceHeld or a panActivationKeyCode prop is back in viewer-canvas.tsx — " +
       "the pan is the Select/Pan toggle now, and a key beside it is a second " +
       "gate that can disagree with the mode",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 21. A connect is an INSERT patch, and one gesture can mint both lines       */
+/* -------------------------------------------------------------------------- */
+
+console.log("\nConnecting two elements is one inserted relationship line");
+{
+  /* NON-CANONICAL for section 13's reason, with the shapes only a CONNECT
+     meets: an existing relationship line (the insert must land under it, and
+     its pair is the duplicate fixture), a diagram with NO relationship lines
+     (the blank-separator anchor), and a `^ref` placeholder (a legal endpoint
+     — an edge is a local fact — where the field editor refuses). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Connect probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" (400,240 160x96)`,
+    `    desc "The paying kind."`,
+    `  ops:person "Operator" (640,240 160x96)`,
+    `  web:system "Web App" (400,480 160x96) >backend`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go] (400,240 160x96)`,
+    `  db:database "Orders DB" (640,240 160x96)`,
+    `  mirror:external ^ctx/cust (880,240 160x96)`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const before = authored.split("\n");
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the fresh pair: one line, under the last relationship line ----------- */
+
+  const connected = connectedNodesEdit(doc, authored, "ctx", "ops", "web");
+  check(
+    "a connect on authored text takes the PATCH path, by name",
+    connected !== null && connected.path === "patch",
+    `path: ${connected === null ? "refused" : connected.path}`,
+  );
+  const after = (connected?.text ?? "").split("\n");
+  check(
+    "the connect adds exactly one line — the relationship",
+    after.length === before.length + 1,
+    `${before.length} lines became ${after.length}`,
+  );
+  const edgeLineAt = before.indexOf(`  cust -> web :"uses"`) + 1;
+  check(
+    "the new line sits directly under the diagram's last relationship line",
+    after[edgeLineAt] === `  ops -> web`,
+    `line under the existing edge: ${JSON.stringify(after[edgeLineAt])}`,
+  );
+  check(
+    "every line the connect is not about is byte-identical",
+    JSON.stringify([
+      ...after.slice(0, edgeLineAt),
+      ...after.slice(edgeLineAt + 1),
+    ]) === JSON.stringify(before),
+    firstDiff(
+      [...after.slice(0, edgeLineAt), ...after.slice(edgeLineAt + 1)].join(
+        "\n",
+      ),
+      authored,
+    ),
+  );
+  /* The patched line is CANONICAL, proved against a full serialise of the
+     connected document — section 13's derivation, section 13's reason. */
+  check(
+    "the inserted line is byte-identical to what the serializer would emit",
+    connected !== null &&
+      sourceTextFor(connected.doc).split("\n").includes(after[edgeLineAt]),
+    "the spliced relationship diverged from canonical form",
+  );
+  const connectedDiagram = connected?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "the re-parse holds the relationship, forward, under its default id",
+    connectedDiagram?.edges.some(
+      (e) =>
+        e.id === "e-ops-web" &&
+        e.source === "ops" &&
+        e.target === "web" &&
+        e.direction === "forward",
+    ) === true,
+    `edges: ${JSON.stringify(connectedDiagram?.edges.map((e) => e.id))}`,
+  );
+
+  /* --- the duplicate: a CAUTION, never a refusal ----------------------------- */
+
+  /* The verdict model's own call (`connect-verdict.ts`): parallel
+     relationships are a real feature the canvas already draws as separate
+     curves, so the module must not refuse them — it de-collides the id
+     instead, and the id must land on the line or the round trip would fuse
+     the pair back into one. */
+  const doubled = connectedNodesEdit(doc, authored, "ctx", "cust", "web");
+  check(
+    "an already-related pair connects again — a caution, never a refusal",
+    doubled !== null &&
+      doubled.path === "patch" &&
+      doubled.text.includes("  cust -> web id=e-cust-web-2") &&
+      doubled.doc.synced.file.diagrams
+        .find((d) => d.id === "ctx")
+        .edges.filter((e) => e.source === "cust" && e.target === "web")
+        .length === 2,
+    `text gained: ${JSON.stringify(
+      changedLines(authored, doubled?.text ?? authored).map((l) => l.after),
+    )}`,
+  );
+
+  /* --- the refusals ---------------------------------------------------------- */
+
+  check(
+    "the same element twice refuses — the verdict model's cancel",
+    refuses(() => connectedNodesEdit(doc, authored, "ctx", "cust", "cust")),
+    "a self-edge was written",
+  );
+  check(
+    "a cross-diagram target refuses — an edge names nodes of ONE diagram",
+    refuses(() => connectedNodesEdit(doc, authored, "ctx", "cust", "api")),
+    "an edge was written into a diagram that does not hold its target",
+  );
+  check(
+    "an unknown target refuses",
+    refuses(() => connectedNodesEdit(doc, authored, "ctx", "cust", "ghost")),
+    "an edge was written against a node the file does not hold",
+  );
+  check(
+    "a Mermaid pane refuses the connect — the connect cell's own caveat",
+    refuses(() =>
+      connectedNodesEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        "ops",
+        "web",
+      ),
+    ),
+    "an edge was written against a pane that gives it no id and one diagram",
+  );
+  const jsonConnected = connectedNodesEdit(
+    { ...doc, format: "json" },
+    JSON.stringify({ not: "the alab text" }),
+    "ctx",
+    "ops",
+    "web",
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    jsonConnected !== null && jsonConnected.path === "reemit",
+    `path: ${jsonConnected === null ? "refused" : jsonConnected.path}`,
+  );
+
+  /* --- the ^ref endpoint, and the first edge of a diagram --------------------- */
+
+  /* One gesture, two facts: a placeholder is a LEGAL endpoint (an edge is a
+     local fact the serializer writes beside the `^` token — the grouping's
+     argument, not the field editor's refusal), and a diagram with no
+     relationship lines yet takes the blank separator the serializer writes
+     between the sections, so the first connect leaves the diagram spelled
+     exactly as a full serialise would order it. */
+  const toMirror = connectedNodesEdit(
+    doc,
+    authored,
+    "backend",
+    "api",
+    "mirror",
+  );
+  const mirrorAfter = (toMirror?.text ?? "").split("\n");
+  const mirrorDeclAt = before.indexOf(
+    `  mirror:external ^ctx/cust (880,240 160x96)`,
+  );
+  check(
+    "a ^ref placeholder is a legal endpoint — an edge is local, not derived",
+    toMirror !== null &&
+      toMirror.path === "patch" &&
+      toMirror.doc.synced.file.diagrams
+        .find((d) => d.id === "backend")
+        .edges.some((e) => e.source === "api" && e.target === "mirror"),
+    "connecting to a mirror was refused — drawing the outer system talking " +
+      "to local elements is what placeholders exist for",
+  );
+  check(
+    "the diagram's first relationship arrives with the canonical blank separator",
+    mirrorAfter.length === before.length + 2 &&
+      mirrorAfter[mirrorDeclAt + 1] === "" &&
+      mirrorAfter[mirrorDeclAt + 2] === "  api -> mirror",
+    `lines under the last node: ${JSON.stringify(
+      mirrorAfter.slice(mirrorDeclAt + 1, mirrorDeclAt + 3),
+    )}`,
+  );
+
+  /* --- the menu's list shares the verdict table ------------------------------ */
+
+  const ctxDiagram = doc.synced.file.diagrams.find((d) => d.id === "ctx");
+  const targets = connectTargets(ctxDiagram, "cust");
+  check(
+    "connectTargets offers every OTHER element, flagging the related pair",
+    targets.length === 2 &&
+      targets.every((t) => t.node.id !== "cust") &&
+      targets.find((t) => t.node.id === "web")?.related === true &&
+      targets.find((t) => t.node.id === "ops")?.related === false,
+    `targets: ${JSON.stringify(
+      targets.map((t) => `${t.node.id}:${t.related}`),
+    )}`,
+  );
+  check(
+    "the reverse direction wears the same flag — the pair is unordered",
+    connectTargets(ctxDiagram, "web").find((t) => t.node.id === "cust")
+      ?.related === true,
+    "B→A of an existing A→B reads as fresh — the parallel-curve surprise the " +
+      "verdict model exists to warn about",
+  );
+
+  /* --- create-then-connect: two lines, ONE text, ONE undo entry --------------- */
+
+  const minted = connectedNewNodeEdit(
+    doc,
+    authored,
+    "ctx",
+    "web",
+    "softwareSystem",
+  );
+  check(
+    "create-then-connect patches, names its node, and stays ONE edit",
+    minted !== null &&
+      minted.path === "patch" &&
+      minted.createdNodeId === "new-system",
+    `got: ${minted === null ? "refused" : `${minted.path}, ${minted.createdNodeId}`}`,
+  );
+  const mintedAfter = (minted?.text ?? "").split("\n");
+  const webDeclAt = before.findIndex((line) => line.startsWith(`  web:system`));
+  check(
+    "it adds exactly two lines — the declaration under the nodes, the relationship under the edges",
+    mintedAfter.length === before.length + 2 &&
+      mintedAfter[webDeclAt + 1].startsWith(`  new-system:system`) &&
+      mintedAfter[edgeLineAt + 1] === `  web -> new-system`,
+    `node slot: ${JSON.stringify(mintedAfter[webDeclAt + 1])}, edge slot: ${JSON.stringify(mintedAfter[edgeLineAt + 1])}`,
+  );
+  /* ONE TEXT IS ONE UNDO ENTRY, measured as the grouping measures it: the
+     pre-edit text holds NEITHER half, so putting it back reverses both at
+     once and no intermediate state exists for an undo to land on. Two edits
+     here would strand the reader with a stray unnamed node connected to
+     nothing after one Cmd/Ctrl+Z. */
+  const preEdit = c4Document(authored).synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "one undo entry reverses both halves — the pre-edit text holds neither",
+    minted !== null &&
+      preEdit.nodes.every((n) => n.id !== "new-system") &&
+      preEdit.edges.every((e) => e.target !== "new-system"),
+    "half the gesture predates the edit — an undo would only partly reverse it",
+  );
+  /* The minted node lands in the clear band BELOW everything drawn —
+     `vacantPosition`'s contract, re-measured on this call path because it is
+     a separate entry point from the Add strip's. */
+  const mintedDiagram = minted?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  const mintedNode = mintedDiagram?.nodes.find((n) => n.id === "new-system");
+  check(
+    "the connected newcomer overlaps nothing",
+    mintedNode !== undefined &&
+      mintedDiagram.nodes.every(
+        (other) =>
+          other.id === mintedNode.id ||
+          other.position.x + other.size.width <= mintedNode.position.x ||
+          mintedNode.position.x + mintedNode.size.width <= other.position.x ||
+          other.position.y + other.size.height <= mintedNode.position.y ||
+          mintedNode.position.y + mintedNode.size.height <= other.position.y,
+      ),
+    `newcomer at ${JSON.stringify(mintedNode?.position)}`,
+  );
+  check(
+    "a type the level refuses is refused here too — the palette's own gate",
+    refuses(() =>
+      connectedNewNodeEdit(doc, authored, "ctx", "web", "container"),
+    ),
+    "a container was written into a context diagram",
+  );
+  /* THE TIED ANCHOR: on a diagram with no relationship lines, the node line
+     and the blank-plus-edge insert anchor after the same last declaration,
+     and the node patch's list position is what keeps the declaration ABOVE
+     the relationship — `applyPatches` sorts stably. This is the assertion
+     that fails if someone reorders the patch list. */
+  const backendMint = connectedNewNodeEdit(
+    doc,
+    authored,
+    "backend",
+    "api",
+    "container",
+  );
+  const backendAfter = (backendMint?.text ?? "").split("\n");
+  check(
+    "on a diagram with no edges, the declaration lands above the blank and the relationship",
+    backendMint !== null &&
+      backendAfter[mirrorDeclAt + 1].startsWith(`  new-container:container`) &&
+      backendAfter[mirrorDeclAt + 2] === "" &&
+      backendAfter[mirrorDeclAt + 3] === `  api -> new-container`,
+    `lines under the last node: ${JSON.stringify(
+      backendAfter.slice(mirrorDeclAt + 1, mirrorDeclAt + 4),
+    )}`,
+  );
+
+  /* --- the Mermaid caveat is MEASURED against the real emitter ---------------- */
+
+  /* The connect cell's `unlessPane.because` claims two losses; both are read
+     off `serializeMermaidC4`'s real output here, not off its comments, so the
+     refusal cannot outlive the emitter growing the slot. */
+  const { serializeMermaidC4 } = await load("src/features/mermaid/lib/emit.ts");
+  const mermaid = serializeMermaidC4(doubled.doc.synced.file);
+  check(
+    "the Mermaid emitter writes no edge id — a duplicate pair fuses on the round trip",
+    mermaid.includes("Rel(cust, web") && !mermaid.includes("e-cust-web-2"),
+    "the emitter now carries an edge id — the connect cell's caveat is stale " +
+      "and the Mermaid refusal may be droppable",
+  );
+  check(
+    "the Mermaid emitter writes ONE diagram — an edge on another level is not in the pane",
+    !mermaid.includes("api") && !mermaid.includes("backend"),
+    "the emitter now writes more than the root diagram — re-measure the caveat",
+  );
+
+  /* --- the host: one applyCanvasEdit per gesture, refusals announced ---------- */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const connectBody =
+    /const handleNodeConnect = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleNodeConnect applies through exactly one applyCanvasEdit and announces the refusal",
+    connectBody !== null &&
+      (connectBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      connectBody[1].includes("connectedNodesEdit(") &&
+      !connectBody[1].includes("setText(") &&
+      connectBody[1].includes("if (next === null)") &&
+      /Cmd or Ctrl \+ Z/.test(connectBody[1]),
+    "a second apply would split one gesture into two undo entries, or a " +
+      "refused connect went silent",
+  );
+  const mintBody =
+    /const handleConnectCreate = useCallback\(([\s\S]*?)\n  \);/.exec(
+      playground,
+    );
+  check(
+    "handleConnectCreate applies ONCE — the one-undo contract crosses the host too",
+    mintBody !== null &&
+      (mintBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      mintBody[1].includes("connectedNewNodeEdit(") &&
+      !mintBody[1].includes("setText("),
+    "the node and its relationship became two undo entries on the way through",
+  );
+
+  /* --- the gesture never re-engages React Flow's connection machinery --------- */
+
+  /* The 4fa7c36 discipline, applied to the SECOND drag that could have woken
+     the store: the viewer's flow declares no connection handler and keeps
+     `nodesConnectable` false, and the grip is hand-rolled — pointer capture
+     on its own button, per-frame state feeding its own portal overlay and
+     nothing the projections read. Matched as JSX PROPS (`name=`) via
+     `code(...)`, the marquee guard's rule: comments rightly NAME these props
+     while warning against them. */
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
+  check(
+    "the flow keeps every connection prop off",
+    /nodesConnectable=\{false\}/.test(canvasCode) &&
+      !canvasCode.includes("onConnect=") &&
+      !canvasCode.includes("onConnectStart=") &&
+      !canvasCode.includes("onConnectEnd=") &&
+      !canvasCode.includes("connectionMode="),
+    "React Flow's connection machinery is reachable — its per-move connection " +
+      "state re-engages the store the marquee guard keeps disengaged",
+  );
+  const gripCode = code(
+    "src/features/viewer/components/viewer-connect-grip.tsx",
+  );
+  check(
+    "the grip is hand-rolled — it never imports React Flow",
+    !gripCode.includes("@xyflow/react"),
+    "the grip reached for the library's connection machinery — re-read the " +
+      "marquee guard (4fa7c36) before wiring any of it",
+  );
+  check(
+    "the grip's press cannot start a node drag — nodrag, stopped, captured",
+    /af-connect-grip nodrag/.test(gripCode) &&
+      /event\.stopPropagation\(\);\s*\n\s*event\.preventDefault\(\);\s*\n\s*event\.currentTarget\.setPointerCapture\(/.test(
+        gripCode,
+      ),
+    "a press on the grip would drag the node under it — the relate grip's " +
+      "own bug, reintroduced on the viewer",
+  );
+  check(
+    "the grip's menu shares the dismissal hook, so Escape closes it without clearing the selection",
+    /useMenuDismissal\(/.test(gripCode),
+    "a third dismissal implementation — the copy that drifts is the one that " +
+      "forgets to consume Escape",
+  );
+  /* The projections must not read anything the grip's drag writes — the ghost
+     is the grip's OWN state. The nodes memo's pinned dep list (the marquee
+     guard) already proves the canvas side; this proves the grip keeps its
+     per-frame state local instead of lifting it. */
+  check(
+    "the ghost line is the grip's own state, portalled, never canvas state",
+    /const \[ghost, setGhost\] = useState<GhostLine \| null>\(null\);/.test(
+      gripCode,
+    ) && /createPortal\(/.test(gripCode),
+    "the drag's per-frame state left the grip — the projection memos are one " +
+      "dependency away from a per-frame identity change",
   );
 }
 

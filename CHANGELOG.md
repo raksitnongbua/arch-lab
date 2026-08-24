@@ -49,6 +49,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Relationships can be drawn on the editable C4 canvas. Every element grows a
+  connect handle at its top right: drag it onto another element to relate the
+  two — a preview line says the whole way whether the release relates, warns
+  of an already-related pair, or cancels — or click it for a menu of the
+  diagram's elements plus the level's node types, so "a new element this one
+  talks to" lands as one change: the declaration and the relationship
+  together, undone by a single Cmd/Ctrl + Z. Already-related pairs may be
+  connected again (the new line draws beside the old one); an element never
+  connects to itself, and `^ref` placeholders connect like anything else. The
+  Mermaid pane refuses the gesture: Mermaid C4 holds a single diagram and
+  gives a relationship no id, so the edit would be lost on the round trip.
+
+- A freshly added child diagram can be entered from the canvas immediately:
+  nesting an element now shows its zoom chip while the child is still empty
+  (wearing "empty" instead of a count), on the editable canvas only — a
+  read-only canvas still hides empty children, which are nothing a reader can
+  drill into.
+
 - Several C4 elements can be grouped into a boundary in one action: dragging
   on an editable canvas draws a selection box, and releasing it over two
   or more elements opens a compact card offering the diagram's boundaries,
