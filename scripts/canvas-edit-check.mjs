@@ -941,6 +941,73 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
     "the lock's gradient hardcodes a colour, so it is tuned for one theme " +
       "and merely tolerated by the rest",
   );
+  /* THE LOCK ANIMATES ITS STATE CHANGE, AND ONLY THAT. The owner asked for
+     the padlock to be animated; what shipped is a one-shot settle per toggle
+     and a still resting state (the trade is argued beside the keyframes in
+     globals.css — a loop on the one control floating over a presented
+     diagram spends the reader's eye on chrome). Three properties keep the
+     motion inside that decision, each pinned below: it can never run
+     forever, it can never fire for a reader who asked for reduced motion or
+     one who merely arrived at the page, and it can never repaint the glyph —
+     the token-colour and gradient assertions above stay the whole story of
+     what the faces look like. */
+  const lockAnimCss = read("src/app/globals.css");
+  const lockAnimTokens = [
+    ...lockAnimCss.matchAll(/--animate-lock-(snap|open):([^;]+);/g),
+  ];
+  const lockKeyframes = [
+    ...lockAnimCss.matchAll(
+      /@keyframes af-lock-(?:snap|open) \{([\s\S]*?)\n\}/g,
+    ),
+  ];
+  const lockKeyframeProps = lockKeyframes.flatMap((m) =>
+    [...m[1].matchAll(/([a-z-]+):/g)].map((p) => p[1]),
+  );
+  check(
+    "the lock's two gestures are one-shot — declared without `infinite`",
+    lockAnimTokens.length === 2 &&
+      lockAnimTokens.every(
+        ([declaration]) => !declaration.includes("infinite"),
+      ),
+    "a state-change settle became a loop — continuous motion on the one " +
+      "control floating over a diagram someone is presenting",
+  );
+  check(
+    "and they move nothing but transform — the faces' paint stays the tokens'",
+    lockKeyframes.length === 2 &&
+      lockKeyframeProps.length > 0 &&
+      lockKeyframeProps.every((prop) => prop === "transform"),
+    `keyframes animate: ${[...new Set(lockKeyframeProps)].join(", ") || "none found"} — ` +
+      "a colour or stroke in the gesture would repaint the glyph the token " +
+      "assertions above vouch for",
+  );
+  /* `motion-safe:` on BOTH faces, and no unguarded spelling anywhere. This is
+     the reduced-motion STOP the canvas promises elsewhere — the variant is a
+     media query, so it already holds on the first toggle frame, before any
+     JS-written preference could. Structural (stripped source): the comment
+     beside the icons explains the class it applies. */
+  check(
+    "the lock's motion is behind motion-safe on both faces — reduced motion stops it",
+    /motion-safe:animate-lock-snap/.test(controlCode) &&
+      /motion-safe:animate-lock-open/.test(controlCode) &&
+      !/(?<!motion-safe:)animate-lock-/.test(controlCode),
+    "a lock gesture escaped the motion-safe gate — reduced motion would " +
+      "still see the padlock travel",
+  );
+  /* NEVER ON FIRST PAINT. The ref is seeded from the CURRENT prop — the one
+     shape that makes the first render unable to differ from itself — and the
+     class is gated on `travelled`, which only a real change sets. A reader
+     opening a locked share link must meet a still padlock, not one slamming
+     shut on a press nobody made. */
+  check(
+    "the gesture fires only on a state CHANGE, never on arrival",
+    /useRef\(locked\)/.test(controlCode) &&
+      /previousLocked\.current !== locked/.test(controlCode) &&
+      /travelled && "motion-safe:animate-lock-snap"/.test(controlCode) &&
+      /travelled && "motion-safe:animate-lock-open"/.test(controlCode),
+    "the first paint can animate — opening a locked diagram would play a " +
+      "lock gesture the reader never pressed for",
+  );
   check(
     "a pointer press hands focus back, so a stray keypress cannot re-toggle the lock",
     /if \(event\.detail > 0\)\s*event\.currentTarget\.blur\(\);/.test(control),
@@ -3111,9 +3178,11 @@ console.log("\nA revise carries the icon and the colour, both as patches");
      border, and the on-screen fill is rebuilt as
      oklch(from <hex> tag-fill-l min(c, tag-fill-c) h) — so both are computed
      here exactly as the browser computes them, per theme, and a swatch that
-     would vanish on any theme cannot ship. A free colour picker is refused in
-     the palette's header for exactly this reason: an arbitrary hex is the one
-     thing this loop cannot vouch for. */
+     would vanish on any theme cannot ship. An arbitrary hex is the one thing
+     this loop cannot vouch for — which is why the free picker beside these
+     swatches never writes one: everything it can emit goes through
+     `presentableTagColor`, and the section after this loop audits that
+     function's whole OUTPUT SPACE against the same two bars. */
   const { parseHex, oklchToLinear, contrast, parseOklch } = await import(
     pathToFileURL(path.join(ROOT, "scripts/lib/oklch.mjs")).href
   );
@@ -3174,6 +3243,248 @@ console.log("\nA revise carries the icon and the colour, both as patches");
       worst.map((w) => `${w.tag} ${w.name.toFixed(2)}:1`).join(", "),
     );
   }
+
+  /* --- the free picker: its whole output space measured on every theme ------ */
+
+  /* The palette loop above vouches for five hexes; the free picker can emit
+     ANY hex, so what gets audited is the emitting FUNCTION. Everything the
+     form can write goes through `presentableTagColor`, so driving a grid over
+     its input space — every hue, lightness from near-black to near-white,
+     chroma past its own cap — and holding every OUTPUT to the palette's two
+     bars proves the picker cannot ship an invisible border, which is the
+     documented reason a free picker used to be refused. */
+  const {
+    presentableTagColor,
+    freeColorTag,
+    hexToOklch,
+    oklchToLinearRgb,
+    TAG_FILL_BY_THEME,
+  } = await load("src/features/editor/lib/free-color.ts");
+
+  /* The module's theme table is a deliberate twin of globals.css (CSS cannot
+     be imported); this is the pin its header promises. A drifted pair would
+     make the clamp solve against fills no theme paints — legible by its own
+     arithmetic, invisible on the screen. */
+  check(
+    "the clamp's theme fill table matches globals.css, theme by theme",
+    themes.every((theme) => {
+      const tokens = tokensOf(css, theme) ?? baseline;
+      const entry = TAG_FILL_BY_THEME[theme];
+      return (
+        entry !== undefined &&
+        entry.l ===
+          Number.parseFloat(resolveToken("--tag-fill-l", tokens, baseline)) &&
+        entry.c ===
+          Number.parseFloat(resolveToken("--tag-fill-c", tokens, baseline))
+      );
+    }),
+    themes
+      .map((theme) => `${theme}: ${JSON.stringify(TAG_FILL_BY_THEME[theme])}`)
+      .join("; "),
+  );
+  /* And its colour maths is a twin of scripts/lib/oklch.mjs (app code cannot
+     import the check suite) — pinned on a colour grid, both directions, so
+     the sweep below cannot pass because the module measures with different
+     arithmetic than this file audits with. */
+  const mathsAgree = [];
+  for (let h = 0; h < 360; h += 45) {
+    for (const [L, C] of [
+      [0.3, 0.05],
+      [0.61, 0.14],
+      [0.85, 0.03],
+    ]) {
+      const a = oklchToLinearRgb(L, C, h);
+      const b = oklchToLinear(L, C, h);
+      mathsAgree.push(a.every((v, i) => Math.abs(v - b[i]) < 1e-9));
+      const hex = `#${b
+        .map((c) =>
+          Math.round(
+            (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055) * 255,
+          )
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("")}`;
+      const ours = hexToOklch(hex);
+      const theirs = parseHex(hex);
+      mathsAgree.push(
+        ours !== null &&
+          theirs !== null &&
+          ours.oklch.every((v, i) => Math.abs(v - theirs.oklch[i]) < 1e-9),
+      );
+    }
+  }
+  check(
+    "the module's oklch maths agrees with the check suite's, both directions",
+    mathsAgree.every(Boolean),
+    "the clamp and this audit measure colour differently — one of them is wrong",
+  );
+
+  /* The measuring half of the sweep, per theme, with THIS FILE's machinery. */
+  const worstOn = (hex) => {
+    const parsed = parseHex(hex);
+    if (parsed === null) return null;
+    let stroke = Number.POSITIVE_INFINITY;
+    let name = Number.POSITIVE_INFINITY;
+    for (const theme of themes) {
+      const tokens = tokensOf(css, theme) ?? baseline;
+      const fillL = Number.parseFloat(
+        resolveToken("--tag-fill-l", tokens, baseline),
+      );
+      const fillC = Number.parseFloat(
+        resolveToken("--tag-fill-c", tokens, baseline),
+      );
+      const nameInk = parseOklch(
+        resolveToken("--node-foreground", tokens, baseline),
+      );
+      const [, C, h] = parsed.oklch;
+      const fill = oklchToLinear(fillL, Math.min(C, fillC), h);
+      stroke = Math.min(stroke, contrast(parsed.rgb, fill));
+      name = Math.min(name, contrast(nameInk.rgb, fill));
+    }
+    return { stroke, name };
+  };
+
+  const gammaEncode = (c) =>
+    c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+  const sweep = {
+    inputs: 0,
+    refused: 0,
+    worstStroke: Number.POSITIVE_INFINITY,
+    worstName: Number.POSITIVE_INFINITY,
+    notIdempotent: 0,
+    dishonestVerbatim: 0,
+  };
+  for (let h = 0; h < 360; h += 5) {
+    for (const L of [0.03, 0.2, 0.45, 0.61, 0.75, 0.97]) {
+      for (const C of [0, 0.05, 0.11, 0.17, 0.3]) {
+        const input = `#${oklchToLinear(L, C, h)
+          .map((c) =>
+            Math.round(gammaEncode(c) * 255)
+              .toString(16)
+              .padStart(2, "0"),
+          )
+          .join("")}`;
+        sweep.inputs += 1;
+        const out = presentableTagColor(input);
+        if (out === null) {
+          sweep.refused += 1;
+          continue;
+        }
+        const measured = worstOn(out.hex);
+        sweep.worstStroke = Math.min(sweep.worstStroke, measured.stroke);
+        sweep.worstName = Math.min(sweep.worstName, measured.name);
+        /* `adjusted: false` is the form's promise that the author got their
+           exact colour — a construction that changed the hex while claiming
+           it did not would hide the one disclosure that keeps it honest. */
+        if (out.adjusted === false && out.hex !== input) {
+          sweep.dishonestVerbatim += 1;
+        }
+        /* Idempotence is what keeps a reopened colour still: a clamp that
+           moves its own output would walk a node's colour a step per edit. */
+        const again = presentableTagColor(out.hex);
+        if (again === null || again.hex !== out.hex || again.adjusted) {
+          sweep.notIdempotent += 1;
+        }
+      }
+    }
+  }
+  check(
+    "every free-pick construction holds >=3:1 stroke and >=7:1 title on every theme",
+    sweep.refused === 0 && sweep.worstStroke >= 3 && sweep.worstName >= 7,
+    `over ${sweep.inputs} inputs: ${sweep.refused} refused, worst stroke ${sweep.worstStroke.toFixed(3)}:1, worst title ${sweep.worstName.toFixed(2)}:1`,
+  );
+  check(
+    "the construction is idempotent and verbatim only when it truly changed nothing",
+    sweep.notIdempotent === 0 && sweep.dishonestVerbatim === 0,
+    `${sweep.notIdempotent} outputs moved when fed back in; ${sweep.dishonestVerbatim} claimed verbatim while changed`,
+  );
+  /* An already-safe hex comes back BYTE-IDENTICAL — the five palette colours
+     are the measured proof such hexes exist. A clamp that touched them would
+     mean the free picker and the swatches disagree about the same colour. */
+  check(
+    "a hex that already passes ships verbatim — the palette colours untouched",
+    NODE_TAG_PALETTE.every(({ color }) => {
+      const out = presentableTagColor(color);
+      return out !== null && out.hex === color && out.adjusted === false;
+    }),
+    "the clamp rewrote a colour the palette audit already vouches for",
+  );
+  check(
+    "non-colours are refused and shorthand is expanded to the long form",
+    presentableTagColor("red") === null &&
+      presentableTagColor("#12") === null &&
+      presentableTagColor("#gggggg") === null &&
+      /^#[0-9a-f]{6}$/.test(presentableTagColor("#ABC")?.hex ?? ""),
+    "an input the serializer cannot carry got past the picker",
+  );
+
+  /* --- the free tag: derived from the hex, so a repeat is a reuse ------------ */
+
+  check(
+    "the free tag is deterministic, grammar-bare, and never the external residue",
+    freeColorTag("#a47c13", undefined) === "c-a47c13" &&
+      /^[A-Za-z0-9_][A-Za-z0-9_.:-]*$/.test(
+        freeColorTag("#a47c13", undefined),
+      ) &&
+      freeColorTag("#a47c13", undefined) !== EXTERNAL_TAG,
+    `derived: ${freeColorTag("#a47c13", undefined)}`,
+  );
+  check(
+    "a colliding author tag is stepped around; a matching one is reused",
+    freeColorTag("#a47c13", { "c-a47c13": "#000000" }) !== "c-a47c13" &&
+      freeColorTag("#a47c13", { "c-a47c13": "#a47c13" }) === "c-a47c13",
+    "the free pick would repaint (or needlessly twin) an author's own tag",
+  );
+  /* End to end, on the same non-canonical fixture: the FIRST free pick mints
+     one header line; the SAME pick on a second element joins it. This is the
+     answer to "a free picker fattens the header with junk tags": ten elements
+     in one custom colour cost one line, exactly as a palette colour does. */
+  const freePick = presentableTagColor("#00ff88");
+  const freeTag = freeColorTag(freePick.hex, docColors);
+  const firstPick = revisedNodeEdit(doc, authored, "ctx", "api", {
+    name: "API",
+    color: { kind: "tag", tag: freeTag, color: freePick.hex },
+  });
+  check(
+    "the first free pick is a patch that mints exactly one header line",
+    firstPick !== null &&
+      firstPick.path === "patch" &&
+      firstPick.text.split("\n").filter((l) => l.startsWith("tagcolor "))
+        .length ===
+        authored.split("\n").filter((l) => l.startsWith("tagcolor ")).length +
+          1 &&
+      firstPick.text.includes(`tagcolor ${freeTag} "${freePick.hex}"`),
+    `path: ${firstPick === null ? "refused" : firstPick.path}`,
+  );
+  const secondPick =
+    firstPick === null
+      ? null
+      : revisedNodeEdit(firstPick.doc, firstPick.text, "ctx", "web", {
+          name: "Web App",
+          technology: "Next.js",
+          color: {
+            kind: "tag",
+            tag: freeColorTag(
+              freePick.hex,
+              firstPick.doc.synced.file.metadata.tagColors,
+            ),
+            color: freePick.hex,
+          },
+        });
+  check(
+    "the same colour on a second element reuses the line — no twin is minted",
+    secondPick !== null &&
+      secondPick.path === "patch" &&
+      secondPick.text.split("\n").filter((l) => l.startsWith("tagcolor "))
+        .length ===
+        firstPick.text.split("\n").filter((l) => l.startsWith("tagcolor "))
+          .length &&
+      secondPick.text
+        .split("\n")
+        .some((l) => l.includes("web:system") && l.includes(`#${freeTag}`)),
+    `path: ${secondPick === null ? "refused" : secondPick.path}`,
+  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -3336,6 +3647,45 @@ console.log(
     "the form warns which coloured tag a new choice replaces, before Apply",
     /replaced\.length > 0/.test(panel) && /Applying removes/.test(panel),
     "a colour swap that silently takes tags off the element",
+  );
+  /* THE FREE PICK NEVER BYPASSES THE CONSTRUCTION. The comments in the form
+     name the construction functions while arguing for them, so these are
+     structural reads of the stripped source: the wheel is the native colour
+     input, every path into `freeHex` runs through `presentableTagColor`, the
+     submitted tag is `freeColorTag`'s, and the preview swatch paints through
+     the same `tagFillCss` the canvas uses. A form that held a raw hex
+     anywhere would pass the module sweep above and still ship one — the
+     construction only protects hexes that actually go through it. */
+  const panelCode = code(
+    "src/features/viewer/components/viewer-node-detail.tsx",
+  );
+  check(
+    "the free pick is a native colour input plus a validated hex field",
+    /type="color"/.test(panelCode) && /#\[0-9a-fA-F\]\{6\}/.test(panelCode),
+    "the wheel or the hex validation is gone — a free pick with no way in, " +
+      "or one that commits half-typed text",
+  );
+  check(
+    "every committed free colour is presentableTagColor's, and its tag is derived",
+    /setFreeHex\(constructed\.hex\)/.test(panelCode) &&
+      !/setFreeHex\((?!constructed\.hex)/.test(panelCode) &&
+      /freeColorTag\(freeHex, tagColors\)/.test(panelCode),
+    "a raw hex can reach the submit — the clamp only protects colours that " +
+      "pass through it",
+  );
+  check(
+    "the free preview is the constructed hex through tagFillCss",
+    /tagFillCss\(freeHex\)/.test(panelCode),
+    "the preview swatch shows a colour the node will never be",
+  );
+  /* The disclosure is PROSE, so it is read from the raw source: when the
+     construction moved the colour, the form says so — a silent clamp is an
+     author wondering why their brand hex shifted. */
+  check(
+    "the form discloses an adjusted colour the moment it happens",
+    /freeAdjusted \?/.test(panelCode) &&
+      /Adjusted to stay readable on every theme/.test(panel),
+    "the clamp moved a colour and nothing said so",
   );
 }
 

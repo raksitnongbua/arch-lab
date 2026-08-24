@@ -65,6 +65,10 @@ import type {
 import { IconPicker } from "@/features/editor/components/icon-picker";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 import {
+  freeColorTag,
+  presentableTagColor,
+} from "@/features/editor/lib/free-color";
+import {
   colorRoleForNode,
   colorTagsOf,
   NODE_TAG_PALETTE,
@@ -261,17 +265,40 @@ export function EditField({
  * absent icon renders the type's own mark, never a blank.
  *
  * THE COLOUR control offers the document's own coloured tags first, then the
- * measured `NODE_TAG_PALETTE` (its header argues why there is no free
- * picker), plus Automatic — the type's role colour. It submits an INTENT
+ * measured `NODE_TAG_PALETTE`, then ANY colour — a wheel plus hex entry —
+ * plus Automatic, the type's role colour. It submits an INTENT
  * (`C4NodeColorChoice`); `revisedNodeEdit` owns turning that into tag and
  * header writes. When the choice would take a coloured tag off the element —
  * the precedence trap `resolveTagColor` documents — the form says which,
  * BEFORE Apply, so the swap is never silent.
+ *
+ * THE FREE COLOUR goes through `presentableTagColor` before it is previewed
+ * or submitted, and the form never holds an unconstructed hex: the wheel is
+ * a native `<input type="color">` (keyboard- and AT-operable, brings the
+ * platform's own spectrum, costs no dependency — a custom wheel would have
+ * to re-earn all three), the text field takes a typed hex and simply does
+ * not commit until it parses, and when the construction had to move the
+ * colour the form SAYS so beside a swatch of what Apply will actually paint.
+ * The tag is `freeColorTag`'s — derived from the hex, so the same colour on
+ * a second element reuses the first element's header line (the module
+ * headers carry both arguments).
  */
 /* Sentinel for the frame select's "mint a new one" row. A value no slug can
    collide with, because `slugify` never emits a leading space. Exported for
    `viewer-multi-detail`, whose boundary select is this one over N elements. */
 export const NEW_FRAME = " new";
+
+/* Sentinel for the colour control's free pick, `NEW_FRAME`'s shape for
+   `NEW_FRAME`'s reason: no tag can start with a space (`slugify` and the
+   bare-tag grammar both refuse one), so this can never shadow a real tag. */
+const FREE_COLOR = " custom";
+
+/* What the free picker holds before the reader touches it when the element
+   has no colour of its own to seed from: mid-lightness, mid-chroma, a hue no
+   role uses — already inside `presentableTagColor`'s band, so the seed is
+   what the swatch shows. An arbitrary but stated choice; nothing is written
+   until the reader picks. */
+const FREE_COLOR_SEED = "#9f6ea3";
 
 function NodeEditForm({
   node,
@@ -296,6 +323,36 @@ function NodeEditForm({
      paints with — `worn[0]` wins, the rest are the tags a new choice removes. */
   const worn = colorTagsOf(node, tagColors);
   const [colorTag, setColorTag] = useState<string | null>(worn[0] ?? null);
+  /* The free pick. `freeHex` only ever holds `presentableTagColor` output —
+     the construction is applied on the way IN, so the preview swatch, the
+     warning and the submitted hex cannot disagree about what Apply writes.
+     It seeds from the element's own colour (constructed) so "nudge my
+     current colour" starts from it rather than from a stranger. */
+  const [freeHex, setFreeHex] = useState(() => {
+    const wornHex = worn[0] === undefined ? "" : (tagColors?.[worn[0]] ?? "");
+    return (
+      presentableTagColor(wornHex === "" ? FREE_COLOR_SEED : wornHex)?.hex ??
+      FREE_COLOR_SEED
+    );
+  });
+  /* Whether the LAST pick had to move to stay legible — drives the one
+     sentence that keeps the clamp honest. Seeding never sets it: nothing was
+     picked yet, so there is nothing to disclose. */
+  const [freeAdjusted, setFreeAdjusted] = useState(false);
+  /* The hex field as TYPED — kept apart from `freeHex` so a half-typed value
+     neither commits nor gets rewritten under the reader's cursor. */
+  const [hexText, setHexText] = useState(() => freeHex);
+  /* A wheel pick or a parsed hex both land here: construct, remember whether
+     construction moved it, and make the free colour the pending choice — the
+     reader just used the picker, so the pick IS the intent. */
+  const commitFreeColor = (raw: string, typed?: string) => {
+    const constructed = presentableTagColor(raw);
+    if (constructed === null) return;
+    setFreeHex(constructed.hex);
+    setFreeAdjusted(constructed.adjusted);
+    setHexText(typed ?? constructed.hex);
+    setColorTag(FREE_COLOR);
+  };
   /* The frame select carries THREE states in one control, because the
      grammar's choice is three-way: no boundary, one that exists, or one this
      edit mints. `NEW_FRAME` is a sentinel option rather than a second
@@ -317,9 +374,14 @@ function NodeEditForm({
   ];
   const hexFor = (tag: string): string =>
     colorOptions.find((option) => option.tag === tag)?.color ?? "";
+  /* The pending choice as the TAG it would store — the free pick resolves to
+     its hex-derived tag here, so the replacement warning and the submit
+     cannot disagree with each other about which tag is chosen. */
+  const chosenTag =
+    colorTag === FREE_COLOR ? freeColorTag(freeHex, tagColors) : colorTag;
   /* Which coloured tags the pending choice takes off the element — worth a
      sentence exactly when it is not empty. */
-  const replaced = worn.filter((tag) => tag !== colorTag);
+  const replaced = worn.filter((tag) => tag !== chosenTag);
   const roleVars = ROLE_COLOR_VARS[colorRoleForNode(node)];
 
   const resolvedIcon = resolveIcon(
@@ -341,9 +403,15 @@ function NodeEditForm({
       onSubmit={(event) => {
         event.preventDefault();
         const color: C4NodeColorChoice =
-          colorTag === null
+          chosenTag === null
             ? { kind: "role" }
-            : { kind: "tag", tag: colorTag, color: hexFor(colorTag) };
+            : {
+                kind: "tag",
+                tag: chosenTag,
+                // The free pick submits its constructed hex; a swatch pick
+                // submits the hex it was offered as.
+                color: colorTag === FREE_COLOR ? freeHex : hexFor(chosenTag),
+              };
         /* A blank label with "New boundary" chosen is NOT a request to mint
            an unnamed frame — `revisedNodeEdit` refuses one, and refusing
            here too would cost the reader their typing. It falls back to
@@ -528,6 +596,62 @@ function NodeEditForm({
             />
           ))}
         </div>
+        {/* ANY colour: wheel, hex, and the pressable result. The three stay
+            one row so the preview is never out of sight of the inputs that
+            move it. */}
+        <div className="mt-1 flex items-center gap-1.5">
+          <input
+            type="color"
+            value={freeHex}
+            onChange={(event) => commitFreeColor(event.target.value)}
+            aria-label="Any colour — opens a colour wheel"
+            title="Any colour"
+            className="size-6 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          />
+          <input
+            value={hexText}
+            onChange={(event) => {
+              const typed = event.target.value;
+              setHexText(typed);
+              /* Long form commits as it completes; shorthand waits for blur —
+                 expanding "#a47" under a cursor still heading for "#a47c13"
+                 would hijack the reader's typing. */
+              if (/^#[0-9a-fA-F]{6}$/.test(typed)) {
+                commitFreeColor(typed, typed);
+              }
+            }}
+            onBlur={() => commitFreeColor(hexText)}
+            aria-label="Any colour as a hex code"
+            placeholder="#rrggbb"
+            className={cn(FIELD_CLASSES, "mt-0 w-24 font-mono")}
+          />
+          <button
+            type="button"
+            aria-pressed={colorTag === FREE_COLOR}
+            aria-label={`Use this colour (${freeHex})`}
+            title={freeHex}
+            onClick={() => setColorTag(FREE_COLOR)}
+            className={cn(
+              "size-6 shrink-0 rounded-full border-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              colorTag === FREE_COLOR && "ring-2 ring-ring ring-offset-1",
+            )}
+            /* The same miniature the palette swatches are: the CONSTRUCTED
+               hex as the stroke, the fill rebuilt through `tagFillCss` — the
+               preview shows what Apply writes, by the same mechanism. */
+            style={{ background: tagFillCss(freeHex), borderColor: freeHex }}
+          />
+        </div>
+        {colorTag === FREE_COLOR && freeAdjusted ? (
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Adjusted to stay readable on every theme — the hue is yours, the
+            lightness moved to where the border keeps its contrast.
+          </p>
+        ) : null}
+        {presentableTagColor(hexText) === null ? (
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Not a hex colour yet — #rgb or #rrggbb.
+          </p>
+        ) : null}
         {replaced.length > 0 ? (
           <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
             Applying removes {replaced.map((tag) => `#${tag}`).join(", ")} from

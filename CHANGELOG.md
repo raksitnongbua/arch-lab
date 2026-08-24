@@ -7,6 +7,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- The element colour control offers any colour, not just the five presets: a
+  colour wheel and hex entry sit beside the swatches. A picked colour is
+  gently adjusted — hue kept, lightness moved the minimum distance — whenever
+  the exact hex would be illegible on any theme, and the form says so beside
+  a preview of what will actually be painted. Picking the same colour on a
+  second element reuses the first one's `tagcolor` line instead of minting a
+  duplicate.
+
 ### Fixed
 
 - Clicking an element on an editable C4 canvas works again. The change that
@@ -31,6 +41,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   its own disclosure beside it.
 - The canvas lock wears a gradient that reads as sealed when locked and settles
   almost flat while the diagram is editable.
+
+- The canvas padlock answers a press with a short physical gesture — locking
+  clicks the closed padlock shut, unlocking springs the open one free — and
+  holds still otherwise, including for reduced-motion readers and on first
+  arrival at a locked diagram.
 
 - The canvas lock wears keyhole padlocks now — open while the diagram is
   editable, closed while it is locked — on both the C4 and the sequence

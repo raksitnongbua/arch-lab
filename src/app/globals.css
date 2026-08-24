@@ -1182,6 +1182,15 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* The canvas lock's two state-change gestures (keyframes below, decision
+     recorded there). Mapped here so the control uses them as
+     `motion-safe:animate-lock-*` — the variant IS the reduced-motion opt-out,
+     enforced in CSS so it holds on first paint with no JS involved. ONE-SHOT
+     by construction: no `infinite` may appear here, and check:canvas-edit
+     reads these two declarations to prove it stays that way. */
+  --animate-lock-snap: af-lock-snap 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
+  --animate-lock-open: af-lock-open 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
 }
 
 @layer base {
@@ -1278,6 +1287,53 @@
   .af-running-gradient {
     animation: none;
     background-position: 25% 50%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Canvas lock: the padlock answers a press with one physical gesture.
+
+   The owner asked for the lock to be ANIMATED to present the secure state.
+   What ships is a one-shot settle on each STATE CHANGE — the closed padlock
+   drops and clicks shut, the open one lifts and springs free — and a still
+   resting state, deliberately: this control floats over a diagram somebody
+   is presenting, and purpose.md's test for resting motion ("would removing
+   it lose information?") answers no here — the secure state at rest is
+   already told twice without movement, by the closed glyph and by the
+   primary-pooled gradient face. A loop would spend the reader's eye on
+   chrome. The moment of locking is where motion ADDS information — "your
+   press did engage" — so that is the only moment that moves.
+
+   TRANSFORM-ONLY, so the glyph's colour stays the theme token the control
+   sets and the button's gradient stays the only paint (both pinned by
+   check:canvas-edit, which also reads these keyframes to hold the
+   transform-only rule). Each face plays on MOUNT (the two faces are distinct
+   lucide glyphs, so a toggle swaps elements); the component skips the very
+   first paint so arriving at the page never animates — only a press does.
+   Reduced motion: the use sites are `motion-safe:` variants, and the global
+   backstop in @layer base flattens anything that slips past.
+   --------------------------------------------------------------------------- */
+@keyframes af-lock-snap {
+  0% {
+    transform: translateY(-2.5px) scale(1.08);
+  }
+  55% {
+    transform: translateY(0.5px) scale(0.96);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes af-lock-open {
+  0% {
+    transform: translateY(1.5px) rotate(-4deg) scale(0.94);
+  }
+  55% {
+    transform: translateY(-1.5px) rotate(3deg) scale(1.07);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
   }
 }
 
