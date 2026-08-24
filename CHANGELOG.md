@@ -9,6 +9,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- A new element can be added to a C4 diagram from the canvas: an Add strip
+  under the breadcrumb offers exactly the node types the diagram's level
+  accepts (a context diagram will not offer `container`), and one press writes
+  a single new line into your source text, placed on the canvas just below the
+  existing diagram so it never lands on top of anything. The node arrives with
+  a placeholder name — rename it with the pencil the details panel already
+  has — and Cmd/Ctrl + Z with the diagram focused undoes it. The Mermaid pane
+  refuses the gesture because Mermaid C4 carries no geometry, so the placement
+  would be lost.
 - A C4 node's wording — its name, technology and description — can now be
   edited on the canvas: select an element and the details panel grows a pencil
   that opens the three fields. The edit is written into your source text as a
