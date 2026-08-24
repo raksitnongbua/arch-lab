@@ -2,8 +2,9 @@
  * Canvas edits, expressed as edits to the SOURCE TEXT.
  *
  * The playground's C4 canvas is directly editable (behind
- * `CANVAS_EDIT_ENABLED`): drag a node and it moves. This module is what makes
- * that a text edit rather than a second place the diagram lives.
+ * `CANVAS_EDIT_ENABLED`): drag a node and it moves, and the details panel
+ * beside a selected node rewrites its wording. This module is what makes
+ * each of those a text edit rather than a second place the diagram lives.
  *
  * It also holds the CAPABILITY MODEL for both editable canvases —
  * `CANVAS_EDIT_OFFERS`, the notation-against-ability grid, and
@@ -34,7 +35,8 @@
  * Here the rule means: touch only the lines the gesture is about.
  * `parseArchTextWithSpans` gives the line range every node and edge came from;
  * `canonicalNodeLine` gives the one line the serializer would have written for
- * a node. Splice one into the other and every byte the gesture did not concern
+ * a node, and `canonicalNodeBlock` the whole block when the gesture edits a
+ * continuation line. Splice one into the other and every byte the gesture did not concern
  * — comments, blank lines, spacing, omitted-at-default fields — is still there
  * because nothing touched it. Every edit reports its `path`, and
  * `check:canvas-edit` pins which gesture takes which, so the safe path can
@@ -57,9 +59,16 @@
  * Keep new imports pointed at pure modules.
  */
 
-import type { ArchLabFile, C4Diagram, Point } from "@/types";
+import type {
+  ArchLabFile,
+  C4Diagram,
+  C4Node,
+  C4NodeRevision,
+  Point,
+} from "@/types";
 
 import {
+  canonicalNodeBlock,
   canonicalNodeLine,
   parseArchTextWithSpans,
   serializeArchText,
@@ -97,11 +106,13 @@ export type CanvasEditability =
  *     from the text, so a drag has nowhere to land.
  *   - `"revise"` — rewrite one element's own FIELDS in place. Needs both a
  *     grammar whose elements each occupy a knowable line range AND a place on
- *     the canvas to type into, which together today mean the sequence document
- *     (`sequence-edit.ts`).
+ *     the canvas to type into, which today means the sequence document
+ *     (`sequence-edit.ts`, edited in its dock) and the C4 document
+ *     (`revisedNodeEdit` below, edited in the viewer's details panel).
  *
- * A document can therefore refuse one and allow the other, and the C4 and
- * sequence canvases genuinely do exactly that in opposite directions. That is
+ * A document can therefore refuse one and allow the other — a sequence
+ * document refuses `move` while offering `revise`, and the four text-laid-out
+ * notations refuse both. That is
  * why the answers live in a TABLE below rather than in a chain of
  * `doc.kind !== …` tests: a chain states each notation's answer as the negation
  * of another's, which reads backwards and leaves the grid a reader wants —
@@ -297,15 +308,39 @@ export const CANVAS_EDIT_OFFERS: Record<
           ".alab to edit on the canvas.",
       },
     },
-    /* `"surface"`, not `"grammar"`: the C4 grammar holds every field a node
-       has. The refusal is a DECISION — that canvas offers move and delete, and
-       a second, weaker field editor on it would be two authoring surfaces for
-       one model. */
+    /* This cell REVERSED a shipped decision. It refused with `ground:
+       "surface"` — "the C4 canvas moves and deletes", a second field editor
+       would be two authoring surfaces for one model — and a `"surface"`
+       refusal is exactly the one that moves when somebody builds the surface
+       (`canvas-editing.md`). The details panel the canvas already renders for
+       a selected element is now that surface: it was already the one place
+       showing every field a node has, so "edit this" can mean "edit all of
+       it" there without a second inspector appearing anywhere. */
     c4: {
-      offers: false,
-      ground: "surface",
-      because: "The C4 canvas moves and deletes.",
-      instead: "A node's wording is edited in the source pane beside it.",
+      offers: true,
+      noun: "C4 diagrams",
+      /* "in the details panel", not "in place": the fields are typed into the
+         panel beside the node, never onto the node itself, and a clause
+         promising in-place typing would send a reader double-clicking a box
+         that only drills down. */
+      onCanvas:
+        "a C4 node's name, description and technology edited in the details " +
+        "panel beside it",
+      unlessPane: {
+        format: "mermaid",
+        /* Measured against the emitter, not assumed: `serializeMermaidC4`
+           gives `technology` an argument slot only on the Container/Component
+           forms (`spec.argStyle === "tech"`), so on a person or a system the
+           field has nowhere to land — the "Known lossy spots" note in
+           `mermaid/lib/emit.ts` and `MERMAID_C4_EXPORT_CAVEAT` both record it.
+           Writing an edit back through a pane that cannot spell it would show
+           the change once and lose it on the next round trip, which is worse
+           than refusing. */
+        because:
+          "Mermaid C4 has no technology slot on person or system elements, " +
+          "so a [technology] edit there would be lost. Switch the pane to " +
+          ".alab to edit on the canvas.",
+      },
     },
     flowchart: {
       offers: false,
@@ -555,7 +590,9 @@ export function movedNodeEdit(
 
   const current = findNode(doc.synced.file, diagramId, nodeId);
   if (current === null) return null;
-  if (current.x === position.x && current.y === position.y) return null;
+  if (current.position.x === position.x && current.position.y === position.y) {
+    return null;
+  }
 
   const edited = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
     ...diagram,
@@ -575,6 +612,97 @@ export function movedNodeEdit(
         { span: { start: span.start, end: span.start }, lines: [line] },
       ]),
     );
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one node's own fields rewritten, or `null` when the edit cannot
+ * apply — a document that refuses `"revise"`, an id that is not in it, a
+ * revision that changes nothing, an empty name, or a boundary placeholder.
+ *
+ * `null` FOR AN UNCHANGED REVISION keeps "one text change per gesture" true
+ * for a form submitted without an edit in it, exactly as the sequence revise
+ * gestures document: rewriting the pane with identical text would still cost
+ * the reader an undo entry and a re-render.
+ *
+ * AN EMPTY NAME IS REFUSED, not passed through: the model requires one (the
+ * serializer refuses `""` outright), so accepting it would turn an Apply into
+ * a dropped edit further down with nothing to say why.
+ *
+ * A BOUNDARY PLACEHOLDER (`externalRef`) IS REFUSED. Its name is the
+ * referenced node's, derived at parse time and shown read-only; writing a
+ * local override from a panel that displays derived values would silently
+ * fork the mirror from its source. The real node is one level up, where this
+ * same gesture edits it.
+ *
+ * A REVISE PATCHES THE NODE'S WHOLE BLOCK — declaration line plus `desc` and
+ * `!` continuations — unlike a move's one line, because `description` IS a
+ * continuation line an edit may add, replace or remove. `canonicalNodeBlock`
+ * is the serializer's own answer for those lines, so the patched block cannot
+ * be non-canonical; the bounded cost (a `!` escape inside the block comes back
+ * in canonical order) is documented there. Every byte outside the block is
+ * untouched.
+ *
+ * WHAT A RENAME CARRIES WITH IT, and deliberately does NOT rewrite: a `^ref`
+ * in another diagram whose own name the author omitted, and a child diagram
+ * head whose title the author omitted, both DERIVE from this node's name at
+ * parse time — omission is the format's way of saying "same as the source".
+ * The patch leaves those lines alone, so the re-parse lets them follow the new
+ * name, which is what the author's own text says should happen; a name or
+ * title the author wrote out explicitly stays exactly as written.
+ * `check:canvas-edit` measures both directions. (A delete has to REWRITE the
+ * referrer lines instead — see `deletedNodeEdit` — because there the source of
+ * the derivation stops existing and the file would stop parsing.)
+ *
+ * The `id` is deliberately not editable here; `C4NodeRevision` carries the
+ * argument.
+ */
+export function revisedNodeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  nodeId: string,
+  revision: C4NodeRevision,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const current = findNode(doc.synced.file, diagramId, nodeId);
+  if (current === null) return null;
+  if (current.externalRef !== undefined) return null;
+  if (revision.name === "") return null;
+
+  /* DESTRUCTURED, not spread from `revision` directly — the same "whole value"
+     contract `revisedMessageEdit` argues at length: `{ ...current, ...revision }`
+     cannot REMOVE a field, because an optional key the caller omitted is simply
+     not in the spread. Naming the three makes each present as a variable,
+     `undefined` included, which is what overwrites the value the reader
+     cleared — and `emitNode` writes an optional field only for a string, so an
+     explicit `undefined` is simply not written. This destructure and
+     `C4NodeRevision` are one unit: a field added there needs a name here or it
+     is silently ignored. */
+  const { name, technology, description } = revision;
+  if (
+    current.name === name &&
+    current.technology === technology &&
+    current.description === description
+  ) {
+    return null;
+  }
+
+  const edited = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
+    ...diagram,
+    nodes: diagram.nodes.map((node) =>
+      node.id === nodeId ? { ...node, name, technology, description } : node,
+    ),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const span = patchable?.spans.nodes.get(spanKey(diagramId, nodeId));
+  const lines = canonicalNodeBlock(edited, diagramId, nodeId);
+  if (span !== undefined && lines !== null) {
+    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines }]));
   }
   return adopt(doc, edited, null);
 }
@@ -784,9 +912,9 @@ function findNode(
   file: ArchLabFile,
   diagramId: string,
   nodeId: string,
-): Point | null {
+): C4Node | null {
   const node = file.diagrams
     .find((diagram) => diagram.id === diagramId)
     ?.nodes.find((candidate) => candidate.id === nodeId);
-  return node === undefined ? null : node.position;
+  return node === undefined ? null : node;
 }
