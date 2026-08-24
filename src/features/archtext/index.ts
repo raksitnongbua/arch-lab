@@ -69,6 +69,7 @@ export { parseArchText, parseArchTextWithSpans, spanKey } from "./lib/parse";
 export type { ArchTextSpans, HeaderSpans, LineSpan } from "./lib/parse";
 export {
   canonicalDiagramBlock,
+  canonicalEdgeBlock,
   canonicalFrameDeclaration,
   canonicalFrameLine,
   canonicalNodeBlock,
@@ -85,6 +86,7 @@ export {
 } from "./lib/keywords";
 export {
   DEFAULT_TIMESTAMP,
+  defaultEdgeId,
   defaultPositions,
   defaultSizeFor,
 } from "./lib/defaults";
