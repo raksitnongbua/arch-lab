@@ -13,9 +13,10 @@
  *     including geometry, viewports, `realizes`, `externalRef`, `childRef`,
  *     tags, `tagColors`, and unknown forward-compatible fields in position.
  *   - `parseArchTextWithSpans(source)` — the same parse, plus the LINE SPAN
- *     each node and edge came from, and `canonicalNodeLine(file, …)` — the
- *     one declaration line the serializer would write for a node. Together
- *     these let a caller splice a single line into the author's own text
+ *     each node and edge came from, and `canonicalNodeLine(file, …)` /
+ *     `canonicalNodeBlock(file, …)` — the declaration line, or the whole
+ *     block continuations included, the serializer would write for a node.
+ *     Together these let a caller splice lines into the author's own text
  *     instead of re-emitting the file, which is lossy in a way canonical text
  *     hides: it has no `//` comments, no author blank lines and no field the
  *     author wrote out that canonical form omits at its default. The editable
@@ -66,7 +67,11 @@
 
 export { parseArchText, parseArchTextWithSpans, spanKey } from "./lib/parse";
 export type { ArchTextSpans, LineSpan } from "./lib/parse";
-export { canonicalNodeLine, serializeArchText } from "./lib/serialize";
+export {
+  canonicalNodeBlock,
+  canonicalNodeLine,
+  serializeArchText,
+} from "./lib/serialize";
 export { ArchTextParseError } from "./lib/errors";
 export type { ArchTextIssue } from "./lib/errors";
 export {

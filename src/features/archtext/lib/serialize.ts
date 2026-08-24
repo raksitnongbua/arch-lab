@@ -356,30 +356,36 @@ function buildNodeHome(
 }
 
 /**
- * The canonical DECLARATION line for one node — byte for byte the
- * `  <id>:<kind> "Name" …` line `serializeArchText` would write for it, geometry
- * token (or its canonical omission) included.
+ * The canonical BLOCK for one node — byte for byte the lines
+ * `serializeArchText` would write for it: the `  <id>:<kind> "Name" …`
+ * declaration line (geometry token, or its canonical omission, included) plus
+ * its `desc` and `!` continuation lines.
  *
- * WHY THIS EXISTS. A canvas drag used to be a whole-document re-emit, which
+ * WHY THIS EXISTS. A canvas edit used to be a whole-document re-emit, which
  * deleted every `//` comment, every author blank line and every field the
- * author wrote out that canonical form omits at its default. A drag is now a
- * one-LINE splice into the author's own text, and this is where the
- * replacement line comes from — derived from the serializer rather than
- * assembled a second time, so a patched line cannot be non-canonical.
+ * author wrote out that canonical form omits at its default. An edit is now a
+ * splice into the author's own text, and this is where the replacement lines
+ * come from — derived from the serializer rather than assembled a second
+ * time, so a patched block cannot be non-canonical. The revise gesture is the
+ * caller that needs the WHOLE block: it edits `description`, which is a
+ * continuation line an edit may add, replace or remove — the same reason the
+ * sequence grammar's `canonicalMessageBlock` deals in blocks. The cost is the
+ * one that gesture's sibling documents: `!` escape lines inside the edited
+ * block come back in canonical ORDER even if the author wrote them the other
+ * way round; every byte outside the block is untouched.
  * See `playground/input/canvas-edit.ts`.
  *
- * The node's CONTINUATION lines (`desc`, `!` escapes) are deliberately not
- * returned. A drag changes nothing below the declaration line, and handing
- * back a whole block would invite a splice that reflows a `desc` line's
- * spacing for no reason.
+ * No `pad` parameter, unlike the sequence blocks: the C4 grammar fixes a
+ * node's indentation (two spaces, continuations at four) rather than carrying
+ * structure in it, so there is nothing to read off the replaced block.
  *
  * `null` when `diagramId` or `nodeId` is not in `file`.
  */
-export function canonicalNodeLine(
+export function canonicalNodeBlock(
   file: ArchLabFile,
   diagramId: string,
   nodeId: string,
-): string | null {
+): string[] | null {
   if (!isRecord(file)) invalid("the file", file);
   const diagramsValue = file.diagrams;
   if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
@@ -412,8 +418,28 @@ export function canonicalNodeLine(
     defaultLayoutFor(nodes, edges),
     buildNodeHome(diagrams),
   );
-  // `emitNode` pushes the declaration line first and its continuations after.
-  return lines[0];
+  return lines;
+}
+
+/**
+ * The canonical DECLARATION line alone — the first line of
+ * `canonicalNodeBlock`, which `emitNode` pushes before any continuation.
+ *
+ * The node's CONTINUATION lines (`desc`, `!` escapes) are deliberately not
+ * returned. A drag changes nothing below the declaration line, and handing
+ * back a whole block would invite a splice that reflows a `desc` line's
+ * spacing for no reason. The revise gesture, which does change `desc`, takes
+ * the block instead.
+ *
+ * `null` when `diagramId` or `nodeId` is not in `file`.
+ */
+export function canonicalNodeLine(
+  file: ArchLabFile,
+  diagramId: string,
+  nodeId: string,
+): string | null {
+  const lines = canonicalNodeBlock(file, diagramId, nodeId);
+  return lines === null ? null : lines[0];
 }
 
 /* -------------------------------------------------------------------------- */
