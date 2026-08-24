@@ -471,6 +471,72 @@ export function canonicalFrameLine(frameId: string, label: string): string {
 }
 
 /**
+ * The canonical declaration line for ONE frame of `diagramId` — byte for byte
+ * the line `serializeArchText` writes for it, the three-valued `in=` nesting
+ * included, which is what `canonicalFrameLine` deliberately does not carry
+ * (see its header: a MINT is always top-level; an existing frame is whatever
+ * the author nested it in). The boundary rename in
+ * `playground/input/canvas-edit.ts` splices this over the frame's own line,
+ * and deriving it from the emitter is what keeps a renamed nested frame's
+ * `in=` exactly as the serializer would spell it.
+ *
+ * `null` when `diagramId` or `frameId` is not in `file`.
+ */
+export function canonicalFrameDeclaration(
+  file: ArchLabFile,
+  diagramId: string,
+  frameId: string,
+): string | null {
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  const frames = diagram?.frames;
+  const index = frames?.findIndex((frame) => frame.id === frameId) ?? -1;
+  const frame = index === -1 ? undefined : frames?.[index];
+  if (frame === undefined) return null;
+  return frameDeclaration(
+    diagramId,
+    frame as unknown as Record<string, unknown>,
+    index,
+  );
+}
+
+/**
+ * One frame's declaration line, shared by `emitDiagram` and
+ * `canonicalFrameDeclaration` so a spliced rename and a full serialise cannot
+ * spell the same frame two ways. Validation lives here with the emission for
+ * the same reason it does in `emitDiagram`'s other branches: the line and the
+ * refusal to write a malformed one are one decision.
+ */
+function frameDeclaration(
+  diagramId: string,
+  frame: Record<string, unknown>,
+  index: number,
+): string {
+  const frameId = frame.id;
+  const label = frame.label;
+  if (typeof frameId !== "string" || frameId === "") {
+    invalid(`diagram "${diagramId}".frames[${index}].id`, frameId);
+  }
+  if (typeof label !== "string" || label === "") {
+    invalid(`diagram "${diagramId}".frames[${index}].label`, label);
+  }
+  let line = canonicalFrameLine(frameId, label);
+  // `parentFrameId` is three-valued and all three must survive: absent
+  // (no attribute), explicit null (`in=null`) and an id. Writing absent
+  // and null the same way would collapse them on the next read.
+  if ("parentFrameId" in frame) {
+    const parent = frame.parentFrameId;
+    if (parent === null) {
+      line += " in=null";
+    } else if (typeof parent === "string" && parent !== "") {
+      line += ` in=${idToken(parent)}`;
+    } else {
+      invalid(`diagram "${diagramId}".frames[${index}].parentFrameId`, parent);
+    }
+  }
+  return line;
+}
+
+/**
  * The canonical BLOCK for one diagram — byte for byte the lines
  * `serializeArchText` writes for it, its `@<level>` head first, WITHOUT the
  * blank separator line (that line belongs to the file's join, and the caller
@@ -594,29 +660,7 @@ function emitDiagram(
     }
     framesValue.forEach((frame, i) => {
       if (!isRecord(frame)) invalid(`diagram "${id}".frames[${i}]`, frame);
-      const frameId = frame.id;
-      const label = frame.label;
-      if (typeof frameId !== "string" || frameId === "") {
-        invalid(`diagram "${id}".frames[${i}].id`, frameId);
-      }
-      if (typeof label !== "string" || label === "") {
-        invalid(`diagram "${id}".frames[${i}].label`, label);
-      }
-      let line = canonicalFrameLine(frameId, label);
-      // `parentFrameId` is three-valued and all three must survive: absent
-      // (no attribute), explicit null (`in=null`) and an id. Writing absent
-      // and null the same way would collapse them on the next read.
-      if ("parentFrameId" in frame) {
-        const parent = frame.parentFrameId;
-        if (parent === null) {
-          line += " in=null";
-        } else if (typeof parent === "string" && parent !== "") {
-          line += ` in=${idToken(parent)}`;
-        } else {
-          invalid(`diagram "${id}".frames[${i}].parentFrameId`, parent);
-        }
-      }
-      lines.push(line);
+      lines.push(frameDeclaration(id, frame, i));
     });
   }
 

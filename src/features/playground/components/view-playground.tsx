@@ -205,6 +205,7 @@ import {
   groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
+  renamedFrameEdit,
   revisedNodeEdit,
   type CanvasEdit,
 } from "../input/canvas-edit";
@@ -1092,6 +1093,21 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleFrameRename = useCallback(
+    (diagramId: string, frameId: string, label: string) => {
+      const next = renamedFrameEdit(doc, text, diagramId, frameId, label);
+      // null covers "nothing changed" as well as every refusal, so submitting
+      // the label the boundary already has costs no text change and no undo
+      // entry — the node revise's own contract.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Boundary renamed to “${label.trim()}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleNodesGroup = useCallback(
     (
       diagramId: string,
@@ -1552,6 +1568,7 @@ export function ViewPlayground({
             onNodeNest: handleNodeNest,
             onNodeUnnest: handleNodeUnnest,
             onNodesGroup: handleNodesGroup,
+            onFrameRename: handleFrameRename,
             onUndo: handleCanvasUndo,
           }
         : undefined,
@@ -1565,6 +1582,7 @@ export function ViewPlayground({
       handleNodeNest,
       handleNodeUnnest,
       handleNodesGroup,
+      handleFrameRename,
       handleCanvasUndo,
     ],
   );
@@ -1689,8 +1707,9 @@ export function ViewPlayground({
             {CANVAS_EDIT_ENABLED ? (
               <>
                 C4 nodes can be dragged on the canvas, added from its palette,
-                grouped into a boundary with a Shift + drag selection, and their
-                wording, icon and colour edited in the details panel, and
+                grouped into a boundary with a drag selection (hold Space to
+                pan instead), their wording, icon and colour edited in the
+                details panel — where a selected boundary is renamed too — and
                 sequence messages and lifelines added, edited, repointed,
                 reordered, numbered and removed on it; the other kinds lay
                 themselves out from the text.{" "}

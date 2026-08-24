@@ -75,6 +75,7 @@ import { childLevelOf } from "@/types";
 
 import {
   canonicalDiagramBlock,
+  canonicalFrameDeclaration,
   canonicalFrameLine,
   canonicalNodeBlock,
   canonicalNodeLine,
@@ -375,11 +376,14 @@ export const CANVAS_EDIT_OFFERS: Record<
          live on its declaration line), gated on exactly the two facts every
          revise gates on; the companion line each one mints (a `frame`
          declaration, a diagram head) follows the colour edit's precedent,
-         where the header's `tagcolor` line rides the same gesture. */
+         where the header's `tagcolor` line rides the same gesture. A selected
+         boundary's own rename (`renamedFrameEdit`) rides here for the same
+         test: a frame is an element with its own declaration line and span,
+         so its label edit gates on nothing the other revises do not. */
       onCanvas:
         "a C4 node's name, description, technology, icon, colour and " +
         "boundary edited in the details panel beside it, where a child " +
-        "view is added or removed too",
+        "view is added or removed and a selected boundary renamed too",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: `serializeMermaidC4`
@@ -1060,6 +1064,75 @@ export function revisedNodeEdit(
       });
     }
     return adopt(doc, edited, applyPatches(sourceText, patches));
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one frame's label rewritten, or `null` when the edit cannot
+ * apply — a document that refuses `"revise"`, a frame that is not in the
+ * diagram, a blank label, or a label that is already what the frame has.
+ * This is the gesture behind selecting a boundary on the canvas and renaming
+ * it in its details card.
+ *
+ * PART OF `"revise"`, NOT A FOURTH ABILITY, by the ability doc's own test: a
+ * new ability is owed only when a gesture gates on a fact the existing ones
+ * do not ask about, and this one gates on exactly the two facts every revise
+ * gates on — an `.alab` C4 pane and the canvas unlocked. A frame is an
+ * element of the grammar with its own declaration line and its own span
+ * (`spans.frames`), so rewriting its label is the same shape as rewriting a
+ * node's name; the C4 revise cell's Mermaid caveat already covers it for the
+ * measured reason the grouping cites — the Mermaid emitter rebuilds its
+ * boundary blocks from `x-mermaid.boundaries` plus `boundary:` tags and never
+ * reads `C4Diagram.frames`, so a renamed label would be lost on the round
+ * trip.
+ *
+ * A RENAME PATCHES EXACTLY ONE LINE — the frame's declaration, the only line
+ * a frame has (`spans.frames` records it as a one-line span). The line is
+ * `canonicalFrameDeclaration`'s answer for the edited model, so a nested
+ * frame's `in=` comes back exactly as the serializer would spell it rather
+ * than being re-derived here. Members are untouched: they name the frame by
+ * ID (`in=<id>`), and the id is deliberately NOT re-minted from the new label
+ * — rewriting every member's declaration line to chase a cosmetic slug would
+ * give a one-word rename the blast radius of a grouping.
+ *
+ * A BLANK LABEL IS REFUSED, not passed through: the serializer refuses an
+ * empty frame label outright (as the validator does), so accepting it would
+ * turn an Apply into a dropped edit further down with nothing to say why —
+ * the same rule the node revise states for an empty name.
+ */
+export function renamedFrameEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  frameId: string,
+  label: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  const frame = diagram?.frames?.find((candidate) => candidate.id === frameId);
+  if (frame === undefined) return null;
+  const trimmed = label.trim();
+  if (trimmed === "") return null;
+  // `null` for an unchanged label keeps "one text change per gesture" true
+  // for a form submitted without an edit in it — every gesture's contract.
+  if (frame.label === trimmed) return null;
+
+  const edited = mapDiagram(file, diagramId, (current) => ({
+    ...current,
+    frames: (current.frames ?? []).map((candidate) =>
+      candidate.id === frameId ? { ...candidate, label: trimmed } : candidate,
+    ),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const span = patchable?.spans.frames.get(spanKey(diagramId, frameId));
+  const line = canonicalFrameDeclaration(edited, diagramId, frameId);
+  if (span !== undefined && line !== null) {
+    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines: [line] }]));
   }
   return adopt(doc, edited, null);
 }
