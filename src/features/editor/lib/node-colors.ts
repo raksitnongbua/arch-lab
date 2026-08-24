@@ -207,18 +207,20 @@ export function resolveTagColor(
  * `tagcolor <tag> "<hex>"` header line, so ten nodes coloured amber cost the
  * header ONE line, not ten.
  *
- * A CURATED SET, NOT A FREE PICKER, for two reasons written down here because
- * the alternative keeps looking easier. First, presentation is the product
- * (`purpose.md`): a free picker mints one junk tag per node and can hand the
- * author a stroke that vanishes on a theme — the on-screen FILL is safe by
- * construction (`tagFillCss` pins its lightness), but the raw hex paints the
- * BORDER, and nothing constructs that. Second, the promise the repo makes for
- * every customisation surface is that every variant is measured: these five
- * hexes are held to the role-border standard (stroke ≥3:1 against the
- * constructed tag fill, node title ≥7:1 on it) on EVERY declared theme by
- * `check:canvas-edit`, which is exactly what cannot be said of an arbitrary
- * hex. Free colour stays available where it always was — a `tagcolor` line
- * typed in the source pane.
+ * A CURATED SET beside a free picker. This palette used to be the ONLY offer,
+ * refusing free colour for two reasons: a free picker mints one junk tag per
+ * node, and it can hand the author a stroke that vanishes on a theme — the
+ * on-screen FILL is safe by construction (`tagFillCss` pins its lightness),
+ * but the raw hex paints the BORDER, and nothing constructed that. The
+ * product owner reversed the refusal, so both reasons are now handled rather
+ * than avoided, in `free-color.ts`: a free pick is clamped per hue into the
+ * band where the border holds the same bar these five are measured to
+ * (stroke ≥3:1 against the constructed tag fill, node title ≥7:1 on it, every
+ * declared theme, all audited by `check:canvas-edit` — the clamp's whole
+ * output space, not just the five), and its tag is derived from the hex so a
+ * repeated colour reuses one header line instead of minting twins. The five
+ * named entries stay because a measured, nameable shortlist is still the
+ * faster reach for "single this node out".
  *
  * Hues deliberately avoid the four role families (violet 295, blue 250, teal
  * 195, green 150): a palette colour is the author SINGLING a node out, and a
