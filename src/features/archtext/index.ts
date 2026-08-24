@@ -66,10 +66,11 @@
  */
 
 export { parseArchText, parseArchTextWithSpans, spanKey } from "./lib/parse";
-export type { ArchTextSpans, LineSpan } from "./lib/parse";
+export type { ArchTextSpans, HeaderSpans, LineSpan } from "./lib/parse";
 export {
   canonicalNodeBlock,
   canonicalNodeLine,
+  canonicalTagColorLine,
   serializeArchText,
 } from "./lib/serialize";
 export { ArchTextParseError } from "./lib/errors";

@@ -442,6 +442,19 @@ export function canonicalNodeLine(
   return lines === null ? null : lines[0];
 }
 
+/**
+ * The canonical header line for one `tagColors` entry — byte for byte the
+ * line `serializeArchText` writes for it, kept HERE so the one place that
+ * knows when a tag or a colour needs quoting (`tagKeyToken`) is the one that
+ * spells the line. The colour edit in `playground/input/canvas-edit.ts`
+ * splices this into the header when it mints a colour the document does not
+ * define yet; a copy of the format string there would drift the first time
+ * either learned a new escape.
+ */
+export function canonicalTagColorLine(tag: string, color: string): string {
+  return `tagcolor ${tagKeyToken(tag)} ${JSON.stringify(color)}`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Diagram / node / edge emitters                                             */
 /* -------------------------------------------------------------------------- */
