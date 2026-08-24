@@ -4,10 +4,13 @@
  * The Add strip: one button per node type the CURRENT diagram level admits,
  * rendered under the breadcrumb while the canvas is editable.
  *
- * ALWAYS-VISIBLE BUTTONS, not a popover. A menu is a second click and a
- * dismissal contract (outside-click, Escape) that would have to negotiate
- * with the canvas's own Escape ladder; a level offers at most five types, so
- * the whole choice fits in one row of the chrome the toolbar already wears.
+ * ALWAYS-VISIBLE BUTTONS, not a popover — for BOTH halves, the types and the
+ * references. A menu is a second click and a dismissal contract
+ * (outside-click, Escape) that would have to negotiate with the canvas's own
+ * Escape ladder. A level offers at most five types, so that half fits in one
+ * row of the chrome the toolbar already wears; the reference half's list
+ * grows with the model instead, so it wraps and is capped — see the note on
+ * the group below — rather than earning back the dropdown it replaced.
  *
  * THE LABELS ARE THE `.alab` KEYWORDS, in mono, on purpose: pressing
  * `database` makes the source pane gain a `:database` line, so the button
@@ -71,46 +74,54 @@ export function ViewerNodePalette({
           {keyword}
         </button>
       ))}
-      {/* A SELECT, not more buttons: the type list is a level's fixed five at
-          most, but the referenceable list grows with the model — a context
-          diagram's every node is a candidate deeper down. It disappears
-          entirely when nothing may be referenced (the root diagram, or a
-          diagram that already mirrors everything above it), because an empty
-          dropdown is a promise the model cannot keep. */}
+      {/* BUTTONS HERE TOO, replacing the dropdown this half shipped as, for
+          the header's reason: picking from a select was a second interaction
+          with its own dismissal contract, for a list that is usually two or
+          three names. Unlike the type half this list GROWS with the model —
+          a context diagram's every node is a candidate deeper down — so the
+          group WRAPS into rows and is CAPPED at about three of them with its
+          own scrollbar. The two alternatives were weighed and lose: unbounded
+          wrapping lets a large model's strip eat the canvas the palette sits
+          over, and a "+N more" popover reintroduces exactly the dismissal
+          contract buttons were chosen to avoid. The scrollbar is the honest
+          overflow affordance — every candidate stays visible or one scroll
+          away, none behind a click. The group disappears entirely when
+          nothing may be referenced (the root diagram, or a diagram that
+          already mirrors everything above it), because an empty group is a
+          promise the model cannot keep. */}
       {references.length > 0 ? (
-        <label className="flex items-center gap-1 border-l border-border/70 pl-1.5">
+        <div className="flex min-w-0 items-start gap-1 border-l border-border/70 pl-1.5">
           <ArrowUp
             aria-hidden="true"
-            className="size-3.5 text-muted-foreground"
+            className="mt-1.5 size-3.5 shrink-0 text-muted-foreground"
           />
-          <span className="sr-only">
-            Reference an element from a level above
-          </span>
-          <select
-            value=""
-            onChange={(event) => {
-              const [diagramId, nodeId] = event.target.value.split("/");
-              if (diagramId === undefined || nodeId === undefined) return;
-              onCreateRef({ diagramId, nodeId });
-              /* Reset to the prompt: the select is a COMMAND, not a state —
-                 leaving the chosen option showing would suggest the strip
-                 remembers a selection the diagram does not have. */
-              event.target.value = "";
-            }}
-            title="Mirror an element from a level above into this diagram"
-            className="max-w-[10rem] rounded-md bg-transparent px-1 py-1 text-[11px] text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          <div
+            role="group"
+            aria-label="Reference an element from a level above"
+            className="flex max-h-20 min-w-0 flex-wrap items-center gap-0.5 overflow-y-auto"
           >
-            <option value="">Reference…</option>
             {references.map(({ sourceDiagramId, sourceLevel, node }) => (
-              <option
+              <button
                 key={`${sourceDiagramId}/${node.id}`}
-                value={`${sourceDiagramId}/${node.id}`}
+                type="button"
+                onClick={() =>
+                  onCreateRef({ diagramId: sourceDiagramId, nodeId: node.id })
+                }
+                title={`Mirror ${node.name} from the ${LEVEL_LABEL[sourceLevel]} view into this diagram`}
+                className="flex min-w-0 items-baseline gap-1 rounded-md px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
-                {node.name} — {LEVEL_LABEL[sourceLevel]}
-              </option>
+                {/* The NAME is the choice; the level is its address. Muted
+                    and smaller so two same-named elements at different
+                    levels stay tellable apart without the address shouting
+                    over every button. */}
+                <span className="max-w-[9rem] truncate">{node.name}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">
+                  {LEVEL_LABEL[sourceLevel]}
+                </span>
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
       ) : null}
     </div>
   );

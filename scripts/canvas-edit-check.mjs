@@ -3408,6 +3408,19 @@ console.log(
     /creatableNodeTypes\(level\)\.map\(/.test(palette),
     "a hand-listed strip is the drift this whole section exists to prevent",
   );
+  /* The REFERENCE half is buttons too, and derived. It shipped as a `<select>`
+     first; the product owner asked for one button per candidate (name plus
+     source level), and the strip header's no-popover argument now covers both
+     halves. What must not change with the widget is where the list comes
+     from: `referenceableNodes` is also what the gesture guard reads
+     (`createdRefEdit`), so a hand-listed half would offer references the
+     guard then refuses. */
+  check(
+    "the reference half is derived buttons, not a dropdown",
+    /references\.map\(/.test(palette) && !/<select/.test(palette),
+    "the ref half stopped mapping the derived candidate list — or grew back " +
+      "the dropdown whose dismissal contract the strip's header rejects",
+  );
 }
 
 /* ----------------------------------------------------------------------- */
