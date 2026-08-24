@@ -1385,6 +1385,61 @@ console.log("\nEvery notation that cannot carry geometry says so");
       /technology on people\/systems/.test(MERMAID_C4_EXPORT_CAVEAT),
       "the caveat no longer supports the refusal that cites it",
     );
+
+    /* THE SAME STANDARD FOR THE PANEL'S TWO NEWER FIELDS. The refusal now
+       also claims an icon or colour edit would be lost through a Mermaid
+       pane, so that loss is MEASURED the way the technology loss is: a node
+       carrying both goes through the app's own converter and comes back
+       carrying neither. If `serializeMermaidC4` ever learns a sprite or an
+       UpdateElementStyle, this fails and the refusal should be revisited. */
+    const paintedDoc = c4Document(
+      [
+        `archlab 1.0`,
+        `title "Paint probe"`,
+        `tagcolor hot "#bc6761"`,
+        ``,
+        `@context ctx "Context"`,
+        `  web:system "Web App" @nextjs! #hot`,
+        ``,
+      ].join("\n"),
+    );
+    const paintedBack = parseViewSource(
+      (
+        await load("src/features/playground/input/parse.ts")
+      ).convertedSourceText(paintedDoc, "mermaid"),
+    );
+    const paintedNode =
+      paintedBack.status === "ok" && paintedBack.value.kind === "c4"
+        ? paintedBack.value.synced.file.diagrams[0].nodes.find(
+            (node) => node.id === "web",
+          )
+        : undefined;
+    check(
+      "an icon and a tag colour are measured to be lost through the Mermaid pane",
+      paintedNode !== undefined &&
+        paintedNode.icon === undefined &&
+        (paintedNode.tags ?? []).includes("hot") === false &&
+        paintedBack.value.synced.file.metadata.tagColors === undefined,
+      `after the round trip: ${JSON.stringify({
+        icon: paintedNode?.icon,
+        tags: paintedNode?.tags,
+        tagColors:
+          paintedBack.status === "ok"
+            ? paintedBack.value.synced.file.metadata.tagColors
+            : "unparsed",
+      })}`,
+    );
+    check(
+      "the Mermaid refusal names the icon and the colour beside the technology",
+      /icon/.test(verdict.reason ?? "") && /colour/.test(verdict.reason ?? ""),
+      "the panel edits two fields the refusal never mentions",
+    );
+    check(
+      "the C4 export caveat documents dropping icons and tag colours too",
+      /icons/.test(MERMAID_C4_EXPORT_CAVEAT) &&
+        /tag colours/.test(MERMAID_C4_EXPORT_CAVEAT),
+      "the caveat no longer supports the refusal that cites it",
+    );
   }
 }
 
@@ -2489,6 +2544,358 @@ console.log("\nA revise rewrites one node's block and nothing else");
 }
 
 /* ----------------------------------------------------------------------- */
+/* 14a. The same revise carries the ICON and the COLOUR, and colour is two  */
+/*      writes with a precedence trap between them                          */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA revise carries the icon and the colour, both as patches");
+
+{
+  const { colorTagsOf, resolveTagColor, NODE_TAG_PALETTE, EXTERNAL_TAG } =
+    await load("src/features/editor/lib/node-colors.ts");
+
+  /* Non-canonical for section 13's reason, and shaped for colour's own traps:
+     `legacy` is a DOCUMENTED colour (a `tagcolor` line), `vip` is a plain tag
+     with no colour — a colour change must take the first off the node and
+     leave the second alone, and nothing but measuring both tells them apart. */
+  const authored = [
+    `archlab 1.0`,
+    `title "Colour probe"`,
+    `tagcolor legacy "#8b0000"`,
+    ``,
+    `// The header ends above this comment.`,
+    `@context ctx "System context"`,
+    `  api:system "API"`,
+    `  cust:person "Customer" #legacy #vip`,
+    `  web:system "Web App" [Next.js]`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the colour fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const docColors = doc.synced.file.metadata.tagColors;
+
+  /* --- the icon: one more token on the same block patch --------------------- */
+
+  const picked = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Web App",
+    technology: "Next.js",
+    icon: "nextjs",
+    iconSource: "explicit",
+  });
+  const pickedChanges = changedLines(authored, picked?.text ?? "");
+  check(
+    "picking an icon writes @slug! onto the declaration line and nothing else moves",
+    picked !== null &&
+      picked.path === "patch" &&
+      pickedChanges.length === 1 &&
+      pickedChanges[0].after.includes("@nextjs!"),
+    `changed: ${JSON.stringify(pickedChanges.map((c) => c.after))}`,
+  );
+  const pickedNode =
+    picked === null
+      ? undefined
+      : picked.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "web");
+  check(
+    "the picked icon survives the round trip as explicit — never auto-overridden later",
+    pickedNode !== undefined &&
+      pickedNode.icon === "nextjs" &&
+      pickedNode.iconSource === "explicit",
+    `icon after re-parse: ${JSON.stringify([pickedNode?.icon, pickedNode?.iconSource])}`,
+  );
+  const clearedIcon =
+    picked === null
+      ? null
+      : revisedNodeEdit(picked.doc, picked.text, "ctx", "web", {
+          name: "Web App",
+          technology: "Next.js",
+        });
+  check(
+    "clearing the icon removes the @ token — absence IS the type default, and the bytes come back",
+    clearedIcon !== null && clearedIcon.text === authored,
+    clearedIcon === null
+      ? "the clearing revise was refused"
+      : firstDiff(clearedIcon.text, authored),
+  );
+
+  /* --- the trap, measured before it is handled ------------------------------ */
+
+  /* The premise first: with tags stored sorted, a naively APPENDED `rose`
+     would lose the precedence race to `legacy` — the FIRST coloured tag in
+     stored order wins, and "rose" sorts after "legacy". If this stops being
+     true the removal below is solving a problem that no longer exists, and
+     should be revisited rather than left standing. */
+  const rose = { kind: "tag", tag: "rose", color: "#ca549d" };
+  check(
+    "the trap is real: on a naive append the OLD colour still wins the race",
+    resolveTagColor(
+      { tags: ["legacy", "rose", "vip"] },
+      { ...docColors, rose: rose.color },
+    ) === "#8b0000",
+    "appending now wins outright — the removal below may be over-handling",
+  );
+
+  /* --- a colour on an untagged node: the mint is exactly two writes --------- */
+
+  const amber = { kind: "tag", tag: "amber", color: "#a47c13" };
+  const minted = revisedNodeEdit(doc, authored, "ctx", "api", {
+    name: "API",
+    color: amber,
+  });
+  const mintedLines = (minted?.text ?? "").split("\n");
+  const mintedAt = mintedLines.indexOf(`tagcolor amber "#a47c13"`);
+  check(
+    "minting a colour is a patch: the node gains #amber and the header gains ONE canonical tagcolor line",
+    minted !== null &&
+      minted.path === "patch" &&
+      mintedAt !== -1 &&
+      mintedLines.some(
+        (line) => line.includes("api:system") && line.includes("#amber"),
+      ),
+    `path: ${minted === null ? "refused" : minted.path}; header line at ${mintedAt}`,
+  );
+  check(
+    "the minted line lands inside the header, directly after the existing tagcolor block",
+    mintedAt === 3 &&
+      mintedAt < mintedLines.findIndex((l) => l.startsWith("@")),
+    `minted at line ${mintedAt + 1}; the header ends before the first "@"`,
+  );
+  check(
+    "every byte outside the two colour writes survives the mint",
+    minted !== null &&
+      changedLines(
+        authored,
+        mintedLines.filter((_, i) => i !== mintedAt).join("\n"),
+      ).length === 1,
+    "a colour change rewrote lines it was not about",
+  );
+  const mintedApi =
+    minted === null
+      ? undefined
+      : minted.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "api");
+  check(
+    "the minted colour actually paints: the re-parsed node resolves to the picked hex",
+    mintedApi !== undefined &&
+      resolveTagColor(mintedApi, minted.doc.synced.file.metadata.tagColors) ===
+        "#a47c13",
+    `resolved: ${JSON.stringify(
+      mintedApi === undefined
+        ? "no node"
+        : resolveTagColor(mintedApi, minted.doc.synced.file.metadata.tagColors),
+    )}`,
+  );
+
+  /* --- a documented colour is joined, never repainted ------------------------ */
+
+  const joined = revisedNodeEdit(doc, authored, "ctx", "api", {
+    name: "API",
+    color: { kind: "tag", tag: "legacy", color: "#ffffff" },
+  });
+  check(
+    "joining a documented colour adds no header line and never rewrites its hex",
+    joined !== null &&
+      joined.path === "patch" &&
+      joined.text.includes(`tagcolor legacy "#8b0000"`) &&
+      !joined.text.includes("#ffffff") &&
+      changedLines(authored, joined.text).length === 1,
+    "a single-element control repainted a tag every other element wears",
+  );
+
+  /* --- the trap, handled: a new colour takes the losing race off the node --- */
+
+  const swapped = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    color: rose,
+  });
+  const swappedCust =
+    swapped === null
+      ? undefined
+      : swapped.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "cust");
+  check(
+    "a new colour REMOVES the coloured tag it would otherwise lose to — never a silent no-op",
+    swappedCust !== undefined &&
+      !(swappedCust.tags ?? []).includes("legacy") &&
+      resolveTagColor(
+        swappedCust,
+        swapped.doc.synced.file.metadata.tagColors,
+      ) === rose.color,
+    `tags after: ${JSON.stringify(swappedCust?.tags)}`,
+  );
+  check(
+    "the swap keeps the plain tag and keeps the header line other elements may wear",
+    swapped !== null &&
+      swappedCust !== undefined &&
+      (swappedCust.tags ?? []).includes("vip") &&
+      swapped.text.includes(`tagcolor legacy "#8b0000"`),
+    "a colour change ate a tag that was not a colour, or a header line others use",
+  );
+
+  /* --- Automatic: back to the role colour, tags stay honest ------------------ */
+
+  const auto = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    color: { kind: "role" },
+  });
+  const autoCust =
+    auto === null
+      ? undefined
+      : auto.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "cust");
+  check(
+    "Automatic takes the coloured tag off, keeps the plain one, and leaves the header alone",
+    autoCust !== undefined &&
+      colorTagsOf(autoCust, auto.doc.synced.file.metadata.tagColors).length ===
+        0 &&
+      (autoCust.tags ?? []).includes("vip") &&
+      auto.text.includes(`tagcolor legacy "#8b0000"`),
+    `tags after: ${JSON.stringify(autoCust?.tags)}`,
+  );
+
+  /* --- what colour refuses, and what it leaves alone ------------------------- */
+
+  check(
+    "re-choosing the colour already in force is a no-op — an untouched Apply costs nothing",
+    revisedNodeEdit(doc, authored, "ctx", "cust", {
+      name: "Customer",
+      color: { kind: "tag", tag: "legacy", color: "#8b0000" },
+    }) === null &&
+      revisedNodeEdit(doc, authored, "ctx", "api", {
+        name: "API",
+        color: { kind: "role" },
+      }) === null,
+    "a form submitted unchanged still rewrote the pane",
+  );
+  const renamedOnly = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Shopper",
+  });
+  check(
+    "a revision that makes no colour claim leaves the tags exactly as written",
+    renamedOnly !== null &&
+      renamedOnly.text
+        .split("\n")
+        .some((l) => l.includes("#legacy") && l.includes("#vip")),
+    "an edit that never looked at colour rewrote the tag list",
+  );
+  /* A `! meta` escape can hold the whole tagColors map, and a minted
+     `tagcolor` line beside it is the one thing the parser rejects outright
+     (the field spelled both ways) — so the mint must refuse rather than
+     hand back an Apply that silently applies nothing. */
+  /* The AUTHORED bang text is what sits in the pane — canonical form would
+     have normalised the escape into a `tagcolor` line and dissolved the very
+     case this guards. */
+  const bangText = [
+    `archlab 1.0`,
+    `title "Bang probe"`,
+    `! meta.tagColors : {"legacy":"#8b0000"}`,
+    ``,
+    `@context ctx "Context"`,
+    `  api:system "API"`,
+    ``,
+  ].join("\n");
+  const bangHeld = c4Document(bangText);
+  check(
+    "a mint against a bang-held tagColors map refuses instead of unparsing the file",
+    revisedNodeEdit(bangHeld, bangText, "ctx", "api", {
+      name: "API",
+      color: amber,
+    }) === null,
+    "the minted line would spell the field twice and fail the re-parse",
+  );
+  /* The guard's BREADTH, pinned from the other side: joining a colour the
+     bang already defines writes no header line, so nothing about the escape
+     is disturbed and the guard must not refuse it — a guard that keys on
+     "the map is bang-held" instead of "a line must be minted" would turn
+     every colour choice on such a file into a silent nothing. (The refusal
+     above is also enforced a second time by the adopt() re-parse; this
+     direction is the one only the guard's own condition decides.) */
+  const bangJoin = revisedNodeEdit(bangHeld, bangText, "ctx", "api", {
+    name: "API",
+    color: { kind: "tag", tag: "legacy", color: "#8b0000" },
+  });
+  check(
+    "joining a bang-held colour still patches — the mint guard refuses only the mint",
+    bangJoin !== null &&
+      bangJoin.path === "patch" &&
+      bangJoin.text.includes(`! meta.tagColors : {"legacy":"#8b0000"}`) &&
+      bangJoin.text.split("\n").some((l) => l.includes("#legacy")),
+    `verdict: ${bangJoin === null ? "refused" : bangJoin.path}`,
+  );
+
+  /* --- the palette: every swatch measured on every theme --------------------- */
+
+  /* The same standard the role palette meets in `check:themes`, applied to
+     the five colours this feature OFFERS: the raw hex paints the node's
+     border, and the on-screen fill is rebuilt as
+     oklch(from <hex> tag-fill-l min(c, tag-fill-c) h) — so both are computed
+     here exactly as the browser computes them, per theme, and a swatch that
+     would vanish on any theme cannot ship. A free colour picker is refused in
+     the palette's header for exactly this reason: an arbitrary hex is the one
+     thing this loop cannot vouch for. */
+  const { parseHex, oklchToLinear, contrast, parseOklch } = await import(
+    pathToFileURL(path.join(ROOT, "scripts/lib/oklch.mjs")).href
+  );
+  const { tokensOf, resolveToken } = await import(
+    pathToFileURL(path.join(ROOT, "scripts/lib/theme-css.mjs")).href
+  );
+  const css = read("src/app/globals.css");
+  const themes = [
+    ...(
+      /export const THEMES = \[([^\]]*)\]/.exec(
+        read("src/lib/constants.ts"),
+      )?.[1] ?? ""
+    ).matchAll(/"([a-z-]+)"/g),
+  ].map((m) => m[1]);
+  check(
+    "the theme list was read from constants.ts, not hand-listed here",
+    themes.length >= 7 && themes.includes("light") && themes.includes("dark"),
+    `parsed ${themes.length} themes: ${themes.join(", ")}`,
+  );
+  const baseline = tokensOf(css, "light");
+  check(
+    "every palette entry is a bare-safe lowercase tag, distinct from the external residue tag",
+    NODE_TAG_PALETTE.every(
+      ({ tag }) => /^[a-z]+$/.test(tag) && tag !== EXTERNAL_TAG,
+    ),
+    "a tag needing quotes, or one that already MEANS something, in the offer list",
+  );
+  for (const theme of themes) {
+    const tokens = tokensOf(css, theme) ?? baseline;
+    const fillL = Number.parseFloat(
+      resolveToken("--tag-fill-l", tokens, baseline),
+    );
+    const fillC = Number.parseFloat(
+      resolveToken("--tag-fill-c", tokens, baseline),
+    );
+    const nameInk = parseOklch(
+      resolveToken("--node-foreground", tokens, baseline),
+    );
+    const worst = NODE_TAG_PALETTE.map(({ tag, color }) => {
+      const hex = parseHex(color);
+      if (hex === null) return { tag, stroke: 0, name: 0 };
+      const [, C, h] = hex.oklch;
+      const fill = oklchToLinear(fillL, Math.min(C, fillC), h);
+      return {
+        tag,
+        stroke: contrast(hex.rgb, fill),
+        name: contrast(nameInk.rgb, fill),
+      };
+    });
+    check(
+      `${theme}: every palette stroke holds >=3:1 against its own constructed fill`,
+      worst.every((w) => w.stroke >= 3),
+      worst.map((w) => `${w.tag} ${w.stroke.toFixed(2)}:1`).join(", "),
+    );
+    check(
+      `${theme}: a node's title holds >=7:1 on every palette fill`,
+      worst.every((w) => w.name >= 7),
+      worst.map((w) => `${w.tag} ${w.name.toFixed(2)}:1`).join(", "),
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 /* 14b. The revise gesture is REACHABLE, and the panel's keys stay its own  */
 /* ----------------------------------------------------------------------- */
 
@@ -2609,6 +3016,45 @@ console.log(
     /technology: orAbsent\(technology\)/.test(panel) &&
       /description: orAbsent\(description\)/.test(panel),
     'a cleared field would submit "" and write a blank the reader cannot see',
+  );
+  /* THE ICON HALF OF THE SAME CONTRACT: a cleared icon submits as ABSENT
+     (spread-guarded, so the type default is spelled as omission, exactly as
+     the format writes it), and a picked one is the reader's own choice —
+     "explicit", the verdict the editor inspector's picker already hands
+     down, so a later technology edit can never auto-override it. */
+  check(
+    "the form submits a cleared icon as absent and a picked one as explicit",
+    /\.\.\.\(icon !== undefined \? \{ icon \} : \{\}\)/.test(panel) &&
+      /setIconSource\("explicit"\)/.test(panel),
+    "a cleared icon would submit a key, or a picked one could be auto-overridden",
+  );
+  /* The picker itself is the SHARED one — a third icon searcher beside the
+     registry's two consumers is the `dry.md` failure by name. */
+  check(
+    "the panel opens the shared IconPicker rather than a searcher of its own",
+    /import \{ IconPicker \} from "@\/features\/editor\/components\/icon-picker"/.test(
+      panel,
+    ) && /<IconPicker/.test(panel),
+    "a second icon search UI one import away from the existing one",
+  );
+  /* THE COLOUR CONTROL IS DERIVED, NOT HAND-LISTED (`codebase.md` habit 4):
+     the swatches come from NODE_TAG_PALETTE plus the document's own tags,
+     and each previews through the same `tagFillCss` construction the canvas
+     paints with — a hand-picked hex here could pass every palette audit and
+     still show the reader a colour the node will never be. */
+  check(
+    "the swatches derive from NODE_TAG_PALETTE and preview through tagFillCss",
+    /NODE_TAG_PALETTE\.filter/.test(panel) && /tagFillCss\(color\)/.test(panel),
+    "a hand-listed swatch row that can drift from the measured palette",
+  );
+  /* THE TRAP IS DISCLOSED BEFORE APPLY: when the choice takes a coloured tag
+     off the element, the form says which — the removal is deliberate module
+     behaviour (section 14a measures it) and silent tag removal is how an
+     author loses vocabulary without noticing. */
+  check(
+    "the form warns which coloured tag a new choice replaces, before Apply",
+    /replaced\.length > 0/.test(panel) && /Applying removes/.test(panel),
+    "a colour swap that silently takes tags off the element",
   );
 }
 
@@ -2806,11 +3252,12 @@ console.log("\nLocking never offers a link to somewhere you already are");
        whether they can move things, and the sentence they meet first is the
        page's own. */
     "reordered",
-    /* Added with the C4 revise. Two strings, because each half can go stale
-       alone: "wording edited" is the gesture, "details panel" is where — a
-       claim naming the first without the second sends the reader
-       double-clicking a box that only drills down. */
-    "wording edited",
+    /* Added with the C4 revise, grown when the same form learned icon and
+       colour. Two strings, because each half can go stale alone: the field
+       list is the gesture, "details panel" is where — a claim naming the
+       first without the second sends the reader double-clicking a box that
+       only drills down. */
+    "wording, icon and colour edited",
     "details panel",
   ]) {
     check(
