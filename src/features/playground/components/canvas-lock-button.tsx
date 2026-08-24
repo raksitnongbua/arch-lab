@@ -61,9 +61,12 @@
 
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import { LockKeyhole, LockKeyholeOpen } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export interface CanvasLockCopy {
   /** What unlocking lets the reader do, as a verb phrase completing
@@ -87,6 +90,24 @@ export function CanvasLockButton({
   onAnnounce: (message: string) => void;
   copy: CanvasLockCopy;
 }) {
+  /* THE GLYPH ANSWERS A PRESS WITH ONE GESTURE — the closed padlock drops
+     and clicks shut, the open one springs free — and NOTHING moves at rest
+     or on arrival (the animation decision itself is argued beside the
+     keyframes in globals.css). What this pair implements is the "never on
+     first paint" half: the ref seeds from the CURRENT state, so the first
+     render can never differ from it, and `travelled` only becomes true once
+     the prop has actually changed — a reader opening a locked share link
+     sees a still padlock, not one that theatrically slams shut on a lock
+     they never pressed. Watching the PROP rather than the click matters
+     too: the state can move from outside this control (the cookie, a host
+     reset), and the faces must answer the change, not the gesture. */
+  const previousLocked = useRef(locked);
+  const [travelled, setTravelled] = useState(false);
+  useEffect(() => {
+    if (previousLocked.current !== locked) setTravelled(true);
+    previousLocked.current = locked;
+  }, [locked]);
+
   /* ONE name for `aria-label` and `title`, saying what PRESSING DOES. The
      faces report the state (that is what a padlock pair can say); the name
      must therefore be the half a padlock cannot draw — the action — or an
@@ -158,10 +179,25 @@ export function CanvasLockButton({
           : "w-8 bg-gradient-to-br from-card/90 to-card/60 px-0 shadow-sm backdrop-blur hover:from-muted/60 hover:to-card/70 motion-safe:transition-all motion-safe:duration-300",
       })}
     >
+      {/* Each face animates on MOUNT (a toggle swaps the two glyphs, so the
+          entering one plays its gesture), gated three ways: `travelled` skips
+          the first paint, `motion-safe:` is the reduced-motion opt-out — in
+          CSS, not JS, so it holds on that very first toggle frame — and the
+          keyframes are transform-only, so the token colour below and the
+          button's gradient stay the only paint either face ever has. */}
       {locked ? (
-        <LockKeyhole aria-hidden="true" className="text-primary" />
+        <LockKeyhole
+          aria-hidden="true"
+          className={cn(
+            "text-primary",
+            travelled && "motion-safe:animate-lock-snap",
+          )}
+        />
       ) : (
-        <LockKeyholeOpen aria-hidden="true" />
+        <LockKeyholeOpen
+          aria-hidden="true"
+          className={cn(travelled && "motion-safe:animate-lock-open")}
+        />
       )}
     </button>
   );

@@ -938,6 +938,73 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
     "the lock's gradient hardcodes a colour, so it is tuned for one theme " +
       "and merely tolerated by the rest",
   );
+  /* THE LOCK ANIMATES ITS STATE CHANGE, AND ONLY THAT. The owner asked for
+     the padlock to be animated; what shipped is a one-shot settle per toggle
+     and a still resting state (the trade is argued beside the keyframes in
+     globals.css — a loop on the one control floating over a presented
+     diagram spends the reader's eye on chrome). Three properties keep the
+     motion inside that decision, each pinned below: it can never run
+     forever, it can never fire for a reader who asked for reduced motion or
+     one who merely arrived at the page, and it can never repaint the glyph —
+     the token-colour and gradient assertions above stay the whole story of
+     what the faces look like. */
+  const lockAnimCss = read("src/app/globals.css");
+  const lockAnimTokens = [
+    ...lockAnimCss.matchAll(/--animate-lock-(snap|open):([^;]+);/g),
+  ];
+  const lockKeyframes = [
+    ...lockAnimCss.matchAll(
+      /@keyframes af-lock-(?:snap|open) \{([\s\S]*?)\n\}/g,
+    ),
+  ];
+  const lockKeyframeProps = lockKeyframes.flatMap((m) =>
+    [...m[1].matchAll(/([a-z-]+):/g)].map((p) => p[1]),
+  );
+  check(
+    "the lock's two gestures are one-shot — declared without `infinite`",
+    lockAnimTokens.length === 2 &&
+      lockAnimTokens.every(
+        ([declaration]) => !declaration.includes("infinite"),
+      ),
+    "a state-change settle became a loop — continuous motion on the one " +
+      "control floating over a diagram someone is presenting",
+  );
+  check(
+    "and they move nothing but transform — the faces' paint stays the tokens'",
+    lockKeyframes.length === 2 &&
+      lockKeyframeProps.length > 0 &&
+      lockKeyframeProps.every((prop) => prop === "transform"),
+    `keyframes animate: ${[...new Set(lockKeyframeProps)].join(", ") || "none found"} — ` +
+      "a colour or stroke in the gesture would repaint the glyph the token " +
+      "assertions above vouch for",
+  );
+  /* `motion-safe:` on BOTH faces, and no unguarded spelling anywhere. This is
+     the reduced-motion STOP the canvas promises elsewhere — the variant is a
+     media query, so it already holds on the first toggle frame, before any
+     JS-written preference could. Structural (stripped source): the comment
+     beside the icons explains the class it applies. */
+  check(
+    "the lock's motion is behind motion-safe on both faces — reduced motion stops it",
+    /motion-safe:animate-lock-snap/.test(controlCode) &&
+      /motion-safe:animate-lock-open/.test(controlCode) &&
+      !/(?<!motion-safe:)animate-lock-/.test(controlCode),
+    "a lock gesture escaped the motion-safe gate — reduced motion would " +
+      "still see the padlock travel",
+  );
+  /* NEVER ON FIRST PAINT. The ref is seeded from the CURRENT prop — the one
+     shape that makes the first render unable to differ from itself — and the
+     class is gated on `travelled`, which only a real change sets. A reader
+     opening a locked share link must meet a still padlock, not one slamming
+     shut on a press nobody made. */
+  check(
+    "the gesture fires only on a state CHANGE, never on arrival",
+    /useRef\(locked\)/.test(controlCode) &&
+      /previousLocked\.current !== locked/.test(controlCode) &&
+      /travelled && "motion-safe:animate-lock-snap"/.test(controlCode) &&
+      /travelled && "motion-safe:animate-lock-open"/.test(controlCode),
+    "the first paint can animate — opening a locked diagram would play a " +
+      "lock gesture the reader never pressed for",
+  );
   check(
     "a pointer press hands focus back, so a stray keypress cannot re-toggle the lock",
     /if \(event\.detail > 0\)\s*event\.currentTarget\.blur\(\);/.test(control),
