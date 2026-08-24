@@ -98,6 +98,7 @@ import {
   SplitWorkbench,
 } from "@/components/ui/split-workbench";
 import type {
+  C4NodeRevision,
   SequenceItemPath,
   SequenceMessageRevision,
   SequenceParticipantRevision,
@@ -195,6 +196,7 @@ import {
   deletedNodeEdit,
   movedNodeEdit,
   ownsChildDiagram,
+  revisedNodeEdit,
   type CanvasEdit,
 } from "../input/canvas-edit";
 import {
@@ -907,10 +909,10 @@ export function ViewPlayground({
   const editability = canvasEditability(doc);
   /**
    * The same question for the OTHER canvas gesture — rewriting an element's
-   * wording, which the sequence canvas offers and the C4 canvas does not (see
-   * `CanvasEditAbility`). Named for what it edits rather than for the ability it
-   * asks about, so that the two `canvasEditability` calls on this page cannot be
-   * read as the same question.
+   * wording, which the sequence canvas offers in its dock and the C4 canvas in
+   * its details panel (see `CanvasEditAbility`). Named for what it edits rather
+   * than for the ability it asks about, so that the two `canvasEditability`
+   * calls on this page cannot be read as the same question.
    */
   const wordingEditability = canvasEditability(doc, "revise");
   /**
@@ -1061,6 +1063,21 @@ export function ViewPlayground({
       applyCanvasEdit(
         next,
         `Deleted ${nodeId} and every relationship touching it — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeRevise = useCallback(
+    (diagramId: string, nodeId: string, revision: C4NodeRevision) => {
+      const next = revisedNodeEdit(doc, text, diagramId, nodeId, revision);
+      // null covers "nothing changed" as well as every refusal, so submitting
+      // an untouched form costs no text change and no undo entry — the same
+      // contract the two sequence revise handlers state.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `${nodeId} updated to “${revision.name}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
       );
     },
     [doc, text, applyCanvasEdit],
@@ -1386,17 +1403,31 @@ export function ViewPlayground({
     setAnnouncement("Undid the last change made on the diagram.");
   }, [applyEdit]);
 
-  /** The handlers together, so the canvas cannot be half-editable. */
+  /** The handlers together, so the canvas cannot be half-editable.
+   *
+   * Gated on `canvasEditable` — the `move` answer — even though the bundle now
+   * also carries `revise`: for a C4 document the two cells refuse in exactly
+   * the same case (a Mermaid pane), so one gate is the honest one and a second
+   * would be a condition that can never differ, kept in step by hand. If the
+   * cells ever diverge, `revisedNodeEdit` still asks `canvasEditability` for
+   * itself — every gesture guards its own ability. */
   const canvasEdit = useMemo(
     () =>
       canvasEditable
         ? {
             onNodeMove: handleNodeMove,
+            onNodeRevise: handleNodeRevise,
             onNodeDelete: handleNodeDelete,
             onUndo: handleCanvasUndo,
           }
         : undefined,
-    [canvasEditable, handleNodeMove, handleNodeDelete, handleCanvasUndo],
+    [
+      canvasEditable,
+      handleNodeMove,
+      handleNodeRevise,
+      handleNodeDelete,
+      handleCanvasUndo,
+    ],
   );
 
   // Reports which diagram is on screen so edits keep the drill-down place.
@@ -1518,10 +1549,10 @@ export function ViewPlayground({
                 they will look for it. */}
             {CANVAS_EDIT_ENABLED ? (
               <>
-                C4 nodes can be dragged on the canvas, and sequence messages and
-                lifelines added, edited, repointed, reordered, numbered and
-                removed on it; the other kinds lay themselves out from the
-                text.{" "}
+                C4 nodes can be dragged on the canvas and their wording edited
+                in the details panel, and sequence messages and lifelines added,
+                edited, repointed, reordered, numbered and removed on it; the
+                other kinds lay themselves out from the text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}

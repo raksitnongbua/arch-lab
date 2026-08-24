@@ -151,11 +151,11 @@ export function canvasStateLabel(locked: boolean) {
  */
 export const CANVAS_LOCK_COPY: Record<"c4" | "sequence", CanvasLockCopy> = {
   c4: {
-    unlockHint: "drag nodes to move them",
+    unlockHint: "drag nodes to move them, or edit one's wording",
     unlockedAnnouncement:
-      "Canvas unlocked — drag a node to move it; arrow keys nudge the selection. Every change is written into the source text.",
+      "Canvas unlocked — drag a node to move it, arrow keys nudge the selection, and the details panel edits a selected node's wording. Every change is written into the source text.",
     lockedAnnouncement:
-      "Canvas locked — the diagram is read-only. Nothing on it can be moved or deleted.",
+      "Canvas locked — the diagram is read-only. Nothing on it can be moved, edited or deleted.",
   },
   sequence: {
     unlockHint: "edit, add, reorder or remove a step",

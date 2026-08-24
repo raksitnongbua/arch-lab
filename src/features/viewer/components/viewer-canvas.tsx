@@ -61,7 +61,7 @@ import {
 
 import "@xyflow/react/dist/style.css";
 
-import type { C4Diagram, C4Edge } from "@/types";
+import type { C4Diagram, C4Edge, C4NodeRevision } from "@/types";
 import { childLevelOf, hasChildDiagram } from "@/types";
 
 import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
@@ -148,6 +148,17 @@ export type NodeMoveHandler = (
  */
 export interface CanvasEditHandlers {
   onNodeMove: NodeMoveHandler;
+  /**
+   * Rewrite the node's own wording — name, technology, description — from the
+   * details panel's edit form. The host turns it into a line patch
+   * (`revisedNodeEdit`) and refuses what cannot apply; the canvas only
+   * reports the submitted form.
+   */
+  onNodeRevise: (
+    diagramId: string,
+    nodeId: string,
+    revision: C4NodeRevision,
+  ) => void;
   /**
    * Remove the node. The host decides whether the removal is allowed (a node
    * owning a child diagram is refused) and says so — the canvas only reports
@@ -1171,6 +1182,20 @@ function ViewerCanvasInner({
       // make one press do two things. The viewer's own Escape ladder
       // (deselect → climb → leave immersive mode) resumes afterwards.
       if (document.fullscreenElement !== null) return;
+      // Form fields are exempt, the same rung rule the sequence viewer's
+      // ladder states: the details panel's edit form is a sibling of this
+      // listener, and an Escape typed into its name field would otherwise
+      // deselect the element — unmounting the form with the reader's
+      // half-typed text in it.
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "TEXTAREA" ||
+          target.tagName === "INPUT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
       // Selection (element or relationship — never both) takes priority;
       // level-climb is the fallback.
       if (
@@ -1233,6 +1258,21 @@ function ViewerCanvasInner({
         focused === document.body ||
         container.contains(focused);
       if (!inCanvas) return;
+
+      /* FORM FIELDS KEEP THEIR OWN KEYS, and this guard exists because the
+         details panel renders INSIDE this container: without it, Backspace in
+         the edit form's name field would delete the selected node, an arrow
+         key would nudge it, and ⌘Z would undo a canvas edit instead of the
+         reader's typing. Same exemption the Escape ladder above and the
+         sequence viewer's rung both make. */
+      if (
+        focused instanceof HTMLElement &&
+        (focused.tagName === "TEXTAREA" ||
+          focused.tagName === "INPUT" ||
+          focused.isContentEditable)
+      ) {
+        return;
+      }
 
       /* UNDO FIRST, and before the selection check: the edit most likely to
          be undone is a delete, which leaves nothing selected. Shift+Cmd+Z
@@ -1458,6 +1498,26 @@ function ViewerCanvasInner({
     }
   }, [drillInto]);
 
+  /* The panel's Apply, resolved to the selected node HERE rather than in the
+     panel: the panel describes one node and should not carry ids around, and
+     the refs are what handlers on this canvas already read the selection
+     from. `undefined` while the canvas is read-only, which is what withholds
+     the pencil — presence is the signal, exactly as `edit` itself is. */
+  const handleDetailRevise = useMemo(
+    () =>
+      edit === undefined
+        ? undefined
+        : (revision: C4NodeRevision) => {
+            if (selectedNodeIdRef.current === null) return;
+            edit.onNodeRevise(
+              diagramIdRef.current,
+              selectedNodeIdRef.current,
+              revision,
+            );
+          },
+    [edit],
+  );
+
   // Focus effect while an element is selected: the element and its direct
   // neighbours stay at full strength (the touching edges stay "idle" in the
   // edges memo — emphasised by contrast, never animated); everything else
@@ -1634,6 +1694,7 @@ function ViewerCanvasInner({
                 detail={nodeDetail}
                 onDismiss={handleDetailDismiss}
                 onZoomIn={handleDetailZoomIn}
+                onRevise={handleDetailRevise}
               />
             ) : (
               <ViewerEdgeDetail

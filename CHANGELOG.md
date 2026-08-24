@@ -7,6 +7,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- A C4 node's wording — its name, technology and description — can now be
+  edited on the canvas: select an element and the details panel grows a pencil
+  that opens the three fields. The edit is written into your source text as a
+  patch of the node's own lines, so comments and formatting elsewhere in the
+  file are untouched, and Cmd/Ctrl + Z with the diagram focused undoes it. The
+  Mermaid pane refuses the gesture because Mermaid C4 cannot hold technology on
+  people or systems; renaming keeps the node's id stable, so relationships and
+  `^ref` lines keep working.
+
 ### Fixed
 
 - An old `/view` link carrying a query now keeps it. `/view?e=atlas-shop`

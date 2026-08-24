@@ -13,15 +13,33 @@
  * Boundary placeholders (`externalRef`) and file-split children (`childRef`)
  * are named honestly instead of showing a dead button. Nothing is invented.
  *
- * Announcements come from the canvas's existing aria-live region, not from
- * this component (same contract as the relationship card).
+ * ON AN EDITABLE CANVAS IT ALSO EDITS. `onRevise` present, the header grows
+ * the same pencil the sequence dock has, and the descriptive rows swap for a
+ * form over the three fields the panel already showed — name, technology,
+ * description. This panel is that editor rather than a new dock because it is
+ * already the one surface showing every field a node has, so "edit this" can
+ * mean "edit all of it" without a second inspector appearing anywhere. The
+ * form's interaction grammar is the sequence dock's, deliberately (habit 2 of
+ * `codebase.md`): plain <form> so Enter submits, Apply/Cancel in that order,
+ * blank optional fields submit as absent, remount per element so fields start
+ * from the new element's values. The form pieces are re-spelled here rather
+ * than imported because the layering runs editor → viewer → sequence — this
+ * feature cannot import the sequence viewer's.
+ *
+ * Announcements come from the host's existing aria-live region, not from
+ * this component (same contract as the relationship card): the playground
+ * says what the applied edit did.
  */
+
+import { useEffect, useRef, useState } from "react";
 
 import {
   ArrowLeftRight,
+  Check,
   Minus,
   MoveLeft,
   MoveRight,
+  Pencil,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -31,7 +49,7 @@ import { LEVEL_LABEL } from "@/lib/constants";
 
 import { MetaRow } from "./viewer-meta-row";
 import { cn } from "@/lib/utils";
-import type { C4Edge, C4Level, C4Node } from "@/types";
+import type { C4Edge, C4Level, C4Node, C4NodeRevision } from "@/types";
 
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
 import { useIconStyle } from "@/lib/icon-style";
@@ -137,21 +155,170 @@ function ConnectionGroup({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* The edit form — the sequence dock's grammar, on this panel's three fields   */
+/* -------------------------------------------------------------------------- */
+
+/** Blank string -> `undefined`, so clearing a field removes it — the same
+ * "empty means absent" contract the sequence dock forms state: `.alab` can
+ * spell `[""]` and `desc ""`, and a document carrying one renders a blank
+ * field the reader cannot tell from a missing one. */
+function orAbsent(value: string): string | undefined {
+  return value.trim() === "" ? undefined : value;
+}
+
+const FIELD_CLASSES =
+  "mt-0.5 w-full rounded-md border border-border bg-canvas/60 px-2 py-1 " +
+  "text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring " +
+  "focus-visible:outline-none";
+
+/** One labelled control. The <label> WRAPS its control rather than using
+ * `htmlFor`, for the reason the sequence dock's `DockField` gives: an id
+ * would have to be unique per selected element, a name to keep in step for
+ * nothing. */
+function EditField({
+  term,
+  children,
+}: {
+  term: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-medium text-muted-foreground">
+        {term}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+/**
+ * The node editor. `key`ed on the node id by its caller, so selecting a
+ * different element REMOUNTS it — the fields start from the new element's
+ * values rather than from an effect that syncs them (the sequence forms'
+ * rule, for the sequence forms' reason).
+ *
+ * THE NAME MAY NOT BE BLANKED: the model requires one, and `revisedNodeEdit`
+ * refuses an empty name rather than dropping the edit silently — so the form
+ * submits the name as typed and leaves the refusal to the one authority. The
+ * two optional fields go through `orAbsent`, exactly as the dock's do.
+ */
+function NodeEditForm({
+  node,
+  onSubmit,
+  onCancel,
+}: {
+  node: C4Node;
+  onSubmit: (revision: C4NodeRevision) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [name, setName] = useState(node.name);
+  const [technology, setTechnology] = useState(node.technology ?? "");
+  const [description, setDescription] = useState(node.description ?? "");
+
+  /* The name takes focus on mount rather than through `autoFocus`, which
+     jsx-a11y flags and which cannot be scoped to "this remount" — the same
+     note as the sequence forms. */
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    nameRef.current?.select();
+  }, []);
+
+  return (
+    <form
+      className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({
+          name,
+          technology: orAbsent(technology),
+          description: orAbsent(description),
+        });
+      }}
+    >
+      <EditField term="Name">
+        <input
+          ref={nameRef}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className={FIELD_CLASSES}
+        />
+      </EditField>
+      <EditField term="Technology">
+        <input
+          value={technology}
+          onChange={(event) => setTechnology(event.target.value)}
+          placeholder="Next.js, PostgreSQL 16 — blank to remove"
+          className={cn(FIELD_CLASSES, "font-mono")}
+        />
+      </EditField>
+      {/* A TEXTAREA because the field may hold newlines the render honours —
+          the same reason the dock's Details field is one. */}
+      <EditField term="Description">
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={3}
+          placeholder="Blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </EditField>
+      {/* Apply / Cancel, in that order — the primary action nearest the
+          fields, matching the sequence dock's `DockFormActions`. */}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <Check aria-hidden="true" className="size-3.5" />
+          Apply
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function ViewerNodeDetail({
   detail,
   onDismiss,
   onZoomIn,
+  onRevise,
 }: {
   detail: NodeDetail;
   onDismiss: () => void;
   /** Drill into the element's child diagram — same path as the zoom chip. */
   onZoomIn: () => void;
+  /**
+   * Rewrite the element's wording. Present only while the canvas is editable
+   * — presence is the signal, so a locked or read-only canvas renders no
+   * pencil rather than a disabled one (the same contract the sequence dock's
+   * `edit` prop states).
+   */
+  onRevise?: (revision: C4NodeRevision) => void;
 }): React.JSX.Element {
-  const { node, level, outgoing, incoming, drill } = detail;
-  const { def } = resolveIcon(node);
-  const [iconStyle] = useIconStyle();
-  const Icon = def.byStyle[iconStyle];
-  const hasConnections = outgoing.length > 0 || incoming.length > 0;
+  const { node } = detail;
+
+  /* Keyed by the TARGET rather than a bare boolean, the sequence dock's rule
+     for the sequence dock's reason: selecting another element must close the
+     form, not re-aim it — an open form holds the reader's half-typed text,
+     and silently re-pointing it would commit that text to an element they
+     were not looking at. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = editingId === node.id;
+
+  /* A boundary placeholder is read-only BY MEANING, not by mode: its name is
+     the referenced node's, derived at parse time (`revisedNodeEdit` refuses it
+     too — one verdict on both sides). So the pencil is withheld, and the card
+     below already says why. */
+  const revisable = onRevise !== undefined && node.externalRef === undefined;
 
   return (
     <aside
@@ -168,16 +335,64 @@ export function ViewerNodeDetail({
         <p className="text-[10px] font-medium tracking-wide text-primary uppercase">
           Element
         </p>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Deselect element"
-          className="-m-1 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          <X aria-hidden="true" className="size-3.5" />
-        </button>
+        <span className="flex items-center gap-0.5">
+          {revisable && !editing ? (
+            <button
+              type="button"
+              onClick={() => setEditingId(node.id)}
+              aria-label="Edit this element"
+              className="-m-1 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Pencil aria-hidden="true" className="size-3.5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Deselect element"
+            className="-m-1 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <X aria-hidden="true" className="size-3.5" />
+          </button>
+        </span>
       </div>
 
+      {/* The form REPLACES the descriptive rows rather than sitting above
+          them — the sequence dock's shape: two renderings of the same fields
+          at once would leave the reader unsure which one the diagram obeys. */}
+      {revisable && editing ? (
+        <NodeEditForm
+          key={node.id}
+          node={node}
+          onSubmit={(revision) => {
+            setEditingId(null);
+            onRevise(revision);
+          }}
+          onCancel={() => setEditingId(null)}
+        />
+      ) : (
+        <NodeReadView detail={detail} onZoomIn={onZoomIn} />
+      )}
+    </aside>
+  );
+}
+
+/** The descriptive rows — everything the card shows when it is not a form. */
+function NodeReadView({
+  detail,
+  onZoomIn,
+}: {
+  detail: NodeDetail;
+  onZoomIn: () => void;
+}): React.JSX.Element {
+  const { node, level, outgoing, incoming, drill } = detail;
+  const { def } = resolveIcon(node);
+  const [iconStyle] = useIconStyle();
+  const Icon = def.byStyle[iconStyle];
+  const hasConnections = outgoing.length > 0 || incoming.length > 0;
+
+  return (
+    <>
       <p className="mt-1 flex items-center gap-1.5 text-sm leading-snug font-medium text-pretty text-foreground">
         <Icon aria-hidden="true" className="size-4 shrink-0" />
         <span className={cn(node.type === "codeElement" && "font-mono")}>
@@ -282,6 +497,6 @@ export function ViewerNodeDetail({
           in this view.
         </p>
       ) : null}
-    </aside>
+    </>
   );
 }
