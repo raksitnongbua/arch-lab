@@ -17,6 +17,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Mermaid pane refuses the gesture because Mermaid C4 cannot hold technology on
   people or systems; renaming keeps the node's id stable, so relationships and
   `^ref` lines keep working.
+- The MCP server (beta) can now tell an agent which icons exist: a `list_icons`
+  tool serves the same icon vocabulary the browser's picker searches — by name,
+  slug or alias, filterable by category — where before an agent had to guess a
+  slug and an unknown one silently rendered the generic fallback icon. The
+  syntax reference's nodes section now points at it, and at the `customicon`
+  header line for icons the registry lacks.
 
 ### Fixed
 
