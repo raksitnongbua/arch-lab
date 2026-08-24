@@ -727,9 +727,10 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      repoint, rename and reorder — the common visit is READING a diagram
      somebody sent, and a mis-aimed press on it is now an edit you have to
      notice before you can undo it. The second half is answered by the control
-     rather than by the default: the locked face offers "Edit" with a pencil,
-     asserted below and in section 8, and if that regresses this default is
-     wrong again. `canvas-lock.ts` carries the full argument. */
+     rather than by the default: the padlock's accessible name and tooltip
+     offer the unlock action, its faces are distinct, and the strip prints the
+     state word — asserted below and in section 8 — and if those regress this
+     default is wrong again. `canvas-lock.ts` carries the full argument. */
   check(
     "no cookie means locked",
     isLockedCookie(undefined) === true,
@@ -783,48 +784,62 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
   /* WHAT PAYS FOR THE DEFAULT. A locked canvas withdraws the pencil, the
      insert buttons, the drag-to-reorder and the numbering toggle, so the lock
      is the only thing left on screen that can say the diagram is editable.
-     These three assertions are the price of the flip above, and each names a
-     way the old control failed to say it. */
+
+     THESE THREE ASSERTIONS WERE DELIBERATELY REWRITTEN when the product owner
+     chose an icon-only padlock pair on the canvas over the labelled
+     pencil-"Edit"/padlock-"Lock" control they used to pin. That is a reversal
+     of two documented rules, each bought by a shipped bug, and the bugs stay
+     real: a padlock labelled "Locked" once named the state the reader could
+     already see and left them guessing that pressing was allowed, and
+     `hidden sm:inline` once left the whole affordance as ONE 16px glyph on a
+     phone with no state distinction and no name. Each rewritten assertion
+     below pins the part of the new control that answers one of those bugs;
+     if any fails, the icon-only shape has lost the thing that made it
+     defensible. */
   const control = read(
     "src/features/playground/components/canvas-lock-button.tsx",
   );
+  /* THE FACES ARE THE STATE, so they must be two states. The old locked face
+     was a pencil offering "Edit" because a state-reporting face plus a label
+     was the shipped bug above; with the owner's icon-only padlocks the label
+     is gone, and what is left to pin is that the pair never collapses back
+     into the phone bug's single glyph: an OPEN padlock while editable, a
+     CLOSED one while locked, distinguishable at a glance. (`<Lock\b` does not
+     match `<LockOpen` — no word boundary inside "LockO".) */
   check(
-    "the locked face offers the edit action rather than reporting the state",
-    /<Pencil\b/.test(control) && /locked \? "Edit"/.test(control),
-    'the locked face is a padlock labelled "Locked" again — it names what the ' +
-      "reader can already see and leaves them to guess that pressing is allowed",
+    "the two faces are distinct padlocks — closed when locked, open when editable",
+    /locked \? \(?\s*<Lock\b/.test(control) &&
+      /:\s*\(?\s*<LockOpen\b/.test(control),
+    "the two faces are no longer a closed padlock (locked) and an open one " +
+      "(editable) — one glyph for both states is the phone bug again, with " +
+      "no viewport to blame",
   );
-  /* NEVER ICON-ONLY. `hidden sm:inline` was on the only text this control had,
-     so on a phone the whole affordance was one padlock glyph — on the notation
-     whose canvas had just learned five new gestures. Matched as a `className`
-     attribute, not as bare text: the module's header quotes the class it
-     replaced, and a grep for the words alone fails on the explanation. */
+  /* THE NAME IS THE ACTION. The old assertion pinned a visible label; the
+     owner removed the words, so the accessible name is now the ONLY channel
+     a screen-reader or voice-control user gets — it must say what PRESSING
+     DOES (the unlock action completed by each canvas's own hint, and the
+     lock action), never the state, or the control regresses to the
+     "Locked"-label bug with the label hidden from everyone. */
   check(
-    "the label survives a narrow viewport",
-    !/className="[^"]*\bhidden\b/.test(control),
-    "the lock's label is hidden below the sm breakpoint — a bare icon is the " +
-      "control nobody thinks to look for",
+    "the accessible name is a full action sentence, not a state word",
+    /Unlock the canvas to \$\{copy\.unlockHint\}/.test(control) &&
+      /"Lock the canvas — make the diagram read-only to present it"/.test(
+        control,
+      ),
+    "the name no longer says what pressing does — an icon-only control whose " +
+      "name reports state leaves the reader guessing that pressing is allowed",
   );
-  /* MEASURED, not asserted by eye: WCAG 2.5.3 wants the visible words to OPEN
-     the accessible name, so a voice-control user saying "click Edit" reaches
-     the control they can see. Comparing the two strings catches the drift that
-     a pair of separate regexes would not — either one being rewritten alone. */
-  const namedLocked = /const name = locked\s*\?\s*`([^`]*)`/.exec(control)?.[1];
-  const namedUnlocked = /const name = locked[\s\S]*?:\s*"([^"]*)"/.exec(
-    control,
-  )?.[1];
-  const faceLabels = /\{locked \? "([^"]+)" : "([^"]+)"\}/.exec(control);
+  /* ONE STRING FOR BOTH CHANNELS. This replaced the WCAG 2.5.3 label-in-name
+     comparison: with no visible words 2.5.3 no longer applies, and the drift
+     to catch moved — `aria-label` (screen reader, voice control) and `title`
+     (the only thing a hover shows) must be the SAME sentence, one `name`
+     feeding both, so a rewrite of either alone cannot make the tooltip
+     contradict the announcement. */
   check(
-    "each face's visible label opens its accessible name",
-    namedLocked !== undefined &&
-      namedUnlocked !== undefined &&
-      faceLabels !== null &&
-      namedLocked.startsWith(faceLabels[1]) &&
-      namedUnlocked.startsWith(faceLabels[2]),
-    `visible ${JSON.stringify(faceLabels?.slice(1))} against names ` +
-      `${JSON.stringify([namedLocked, namedUnlocked])} — a control whose ` +
-      "spoken name does not start with its printed one cannot be reached by " +
-      "the word on it",
+    "one name feeds both aria-label and title",
+    /aria-label=\{name\}/.test(control) && /title=\{name\}/.test(control),
+    "aria-label and title stopped sharing one string — the hover tooltip and " +
+      "the spoken name can now disagree about what pressing does",
   );
 
   /* READ ON THE SERVER, for the reason the source fold already established:
@@ -3506,12 +3521,48 @@ console.log("\nLocking never offers a link to somewhere you already are");
   );
 
   /* ONE RENDER PER LOCKABLE CANVAS. Fewer means a canvas the lock gates but
-     cannot be reached from; more would mean two locks racing one cookie. */
+     cannot be reached from; more would mean two locks racing one cookie.
+
+     The renders are now CONSTRUCTED as each viewer's `lockSlot` prop rather
+     than written into the strips — the product owner moved the control onto
+     the canvas itself — so this count alone stopped proving reachability: a
+     playground that builds a lock a viewer never mounts would still pass it.
+     The two assertions after it close that gap by asking each viewer's own
+     source whether the slot reaches the screen. */
   const renders = playground.match(/<CanvasLockButton\b/g) ?? [];
   check(
-    "the lock is rendered once for each canvas branch that can be locked",
+    "the lock is constructed once for each canvas branch that can be locked",
     renders.length === lockable.length,
     `${renders.length} <CanvasLockButton> renders for ${lockable.length} lockable kinds (${lockable.join(", ")})`,
+  );
+  /* THE SLOT REACHES EACH CANVAS. Section 8's founding bug was a control
+     correct in the module and unreachable on the screen; a slot prop is a new
+     way to reproduce it (built, passed, never mounted), so each hop is
+     pinned: the shell forwards, and each canvas renders — the C4 one inside
+     its top-right panel, where the details card already lives, the sequence
+     one over its diagram pane. */
+  const shellSrc = read("src/features/viewer/components/viewer-shell.tsx");
+  const canvasSrc = read("src/features/viewer/components/viewer-canvas.tsx");
+  const sequenceSrc = read(
+    "src/features/sequence/components/sequence-viewer.tsx",
+  );
+  check(
+    "the shell forwards the lock slot to the C4 canvas",
+    /lockSlot=\{lockSlot\}/.test(shellSrc),
+    "the playground hands the shell a lock the canvas never receives",
+  );
+  check(
+    "the C4 canvas mounts the lock slot in its top-right panel",
+    /position="top-right"[\s\S]{0,700}\{lockSlot\}/.test(canvasSrc),
+    "the C4 lock is built but never reaches the canvas corner — section 8's " +
+      "bug in slot form",
+  );
+  check(
+    "the sequence canvas mounts the lock slot over its diagram pane",
+    /\{lockSlot !== undefined \?/.test(sequenceSrc) &&
+      /\{lockSlot\}/.test(sequenceSrc),
+    "the sequence lock is built but never reaches the canvas — the branch " +
+      "this section exists for, again",
   );
 
   /* THE WORDING IS COMPLETE for every lockable kind. A control that borrows
@@ -3553,17 +3604,21 @@ console.log("\nLocking never offers a link to somewhere you already are");
       "control, which is how the two branches drifted apart the first time",
   );
 
-  /* ONE STATE WORD PER LOCK. The control's faces are ACTIONS ("Edit",
-     "Lock"), which is what makes a locked-by-default canvas findable — and it
-     is also why the state has to be said somewhere. `canvasStateLabel` is
-     that word, and a strip that renders the lock without it leaves a reader
-     pressing to find out which state they were in. Counted against the
-     renders rather than against the literal 2, for the same reason as above. */
+  /* ONE STATE WORD PER LOCKABLE CANVAS. This used to read "named beside it",
+     when the state word sat next to a control whose faces were actions
+     ("Edit", "Lock"). The product owner moved the control onto the canvas as
+     an icon-only padlock — a deliberate reversal, argued in the control's
+     header — so "beside" is gone, and what the word now carries is MORE, not
+     less: the strip's `canvasStateLabel` is the only place the state is
+     spelled out at all, since the padlock draws it but cannot say it. Counted
+     against the lockable kinds rather than the literal 2, so a seventh
+     notation cannot arrive without its word — and so the control's move
+     could not silently take the word with it. */
   const stateWords = playground.match(/canvasStateLabel\(/g) ?? [];
   check(
-    "every rendered lock has the canvas state named beside it",
-    stateWords.length === renders.length,
-    `${stateWords.length} canvasStateLabel() uses for ${renders.length} lock renders`,
+    "every lockable canvas still names its state in words, in the strip",
+    stateWords.length === lockable.length,
+    `${stateWords.length} canvasStateLabel() uses for ${lockable.length} lockable kinds`,
   );
 
   /* THE HEADING'S CLAIM MATCHES WHAT SHIPS. It said "C4 diagrams can also be

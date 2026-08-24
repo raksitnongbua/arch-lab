@@ -2206,39 +2206,22 @@ export function ViewPlayground({
                     onToggle={() => setSourceCollapsed(!sourceCollapsed)}
                     sourceLabel="document source"
                   />
-                  {/* ONE CONTROL, and only where it can act. The lock renders
-                      for a C4 document the canvas could edit and for nothing
-                      else — the five text-laid-out notations never reach this
-                      branch at all, so there is no disabled button and no
-                      tooltip explaining an absence. A C4 document sitting here
-                      as Mermaid is the one case that is C4 and still cannot be
-                      edited, and it gets the REASON instead of a control that
-                      would do nothing. */}
-                  <span className="flex min-w-0 items-center gap-2">
-                    {showCanvasLock ? (
-                      <CanvasLockButton
-                        locked={canvasLocked}
-                        onToggle={setCanvasLocked}
-                        onAnnounce={setAnnouncement}
-                        copy={CANVAS_LOCK_COPY.c4}
-                      />
-                    ) : null}
-                    {/* THE STATE THE CONTROL DOES NOT REPORT. Its faces are
-                        actions ("Edit", "Lock"), so this word is where a
-                        reader learns which one they are in — one word, read
-                        left to right with the button: "Read-only ✏ Edit". A
-                        refusal outranks it: a C4 document the canvas cannot
-                        edit at all has a reason to give, and no lock beside
-                        it to need a state for. */}
-                    <span className="truncate text-xs text-muted-foreground">
-                      {CANVAS_EDIT_ENABLED &&
-                      doc.kind === "c4" &&
-                      !editability.editable
-                        ? editability.reason
-                        : showCanvasLock
-                          ? canvasStateLabel(canvasLocked)
-                          : "Diagram"}
-                    </span>
+                  {/* THE STATE, IN WORDS. The lock itself moved onto the
+                      canvas (its top-right corner, via the shell's slot
+                      below) and is an icon-only padlock there, so this word
+                      in the strip is now the ONE place the state is spelled
+                      out — it stayed where words fit when the control
+                      stopped carrying any. A refusal outranks it: a C4
+                      document the canvas cannot edit at all has a reason to
+                      give, and no lock on it to need a state for. */}
+                  <span className="truncate text-xs text-muted-foreground">
+                    {CANVAS_EDIT_ENABLED &&
+                    doc.kind === "c4" &&
+                    !editability.editable
+                      ? editability.reason
+                      : showCanvasLock
+                        ? canvasStateLabel(canvasLocked)
+                        : "Diagram"}
                   </span>
                 </div>
                 <ViewerShell
@@ -2258,6 +2241,23 @@ export function ViewPlayground({
                      which would point back here. Capability, not current
                      state; see `canEdit` on the shell. */
                   canEdit={CANVAS_EDIT_ENABLED && editability.editable}
+                  /* ONE CONTROL, and only where it can act: absent, not
+                     disabled, when the document cannot be edited at all —
+                     the strip shows the REASON instead. Handed to the shell
+                     as a slot so it mounts at the canvas's own top right
+                     (the product owner's placement), which also keeps it
+                     reachable in immersive mode, where this strip is
+                     covered. */
+                  lockSlot={
+                    showCanvasLock ? (
+                      <CanvasLockButton
+                        locked={canvasLocked}
+                        onToggle={setCanvasLocked}
+                        onAnnounce={setAnnouncement}
+                        copy={CANVAS_LOCK_COPY.c4}
+                      />
+                    ) : undefined
+                  }
                   /* Passing these is what makes the canvas editable — see
                      `CanvasEditHandlers`. `undefined` leaves the shell's
                      read-only canvas exactly as every other host gets it. */
@@ -2334,22 +2334,6 @@ export function ViewPlayground({
                       exit is one click away, and a menu that opened over a
                       fullscreen diagram would be covering the thing it exports. */}
                   <span className="flex shrink-0 items-center gap-1.5">
-                    {/* THE SAME LOCK, in the branch a sequence document
-                        actually renders in. It gates `sequenceEditable`, so
-                        leaving it in the C4 branch alone meant a reader who
-                        had locked the canvas once could never unlock this
-                        one — see the header of `canvas-lock-button.tsx`.
-                        Offered only for the notation whose canvas can act on
-                        it: the other four have nothing to lock, and a control
-                        that cannot change anything is worse than its absence. */}
-                    {showSequenceCanvasLock ? (
-                      <CanvasLockButton
-                        locked={canvasLocked}
-                        onToggle={setCanvasLocked}
-                        onAnnounce={setAnnouncement}
-                        copy={CANVAS_LOCK_COPY.sequence}
-                      />
-                    ) : null}
                     {isImmersive ? null : doc.kind === "sequence" ? (
                       <>
                         <SequenceShareButton
@@ -2466,6 +2450,27 @@ export function ViewPlayground({
                     onAnnounce={setAnnouncement}
                     extraTourSteps={PLAYGROUND_TOUR_STEPS}
                     edit={sequenceEdit}
+                    /* THE SAME LOCK as the C4 branch's, in the branch a
+                       sequence document actually renders in — it gates
+                       `sequenceEditable`, and leaving it in the C4 branch
+                       alone once meant a reader who had locked the canvas
+                       could never unlock this one (see the header of
+                       `canvas-lock-button.tsx`). A slot at the viewer's
+                       top-right corner, matching the C4 canvas; offered only
+                       for the notation whose canvas can act on it — the
+                       other four in this branch have nothing to lock, and a
+                       control that cannot change anything is worse than its
+                       absence. */
+                    lockSlot={
+                      showSequenceCanvasLock ? (
+                        <CanvasLockButton
+                          locked={canvasLocked}
+                          onToggle={setCanvasLocked}
+                          onAnnounce={setAnnouncement}
+                          copy={CANVAS_LOCK_COPY.sequence}
+                        />
+                      ) : undefined
+                    }
                   />
                 ) : doc.kind === "flowchart" ? (
                   <FlowchartViewer

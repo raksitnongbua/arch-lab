@@ -165,6 +165,7 @@ export function ViewerShell({
   onDiagramChange,
   edit,
   canEdit,
+  lockSlot,
   defaultImmersive = false,
   tour: tourEnabled = true,
   titleAs: TitleTag = "h1",
@@ -200,6 +201,14 @@ export function ViewerShell({
    * for hosts where it is not.
    */
   canEdit?: boolean;
+  /**
+   * The host's canvas-lock control, forwarded to the canvas's top-right
+   * panel — see the prop on `ViewerCanvas` for why it is a slot. Forwarding
+   * it through the shell (rather than the host overlaying the shell) keeps
+   * the lock inside the canvas in immersive mode too, where the host's own
+   * chrome is covered.
+   */
+  lockSlot?: React.ReactNode;
   /**
    * Start in immersive mode. For a page that exists only to show one model
    * (`/live/[modelId]`) — where the diagram IS the page, so the site chrome is
@@ -393,6 +402,7 @@ export function ViewerShell({
           initialDiagramId={initialDiagramId}
           onDiagramChange={handleDiagramChange}
           edit={edit}
+          lockSlot={lockSlot}
         />
         {/* First visit it opens itself (remembered per browser — see
             components/ui/tour.tsx for the persistence verdicts); the strip's

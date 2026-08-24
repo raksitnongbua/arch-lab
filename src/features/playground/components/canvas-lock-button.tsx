@@ -1,5 +1,6 @@
 /**
- * The canvas lock, as ONE control for every canvas that has something to lock.
+ * The canvas lock, as ONE control for every canvas that has something to lock —
+ * an icon-only padlock the host places at the CANVAS'S OWN TOP RIGHT.
  *
  * It used to be written inline in the C4 branch of `view-playground.tsx`, and
  * that is exactly how it broke. When the sequence canvas became editable, the
@@ -8,61 +9,65 @@
  * `doc.kind === "c4" ? (…)`, a branch a sequence document never reaches. A
  * reader who had ever locked the canvas to present a C4 diagram therefore
  * found the sequence canvas silently uneditable with NO CONTROL ANYWHERE to
- * turn it back on: the pencil and the insert button were withdrawn, and the
- * one thing that would have explained why was in the branch not taken.
+ * turn it back on. Every `check:canvas-edit` assertion passed throughout,
+ * because they all asked whether the MODULE says a document is editable — not
+ * whether the control that decides it is reachable from the branch that
+ * document renders in. The fix is that there is now one control, and
+ * `check:canvas-edit` asserts it is constructed once per lockable canvas
+ * branch AND actually mounted by each canvas, derived from the seed table.
  *
- * Every `check:canvas-edit` assertion passed throughout, because they all
- * asked whether the MODULE says a document is editable — not whether the
- * control that decides it is reachable from the branch that document renders
- * in. `codebase.md` habit 4: two halves, each self-consistent, that disagree.
- * The fix is that there is now one half. `check:canvas-edit` asserts this
- * component is rendered once per canvas branch that can be locked, derived
- * from the seed table rather than from a list of kind names.
+ * THE SHAPE IS A DELIBERATE REVERSAL, decided by the product owner, and the
+ * two rules it reverses were each bought by a shipped bug — recorded here
+ * because the bugs stay real even though the rules moved:
+ *
+ * - The faces used to be ACTIONS WITH VISIBLE WORDS: a pencil labelled "Edit"
+ *   while locked, a padlock labelled "Lock" while unlocked. That shape existed
+ *   because a padlock labelled "Locked" names the state the reader can already
+ *   see and leaves them guessing that pressing is even allowed — and because
+ *   `hidden sm:inline` had once left the whole affordance as ONE 16px padlock
+ *   glyph on a phone, with no state distinction and no name.
+ * - The owner asked for an icon-only padlock pair on the canvas instead, and
+ *   is the authority on that trade. So the control is now WORDLESS ON PURPOSE,
+ *   and each old bug is answered by a different part of it:
+ *   the phone bug (one glyph, no state) by TWO VISUALLY DISTINCT FACES — an
+ *   OPEN padlock while the canvas is editable, a CLOSED one while it is
+ *   locked, which the single glyph never had; the guessing bug by the
+ *   ACCESSIBLE NAME, a full sentence naming what pressing DOES (the unlock
+ *   action completed by each canvas's own hint), shown as the tooltip and
+ *   read by screen readers and voice control; and the state itself by
+ *   `canvasStateLabel`, which the playground's strip still prints — the word
+ *   did not move onto the icon, it stayed where words fit.
  *
  * WHY THE WORDING IS A PROP and not derived here: the two canvases lock
  * different gestures. C4 stops a stray drag moving a box; sequence stops an
  * edit to a message's wording. A reader pressing this wants to know what it
  * just stopped, so the sentence names the gesture — and the announcement is
- * what a screen-reader user gets instead of the icon change.
+ * what a screen-reader user gets alongside the icon change.
  *
- * EACH FACE OFFERS THE ACTION IT PERFORMS; NEITHER REPORTS THE STATE. This is
- * the part that carries the locked-by-default change in `canvas-lock.ts`, and
- * it is not a decoration on it — the default is only defensible while this
- * holds. A locked canvas withdraws the pencil, the insert buttons, the
- * drag-to-reorder and the numbering toggle, so the control is the ONLY thing
- * left on screen that can say the diagram is editable at all. A padlock
- * labelled "Locked" does not say it: it names the state a reader can already
- * see and leaves them to guess that pressing it is allowed, let alone what it
- * would give them. So the locked face is a PENCIL labelled "Edit" — the same
- * icon the sequence canvas puts on the gesture itself — and the unlocked face
- * is a padlock labelled "Lock". The state is not lost; it is one word away in
- * `canvasStateLabel`, which the strip shows beside this, so the pair reads
- * "Read-only ✏ Edit" or "Editable 🔒 Lock" with nothing to hover and nothing
- * to read twice.
- *
- * THE LABEL IS NEVER HIDDEN, and the `hidden sm:inline` it replaced is why
- * that is written down: on a phone the whole affordance was one 16px padlock
- * glyph, on the notation whose canvas had just learned five new gestures. An
- * icon-only face is exactly the "control nobody would think to look for" the
- * old default existed to avoid.
+ * WITH NO VISIBLE TEXT, WCAG 2.5.3 (label in name) no longer applies — there
+ * is no printed word for the spoken name to open with. That makes the name
+ * carry MORE, not less: it is now the only channel a screen-reader or
+ * voice-control user has, so it must be the action sentence, never a state
+ * word, and `aria-label` and `title` are one string so hover and assistive
+ * tech cannot drift apart. `check:canvas-edit` pins both.
  *
  * NO `aria-pressed`, deliberately, and it was there before. A button whose
  * name is the action it performs cannot also carry a pressed state without
- * contradicting itself — "Edit, toggle button, pressed" tells a screen-reader
- * user the opposite of what pressing it does. State reaches assistive tech
- * through the two announcements instead, which are full sentences and say
- * what changed rather than which control moved.
+ * contradicting itself — "Unlock…, toggle button, pressed" tells a
+ * screen-reader user the opposite of what pressing it does. State reaches
+ * assistive tech through the two announcements instead, which are full
+ * sentences and say what changed rather than which control moved.
  */
 
 "use client";
 
-import { Lock, Pencil } from "lucide-react";
+import { Lock, LockOpen } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 
 export interface CanvasLockCopy {
   /** What unlocking lets the reader do, as a verb phrase completing
-   * "Edit — unlock the canvas to …". Lower case, no trailing stop. */
+   * "Unlock the canvas to …". Lower case, no trailing stop. */
   unlockHint: string;
   /** Announced on unlocking. A full sentence: a screen-reader user gets this
    * instead of watching the icon change. */
@@ -82,13 +87,13 @@ export function CanvasLockButton({
   onAnnounce: (message: string) => void;
   copy: CanvasLockCopy;
 }) {
-  /* The visible label is the FIRST WORDS of the accessible name, not a
-     different string beside it: a voice-control user says "click Edit", and a
-     name that begins somewhere else is a control they cannot reach by the word
-     they can see (WCAG 2.5.3). The rest of the name is the hint that used to
-     live only in a `title` — a tooltip no touch device shows. */
+  /* ONE name for `aria-label` and `title`, saying what PRESSING DOES. The
+     faces report the state (that is what a padlock pair can say); the name
+     must therefore be the half a padlock cannot draw — the action — or an
+     icon-only control regresses to the "Locked"-label bug the header
+     records: a reader left guessing whether pressing is allowed. */
   const name = locked
-    ? `Edit — unlock the canvas to ${copy.unlockHint}`
+    ? `Unlock the canvas to ${copy.unlockHint}`
     : "Lock the canvas — make the diagram read-only to present it";
   return (
     <button
@@ -101,43 +106,43 @@ export function CanvasLockButton({
       }}
       aria-label={name}
       title={name}
-      className={buttonClasses(
-        locked
-          ? {
-              /* The one emphasised control in the strip, and only while
-                 locked. An outline with a primary tint reads as "you may
-                 press this"; the ghost the unlocked face keeps reads as
-                 "chrome", which is right once the reader is already editing
-                 and the canvas itself carries the affordances. The tint is
-                 the `primary` token, so every theme supplies its own — and
-                 the LABEL rather than the tint is what carries the meaning,
-                 so a theme whose primary is quiet still reads. */
-              variant: "outline",
-              size: "sm",
-              className:
-                "border-primary/40 hover:border-primary/70 hover:bg-primary/10",
-            }
-          : { variant: "ghost", size: "sm" },
-      )}
+      className={buttonClasses({
+        variant: "outline",
+        size: "sm",
+        /* `w-8 px-0` squares the button around its one glyph. Card backdrop
+           and blur on BOTH faces because this floats over the drawing, where
+           a ghost button disappears into whatever the diagram paints under
+           it — the same chrome the canvas's other floating controls wear.
+           The locked face keeps the primary tint the labelled control had:
+           a locked canvas withdraws every other editing affordance, so this
+           is the one thing left on screen that can say editing exists at
+           all, and it has to read as pressable rather than as chrome. */
+        className: locked
+          ? "w-8 border-primary/40 bg-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:bg-primary/10"
+          : "w-8 bg-card/80 px-0 shadow-sm backdrop-blur",
+      })}
     >
       {locked ? (
-        <Pencil aria-hidden="true" className="text-primary" />
+        <Lock aria-hidden="true" className="text-primary" />
       ) : (
-        <Lock aria-hidden="true" />
+        <LockOpen aria-hidden="true" />
       )}
-      <span>{locked ? "Edit" : "Lock"}</span>
     </button>
   );
 }
 
 /**
- * The one word the canvas strip shows beside the control, naming the state the
- * control deliberately does not.
+ * The one word the playground's canvas strip shows, naming the state the
+ * control's faces draw but never spell. It used to sit BESIDE the control;
+ * now that the control is an icon-only padlock down on the canvas, this word
+ * in the strip is the only place the state is written out — which is why
+ * `check:canvas-edit` pins one use per lockable canvas rather than letting
+ * the control's move silently take the word with it.
  *
  * Here rather than at either call site because there are two strips — the C4
- * branch and the shared sequence/flowchart/use-case branch — and a canvas
- * reading "Locked" beside a control offering "Edit" while the other reads
- * "Read-only" is the drift this module was written to end.
+ * branch and the shared sequence/flowchart/use-case branch — and one canvas
+ * reading "Locked" while the other reads "Read-only" is the drift this module
+ * was written to end.
  */
 export function canvasStateLabel(locked: boolean) {
   return locked ? "Read-only" : "Editable";

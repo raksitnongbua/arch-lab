@@ -701,11 +701,13 @@ function ViewerCanvasInner({
   initialDiagramId,
   onDiagramChange,
   edit,
+  lockSlot,
 }: {
   model: ViewerModel;
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
   edit?: CanvasEditHandlers;
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   /* The modifier's name for THIS reader's platform — "Ctrl + scroll" on a Mac
      names the gesture that zooms the operating system, not the canvas. */
@@ -1828,21 +1830,31 @@ function ViewerCanvasInner({
             position="top-right"
             className="max-w-[min(19rem,calc(100%-1rem))]"
           >
-            {nodeDetail !== null ? (
-              <ViewerNodeDetail
-                detail={nodeDetail}
-                onDismiss={handleDetailDismiss}
-                onZoomIn={handleDetailZoomIn}
-                onRevise={handleDetailRevise}
-                onNest={canNest ? nestSelected : undefined}
-                onUnnest={canUnnest ? unnestSelected : undefined}
-              />
-            ) : (
-              <ViewerEdgeDetail
-                detail={detail}
-                onDismiss={handleDetailDismiss}
-              />
-            )}
+            <div className="flex flex-col items-end gap-2">
+              {/* THE HOST'S LOCK, FIRST IN THE SAME PANEL as the details
+                  card, not a second top-right resident: two absolutely
+                  positioned corner occupants overlap at some width, so the
+                  lock joins the card's column instead — the card yields one
+                  control's height and neither can ever cover the other.
+                  Right-aligned so the lock hugs the corner whether or not a
+                  card is open below it. */}
+              {lockSlot}
+              {nodeDetail !== null ? (
+                <ViewerNodeDetail
+                  detail={nodeDetail}
+                  onDismiss={handleDetailDismiss}
+                  onZoomIn={handleDetailZoomIn}
+                  onRevise={handleDetailRevise}
+                  onNest={canNest ? nestSelected : undefined}
+                  onUnnest={canUnnest ? unnestSelected : undefined}
+                />
+              ) : (
+                <ViewerEdgeDetail
+                  detail={detail}
+                  onDismiss={handleDetailDismiss}
+                />
+              )}
+            </div>
           </Panel>
           <Panel position="bottom-left">
             <ViewerZoomControls />
@@ -1881,6 +1893,7 @@ export function ViewerCanvas({
   initialDiagramId,
   onDiagramChange,
   edit,
+  lockSlot,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -1892,6 +1905,15 @@ export function ViewerCanvas({
    * the read-only surface it has always been — see {@link CanvasEditHandlers}.
    */
   edit?: CanvasEditHandlers;
+  /**
+   * The host's lock control, mounted at the canvas's top right (above the
+   * details card, in the same panel). A SLOT rather than a rendered-here
+   * button because the lock is the HOST'S state — the playground owns the
+   * cookie and the copy — and this feature must not import from the
+   * playground. Deliberately independent of `edit`: locking WITHDRAWS the
+   * handlers, so a lock gated on them could never be pressed to undo itself.
+   */
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
@@ -1900,6 +1922,7 @@ export function ViewerCanvas({
         initialDiagramId={initialDiagramId}
         onDiagramChange={onDiagramChange}
         edit={edit}
+        lockSlot={lockSlot}
       />
     </ReactFlowProvider>
   );

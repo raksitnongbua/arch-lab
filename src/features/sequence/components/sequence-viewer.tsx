@@ -243,6 +243,7 @@ export function SequenceViewer({
   extraTourSteps,
   tour: tourEnabled = true,
   edit,
+  lockSlot,
 }: {
   file: SequenceLabFile;
   /**
@@ -289,6 +290,15 @@ export function SequenceViewer({
    * passing handlers plus a disabled flag.
    */
   edit?: SequenceEditHandlers;
+  /**
+   * The host's canvas-lock control, mounted at the diagram pane's top right.
+   * A SLOT because the lock is the HOST'S state — the playground owns the
+   * cookie and the wording — and this feature must not import from the
+   * playground. Deliberately separate from `edit`, and not gated on it:
+   * locking WITHDRAWS the handlers, so a lock that only rendered alongside
+   * them could never be pressed to undo itself.
+   */
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   /**
    * COLLAPSED PARTICIPANTS — the ones whose private dependencies are folded
@@ -1955,6 +1965,25 @@ export function SequenceViewer({
           />
         ) : null}
 
+        {/* THE HOST'S LOCK, at the pane's top right. It YIELDS to the dock
+            rather than fighting it for the corner: the dock owns the whole
+            right edge while open (`md:right-0 md:w-72`), so a fixed-corner
+            lock would either sit under it — invisible exactly when the reader
+            is mid-edit and most likely to want to lock — or float over the
+            dock's own header buttons. Sliding to just left of the dock keeps
+            the lock visible in both states for the price of one position
+            change. Below `md` the dock is a bottom sheet, so the corner is
+            never contested there. */}
+        {lockSlot !== undefined ? (
+          <div
+            className={cn(
+              "absolute top-3 z-10",
+              dockOpen ? "right-3 md:right-[18.75rem]" : "right-3",
+            )}
+          >
+            {lockSlot}
+          </div>
+        ) : null}
         {/* ---- the details dock ----
             A docked, NON-BLOCKING side panel — deliberately not a modal
             dialog (see the header comment; do not "fix" this into one): the
