@@ -9,6 +9,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- A C4 element can now be put inside a boundary from the canvas: the details
+  panel's edit form grows a Boundary select offering the diagram's own frames,
+  "None", and a new boundary you name on the spot — written as `in=` on the
+  element, with the `frame` line minted above the diagram's nodes when the
+  boundary is new. Leaving a boundary never deletes the frame line, so a
+  boundary you emptied is still there for the next element.
+- A C4 element can be given a child diagram from the canvas — the details
+  panel offers "Add container/component/code diagram" wherever the level has
+  somewhere deeper to go and the element has no child yet, and the drill-down
+  the viewer already offered becomes something you can author. A child nobody
+  filled can be removed again from the same panel; one that holds anything
+  cannot, and says so.
+- The Add strip can mirror an element from a level above into the diagram
+  you are looking at, as a read-only `^ref` placeholder — so a container
+  diagram can show the person or system it talks to without redeclaring it.
+  The picker offers only ancestors' elements that are legal at this level and
+  not already mirrored here.
+
 - The details panel's edit form now also changes a C4 element's icon and its
   colour. The icon is picked from the same searchable picker the editor uses
   and lands in your text as `@slug` (clearing it returns the type's default);

@@ -42,6 +42,7 @@ import {
   MoveLeft,
   MoveRight,
   Pencil,
+  Trash2,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -53,9 +54,11 @@ import { MetaRow } from "./viewer-meta-row";
 import { cn } from "@/lib/utils";
 import type {
   C4Edge,
+  C4Frame,
   C4Level,
   C4Node,
   C4NodeColorChoice,
+  C4NodeFrameChoice,
   C4NodeRevision,
 } from "@/types";
 
@@ -93,6 +96,26 @@ export interface NodeDetail {
   incoming: NodeConnection[];
   /** Present ⇔ the element has a loaded child diagram to zoom into. */
   drill: { childCount: number; childLevel: C4Level } | null;
+  /**
+   * The level one step deeper, or `null` at `code` where there is nowhere
+   * further to go. What decides whether nesting is even a question for this
+   * element — the panel never offers a nest the grammar has no block for.
+   */
+  childLevel: C4Level | null;
+  /**
+   * The element's child diagram when it EXISTS BUT HOLDS NOTHING — the state
+   * `drill` deliberately refuses to report, because an empty child is not a
+   * drill-down. On an editable canvas it is its own situation: a workspace to
+   * open and fill, and the only child that may be removed again. `exists`
+   * distinguishes an empty block from a DANGLING pointer at no block at all.
+   */
+  emptyChild: { exists: boolean } | null;
+  /**
+   * The diagram's own boundaries — what the edit form's frame select offers
+   * beside "none" and a new label. Frames belong to the diagram rather than
+   * the element, so they arrive with the detail the way `tagColors` does.
+   */
+  frames: readonly C4Frame[];
   /**
    * The document's `metadata.tagColors` — what the edit form's colour control
    * reads to show the element's current colour and to offer the author's own
@@ -242,14 +265,20 @@ function EditField({
  * the precedence trap `resolveTagColor` documents — the form says which,
  * BEFORE Apply, so the swap is never silent.
  */
+/* Sentinel for the frame select's "mint a new one" row. A value no slug can
+   collide with, because `slugify` never emits a leading space. */
+const NEW_FRAME = " new";
+
 function NodeEditForm({
   node,
   tagColors,
+  frames,
   onSubmit,
   onCancel,
 }: {
   node: C4Node;
   tagColors: Readonly<Record<string, string>> | undefined;
+  frames: readonly C4Frame[];
   onSubmit: (revision: C4NodeRevision) => void;
   onCancel: () => void;
 }): React.JSX.Element {
@@ -263,6 +292,13 @@ function NodeEditForm({
      paints with — `worn[0]` wins, the rest are the tags a new choice removes. */
   const worn = colorTagsOf(node, tagColors);
   const [colorTag, setColorTag] = useState<string | null>(worn[0] ?? null);
+  /* The frame select carries THREE states in one control, because the
+     grammar's choice is three-way: no boundary, one that exists, or one this
+     edit mints. `NEW_FRAME` is a sentinel option rather than a second
+     checkbox — a checkbox would let the reader ask for a new boundary while
+     an existing one is still selected, a state the revision cannot spell. */
+  const [frameId, setFrameId] = useState<string>(node.frameId ?? "");
+  const [newFrameLabel, setNewFrameLabel] = useState("");
   const [iconStyle] = useIconStyle();
 
   /* The document's own coloured tags lead — an author who built a vocabulary
@@ -304,6 +340,20 @@ function NodeEditForm({
           colorTag === null
             ? { kind: "role" }
             : { kind: "tag", tag: colorTag, color: hexFor(colorTag) };
+        /* A blank label with "New boundary" chosen is NOT a request to mint
+           an unnamed frame — `revisedNodeEdit` refuses one, and refusing
+           here too would cost the reader their typing. It falls back to
+           whatever membership the element already had. */
+        const frame: C4NodeFrameChoice =
+          frameId === NEW_FRAME
+            ? newFrameLabel.trim() === ""
+              ? node.frameId !== undefined
+                ? { kind: "existing", frameId: node.frameId }
+                : { kind: "none" }
+              : { kind: "new", label: newFrameLabel.trim() }
+            : frameId === ""
+              ? { kind: "none" }
+              : { kind: "existing", frameId };
         onSubmit({
           name,
           technology: orAbsent(technology),
@@ -315,6 +365,7 @@ function NodeEditForm({
             ? { iconSource }
             : {}),
           color,
+          frame,
         });
       }}
     >
@@ -401,6 +452,34 @@ function NodeEditForm({
           />
         ) : null}
       </div>
+      {/* BOUNDARY BEFORE COLOUR: membership changes what the diagram says,
+          colour only how it looks, and the form reads top-down from meaning
+          to appearance — the same ordering the read view uses. */}
+      <EditField term="Boundary">
+        <select
+          value={frameId}
+          onChange={(event) => setFrameId(event.target.value)}
+          className={FIELD_CLASSES}
+        >
+          <option value="">None</option>
+          {frames.map((frame) => (
+            <option key={frame.id} value={frame.id}>
+              {frame.label}
+            </option>
+          ))}
+          <option value={NEW_FRAME}>New boundary…</option>
+        </select>
+      </EditField>
+      {frameId === NEW_FRAME ? (
+        <EditField term="Boundary name">
+          <input
+            value={newFrameLabel}
+            onChange={(event) => setNewFrameLabel(event.target.value)}
+            placeholder="Internal, Trust boundary — blank to leave as-is"
+            className={FIELD_CLASSES}
+          />
+        </EditField>
+      ) : null}
       <div>
         <span className="text-[10px] font-medium text-muted-foreground">
           Colour
@@ -480,6 +559,8 @@ export function ViewerNodeDetail({
   onDismiss,
   onZoomIn,
   onRevise,
+  onNest,
+  onUnnest,
 }: {
   detail: NodeDetail;
   onDismiss: () => void;
@@ -492,6 +573,17 @@ export function ViewerNodeDetail({
    * `edit` prop states).
    */
   onRevise?: (revision: C4NodeRevision) => void;
+  /**
+   * Give the element a fresh, empty child diagram one level down. Presence is
+   * decided PER ELEMENT by the canvas, from the same facts `nestedNodeEdit`
+   * refuses on, so a button that appears is a button the host will honour.
+   */
+  onNest?: () => void;
+  /**
+   * Remove the element's empty child diagram — the way back out of a nest
+   * nobody filled. Present only beside a child the canvas can see is empty.
+   */
+  onUnnest?: () => void;
 }): React.JSX.Element {
   const { node } = detail;
 
@@ -554,6 +646,7 @@ export function ViewerNodeDetail({
           key={node.id}
           node={node}
           tagColors={detail.tagColors}
+          frames={detail.frames}
           onSubmit={(revision) => {
             setEditingId(null);
             onRevise(revision);
@@ -561,7 +654,42 @@ export function ViewerNodeDetail({
           onCancel={() => setEditingId(null)}
         />
       ) : (
-        <NodeReadView detail={detail} onZoomIn={onZoomIn} />
+        <>
+          <NodeReadView detail={detail} onZoomIn={onZoomIn} />
+          {/* NESTING LIVES OUTSIDE THE FORM, unlike boundary and colour: those
+              are fields of the element's own line, which Apply rewrites as
+              one patch. A child diagram is a whole block elsewhere in the
+              file — an action, not a field, and putting it behind Apply would
+              let Cancel imply it could be taken back after the block existed. */}
+          {onNest !== undefined || onUnnest !== undefined ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
+              {onNest !== undefined ? (
+                <button
+                  type="button"
+                  onClick={onNest}
+                  className={buttonClasses({ variant: "outline", size: "sm" })}
+                >
+                  <ZoomIn aria-hidden="true" className="size-3.5" />
+                  Add{" "}
+                  {detail.childLevel !== null
+                    ? LEVEL_LABEL[detail.childLevel].toLowerCase()
+                    : "child"}{" "}
+                  diagram
+                </button>
+              ) : null}
+              {onUnnest !== undefined ? (
+                <button
+                  type="button"
+                  onClick={onUnnest}
+                  className={buttonClasses({ variant: "outline", size: "sm" })}
+                >
+                  <Trash2 aria-hidden="true" className="size-3.5" />
+                  Remove empty child
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </>
       )}
     </aside>
   );

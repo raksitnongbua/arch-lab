@@ -100,6 +100,7 @@ import {
 import type {
   C4NodeRevision,
   C4NodeType,
+  ExternalRef,
   SequenceItemPath,
   SequenceMessageRevision,
   SequenceParticipantRevision,
@@ -195,6 +196,9 @@ import {
 import {
   canvasEditability,
   createdNodeEdit,
+  createdRefEdit,
+  nestedNodeEdit,
+  unnestedNodeEdit,
   createdNodeName,
   deletedNodeEdit,
   movedNodeEdit,
@@ -1108,6 +1112,62 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleRefCreate = useCallback(
+    (diagramId: string, source: ExternalRef) => {
+      const next = createdRefEdit(doc, text, diagramId, source);
+      /* Said for the Add strip's reason — this arrives from the same strip,
+         and a picker that silently does nothing reads as broken. */
+      if (next === null) {
+        setAnnouncement(
+          "The reference was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        "Reference added below the diagram — the source text follows. It mirrors an element from a level above and is read-only here; press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeNest = useCallback(
+    (diagramId: string, nodeId: string) => {
+      const next = nestedNodeEdit(doc, text, diagramId, nodeId);
+      if (next === null) {
+        setAnnouncement(
+          "The child diagram was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        "Child diagram added — the source text follows. Zoom into the element to fill it in; press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeUnnest = useCallback(
+    (diagramId: string, nodeId: string) => {
+      const next = unnestedNodeEdit(doc, text, diagramId, nodeId);
+      /* The one refusal a reader can cause here is a child that stopped being
+         empty in the pane — worth saying, because the button was offered on
+         the strength of it being empty. */
+      if (next === null) {
+        setAnnouncement(
+          "The child diagram was not removed — it is no longer empty, or the source pane and the diagram do not match yet.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        "Empty child diagram removed — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   /* ---- the sequence canvas's own gestures --------------------------------
      Routed through `applyCanvasEdit` exactly as the C4 drag is, so both
      canvases share one undo ring, one "the pane just written is never rewritten
@@ -1444,6 +1504,9 @@ export function ViewPlayground({
             onNodeRevise: handleNodeRevise,
             onNodeDelete: handleNodeDelete,
             onNodeCreate: handleNodeCreate,
+            onRefCreate: handleRefCreate,
+            onNodeNest: handleNodeNest,
+            onNodeUnnest: handleNodeUnnest,
             onUndo: handleCanvasUndo,
           }
         : undefined,
@@ -1453,6 +1516,9 @@ export function ViewPlayground({
       handleNodeRevise,
       handleNodeDelete,
       handleNodeCreate,
+      handleRefCreate,
+      handleNodeNest,
+      handleNodeUnnest,
       handleCanvasUndo,
     ],
   );

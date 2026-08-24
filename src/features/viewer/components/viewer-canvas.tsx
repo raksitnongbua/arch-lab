@@ -1615,31 +1615,33 @@ function ViewerCanvasInner({
      same facts the module refuses on — a button the host would refuse every
      time is a dead control, which is worse than none. */
   const detailNode = nodeDetail?.node;
-  const handleDetailNest = useMemo(
-    () =>
-      edit === undefined ||
-      detailNode === undefined ||
-      nodeDetail?.childLevel === null ||
-      hasChildDiagram(detailNode) ||
-      detailNode.childRef !== undefined ||
-      detailNode.externalRef !== undefined
-        ? undefined
-        : () => {
-            if (selectedNodeIdRef.current === null) return;
-            edit.onNodeNest(diagramIdRef.current, selectedNodeIdRef.current);
-          },
-    [edit, detailNode, nodeDetail?.childLevel],
-  );
-  const handleDetailUnnest = useMemo(
-    () =>
-      edit === undefined || nodeDetail?.emptyChild == null
-        ? undefined
-        : () => {
-            if (selectedNodeIdRef.current === null) return;
-            edit.onNodeUnnest(diagramIdRef.current, selectedNodeIdRef.current);
-          },
-    [edit, nodeDetail?.emptyChild],
-  );
+  /* THE REF READS LIVE IN A CALLBACK, not in the memo that decides presence.
+     Reading `.current` inside a `useMemo` body is a render-time read, which
+     `react-hooks/refs` refuses — and rightly: the memo would capture whatever
+     the ref held while rendering. Split in two, the callback reads the
+     selection at CLICK time (the only moment it is true) and the memo decides
+     only whether the button exists at all. */
+  const nestSelected = useCallback(() => {
+    if (edit === undefined || selectedNodeIdRef.current === null) return;
+    edit.onNodeNest(diagramIdRef.current, selectedNodeIdRef.current);
+  }, [edit]);
+  const unnestSelected = useCallback(() => {
+    if (edit === undefined || selectedNodeIdRef.current === null) return;
+    edit.onNodeUnnest(diagramIdRef.current, selectedNodeIdRef.current);
+  }, [edit]);
+  /* Plain booleans, not memos handing back the callbacks: a memo whose value
+     IS a ref-reading function is a render-time read as far as
+     `react-hooks/refs` is concerned. The presence test is pure derivation from
+     props, so it costs nothing to recompute, and the JSX below picks the
+     callback — which is where a handler belongs anyway. */
+  const canNest =
+    edit !== undefined &&
+    detailNode !== undefined &&
+    nodeDetail?.childLevel !== null &&
+    !hasChildDiagram(detailNode) &&
+    detailNode.childRef === undefined &&
+    detailNode.externalRef === undefined;
+  const canUnnest = edit !== undefined && nodeDetail?.emptyChild != null;
 
   // Focus effect while an element is selected: the element and its direct
   // neighbours stay at full strength (the touching edges stay "idle" in the
@@ -1832,6 +1834,8 @@ function ViewerCanvasInner({
                 onDismiss={handleDetailDismiss}
                 onZoomIn={handleDetailZoomIn}
                 onRevise={handleDetailRevise}
+                onNest={canNest ? nestSelected : undefined}
+                onUnnest={canUnnest ? unnestSelected : undefined}
               />
             ) : (
               <ViewerEdgeDetail
