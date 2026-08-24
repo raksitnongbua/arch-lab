@@ -19,6 +19,13 @@ export type { SequenceEditHandlers } from "./components/sequence-viewer";
 export { layoutSequence, SEQ } from "./lib/layout";
 export type { SequenceLayout } from "./lib/layout";
 export { SEQUENCE_EXAMPLE } from "./input/example";
+/* The gesture list the canvas's own strip renders, exported so the /live
+   page's "what you can do on the canvas" disclosure names the same gestures
+   from the same record — a second hand-written list is how the page and the
+   canvas came to disagree about what could be edited (`check:canvas-edit`
+   section 8's history). */
+export { SEQUENCE_MOUSE_GESTURES } from "./lib/mouse-guide";
+export type { SequenceMouseGesture } from "./lib/mouse-guide";
 export {
   MERMAID_SEQUENCE_CAVEAT,
   parseSequenceInput,
