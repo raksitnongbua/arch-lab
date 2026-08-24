@@ -7,6 +7,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- The MCP server (beta) can now tell an agent which icons exist: a `list_icons`
+  tool serves the same icon vocabulary the browser's picker searches — by name,
+  slug or alias, filterable by category — where before an agent had to guess a
+  slug and an unknown one silently rendered the generic fallback icon. The
+  syntax reference's nodes section now points at it, and at the `customicon`
+  header line for icons the registry lacks.
+
 ### Fixed
 
 - An old `/view` link carrying a query now keeps it. `/view?e=atlas-shop`
