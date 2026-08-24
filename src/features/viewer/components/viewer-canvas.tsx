@@ -1292,9 +1292,18 @@ function ViewerCanvasInner({
       // From the PANE only: a press that starts on a node, a panel or the
       // minimap means something else, and claiming it would eat that
       // gesture.
+      /* THE TARGET MUST *BE* THE PANE, NOT SIT INSIDE IT — and the difference
+         is a shipped bug. React Flow v12 renders the whole graph as CHILDREN
+         of `.react-flow__pane`, so every node and every edge is a descendant
+         of it. A `closest(".react-flow__pane")` test therefore matched a press
+         on a NODE, and the lasso claimed it — cancelling the press, which
+         cancels selecting the node, dragging it, and the focus move that
+         would have let Space pan afterwards. The background is the pane
+         ELEMENT ITSELF; anything with a node, an edge, a panel or a control
+         between it and the pointer belongs to that thing. */
       if (
         !(event.target instanceof Element) ||
-        event.target.closest(".react-flow__pane") === null
+        !event.target.classList.contains("react-flow__pane")
       ) {
         return;
       }
@@ -1817,10 +1826,26 @@ function ViewerCanvasInner({
         if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
           return;
         }
+        /* A KEYBOARD-FOCUSED CONTROL KEEPS SPACE; A POINTER-FOCUSED ONE DOES
+           NOT — and the distinction is the whole fix. The first version of
+           this guard yielded to any focused button, which sounded right and
+           was unusable: every node BODY on this canvas is a real <button>, so
+           clicking a node parked focus on one and Space stopped panning for
+           the rest of the session. The reader had done nothing but select an
+           element.
+
+           `:focus-visible` is exactly this question, answered by the browser's
+           own heuristic rather than by us tracking input modality: a control
+           reached by Tab matches it, one clicked with a mouse generally does
+           not. So a keyboard user's Space still presses the button they
+           navigated to — nothing regresses for them — while a pointer user
+           gets the pan, because after a click their focus is incidental
+           rather than intentional. Enter activates either way. */
         if (
           focused instanceof HTMLElement &&
           focused.closest("button, a, select, summary, [role='button']") !==
-            null
+            null &&
+          focused.matches(":focus-visible")
         ) {
           return;
         }

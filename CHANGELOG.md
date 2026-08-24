@@ -9,6 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Clicking elements and holding Space to pan work again on an editable C4
+  canvas. Two causes, both from the change that made a bare drag draw a
+  selection box. The box claimed any press that landed _inside_ the pane —
+  and React Flow renders every node inside it — so pressing a node was
+  cancelled before it could select or drag. Separately, the canvas yielded
+  Space to any focused control, and a node's body is itself a button, so
+  selecting anything stopped Space panning until the page was reloaded. The
+  box now claims only the background itself, and Space is yielded only to a
+  control reached by keyboard, never one a click happened to land on.
+
 - Clicking the background of an editable C4 canvas works again, and holding
   Space pans again. Making a bare drag draw the selection box meant the canvas
   had to cancel the press it claimed, and cancelling a press also cancels the

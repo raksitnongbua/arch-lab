@@ -197,6 +197,25 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
+/**
+ * The same source with its comments removed, for assertions that pin CODE.
+ *
+ * Written after the trap fired three times in this file. A regex over a
+ * source file matches prose as readily as syntax, and the prose most likely
+ * to contain a fragment of code is the comment explaining that exact code —
+ * or, worse, the comment explaining the BUG, which quotes the wrong version
+ * verbatim. Each time, breaking the code left the assertion passing against
+ * its own explanation, which is the one failure a check must never have: it
+ * reports success for the state it exists to forbid.
+ *
+ * So: structural assertions read `code(...)`, prose assertions read `read(...)`,
+ * and the choice is visible at the call site.
+ */
+const code = (relative) =>
+  read(relative)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+
 /* ----------------------------------------------------------------------- */
 /* Module resolution: `@/*` alias + extensionless relative imports -> .ts   */
 /* ----------------------------------------------------------------------- */
@@ -5100,6 +5119,7 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
     "src/features/playground/components/view-playground.tsx",
   );
   const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
   const groupBody =
     /const handleNodesGroup = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
   check(
@@ -5229,12 +5249,29 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
     "a mouse move now writes state the projection can see — re-read 4fa7c36 first",
   );
   check(
-    "the marquee claims the press from the pane and cancels it before React Flow pans",
-    /closest\("\.react-flow__pane"\)/.test(canvas) &&
+    "the marquee claims a press on the pane ITSELF, never one inside it",
+    /classList\.contains\("react-flow__pane"\)/.test(canvasCode) &&
+      !/closest\("\.react-flow__pane"\)/.test(canvasCode) &&
       /event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);\s*\n\s*container\.setPointerCapture\(/.test(
-        canvas,
+        canvasCode,
       ),
-    "a bare drag would pan (or select text) instead of drawing the box",
+    "React Flow v12 renders the graph as CHILDREN of .react-flow__pane, so a " +
+      "`closest` test matches a press on a NODE and the lasso cancels it — " +
+      "selecting, dragging and the focus move that lets Space pan all die",
+  );
+  /* SPACE YIELDS TO A CONTROL THE KEYBOARD REACHED, NOT ONE A CLICK LANDED ON.
+     Every node body on this canvas is a real <button>, so yielding to any
+     focused button meant that selecting an element stopped Space panning for
+     the rest of the session — reported twice. `:focus-visible` is the browser
+     answering the only question that matters here (did the reader NAVIGATE to
+     this control, or merely click near it), so a Tab user keeps Space on their
+     button and a mouse user gets the pan. */
+  check(
+    "a pointer-focused control does not hold Space hostage; a tabbed-to one does",
+    /focused\.matches\(":focus-visible"\)/.test(canvasCode),
+    "Space yields to any focused button — and clicking a node focuses the " +
+      "node's own button, so panning dies the moment the reader selects " +
+      "anything",
   );
 }
 
