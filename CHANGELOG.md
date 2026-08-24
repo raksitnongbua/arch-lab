@@ -9,31 +9,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
-- Clicking elements and holding Space to pan work again on an editable C4
-  canvas. Two causes, both from the change that made a bare drag draw a
-  selection box. The box claimed any press that landed _inside_ the pane —
-  and React Flow renders every node inside it — so pressing a node was
-  cancelled before it could select or drag. Separately, the canvas yielded
-  Space to any focused control, and a node's body is itself a button, so
-  selecting anything stopped Space panning until the page was reloaded. The
-  box now claims only the background itself, and Space is yielded only to a
-  control reached by keyboard, never one a click happened to land on.
+- Clicking an element on an editable C4 canvas works again. The change that
+  made a bare drag draw a selection box claimed any press that landed
+  _inside_ the pane — and React Flow renders every node inside it — so
+  pressing a node was cancelled before it could select or drag. The box now
+  claims only the background itself.
 
-- Clicking the background of an editable C4 canvas works again, and holding
-  Space pans again. Making a bare drag draw the selection box meant the canvas
-  had to cancel the press it claimed, and cancelling a press also cancels the
-  two things it quietly did: moving focus, and delivering a plain click. Focus
-  stayed on whatever button was pressed last, and the canvas will not take
-  Space from a focused control — so panning did nothing. A press on the
-  background now moves focus to the diagram, and one that never travels is
-  treated as the click it is rather than an empty selection box.
-
-- Holding Space to pan no longer toggles the canvas lock. Clicking the lock
-  left the button holding focus, and the canvas deliberately will not take
-  Space from a focused control — so the next Space press activated the lock
-  again, and again on every key repeat. A pointer press now hands focus back
-  to the canvas; a keyboard press still keeps it, so tabbing to the lock and
-  pressing Space works exactly as before.
+- Clicking the background of an editable C4 canvas works again. Making a bare
+  drag draw the selection box meant the canvas had to cancel the press it
+  claimed, and cancelling a press also cancels the two things it quietly did:
+  moving focus, and delivering a plain click. A press on the background now
+  moves focus to the diagram, and one that never travels is treated as the
+  click it is rather than an empty selection box.
 
 ### Changed
 
@@ -42,11 +29,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   canvas, which share the one control.
 
 - **Dragging on an editable C4 canvas now draws a selection box instead of
-  panning; hold Space to pan.** This is the convention drawing tools use,
-  and it is what makes the lasso reachable without a modifier — but it does
-  move a gesture you already know, so the canvas heading names both halves.
-  A locked or read-only canvas is unaffected: it has no selection to draw,
-  so dragging still pans there, which is what every shared link opens as.
+  panning; a Select / Pan toggle beside the zoom controls hands the drag back
+  to panning.** Drag-to-select is the drawing-tool convention and is what
+  makes the lasso reachable without a modifier; the pan is an explicit mode
+  rather than a held key, so it works the same whatever has keyboard focus
+  and on touch, where there is no key to hold. Select is the default, the
+  pane's cursor follows the mode, and the canvas heading names both halves.
+  A locked or read-only canvas is unaffected: it shows no toggle and has no
+  selection to draw, so dragging simply pans there — which is what every
+  shared link opens as.
 
 ### Added
 
