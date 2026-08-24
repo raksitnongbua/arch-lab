@@ -1549,10 +1549,11 @@ export function ViewPlayground({
                 they will look for it. */}
             {CANVAS_EDIT_ENABLED ? (
               <>
-                C4 nodes can be dragged on the canvas and their wording edited
-                in the details panel, and sequence messages and lifelines added,
-                edited, repointed, reordered, numbered and removed on it; the
-                other kinds lay themselves out from the text.{" "}
+                C4 nodes can be dragged on the canvas and their wording, icon
+                and colour edited in the details panel, and sequence messages
+                and lifelines added, edited, repointed, reordered, numbered and
+                removed on it; the other kinds lay themselves out from the
+                text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}

@@ -149,10 +149,10 @@ export type NodeMoveHandler = (
 export interface CanvasEditHandlers {
   onNodeMove: NodeMoveHandler;
   /**
-   * Rewrite the node's own wording — name, technology, description — from the
-   * details panel's edit form. The host turns it into a line patch
-   * (`revisedNodeEdit`) and refuses what cannot apply; the canvas only
-   * reports the submitted form.
+   * Rewrite the node's own fields — name, technology, description, icon and
+   * colour — from the details panel's edit form. The host turns it into a
+   * line patch (`revisedNodeEdit`) and refuses what cannot apply; the canvas
+   * only reports the submitted form.
    */
   onNodeRevise: (
     diagramId: string,
@@ -1489,7 +1489,16 @@ function ViewerCanvasInner({
         : 0;
     const drill =
       childCount > 0 && childLevel !== null ? { childCount, childLevel } : null;
-    return { node, level: diagram.level, outgoing, incoming, drill };
+    return {
+      node,
+      level: diagram.level,
+      outgoing,
+      incoming,
+      drill,
+      // The edit form's colour control reads these; the nodes already paint
+      // with them (project-nodes), so the panel and the canvas see one map.
+      tagColors: model.file.metadata.tagColors,
+    };
   }, [model, diagram, selectedNodeId]);
 
   const handleDetailZoomIn = useCallback(() => {
