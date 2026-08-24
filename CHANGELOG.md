@@ -9,6 +9,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- The details panel's edit form now also changes a C4 element's icon and its
+  colour. The icon is picked from the same searchable picker the editor uses
+  and lands in your text as `@slug` (clearing it returns the type's default);
+  colour offers the document's own coloured tags plus five built-in colours
+  measured for legibility on every theme, written as a `#tag` on the element
+  and one shared `tagcolor` header line — so ten amber elements cost the
+  header one line, and free-form colours remain available by typing a
+  `tagcolor` line in the source pane. When an element already wears a
+  coloured tag, picking a new colour replaces that tag on the element (the
+  form says so before Apply) instead of silently losing the precedence race;
+  the header keeps the old colour for other elements. The Mermaid pane
+  refuses these edits because Mermaid C4 has no slot for icons or tag
+  colours.
 - A C4 node's wording — its name, technology and description — can now be
   edited on the canvas: select an element and the details panel grows a pencil
   that opens the three fields. The edit is written into your source text as a
