@@ -166,6 +166,25 @@
  *      strip is a click-to-open MENU (its list grows with the model, unlike
  *      the fixed type buttons), sharing the zoom menu's dismissal hook so
  *      Escape closes the menu WITHOUT also clearing the canvas selection.
+ *  16. A GROUPING IS ONE GESTURE, ONE TEXT, ONE UNDO. The marquee's write
+ *      (`groupedNodesEdit`) puts N elements into one boundary as a single
+ *      patch list — N declaration lines plus at most one minted `frame` line
+ *      — so one Cmd/Ctrl+Z reverses the whole boundary; the host's handler is
+ *      pinned to exactly one `applyCanvasEdit` call so the module's one edit
+ *      cannot become two undo entries on the way through. Held to section
+ *      13's standard from non-canonical text (only the members' declaration
+ *      lines change, comments and `desc` continuations survive, the patched
+ *      lines equal a full serialise's). A selection naming an unknown id
+ *      refuses WHOLLY — nothing partial — while a `^ref` placeholder is a
+ *      legal member, because membership is a local fact the emitter writes
+ *      beside the `^` token, unlike the derived own-fields `revisedNodeEdit`
+ *      refuses. AND THE MARQUEE ITSELF IS HELD AWAY FROM 4fa7c36's RENDER
+ *      LOOP: the gesture must never engage React Flow's own rubber band
+ *      (`elementsSelectable` false, no `onSelectionChange`), its per-frame
+ *      state may feed nothing but the overlay div, and the `nodes` / `edges`
+ *      projection memos must not read any of it — the prop identity holding
+ *      still for the whole gesture is what makes the StoreUpdater loop
+ *      impossible rather than merely unlikely.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
@@ -223,6 +242,7 @@ const {
   createdNodeName,
   createdRefEdit,
   deletedNodeEdit,
+  groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
   revisedNodeEdit,
@@ -3794,8 +3814,11 @@ console.log("\nLocking never offers a link to somewhere you already are");
      across source lines at arbitrary points and a phrase like "the other
      kinds" straddles a newline plus fourteen spaces of indentation. */
   const flowed = playground.replace(/\s+/g, " ");
+  /* The window grew from 240 to 340 when the sentence learned the grouping
+     clause — it measures how much claim can sit between the two anchors, and
+     the claim is longer now because the canvas does more. */
   const claim =
-    /C4 nodes can be dragged.{0,240}?the other kinds lay themselves out/.exec(
+    /C4 nodes can be dragged.{0,340}?the other kinds lay themselves out/.exec(
       flowed,
     );
   check(
@@ -3831,6 +3854,12 @@ console.log("\nLocking never offers a link to somewhere you already are");
        sequence half of the sentence and would pass with the palette claim
        gone. */
     "added from its palette",
+    /* Added with the marquee grouping. Two strings for the revise pair's
+       reason — each half can go stale alone: the first is WHAT the gesture
+       writes, the second is HOW it is made, and a reader who has used a
+       drawing tool arrives asking for exactly this gesture by its keystroke. */
+    "grouped into a boundary",
+    "Shift + drag",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
@@ -4761,6 +4790,365 @@ console.log("\nNo surface still claims the sequence canvas has no drag");
     "the move refusal still explains that a sequence document has no position",
     /no position to move/i.test(refusal.reason ?? ""),
     "the honest half of the claim was deleted to satisfy the sweep above",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 20. Grouping a lasso of elements: one gesture, one text, one undo           */
+/* -------------------------------------------------------------------------- */
+
+console.log("\nGrouping several elements into a boundary is ONE edit");
+{
+  /* NON-CANONICAL for section 13's reason, with the shapes only a GROUPING
+     meets: an existing frame with a member (joins must not disturb it), a
+     node with a `desc` continuation (a grouping patches declaration lines
+     ONLY, so the continuation must survive untouched), and a `^ref`
+     placeholder (a legal member — membership is local — where the same
+     panel's field edit refuses). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Group probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    `  frame f-edge "Edge"`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" (400,240 160x96)`,
+    `    desc "The paying kind."`,
+    `  ops:person "Operator" (640,240 160x96)`,
+    `  web:system "Web App" (400,480 160x96) >backend in=f-edge`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go] (400,240 160x96)`,
+    `  mirror:external ^ctx/cust (640,240 160x96)`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the grouping itself: N lines and one mint, in one edit -------------- */
+
+  const grouped = groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+    kind: "new",
+    label: "Trust zone",
+  });
+  check(
+    "a grouping on authored text takes the PATCH path, by name",
+    grouped !== null && grouped.path === "patch",
+    `path: ${grouped === null ? "refused" : grouped.path}`,
+  );
+  const after = (grouped?.text ?? "").split("\n");
+  const before = authored.split("\n");
+  check(
+    "the whole grouping adds exactly one line — the minted frame declaration",
+    after.length === before.length + 1,
+    `${before.length} lines became ${after.length}`,
+  );
+  check(
+    "the minted frame line sits directly under the existing one, so frames stay together",
+    after[before.indexOf(`  frame f-edge "Edge"`) + 1] ===
+      `  frame f-trust-zone "Trust zone"`,
+    `line after f-edge: ${JSON.stringify(after[before.indexOf(`  frame f-edge "Edge"`) + 1])}`,
+  );
+  /* EVERY byte the gesture is not about survives, asserted by subtraction:
+     take the members' declaration lines out of both texts (and the minted
+     line out of the patched one) and the remainders must be IDENTICAL —
+     comments, the `desc` continuation, blank lines, the untouched `web`
+     membership, the whole backend diagram. */
+  const memberLine = (line) =>
+    line.trimStart().startsWith("cust:person") ||
+    line.trimStart().startsWith("ops:person");
+  const rest = (lines, minted) =>
+    lines.filter(
+      (line) =>
+        !memberLine(line) && (!minted || !line.includes("f-trust-zone")),
+    );
+  check(
+    "every line the grouping is not about is byte-identical",
+    JSON.stringify(rest(before, false)) === JSON.stringify(rest(after, true)),
+    firstDiff(rest(after, true).join("\n"), rest(before, false).join("\n")),
+  );
+  /* The patched declarations are CANONICAL, proved against a full serialise
+     of the grouped document — section 13's derivation, section 13's reason. */
+  const canonicalAfter = sourceTextFor(grouped?.doc ?? doc);
+  check(
+    "each member's patched line is byte-identical to what the serializer would emit",
+    ["cust:person", "ops:person"].every(
+      (stem) =>
+        after.find((line) => line.trimStart().startsWith(stem)) ===
+        canonicalAfter
+          .split("\n")
+          .find((line) => line.trimStart().startsWith(stem)),
+    ),
+    "a grouped declaration diverged from canonical form",
+  );
+  const groupedDiagram = grouped?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "the re-parse puts every member in the minted boundary",
+    ["cust", "ops"].every(
+      (id) =>
+        groupedDiagram?.nodes.find((n) => n.id === id)?.frameId ===
+        "f-trust-zone",
+    ) && groupedDiagram?.frames?.some((f) => f.id === "f-trust-zone") === true,
+    "a member came back outside the boundary it was grouped into",
+  );
+
+  /* ONE TEXT IS ONE UNDO ENTRY. The undo ring stores whole texts, so "one
+     entry" is exactly "one edit object whose text carries the whole
+     grouping": putting `authored` back reverses every membership AND the
+     mint at once. Measured, not assumed — the pre-edit parse holds no
+     grouped member, so there is no intermediate state an undo could land on. */
+  const preEdit = c4Document(authored).synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "one undo entry reverses the whole grouping — the pre-edit text holds none of it",
+    grouped !== null &&
+      ["cust", "ops"].every(
+        (id) => preEdit.nodes.find((n) => n.id === id).frameId === undefined,
+      ) &&
+      preEdit.frames?.some((f) => f.id === "f-trust-zone") !== true,
+    "part of the grouping predates the edit — an undo would only partly reverse it",
+  );
+
+  /* --- joining an EXISTING boundary, and leaving all of them ---------------- */
+
+  const joined = groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+    kind: "existing",
+    frameId: "f-edge",
+  });
+  check(
+    "grouping into an existing boundary mints nothing and patches only the members",
+    joined !== null &&
+      joined.path === "patch" &&
+      joined.text.split("\n").length === before.length &&
+      changedLines(authored, joined.text).every(
+        (line) => memberLine(line.before ?? "") || memberLine(line.after ?? ""),
+      ),
+    "a join minted a line or touched a non-member",
+  );
+  const released = groupedNodesEdit(doc, authored, "ctx", ["web"], {
+    kind: "none",
+  });
+  check(
+    "releasing members writes `none` as membership coming off the line, frame kept",
+    released !== null &&
+      released.doc.synced.file.diagrams
+        .find((d) => d.id === "ctx")
+        .nodes.find((n) => n.id === "web").frameId === undefined &&
+      released.doc.synced.file.diagrams
+        .find((d) => d.id === "ctx")
+        .frames?.some((f) => f.id === "f-edge") === true,
+    "the release ate the frame declaration, or left the membership on",
+  );
+
+  /* --- the refusals, and which way a mixed selection falls ------------------ */
+
+  check(
+    "a selection naming an unknown id refuses WHOLLY — nothing partial",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["cust", "ghost"], {
+        kind: "new",
+        label: "Half",
+      }),
+    ),
+    "a boundary was drawn missing a member the reader lassoed",
+  );
+  check(
+    "an empty selection refuses rather than minting an empty boundary",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", [], { kind: "new", label: "X" }),
+    ),
+    "zero elements still produced an edit",
+  );
+  check(
+    "a blank new label refuses — the shared resolver's rule",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+        kind: "new",
+        label: "   ",
+      }),
+    ),
+    "an unnamed boundary was minted",
+  );
+  check(
+    "an unknown existing frame refuses — `in=` naming no frame will not parse",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+        kind: "existing",
+        frameId: "f-ghost",
+      }),
+    ),
+    "a membership was written against a frame the diagram does not declare",
+  );
+  check(
+    "a no-op grouping refuses, so an idle Apply costs no undo entry",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["web"], {
+        kind: "existing",
+        frameId: "f-edge",
+      }),
+    ),
+    "members already in the boundary still rewrote the pane",
+  );
+  check(
+    "a Mermaid pane refuses the grouping — the C4 revise cell's own caveat",
+    refuses(() =>
+      groupedNodesEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        ["cust"],
+        {
+          kind: "new",
+          label: "Zone",
+        },
+      ),
+    ),
+    "a membership was written against a pane whose emitter never reads frameId",
+  );
+  /* A `^ref` placeholder GROUPS, where the field editor refuses it: its own
+     fields are derived from its target (forking them is what
+     `revisedNodeEdit` refuses), but membership is a local fact — the
+     serializer writes `in=` beside the `^` token. */
+  const withMirror = groupedNodesEdit(
+    doc,
+    authored,
+    "backend",
+    ["api", "mirror"],
+    { kind: "new", label: "Backend zone" },
+  );
+  const mirrorLine = (withMirror?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("mirror:external"));
+  check(
+    "a ^ref placeholder is a legal member — membership is local, not derived",
+    withMirror !== null &&
+      withMirror.path === "patch" &&
+      mirrorLine !== undefined &&
+      mirrorLine.includes("^ctx/cust") &&
+      mirrorLine.includes("in=f-backend-zone") &&
+      !mirrorLine.includes('"'),
+    `mirror line: ${JSON.stringify(mirrorLine)}`,
+  );
+  const jsonGrouped = groupedNodesEdit(
+    { ...doc, format: "json" },
+    JSON.stringify({ not: "the alab text" }),
+    "ctx",
+    ["cust", "ops"],
+    { kind: "new", label: "Zone" },
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    jsonGrouped !== null && jsonGrouped.path === "reemit",
+    `path: ${jsonGrouped === null ? "refused" : jsonGrouped.path}`,
+  );
+
+  /* --- the gesture reaches the module through ONE host call ----------------- */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  const groupBody =
+    /const handleNodesGroup = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleNodesGroup applies the whole grouping through exactly one applyCanvasEdit",
+    groupBody !== null &&
+      (groupBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      groupBody[1].includes("groupedNodesEdit(") &&
+      !groupBody[1].includes("setText("),
+    "a second apply (or a direct pane write) would split one gesture into two undo entries",
+  );
+  check(
+    "the canvas fires the grouping exactly once per Apply",
+    (canvas.match(/edit\.onNodesGroup\(/g) ?? []).length === 1,
+    "a second call site could commit the same lasso twice",
+  );
+  check(
+    "the grouping refusal is announced, and the lasso is kept for a retry",
+    groupBody !== null &&
+      groupBody[1].includes("return false;") &&
+      /if \(edit\.onNodesGroup\([\s\S]{0,120}?\)\) \{\s*\n\s*clearMultiSelection\(false\);/.test(
+        canvas,
+      ),
+    "a refused grouping went silent, or a refusal still threw the selection away",
+  );
+
+  /* --- THE MARQUEE GUARD: 4fa7c36's loop must stay impossible --------------- */
+
+  /* The crash: React Flow's rubber band emits `select` changes per mouse
+     move; mirroring them into state the `nodes` prop derives from hands a
+     fresh array identity to StoreUpdater every frame, which re-derives the
+     selection against the adopted objects, and round again to React #185.
+     The viewer's marquee is immune BY CONSTRUCTION, and each leg of that
+     construction is pinned here so it cannot be relaxed unnoticed. */
+  /* Matched as JSX PROPS (`name=`), not bare words: the canvas's comments
+     rightly NAME these props while warning against them, and an assertion
+     that fails on the warning would be failing on the guard itself. */
+  check(
+    "the viewer never engages React Flow's own selection machinery",
+    /elementsSelectable=\{false\}/.test(canvas) &&
+      !canvas.includes("onSelectionChange=") &&
+      !canvas.includes("selectionOnDrag=") &&
+      !canvas.includes("selectionKeyCode="),
+    "the rubber band that crashed the editor (4fa7c36) is reachable again",
+  );
+  const nodesMemo = /const nodes = useMemo\(([\s\S]*?)\n  \);/.exec(canvas);
+  const edgesMemo =
+    /const edges = useMemo\(([\s\S]*?)\n  \}, \[([^\]]*)\]\);/.exec(canvas);
+  check(
+    "the nodes projection reads nothing the marquee writes",
+    nodesMemo !== null &&
+      !/marquee|multiSelected|activeMulti/i.test(nodesMemo[1]) &&
+      nodesMemo[1].includes(
+        "[model, draggedDiagram, editable, projectionCache]",
+      ),
+    "the nodes prop would gain a new identity per marquee frame — the loop's fuel",
+  );
+  check(
+    "the edges projection reads nothing the marquee writes",
+    edgesMemo !== null &&
+      !/marquee|multiSelected|activeMulti/i.test(edgesMemo[0]),
+    "the edges prop would gain a new identity per marquee frame — same loop, edge lane",
+  );
+  const marqueeMove =
+    /const handleMarqueeMove = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
+  check(
+    "the per-frame marquee handler writes the overlay rect and nothing else",
+    marqueeMove !== null &&
+      marqueeMove[1].includes("setMarquee(") &&
+      (marqueeMove[1].match(/set[A-Z]\w*\(/g) ?? []).every(
+        (call) => call === "setMarquee(",
+      ) &&
+      !marqueeMove[1].includes("edit."),
+    "a mouse move now writes state the projection can see — re-read 4fa7c36 first",
+  );
+  check(
+    "the marquee claims the press from the pane and cancels it before React Flow pans",
+    /closest\("\.react-flow__pane"\)/.test(canvas) &&
+      /event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);\s*\n\s*container\.setPointerCapture\(/.test(
+        canvas,
+      ),
+    "Shift + drag would pan (or select text) instead of drawing the box",
   );
 }
 

@@ -98,6 +98,7 @@ import {
   SplitWorkbench,
 } from "@/components/ui/split-workbench";
 import type {
+  C4NodeFrameChoice,
   C4NodeRevision,
   C4NodeType,
   ExternalRef,
@@ -201,6 +202,7 @@ import {
   unnestedNodeEdit,
   createdNodeName,
   deletedNodeEdit,
+  groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
   revisedNodeEdit,
@@ -1090,6 +1092,40 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleNodesGroup = useCallback(
+    (
+      diagramId: string,
+      nodeIds: readonly string[],
+      frame: C4NodeFrameChoice,
+    ): boolean => {
+      const next = groupedNodesEdit(doc, text, diagramId, nodeIds, frame);
+      /* SAID, not swallowed — the Add strip's rule: a pressed Apply that
+         changes nothing reads as a broken button. Two causes share the
+         sentence honestly: the pane lagging the canvas, and a lasso whose
+         members already have exactly this membership. The boolean tells the
+         canvas whether to keep the lasso for a retry — see `onNodesGroup`. */
+      if (next === null) {
+        setAnnouncement(
+          "The elements were not grouped — they may already be in that boundary, or the source pane and the diagram do not match yet.",
+        );
+        return false;
+      }
+      /* ONE applyCanvasEdit for the WHOLE grouping: N membership lines plus
+         at most one minted `frame` line land as one text, so a single
+         Cmd/Ctrl+Z takes the whole boundary back out. `check:canvas-edit`
+         pins this call count — a second call here would be a second undo
+         entry per gesture. */
+      applyCanvasEdit(
+        next,
+        frame.kind === "none"
+          ? `${nodeIds.length} elements removed from their boundaries — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`
+          : `${nodeIds.length} elements grouped into one boundary — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo the whole grouping.`,
+      );
+      return true;
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleNodeCreate = useCallback(
     (diagramId: string, type: C4NodeType): string | null => {
       const next = createdNodeEdit(doc, text, diagramId, type);
@@ -1515,6 +1551,7 @@ export function ViewPlayground({
             onRefCreate: handleRefCreate,
             onNodeNest: handleNodeNest,
             onNodeUnnest: handleNodeUnnest,
+            onNodesGroup: handleNodesGroup,
             onUndo: handleCanvasUndo,
           }
         : undefined,
@@ -1527,6 +1564,7 @@ export function ViewPlayground({
       handleRefCreate,
       handleNodeNest,
       handleNodeUnnest,
+      handleNodesGroup,
       handleCanvasUndo,
     ],
   );
@@ -1650,9 +1688,10 @@ export function ViewPlayground({
                 they will look for it. */}
             {CANVAS_EDIT_ENABLED ? (
               <>
-                C4 nodes can be dragged on the canvas, added from its palette
-                and their wording, icon and colour edited in the details panel,
-                and sequence messages and lifelines added, edited, repointed,
+                C4 nodes can be dragged on the canvas, added from its palette,
+                grouped into a boundary with a Shift + drag selection, and their
+                wording, icon and colour edited in the details panel, and
+                sequence messages and lifelines added, edited, repointed,
                 reordered, numbered and removed on it; the other kinds lay
                 themselves out from the text.{" "}
               </>

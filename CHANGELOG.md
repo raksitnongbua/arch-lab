@@ -9,6 +9,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Several C4 elements can be grouped into a boundary in one action: Shift +
+  drag on an editable canvas draws a selection box, and releasing it over two
+  or more elements opens a compact card offering the diagram's boundaries,
+  "None", and a new boundary you name on the spot. The whole grouping lands as
+  one change to your text — each member's line gains its `in=`, plus one
+  minted `frame` line for a new boundary — so a single Cmd/Ctrl + Z takes the
+  entire boundary back out. A lasso over one element just selects it, and
+  `^ref` placeholders group like anything else. The Mermaid pane refuses the
+  gesture for the reason it refuses the single-element boundary edit: Mermaid
+  C4 has nowhere to keep the membership.
 - A C4 element can now be put inside a boundary from the canvas: the details
   panel's edit form grows a Boundary select offering the diagram's own frames,
   "None", and a new boundary you name on the spot — written as `in=` on the

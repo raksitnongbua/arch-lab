@@ -214,7 +214,10 @@ function orAbsent(value: string): string | undefined {
   return value.trim() === "" ? undefined : value;
 }
 
-const FIELD_CLASSES =
+/** Exported for `viewer-multi-detail`, which renders the same boundary
+ * control this panel's form does — one spelling of the field chrome, so the
+ * two cards cannot drift apart visually. */
+export const FIELD_CLASSES =
   "mt-0.5 w-full rounded-md border border-border bg-canvas/60 px-2 py-1 " +
   "text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring " +
   "focus-visible:outline-none";
@@ -222,8 +225,8 @@ const FIELD_CLASSES =
 /** One labelled control. The <label> WRAPS its control rather than using
  * `htmlFor`, for the reason the sequence dock's `DockField` gives: an id
  * would have to be unique per selected element, a name to keep in step for
- * nothing. */
-function EditField({
+ * nothing. Exported for `viewer-multi-detail`, with `FIELD_CLASSES`. */
+export function EditField({
   term,
   children,
 }: {
@@ -266,8 +269,9 @@ function EditField({
  * BEFORE Apply, so the swap is never silent.
  */
 /* Sentinel for the frame select's "mint a new one" row. A value no slug can
-   collide with, because `slugify` never emits a leading space. */
-const NEW_FRAME = " new";
+   collide with, because `slugify` never emits a leading space. Exported for
+   `viewer-multi-detail`, whose boundary select is this one over N elements. */
+export const NEW_FRAME = " new";
 
 function NodeEditForm({
   node,
