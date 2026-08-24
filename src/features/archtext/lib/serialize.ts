@@ -356,30 +356,36 @@ function buildNodeHome(
 }
 
 /**
- * The canonical DECLARATION line for one node — byte for byte the
- * `  <id>:<kind> "Name" …` line `serializeArchText` would write for it, geometry
- * token (or its canonical omission) included.
+ * The canonical BLOCK for one node — byte for byte the lines
+ * `serializeArchText` would write for it: the `  <id>:<kind> "Name" …`
+ * declaration line (geometry token, or its canonical omission, included) plus
+ * its `desc` and `!` continuation lines.
  *
- * WHY THIS EXISTS. A canvas drag used to be a whole-document re-emit, which
+ * WHY THIS EXISTS. A canvas edit used to be a whole-document re-emit, which
  * deleted every `//` comment, every author blank line and every field the
- * author wrote out that canonical form omits at its default. A drag is now a
- * one-LINE splice into the author's own text, and this is where the
- * replacement line comes from — derived from the serializer rather than
- * assembled a second time, so a patched line cannot be non-canonical.
+ * author wrote out that canonical form omits at its default. An edit is now a
+ * splice into the author's own text, and this is where the replacement lines
+ * come from — derived from the serializer rather than assembled a second
+ * time, so a patched block cannot be non-canonical. The revise gesture is the
+ * caller that needs the WHOLE block: it edits `description`, which is a
+ * continuation line an edit may add, replace or remove — the same reason the
+ * sequence grammar's `canonicalMessageBlock` deals in blocks. The cost is the
+ * one that gesture's sibling documents: `!` escape lines inside the edited
+ * block come back in canonical ORDER even if the author wrote them the other
+ * way round; every byte outside the block is untouched.
  * See `playground/input/canvas-edit.ts`.
  *
- * The node's CONTINUATION lines (`desc`, `!` escapes) are deliberately not
- * returned. A drag changes nothing below the declaration line, and handing
- * back a whole block would invite a splice that reflows a `desc` line's
- * spacing for no reason.
+ * No `pad` parameter, unlike the sequence blocks: the C4 grammar fixes a
+ * node's indentation (two spaces, continuations at four) rather than carrying
+ * structure in it, so there is nothing to read off the replaced block.
  *
  * `null` when `diagramId` or `nodeId` is not in `file`.
  */
-export function canonicalNodeLine(
+export function canonicalNodeBlock(
   file: ArchLabFile,
   diagramId: string,
   nodeId: string,
-): string | null {
+): string[] | null {
   if (!isRecord(file)) invalid("the file", file);
   const diagramsValue = file.diagrams;
   if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
@@ -412,8 +418,155 @@ export function canonicalNodeLine(
     defaultLayoutFor(nodes, edges),
     buildNodeHome(diagrams),
   );
-  // `emitNode` pushes the declaration line first and its continuations after.
-  return lines[0];
+  return lines;
+}
+
+/**
+ * The canonical DECLARATION line alone — the first line of
+ * `canonicalNodeBlock`, which `emitNode` pushes before any continuation.
+ *
+ * The node's CONTINUATION lines (`desc`, `!` escapes) are deliberately not
+ * returned. A drag changes nothing below the declaration line, and handing
+ * back a whole block would invite a splice that reflows a `desc` line's
+ * spacing for no reason. The revise gesture, which does change `desc`, takes
+ * the block instead.
+ *
+ * `null` when `diagramId` or `nodeId` is not in `file`.
+ */
+export function canonicalNodeLine(
+  file: ArchLabFile,
+  diagramId: string,
+  nodeId: string,
+): string | null {
+  const lines = canonicalNodeBlock(file, diagramId, nodeId);
+  return lines === null ? null : lines[0];
+}
+
+/**
+ * The canonical header line for one `tagColors` entry — byte for byte the
+ * line `serializeArchText` writes for it, kept HERE so the one place that
+ * knows when a tag or a colour needs quoting (`tagKeyToken`) is the one that
+ * spells the line. The colour edit in `playground/input/canvas-edit.ts`
+ * splices this into the header when it mints a colour the document does not
+ * define yet; a copy of the format string there would drift the first time
+ * either learned a new escape.
+ */
+export function canonicalTagColorLine(tag: string, color: string): string {
+  return `tagcolor ${tagKeyToken(tag)} ${JSON.stringify(color)}`;
+}
+
+/**
+ * The canonical `frame` declaration for a TOP-LEVEL boundary — byte for byte
+ * the line `serializeArchText` writes for one with no `parentFrameId`, kept
+ * here for `canonicalTagColorLine`'s reason: the one place that knows when an
+ * id needs quoting is the one that spells the line. The boundary gesture in
+ * `playground/input/canvas-edit.ts` splices this into the diagram body when
+ * it mints a frame the document does not declare yet. Top-level only, on
+ * purpose: nesting is a statement about two frames the panel's single-element
+ * control never makes (`C4NodeFrameChoice`), so `emitDiagram` appends the
+ * three-valued `in=` itself.
+ */
+export function canonicalFrameLine(frameId: string, label: string): string {
+  return `  frame ${idToken(frameId)} ${JSON.stringify(label)}`;
+}
+
+/**
+ * The canonical declaration line for ONE frame of `diagramId` — byte for byte
+ * the line `serializeArchText` writes for it, the three-valued `in=` nesting
+ * included, which is what `canonicalFrameLine` deliberately does not carry
+ * (see its header: a MINT is always top-level; an existing frame is whatever
+ * the author nested it in). The boundary rename in
+ * `playground/input/canvas-edit.ts` splices this over the frame's own line,
+ * and deriving it from the emitter is what keeps a renamed nested frame's
+ * `in=` exactly as the serializer would spell it.
+ *
+ * `null` when `diagramId` or `frameId` is not in `file`.
+ */
+export function canonicalFrameDeclaration(
+  file: ArchLabFile,
+  diagramId: string,
+  frameId: string,
+): string | null {
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  const frames = diagram?.frames;
+  const index = frames?.findIndex((frame) => frame.id === frameId) ?? -1;
+  const frame = index === -1 ? undefined : frames?.[index];
+  if (frame === undefined) return null;
+  return frameDeclaration(
+    diagramId,
+    frame as unknown as Record<string, unknown>,
+    index,
+  );
+}
+
+/**
+ * One frame's declaration line, shared by `emitDiagram` and
+ * `canonicalFrameDeclaration` so a spliced rename and a full serialise cannot
+ * spell the same frame two ways. Validation lives here with the emission for
+ * the same reason it does in `emitDiagram`'s other branches: the line and the
+ * refusal to write a malformed one are one decision.
+ */
+function frameDeclaration(
+  diagramId: string,
+  frame: Record<string, unknown>,
+  index: number,
+): string {
+  const frameId = frame.id;
+  const label = frame.label;
+  if (typeof frameId !== "string" || frameId === "") {
+    invalid(`diagram "${diagramId}".frames[${index}].id`, frameId);
+  }
+  if (typeof label !== "string" || label === "") {
+    invalid(`diagram "${diagramId}".frames[${index}].label`, label);
+  }
+  let line = canonicalFrameLine(frameId, label);
+  // `parentFrameId` is three-valued and all three must survive: absent
+  // (no attribute), explicit null (`in=null`) and an id. Writing absent
+  // and null the same way would collapse them on the next read.
+  if ("parentFrameId" in frame) {
+    const parent = frame.parentFrameId;
+    if (parent === null) {
+      line += " in=null";
+    } else if (typeof parent === "string" && parent !== "") {
+      line += ` in=${idToken(parent)}`;
+    } else {
+      invalid(`diagram "${diagramId}".frames[${index}].parentFrameId`, parent);
+    }
+  }
+  return line;
+}
+
+/**
+ * The canonical BLOCK for one diagram — byte for byte the lines
+ * `serializeArchText` writes for it, its `@<level>` head first, WITHOUT the
+ * blank separator line (that line belongs to the file's join, and the caller
+ * decides whether the splice point already has one).
+ *
+ * Exists for the nest gesture: giving a node a child diagram appends a whole
+ * new diagram block to the text, and deriving those lines from the serializer
+ * is what keeps a patched block canonical — the same duty
+ * `canonicalNodeBlock` discharges one element down. For the freshly minted
+ * child the block is exactly one head line, but this returns whatever the
+ * serializer would write so the derivation cannot silently narrow.
+ *
+ * `null` when `diagramId` is not in `file`.
+ */
+export function canonicalDiagramBlock(
+  file: ArchLabFile,
+  diagramId: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const diagramsValue = file.diagrams;
+  if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
+  const diagrams = diagramsValue.map((diagram, i) => {
+    if (!isRecord(diagram)) invalid(`diagrams[${i}]`, diagram);
+    return diagram;
+  });
+  const diagram = diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  const lines: string[] = [];
+  emitDiagram(lines, diagram, buildNodeHome(diagrams));
+  return lines;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -507,29 +660,7 @@ function emitDiagram(
     }
     framesValue.forEach((frame, i) => {
       if (!isRecord(frame)) invalid(`diagram "${id}".frames[${i}]`, frame);
-      const frameId = frame.id;
-      const label = frame.label;
-      if (typeof frameId !== "string" || frameId === "") {
-        invalid(`diagram "${id}".frames[${i}].id`, frameId);
-      }
-      if (typeof label !== "string" || label === "") {
-        invalid(`diagram "${id}".frames[${i}].label`, label);
-      }
-      let line = `  frame ${idToken(frameId)} ${JSON.stringify(label)}`;
-      // `parentFrameId` is three-valued and all three must survive: absent
-      // (no attribute), explicit null (`in=null`) and an id. Writing absent
-      // and null the same way would collapse them on the next read.
-      if ("parentFrameId" in frame) {
-        const parent = frame.parentFrameId;
-        if (parent === null) {
-          line += " in=null";
-        } else if (typeof parent === "string" && parent !== "") {
-          line += ` in=${idToken(parent)}`;
-        } else {
-          invalid(`diagram "${id}".frames[${i}].parentFrameId`, parent);
-        }
-      }
-      lines.push(line);
+      lines.push(frameDeclaration(id, frame, i));
     });
   }
 

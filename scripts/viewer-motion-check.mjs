@@ -333,75 +333,90 @@ check("the export paints the drift with the canvas's resolved token", () => {
 /* Panning survives an editable canvas                                      */
 /* ----------------------------------------------------------------------- */
 
-check("both C4 canvases declare the same pan-activation gesture", () => {
-  /* Drag is about to mean "move a node" on the viewer canvas, which leaves
-     exactly two ways to pan: drag the empty pane, and hold the activation key
-     anywhere. Both are React Flow DEFAULTS (`panOnDrag = true`,
-     `panActivationKeyCode = 'Space'`), and that is the hazard — a default
-     nothing states is a default nothing protects. Panning silently stopped
-     working once already on this canvas family, and a library bump or a
-     stray `selectionOnDrag` here would do it again with no diff to read.
+check(
+  "each canvas keeps its own pan gesture — key on one, mode on the other",
+  () => {
+    /* This used to pin the viewer's `panActivationKeyCode` to the editor's
+     Space: the held key was the editable viewer's only bare-hand pan. It was
+     reported broken three times — a held key depends on keyboard state and
+     focus, and never existed on touch — so the viewer moved to an explicit
+     Select/Pan MODE TOGGLE, and what is worth pinning flipped with it:
 
-     Asserted as a RELATION between the two canvases rather than against the
-     literal "Space": the editor already teaches this gesture (its README
-     spends a paragraph on `Space` being `panActivationKeyCode`, which is why
-     relate is a grip and not Alt+drag), so the viewer agreeing with the
-     editor is the property worth holding. Retuning one canvas now fails here
-     instead of teaching two different gestures for one job. The editor's
-     `canvas.tsx` is frozen, so this pins the pair rather than sharing a
-     constant — the arrangement `dry.md` asks for when two modules cannot
-     import from each other. */
-  const editorCanvas = read("src/features/editor/components/canvas.tsx");
-  const panKey = /panActivationKeyCode="([^"]+)"/;
-  const editorKey = panKey.exec(editorCanvas)?.[1];
-  const viewerKey = panKey.exec(canvas)?.[1];
-  assert.ok(
-    editorKey,
-    "the editor canvas no longer declares panActivationKeyCode, so there is nothing to agree with",
-  );
-  assert.equal(
-    viewerKey,
-    editorKey,
-    "the viewer canvas must pan on the same key the editor does",
-  );
-  /* Empty-pane drag is the other half, and it is the half `selectionOnDrag`
+       - the EDITOR keeps its own Space pan untouched (its README spends a
+         paragraph teaching it, which is why relate is a grip and not
+         Alt+drag). This half is what stops "remove the Space machinery from
+         the viewer" from quietly reaching into the editor;
+       - the VIEWER must NOT re-declare a pan key beside the toggle. A key
+         and a mode gating one gesture is two gates that can disagree — the
+         exact shape that produced the three reports. In Pan mode the marquee
+         handlers are not attached at all, so React Flow's own `panOnDrag`
+         does the panning with no key involved (`check:canvas-edit` pins the
+         detachment). */
+    const editorCanvas = read("src/features/editor/components/canvas.tsx");
+    assert.match(
+      editorCanvas,
+      /panActivationKeyCode="Space"/,
+      "the editor canvas no longer declares its Space pan — only the VIEWER " +
+        "moved to a mode toggle; the editor's gesture must not change",
+    );
+    /* Matched as a PROP USE (`name=`), not the bare word: the comment above
+     the viewer's pan props rightly names `panActivationKeyCode` while
+     explaining why it is gone, and an assertion failing on the explanation
+     would punish the file for documenting itself. */
+    assert.doesNotMatch(
+      canvas,
+      /panActivationKeyCode=/,
+      "the viewer re-declared a pan key beside the Select/Pan toggle — two " +
+        "gates for one gesture is the key-state plumbing that broke three times",
+    );
+    /* Empty-pane drag is the other half, and it is the half `selectionOnDrag`
      takes away: the editor pays for its marquee with `panOnDrag={[1, 2]}`,
      middle and right button only. The viewer keeps the plain form, so a
-     left-drag on empty canvas still pans for a reader who never learns a
-     modifier. */
-  assert.match(
-    canvas,
-    /^\s*panOnDrag$/m,
-    "the viewer canvas must keep bare panOnDrag, so empty-canvas drag pans",
-  );
-  /* ANCHORED TO A PROP ON ITS OWN LINE, not the bare word — the comment above
+     left-drag on empty canvas still pans wherever the marquee is not
+     attached — every read-only canvas, and Pan mode on the editable one. */
+    assert.match(
+      canvas,
+      /^\s*panOnDrag$/m,
+      "the viewer canvas must keep bare panOnDrag, so empty-canvas drag pans",
+    );
+    /* ANCHORED TO A PROP ON ITS OWN LINE, not the bare word — the comment above
      the props in `viewer-canvas.tsx` names `selectionOnDrag` while explaining
      why it must not be added, and a bare match failed on that sentence. Same
      correction the `localStorage` assertion below already carries: match the
      USE, not the mention, or the check punishes the file for documenting
      itself. */
-  assert.doesNotMatch(
-    canvas,
-    /^\s*selectionOnDrag$/m,
-    "selectionOnDrag would claim left-drag on the pane and remove the pan gesture",
-  );
-  /* And the pill has to SAY so. The gesture existing while nothing announces
-     it is how the wheel-zoom confusion this same file documents happened —
-     a reader tries drag, sees a node move, and concludes the canvas cannot
-     pan.
+    assert.doesNotMatch(
+      canvas,
+      /^\s*selectionOnDrag$/m,
+      "selectionOnDrag would claim left-drag on the pane and remove the pan gesture",
+    );
+    /* And the pill has to SAY so, in BOTH branches. The gesture existing while
+     nothing announces it is how the wheel-zoom confusion this same file
+     documents happened — a reader tries drag, sees a lasso, and concludes
+     the canvas cannot pan. The editable branch must name the toggle (the pan
+     a reader who knew drag-to-pan has to be told where to find); the
+     read-only branch must still teach plain drag-to-pan.
 
      Matched against the SENTENCE, with the JSX space expressions and line
      breaks collapsed away first. Prettier owns where that paragraph wraps —
      wrapping the flow in one more provider was enough to move the break and
      fail this assertion while every word a reader sees stayed put. An
      assertion about copy must not be an assertion about indentation. */
-  const hintProse = canvas.replace(/\{" "\}/g, " ").replace(/\s+/g, " ");
-  assert.match(
-    hintProse,
-    /Space<\/kbd> \+ drag/,
-    "the canvas hint must name the pan-anywhere gesture",
-  );
-});
+    const hintProse = canvas.replace(/\{" "\}/g, " ").replace(/\s+/g, " ");
+    assert.match(
+      hintProse,
+      /Select \/ Pan<\/span> toggle makes a drag pan/,
+      "the editable hint no longer says where the pan went — a reader who knew " +
+        "drag-to-pan concludes panning broke",
+    );
+    assert.match(
+      hintProse,
+      /drag<\/span> to pan/,
+      "the read-only hint must still teach drag-to-pan — it is the gesture " +
+        "every shared link opens with",
+    );
+  },
+);
 
 /* ----------------------------------------------------------------------- */
 /* The playground's rail fold is decided by the SERVER                      */

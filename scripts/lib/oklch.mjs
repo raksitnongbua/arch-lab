@@ -87,6 +87,34 @@ const gammaDecode = (c) =>
   c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 
 /**
+ * `#rrggbb` -> `{ rgb, oklch }` (linear sRGB triple + [L, C, h]), the inverse
+ * direction of `oklchToLinear` (Ottosson's matrices both ways). Needed by
+ * `canvas-edit-check.mjs`, which has to REBUILD what the browser does with a
+ * `tagColors` hex — `oklch(from <hex> var(--tag-fill-l) min(c, var(--tag-fill-c)) h)`
+ * — before it can measure the result; nothing else in the suite starts from a
+ * hex. `null` for anything that is not six hex digits, which is also this
+ * suite's answer to shorthand: the app's palette and the serializer only ever
+ * carry the long form.
+ */
+export function parseHex(value) {
+  const m = /^#([0-9a-f]{6})$/i.exec(value ?? "");
+  if (m === null) return null;
+  const rgb = [0, 2, 4].map((i) =>
+    gammaDecode(parseInt(m[1].slice(i, i + 2), 16) / 255),
+  );
+  const [r, g, b] = rgb;
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m_ = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const L = 0.2104542553 * l + 0.793617785 * m_ - 0.0040720468 * s;
+  const a = 1.9779984951 * l - 2.428592205 * m_ + 0.4505937099 * s;
+  const bb = 0.0259040371 * l + 0.7827717662 * m_ - 0.808675766 * s;
+  let h = (Math.atan2(bb, a) * 180) / Math.PI;
+  if (h < 0) h += 360;
+  return { rgb, oklch: [L, Math.hypot(a, bb), h] };
+}
+
+/**
  * The wash's deepest stop in linear sRGB: `fraction` of the stroke folded
  * into the fill. Lerped on GAMMA-ENCODED channels because that is precisely
  * what the exporter ships (`lib/wash.ts` mixes 8-bit sRGB bytes); measuring
@@ -96,7 +124,8 @@ const gammaDecode = (c) =>
 export function washMixLinear(fillLinear, strokeLinear, fraction) {
   return fillLinear.map((c, i) =>
     gammaDecode(
-      gammaEncode(c) + (gammaEncode(strokeLinear[i]) - gammaEncode(c)) * fraction,
+      gammaEncode(c) +
+        (gammaEncode(strokeLinear[i]) - gammaEncode(c)) * fraction,
     ),
   );
 }

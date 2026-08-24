@@ -19,6 +19,11 @@
  * Outer frames paint first (`placeFrames` returns them outermost-first), so a
  * child's fill lands on top of its parent's and nesting reads as depth rather
  * than as two overlapping washes.
+ *
+ * Focus runs in TWO MODES — uncontrolled (the editor, the read-only viewer:
+ * this layer holds the focused id and dismisses it itself) and controlled
+ * (the editable viewer, where a focused frame is a SELECTION with a details
+ * card): see `FrameLayerProps.onSelect` for the argument.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -35,9 +40,27 @@ export interface FrameLayerProps {
    * indicators, and they live in different components — the canvas owns node
    * selection, this owns frame focus — so neither can turn the other off on
    * its own. Without this, focusing a frame left a node's comet still running
-   * and the diagram claimed two focal points at once.
+   * and the diagram claimed two focal points at once. Uncontrolled mode only:
+   * a host that passes `onSelect` clears its other selections itself.
    */
   onFocus?: () => void;
+  /**
+   * CONTROLLED focus, as a pair: when `onSelect` is present the layer stops
+   * holding focus state of its own — `selectedFrameId` is the focused frame,
+   * a click reports the next value (`null` on a dismissing second click)
+   * through `onSelect`, and the document-level dismissal listeners below are
+   * NOT installed, because the host owns dismissal along with the state.
+   *
+   * The pair exists for the editable viewer canvas, where a focused frame is
+   * a SELECTION — it opens a details card whose rename form the reader types
+   * into. The uncontrolled layer's "any pointerdown elsewhere dismisses"
+   * rule would close that selection on the first click INTO the card, so the
+   * state has to live where the card's lifetime is decided. The editor and
+   * the read-only viewer pass neither prop and keep the uncontrolled
+   * behaviour unchanged.
+   */
+  selectedFrameId?: string | null;
+  onSelect?: (frameId: string | null) => void;
 }
 
 /** Breathing room around a frame when zooming to it. */
@@ -49,12 +72,17 @@ const FOCUS_DURATION = 320;
 export function FrameLayer({
   diagram,
   onFocus,
+  selectedFrameId,
+  onSelect,
 }: FrameLayerProps): React.JSX.Element {
   const { fitBounds } = useReactFlow();
   const frames = placeFrames(diagram);
+  const controlled = onSelect !== undefined;
   // The focused frame. Persists — this is a selection indicator the reader
-  // asked for, so it stays until they point somewhere else.
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  // asked for, so it stays until they point somewhere else. Local state only
+  // while uncontrolled; a controlled host's answer supersedes it below.
+  const [localFocusedId, setLocalFocusedId] = useState<string | null>(null);
+  const focusedId = controlled ? (selectedFrameId ?? null) : localFocusedId;
 
   const focusFrame = useCallback(
     (rect: { x: number; y: number; width: number; height: number }) => {
@@ -73,10 +101,16 @@ export function FrameLayer({
   );
 
   // Clicking the focused frame's own caption clears it, so the indicator can
-  // be dismissed without hunting for somewhere neutral to click.
+  // be dismissed without hunting for somewhere neutral to click. Controlled,
+  // the toggle is only REPORTED — the host decides what a frame selection
+  // displaces, so `onFocus` is not called on its behalf.
   const toggleFocus = useCallback(
     (id: string) => {
-      setFocusedId((cur) => {
+      if (onSelect !== undefined) {
+        onSelect(focusedId === id ? null : id);
+        return;
+      }
+      setLocalFocusedId((cur) => {
         const next = cur === id ? null : id;
         // Only when taking focus, not when giving it up: clearing on release
         // would wipe a selection the reader made after focusing the frame.
@@ -84,7 +118,7 @@ export function FrameLayer({
         return next;
       });
     },
-    [onFocus],
+    [onFocus, onSelect, focusedId],
   );
 
   // Anything else dismisses it: a node, an edge, empty canvas, Escape.
@@ -96,6 +130,10 @@ export function FrameLayer({
   // CAPTURE phase so this still runs when a handler underneath stops
   // propagation, which the canvas does for its own selection.
   useEffect(() => {
+    // Controlled: the host owns dismissal (its pane click, its node click,
+    // its Escape ladder). Installing these too would close the host's frame
+    // selection on the first click into the details card it just opened.
+    if (controlled) return;
     if (focusedId === null) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
@@ -105,10 +143,10 @@ export function FrameLayer({
       ) {
         return;
       }
-      setFocusedId(null);
+      setLocalFocusedId(null);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setFocusedId(null);
+      if (event.key === "Escape") setLocalFocusedId(null);
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
@@ -116,7 +154,7 @@ export function FrameLayer({
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [focusedId]);
+  }, [controlled, focusedId]);
 
   if (frames.length === 0) return <></>;
 
@@ -242,9 +280,17 @@ export function FrameLayer({
               // already inside it.
               // A toggle now, so it has to say so: the caption both zooms and
               // marks the frame as focused, and pressing it again clears that.
+              // Controlled (the editable viewer), the same press also SELECTS
+              // the boundary — it opens the details card — so the name says
+              // select, not zoom: the zoom is the camera helping, the
+              // selection is what the reader pressed for.
               data-frame-hit=""
               aria-pressed={focusedId === frame.id}
-              aria-label={`Zoom to the ${frame.label} frame`}
+              aria-label={
+                controlled
+                  ? `Select the ${frame.label} boundary`
+                  : `Zoom to the ${frame.label} frame`
+              }
               // `bg-canvas` punches a gap through the dashed border and any
               // edge behind it, the way a boundary caption is normally drawn.
               className="pointer-events-auto absolute cursor-zoom-in truncate rounded bg-canvas px-1.5 font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"

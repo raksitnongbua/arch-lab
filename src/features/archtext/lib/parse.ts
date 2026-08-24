@@ -167,6 +167,8 @@ interface Header {
   updated?: string;
   reviewed?: string;
   tagColors?: Map<string, string>;
+  /** Source line of each `tagcolor` line, for `ArchTextSpans.header`. */
+  tagColorLines?: Map<string, number>;
   customIcons?: Map<string, { name: string; svg: string }>;
   generator?: { name: string; version: string };
   root?: string;
@@ -343,9 +345,42 @@ export interface LineSpan {
  * author blank lines and no fields omitted-at-default that the author wrote
  * out anyway. Splicing lines by span keeps every byte the edit did not touch.
  */
+/**
+ * Where the HEADER can be patched. Unlike nodes and edges the header is not
+ * one block with one span — its lines carry unrelated keywords in author
+ * order — so this records only what a header patch needs: where each
+ * `tagcolor` line sits (a colour edit keys off the tag), and the last header
+ * content line, after which a new header line may be inserted without ever
+ * landing inside a diagram (`header lines must appear before the first "@"
+ * diagram` is the parser's own rule).
+ */
+export interface HeaderSpans {
+  /** 1-based line of the last header content line — insert AFTER this. */
+  end: number;
+  /** 1-based line of each `tagcolor` line, keyed by tag. */
+  tagColors: ReadonlyMap<string, number>;
+}
+
 export interface ArchTextSpans {
   nodes: ReadonlyMap<string, LineSpan>;
   edges: ReadonlyMap<string, LineSpan>;
+  /**
+   * Each `frame` line, keyed by `spanKey(diagramId, frameId)`. Always a
+   * single line (`start === end`): the frame grammar has no continuation
+   * lines. Recorded so the boundary gesture can splice a minted `frame` line
+   * beside the existing ones instead of scanning the text for them — the
+   * second-parser move `codebase.md` bans.
+   */
+  frames: ReadonlyMap<string, LineSpan>;
+  /**
+   * The 1-based line of each diagram's `@<level>` head, keyed by diagram id.
+   * The HEAD only, not the block: a diagram's members already have their own
+   * spans above, and the one caller that removes a whole diagram
+   * (`unnestedNodeEdit`) refuses anything but an EMPTY one — whose block IS
+   * its head line.
+   */
+  diagramHeads: ReadonlyMap<string, number>;
+  header: HeaderSpans;
 }
 
 /** The `ArchTextSpans` key for a member of a diagram. */
@@ -359,6 +394,9 @@ export function spanKey(diagramId: string, memberId: string): string {
 interface SpanCollector {
   nodes: Map<string, LineSpan>;
   edges: Map<string, LineSpan>;
+  frames: Map<string, LineSpan>;
+  diagramHeads: Map<string, number>;
+  header: HeaderSpans;
 }
 
 /**
@@ -397,6 +435,10 @@ export function parseArchTextWithSpans(source: string): {
   let current: PendingDiagram | null = null;
   let member: PendingNode | PendingEdge | null = null;
   let seenContent = false;
+  // The last header CONTENT line (comments and blanks between the header and
+  // the first "@" belong to nobody, so an insertion after this line can never
+  // split a diagram) — see `HeaderSpans.end`.
+  let headerEnd = 0;
 
   const lines = source.split("\n");
   for (let index = 0; index < lines.length; index += 1) {
@@ -459,6 +501,7 @@ export function parseArchTextWithSpans(source: string): {
       }
       header.version = version;
       header.versionLoc = versionLoc;
+      headerEnd = lineNo;
       continue;
     }
 
@@ -482,9 +525,11 @@ export function parseArchTextWithSpans(source: string): {
       }
       if (cursor.peek() === "!") {
         parseHeaderBang(cursor, header);
+        headerEnd = lineNo;
         continue;
       }
       parseHeaderLine(cursor, header);
+      headerEnd = lineNo;
       continue;
     }
 
@@ -522,7 +567,13 @@ export function parseArchTextWithSpans(source: string): {
     failAt(1, 1, 'the file is empty — expected an "archlab <version>" line');
   }
 
-  const spans: SpanCollector = { nodes: new Map(), edges: new Map() };
+  const spans: SpanCollector = {
+    nodes: new Map(),
+    edges: new Map(),
+    frames: new Map(),
+    diagramHeads: new Map(),
+    header: { end: headerEnd, tagColors: header.tagColorLines ?? new Map() },
+  };
   const file = resolve(header, diagrams, diagramById, nodeHome, spans);
   return { file, spans };
 }
@@ -603,6 +654,8 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
         cursor.fail(`duplicate "tagcolor" line for tag "${tag}"`);
       }
       header.tagColors.set(tag, color);
+      header.tagColorLines = header.tagColorLines ?? new Map();
+      header.tagColorLines.set(tag, cursor.line);
       break;
     }
     case "customicon": {
@@ -2070,6 +2123,11 @@ function resolve(
       if (frame.hasIn)
         pairs.push(["parentFrameId", frame.parentFrameId ?? null]);
       finalFrames.push(assemble(pairs, []));
+      // A frame line has no continuations, so its span is the one line.
+      spans.frames.set(spanKey(diagram.id, frame.id), {
+        start: frame.line,
+        end: frame.line,
+      });
     }
     // Walk each chain to its root. Cheap (frames per diagram are few) and it
     // reports the frame the author can actually see, not an internal cycle set.
@@ -2141,6 +2199,7 @@ function resolve(
     pairs.push(["nodes", finalNodes]);
     pairs.push(["edges", finalEdges]);
     finalDiagrams.push(assemble(pairs, diagram.unknowns));
+    spans.diagramHeads.set(diagram.id, diagram.line);
   }
 
   /* ------------------------------- root --------------------------------- */

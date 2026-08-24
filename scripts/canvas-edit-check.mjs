@@ -58,10 +58,14 @@
  *      reports itself uneditable with a reason. A hardcoded list cannot notice
  *      a seventh notation the day it is added; the table can. The table is
  *      looped TWICE, once per `CanvasEditAbility`, because there are two things
- *      a canvas can write back and the notations answer them in opposite
- *      directions — C4 allows `move` and refuses `revise`, a sequence document
- *      does the reverse. The one-argument default must keep meaning `move`, or
- *      a sequence document silently reports itself draggable.
+ *      a canvas can write back and the notations answer them differently — a
+ *      sequence document refuses `move` while offering `revise`, C4 answers
+ *      both, and the four text-laid-out notations refuse both. The
+ *      one-argument default must keep meaning `move`, or a sequence document
+ *      silently reports itself draggable. (The loop count follows the ability
+ *      union — `move`, `revise` and now `create` — and the grid-shape
+ *      assertion pins that count, so a fourth ability fails here until its
+ *      row is complete.)
  *   7. A NUDGE STAYS ON THE GRID, and four of them round a square return the
  *      text to byte-identical — a nudge that rounds or double-applies its
  *      delta would leave a residue the reader cannot see and cannot undo by
@@ -119,6 +123,68 @@
  *      JSON, and a pane whose text means a different document than the canvas
  *      is showing — each have an assertion, so the safe path cannot silently
  *      stop being taken.
+ *  14. A REVISE IS A BLOCK PATCH, and the whole ability is held to section
+ *      13's standard from the same kind of non-canonical text: only the
+ *      node's own block changes, the patched block equals what a full
+ *      serialise would emit for that node, a no-op or an unknown id refuses
+ *      (`null`, no undo entry) rather than throws, clearing an optional field
+ *      REMOVES it (never writes `[""]` or `desc ""`), an empty name and a
+ *      boundary placeholder refuse, and revise-then-revise-back restores the
+ *      AUTHORED bytes. What a rename deliberately carries is measured too: a
+ *      `^ref` name and a child-diagram title the author OMITTED derive from
+ *      this node's name and follow it, while ones written out stay put —
+ *      omission is the format's "same as the source", and rewriting those
+ *      lines would fork what the author's text says from what it said. The
+ *      gesture is also proved REACHABLE the way section 14 proves the
+ *      sequence dock's are: every handler `CanvasEditHandlers` declares is
+ *      invoked by the viewer and supplied by the playground, the panel's form
+ *      fields are exempt from the canvas's own keys (Backspace in the name
+ *      field must not delete the node), the pencil is withheld from a
+ *      read-only canvas and from a boundary placeholder, and the page's
+ *      heading names the gesture.
+ *  15. A CREATE IS AN INSERT PATCH, and the palette cannot offer what the
+ *      parser refuses. The Add strip's type list is DERIVED from the syntax
+ *      reference's `NODE_TYPE_ROWS` and pinned here — level by level, both
+ *      directions — to `VALID_NODE_TYPES_BY_LEVEL`, the very table the parser
+ *      validates against, because a palette that drifted would ship a button
+ *      that produces an invalid document. The gesture itself is held to
+ *      section 13's standard from non-canonical text: exactly one line gains,
+ *      every other byte survives, the line is what a full serialise would
+ *      emit, the id de-duplicates deterministically against the whole file
+ *      (ids are file-unique), an illegal-at-this-level type refuses (`null`,
+ *      no throw), and the new node's box is MEASURED to overlap nothing —
+ *      after the round trip, since inserting an id reflows the default
+ *      layout, so the pre-insert picture is the wrong one to measure.
+ *      A CREATE ALSO NAMES WHAT IT CREATED (`CanvasEdit.createdNodeId`, on
+ *      the patch path and both re-emit fallbacks, and on the ref create),
+ *      and the id is FOLLOWED: the playground's create handlers hand it back
+ *      and the canvas centres on the new element and selects it — because
+ *      the element is placed below everything drawn, which on a tall diagram
+ *      is off screen, while the announcement tells the reader to rename it in
+ *      the details panel. Without the camera move and the selection that
+ *      sentence is a promise nothing keeps. The reference half of the Add
+ *      strip is a click-to-open MENU (its list grows with the model, unlike
+ *      the fixed type buttons), sharing the zoom menu's dismissal hook so
+ *      Escape closes the menu WITHOUT also clearing the canvas selection.
+ *  16. A GROUPING IS ONE GESTURE, ONE TEXT, ONE UNDO. The marquee's write
+ *      (`groupedNodesEdit`) puts N elements into one boundary as a single
+ *      patch list — N declaration lines plus at most one minted `frame` line
+ *      — so one Cmd/Ctrl+Z reverses the whole boundary; the host's handler is
+ *      pinned to exactly one `applyCanvasEdit` call so the module's one edit
+ *      cannot become two undo entries on the way through. Held to section
+ *      13's standard from non-canonical text (only the members' declaration
+ *      lines change, comments and `desc` continuations survive, the patched
+ *      lines equal a full serialise's). A selection naming an unknown id
+ *      refuses WHOLLY — nothing partial — while a `^ref` placeholder is a
+ *      legal member, because membership is a local fact the emitter writes
+ *      beside the `^` token, unlike the derived own-fields `revisedNodeEdit`
+ *      refuses. AND THE MARQUEE ITSELF IS HELD AWAY FROM 4fa7c36's RENDER
+ *      LOOP: the gesture must never engage React Flow's own rubber band
+ *      (`elementsSelectable` false, no `onSelectionChange`), its per-frame
+ *      state may feed nothing but the overlay div, and the `nodes` / `edges`
+ *      projection memos must not read any of it — the prop identity holding
+ *      still for the whole gesture is what makes the StoreUpdater loop
+ *      impossible rather than merely unlikely.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
@@ -130,6 +196,25 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
+
+/**
+ * The same source with its comments removed, for assertions that pin CODE.
+ *
+ * Written after the trap fired three times in this file. A regex over a
+ * source file matches prose as readily as syntax, and the prose most likely
+ * to contain a fragment of code is the comment explaining that exact code —
+ * or, worse, the comment explaining the BUG, which quotes the wrong version
+ * verbatim. Each time, breaking the code left the assertion passing against
+ * its own explanation, which is the one failure a check must never have: it
+ * reports success for the state it exists to forbid.
+ *
+ * So: structural assertions read `code(...)`, prose assertions read `read(...)`,
+ * and the choice is visible at the call site.
+ */
+const code = (relative) =>
+  read(relative)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 /* ----------------------------------------------------------------------- */
 /* Module resolution: `@/*` alias + extensionless relative imports -> .ts   */
@@ -172,10 +257,18 @@ const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
 const {
   CANVAS_EDIT_OFFERS,
   canvasEditability,
+  createdNodeEdit,
+  createdNodeName,
+  createdRefEdit,
   deletedNodeEdit,
+  groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
+  revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
+const { creatableNodeTypes } = await load(
+  "src/features/viewer/lib/node-palette.ts",
+);
 const {
   revisedMessageEdit,
   revisedParticipantEdit,
@@ -636,11 +729,31 @@ console.log("\nThe canvas undo ring is bounded and stays out of the pane");
     "the focus guard is gone — canvas keys would fire while the source " +
       "textarea had focus, and undo would revert the wrong history",
   );
+  /* COUNTED FROM COMMENT-STRIPPED SOURCE: a comment naming the listener call
+     while explaining it would be counted as a third listener otherwise — the
+     prose-versus-code trap that has now fired three times in this file. */
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
   check(
     "the nudge keys and the undo chord share one listener",
-    (canvas.match(/window\.addEventListener\("keydown"/g) ?? []).length === 2,
+    (canvasCode.match(/window\.addEventListener\("keydown"/g) ?? []).length ===
+      2,
     "expected exactly two keydown listeners in the canvas (the Escape ladder " +
       "and the edit keys); a third means a second guard to keep in step",
+  );
+  /* ZERO, not "fewer": the only keyup (and window blur) listener this canvas
+     ever had released the held-Space pan flag, and that machinery — key
+     state mirrored into React state — is what kept breaking and was replaced
+     by the Select/Pan mode toggle. A keyup listener reappearing means some
+     gesture is being keyed off held-key state again, which needs the same
+     release-everywhere plumbing that failed three times. */
+  check(
+    "no keyup or window-blur listener remains — nothing tracks a held key",
+    (canvasCode.match(/window\.addEventListener\("keyup"/g) ?? []).length ===
+      0 &&
+      (canvasCode.match(/window\.addEventListener\("blur"/g) ?? []).length ===
+        0,
+    "a held-key flag is back in the viewer canvas — the Select/Pan toggle " +
+      "exists precisely so no gesture depends on keyboard state",
   );
 
   /* React Flow must not delete nodes itself. Its delete would remove the node
@@ -685,9 +798,10 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      repoint, rename and reorder — the common visit is READING a diagram
      somebody sent, and a mis-aimed press on it is now an edit you have to
      notice before you can undo it. The second half is answered by the control
-     rather than by the default: the locked face offers "Edit" with a pencil,
-     asserted below and in section 8, and if that regresses this default is
-     wrong again. `canvas-lock.ts` carries the full argument. */
+     rather than by the default: the padlock's accessible name and tooltip
+     offer the unlock action, its faces are distinct, and the strip prints the
+     state word — asserted below and in section 8 — and if those regress this
+     default is wrong again. `canvas-lock.ts` carries the full argument. */
   check(
     "no cookie means locked",
     isLockedCookie(undefined) === true,
@@ -741,48 +855,89 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
   /* WHAT PAYS FOR THE DEFAULT. A locked canvas withdraws the pencil, the
      insert buttons, the drag-to-reorder and the numbering toggle, so the lock
      is the only thing left on screen that can say the diagram is editable.
-     These three assertions are the price of the flip above, and each names a
-     way the old control failed to say it. */
+
+     THESE THREE ASSERTIONS WERE DELIBERATELY REWRITTEN when the product owner
+     chose an icon-only padlock pair on the canvas over the labelled
+     pencil-"Edit"/padlock-"Lock" control they used to pin. That is a reversal
+     of two documented rules, each bought by a shipped bug, and the bugs stay
+     real: a padlock labelled "Locked" once named the state the reader could
+     already see and left them guessing that pressing was allowed, and
+     `hidden sm:inline` once left the whole affordance as ONE 16px glyph on a
+     phone with no state distinction and no name. Each rewritten assertion
+     below pins the part of the new control that answers one of those bugs;
+     if any fails, the icon-only shape has lost the thing that made it
+     defensible. */
   const control = read(
     "src/features/playground/components/canvas-lock-button.tsx",
   );
+  /* THE FACES ARE THE STATE, so they must be two states. The old locked face
+     was a pencil offering "Edit" because a state-reporting face plus a label
+     was the shipped bug above; with the owner's icon-only padlocks the label
+     is gone, and what is left to pin is that the pair never collapses back
+     into the phone bug's single glyph: an OPEN padlock while editable, a
+     CLOSED one while locked, distinguishable at a glance. Matched on the
+     shared `LockKeyhole` stem with the OPEN suffix as the discriminator, so
+     the pair can be restyled without the assertion going stale, but cannot
+     collapse to one glyph. (`LockKeyhole(?!Open)` is what refuses the
+     collapse — a bare stem on both faces fails.) */
   check(
-    "the locked face offers the edit action rather than reporting the state",
-    /<Pencil\b/.test(control) && /locked \? "Edit"/.test(control),
-    'the locked face is a padlock labelled "Locked" again — it names what the ' +
-      "reader can already see and leaves them to guess that pressing is allowed",
+    "the two faces are distinct padlocks — closed when locked, open when editable",
+    /locked \? \(?\s*<LockKeyhole(?!Open)\b/.test(control) &&
+      /:\s*\(?\s*<LockKeyholeOpen\b/.test(control),
+    "the two faces are no longer a closed padlock (locked) and an open one " +
+      "(editable) — one glyph for both states is the phone bug again, with " +
+      "no viewport to blame",
   );
-  /* NEVER ICON-ONLY. `hidden sm:inline` was on the only text this control had,
-     so on a phone the whole affordance was one padlock glyph — on the notation
-     whose canvas had just learned five new gestures. Matched as a `className`
-     attribute, not as bare text: the module's header quotes the class it
-     replaced, and a grep for the words alone fails on the explanation. */
+  /* A POINTER PRESS HANDS FOCUS BACK TO THE CANVAS. This shipped as the fix
+     for hold-Space-to-pan toggling the lock on every key repeat; that pan is
+     gone from the viewer (the Select/Pan toggle replaced it), and the guard
+     STAYS because the hazard was never the pan's — it is the browser's. A
+     focused button activates on Space and Enter, and after a click the
+     reader's focus sits on the lock without them having chosen it, so one
+     reflex keypress silently flips the lock they only meant to press once.
+     A keyboard activation must NOT blur, or a keyboard user loses their
+     place in the tab order to fix a bug they never had. Pinning
+     `event.detail` specifically, because that is the only part that
+     distinguishes the two — an unconditional blur would pass a laxer test
+     and silently break keyboard use. MATCHED AS A STATEMENT, not as the bare
+     phrase: the first draft of this assertion tested for `event.detail > 0`
+     anywhere in the file and passed against the PROSE above the code, so
+     replacing the guarded blur with an unconditional one did not fail it.
+     The same trap has now caught two authors in this file — a regex over a
+     source file must match syntax the compiler sees, never words. */
   check(
-    "the label survives a narrow viewport",
-    !/className="[^"]*\bhidden\b/.test(control),
-    "the lock's label is hidden below the sm breakpoint — a bare icon is the " +
-      "control nobody thinks to look for",
+    "a pointer press hands focus back, so a stray keypress cannot re-toggle the lock",
+    /if \(event\.detail > 0\)\s*event\.currentTarget\.blur\(\);/.test(control),
+    "clicking the lock leaves it focused, and a focused button activates on " +
+      "Space and Enter — the next reflex keypress would silently flip the " +
+      "lock, so a pointer activation has to stop being focused",
   );
-  /* MEASURED, not asserted by eye: WCAG 2.5.3 wants the visible words to OPEN
-     the accessible name, so a voice-control user saying "click Edit" reaches
-     the control they can see. Comparing the two strings catches the drift that
-     a pair of separate regexes would not — either one being rewritten alone. */
-  const namedLocked = /const name = locked\s*\?\s*`([^`]*)`/.exec(control)?.[1];
-  const namedUnlocked = /const name = locked[\s\S]*?:\s*"([^"]*)"/.exec(
-    control,
-  )?.[1];
-  const faceLabels = /\{locked \? "([^"]+)" : "([^"]+)"\}/.exec(control);
+  /* THE NAME IS THE ACTION. The old assertion pinned a visible label; the
+     owner removed the words, so the accessible name is now the ONLY channel
+     a screen-reader or voice-control user gets — it must say what PRESSING
+     DOES (the unlock action completed by each canvas's own hint, and the
+     lock action), never the state, or the control regresses to the
+     "Locked"-label bug with the label hidden from everyone. */
   check(
-    "each face's visible label opens its accessible name",
-    namedLocked !== undefined &&
-      namedUnlocked !== undefined &&
-      faceLabels !== null &&
-      namedLocked.startsWith(faceLabels[1]) &&
-      namedUnlocked.startsWith(faceLabels[2]),
-    `visible ${JSON.stringify(faceLabels?.slice(1))} against names ` +
-      `${JSON.stringify([namedLocked, namedUnlocked])} — a control whose ` +
-      "spoken name does not start with its printed one cannot be reached by " +
-      "the word on it",
+    "the accessible name is a full action sentence, not a state word",
+    /Unlock the canvas to \$\{copy\.unlockHint\}/.test(control) &&
+      /"Lock the canvas — make the diagram read-only to present it"/.test(
+        control,
+      ),
+    "the name no longer says what pressing does — an icon-only control whose " +
+      "name reports state leaves the reader guessing that pressing is allowed",
+  );
+  /* ONE STRING FOR BOTH CHANNELS. This replaced the WCAG 2.5.3 label-in-name
+     comparison: with no visible words 2.5.3 no longer applies, and the drift
+     to catch moved — `aria-label` (screen reader, voice control) and `title`
+     (the only thing a hover shows) must be the SAME sentence, one `name`
+     feeding both, so a rewrite of either alone cannot make the tooltip
+     contradict the announcement. */
+  check(
+    "one name feeds both aria-label and title",
+    /aria-label=\{name\}/.test(control) && /title=\{name\}/.test(control),
+    "aria-label and title stopped sharing one string — the hover tooltip and " +
+      "the spoken name can now disagree about what pressing does",
   );
 
   /* READ ON THE SERVER, for the reason the source fold already established:
@@ -867,10 +1022,11 @@ console.log("\nThe capability grid answers every notation for every ability");
   const abilities = Object.keys(CANVAS_EDIT_OFFERS);
   const seededKinds = Object.keys(VIEW_SEED_TEXT).sort();
   check(
-    "the grid names both abilities and nothing else",
-    abilities.length === 2 &&
+    "the grid names the three abilities and nothing else",
+    abilities.length === 3 &&
       abilities.includes("move") &&
-      abilities.includes("revise"),
+      abilities.includes("revise") &&
+      abilities.includes("create"),
     `abilities: ${abilities.join(", ")}`,
   );
 
@@ -1093,8 +1249,9 @@ console.log("\nEvery notation that cannot carry geometry says so");
   }
 
   /* THE SAME TABLE, THE OTHER ABILITY. There are two things a canvas can write
-     back (`CanvasEditAbility`) and the notations answer them differently: C4
-     allows `move` and refuses `revise`, a sequence document does the opposite.
+     back (`CanvasEditAbility`) and the notations answer them differently: a
+     sequence document refuses `move` while offering `revise`, C4 answers both,
+     and the four text-laid-out notations refuse both.
      Looping the seed table a second time is what makes that a COVERAGE claim
      rather than two hand-checked cases — the failure a hardcoded pair cannot
      notice is a seventh notation whose dock grows an editor that writes into a
@@ -1111,16 +1268,38 @@ console.log("\nEvery notation that cannot carry geometry says so");
       );
       continue;
     }
-    check(
-      `a ${kind} document refuses "revise", with a reason a reader can act on`,
-      verdict.editable === false &&
-        typeof verdict.reason === "string" &&
-        verdict.reason.length > 20,
-      `verdict: ${JSON.stringify(verdict)}`,
-    );
+    if (kind === "c4") {
+      check(
+        "a C4 document can have a node's wording revised",
+        verdict.editable === true,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+    } else {
+      check(
+        `a ${kind} document refuses "revise", with a reason a reader can act on`,
+        verdict.editable === false &&
+          typeof verdict.reason === "string" &&
+          verdict.reason.length > 20,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+      /* THE C4 REVISER DECLINES EVERY GRAMMAR THAT IS NOT ITS OWN, the same
+         duty `movedNodeEdit` answers in the loop above: the refusal must be
+         real at the gesture, not advisory at the table, or a caller that
+         forgot to ask would splice by line numbers that mean something else.
+         (`sequence` is covered separately below the loop — its cell OFFERS
+         the ability, so this gesture's refusal there is the kind guard, not
+         the table.) */
+      check(
+        `revisedNodeEdit declines a ${kind} document`,
+        revisedNodeEdit(parsed.value, "", "any", "any", { name: "x" }) === null,
+        "expected null",
+      );
+    }
     /* And the refusal is REAL, not advisory: the gesture itself declines, or a
        caller that forgot to ask would splice into a grammar whose line numbers
-       mean something else.
+       mean something else. A C4 document runs through this list too — its cell
+       offers `revise`, but only to ITS OWN gesture, and a sequence gesture
+       pointed at a C4 pane would splice sequence lines into a C4 file.
 
        EVERY GESTURE IS LISTED, not just the first one written. Each of these is
        an independent entry point into the same splice, and the one that forgets
@@ -1165,6 +1344,20 @@ console.log("\nEvery notation that cannot carry geometry says so");
         "expected null",
       );
     }
+  }
+
+  /* THE ONE PAIR THE LOOP ABOVE CANNOT REACH: a sequence document offers
+     `revise` — to its OWN nine gestures — so the C4 reviser pointed at it is
+     refused by the kind guard rather than by the table, and skipping this
+     would leave exactly one grammar the gesture never proved it declines. */
+  {
+    const parsed = parseViewSource(VIEW_SEED_TEXT.sequence);
+    check(
+      "revisedNodeEdit declines a sequence document",
+      parsed.status === "ok" &&
+        revisedNodeEdit(parsed.value, "", "any", "any", { name: "x" }) === null,
+      "expected null",
+    );
   }
 
   /* DEFAULTING TO `"move"` IS LOAD-BEARING. Every existing caller — and the
@@ -1261,6 +1454,128 @@ console.log("\nEvery notation that cannot carry geometry says so");
         : asMermaid.error,
     )}`,
   );
+
+  /* MERMAID C4 ALSO REFUSES `revise`, and this one is MEASURED against the
+     emitter rather than asserted from taste, the same standard the sequence
+     Mermaid refusal above meets: `serializeMermaidC4` gives `technology` an
+     argument slot only on the Container/Component forms, so on a person or a
+     system — which is what a context diagram is made of — the field the panel
+     edits has nowhere to land, and an edit written back through that pane
+     would show once and vanish on the round trip. Driven through the app's
+     own converter both ways so it cannot drift from what the toggle does. */
+  {
+    const verdict = canvasEditability(asMermaid.value, "revise");
+    check(
+      "a C4 document sitting in the pane as Mermaid refuses `revise`",
+      asMermaid.status === "ok" && verdict.editable === false,
+      `verdict: ${JSON.stringify(verdict)}`,
+    );
+    check(
+      "the Mermaid refusal names the field that would be lost, not just the format",
+      /technology/.test(verdict.reason ?? ""),
+      "a reader cannot tell what switching the pane would buy them",
+    );
+    /* The EVIDENCE, measured: a system node's technology genuinely does not
+       survive alab → Mermaid → parse. If the emitter ever learns a slot for
+       it, this fails and the refusal should be revisited rather than left
+       standing — the same contract the sequence caveat assertion states. */
+    const techDoc = c4Document(
+      [
+        `archlab 1.0`,
+        `title "Tech probe"`,
+        ``,
+        `@context ctx "Context"`,
+        `  web:system "Web App" [Next.js]`,
+        ``,
+      ].join("\n"),
+    );
+    const probe = techDoc.synced.file.diagrams[0].nodes[0];
+    check(
+      "the probe genuinely carries a technology before the round trip",
+      probe.technology === "Next.js",
+      `technology: ${JSON.stringify(probe.technology)}`,
+    );
+    const roundTripped = parseViewSource(
+      (
+        await load("src/features/playground/input/parse.ts")
+      ).convertedSourceText(techDoc, "mermaid"),
+    );
+    const returned =
+      roundTripped.status === "ok" && roundTripped.value.kind === "c4"
+        ? roundTripped.value.synced.file.diagrams[0].nodes.find(
+            (node) => node.id === "web",
+          )
+        : undefined;
+    check(
+      "a system's technology is measured to be lost through the Mermaid pane",
+      returned !== undefined && returned.technology === undefined,
+      `technology after the round trip: ${JSON.stringify(returned?.technology)}`,
+    );
+    /* And the user-facing caveat still documents the loss the refusal cites. */
+    const { MERMAID_C4_EXPORT_CAVEAT } = await load(
+      "src/features/playground/input/parse.ts",
+    );
+    check(
+      "the C4 export caveat still documents dropping technology on people/systems",
+      /technology on people\/systems/.test(MERMAID_C4_EXPORT_CAVEAT),
+      "the caveat no longer supports the refusal that cites it",
+    );
+
+    /* THE SAME STANDARD FOR THE PANEL'S TWO NEWER FIELDS. The refusal now
+       also claims an icon or colour edit would be lost through a Mermaid
+       pane, so that loss is MEASURED the way the technology loss is: a node
+       carrying both goes through the app's own converter and comes back
+       carrying neither. If `serializeMermaidC4` ever learns a sprite or an
+       UpdateElementStyle, this fails and the refusal should be revisited. */
+    const paintedDoc = c4Document(
+      [
+        `archlab 1.0`,
+        `title "Paint probe"`,
+        `tagcolor hot "#bc6761"`,
+        ``,
+        `@context ctx "Context"`,
+        `  web:system "Web App" @nextjs! #hot`,
+        ``,
+      ].join("\n"),
+    );
+    const paintedBack = parseViewSource(
+      (
+        await load("src/features/playground/input/parse.ts")
+      ).convertedSourceText(paintedDoc, "mermaid"),
+    );
+    const paintedNode =
+      paintedBack.status === "ok" && paintedBack.value.kind === "c4"
+        ? paintedBack.value.synced.file.diagrams[0].nodes.find(
+            (node) => node.id === "web",
+          )
+        : undefined;
+    check(
+      "an icon and a tag colour are measured to be lost through the Mermaid pane",
+      paintedNode !== undefined &&
+        paintedNode.icon === undefined &&
+        (paintedNode.tags ?? []).includes("hot") === false &&
+        paintedBack.value.synced.file.metadata.tagColors === undefined,
+      `after the round trip: ${JSON.stringify({
+        icon: paintedNode?.icon,
+        tags: paintedNode?.tags,
+        tagColors:
+          paintedBack.status === "ok"
+            ? paintedBack.value.synced.file.metadata.tagColors
+            : "unparsed",
+      })}`,
+    );
+    check(
+      "the Mermaid refusal names the icon and the colour beside the technology",
+      /icon/.test(verdict.reason ?? "") && /colour/.test(verdict.reason ?? ""),
+      "the panel edits two fields the refusal never mentions",
+    );
+    check(
+      "the C4 export caveat documents dropping icons and tag colours too",
+      /icons/.test(MERMAID_C4_EXPORT_CAVEAT) &&
+        /tag colours/.test(MERMAID_C4_EXPORT_CAVEAT),
+      "the caveat no longer supports the refusal that cites it",
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1797,7 +2112,7 @@ console.log("\nA drag follows the cursor, and its release costs nothing");
   check(
     "and the canvas feeds the frames and the nodes the same diagram",
     /diagram: draggedDiagram/.test(canvas) &&
-      /<FrameLayer diagram=\{draggedDiagram\}/.test(canvas),
+      /<FrameLayer\b[^>]*\sdiagram=\{draggedDiagram\}/.test(canvas),
     "the projection and the frame layer are reading different diagrams — two " +
       "halves of one picture, each self-consistent, that disagree mid-press",
   );
@@ -2081,6 +2396,1282 @@ console.log("\nAn edit keeps every byte it is not about");
 }
 
 /* ----------------------------------------------------------------------- */
+/* 14. A revise is a BLOCK patch, held to section 13's standard             */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA revise rewrites one node's block and nothing else");
+
+{
+  /* NON-CANONICAL FOR THE SAME REASON section 13's fixture is, plus the two
+     shapes only a REVISE can get wrong: a `^ref` in another diagram whose
+     name the author OMITTED (it derives from the edited node's), and a child
+     diagram head whose title the author omitted for the same reason. Both are
+     the format's "same as the source" — a rename must let them FOLLOW, and a
+     delete must not have taught this gesture to rewrite them. */
+  const authored = [
+    `archlab 1.0`,
+    `title "Revise probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // Who uses this thing.`,
+    `  cust:person "Customer" [human]`,
+    `    desc "The paying kind."`,
+    `  web:system "Web App" >backend`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go]`,
+    `  mirror:external ^ctx/web`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+
+  /* A gesture that THROWS on a bad address takes the page down with it, so
+     every refusal below is measured as "returns null without throwing". */
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the patch, and its blast radius ------------------------------------ */
+
+  const revision = {
+    name: "Shopper",
+    technology: "human",
+    description: "The paying kind, renamed.",
+  };
+  const revised = revisedNodeEdit(doc, authored, "ctx", "cust", revision);
+  check(
+    "a revise on authored text takes the PATCH path, by name",
+    revised !== null && revised.path === "patch",
+    `path: ${revised === null ? "refused" : revised.path}`,
+  );
+  /* ONLY THE NODE'S OWN BLOCK. The fixture's `cust` block is two lines
+     (declaration + desc), and this revision keeps it two — so exactly those
+     two lines may differ, and every comment, blank line and other node is
+     byte-identical. This is the canonical-diff minimality claim for a block
+     gesture: section 13 asserts "one line" for a move, this asserts "the
+     block and nothing else". */
+  const changed = changedLines(authored, revised?.text ?? "");
+  check(
+    "a revise changes exactly the node's own two lines",
+    changed.length === 2 &&
+      changed.every(
+        (line, i, all) => i === 0 || line.index === all[0].index + 1,
+      ),
+    `${changed.length} lines changed: ${changed.map((c) => `#${c.index + 1}`).join(", ")}`,
+  );
+  check(
+    "the comments and blank lines all survive a revise",
+    (revised?.text ?? "").split("\n").filter((l) => l.includes("//")).length ===
+      authored.split("\n").filter((l) => l.includes("//")).length &&
+      authored.split("\n").filter((l) => l.includes("//")).length === 2,
+    "an author comment was eaten — the whole reason edits are patches",
+  );
+  /* THE PATCHED BLOCK IS CANONICAL, proved against a FULL serialise of the
+     revised document rather than against lines assembled here — the same
+     derivation section 13 uses for the moved line, for the same reason: a
+     patch that wrote almost-canonical text would trade a silent comment loss
+     for a silent divergence. */
+  const canonicalAfter = sourceTextFor(revised?.doc ?? doc);
+  const blockAfter = canonicalAfter
+    .split("\n")
+    .filter(
+      (line) =>
+        line.trimStart().startsWith("cust:person") ||
+        line.includes(`desc "The paying kind, renamed."`),
+    );
+  check(
+    "the patched block is byte-identical to what the serializer would emit",
+    changed.length === 2 &&
+      JSON.stringify(changed.map((c) => c.after)) ===
+        JSON.stringify(blockAfter),
+    `patched:    ${JSON.stringify(changed.map((c) => c.after))}\n      ` +
+      `serialiser: ${JSON.stringify(blockAfter)}`,
+  );
+
+  /* --- what a revise refuses, and how -------------------------------------- */
+
+  check(
+    "a no-op revision is refused, so an untouched Apply costs no undo entry",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        technology: "human",
+        description: "The paying kind.",
+      }),
+    ),
+    "identical fields still rewrote the pane",
+  );
+  check(
+    "an unknown node id refuses rather than throws",
+    refuses(() => revisedNodeEdit(doc, authored, "ctx", "ghost", revision)),
+    "a stale selection would take the page down instead of doing nothing",
+  );
+  check(
+    "an unknown diagram id refuses rather than throws",
+    refuses(() => revisedNodeEdit(doc, authored, "ghost", "cust", revision)),
+    "a stale selection would take the page down instead of doing nothing",
+  );
+  check(
+    "an empty name is refused — the model requires one",
+    refuses(() => revisedNodeEdit(doc, authored, "ctx", "cust", { name: "" })),
+    "an empty name would reach the serializer, which throws on it",
+  );
+  /* A boundary placeholder's name is DERIVED from its target, and the panel
+     shows it read-only; the module must reach the same verdict or the two
+     halves disagree about one node. */
+  check(
+    "a boundary placeholder (^ref) is refused",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "backend", "mirror", { name: "Forked" }),
+    ),
+    "revising a mirror would fork it from the node it mirrors",
+  );
+
+  /* --- clearing a field removes it ----------------------------------------- */
+
+  /* `.alab` can spell `[""]` and `desc ""`, and both render as a blank the
+     reader cannot tell from a missing field — so a cleared field must vanish
+     from the text, not blank in place. The same contract the sequence dock's
+     forms state, measured here on the C4 side. */
+  const cleared = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+  });
+  check(
+    "clearing technology and description removes the fields, never blanks them",
+    cleared !== null &&
+      cleared.path === "patch" &&
+      !cleared.text.includes(`[""]`) &&
+      !cleared.text.includes(`desc ""`) &&
+      !cleared.text.includes("[human]") &&
+      !cleared.text.includes("The paying kind."),
+    `text still carries a cleared field: ${JSON.stringify(
+      (cleared?.text ?? "")
+        .split("\n")
+        .find((l) => l.includes("cust:person") || l.includes("desc")),
+    )}`,
+  );
+  /* And ADDING a description grows the block by one continuation line —
+     the case a one-line splice cannot serve and the reason a revise deals in
+     blocks. `web` has no desc in the fixture. */
+  const grown = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Web App",
+    description: "Serves the storefront.",
+  });
+  check(
+    "adding a description grows the node's block by its desc line",
+    grown !== null &&
+      grown.path === "patch" &&
+      grown.text.includes(`    desc "Serves the storefront."`),
+    "the new continuation line is missing or mis-indented",
+  );
+
+  /* --- what a rename carries, measured both ways --------------------------- */
+
+  const renamed = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Storefront",
+  });
+  const renamedFile =
+    renamed !== null && renamed.doc.kind === "c4"
+      ? renamed.doc.synced.file
+      : null;
+  check(
+    "an OMITTED ^ref name follows the rename — omission means 'same as the source'",
+    renamedFile !== null &&
+      renamedFile.diagrams
+        .find((d) => d.id === "backend")
+        .nodes.find((n) => n.id === "mirror").name === "Storefront",
+    "the mirror kept the old name — the patch rewrote a derivation the author never wrote",
+  );
+  check(
+    "an OMITTED child-diagram title follows the rename, for the same reason",
+    renamedFile !== null &&
+      renamedFile.diagrams.find((d) => d.id === "backend").title ===
+        "Storefront",
+    "the child diagram kept a title its own text never spells",
+  );
+  /* The other direction: the SAME name and title written OUT stay put. The
+     author spelled them, so they are the author's — following the rename here
+     would rewrite bytes the gesture was not about. */
+  const explicit = authored
+    .replace(`web:system "Web App" >backend`, `web:system "Web App" >backend`)
+    .replace(
+      `@container backend owner=web`,
+      `@container backend "Web App" owner=web`,
+    )
+    .replace(
+      `  mirror:external ^ctx/web`,
+      `  mirror:external "Web App" ^ctx/web`,
+    );
+  const explicitDoc = c4Document(explicit);
+  const renamedExplicit = revisedNodeEdit(explicitDoc, explicit, "ctx", "web", {
+    name: "Storefront",
+  });
+  const explicitFile =
+    renamedExplicit !== null && renamedExplicit.doc.kind === "c4"
+      ? renamedExplicit.doc.synced.file
+      : null;
+  check(
+    "a ^ref name the author wrote out stays exactly as written",
+    renamedExplicit !== null &&
+      renamedExplicit.path === "patch" &&
+      renamedExplicit.text.includes(`mirror:external "Web App" ^ctx/web`) &&
+      explicitFile !== null &&
+      explicitFile.diagrams
+        .find((d) => d.id === "backend")
+        .nodes.find((n) => n.id === "mirror").name === "Web App",
+    "an explicit local name was renamed along with its target",
+  );
+  check(
+    "a child-diagram title the author wrote out stays exactly as written",
+    renamedExplicit !== null &&
+      renamedExplicit.text.includes(`@container backend "Web App" owner=web`) &&
+      explicitFile !== null &&
+      explicitFile.diagrams.find((d) => d.id === "backend").title === "Web App",
+    "an explicit title was renamed along with the owner node",
+  );
+
+  /* --- round trip, and the named fallback ---------------------------------- */
+
+  const there = revisedNodeEdit(doc, authored, "ctx", "cust", revision);
+  const back =
+    there === null
+      ? null
+      : revisedNodeEdit(there.doc, there.text, "ctx", "cust", {
+          name: "Customer",
+          technology: "human",
+          description: "The paying kind.",
+        });
+  check(
+    "a revise and a revise back restore the AUTHORED bytes, not canonical ones",
+    back !== null && back.text === authored,
+    back === null
+      ? "the return revise was refused"
+      : firstDiff(back.text, authored),
+  );
+  const inJson = revisedNodeEdit(
+    { ...doc, format: "json" },
+    doc.synced.jsonText,
+    "ctx",
+    "cust",
+    revision,
+  );
+  check(
+    "a C4 document sitting in the pane as JSON re-emits, and says so",
+    inJson !== null &&
+      inJson.path === "reemit" &&
+      inJson.text === inJson.doc.synced.jsonText,
+    `path: ${inJson === null ? "refused" : inJson.path}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 14a. The same revise carries the ICON and the COLOUR, and colour is two  */
+/*      writes with a precedence trap between them                          */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA revise carries the icon and the colour, both as patches");
+
+{
+  const { colorTagsOf, resolveTagColor, NODE_TAG_PALETTE, EXTERNAL_TAG } =
+    await load("src/features/editor/lib/node-colors.ts");
+
+  /* Non-canonical for section 13's reason, and shaped for colour's own traps:
+     `legacy` is a DOCUMENTED colour (a `tagcolor` line), `vip` is a plain tag
+     with no colour — a colour change must take the first off the node and
+     leave the second alone, and nothing but measuring both tells them apart. */
+  const authored = [
+    `archlab 1.0`,
+    `title "Colour probe"`,
+    `tagcolor legacy "#8b0000"`,
+    ``,
+    `// The header ends above this comment.`,
+    `@context ctx "System context"`,
+    `  api:system "API"`,
+    `  cust:person "Customer" #legacy #vip`,
+    `  web:system "Web App" [Next.js]`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the colour fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const docColors = doc.synced.file.metadata.tagColors;
+
+  /* --- the icon: one more token on the same block patch --------------------- */
+
+  const picked = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Web App",
+    technology: "Next.js",
+    icon: "nextjs",
+    iconSource: "explicit",
+  });
+  const pickedChanges = changedLines(authored, picked?.text ?? "");
+  check(
+    "picking an icon writes @slug! onto the declaration line and nothing else moves",
+    picked !== null &&
+      picked.path === "patch" &&
+      pickedChanges.length === 1 &&
+      pickedChanges[0].after.includes("@nextjs!"),
+    `changed: ${JSON.stringify(pickedChanges.map((c) => c.after))}`,
+  );
+  const pickedNode =
+    picked === null
+      ? undefined
+      : picked.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "web");
+  check(
+    "the picked icon survives the round trip as explicit — never auto-overridden later",
+    pickedNode !== undefined &&
+      pickedNode.icon === "nextjs" &&
+      pickedNode.iconSource === "explicit",
+    `icon after re-parse: ${JSON.stringify([pickedNode?.icon, pickedNode?.iconSource])}`,
+  );
+  const clearedIcon =
+    picked === null
+      ? null
+      : revisedNodeEdit(picked.doc, picked.text, "ctx", "web", {
+          name: "Web App",
+          technology: "Next.js",
+        });
+  check(
+    "clearing the icon removes the @ token — absence IS the type default, and the bytes come back",
+    clearedIcon !== null && clearedIcon.text === authored,
+    clearedIcon === null
+      ? "the clearing revise was refused"
+      : firstDiff(clearedIcon.text, authored),
+  );
+
+  /* --- the trap, measured before it is handled ------------------------------ */
+
+  /* The premise first: with tags stored sorted, a naively APPENDED `rose`
+     would lose the precedence race to `legacy` — the FIRST coloured tag in
+     stored order wins, and "rose" sorts after "legacy". If this stops being
+     true the removal below is solving a problem that no longer exists, and
+     should be revisited rather than left standing. */
+  const rose = { kind: "tag", tag: "rose", color: "#ca549d" };
+  check(
+    "the trap is real: on a naive append the OLD colour still wins the race",
+    resolveTagColor(
+      { tags: ["legacy", "rose", "vip"] },
+      { ...docColors, rose: rose.color },
+    ) === "#8b0000",
+    "appending now wins outright — the removal below may be over-handling",
+  );
+
+  /* --- a colour on an untagged node: the mint is exactly two writes --------- */
+
+  const amber = { kind: "tag", tag: "amber", color: "#a47c13" };
+  const minted = revisedNodeEdit(doc, authored, "ctx", "api", {
+    name: "API",
+    color: amber,
+  });
+  const mintedLines = (minted?.text ?? "").split("\n");
+  const mintedAt = mintedLines.indexOf(`tagcolor amber "#a47c13"`);
+  check(
+    "minting a colour is a patch: the node gains #amber and the header gains ONE canonical tagcolor line",
+    minted !== null &&
+      minted.path === "patch" &&
+      mintedAt !== -1 &&
+      mintedLines.some(
+        (line) => line.includes("api:system") && line.includes("#amber"),
+      ),
+    `path: ${minted === null ? "refused" : minted.path}; header line at ${mintedAt}`,
+  );
+  check(
+    "the minted line lands inside the header, directly after the existing tagcolor block",
+    mintedAt === 3 &&
+      mintedAt < mintedLines.findIndex((l) => l.startsWith("@")),
+    `minted at line ${mintedAt + 1}; the header ends before the first "@"`,
+  );
+  check(
+    "every byte outside the two colour writes survives the mint",
+    minted !== null &&
+      changedLines(
+        authored,
+        mintedLines.filter((_, i) => i !== mintedAt).join("\n"),
+      ).length === 1,
+    "a colour change rewrote lines it was not about",
+  );
+  const mintedApi =
+    minted === null
+      ? undefined
+      : minted.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "api");
+  check(
+    "the minted colour actually paints: the re-parsed node resolves to the picked hex",
+    mintedApi !== undefined &&
+      resolveTagColor(mintedApi, minted.doc.synced.file.metadata.tagColors) ===
+        "#a47c13",
+    `resolved: ${JSON.stringify(
+      mintedApi === undefined
+        ? "no node"
+        : resolveTagColor(mintedApi, minted.doc.synced.file.metadata.tagColors),
+    )}`,
+  );
+
+  /* --- a documented colour is joined, never repainted ------------------------ */
+
+  const joined = revisedNodeEdit(doc, authored, "ctx", "api", {
+    name: "API",
+    color: { kind: "tag", tag: "legacy", color: "#ffffff" },
+  });
+  check(
+    "joining a documented colour adds no header line and never rewrites its hex",
+    joined !== null &&
+      joined.path === "patch" &&
+      joined.text.includes(`tagcolor legacy "#8b0000"`) &&
+      !joined.text.includes("#ffffff") &&
+      changedLines(authored, joined.text).length === 1,
+    "a single-element control repainted a tag every other element wears",
+  );
+
+  /* --- the trap, handled: a new colour takes the losing race off the node --- */
+
+  const swapped = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    color: rose,
+  });
+  const swappedCust =
+    swapped === null
+      ? undefined
+      : swapped.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "cust");
+  check(
+    "a new colour REMOVES the coloured tag it would otherwise lose to — never a silent no-op",
+    swappedCust !== undefined &&
+      !(swappedCust.tags ?? []).includes("legacy") &&
+      resolveTagColor(
+        swappedCust,
+        swapped.doc.synced.file.metadata.tagColors,
+      ) === rose.color,
+    `tags after: ${JSON.stringify(swappedCust?.tags)}`,
+  );
+  check(
+    "the swap keeps the plain tag and keeps the header line other elements may wear",
+    swapped !== null &&
+      swappedCust !== undefined &&
+      (swappedCust.tags ?? []).includes("vip") &&
+      swapped.text.includes(`tagcolor legacy "#8b0000"`),
+    "a colour change ate a tag that was not a colour, or a header line others use",
+  );
+
+  /* --- Automatic: back to the role colour, tags stay honest ------------------ */
+
+  const auto = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    color: { kind: "role" },
+  });
+  const autoCust =
+    auto === null
+      ? undefined
+      : auto.doc.synced.file.diagrams[0].nodes.find((n) => n.id === "cust");
+  check(
+    "Automatic takes the coloured tag off, keeps the plain one, and leaves the header alone",
+    autoCust !== undefined &&
+      colorTagsOf(autoCust, auto.doc.synced.file.metadata.tagColors).length ===
+        0 &&
+      (autoCust.tags ?? []).includes("vip") &&
+      auto.text.includes(`tagcolor legacy "#8b0000"`),
+    `tags after: ${JSON.stringify(autoCust?.tags)}`,
+  );
+
+  /* --- what colour refuses, and what it leaves alone ------------------------- */
+
+  check(
+    "re-choosing the colour already in force is a no-op — an untouched Apply costs nothing",
+    revisedNodeEdit(doc, authored, "ctx", "cust", {
+      name: "Customer",
+      color: { kind: "tag", tag: "legacy", color: "#8b0000" },
+    }) === null &&
+      revisedNodeEdit(doc, authored, "ctx", "api", {
+        name: "API",
+        color: { kind: "role" },
+      }) === null,
+    "a form submitted unchanged still rewrote the pane",
+  );
+  const renamedOnly = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Shopper",
+  });
+  check(
+    "a revision that makes no colour claim leaves the tags exactly as written",
+    renamedOnly !== null &&
+      renamedOnly.text
+        .split("\n")
+        .some((l) => l.includes("#legacy") && l.includes("#vip")),
+    "an edit that never looked at colour rewrote the tag list",
+  );
+  /* A `! meta` escape can hold the whole tagColors map, and a minted
+     `tagcolor` line beside it is the one thing the parser rejects outright
+     (the field spelled both ways) — so the mint must refuse rather than
+     hand back an Apply that silently applies nothing. */
+  /* The AUTHORED bang text is what sits in the pane — canonical form would
+     have normalised the escape into a `tagcolor` line and dissolved the very
+     case this guards. */
+  const bangText = [
+    `archlab 1.0`,
+    `title "Bang probe"`,
+    `! meta.tagColors : {"legacy":"#8b0000"}`,
+    ``,
+    `@context ctx "Context"`,
+    `  api:system "API"`,
+    ``,
+  ].join("\n");
+  const bangHeld = c4Document(bangText);
+  check(
+    "a mint against a bang-held tagColors map refuses instead of unparsing the file",
+    revisedNodeEdit(bangHeld, bangText, "ctx", "api", {
+      name: "API",
+      color: amber,
+    }) === null,
+    "the minted line would spell the field twice and fail the re-parse",
+  );
+  /* The guard's BREADTH, pinned from the other side: joining a colour the
+     bang already defines writes no header line, so nothing about the escape
+     is disturbed and the guard must not refuse it — a guard that keys on
+     "the map is bang-held" instead of "a line must be minted" would turn
+     every colour choice on such a file into a silent nothing. (The refusal
+     above is also enforced a second time by the adopt() re-parse; this
+     direction is the one only the guard's own condition decides.) */
+  const bangJoin = revisedNodeEdit(bangHeld, bangText, "ctx", "api", {
+    name: "API",
+    color: { kind: "tag", tag: "legacy", color: "#8b0000" },
+  });
+  check(
+    "joining a bang-held colour still patches — the mint guard refuses only the mint",
+    bangJoin !== null &&
+      bangJoin.path === "patch" &&
+      bangJoin.text.includes(`! meta.tagColors : {"legacy":"#8b0000"}`) &&
+      bangJoin.text.split("\n").some((l) => l.includes("#legacy")),
+    `verdict: ${bangJoin === null ? "refused" : bangJoin.path}`,
+  );
+
+  /* --- the palette: every swatch measured on every theme --------------------- */
+
+  /* The same standard the role palette meets in `check:themes`, applied to
+     the five colours this feature OFFERS: the raw hex paints the node's
+     border, and the on-screen fill is rebuilt as
+     oklch(from <hex> tag-fill-l min(c, tag-fill-c) h) — so both are computed
+     here exactly as the browser computes them, per theme, and a swatch that
+     would vanish on any theme cannot ship. A free colour picker is refused in
+     the palette's header for exactly this reason: an arbitrary hex is the one
+     thing this loop cannot vouch for. */
+  const { parseHex, oklchToLinear, contrast, parseOklch } = await import(
+    pathToFileURL(path.join(ROOT, "scripts/lib/oklch.mjs")).href
+  );
+  const { tokensOf, resolveToken } = await import(
+    pathToFileURL(path.join(ROOT, "scripts/lib/theme-css.mjs")).href
+  );
+  const css = read("src/app/globals.css");
+  const themes = [
+    ...(
+      /export const THEMES = \[([^\]]*)\]/.exec(
+        read("src/lib/constants.ts"),
+      )?.[1] ?? ""
+    ).matchAll(/"([a-z-]+)"/g),
+  ].map((m) => m[1]);
+  check(
+    "the theme list was read from constants.ts, not hand-listed here",
+    themes.length >= 7 && themes.includes("light") && themes.includes("dark"),
+    `parsed ${themes.length} themes: ${themes.join(", ")}`,
+  );
+  const baseline = tokensOf(css, "light");
+  check(
+    "every palette entry is a bare-safe lowercase tag, distinct from the external residue tag",
+    NODE_TAG_PALETTE.every(
+      ({ tag }) => /^[a-z]+$/.test(tag) && tag !== EXTERNAL_TAG,
+    ),
+    "a tag needing quotes, or one that already MEANS something, in the offer list",
+  );
+  for (const theme of themes) {
+    const tokens = tokensOf(css, theme) ?? baseline;
+    const fillL = Number.parseFloat(
+      resolveToken("--tag-fill-l", tokens, baseline),
+    );
+    const fillC = Number.parseFloat(
+      resolveToken("--tag-fill-c", tokens, baseline),
+    );
+    const nameInk = parseOklch(
+      resolveToken("--node-foreground", tokens, baseline),
+    );
+    const worst = NODE_TAG_PALETTE.map(({ tag, color }) => {
+      const hex = parseHex(color);
+      if (hex === null) return { tag, stroke: 0, name: 0 };
+      const [, C, h] = hex.oklch;
+      const fill = oklchToLinear(fillL, Math.min(C, fillC), h);
+      return {
+        tag,
+        stroke: contrast(hex.rgb, fill),
+        name: contrast(nameInk.rgb, fill),
+      };
+    });
+    check(
+      `${theme}: every palette stroke holds >=3:1 against its own constructed fill`,
+      worst.every((w) => w.stroke >= 3),
+      worst.map((w) => `${w.tag} ${w.stroke.toFixed(2)}:1`).join(", "),
+    );
+    check(
+      `${theme}: a node's title holds >=7:1 on every palette fill`,
+      worst.every((w) => w.name >= 7),
+      worst.map((w) => `${w.tag} ${w.name.toFixed(2)}:1`).join(", "),
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
+/* 14b. The revise gesture is REACHABLE, and the panel's keys stay its own  */
+/* ----------------------------------------------------------------------- */
+
+/* The same duty section 14 (sequence) discharges for the dock, derived the
+   same way: the gesture list comes from the viewer's own handler interface,
+   so a handler added to `CanvasEditHandlers` grows two assertions that fail
+   until something calls it and something supplies it. */
+console.log(
+  "\nEvery C4 canvas gesture is reachable, and the form keeps its keys",
+);
+{
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  const panel = read("src/features/viewer/components/viewer-node-detail.tsx");
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+
+  const contract = /export interface CanvasEditHandlers \{([\s\S]*?)\n\}/.exec(
+    canvas,
+  );
+  check(
+    "the viewer declares a handler contract this section can derive from",
+    contract !== null,
+    "CanvasEditHandlers not found — every assertion below would be vacuous",
+  );
+  const handlers = [
+    ...new Set(
+      [...(contract?.[1] ?? "").matchAll(/^\s{2}(on[A-Z]\w*)\s*[?:]/gm)].map(
+        (m) => m[1],
+      ),
+    ),
+  ];
+  check(
+    "the contract names at least the four gestures the canvas ships",
+    handlers.length >= 4,
+    `found ${handlers.length}: ${handlers.join(", ")}`,
+  );
+  for (const handler of handlers) {
+    check(
+      `the viewer reaches ${handler} from a control`,
+      new RegExp(`edit\\??\\.${handler}\\b`).test(canvas),
+      "the handler is declared but nothing in the viewer reaches it",
+    );
+    check(
+      `the playground wires ${handler} into the canvas bundle`,
+      new RegExp(`${handler}:\\s*handle`).test(playground),
+      "the viewer would render a control the host never answers",
+    );
+  }
+
+  /* THE HOST'S HANDLER LANDS ON THE UNDO RING and refuses the null quietly —
+     the same two facts section 14 pins for every destructive sequence
+     handler. */
+  const body = /const handleNodeRevise = useCallback\(([\s\S]*?)\n  \);/.exec(
+    playground,
+  );
+  check(
+    "handleNodeRevise routes through applyCanvasEdit, so it lands on the undo ring",
+    body !== null &&
+      body[1].includes("applyCanvasEdit(") &&
+      !body[1].includes("setText(") &&
+      body[1].includes("if (next === null) return;"),
+    "a canvas edit that cannot be undone, or a refusal that rewrites the pane",
+  );
+  check(
+    "handleNodeRevise tells the reader how to undo it",
+    body !== null && /Cmd or Ctrl \+ Z/.test(body[1]),
+    "a wording rewrite with no stated way back",
+  );
+
+  /* THE FORM'S KEYS ARE ITS OWN. The details panel renders INSIDE the canvas
+     container, so without the field exemption the edit-keys listener reads a
+     Backspace in the name field as "delete the selected node" — the reader
+     types one character over and the element vanishes. Positional, not just
+     present: the exemption has to sit between the focus guard and the delete
+     branch of the SAME listener, or it guards nothing. */
+  const guardAt = canvas.indexOf("if (!inCanvas) return;");
+  const exemptAt = canvas.indexOf('focused.tagName === "TEXTAREA"');
+  const deleteAt = canvas.indexOf("edit.onNodeDelete(");
+  check(
+    "form fields are exempt from the edit keys, before the delete branch",
+    guardAt !== -1 && guardAt < exemptAt && exemptAt < deleteAt,
+    "Backspace in the panel's name field would delete the node it describes",
+  );
+  /* And from the Escape ladder, the sequence rung's own rule: Escape typed
+     into a field must not deselect the element — deselection unmounts the
+     form with the reader's half-typed text in it. */
+  check(
+    "form fields are exempt from the Escape ladder",
+    /target\.tagName === "TEXTAREA"/.test(canvas),
+    "Escape in the edit form would unmount it, half-typed text and all",
+  );
+
+  /* THE PENCIL IS PRESENCE-GATED, both ways the sequence dock's is: a locked
+     or read-only canvas passes no `onRevise`, so no pencil renders (never a
+     disabled one), and a boundary placeholder is withheld for the reason the
+     module refuses it. */
+  check(
+    "the panel gates its editor on the handler being present and the node being real",
+    /const revisable = onRevise !== undefined && node\.externalRef === undefined;/.test(
+      panel,
+    ) && /revisable && !editing \? \(/.test(panel),
+    "a pencil on a read-only canvas, or on a mirror the module refuses to edit",
+  );
+  /* The form REMOUNTS per element and starts from the element's own values —
+     the sequence forms' rule; an effect syncing state would re-aim an open
+     form at whatever got selected next. */
+  check(
+    "the form is keyed by the node, so selecting another element cannot re-aim it",
+    /<NodeEditForm\s+key=\{node\.id\}/.test(panel),
+    "an open form would silently point at a node the reader was not editing",
+  );
+  /* Blank optional fields submit as ABSENT — the module-side assertion in
+     section 14 measures the text; this pins the form half of the same
+     contract. */
+  check(
+    "the form submits blank optional fields as absent",
+    /technology: orAbsent\(technology\)/.test(panel) &&
+      /description: orAbsent\(description\)/.test(panel),
+    'a cleared field would submit "" and write a blank the reader cannot see',
+  );
+  /* THE ICON HALF OF THE SAME CONTRACT: a cleared icon submits as ABSENT
+     (spread-guarded, so the type default is spelled as omission, exactly as
+     the format writes it), and a picked one is the reader's own choice —
+     "explicit", the verdict the editor inspector's picker already hands
+     down, so a later technology edit can never auto-override it. */
+  check(
+    "the form submits a cleared icon as absent and a picked one as explicit",
+    /\.\.\.\(icon !== undefined \? \{ icon \} : \{\}\)/.test(panel) &&
+      /setIconSource\("explicit"\)/.test(panel),
+    "a cleared icon would submit a key, or a picked one could be auto-overridden",
+  );
+  /* The picker itself is the SHARED one — a third icon searcher beside the
+     registry's two consumers is the `dry.md` failure by name. */
+  check(
+    "the panel opens the shared IconPicker rather than a searcher of its own",
+    /import \{ IconPicker \} from "@\/features\/editor\/components\/icon-picker"/.test(
+      panel,
+    ) && /<IconPicker/.test(panel),
+    "a second icon search UI one import away from the existing one",
+  );
+  /* THE COLOUR CONTROL IS DERIVED, NOT HAND-LISTED (`codebase.md` habit 4):
+     the swatches come from NODE_TAG_PALETTE plus the document's own tags,
+     and each previews through the same `tagFillCss` construction the canvas
+     paints with — a hand-picked hex here could pass every palette audit and
+     still show the reader a colour the node will never be. */
+  check(
+    "the swatches derive from NODE_TAG_PALETTE and preview through tagFillCss",
+    /NODE_TAG_PALETTE\.filter/.test(panel) && /tagFillCss\(color\)/.test(panel),
+    "a hand-listed swatch row that can drift from the measured palette",
+  );
+  /* THE TRAP IS DISCLOSED BEFORE APPLY: when the choice takes a coloured tag
+     off the element, the form says which — the removal is deliberate module
+     behaviour (section 14a measures it) and silent tag removal is how an
+     author loses vocabulary without noticing. */
+  check(
+    "the form warns which coloured tag a new choice replaces, before Apply",
+    /replaced\.length > 0/.test(panel) && /Applying removes/.test(panel),
+    "a colour swap that silently takes tags off the element",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 15. A create is an INSERT patch, and the palette matches the parser      */
+/* ----------------------------------------------------------------------- */
+
+console.log(
+  "\nA create inserts one line, at a spot that collides with nothing",
+);
+
+{
+  const { VALID_NODE_TYPES_BY_LEVEL } = await load("src/types/c4.ts");
+  const { NODE_TYPE_ROWS } = await load(
+    "src/features/syntax-docs/content/snippets.ts",
+  );
+  const { NODE_TYPE_BY_KEYWORD } = await load("src/features/archtext/index.ts");
+
+  /* --- the palette cannot offer what the parser refuses -------------------- */
+
+  /* `creatableNodeTypes` derives from the syntax reference's `NODE_TYPE_ROWS`
+     (which carries the keywords a palette needs); the PARSER validates a
+     node's type against `VALID_NODE_TYPES_BY_LEVEL`. Those are two tables in
+     two features that cannot import each other's reason for existing, so this
+     is the `dry.md` case where a check pins the pair — level by level, SET
+     EQUALITY in both directions, because `every(includes)` passes on a palette
+     that quietly lost a type as well as on one that never gained it. The
+     failure this prevents is the dishonest button: `container` offered on a
+     context diagram creates a document the re-parse refuses, and the reader
+     sees a press that does nothing. */
+  const levels = Object.keys(VALID_NODE_TYPES_BY_LEVEL);
+  check(
+    "the level table is the one the parser uses and is non-trivial",
+    levels.length === 4 && levels.includes("context"),
+    `levels: ${levels.join(", ")}`,
+  );
+  for (const level of levels) {
+    const offered = creatableNodeTypes(level)
+      .map((entry) => entry.type)
+      .sort()
+      .join(",");
+    const legal = [...VALID_NODE_TYPES_BY_LEVEL[level]].sort().join(",");
+    check(
+      `the palette at @${level} offers exactly the types the parser accepts there`,
+      offered === legal && offered.length > 0,
+      `palette: ${offered} / parser: ${legal}`,
+    );
+  }
+  /* And the docs table's own keyword→type column agrees with the grammar's
+     bijection, so the KEYWORD on a palette button names the TYPE the gesture
+     writes. A row that drifted would render a button labelled with one word
+     that inserts another. */
+  for (const row of NODE_TYPE_ROWS) {
+    check(
+      `NODE_TYPE_ROWS maps "${row.keyword}" to the type the grammar does`,
+      NODE_TYPE_BY_KEYWORD[row.keyword] === row.modelType,
+      `docs say ${row.modelType}, grammar says ${NODE_TYPE_BY_KEYWORD[row.keyword]}`,
+    );
+  }
+
+  /* --- the patch, from non-canonical text ---------------------------------- */
+
+  /* Non-canonical for section 13's reason: a re-emit of canonical text IS
+     canonical text, so only comments and author blank lines can catch one. */
+  const authored = [
+    `archlab 1.0`,
+    `title "Create probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // Who uses this thing.`,
+    `  cust:person "Customer" [human]`,
+    `    desc "The paying kind."`,
+    `  web:system "Web App" >backend`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go]`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the create fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  const created = createdNodeEdit(doc, authored, "ctx", "person");
+  check(
+    "a create on authored text takes the PATCH path, by name",
+    created !== null && created.path === "patch",
+    `path: ${created === null ? "refused" : created.path}`,
+  );
+
+  /* AN INSERT IS ONE GAINED LINE AND NO CHANGED ONES. `changedLines` cannot
+     say this (an insert shifts every later index), so it is measured as a
+     splice: remove the one new line and the authored bytes must come back
+     exactly — which covers the comments and blank lines in the same breath. */
+  const beforeLines = authored.split("\n");
+  const afterLines = (created?.text ?? "").split("\n");
+  let insertedAt = -1;
+  for (let i = 0; i < afterLines.length; i += 1) {
+    if (afterLines[i] !== beforeLines[i]) {
+      insertedAt = i;
+      break;
+    }
+  }
+  const spliced = [...afterLines];
+  if (insertedAt !== -1) spliced.splice(insertedAt, 1);
+  check(
+    "a create adds exactly one line and every authored byte survives",
+    afterLines.length === beforeLines.length + 1 &&
+      insertedAt !== -1 &&
+      spliced.join("\n") === authored,
+    created === null
+      ? "the create was refused"
+      : firstDiff(spliced.join("\n"), authored),
+  );
+  /* DIRECTLY AFTER THE DIAGRAM'S LAST NODE DECLARATION — nodes stay with
+     nodes, ahead of the relationship lines, so the reviewer's diff reads as
+     "one element added" rather than a line floating among the edges. */
+  check(
+    "the new line lands directly under the diagram's last node declaration",
+    insertedAt !== -1 &&
+      beforeLines[insertedAt - 1] === `  web:system "Web App" >backend`,
+    `inserted after: ${JSON.stringify(beforeLines[insertedAt - 1])}`,
+  );
+  /* THE INSERTED LINE IS CANONICAL, proved against a FULL serialise of the
+     edited document — section 13's derivation, for section 13's reason: a
+     patch that wrote almost-canonical text would trade a silent loss for a
+     silent divergence. */
+  const canonicalAfter = created === null ? "" : sourceTextFor(created.doc);
+  check(
+    "the inserted line is exactly what a full serialise would write for the node",
+    insertedAt !== -1 &&
+      canonicalAfter.split("\n").includes(afterLines[insertedAt]) &&
+      afterLines[insertedAt].includes("new-person:person"),
+    `inserted: ${JSON.stringify(afterLines[insertedAt])}`,
+  );
+
+  /* --- what the reader gets: a named, legal, visibly-placed node ----------- */
+
+  const createdNode =
+    created === null
+      ? undefined
+      : created.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "ctx")
+          ?.nodes.find((node) => node.id === "new-person");
+  check(
+    "the created node survives the round trip with the placeholder name",
+    createdNode !== undefined &&
+      createdNode.name === createdNodeName("person") &&
+      createdNode.name.length > 0,
+    `node after re-parse: ${JSON.stringify(createdNode)}`,
+  );
+  /* NOT ON TOP OF ANYTHING, measured as rectangle disjointness AGAINST THE
+     RE-PARSED DOCUMENT rather than the pre-insert one: adding an id reflows
+     the default layout, so nodes whose geometry the text omits may have
+     moved, and the pre-insert picture is the wrong one to measure. This is
+     the assertion the gesture exists to satisfy — a node born under another
+     is a create that looks like a delete. */
+  const others =
+    created === null
+      ? []
+      : (created.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "ctx")
+          ?.nodes.filter((node) => node.id !== "new-person") ?? []);
+  const overlaps = others.filter(
+    (node) =>
+      createdNode !== undefined &&
+      createdNode.position.x < node.position.x + node.size.width &&
+      node.position.x < createdNode.position.x + createdNode.size.width &&
+      createdNode.position.y < node.position.y + node.size.height &&
+      node.position.y < createdNode.position.y + createdNode.size.height,
+  );
+  check(
+    "the created node's box overlaps no existing node's box after the re-parse",
+    others.length > 0 && overlaps.length === 0,
+    `overlapping: ${overlaps.map((node) => node.id).join(", ")}`,
+  );
+  check(
+    "the created node lands on the format's grid",
+    createdNode !== undefined &&
+      createdNode.position.x % EDIT_GRID === 0 &&
+      createdNode.position.y % EDIT_GRID === 0,
+    `position: ${JSON.stringify(createdNode?.position)}`,
+  );
+
+  /* --- the edit NAMES what it created ---------------------------------------
+     `createdNodeId` is how the canvas finds the newcomer to centre on and
+     select (the element lands below everything drawn — off screen on a tall
+     diagram, where the announcement's "rename it in the details panel" would
+     otherwise be a promise nothing keeps). Asserted against the RE-PARSED
+     document rather than against the id-minting convention, so the field can
+     never name a node the adopted document does not hold. */
+  check(
+    "a create reports the created node's id, and the id is real in the re-parsed document",
+    created !== null &&
+      created.createdNodeId === "new-person" &&
+      createdNode !== undefined,
+    `createdNodeId: ${JSON.stringify(created?.createdNodeId)}`,
+  );
+
+  /* The REF create reports its minted placeholder the same way — its id is
+     derived from the mirrored node's NAME rather than a type keyword, so the
+     expectation is read back from the document instead of retyped here. */
+  const refCreated = createdRefEdit(doc, authored, "backend", {
+    diagramId: "ctx",
+    nodeId: "cust",
+  });
+  const mintedRef =
+    refCreated === null
+      ? undefined
+      : refCreated.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "backend")
+          ?.nodes.find((node) => node.externalRef?.nodeId === "cust");
+  check(
+    "a ref create reports the id of the placeholder it minted",
+    refCreated !== null &&
+      mintedRef !== undefined &&
+      refCreated.createdNodeId === mintedRef.id,
+    `createdNodeId: ${JSON.stringify(refCreated?.createdNodeId)}, minted: ${JSON.stringify(mintedRef?.id)}`,
+  );
+
+  /* --- the id: file-unique, deterministic ---------------------------------- */
+
+  /* Node ids are unique across the FILE (`validate.ts`), not per diagram, so
+     the collision fixture puts the stem in the OTHER diagram — a per-diagram
+     de-dupe would pass a same-diagram probe and still hand back a document
+     the parser refuses. */
+  const collision = c4Document(
+    authored.replace(
+      `  api:container "API" [Go]`,
+      [`  api:container "API" [Go]`, `  new-database:database "Orders"`].join(
+        "\n",
+      ),
+    ),
+  );
+  const collided = createdNodeEdit(
+    collision,
+    sourceTextFor(collision),
+    "backend",
+    "database",
+  );
+  const collidedIds =
+    collided === null
+      ? []
+      : (collided.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "backend")
+          ?.nodes.map((node) => node.id) ?? []);
+  check(
+    "a taken id stem de-duplicates deterministically to -2",
+    collidedIds.includes("new-database") &&
+      collidedIds.includes("new-database-2"),
+    `ids: ${collidedIds.join(", ")}`,
+  );
+  check(
+    "creating twice from the same document is deterministic",
+    created !== null &&
+      createdNodeEdit(doc, authored, "ctx", "person")?.text === created.text,
+    "two runs over identical input produced different text",
+  );
+
+  /* --- the refusals: null, never a throw ----------------------------------- */
+
+  check(
+    "a type the diagram's level cannot hold refuses",
+    refuses(() => createdNodeEdit(doc, authored, "ctx", "container")),
+    "a context diagram accepted a container — the re-parse will refuse it later, " +
+      "where the reader cannot tell why",
+  );
+  check(
+    "an unknown diagram refuses",
+    refuses(() => createdNodeEdit(doc, authored, "nowhere", "person")),
+    "a create against a missing diagram should be null, not a crash",
+  );
+
+  /* --- the named fallback, both forcing conditions -------------------------- */
+
+  /* Pinned BY NAME, as section 13 pins the move's: `path` is the only thing
+     that says which gestures are safe for the author's bytes. */
+  const jsonPane = { ...doc, format: "json" };
+  const inJson = createdNodeEdit(
+    jsonPane,
+    doc.synced.jsonText,
+    "ctx",
+    "person",
+  );
+  check(
+    "a create against the JSON pane re-emits, and says so",
+    inJson !== null &&
+      inJson.path === "reemit" &&
+      inJson.text === inJson.doc.synced.jsonText,
+    `path: ${inJson === null ? "refused" : inJson.path}`,
+  );
+  /* The FALLBACK path names the newcomer too — the canvas's centring must not
+     depend on which path the text took, or a JSON-pane create would land off
+     screen while the patch path centres. */
+  check(
+    "the re-emit path still reports the created node's id",
+    inJson !== null && inJson.createdNodeId === "new-person",
+    `createdNodeId: ${JSON.stringify(inJson?.createdNodeId)}`,
+  );
+  /* An EMPTY diagram is the create-specific forcing condition: the spans map
+     holds node and edge lines only, so there is no line to sit after and the
+     module falls back rather than growing a second parser to find the diagram
+     head. An empty diagram has no comments between members to lose. */
+  const emptied = c4Document(
+    [
+      `archlab 1.0`,
+      `title "Empty probe"`,
+      ``,
+      `@context ctx "Context"`,
+      `  web:system "Web App" >backend`,
+      ``,
+      `@container backend owner=web`,
+      ``,
+    ].join("\n"),
+  );
+  const intoEmpty = createdNodeEdit(
+    emptied,
+    [
+      `archlab 1.0`,
+      `title "Empty probe"`,
+      ``,
+      `@context ctx "Context"`,
+      `  web:system "Web App" >backend`,
+      ``,
+      `@container backend owner=web`,
+      ``,
+    ].join("\n"),
+    "backend",
+    "container",
+  );
+  check(
+    "a create into an empty diagram falls back to the re-emit path, and says so",
+    intoEmpty !== null &&
+      intoEmpty.path === "reemit" &&
+      intoEmpty.doc.synced.file.diagrams
+        .find((diagram) => diagram.id === "backend")
+        ?.nodes.some((node) => node.id === "new-container"),
+    `verdict: ${intoEmpty === null ? "refused" : intoEmpty.path}`,
+  );
+  check(
+    "the empty-diagram fallback reports the created node's id too",
+    intoEmpty !== null && intoEmpty.createdNodeId === "new-container",
+    `createdNodeId: ${JSON.stringify(intoEmpty?.createdNodeId)}`,
+  );
+
+  /* --- the affordance renders in the editable branch only ------------------ */
+
+  /* Source assertions, the section-9 tactic, because the strip lives in a
+     `.tsx` the harness cannot load. Presence-gated like every edit control:
+     a read-only or locked canvas must show NO strip, never a disabled one —
+     and a strip rendered unconditionally would be section 8's bug (a control
+     in one branch only) inverted into a control that lies in every branch. */
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  const palette = read(
+    "src/features/viewer/components/viewer-node-palette.tsx",
+  );
+  check(
+    "the Add strip renders only while the canvas is editable",
+    /\{editable \? \(\s*<ViewerNodePalette/.test(canvas),
+    "the strip is missing, or offered on a canvas that cannot honour it",
+  );
+  check(
+    "the strip's buttons come from the derived palette, not a hand-written list",
+    /creatableNodeTypes\(level\)\.map\(/.test(palette),
+    "a hand-listed strip is the drift this whole section exists to prevent",
+  );
+  /* The REFERENCE half is a click-to-open MENU. It has now worn three shapes —
+     a `<select>`, then inline buttons, now a menu at the product owner's
+     request — and two things survive every shape. WHERE THE LIST COMES FROM:
+     `referenceableNodes` is also what the gesture guard reads
+     (`createdRefEdit`), so a hand-listed half would offer references the
+     guard then refuses. AND NEVER A BARE `<select>`: a native dropdown brings
+     its own dismissal, so its Escape reaches the canvas ladder too — one
+     press would close the list AND clear the reader's selection — and its
+     rows cannot carry the name-plus-level layout the choice needs. */
+  check(
+    "the reference half is a menu of derived rows, never a <select>",
+    /role="menu"/.test(palette) &&
+      /role="menuitem"/.test(palette) &&
+      /references\.map\(/.test(palette) &&
+      !/<select/.test(palette),
+    "the ref half stopped being a real menu over the derived candidate list — " +
+      "or grew back the native dropdown whose Escape the canvas ladder also hears",
+  );
+  /* The trigger SAYS a menu opens (`aria-haspopup`) and reports whether it is
+     open (`aria-expanded`) — an icon-plus-word button that silently sprouts a
+     list is a control a screen-reader user cannot predict. */
+  check(
+    "the menu trigger declares the popup and its open state",
+    /aria-haspopup="menu"/.test(palette) &&
+      /aria-expanded=\{refsOpen\}/.test(palette),
+    "the trigger no longer tells assistive tech a menu opens here",
+  );
+  /* THE ESCAPE CONTRACT IS THE ZOOM MENU'S, through ONE shared hook — the
+     precedent that already negotiates with this canvas's Escape ladder. Two
+     copies of the dismissal effect is how one of them later loses the consume
+     and a menu press starts clearing selections (`dry.md`, same body → one
+     definition). Asserted from both consumers AND from the hook's own source,
+     because the sharing is worthless if the shared code drops the clause. */
+  const dismissal = read("src/components/ui/menu-dismissal.ts");
+  const zoomMenu = read("src/components/ui/zoom-menu.tsx");
+  check(
+    "the reference menu and the zoom menu share one dismissal hook",
+    /useMenuDismissal\(/.test(palette) && /useMenuDismissal\(/.test(zoomMenu),
+    "a second dismissal implementation appeared — the copy that drifts is " +
+      "the one that forgets to consume Escape",
+  );
+  check(
+    "that hook consumes Escape, so closing a menu cannot also clear the canvas selection",
+    /event\.key !== "Escape"/.test(dismissal) &&
+      /event\.preventDefault\(\);/.test(dismissal) &&
+      /event\.stopPropagation\(\);/.test(dismissal) &&
+      /addEventListener\("keydown", onKeyDown, true\)/.test(dismissal),
+    "one Escape press would take two steps — close the menu AND run a rung " +
+      "of the canvas's own ladder",
+  );
+  /* The trigger stays HONEST about emptiness: `referenceableNodes` returns
+     empty on the root diagram and where everything above is already mirrored,
+     and a trigger that opens an empty menu is a promise the model cannot
+     keep — the whole group is withheld instead, as it always was. */
+  check(
+    "an empty candidate list withholds the reference group entirely",
+    /references\.length > 0 \?/.test(palette),
+    "a trigger now renders with nothing to offer — it would open an empty menu",
+  );
+
+  /* --- the created element is centred and selected -------------------------- */
+
+  /* Source assertions (section-9 tactic — the camera lives in a `.tsx`).
+     The module half above proves every create REPORTS its id; this half
+     proves the id is FOLLOWED, because the announcement promises a rename in
+     the details panel and the element lands below everything drawn — off
+     screen on a tall diagram. Each hop is pinned: the host hands the id back,
+     the canvas keeps it until the model containing the node arrives, and the
+     one effect both selects and centres. */
+  const playgroundSrc = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  check(
+    "both create handlers hand the created id back to the canvas",
+    (playgroundSrc.match(/return next\.createdNodeId \?\? null;/g) ?? [])
+      .length === 2,
+    "a create the canvas cannot follow — the new element stays off screen " +
+      "while the announcement promises a rename",
+  );
+  check(
+    "the canvas keeps the returned id until the model holding the node lands",
+    /focusWhenCreated\(edit\?\.onNodeCreate\(/.test(canvas) &&
+      /focusWhenCreated\(edit\?\.onRefCreate\(/.test(canvas) &&
+      /pendingFocusRef\.current = createdNodeId/.test(canvas),
+    "a returned id nothing stores — the camera would act on a model that " +
+      "does not hold the node yet, or never act at all",
+  );
+  /* Selected AND centred, in that one effect, and the camera goes through the
+     flow's own viewport pipe with the shared duration helper — `duration()`
+     is 0 under prefers-reduced-motion, so the pan is a cut for the reader who
+     asked for stillness, the same contract every level transition honours. */
+  check(
+    "the focus effect selects the new element and centres the camera on it",
+    /pendingFocusRef\.current = null;[\s\S]{0,900}?selectNode\(nodeId\);[\s\S]{0,1200}?setViewport\(centred, \{ duration: duration\("levelTransition"\) \}\)/.test(
+      canvas,
+    ),
+    "the created element is reported but not brought into view or not " +
+      "selected — the announcement's rename instruction has no state behind it",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("\nLocking never offers a link to somewhere you already are");
 
@@ -2163,12 +3754,48 @@ console.log("\nLocking never offers a link to somewhere you already are");
   );
 
   /* ONE RENDER PER LOCKABLE CANVAS. Fewer means a canvas the lock gates but
-     cannot be reached from; more would mean two locks racing one cookie. */
+     cannot be reached from; more would mean two locks racing one cookie.
+
+     The renders are now CONSTRUCTED as each viewer's `lockSlot` prop rather
+     than written into the strips — the product owner moved the control onto
+     the canvas itself — so this count alone stopped proving reachability: a
+     playground that builds a lock a viewer never mounts would still pass it.
+     The two assertions after it close that gap by asking each viewer's own
+     source whether the slot reaches the screen. */
   const renders = playground.match(/<CanvasLockButton\b/g) ?? [];
   check(
-    "the lock is rendered once for each canvas branch that can be locked",
+    "the lock is constructed once for each canvas branch that can be locked",
     renders.length === lockable.length,
     `${renders.length} <CanvasLockButton> renders for ${lockable.length} lockable kinds (${lockable.join(", ")})`,
+  );
+  /* THE SLOT REACHES EACH CANVAS. Section 8's founding bug was a control
+     correct in the module and unreachable on the screen; a slot prop is a new
+     way to reproduce it (built, passed, never mounted), so each hop is
+     pinned: the shell forwards, and each canvas renders — the C4 one inside
+     its top-right panel, where the details card already lives, the sequence
+     one over its diagram pane. */
+  const shellSrc = read("src/features/viewer/components/viewer-shell.tsx");
+  const canvasSrc = read("src/features/viewer/components/viewer-canvas.tsx");
+  const sequenceSrc = read(
+    "src/features/sequence/components/sequence-viewer.tsx",
+  );
+  check(
+    "the shell forwards the lock slot to the C4 canvas",
+    /lockSlot=\{lockSlot\}/.test(shellSrc),
+    "the playground hands the shell a lock the canvas never receives",
+  );
+  check(
+    "the C4 canvas mounts the lock slot in its top-right panel",
+    /position="top-right"[\s\S]{0,700}\{lockSlot\}/.test(canvasSrc),
+    "the C4 lock is built but never reaches the canvas corner — section 8's " +
+      "bug in slot form",
+  );
+  check(
+    "the sequence canvas mounts the lock slot over its diagram pane",
+    /\{lockSlot !== undefined \?/.test(sequenceSrc) &&
+      /\{lockSlot\}/.test(sequenceSrc),
+    "the sequence lock is built but never reaches the canvas — the branch " +
+      "this section exists for, again",
   );
 
   /* THE WORDING IS COMPLETE for every lockable kind. A control that borrows
@@ -2210,17 +3837,21 @@ console.log("\nLocking never offers a link to somewhere you already are");
       "control, which is how the two branches drifted apart the first time",
   );
 
-  /* ONE STATE WORD PER LOCK. The control's faces are ACTIONS ("Edit",
-     "Lock"), which is what makes a locked-by-default canvas findable — and it
-     is also why the state has to be said somewhere. `canvasStateLabel` is
-     that word, and a strip that renders the lock without it leaves a reader
-     pressing to find out which state they were in. Counted against the
-     renders rather than against the literal 2, for the same reason as above. */
+  /* ONE STATE WORD PER LOCKABLE CANVAS. This used to read "named beside it",
+     when the state word sat next to a control whose faces were actions
+     ("Edit", "Lock"). The product owner moved the control onto the canvas as
+     an icon-only padlock — a deliberate reversal, argued in the control's
+     header — so "beside" is gone, and what the word now carries is MORE, not
+     less: the strip's `canvasStateLabel` is the only place the state is
+     spelled out at all, since the padlock draws it but cannot say it. Counted
+     against the lockable kinds rather than the literal 2, so a seventh
+     notation cannot arrive without its word — and so the control's move
+     could not silently take the word with it. */
   const stateWords = playground.match(/canvasStateLabel\(/g) ?? [];
   check(
-    "every rendered lock has the canvas state named beside it",
-    stateWords.length === renders.length,
-    `${stateWords.length} canvasStateLabel() uses for ${renders.length} lock renders`,
+    "every lockable canvas still names its state in words, in the strip",
+    stateWords.length === lockable.length,
+    `${stateWords.length} canvasStateLabel() uses for ${lockable.length} lockable kinds`,
   );
 
   /* THE HEADING'S CLAIM MATCHES WHAT SHIPS. It said "C4 diagrams can also be
@@ -2249,8 +3880,13 @@ console.log("\nLocking never offers a link to somewhere you already are");
      across source lines at arbitrary points and a phrase like "the other
      kinds" straddles a newline plus fourteen spaces of indentation. */
   const flowed = playground.replace(/\s+/g, " ");
+  /* The window measures how much claim can sit between the two anchors. It
+     grew from 240 to 340 when the sentence learned the grouping clause, and
+     to 380 when the pan moved from a held key to the Select/Pan toggle —
+     naming a control takes more words than naming a keystroke, and the
+     sentence must name it or the reader concludes panning broke. */
   const claim =
-    /C4 nodes can be dragged.{0,240}?the other kinds lay themselves out/.exec(
+    /C4 nodes can be dragged.{0,380}?the other kinds lay themselves out/.exec(
       flowed,
     );
   check(
@@ -2274,6 +3910,32 @@ console.log("\nLocking never offers a link to somewhere you already are");
        whether they can move things, and the sentence they meet first is the
        page's own. */
     "reordered",
+    /* Added with the C4 revise, grown when the same form learned icon and
+       colour. Two strings, because each half can go stale alone: the field
+       list is the gesture, "details panel" is where — a claim naming the
+       first without the second sends the reader double-clicking a box that
+       only drills down. */
+    "wording, icon and colour edited",
+    "details panel",
+    /* Added with the C4 create. One string carrying gesture AND place, unlike
+       the pair above, because "added" alone is already claimed by the
+       sequence half of the sentence and would pass with the palette claim
+       gone. */
+    "added from its palette",
+    /* Added with the marquee grouping. Two strings for the revise pair's
+       reason — each half can go stale alone: the first is WHAT the gesture
+       writes, the second is HOW it is made, and a reader who has used a
+       drawing tool arrives asking for exactly this gesture. */
+    "grouped into a boundary",
+    "drag selection",
+    /* THE PAN MOVED, TWICE: a bare drag stopped panning when it became the
+       lasso, and the hold-Space pan that first replaced it broke three times
+       (keyboard state and focus) and gave way to the explicit Select/Pan
+       toggle. A reader who has panned this canvas by dragging knows the OLD
+       gesture, and a page that names only the lasso leaves them thinking
+       panning broke — which is why the pan's new home is pinned here rather
+       than left to the hint bar. */
+    "Select / Pan toggle",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
@@ -3204,6 +4866,510 @@ console.log("\nNo surface still claims the sequence canvas has no drag");
     "the move refusal still explains that a sequence document has no position",
     /no position to move/i.test(refusal.reason ?? ""),
     "the honest half of the claim was deleted to satisfy the sweep above",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 20. Grouping a lasso of elements: one gesture, one text, one undo           */
+/* -------------------------------------------------------------------------- */
+
+console.log("\nGrouping several elements into a boundary is ONE edit");
+{
+  /* NON-CANONICAL for section 13's reason, with the shapes only a GROUPING
+     meets: an existing frame with a member (joins must not disturb it), a
+     node with a `desc` continuation (a grouping patches declaration lines
+     ONLY, so the continuation must survive untouched), and a `^ref`
+     placeholder (a legal member — membership is local — where the same
+     panel's field edit refuses). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Group probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    `  frame f-edge "Edge"`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" (400,240 160x96)`,
+    `    desc "The paying kind."`,
+    `  ops:person "Operator" (640,240 160x96)`,
+    `  web:system "Web App" (400,480 160x96) >backend in=f-edge`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go] (400,240 160x96)`,
+    `  mirror:external ^ctx/cust (640,240 160x96)`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the grouping itself: N lines and one mint, in one edit -------------- */
+
+  const grouped = groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+    kind: "new",
+    label: "Trust zone",
+  });
+  check(
+    "a grouping on authored text takes the PATCH path, by name",
+    grouped !== null && grouped.path === "patch",
+    `path: ${grouped === null ? "refused" : grouped.path}`,
+  );
+  const after = (grouped?.text ?? "").split("\n");
+  const before = authored.split("\n");
+  check(
+    "the whole grouping adds exactly one line — the minted frame declaration",
+    after.length === before.length + 1,
+    `${before.length} lines became ${after.length}`,
+  );
+  check(
+    "the minted frame line sits directly under the existing one, so frames stay together",
+    after[before.indexOf(`  frame f-edge "Edge"`) + 1] ===
+      `  frame f-trust-zone "Trust zone"`,
+    `line after f-edge: ${JSON.stringify(after[before.indexOf(`  frame f-edge "Edge"`) + 1])}`,
+  );
+  /* EVERY byte the gesture is not about survives, asserted by subtraction:
+     take the members' declaration lines out of both texts (and the minted
+     line out of the patched one) and the remainders must be IDENTICAL —
+     comments, the `desc` continuation, blank lines, the untouched `web`
+     membership, the whole backend diagram. */
+  const memberLine = (line) =>
+    line.trimStart().startsWith("cust:person") ||
+    line.trimStart().startsWith("ops:person");
+  const rest = (lines, minted) =>
+    lines.filter(
+      (line) =>
+        !memberLine(line) && (!minted || !line.includes("f-trust-zone")),
+    );
+  check(
+    "every line the grouping is not about is byte-identical",
+    JSON.stringify(rest(before, false)) === JSON.stringify(rest(after, true)),
+    firstDiff(rest(after, true).join("\n"), rest(before, false).join("\n")),
+  );
+  /* The patched declarations are CANONICAL, proved against a full serialise
+     of the grouped document — section 13's derivation, section 13's reason. */
+  const canonicalAfter = sourceTextFor(grouped?.doc ?? doc);
+  check(
+    "each member's patched line is byte-identical to what the serializer would emit",
+    ["cust:person", "ops:person"].every(
+      (stem) =>
+        after.find((line) => line.trimStart().startsWith(stem)) ===
+        canonicalAfter
+          .split("\n")
+          .find((line) => line.trimStart().startsWith(stem)),
+    ),
+    "a grouped declaration diverged from canonical form",
+  );
+  const groupedDiagram = grouped?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "the re-parse puts every member in the minted boundary",
+    ["cust", "ops"].every(
+      (id) =>
+        groupedDiagram?.nodes.find((n) => n.id === id)?.frameId ===
+        "f-trust-zone",
+    ) && groupedDiagram?.frames?.some((f) => f.id === "f-trust-zone") === true,
+    "a member came back outside the boundary it was grouped into",
+  );
+
+  /* ONE TEXT IS ONE UNDO ENTRY. The undo ring stores whole texts, so "one
+     entry" is exactly "one edit object whose text carries the whole
+     grouping": putting `authored` back reverses every membership AND the
+     mint at once. Measured, not assumed — the pre-edit parse holds no
+     grouped member, so there is no intermediate state an undo could land on. */
+  const preEdit = c4Document(authored).synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "one undo entry reverses the whole grouping — the pre-edit text holds none of it",
+    grouped !== null &&
+      ["cust", "ops"].every(
+        (id) => preEdit.nodes.find((n) => n.id === id).frameId === undefined,
+      ) &&
+      preEdit.frames?.some((f) => f.id === "f-trust-zone") !== true,
+    "part of the grouping predates the edit — an undo would only partly reverse it",
+  );
+
+  /* --- joining an EXISTING boundary, and leaving all of them ---------------- */
+
+  const joined = groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+    kind: "existing",
+    frameId: "f-edge",
+  });
+  check(
+    "grouping into an existing boundary mints nothing and patches only the members",
+    joined !== null &&
+      joined.path === "patch" &&
+      joined.text.split("\n").length === before.length &&
+      changedLines(authored, joined.text).every(
+        (line) => memberLine(line.before ?? "") || memberLine(line.after ?? ""),
+      ),
+    "a join minted a line or touched a non-member",
+  );
+  const released = groupedNodesEdit(doc, authored, "ctx", ["web"], {
+    kind: "none",
+  });
+  check(
+    "releasing members writes `none` as membership coming off the line, frame kept",
+    released !== null &&
+      released.doc.synced.file.diagrams
+        .find((d) => d.id === "ctx")
+        .nodes.find((n) => n.id === "web").frameId === undefined &&
+      released.doc.synced.file.diagrams
+        .find((d) => d.id === "ctx")
+        .frames?.some((f) => f.id === "f-edge") === true,
+    "the release ate the frame declaration, or left the membership on",
+  );
+
+  /* --- the refusals, and which way a mixed selection falls ------------------ */
+
+  check(
+    "a selection naming an unknown id refuses WHOLLY — nothing partial",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["cust", "ghost"], {
+        kind: "new",
+        label: "Half",
+      }),
+    ),
+    "a boundary was drawn missing a member the reader lassoed",
+  );
+  check(
+    "an empty selection refuses rather than minting an empty boundary",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", [], { kind: "new", label: "X" }),
+    ),
+    "zero elements still produced an edit",
+  );
+  check(
+    "a blank new label refuses — the shared resolver's rule",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+        kind: "new",
+        label: "   ",
+      }),
+    ),
+    "an unnamed boundary was minted",
+  );
+  check(
+    "an unknown existing frame refuses — `in=` naming no frame will not parse",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["cust", "ops"], {
+        kind: "existing",
+        frameId: "f-ghost",
+      }),
+    ),
+    "a membership was written against a frame the diagram does not declare",
+  );
+  check(
+    "a no-op grouping refuses, so an idle Apply costs no undo entry",
+    refuses(() =>
+      groupedNodesEdit(doc, authored, "ctx", ["web"], {
+        kind: "existing",
+        frameId: "f-edge",
+      }),
+    ),
+    "members already in the boundary still rewrote the pane",
+  );
+  check(
+    "a Mermaid pane refuses the grouping — the C4 revise cell's own caveat",
+    refuses(() =>
+      groupedNodesEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        ["cust"],
+        {
+          kind: "new",
+          label: "Zone",
+        },
+      ),
+    ),
+    "a membership was written against a pane whose emitter never reads frameId",
+  );
+  /* A `^ref` placeholder GROUPS, where the field editor refuses it: its own
+     fields are derived from its target (forking them is what
+     `revisedNodeEdit` refuses), but membership is a local fact — the
+     serializer writes `in=` beside the `^` token. */
+  const withMirror = groupedNodesEdit(
+    doc,
+    authored,
+    "backend",
+    ["api", "mirror"],
+    { kind: "new", label: "Backend zone" },
+  );
+  const mirrorLine = (withMirror?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("mirror:external"));
+  check(
+    "a ^ref placeholder is a legal member — membership is local, not derived",
+    withMirror !== null &&
+      withMirror.path === "patch" &&
+      mirrorLine !== undefined &&
+      mirrorLine.includes("^ctx/cust") &&
+      mirrorLine.includes("in=f-backend-zone") &&
+      !mirrorLine.includes('"'),
+    `mirror line: ${JSON.stringify(mirrorLine)}`,
+  );
+  const jsonGrouped = groupedNodesEdit(
+    { ...doc, format: "json" },
+    JSON.stringify({ not: "the alab text" }),
+    "ctx",
+    ["cust", "ops"],
+    { kind: "new", label: "Zone" },
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    jsonGrouped !== null && jsonGrouped.path === "reemit",
+    `path: ${jsonGrouped === null ? "refused" : jsonGrouped.path}`,
+  );
+
+  /* --- the gesture reaches the module through ONE host call ----------------- */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
+  const groupBody =
+    /const handleNodesGroup = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleNodesGroup applies the whole grouping through exactly one applyCanvasEdit",
+    groupBody !== null &&
+      (groupBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      groupBody[1].includes("groupedNodesEdit(") &&
+      !groupBody[1].includes("setText("),
+    "a second apply (or a direct pane write) would split one gesture into two undo entries",
+  );
+  check(
+    "the canvas fires the grouping exactly once per Apply",
+    (canvas.match(/edit\.onNodesGroup\(/g) ?? []).length === 1,
+    "a second call site could commit the same lasso twice",
+  );
+  check(
+    "the grouping refusal is announced, and the lasso is kept for a retry",
+    groupBody !== null &&
+      groupBody[1].includes("return false;") &&
+      /if \(edit\.onNodesGroup\([\s\S]{0,120}?\)\) \{\s*\n\s*clearMultiSelection\(false\);/.test(
+        canvas,
+      ),
+    "a refused grouping went silent, or a refusal still threw the selection away",
+  );
+
+  /* --- THE MARQUEE GUARD: 4fa7c36's loop must stay impossible --------------- */
+
+  /* The crash: React Flow's rubber band emits `select` changes per mouse
+     move; mirroring them into state the `nodes` prop derives from hands a
+     fresh array identity to StoreUpdater every frame, which re-derives the
+     selection against the adopted objects, and round again to React #185.
+     The viewer's marquee is immune BY CONSTRUCTION, and each leg of that
+     construction is pinned here so it cannot be relaxed unnoticed. */
+  /* Matched as JSX PROPS (`name=`), not bare words: the canvas's comments
+     rightly NAME these props while warning against them, and an assertion
+     that fails on the warning would be failing on the guard itself. */
+  check(
+    "the viewer never engages React Flow's own selection machinery",
+    /elementsSelectable=\{false\}/.test(canvas) &&
+      !canvas.includes("onSelectionChange=") &&
+      !canvas.includes("selectionOnDrag=") &&
+      !canvas.includes("selectionKeyCode="),
+    "the rubber band that crashed the editor (4fa7c36) is reachable again",
+  );
+  const nodesMemo = /const nodes = useMemo\(([\s\S]*?)\n  \);/.exec(canvas);
+  const edgesMemo =
+    /const edges = useMemo\(([\s\S]*?)\n  \}, \[([^\]]*)\]\);/.exec(canvas);
+  check(
+    "the nodes projection reads nothing the marquee writes",
+    nodesMemo !== null &&
+      !/marquee|multiSelected|activeMulti/i.test(nodesMemo[1]) &&
+      nodesMemo[1].includes(
+        "[model, draggedDiagram, editable, projectionCache]",
+      ),
+    "the nodes prop would gain a new identity per marquee frame — the loop's fuel",
+  );
+  check(
+    "the edges projection reads nothing the marquee writes",
+    edgesMemo !== null &&
+      !/marquee|multiSelected|activeMulti/i.test(edgesMemo[0]),
+    "the edges prop would gain a new identity per marquee frame — same loop, edge lane",
+  );
+  /* THE SHIPPED-LINK REGRESSION THIS SWAP COULD CAUSE. A bare drag now draws
+     the lasso — but the lasso exists only where the canvas is editable AND
+     in Select mode, and the canvas is LOCKED BY DEFAULT: every shared link
+     and every presentation opens read-only. If the marquee ever claimed the
+     press there, a reader who opened a shared diagram could not move around
+     it at all, and the gesture they would reach for first is the one that
+     broke. Two layers, both pinned, because either alone would be enough to
+     regress:
+       - the handler is not even ATTACHED unless `marqueeMode` (JSX gate),
+         whose definition requires `editable`, so React Flow's own
+         `panOnDrag` owns the press;
+       - and the handler itself bails on a missing `edit` before it captures
+         the pointer, so a future caller that attaches it unconditionally still
+         cannot steal the pan. */
+  check(
+    "a bare drag still pans a read-only canvas — the marquee is not attached there",
+    /onPointerDownCapture=\{marqueeMode \? handleMarqueeStart : undefined\}/.test(
+      canvas,
+    ) &&
+      /const marqueeMode = editable && dragMode === "select";/.test(canvasCode),
+    "the lasso is wired to a canvas that may be locked — a shared link would " +
+      "stop panning, which is the one gesture every reader of one uses",
+  );
+  /* PAN MODE DETACHES THE MARQUEE, it does not bail inside it. The toggle's
+     whole argument over the held-Space pan it replaced is that the pan owes
+     nothing to any state a handler has to consult mid-gesture — the press
+     must reach React Flow untouched, so ALL FOUR handlers hang off the same
+     `marqueeMode` gate. One of them attached on bare `editable` would run in
+     Pan mode: the capture-phase down would cancel the press and the pan would
+     be broken again, in exactly the way three bug reports described. */
+  check(
+    "Pan mode does not attach the marquee — all four pointer handlers gate on the mode",
+    [
+      ["onPointerDownCapture", "handleMarqueeStart"],
+      ["onPointerMove", "handleMarqueeMove"],
+      ["onPointerUp", "handleMarqueeEnd"],
+      ["onPointerCancel", "handleMarqueeCancel"],
+    ].every(([prop, handler]) =>
+      new RegExp(`${prop}=\\{marqueeMode \\? ${handler} : undefined\\}`).test(
+        canvasCode,
+      ),
+    ),
+    "a marquee handler is attached outside `marqueeMode` — in Pan mode it " +
+      "would claim (or shadow) the press that is supposed to pan",
+  );
+  /* THE MODE CONTROL IS EDIT CHROME, presence-gated like the palette and the
+     grouping card: a read-only or locked canvas ALWAYS pans, so it must show
+     NO control — a disabled or ever-present toggle offers a Select mode that
+     does not exist there, and this canvas's rule (bought by the lock bug,
+     section 8's story) is that an affordance that cannot act does not
+     render. */
+  check(
+    "the mode toggle renders only while the canvas is editable",
+    /\{editable \? \(\s*<ViewerModeToggle/.test(canvas),
+    "a mode control on a read-only canvas — it always pans, so the toggle " +
+      "either lies (a Select option that does nothing) or ships disabled, " +
+      "and this canvas ships neither",
+  );
+  /* SELECT IS THE DEFAULT: the toggle exists only on an editable canvas, and
+     a reader who unlocked it did so to edit — defaulting to Pan would make
+     the unlock's first drag pan, which reads as the unlock not working. */
+  check(
+    "the drag mode defaults to Select",
+    /useState<CanvasDragMode>\("select"\)/.test(canvasCode),
+    "an unlocked canvas opens in Pan mode — the reader's first drag after " +
+      "unlocking pans, which reads as the unlock having done nothing",
+  );
+  /* THE ACTIVE MODE IS UNAMBIGUOUS TO A SCREEN READER. Two mutually
+     exclusive states, exactly one active, is what radio semantics SAY —
+     `aria-pressed` on two buttons was the runner-up, but "Select, toggle
+     button, not pressed" makes the listener infer the mode from the other
+     button. Checked on the group role plus aria-checked on the options,
+     because the visual highlight is the one channel a screen reader cannot
+     read. */
+  const modeToggle = code(
+    "src/features/viewer/components/viewer-mode-toggle.tsx",
+  );
+  check(
+    "the mode toggle is an honest radio group — role and checked state",
+    /role="radiogroup"/.test(modeToggle) &&
+      /role="radio"/.test(modeToggle) &&
+      /aria-checked=\{checked\}/.test(modeToggle),
+    "the toggle stopped reporting which mode is active as a checked state — " +
+      "a screen reader is left to infer the mode from styling it cannot see",
+  );
+  const marqueeStart =
+    /const handleMarqueeStart = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
+  check(
+    "and it refuses the press outright when the canvas hands it no edit",
+    marqueeStart !== null &&
+      /if \(edit === undefined\) return;/.test(marqueeStart[1]),
+    "the marquee would capture a pointer on a canvas with nothing to select",
+  );
+  /* THE TWO THINGS CANCELLING THE PRESS TOOK AWAY, both reported as bugs
+     ("cannot click focus everything", plus the pan of the day), and both
+     from one cause. `preventDefault` on the pane pointerdown suppresses the
+     compatibility mouse events, and those events were doing two jobs nobody
+     had written down: moving focus, and delivering the plain background
+     click. A press on the pane means "I am working on the drawing now" —
+     Escape, the nudge arrows and the next Tab must aim at the diagram, not
+     at the last control pressed (or stay locked out by the source
+     textarea's form-field exemption). A gesture that claims a press owes
+     back everything the press would have done. */
+  check(
+    "claiming the pane press hands focus to the canvas it suppressed",
+    marqueeStart !== null &&
+      /container\.focus\(\{ preventScroll: true \}\);/.test(marqueeStart[1]),
+    "focus stays on whatever was clicked last — the canvas's own keys keep " +
+      "aiming at a control (or a textarea) the reader has moved on from",
+  );
+  const marqueeEnd =
+    /const handleMarqueeEnd = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
+  check(
+    "a press that never travelled is a click, not an empty selection box",
+    marqueeEnd !== null &&
+      /MARQUEE_CLICK_SLOP_PX/.test(marqueeEnd[1]) &&
+      /clearSelection\(!travelled\)/.test(marqueeEnd[1]),
+    "a plain background click reports 'no elements inside the selection box' " +
+      "— describing a gesture the reader never made",
+  );
+  const marqueeMove =
+    /const handleMarqueeMove = useCallback\(([\s\S]*?)\n  \);/.exec(canvas);
+  check(
+    "the per-frame marquee handler writes the overlay rect and nothing else",
+    marqueeMove !== null &&
+      marqueeMove[1].includes("setMarquee(") &&
+      (marqueeMove[1].match(/set[A-Z]\w*\(/g) ?? []).every(
+        (call) => call === "setMarquee(",
+      ) &&
+      !marqueeMove[1].includes("edit."),
+    "a mouse move now writes state the projection can see — re-read 4fa7c36 first",
+  );
+  check(
+    "the marquee claims a press on the pane ITSELF, never one inside it",
+    /classList\.contains\("react-flow__pane"\)/.test(canvasCode) &&
+      !/closest\("\.react-flow__pane"\)/.test(canvasCode) &&
+      /event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);\s*\n\s*container\.setPointerCapture\(/.test(
+        canvasCode,
+      ),
+    "React Flow v12 renders the graph as CHILDREN of .react-flow__pane, so a " +
+      "`closest` test matches a press on a NODE and the lasso cancels it — " +
+      "selecting, dragging and the focus handover the press owes all die",
+  );
+  /* THE SPACE MACHINERY IS GONE, WHOLLY — not parked as a half-working
+     accelerator. Hold-Space-to-pan was reported broken three times and
+     outlived two attempted fixes, because it was a held-key flag mirrored
+     from window listeners: released by keyup, by window blur, by effect
+     cleanup, yielded to focused controls — every one of those a place the
+     flag and reality could disagree, and it never existed on touch at all.
+     The Select/Pan toggle replaced it, so any of these names reappearing in
+     the viewer means key-state plumbing is growing back BESIDE the toggle —
+     two gates for one gesture, the exact "two halves that disagree" shape
+     that produced the reports. `spaceHeld` is checked on the RAW source on
+     purpose: even a comment still describing the Space pan is a page
+     teaching a gesture that no longer exists. `panActivationKeyCode` is
+     matched as a PROP USE (`=`), because the pan-props comment rightly names
+     it while explaining why it is gone. */
+  check(
+    "no Space-pan machinery remains in the viewer canvas",
+    !/spaceHeld/.test(canvas) && !/panActivationKeyCode=/.test(canvas),
+    "spaceHeld or a panActivationKeyCode prop is back in viewer-canvas.tsx — " +
+      "the pan is the Select/Pan toggle now, and a key beside it is a second " +
+      "gate that can disagree with the mode",
   );
 }
 

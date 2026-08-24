@@ -16,10 +16,17 @@
  * generated from the sections that actually exist.
  */
 
-// Both imports here stay on the pure-data side, so the "no React, no zod, no
+// All imports here stay on the pure-data side, so the "no React, no zod, no
 // SDK" promise above still holds and the `/mcp` page's bundle is unaffected:
 // `content/syntax-sections` reaches only the snippets module and, through it,
-// `@/lib/constants` (plain values), while `lib/limits` imports nothing at all.
+// `@/lib/constants` (plain values); `lib/limits` and the icon categories
+// module import nothing at all. The category list is imported for the same
+// reason the section ids are — so `list_icons`'s argument documentation is
+// generated from the categories that actually exist. (The icon REGISTRY
+// itself is not importable here: it carries the artwork, which is React
+// components.)
+import { ICON_CATEGORY_ORDER } from "@/features/editor/lib/icons/categories";
+
 import { SYNTAX_SECTION_IDS } from "./content/syntax-sections";
 import { MAX_SOURCE_CHARS } from "./lib/limits";
 
@@ -446,6 +453,44 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     ],
   },
   {
+    name: "list_icons",
+    title: "List node icons",
+    description:
+      "The vocabulary the `@icon` token draws from — every slug a node can " +
+      "cite, searchable by name, slug or alias. Call this BEFORE writing an " +
+      "`@slug` on a node line, because a wrong slug is the one authoring " +
+      "mistake no validator will ever report: an unknown slug does not fail " +
+      "anywhere — the canvas silently falls back to the node type's generic " +
+      "icon — so a guessed `@postgres` quietly renders the wrong picture " +
+      '(searching "postgres" finds the real slug, `postgresql`). Icons this ' +
+      "registry lacks can be supplied by the document itself with a " +
+      '`customicon <slug> "Name" "<svg>…"` header line — see the header ' +
+      "section of the syntax reference.",
+    args: [
+      {
+        name: "query",
+        required: false,
+        description:
+          "Case-insensitive substring, matched against each icon's name, " +
+          'slug and aliases — "pg" and "postgres" both find PostgreSQL. ' +
+          "Omit for the full vocabulary.",
+      },
+      {
+        name: "category",
+        required: false,
+        // DERIVED from the category table the icon picker renders, never
+        // typed out — the same rule as `get_syntax_reference`'s section list
+        // above, and for the same reason: a hand-written list here would go
+        // stale the day a category is added, and the caller would be offered
+        // a vocabulary the tool then rejects (or denied one it accepts).
+        // `check:mcp` asserts every real category is named here.
+        description:
+          `Restrict to one category: ${ICON_CATEGORY_ORDER.join(", ")}. ` +
+          "Omit to search all of them.",
+      },
+    ],
+  },
+  {
     name: "list_example_models",
     title: "List example models",
     description:
@@ -635,10 +680,11 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
     id: "learn",
     title: "Learn the format",
     blurb:
-      "The grammar and real examples — read these before writing .alab, " +
-      "not after the first failure.",
+      "The grammar, the icon vocabulary and real examples — read these " +
+      "before writing .alab, not after the first failure.",
     tools: toolsNamed(
       "get_syntax_reference",
+      "list_icons",
       "list_example_models",
       "get_example_model",
     ),

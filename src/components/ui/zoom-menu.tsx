@@ -32,9 +32,10 @@
  * menu over a canvas, not a dialog.
  */
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { Check } from "lucide-react";
 
+import { useMenuDismissal } from "@/components/ui/menu-dismissal";
 import { ZOOM_READOUT_CLASSES } from "@/components/ui/zoom-pill";
 import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
@@ -85,30 +86,10 @@ export function ZoomMenu({
   const menuId = useId();
   const mod = useModKey();
 
-  /* One listener pair while open, none while closed. `pointerdown` rather
-     than `click` so the menu is gone before the canvas beneath it reacts —
-     otherwise dismissing the menu also pans or clears a selection. */
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      // Consumed, so this Escape does not also clear the canvas's selection
-      // or leave immersive mode — one press, one step, same ladder rule the
-      // sequence playground documents.
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown, true);
-    };
-  }, [open]);
+  // The dismissal contract lives in the shared hook — see `menu-dismissal.ts`
+  // for the Escape-consumption and pointerdown arguments it carries.
+  const closeMenu = useCallback(() => setOpen(false), []);
+  useMenuDismissal(open, closeMenu, wrapperRef);
 
   const choose = (scale: number | null): void => {
     setOpen(false);

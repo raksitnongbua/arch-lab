@@ -21,11 +21,16 @@
  *
  * AND THE OBJECTION IS ANSWERED BY THE CONTROL, NOT BY THE DEFAULT. Hiding the
  * feature was the real risk in flipping this, and it is the failure this
- * project has already shipped twice. The answer is that the locked face of the
- * control is an INVITATION rather than a status: a pencil offering "Edit", not
- * a padlock reporting "Locked". The argument for that shape, and the
- * assertions that keep it, are in `canvas-lock-button.tsx`. If that control
- * ever regresses to reporting state, this default is wrong again.
+ * project has already shipped twice. The answer used to be a locked face that
+ * was an invitation — a pencil offering "Edit". The product owner has since
+ * chosen an icon-only padlock pair at the canvas's top right, so the
+ * invitation is now carried differently: the closed padlock is visually
+ * distinct from the open one, its accessible name and tooltip are the unlock
+ * ACTION rather than the state, and the strip still prints the state word.
+ * The argument for that shape, its history, and the assertions that keep it
+ * are in `canvas-lock-button.tsx`. If those channels ever thin further —
+ * a state-named control with no action in its name — this default is wrong
+ * again.
  *
  * WHO THE LOCK IS FOR is now the common case rather than the exception:
  * someone READING or PRESENTING. Sharing a screen, talking through a diagram,

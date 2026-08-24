@@ -61,7 +61,14 @@ import {
 
 import "@xyflow/react/dist/style.css";
 
-import type { C4Diagram, C4Edge } from "@/types";
+import type {
+  C4Diagram,
+  C4Edge,
+  C4NodeFrameChoice,
+  C4NodeRevision,
+  C4NodeType,
+  ExternalRef,
+} from "@/types";
 import { childLevelOf, hasChildDiagram } from "@/types";
 
 import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
@@ -90,11 +97,14 @@ import {
 } from "../lib/drag-overlay";
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
+import { referenceableNodes } from "../lib/node-palette";
 import {
   createNodeProjectionCache,
   projectViewerNodes,
 } from "../lib/project-nodes";
 import { ViewerEdgeDetail, type EdgeDetail } from "./viewer-edge-detail";
+import { ViewerFrameDetail, type FrameDetail } from "./viewer-frame-detail";
+import { ViewerMultiDetail } from "./viewer-multi-detail";
 import { ViewerNodeDetail, type NodeDetail } from "./viewer-node-detail";
 import {
   ViewerEdge,
@@ -108,6 +118,8 @@ import {
   type ViewerFlowNode,
   type ViewerNodeActions,
 } from "./viewer-node";
+import { ViewerModeToggle, type CanvasDragMode } from "./viewer-mode-toggle";
+import { ViewerNodePalette } from "./viewer-node-palette";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
 import { useModKey } from "@/lib/mod-key";
@@ -149,11 +161,86 @@ export type NodeMoveHandler = (
 export interface CanvasEditHandlers {
   onNodeMove: NodeMoveHandler;
   /**
+   * Rewrite the node's own fields — name, technology, description, icon and
+   * colour — from the details panel's edit form. The host turns it into a
+   * line patch (`revisedNodeEdit`) and refuses what cannot apply; the canvas
+   * only reports the submitted form.
+   */
+  onNodeRevise: (
+    diagramId: string,
+    nodeId: string,
+    revision: C4NodeRevision,
+  ) => void;
+  /**
    * Remove the node. The host decides whether the removal is allowed (a node
    * owning a child diagram is refused) and says so — the canvas only reports
    * the keystroke.
    */
   onNodeDelete: (diagramId: string, nodeId: string) => void;
+  /**
+   * Add a new node of `type` to the diagram, from the Add strip. The host
+   * generates the id, the placeholder name and a spot below the diagram
+   * (`createdNodeEdit`) and refuses a type the diagram's level cannot hold —
+   * the canvas only reports the pressed button, which is itself already
+   * filtered to the level's legal types (`creatableNodeTypes`).
+   *
+   * RETURNS THE CREATED NODE'S ID (`null` when the host refused), because the
+   * follow-up belongs to the canvas: the host owns the text but this component
+   * owns the camera and the selection, and the new node lands below everything
+   * drawn — off screen entirely on a tall diagram. The id comes back on the
+   * same call the gesture went out on (`CanvasEdit.createdNodeId` carries it
+   * host-side), so there is no second channel to fall out of step.
+   */
+  onNodeCreate: (diagramId: string, type: C4NodeType) => string | null;
+  /**
+   * Add a `^ref` boundary placeholder mirroring `source` — a node from an
+   * ancestor diagram — from the palette's reference menu. The menu's
+   * candidate list and the host's guard (`createdRefEdit`) read the same
+   * derivation (`referenceableNodes`), so the canvas can only report a choice
+   * the host will honour or refuse for pane-lag reasons it can announce.
+   * Returns the created placeholder's id for the reason `onNodeCreate` does.
+   */
+  onRefCreate: (diagramId: string, source: ExternalRef) => string | null;
+  /**
+   * Give the node a fresh, empty child diagram one level down, from the
+   * details panel. The host mints the id, appends the block and refuses what
+   * cannot nest (`nestedNodeEdit`); the canvas only offers the button where
+   * the node has no child, no `childRef` and no `externalRef`, and the level
+   * has somewhere deeper to go.
+   */
+  onNodeNest: (diagramId: string, nodeId: string) => void;
+  /**
+   * Remove the node's EMPTY child diagram — the way back out of a nest that
+   * was never filled. The host is the authority on emptiness
+   * (`unnestedNodeEdit` refuses a child holding anything) and says so; the
+   * canvas offers the button only beside a child it can see is empty.
+   */
+  onNodeUnnest: (diagramId: string, nodeId: string) => void;
+  /**
+   * Put every node in `nodeIds` into one boundary — an existing frame, none,
+   * or one minted from a label — from the marquee selection's card. The host
+   * resolves it into ONE text edit (`groupedNodesEdit`), so the whole
+   * grouping is one undo entry; it refuses a selection the document no longer
+   * matches and says why. RETURNS whether the edit applied, for the reason
+   * `onNodeCreate` returns its id — the follow-up belongs to the canvas: on
+   * success the card has done its job and the multi-selection clears (the
+   * boundary drawing itself around the members is the feedback); on a refusal
+   * the lasso is kept, so the reader can apply again once the pane catches up
+   * rather than being charged the whole gesture for the host's busy moment.
+   */
+  onNodesGroup: (
+    diagramId: string,
+    nodeIds: readonly string[],
+    frame: C4NodeFrameChoice,
+  ) => boolean;
+  /**
+   * Rewrite one boundary's label, from the frame card beside the selected
+   * frame. The host turns it into a one-line patch of the `frame`
+   * declaration (`renamedFrameEdit`) and refuses what cannot apply — a blank
+   * label, a frame the pane no longer holds — the canvas only reports the
+   * submitted form, exactly as `onNodeRevise` does for a node's fields.
+   */
+  onFrameRename: (diagramId: string, frameId: string, label: string) => void;
   /**
    * Undo the last canvas edit.
    *
@@ -169,6 +256,18 @@ export interface CanvasEditHandlers {
 
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
+
+/**
+ * How far a press may travel and still count as a CLICK rather than a lasso.
+ *
+ * The marquee claims every press on the pane, so the plain background click
+ * that used to reach React Flow's `onPaneClick` now arrives at the marquee's
+ * release as a box with no members. This is the number that tells the two
+ * apart. Generous enough to survive the hand tremor and the pixel or two a
+ * trackpad adds to a firm tap — a threshold of zero would turn most real
+ * clicks into empty selections and announce a gesture nobody made.
+ */
+const MARQUEE_CLICK_SLOP_PX = 4;
 
 /*
  * The resting marching dash, in `pathLength=100` units — so these are
@@ -651,11 +750,13 @@ function ViewerCanvasInner({
   initialDiagramId,
   onDiagramChange,
   edit,
+  lockSlot,
 }: {
   model: ViewerModel;
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
   edit?: CanvasEditHandlers;
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   /* The modifier's name for THIS reader's platform — "Ctrl + scroll" on a Mac
      names the gesture that zooms the operating system, not the canvas. */
@@ -684,6 +785,47 @@ function ViewerCanvasInner({
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   /** At most one element selected — mutually exclusive with the edge. */
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  /**
+   * SEVERAL elements at once — the marquee's product, mutually exclusive with
+   * both single selections above. A PARALLEL state rather than a widened
+   * `selectedNodeId`, deliberately: the single id is read by the details
+   * panel, the focus stylesheet, the edit keys, nudge and delete, all of
+   * which mean exactly one element — widening it would half-migrate every
+   * reader. `null` ⇒ no multi-selection, and never a one-element array: a
+   * lasso landing on one node falls through to `selectNode`, which owns
+   * everything single selection means.
+   *
+   * DELIBERATELY NOT React Flow's own selection. Its rubber band emits
+   * `select` changes once per mouse move, and on a controlled flow that
+   * mirrors them into state feeding the `nodes` prop, every move re-projects
+   * the array, StoreUpdater pushes the fresh identity back into React Flow's
+   * store, the rect re-derives against the adopted objects, and the cycle
+   * runs to "Maximum update depth exceeded" — the production crash 4fa7c36
+   * fixed on the editor canvas. This canvas never engages that machinery at
+   * all (`elementsSelectable` stays false and no `onSelectionChange` is
+   * declared): the marquee below is its own overlay, its per-frame state
+   * feeds nothing but that overlay's div, and membership is computed ONCE on
+   * release from model geometry. The `nodes` and `edges` memos read none of
+   * this state, so their identity holds for the whole gesture and the loop
+   * has no fuel — `check:canvas-edit` pins exactly that.
+   */
+  const [multiSelectedIds, setMultiSelectedIds] = useState<
+    readonly string[] | null
+  >(null);
+  /**
+   * ONE BOUNDARY selected — the FOURTH selection kind, mutually exclusive
+   * with all three above for the same reason they are with each other: the
+   * corner slot shows one card, and two "this is what you are looking at"
+   * indicators is a diagram claiming two focal points. A PARALLEL state
+   * rather than a widened `selectedNodeId`, the multi selection's argument:
+   * the single node id is read by the node panel, the focus stylesheet,
+   * nudge and delete, all of which mean exactly one ELEMENT — a frame is not
+   * one (it has no node object, no position of its own), so widening the id
+   * would half-migrate every reader. Only meaningful while editable: the
+   * FrameLayer runs controlled exactly then (see `activeFrameId`), so a
+   * read-only canvas can never enter this state.
+   */
+  const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramIdRef = useRef(diagramId);
@@ -693,6 +835,8 @@ function ViewerCanvasInner({
   /** Mirrors for handlers that must read the selection synchronously. */
   const selectedEdgeIdRef = useRef<string | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
+  const multiSelectedIdsRef = useRef<readonly string[] | null>(null);
+  const selectedFrameIdRef = useRef<string | null>(null);
   /** Last camera per diagram — climbing back returns to where you were. */
   const viewportsRef = useRef<Record<string, Viewport>>({});
   const pendingRef = useRef<PendingNav | null>(null);
@@ -720,13 +864,34 @@ function ViewerCanvasInner({
     if (announce) setAnnouncement("Element deselected.");
   }, []);
 
+  const clearMultiSelection = useCallback((announce = true) => {
+    if (multiSelectedIdsRef.current === null) return;
+    multiSelectedIdsRef.current = null;
+    setMultiSelectedIds(null);
+    if (announce) setAnnouncement("Selection cleared.");
+  }, []);
+
+  const clearFrameSelection = useCallback((announce = true) => {
+    if (selectedFrameIdRef.current === null) return;
+    selectedFrameIdRef.current = null;
+    setSelectedFrameId(null);
+    if (announce) setAnnouncement("Boundary deselected.");
+  }, []);
+
   /** Clear whichever selection is active (they are mutually exclusive). */
   const clearSelection = useCallback(
     (announce = true) => {
       clearEdgeSelection(announce);
       clearNodeSelection(announce);
+      clearMultiSelection(announce);
+      clearFrameSelection(announce);
     },
-    [clearEdgeSelection, clearNodeSelection],
+    [
+      clearEdgeSelection,
+      clearNodeSelection,
+      clearMultiSelection,
+      clearFrameSelection,
+    ],
   );
 
   const toggleEdgeSelection = useCallback(
@@ -738,8 +903,11 @@ function ViewerCanvasInner({
       const current = getDiagram(model, diagramIdRef.current);
       const edge = findEdge(current, edgeId);
       if (edge === null) return;
-      // Mutually exclusive: an incoming edge selection displaces the node's.
+      // Mutually exclusive: an incoming edge selection displaces the node's,
+      // the marquee's and the frame's.
       clearNodeSelection(false);
+      clearMultiSelection(false);
+      clearFrameSelection(false);
       const sourceName = findNode(current, edge.source)?.name ?? edge.source;
       const targetName = findNode(current, edge.target)?.name ?? edge.target;
       selectedEdgeIdRef.current = edgeId;
@@ -751,7 +919,13 @@ function ViewerCanvasInner({
           " Details panel updated. Press Escape to deselect.",
       );
     },
-    [model, clearEdgeSelection, clearNodeSelection],
+    [
+      model,
+      clearEdgeSelection,
+      clearNodeSelection,
+      clearMultiSelection,
+      clearFrameSelection,
+    ],
   );
 
   // Selecting an already-selected node keeps it selected (idempotent, NOT a
@@ -763,8 +937,11 @@ function ViewerCanvasInner({
       const current = getDiagram(model, diagramIdRef.current);
       const node = findNode(current, nodeId);
       if (node === null) return;
-      // Mutually exclusive: an incoming node selection displaces the edge's.
+      // Mutually exclusive: an incoming node selection displaces the edge's,
+      // the marquee's and the frame's.
       clearEdgeSelection(false);
+      clearMultiSelection(false);
+      clearFrameSelection(false);
       selectedNodeIdRef.current = nodeId;
       setSelectedNodeId(nodeId);
       const drillHint = hasChildDiagram(node)
@@ -775,7 +952,41 @@ function ViewerCanvasInner({
           `Details panel updated.${drillHint} Press Escape to deselect.`,
       );
     },
-    [model, clearEdgeSelection],
+    [model, clearEdgeSelection, clearMultiSelection, clearFrameSelection],
+  );
+
+  /**
+   * Select ONE boundary — the FrameLayer's controlled `onSelect`, so it fires
+   * exactly when a frame's caption or border band is clicked on an editable
+   * canvas (`null` on the dismissing second click). Displaces every other
+   * selection kind, as each of them displaces this one.
+   */
+  const selectFrame = useCallback(
+    (frameId: string | null) => {
+      if (frameId === null) {
+        clearFrameSelection();
+        return;
+      }
+      if (selectedFrameIdRef.current === frameId) return;
+      const current = getDiagram(model, diagramIdRef.current);
+      const frame = (current.frames ?? []).find((f) => f.id === frameId);
+      if (frame === undefined) return;
+      clearEdgeSelection(false);
+      clearNodeSelection(false);
+      clearMultiSelection(false);
+      selectedFrameIdRef.current = frameId;
+      setSelectedFrameId(frameId);
+      setAnnouncement(
+        `Boundary selected: ${frame.label}. Rename it in the details panel; press Escape to deselect.`,
+      );
+    },
+    [
+      model,
+      clearEdgeSelection,
+      clearNodeSelection,
+      clearMultiSelection,
+      clearFrameSelection,
+    ],
   );
 
   // Same pointer-events constraint as node drilling: with selection and focus
@@ -1008,6 +1219,350 @@ function ViewerCanvasInner({
   /** Editable is a property of the handlers' presence — see CanvasEditHandlers. */
   const editable = edit !== undefined;
 
+  /* ---- editing: what a bare drag on the pane does ----------------------------
+   * TWO MODES, CHOSEN BY AN EXPLICIT TOGGLE: Select (drag draws the marquee)
+   * or Pan (the handlers below are not attached at all, so the press reaches
+   * React Flow's own `panOnDrag` and pans exactly as a read-only canvas
+   * does). Select is the default — a reader who unlocked the canvas did so to
+   * edit. A visible mode replaced hold-Space-to-pan, which was reported
+   * broken three times and outlived two attempted fixes, because a held key
+   * depends on keyboard state and focus — a flag mirrored from window
+   * listeners, released by keyup and by blur, yielded to whichever control
+   * held focus — and never existed on touch, which has no Space key. Plain
+   * state, no ref twin: nothing reads it mid-gesture, because Pan mode works
+   * by DETACHMENT rather than by a per-press bail. */
+  const [dragMode, setDragMode] = useState<CanvasDragMode>("select");
+
+  /* ---- editing: the marquee — several elements in one gesture ---------------
+   * A BARE drag on the pane draws a selection box; release selects every
+   * element the box fully CONTAINS and opens the grouping card. Full
+   * containment, matching React Flow's own default (`SelectionMode.Full`),
+   * so the gesture reads the way the library's marquee would have — a box
+   * that merely clips a neighbour does not conscript it into a boundary.
+   *
+   * BARE DRAG IS THE LASSO ONLY WHERE THE LASSO EXISTS — AND ONLY IN SELECT
+   * MODE. These handlers are attached only while `marqueeMode` (see the
+   * container's props), so on a read-only or locked canvas — every shared
+   * link, every presentation, and the DEFAULT, since the canvas locks by
+   * default — a bare drag still pans through React Flow's own `panOnDrag`,
+   * untouched by any of this. On an editable canvas the drawing-tool
+   * convention takes over: drag selects, and panning is one press away on
+   * the Select/Pan toggle beside the zoom pill (plus the scroll-pan and the
+   * pinch that never stopped working). Pan mode DETACHES these handlers
+   * rather than bailing inside them, so the two gestures cannot fight over
+   * one button and the pan owes nothing to any keyboard or focus state —
+   * the dependency that broke the held-key pan this mode replaced.
+   *
+   * THIS IS NOT REACT FLOW'S RUBBER BAND, AND THAT IS THE CRASH GUARD — see
+   * the note on `multiSelectedIds` for the loop (4fa7c36) this shape avoids
+   * by construction: the only per-frame state is one rect (`marquee`),
+   * consumed by one overlay div, and the projection memos never read it, so
+   * the `nodes` prop keeps its identity for the whole gesture and React
+   * Flow's StoreUpdater has nothing to push.
+   *
+   * POINTER CAPTURE, NOT WINDOW LISTENERS: the container captures the pointer
+   * for the length of the press, so the move and release handlers are plain
+   * props on the container — no third window listener beside the two keydown
+   * guards the check counts. Cancelling the pointerdown is also what keeps
+   * the pane's own pan out of the gesture: React Flow pans through d3, which
+   * listens for the COMPATIBILITY mousedown, and a cancelled pointerdown
+   * suppresses it (Pointer Events, "compatibility mouse events") — so a bare
+   * drag draws a box here while the same drag still pans everywhere the
+   * handlers are absent. */
+
+  const [marquee, setMarquee] = useState<Rect | null>(null);
+  /** The press's origin and pointer, container-relative; null between presses. */
+  const marqueeOriginRef = useRef<{
+    x: number;
+    y: number;
+    pointerId: number;
+  } | null>(null);
+
+  const handleMarqueeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (edit === undefined) return;
+      // The left button is the whole gesture; anything else stays React
+      // Flow's (middle/right drag, pinch, a drag on a node moves it).
+      if (event.button !== 0) return;
+      // From the PANE only: a press that starts on a node, a panel or the
+      // minimap means something else, and claiming it would eat that
+      // gesture.
+      /* THE TARGET MUST *BE* THE PANE, NOT SIT INSIDE IT — and the difference
+         is a shipped bug. React Flow v12 renders the whole graph as CHILDREN
+         of `.react-flow__pane`, so every node and every edge is a descendant
+         of it. A `closest(".react-flow__pane")` test therefore matched a press
+         on a NODE, and the lasso claimed it — cancelling the press, which
+         cancels selecting the node, dragging it, and the focus move the
+         press owed the canvas. The background is the pane ELEMENT ITSELF;
+         anything with a node, an edge, a panel or a control between it and
+         the pointer belongs to that thing. */
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.classList.contains("react-flow__pane")
+      ) {
+        return;
+      }
+      const container = containerRef.current;
+      if (container === null) return;
+      // Cancelled so d3 never sees the compat mousedown (see the section
+      // note); captured so the move and the release land here whatever the
+      // pointer crosses on the way.
+      event.preventDefault();
+      event.stopPropagation();
+      container.setPointerCapture(event.pointerId);
+      /* THE FOCUS THE `preventDefault` ABOVE JUST SUPPRESSED, handed over
+         explicitly — and this is a bug fix, not tidying. Cancelling the press
+         suppresses the compatibility mouse events, and moving focus is one of
+         the things those events do. Without this the reader's focus stays on
+         whatever they last clicked — on this canvas usually a BUTTON (the Add
+         strip, the lock, the zoom chip), or the source textarea, whose
+         form-field exemption then keeps the nudge and delete keys away from
+         the diagram. Pressing the pane is the gesture that means "I am
+         working on the drawing now"; it has to move focus there like the
+         click it replaced, so Escape, the arrows and the next Tab aim at the
+         drawing rather than at the last control pressed. */
+      container.focus({ preventScroll: true });
+      const box = container.getBoundingClientRect();
+      const x = event.clientX - box.left;
+      const y = event.clientY - box.top;
+      marqueeOriginRef.current = { x, y, pointerId: event.pointerId };
+      setMarquee({ x, y, width: 0, height: 0 });
+    },
+    [edit],
+  );
+
+  const handleMarqueeMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const origin = marqueeOriginRef.current;
+      if (origin === null || event.pointerId !== origin.pointerId) return;
+      const container = containerRef.current;
+      if (container === null) return;
+      const box = container.getBoundingClientRect();
+      const x = event.clientX - box.left;
+      const y = event.clientY - box.top;
+      // ONLY the overlay's rect. Nothing downstream of the projection may
+      // depend on this state — that is the whole 4fa7c36 guard, and the
+      // check reads this handler to hold it to that.
+      setMarquee({
+        x: Math.min(origin.x, x),
+        y: Math.min(origin.y, y),
+        width: Math.abs(x - origin.x),
+        height: Math.abs(y - origin.y),
+      });
+    },
+    [],
+  );
+
+  const handleMarqueeEnd = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const origin = marqueeOriginRef.current;
+      if (origin === null || event.pointerId !== origin.pointerId) return;
+      marqueeOriginRef.current = null;
+      setMarquee(null);
+      const container = containerRef.current;
+      if (container === null) return;
+      const box = container.getBoundingClientRect();
+      const x = event.clientX - box.left;
+      const y = event.clientY - box.top;
+      // Container pixels → model coordinates: the inverse of
+      // `flowRectToScreen`, under the camera the gesture happened in.
+      const viewport = getViewport();
+      const left = (Math.min(origin.x, x) - viewport.x) / viewport.zoom;
+      const top = (Math.min(origin.y, y) - viewport.y) / viewport.zoom;
+      const right = (Math.max(origin.x, x) - viewport.x) / viewport.zoom;
+      const bottom = (Math.max(origin.y, y) - viewport.y) / viewport.zoom;
+      // Membership is computed ONCE, here, from the model's own geometry —
+      // never per frame, and never from React Flow's store.
+      const current = getDiagram(model, diagramIdRef.current);
+      const covered = current.nodes
+        .filter(
+          (node) =>
+            node.position.x >= left &&
+            node.position.y >= top &&
+            node.position.x + node.size.width <= right &&
+            node.position.y + node.size.height <= bottom,
+        )
+        .map((node) => node.id);
+      const [first] = covered;
+      if (first === undefined) {
+        /* A PRESS THAT NEVER TRAVELLED IS A CLICK, and it must read as one.
+           The marquee claims every pane press, so the plain click that used
+           to reach `onPaneClick` now arrives here as a zero-area box. Told
+           apart by travel rather than by area, because a box can be a few
+           pixels wide and still be a real, if tiny, drag. Announcing "no
+           elements inside the selection box" at someone who simply clicked
+           the background describes a gesture they did not make. */
+        const travelled =
+          Math.abs(x - origin.x) > MARQUEE_CLICK_SLOP_PX ||
+          Math.abs(y - origin.y) > MARQUEE_CLICK_SLOP_PX;
+        clearSelection(!travelled);
+        if (travelled) setAnnouncement("No elements inside the selection box.");
+        return;
+      }
+      if (covered.length === 1) {
+        // One node is a SINGLE selection, with everything that means — the
+        // details panel, nudge, delete. The multi card would be a worse
+        // rendering of a state the canvas already handles.
+        clearMultiSelection(false);
+        selectNode(first);
+        return;
+      }
+      clearEdgeSelection(false);
+      clearNodeSelection(false);
+      clearFrameSelection(false);
+      multiSelectedIdsRef.current = covered;
+      setMultiSelectedIds(covered);
+      setAnnouncement(
+        `${covered.length} elements selected. Group them into a boundary in the details panel; press Escape to deselect.`,
+      );
+    },
+    [
+      model,
+      getViewport,
+      clearSelection,
+      clearMultiSelection,
+      clearEdgeSelection,
+      clearNodeSelection,
+      clearFrameSelection,
+      selectNode,
+    ],
+  );
+
+  // An aborted press (a second finger, focus stolen mid-drag) selects
+  // nothing: the box disappears and whatever was selected before stays.
+  const handleMarqueeCancel = useCallback(() => {
+    marqueeOriginRef.current = null;
+    setMarquee(null);
+  }, []);
+
+  /* Switching modes also puts an in-flight box away, exactly as a cancelled
+     press does. Pan mode works by detaching the handlers, so a flip that
+     lands mid-press (a second finger reaching the toggle) would otherwise
+     strand the overlay with no release handler left to clear it. */
+  const handleDragModeChange = useCallback(
+    (mode: CanvasDragMode) => {
+      handleMarqueeCancel();
+      setDragMode(mode);
+    },
+    [handleMarqueeCancel],
+  );
+
+  /* The lasso exists only on an editable canvas in SELECT mode. This gate is
+     what the container's four pointer props read, so Pan mode detaches the
+     marquee entirely and a bare drag reaches React Flow's `panOnDrag` — see
+     the marquee section note. */
+  const marqueeMode = editable && dragMode === "select";
+
+  /* The card's Apply, resolved to the lassoed ids here for the reason the
+     single revise is: the card describes a selection and should not carry ids
+     around. Success clears the lasso — the boundary drawing itself around
+     the members is the feedback — while a refusal keeps it, so the reader
+     can apply again once the pane catches up (the host announced why). */
+  const handleGroupSelection = useCallback(
+    (frame: C4NodeFrameChoice) => {
+      const ids = multiSelectedIdsRef.current;
+      if (edit === undefined || ids === null) return;
+      if (edit.onNodesGroup(diagramIdRef.current, ids, frame)) {
+        clearMultiSelection(false);
+      }
+    },
+    [edit, clearMultiSelection],
+  );
+
+  /* Locking (or the document ceasing to be editable) withdraws the gesture,
+     so everything the lasso DRIVES derives from this value, which is null the
+     moment the handlers are withdrawn: the grouping card is edit chrome, the
+     dim exists to point at the card, and a locked canvas must show neither.
+     The underlying state deliberately SURVIVES the lock rather than being
+     cleared by an effect (a setState-in-effect the linter rightly refuses):
+     unlocking puts the reader back exactly where the lock interrupted them,
+     and a selection whose members stopped existing meanwhile refuses at the
+     grouping with its own announcement. The Escape ladder gates on the same
+     `editable`, so a dormant lasso never eats the climb keystroke. */
+  const activeMultiIds = editable ? multiSelectedIds : null;
+
+  /* The frame selection derives the same way, for the same reasons: the
+     boundary card is edit chrome, so a locked canvas shows neither it nor
+     the controlled FrameLayer that feeds it — the layer falls back to its
+     own zoom-and-march focus — while the underlying state survives the lock
+     for `activeMultiIds`' reason. */
+  const activeFrameId = editable ? selectedFrameId : null;
+
+  /* ---- editing: bring a just-created element into view ---------------------
+   * The create gestures place the newcomer in a clear band BELOW everything
+   * drawn (`vacantPosition`), which on a tall diagram is off screen — and the
+   * announcement tells the reader to select it, a promise the camera has to
+   * help keep. The id the host hands back cannot be acted on synchronously:
+   * the node exists only after the host's state lands back here as a new
+   * `model`, so the id waits in a ref and the effect below runs on the model
+   * that contains the node. A ref, not state: nothing renders from it. */
+  const pendingFocusRef = useRef<string | null>(null);
+
+  const focusWhenCreated = useCallback((createdNodeId: string | null): void => {
+    if (createdNodeId !== null) pendingFocusRef.current = createdNodeId;
+  }, []);
+
+  useEffect(() => {
+    const nodeId = pendingFocusRef.current;
+    if (nodeId === null) return;
+    // Cleared whether or not the node is found: the id belongs to THIS model
+    // change, and a stale id must never re-aim the camera on a later edit.
+    pendingFocusRef.current = null;
+    const container = containerRef.current;
+    const rect = nodeRect(getDiagram(model, diagramIdRef.current), nodeId);
+    if (container === null || rect === null) return;
+    // Selected as well as centred: the announcement's next step is "rename it
+    // in the details panel", and selection is what opens that panel — arriving
+    // with it open turns the instruction into a state the reader is already in.
+    selectNode(nodeId);
+    /* Centred by PANNING AT THE CURRENT ZOOM — the same viewport pipe every
+       navigation uses (`setViewport`), never a second camera mover. Not
+       `fitViewportFor`: fitting the whole diagram would zoom out to answer a
+       question nobody asked, when the reader's next act is on this one node.
+       `duration()` is 0 under `prefers-reduced-motion`, so the reduced-motion
+       reader gets an instant cut, exactly as the level transitions do. */
+    const box = container.getBoundingClientRect();
+    const zoom = getViewport().zoom;
+    const centred: Viewport = {
+      x: box.width / 2 - (rect.x + rect.width / 2) * zoom,
+      y: box.height / 2 - (rect.y + rect.height / 2) * zoom,
+      zoom,
+    };
+    // Saved as this diagram's camera too, as `navigateTo` saves its own:
+    // climbing away and back should return to where the reader was left.
+    viewportsRef.current[diagramIdRef.current] = centred;
+    void setViewport(centred, { duration: duration("levelTransition") });
+  }, [model, getViewport, setViewport, selectNode]);
+
+  /* Resolved to the CURRENT diagram here, exactly as the drag and the delete
+     are: the palette describes one level's types and should not carry the
+     diagram id around. */
+  const handleNodeCreate = useCallback(
+    (type: C4NodeType) => {
+      focusWhenCreated(edit?.onNodeCreate(diagramIdRef.current, type) ?? null);
+    },
+    [edit, focusWhenCreated],
+  );
+
+  const handleRefCreate = useCallback(
+    (source: ExternalRef) => {
+      focusWhenCreated(edit?.onRefCreate(diagramIdRef.current, source) ?? null);
+    },
+    [edit, focusWhenCreated],
+  );
+
+  /* What the palette's reference picker offers — the same derivation the
+     host's guard reads (`referenceableNodes`), so the picker and the refusal
+     cannot disagree. Computed only while editable: a read-only canvas renders
+     no picker, so the walk would be work nobody sees. */
+  const refOptions = useMemo(
+    () =>
+      editable
+        ? referenceableNodes(Object.values(model.diagrams), diagramId)
+        : [],
+    [editable, model, diagramId],
+  );
+
   const climbTo = useCallback(
     (targetId: string) => {
       const anchorNodeId = climbAnchorNodeId(
@@ -1171,11 +1726,31 @@ function ViewerCanvasInner({
       // make one press do two things. The viewer's own Escape ladder
       // (deselect → climb → leave immersive mode) resumes afterwards.
       if (document.fullscreenElement !== null) return;
-      // Selection (element or relationship — never both) takes priority;
-      // level-climb is the fallback.
+      // Form fields are exempt, the same rung rule the sequence viewer's
+      // ladder states: the details panel's edit form is a sibling of this
+      // listener, and an Escape typed into its name field would otherwise
+      // deselect the element — unmounting the form with the reader's
+      // half-typed text in it.
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "TEXTAREA" ||
+          target.tagName === "INPUT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      // Selection (element, relationship, marquee or boundary — never two at
+      // once) takes priority; level-climb is the fallback. The marquee's and
+      // the frame's rungs are gated on `editable` because both survive the
+      // lock dormant (see `activeMultiIds` / `activeFrameId`): while locked
+      // nothing on screen shows either, so Escape must climb rather than
+      // clear a selection nobody can see.
       if (
         selectedEdgeIdRef.current !== null ||
-        selectedNodeIdRef.current !== null
+        selectedNodeIdRef.current !== null ||
+        (editable && multiSelectedIdsRef.current !== null) ||
+        (editable && selectedFrameIdRef.current !== null)
       ) {
         event.preventDefault();
         clearSelection();
@@ -1188,7 +1763,7 @@ function ViewerCanvasInner({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model, climbTo, clearSelection]);
+  }, [model, climbTo, clearSelection, editable]);
 
   /* ---- editing: nudge and delete the selected element ----------------------
    * ONE GRID STEP PER PRESS, and deliberately no fine (Shift) variant. The
@@ -1233,6 +1808,21 @@ function ViewerCanvasInner({
         focused === document.body ||
         container.contains(focused);
       if (!inCanvas) return;
+
+      /* FORM FIELDS KEEP THEIR OWN KEYS, and this guard exists because the
+         details panel renders INSIDE this container: without it, Backspace in
+         the edit form's name field would delete the selected node, an arrow
+         key would nudge it, and ⌘Z would undo a canvas edit instead of the
+         reader's typing. Same exemption the Escape ladder above and the
+         sequence viewer's rung both make. */
+      if (
+        focused instanceof HTMLElement &&
+        (focused.tagName === "TEXTAREA" ||
+          focused.tagName === "INPUT" ||
+          focused.isContentEditable)
+      ) {
+        return;
+      }
 
       /* UNDO FIRST, and before the selection check: the edit most likely to
          be undone is a delete, which leaves nothing selected. Shift+Cmd+Z
@@ -1443,20 +2033,134 @@ function ViewerCanvasInner({
       }));
     const childLevel = childLevelOf(diagram.level);
     // Same rule as the canvas chip: an empty child diagram is not a drill-down.
-    const childCount =
+    // A CHILD THAT EXISTS BUT IS EMPTY is distinguished from "no child" below,
+    // because on an editable canvas it is a different situation: a workspace
+    // to open and fill, with a way back out (un-nest) — not a dead pointer.
+    const child =
       hasChildDiagram(node) && node.childDiagramId
-        ? getDiagram(model, node.childDiagramId).nodes.length
-        : 0;
+        ? (model.diagrams[node.childDiagramId] ?? null)
+        : null;
+    const childCount = child !== null ? child.nodes.length : 0;
     const drill =
       childCount > 0 && childLevel !== null ? { childCount, childLevel } : null;
-    return { node, level: diagram.level, outgoing, incoming, drill };
+    return {
+      node,
+      level: diagram.level,
+      childLevel,
+      outgoing,
+      incoming,
+      drill,
+      // An empty (or dangling) child pointer, for the editable panel's
+      // open-or-remove affordances; read-only hosts render nothing from it.
+      emptyChild:
+        hasChildDiagram(node) && childCount === 0
+          ? { exists: child !== null }
+          : null,
+      // The diagram's own boundaries — what the edit form's boundary select
+      // offers, alongside "none" and a new label.
+      frames: diagram.frames ?? [],
+      // The edit form's colour control reads these; the nodes already paint
+      // with them (project-nodes), so the panel and the canvas see one map.
+      tagColors: model.file.metadata.tagColors,
+    };
   }, [model, diagram, selectedNodeId]);
+
+  /* ---- selected-boundary detail --------------------------------------------- */
+
+  const frameDetail = useMemo<FrameDetail | null>(() => {
+    if (activeFrameId === null) return null;
+    const frames = diagram.frames ?? [];
+    const frame = frames.find((candidate) => candidate.id === activeFrameId);
+    // A selection can outlive its frame for one render after a pane edit —
+    // the node detail's rule: render nothing rather than a card about a
+    // boundary that is no longer there.
+    if (frame === undefined) return null;
+    return {
+      frame,
+      memberCount: diagram.nodes.filter((node) => node.frameId === frame.id)
+        .length,
+      childFrameCount: frames.filter(
+        (candidate) => candidate.parentFrameId === frame.id,
+      ).length,
+    };
+  }, [diagram, activeFrameId]);
+
+  /* The card's Rename, resolved to the selected frame HERE for the reason the
+     node revise is: the card describes one boundary and should not carry ids
+     around, and the ref is what handlers on this canvas already read the
+     selection from — at CLICK time, inside the callback, never at render
+     (`react-hooks/refs`). */
+  const handleFrameRename = useCallback(
+    (label: string) => {
+      if (edit === undefined || selectedFrameIdRef.current === null) return;
+      edit.onFrameRename(
+        diagramIdRef.current,
+        selectedFrameIdRef.current,
+        label,
+      );
+    },
+    [edit],
+  );
 
   const handleDetailZoomIn = useCallback(() => {
     if (selectedNodeIdRef.current !== null) {
       drillInto(selectedNodeIdRef.current);
     }
   }, [drillInto]);
+
+  /* The panel's Apply, resolved to the selected node HERE rather than in the
+     panel: the panel describes one node and should not carry ids around, and
+     the refs are what handlers on this canvas already read the selection
+     from. `undefined` while the canvas is read-only, which is what withholds
+     the pencil — presence is the signal, exactly as `edit` itself is. */
+  const handleDetailRevise = useMemo(
+    () =>
+      edit === undefined
+        ? undefined
+        : (revision: C4NodeRevision) => {
+            if (selectedNodeIdRef.current === null) return;
+            edit.onNodeRevise(
+              diagramIdRef.current,
+              selectedNodeIdRef.current,
+              revision,
+            );
+          },
+    [edit],
+  );
+
+  /* Nest and un-nest, resolved to the selected node the way the revise is.
+     PRESENCE IS PER-NODE, not per-canvas: the panel renders whichever button
+     it is handed, so the decision "can THIS node nest" is made here, from the
+     same facts the module refuses on — a button the host would refuse every
+     time is a dead control, which is worse than none. */
+  const detailNode = nodeDetail?.node;
+  /* THE REF READS LIVE IN A CALLBACK, not in the memo that decides presence.
+     Reading `.current` inside a `useMemo` body is a render-time read, which
+     `react-hooks/refs` refuses — and rightly: the memo would capture whatever
+     the ref held while rendering. Split in two, the callback reads the
+     selection at CLICK time (the only moment it is true) and the memo decides
+     only whether the button exists at all. */
+  const nestSelected = useCallback(() => {
+    if (edit === undefined || selectedNodeIdRef.current === null) return;
+    edit.onNodeNest(diagramIdRef.current, selectedNodeIdRef.current);
+  }, [edit]);
+  const unnestSelected = useCallback(() => {
+    if (edit === undefined || selectedNodeIdRef.current === null) return;
+    edit.onNodeUnnest(diagramIdRef.current, selectedNodeIdRef.current);
+  }, [edit]);
+  /* Plain booleans, not memos handing back the callbacks: a memo whose value
+     IS a ref-reading function is a render-time read as far as
+     `react-hooks/refs` is concerned. The presence test is pure derivation from
+     props, so it costs nothing to recompute, and the JSX below picks the
+     callback — which is where a handler belongs anyway. */
+  const canNest =
+    edit !== undefined &&
+    detailNode !== undefined &&
+    nodeDetail?.childLevel !== null &&
+    !hasChildDiagram(detailNode) &&
+    detailNode.childRef === undefined &&
+    detailNode.externalRef === undefined;
+  const canUnnest = edit !== undefined && nodeDetail?.emptyChild != null;
 
   // Focus effect while an element is selected: the element and its direct
   // neighbours stay at full strength (the touching edges stay "idle" in the
@@ -1501,6 +2205,33 @@ function ViewerCanvasInner({
     );
   }, [diagram, selectedNodeId]);
 
+  // Focus effect while SEVERAL elements are selected: members wear the
+  // static selection ring (the single selection's reduced-motion affordance)
+  // and everything else recedes. STATIC whatever the motion preference — N
+  // marching outlines would be N moving lights, and the single selection's
+  // rule that the only moving light is the selection itself is worth more
+  // than symmetry here. Stylesheet-driven like both single focuses, so node
+  // objects never change with selection (the remount note above the `nodes`
+  // memo). Ids that stop existing mid-selection (a pane edit deleting a
+  // member) select nothing and dim as part of "everything else" — harmless,
+  // and the grouping itself refuses the stale id with an announcement.
+  const multiFocusCss = useMemo<string | null>(() => {
+    if (activeMultiIds === null) return null;
+    const excludeSelector = activeMultiIds
+      .map((id) => `:not([data-id="${id}"])`)
+      .join("");
+    const rings = activeMultiIds
+      .map(
+        (id) =>
+          `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }`,
+      )
+      .join("\n");
+    return (
+      `.viewer-canvas .react-flow__node${excludeSelector} { opacity: ${DIM_NODE_OPACITY}; }\n` +
+      rings
+    );
+  }, [activeMultiIds]);
+
   /* ---- camera persistence --------------------------------------------------- */
 
   const handleMoveEnd = useCallback<OnMoveEnd>((_event, viewport) => {
@@ -1528,6 +2259,17 @@ function ViewerCanvasInner({
       // error 004). Absolute positioning tracks the wrapper's USED box —
       // min-height clamp included — so the graph always has real dimensions.
       className="viewer-canvas absolute inset-0 outline-none"
+      /* The marquee's four pointer handlers, present only while `marqueeMode`
+         (editable AND the Select mode) — the gesture is an EDIT gesture (its
+         product is the grouping card), so a read-only or locked canvas never
+         draws the box, and Pan mode detaches the handlers so the press pans
+         through React Flow instead. Down is CAPTURE phase to claim the press
+         before React Flow's pane sees it; the other three receive the
+         captured pointer, so they are ordinary props. */
+      onPointerDownCapture={marqueeMode ? handleMarqueeStart : undefined}
+      onPointerMove={marqueeMode ? handleMarqueeMove : undefined}
+      onPointerUp={marqueeMode ? handleMarqueeEnd : undefined}
+      onPointerCancel={marqueeMode ? handleMarqueeCancel : undefined}
     >
       <style>{EDGE_INTERACTION_CSS}</style>
       {detail !== null ? (
@@ -1538,6 +2280,23 @@ function ViewerCanvasInner({
         <style>{`.viewer-canvas .react-flow__node:not([data-id="${detail.edge.source}"]):not([data-id="${detail.edge.target}"]) { opacity: ${DIM_NODE_OPACITY}; }`}</style>
       ) : null}
       {nodeFocusCss !== null ? <style>{nodeFocusCss}</style> : null}
+      {multiFocusCss !== null ? <style>{multiFocusCss}</style> : null}
+      {marquee !== null ? (
+        // The selection box: one absolutely positioned div, fed by the only
+        // state the gesture writes per frame — see the marquee section note.
+        // aria-hidden because the release announces the result; the rectangle
+        // is just the aim.
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute z-[5] rounded-sm border border-primary bg-primary/10"
+          style={{
+            left: marquee.x,
+            top: marquee.y,
+            width: marquee.width,
+            height: marquee.height,
+          }}
+        />
+      ) : null}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -1561,24 +2320,32 @@ function ViewerCanvasInner({
           zoomOnScroll={false}
           zoomOnPinch
           zoomOnDoubleClick={false}
-          /* PAN IS TWO GESTURES, AND BOTH ARE SPELLED OUT ON PURPOSE.
-             `panOnDrag` and `panActivationKeyCode` are both React Flow
-             DEFAULTS (`panOnDrag = true`, `panActivationKeyCode = 'Space'`),
-             so leaving them off the element would behave identically today.
-             They are written anyway because an editable canvas is about to
-             depend on them: once nodes become draggable, dragging a node MOVES
-             it, and these two are then the only ways left to pan — the pane for
-             empty canvas, Space for anywhere including over a node. A default
-             that a feature depends on is a default that must not be able to
-             change under it silently, whether by a library upgrade or by
-             someone adding `selectionOnDrag` here the way the editor has it.
-             `check:viewer-motion` pins the Space key to the editor's, which is
-             the one place the same gesture is already declared. */
+          /* PAN IS `panOnDrag`, A REACT FLOW DEFAULT SPELLED OUT ON PURPOSE,
+             because both canvas states depend on it:
+
+               - READ-ONLY (every shared link and presentation, and the
+                 default — the canvas locks by default), it is the whole
+                 story: no marquee handler is attached, so a bare drag
+                 reaches React Flow and pans, exactly as it always has.
+               - EDITABLE, the Select/Pan toggle decides who owns a bare pane
+                 drag: in Select the marquee's capture handler claims it for
+                 the lasso; in Pan the handlers are not attached at all and
+                 this same `panOnDrag` pans. An explicit mode, not a held
+                 key: the hold-Space pan this replaced depended on keyboard
+                 state and focus and broke three times, and touch has no
+                 Space key. No `panActivationKeyCode` is declared here —
+                 the pan must owe nothing to any key.
+
+             A default that a feature depends on is a default that must not
+             be able to change under it silently, whether by a library
+             upgrade or by someone adding `selectionOnDrag` here the way the
+             editor has it. `check:viewer-motion` pins this prop, and pins
+             that no pan key grows back beside the toggle. */
           panOnDrag
-          panActivationKeyCode="Space"
           /* The pan comment above is the other half of this line: with nodes
-             draggable, a drag STARTING ON A NODE moves it, and pan survives as
-             the pane drag and Space + drag. */
+             draggable, a drag STARTING ON A NODE moves it in either mode —
+             the toggle governs the pane, not the nodes — and pan survives as
+             the Pan mode (plus scroll and pinch). */
           nodesDraggable={editable}
           /* THE PAIR THAT MAKES A DRAG VISIBLE. `nodes` above makes this flow
              controlled, and a controlled flow that declares no `onNodesChange`
@@ -1603,7 +2370,16 @@ function ViewerCanvasInner({
              space merges two class names into one nonsense name, every rule
              targeting it silently stops applying, and CSS reports nothing. */
           className={[
-            "bg-canvas [&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing",
+            "bg-canvas",
+            /* THE PANE CURSOR IS THE MODE. Read-only, a bare drag pans, so
+               the pane wears grab/grabbing as it always has. Editable, the
+               toggle decides: crosshair while a drag draws the lasso (the
+               drawing-tool convention), grab in Pan mode — so the canvas
+               itself answers "which mode am I in" without the reader looking
+               back at the toggle. */
+            marqueeMode
+              ? "[&_.react-flow__pane]:cursor-crosshair"
+              : "[&_.react-flow__pane]:cursor-grab [&_.react-flow__pane:active]:cursor-grabbing",
             /* THE AFFORDANCE. Without this the node keeps the body button's
                pointer cursor and nothing on screen says it can be moved — the
                feature would be invisible until someone tried it by accident.
@@ -1619,31 +2395,110 @@ function ViewerCanvasInner({
               box of its members' positions (`placeFrames`), so feeding it the
               model while the nodes follow the pointer would draw a frame that
               visibly fails to contain the node it owns, then jump on release. */}
-          <FrameLayer diagram={draggedDiagram} onFocus={clearSelection} />
+          {/* CONTROLLED exactly while editable: a clicked frame is then a
+              SELECTION (the boundary card opens, this canvas owns dismissal);
+              read-only or locked, both props fall away and the layer keeps
+              its own zoom-and-march focus — see FrameLayerProps.onSelect. */}
+          <FrameLayer
+            diagram={draggedDiagram}
+            onFocus={clearSelection}
+            selectedFrameId={editable ? activeFrameId : undefined}
+            onSelect={editable ? selectFrame : undefined}
+          />
           <Panel position="top-left" className="max-w-full">
-            {/* No `currentLevel`: the last crumb already carries it, and two
-                sources for one fact can disagree. */}
-            <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
+            <div className="flex flex-col items-start gap-2">
+              {/* No `currentLevel`: the last crumb already carries it, and two
+                  sources for one fact can disagree. */}
+              <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
+              {/* Under the breadcrumb, not beside it: the crumb trail grows
+                  with the drill depth and would push the palette off a narrow
+                  canvas. Presence-gated like every edit control — a read-only
+                  or locked canvas shows no strip, never a disabled one. */}
+              {editable ? (
+                <ViewerNodePalette
+                  level={diagram.level}
+                  onCreate={handleNodeCreate}
+                  references={refOptions}
+                  onCreateRef={handleRefCreate}
+                />
+              ) : null}
+            </div>
           </Panel>
           <Panel
             position="top-right"
             className="max-w-[min(19rem,calc(100%-1rem))]"
           >
-            {nodeDetail !== null ? (
-              <ViewerNodeDetail
-                detail={nodeDetail}
-                onDismiss={handleDetailDismiss}
-                onZoomIn={handleDetailZoomIn}
-              />
-            ) : (
-              <ViewerEdgeDetail
-                detail={detail}
-                onDismiss={handleDetailDismiss}
-              />
-            )}
+            <div className="flex flex-col items-end gap-2">
+              {/* THE HOST'S LOCK, FIRST IN THE SAME PANEL as the details
+                  card, not a second top-right resident: two absolutely
+                  positioned corner occupants overlap at some width, so the
+                  lock joins the card's column instead — the card yields one
+                  control's height and neither can ever cover the other.
+                  Right-aligned so the lock hugs the corner whether or not a
+                  card is open below it. */}
+              {lockSlot}
+              {nodeDetail !== null ? (
+                <ViewerNodeDetail
+                  detail={nodeDetail}
+                  onDismiss={handleDetailDismiss}
+                  onZoomIn={handleDetailZoomIn}
+                  onRevise={handleDetailRevise}
+                  onNest={canNest ? nestSelected : undefined}
+                  onUnnest={canUnnest ? unnestSelected : undefined}
+                />
+              ) : frameDetail !== null ? (
+                /* Keyed by the frame so selecting ANOTHER boundary remounts
+                   the card — the multi card's rule: a half-typed rename must
+                   start over for a different boundary, never be silently
+                   re-aimed at it. */
+                <ViewerFrameDetail
+                  key={frameDetail.frame.id}
+                  detail={frameDetail}
+                  onDismiss={handleDetailDismiss}
+                  onRename={handleFrameRename}
+                />
+              ) : activeMultiIds !== null ? (
+                /* Keyed by the selection so a NEW lasso remounts the card —
+                   the node form's rule: fields (here, a half-typed boundary
+                   name) must start over for a different selection, never be
+                   silently re-aimed at it. */
+                <ViewerMultiDetail
+                  key={activeMultiIds.join(" ")}
+                  count={activeMultiIds.length}
+                  frames={diagram.frames ?? []}
+                  onDismiss={handleDetailDismiss}
+                  onGroup={handleGroupSelection}
+                />
+              ) : (
+                <ViewerEdgeDetail
+                  detail={detail}
+                  onDismiss={handleDetailDismiss}
+                />
+              )}
+            </div>
           </Panel>
           <Panel position="bottom-left">
-            <ViewerZoomControls />
+            <div className="flex flex-col items-start gap-2">
+              {/* The drag-mode toggle lives with the ZOOM PILL, because the
+                  bottom-left cluster is already the "how do I move around
+                  this canvas" chrome — the mode governs the same gesture the
+                  pill's scroll hints do — and it is the one corner with room:
+                  top-left grows with the breadcrumb and the palette, top-right
+                  is the lock + details column, bottom-centre is the hint bar.
+                  ABOVE the pill rather than inside it: the pill is shared
+                  chrome across three canvases (`zoom-pill.tsx`) and the mode
+                  exists on exactly one. Presence-gated like every edit
+                  affordance — a read-only or locked canvas always pans, so it
+                  shows NO control, never a disabled one offering a Select
+                  mode that does not exist there. */}
+              {editable ? (
+                <ViewerModeToggle
+                  mode={dragMode}
+                  onModeChange={handleDragModeChange}
+                />
+              ) : null}
+              <ViewerZoomControls />
+            </div>
           </Panel>
           {/* Not in a Panel: React Flow's MiniMap positions itself, and
               wrapping it would fight its own corner offsets. */}
@@ -1663,8 +2518,28 @@ function ViewerCanvasInner({
               zoom in ·{" "}
               <span className="font-medium text-primary">{mod} + scroll</span>{" "}
               zooms · <kbd className="font-mono text-[10px]">Esc</kbd> steps
-              back · drag or <kbd className="font-mono text-[10px]">Space</kbd>{" "}
-              + drag to pan
+              back ·{" "}
+              {/* THE PAN CLAUSE SPLITS ON `editable`, because the gesture
+                  does: a bare drag pans only the read-only canvas, and a hint
+                  teaching it on an editable one would promise a pan and
+                  deliver a lasso. The editable branch names the Select/Pan
+                  toggle — the pan a reader who knew drag-to-pan must now be
+                  told where to find, or they conclude panning broke. The
+                  marquee half exists only there too: advertising a lasso on a
+                  read-only canvas would teach a gesture that does nothing.
+                  `check:viewer-motion` reads both sentences. */}
+              {editable ? (
+                <>
+                  <span className="font-medium text-primary">drag</span> to
+                  select or group elements · the{" "}
+                  <span className="font-medium text-primary">Select / Pan</span>{" "}
+                  toggle makes a drag pan instead
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-primary">drag</span> to pan
+                </>
+              )}
             </p>
           </Panel>
         </ReactFlow>
@@ -1679,6 +2554,7 @@ export function ViewerCanvas({
   initialDiagramId,
   onDiagramChange,
   edit,
+  lockSlot,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -1690,6 +2566,15 @@ export function ViewerCanvas({
    * the read-only surface it has always been — see {@link CanvasEditHandlers}.
    */
   edit?: CanvasEditHandlers;
+  /**
+   * The host's lock control, mounted at the canvas's top right (above the
+   * details card, in the same panel). A SLOT rather than a rendered-here
+   * button because the lock is the HOST'S state — the playground owns the
+   * cookie and the copy — and this feature must not import from the
+   * playground. Deliberately independent of `edit`: locking WITHDRAWS the
+   * handlers, so a lock gated on them could never be pressed to undo itself.
+   */
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
@@ -1698,6 +2583,7 @@ export function ViewerCanvas({
         initialDiagramId={initialDiagramId}
         onDiagramChange={onDiagramChange}
         edit={edit}
+        lockSlot={lockSlot}
       />
     </ReactFlowProvider>
   );

@@ -31,11 +31,12 @@ reader. There are two abilities:
 | Ability    | What it writes                        | Needs                                             | Offered by |
 | ---------- | ------------------------------------- | ------------------------------------------------- | ---------- |
 | `"move"`   | geometry — a coordinate               | a per-element position **in the grammar**         | C4         |
-| `"revise"` | one element's own fields, in place    | a knowable line range per element **and** a place on the canvas to type into | sequence   |
+| `"revise"` | one element's own fields, in place    | a knowable line range per element **and** a place on the canvas to type into | sequence, C4 |
 
-C4 offers `move` and refuses `revise`; a sequence document does the exact
-opposite. That is not an accident of what got built first — it is what the two
-grammars can hold, which is why the answers are a grid and not a flag.
+A sequence document refuses `move` and offers `revise`; C4 answers both. That
+is not an accident of what got built first — it is what the grammars can hold
+plus which canvases grew a surface to type into, which is why the answers are
+a grid and not a flag.
 
 ## Does my notation have anything to edit on a canvas?
 
@@ -63,9 +64,12 @@ parse — because every edit is a line patch (see below). Without spans there is
 **3. Is there somewhere on the canvas to make the edit?** A grammar that could
 hold the edit and a canvas with no dock, inspector or handle to make it with is a
 legitimate refusal too, with `ground: "surface"`. The four text-laid-out
-notations refuse `revise` on exactly these grounds, and the C4 canvas refuses it
-deliberately: it already has move and delete, and a second, weaker field editor
-on it would be two authoring surfaces for one model.
+notations refuse `revise` on exactly these grounds. The C4 canvas refused it
+this way for a release — "it already has move and delete, and a second, weaker
+field editor would be two authoring surfaces for one model" — and that refusal
+then moved the way a `"surface"` refusal is supposed to: the details panel the
+canvas already rendered for a selected element became the surface
+(`revisedNodeEdit`), not a new inspector beside one.
 
 **The two grounds are both shipped answers.** `"surface"` is not a to-do marker.
 The distinction is there so the next reader knows whether the refusal is theirs
@@ -101,9 +105,11 @@ just tried something, so:
 
 **A pane-language exception where one applies.** A cell that offers an ability
 can still refuse it in one pane language, via `unlessPane`: Mermaid C4 carries no
-geometry, and Mermaid `sequenceDiagram` holds neither `desc` nor `[technology]`.
-Both are **measured against the emitter**, not assumed —
-`MERMAID_SEQUENCE_EXPORT_CAVEAT` is the evidence, and a check asserts the caveat
+geometry and gives `technology` no slot on person/system elements, and Mermaid
+`sequenceDiagram` holds neither `desc` nor `[technology]`.
+All are **measured against the emitter**, not assumed —
+`MERMAID_SEQUENCE_EXPORT_CAVEAT` and `MERMAID_C4_EXPORT_CAVEAT` are the
+evidence, and a check asserts each caveat
 still says what the refusal claims it says. If you add such an exception, name
 the fields that would be lost; "the format is not supported" tells the reader
 nothing about what switching the pane would buy them.

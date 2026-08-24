@@ -16,6 +16,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { ICON_CATEGORY_ORDER } from "@/features/editor/lib/icons/categories";
+import type { IconCategory } from "@/features/editor/lib/icons/categories";
 import type { CheckChoice } from "@/features/validate/lib/check";
 
 import {
@@ -29,6 +31,7 @@ import { convertModel, formatModel } from "./tools/convert";
 import { describeModel } from "./tools/describe";
 import { getExampleModel, listExampleModels } from "./tools/examples";
 import { formatFlowchart, validateFlowchart } from "./tools/flowchart";
+import { listIcons } from "./tools/icons";
 import { formatSequence, validateSequence } from "./tools/sequence";
 import { formatUseCase, validateUseCase } from "./tools/usecase";
 import { formatEr, validateEr } from "./tools/er";
@@ -329,6 +332,33 @@ export function registerArchLabMcp(server: McpServer): void {
       },
     },
     ({ section }) => getSyntaxReference(section),
+  );
+
+  /* ---- icons ------------------------------------------------------------- */
+
+  server.registerTool(
+    "list_icons",
+    {
+      ...config("list_icons"),
+      inputSchema: {
+        query: z
+          .string()
+          .optional()
+          .describe(
+            "Case-insensitive substring, matched against name, slug and " +
+              "aliases. Omit for the full vocabulary.",
+          ),
+        /* The cast narrows the registry's `readonly IconCategory[]` to the
+           non-empty tuple `z.enum` wants; the values themselves come from the
+           same table the icon picker renders, so the schema and the picker
+           cannot offer different vocabularies. */
+        category: z
+          .enum(ICON_CATEGORY_ORDER as [IconCategory, ...IconCategory[]])
+          .optional()
+          .describe("Restrict to one category. Omit to search all of them."),
+      },
+    },
+    ({ query, category }) => listIcons(query, category),
   );
 
   /* ---- examples ---------------------------------------------------------- */

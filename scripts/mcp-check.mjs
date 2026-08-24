@@ -25,7 +25,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { registerHooks } from "node:module";
+import { createRequire, registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -35,6 +35,17 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 /* Module resolution: `@/*` alias + extensionless relative imports -> .ts   */
 /* ----------------------------------------------------------------------- */
 
+/**
+ * `list_icons` reads the real icon registry, whose artwork modules are `.tsx`
+ * — beyond Node's type stripping, which handles `.ts` only. Rather than fork
+ * the registry into a data-only copy this script could load (the exact drift
+ * `list_icons` exists to prevent), the load hook below transpiles `.tsx` with
+ * the project's own TypeScript, so the check exercises the same modules the
+ * app ships.
+ */
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
     let resolved = specifier;
@@ -43,7 +54,12 @@ registerHooks({
     }
     if (
       (resolved.startsWith("./") || resolved.startsWith("../")) &&
-      typeof context.parentURL === "string"
+      typeof context.parentURL === "string" &&
+      // Only app code needs the extensionless rewrite. Rewriting every
+      // relative specifier to a file: URL breaks the CommonJS packages the
+      // icon registry pulls in (react's own `require("./cjs/…")` cannot take
+      // a URL), and those resolve fine natively.
+      /\.tsx?$/.test(context.parentURL)
     ) {
       resolved = new URL(resolved, context.parentURL).href;
     }
@@ -53,6 +69,8 @@ registerHooks({
       if (!isFile) {
         if (existsSync(`${asPath}.ts`)) {
           resolved = pathToFileURL(`${asPath}.ts`).href;
+        } else if (existsSync(`${asPath}.tsx`)) {
+          resolved = pathToFileURL(`${asPath}.tsx`).href;
         } else if (existsSync(path.join(asPath, "index.ts"))) {
           resolved = pathToFileURL(path.join(asPath, "index.ts")).href;
         }
@@ -74,6 +92,32 @@ registerHooks({
         format: "json",
         shortCircuit: true,
         source: readFileSync(fileURLToPath(url), "utf8"),
+      };
+    }
+    /*
+     * `.tsx` (the icon artwork) is transpiled with the project's TypeScript.
+     * Classic JSX with an injected default React import, not the automatic
+     * runtime: `react/jsx-runtime` is CommonJS whose named exports Node's
+     * lexer cannot see, while a default import of `react` always resolves.
+     * The injection cannot collide — no `.tsx` here imports the React VALUE,
+     * only its types, which transpilation erases.
+     */
+    if (url.startsWith("file:") && url.endsWith(".tsx")) {
+      const transpiled = ts.transpileModule(
+        readFileSync(fileURLToPath(url), "utf8"),
+        {
+          compilerOptions: {
+            module: ts.ModuleKind.ESNext,
+            target: ts.ScriptTarget.ES2022,
+            jsx: ts.JsxEmit.React,
+          },
+          fileName: fileURLToPath(url),
+        },
+      );
+      return {
+        format: "module",
+        shortCircuit: true,
+        source: `import React from "react";\n${transpiled.outputText}`,
       };
     }
     return nextLoad(url, context);
@@ -113,6 +157,11 @@ const { getExampleModel, listExampleModels } = await load(
 );
 const { getSyntaxReference, SYNTAX_SECTION_IDS } = await load(
   "src/features/mcp/tools/syntax.ts",
+);
+const { listIcons } = await load("src/features/mcp/tools/icons.ts");
+const { ICONS } = await load("src/features/editor/lib/icons/registry.ts");
+const { ICON_CATEGORY_ORDER, ICON_CATEGORY_LABELS } = await load(
+  "src/features/editor/lib/icons/categories.ts",
 );
 const { createShareLink } = await load("src/features/mcp/tools/share.ts");
 const { decodeShareFragment, SHARE_URL_SAFE_LENGTH, MAX_SHARE_URL_LENGTH } =
@@ -800,6 +849,124 @@ check("the documented section list names every real section", () => {
       arg.description,
       new RegExp(`\\b${id}\\b`),
       `section "${id}" exists but is not offered in the tool's own argument docs`,
+    );
+  }
+});
+
+/* ----------------------------------------------------------------------- */
+/* list_icons ⇄ the registry                                                */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * These are the anti-drift checks for the icon vocabulary, and they are
+ * written from the REGISTRY (the data), never from a hand-listed set of
+ * slugs — a hardcoded list cannot notice the icon it has never heard of
+ * (codebase.md, habit 4). `ICONS` here is the same module the canvas draws
+ * from, loaded independently of the tool, so a `list_icons` that ever
+ * truncates, caps, or switches to a maintained-by-hand list fails the moment
+ * the registry and its output disagree.
+ */
+
+check("list_icons exposes every registry slug, and invents none", () => {
+  const text = expectOk(listIcons(undefined, undefined));
+  const slugs = Object.keys(ICONS);
+  assert.ok(slugs.length > 0, "the registry loaded empty — the check is void");
+
+  // Every registered icon is offered, by slug and by display name.
+  for (const slug of slugs) {
+    assert.ok(
+      text.includes(`@${slug} — `),
+      `icon "${slug}" is registered but list_icons does not offer it`,
+    );
+    assert.ok(
+      text.includes(ICONS[slug].name),
+      `icon "${slug}" is listed without its display name "${ICONS[slug].name}"`,
+    );
+  }
+
+  // And nothing else: a slug in the output that the registry cannot resolve
+  // would be a documented vocabulary the canvas silently falls back on.
+  for (const [, offered] of text.matchAll(/^ {2}@(\S+) — /gm)) {
+    assert.ok(
+      offered in ICONS,
+      `list_icons offers "@${offered}", which the registry cannot resolve`,
+    );
+  }
+
+  // The headline count states the true total, so a capped listing cannot
+  // read as complete.
+  assert.match(text, new RegExp(`\\b${slugs.length} of ${slugs.length} icons`));
+
+  // Every category heading appears — a group dropped in rendering would
+  // silently hide its members while the per-slug assertions above could not
+  // localise the loss to a category.
+  for (const id of ICON_CATEGORY_ORDER) {
+    assert.ok(
+      text.includes(ICON_CATEGORY_LABELS[id]),
+      `category "${id}" has no heading in the full listing`,
+    );
+  }
+});
+
+check("list_icons search matches aliases, not just names", () => {
+  // "pg" is an alias — the exact token an agent guesses with. Both it and
+  // the substring "postgres" must land on the real slug.
+  for (const query of ["pg", "postgres"]) {
+    const text = expectOk(listIcons(query, undefined));
+    assert.ok(
+      text.includes("@postgresql — "),
+      `searching "${query}" must find @postgresql`,
+    );
+  }
+});
+
+check("list_icons filters by category, derived from the real table", () => {
+  const dbText = expectOk(listIcons(undefined, "databases"));
+  assert.ok(dbText.includes("@postgresql — "));
+
+  // A slug from a DIFFERENT category, picked from the registry rather than
+  // hand-named, must be absent.
+  const other = Object.values(ICONS).find(
+    (def) => def.category !== "databases",
+  );
+  assert.ok(
+    !dbText.includes(`@${other.slug} — `),
+    `category filter leaked "@${other.slug}" (${other.category}) into databases`,
+  );
+
+  // An unknown category is refused BY NAME, offering every real one — the
+  // same recovery contract get_syntax_reference gives an unknown section.
+  const error = expectError(listIcons(undefined, "nope"));
+  assert.match(error, /Unknown category `nope`/);
+  for (const id of ICON_CATEGORY_ORDER) {
+    assert.ok(error.includes(id), `the refusal must offer category "${id}"`);
+  }
+});
+
+check("list_icons states the silent fallback and the customicon hatch", () => {
+  // The two facts that make the vocabulary safe to use are part of the
+  // contract, on the hit path and the miss path both: an unknown slug never
+  // errors (so guessing must be warned against), and a missing icon can be
+  // supplied by the document (so the registry is not a wall).
+  for (const text of [
+    expectOk(listIcons(undefined, undefined)),
+    expectOk(listIcons("zzz-no-such-icon", undefined)),
+  ]) {
+    assert.match(text, /silently falls back/);
+    assert.match(text, /customicon /);
+  }
+});
+
+check("the documented category list names every real category", () => {
+  // Same derivation rule as get_syntax_reference's section list: the tool's
+  // own argument docs must offer exactly the categories that exist.
+  const tool = MCP_TOOLS.find((t) => t.name === "list_icons");
+  const arg = tool.args.find((a) => a.name === "category");
+  for (const id of ICON_CATEGORY_ORDER) {
+    assert.match(
+      arg.description,
+      new RegExp(`\\b${id}\\b`),
+      `category "${id}" exists but is not offered in the tool's argument docs`,
     );
   }
 });

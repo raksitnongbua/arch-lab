@@ -176,6 +176,104 @@ export interface C4Node {
 }
 
 /* -------------------------------------------------------------------------- */
+/* The editable subset of an element                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What the details panel's colour control asks for. Colour is NOT a node
+ * field: the format spells it as a `#tag` on the node plus a `tagcolor` line
+ * in the file header, so the revision carries the INTENT and
+ * `playground/input/canvas-edit.ts` derives both writes from it — deriving
+ * them in the panel would split one decision across two modules.
+ *
+ *   - `"role"` — the type's own role colour: every colour-carrying tag comes
+ *     OFF the node (the header keeps its `tagcolor` lines, because other
+ *     nodes may wear them).
+ *   - `"tag"` — colour via `tag`, minting `tagcolor <tag> "<color>"` in the
+ *     header when the document does not already define it. When it does, the
+ *     document's own colour wins and `color` is ignored: rewriting an
+ *     existing `tagcolor` line would recolour every node wearing the tag,
+ *     a blast radius a single-element panel must not have.
+ */
+export type C4NodeColorChoice =
+  { kind: "role" } | { kind: "tag"; tag: string; color: string };
+
+/**
+ * What the details panel's boundary control asks for. Membership IS a node
+ * field (`C4Node.frameId`), so unlike colour most of this is a plain value —
+ * but joining a boundary that does not exist yet has to CREATE it, and a
+ * `frame` line is a diagram-level declaration the panel must not spell
+ * itself. So the revision carries the intent and
+ * `playground/input/canvas-edit.ts` derives the writes, exactly as it does
+ * for colour.
+ *
+ *   - `"none"` — the node stands loose on the canvas: `in=` comes off its
+ *     line. The frame itself is left declared even if this empties it — an
+ *     empty frame is not drawn (`C4Frame`), other nodes may rejoin it, and
+ *     eating a declaration the author wrote over a membership change is the
+ *     blast radius the colour choice already refuses to have.
+ *   - `"existing"` — the node joins a frame the diagram already declares.
+ *   - `"new"` — a `frame` line is minted from `label` and the node joins it.
+ *     Always top-level: nesting a boundary is a statement about two frames,
+ *     not about this node, and belongs in the text.
+ */
+export type C4NodeFrameChoice =
+  | { kind: "none" }
+  | { kind: "existing"; frameId: string }
+  | { kind: "new"; label: string };
+
+/**
+ * The editable subset of a node, given WHOLE rather than as a diff — the same
+ * contract as `SequenceMessageRevision` one file over, and here for the same
+ * reason: the viewer's details panel collects it and
+ * `playground/input/canvas-edit.ts` turns it into a line patch, and the viewer
+ * must not import from the playground (the repo's import layering runs
+ * editor → viewer → sequence, and the playground consumes all three).
+ * `undefined` means the field is absent from the document, not "leave it as it
+ * was" — the panel's form shows every field at once and submits every field.
+ *
+ * `id` IS DELIBERATELY NOT HERE, and this is a decision rather than an
+ * omission: the id is what every relationship line and every `^ref` in the
+ * file names, so renaming it on the canvas would mean rewriting lines all over
+ * a multi-diagram document — a refactor rather than an edit, and it belongs in
+ * the pane where the reader can see every line it touches. The display NAME is
+ * the safe rename: nothing addresses a node by its name.
+ *
+ * `type` and `tags` as free text are absent because the panel has no control
+ * for them yet; each arrives with the control that edits it, so this type
+ * never promises a field the canvas cannot write. The drill-down pointers are
+ * absent for a different reason: giving a node a child diagram writes a whole
+ * diagram block as well as the node's own line, so it is its own gesture
+ * (`nestedNodeEdit`) rather than a form field.
+ */
+export interface C4NodeRevision {
+  name: string;
+  technology?: string;
+  description?: string;
+  /** Absent means the type's default icon — the same omission the format
+   *  writes, so clearing the picker genuinely removes the `@` token. */
+  icon?: string;
+  /** Present only when `icon` is, exactly as on `C4Node`. */
+  iconSource?: IconSource;
+  /**
+   * THE ONE FIELD THAT IS NOT WHOLE-VALUE, deliberately: colour is a pairing
+   * of the node's tags with the file header rather than a node field, and its
+   * cleared state already has a spelling (`{ kind: "role" }`), so `undefined`
+   * is free to mean "no claim — leave tags and header untouched". That is
+   * what lets a caller that edits only wording keep its hands off a tag
+   * vocabulary it never looked at.
+   */
+  color?: C4NodeColorChoice;
+  /**
+   * NOT WHOLE-VALUE EITHER, for colour's reason: the cleared state has its
+   * own spelling (`{ kind: "none" }`), so `undefined` means "no claim — leave
+   * membership and the diagram's frames untouched", which keeps a caller that
+   * edits only wording away from boundaries it never looked at.
+   */
+  frame?: C4NodeFrameChoice;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Edges                                                                       */
 /* -------------------------------------------------------------------------- */
 

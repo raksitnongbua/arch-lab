@@ -98,6 +98,10 @@ import {
   SplitWorkbench,
 } from "@/components/ui/split-workbench";
 import type {
+  C4NodeFrameChoice,
+  C4NodeRevision,
+  C4NodeType,
+  ExternalRef,
   SequenceItemPath,
   SequenceMessageRevision,
   SequenceParticipantRevision,
@@ -192,9 +196,17 @@ import {
 } from "../input/parse";
 import {
   canvasEditability,
+  createdNodeEdit,
+  createdRefEdit,
+  nestedNodeEdit,
+  unnestedNodeEdit,
+  createdNodeName,
   deletedNodeEdit,
+  groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
+  renamedFrameEdit,
+  revisedNodeEdit,
   type CanvasEdit,
 } from "../input/canvas-edit";
 import {
@@ -907,10 +919,10 @@ export function ViewPlayground({
   const editability = canvasEditability(doc);
   /**
    * The same question for the OTHER canvas gesture — rewriting an element's
-   * wording, which the sequence canvas offers and the C4 canvas does not (see
-   * `CanvasEditAbility`). Named for what it edits rather than for the ability it
-   * asks about, so that the two `canvasEditability` calls on this page cannot be
-   * read as the same question.
+   * wording, which the sequence canvas offers in its dock and the C4 canvas in
+   * its details panel (see `CanvasEditAbility`). Named for what it edits rather
+   * than for the ability it asks about, so that the two `canvasEditability`
+   * calls on this page cannot be read as the same question.
    */
   const wordingEditability = canvasEditability(doc, "revise");
   /**
@@ -1061,6 +1073,156 @@ export function ViewPlayground({
       applyCanvasEdit(
         next,
         `Deleted ${nodeId} and every relationship touching it — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeRevise = useCallback(
+    (diagramId: string, nodeId: string, revision: C4NodeRevision) => {
+      const next = revisedNodeEdit(doc, text, diagramId, nodeId, revision);
+      // null covers "nothing changed" as well as every refusal, so submitting
+      // an untouched form costs no text change and no undo entry — the same
+      // contract the two sequence revise handlers state.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `${nodeId} updated to “${revision.name}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleFrameRename = useCallback(
+    (diagramId: string, frameId: string, label: string) => {
+      const next = renamedFrameEdit(doc, text, diagramId, frameId, label);
+      // null covers "nothing changed" as well as every refusal, so submitting
+      // the label the boundary already has costs no text change and no undo
+      // entry — the node revise's own contract.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Boundary renamed to “${label.trim()}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodesGroup = useCallback(
+    (
+      diagramId: string,
+      nodeIds: readonly string[],
+      frame: C4NodeFrameChoice,
+    ): boolean => {
+      const next = groupedNodesEdit(doc, text, diagramId, nodeIds, frame);
+      /* SAID, not swallowed — the Add strip's rule: a pressed Apply that
+         changes nothing reads as a broken button. Two causes share the
+         sentence honestly: the pane lagging the canvas, and a lasso whose
+         members already have exactly this membership. The boolean tells the
+         canvas whether to keep the lasso for a retry — see `onNodesGroup`. */
+      if (next === null) {
+        setAnnouncement(
+          "The elements were not grouped — they may already be in that boundary, or the source pane and the diagram do not match yet.",
+        );
+        return false;
+      }
+      /* ONE applyCanvasEdit for the WHOLE grouping: N membership lines plus
+         at most one minted `frame` line land as one text, so a single
+         Cmd/Ctrl+Z takes the whole boundary back out. `check:canvas-edit`
+         pins this call count — a second call here would be a second undo
+         entry per gesture. */
+      applyCanvasEdit(
+        next,
+        frame.kind === "none"
+          ? `${nodeIds.length} elements removed from their boundaries — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`
+          : `${nodeIds.length} elements grouped into one boundary — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo the whole grouping.`,
+      );
+      return true;
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeCreate = useCallback(
+    (diagramId: string, type: C4NodeType): string | null => {
+      const next = createdNodeEdit(doc, text, diagramId, type);
+      /* SAID, not swallowed, unlike a refused move: a no-op drag left the
+         canvas looking exactly as the reader expects, but a pressed Add
+         button that changes nothing looks like a broken button — the same
+         verdict the sequence insert handlers reached. The one refusal a
+         reader can actually cause here is the pane lagging the canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The element was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return null;
+      }
+      applyCanvasEdit(
+        next,
+        /* "and selected", because the id returned below is what the canvas
+           centres on and selects — the announcement describes the state the
+           reader ARRIVES in, so it says "rename it" rather than the old
+           "select it to rename it", which was an instruction the viewport
+           did not help them follow. */
+        `“${createdNodeName(type)}” added below the diagram and selected — the source text follows. Rename it in the details panel; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+      // The canvas owns the camera; the id is how it finds what to centre on.
+      return next.createdNodeId ?? null;
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleRefCreate = useCallback(
+    (diagramId: string, source: ExternalRef): string | null => {
+      const next = createdRefEdit(doc, text, diagramId, source);
+      /* Said for the Add strip's reason — this arrives from the same strip,
+         and a menu choice that silently does nothing reads as broken. */
+      if (next === null) {
+        setAnnouncement(
+          "The reference was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return null;
+      }
+      applyCanvasEdit(
+        next,
+        "Reference added below the diagram and selected — the source text follows. It mirrors an element from a level above and is read-only here; press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+      return next.createdNodeId ?? null;
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeNest = useCallback(
+    (diagramId: string, nodeId: string) => {
+      const next = nestedNodeEdit(doc, text, diagramId, nodeId);
+      if (next === null) {
+        setAnnouncement(
+          "The child diagram was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        "Child diagram added — the source text follows. Zoom into the element to fill it in; press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeUnnest = useCallback(
+    (diagramId: string, nodeId: string) => {
+      const next = unnestedNodeEdit(doc, text, diagramId, nodeId);
+      /* The one refusal a reader can cause here is a child that stopped being
+         empty in the pane — worth saying, because the button was offered on
+         the strength of it being empty. */
+      if (next === null) {
+        setAnnouncement(
+          "The child diagram was not removed — it is no longer empty, or the source pane and the diagram do not match yet.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        "Empty child diagram removed — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.",
       );
     },
     [doc, text, applyCanvasEdit],
@@ -1386,17 +1548,43 @@ export function ViewPlayground({
     setAnnouncement("Undid the last change made on the diagram.");
   }, [applyEdit]);
 
-  /** The handlers together, so the canvas cannot be half-editable. */
+  /** The handlers together, so the canvas cannot be half-editable.
+   *
+   * Gated on `canvasEditable` — the `move` answer — even though the bundle now
+   * also carries `revise`: for a C4 document the two cells refuse in exactly
+   * the same case (a Mermaid pane), so one gate is the honest one and a second
+   * would be a condition that can never differ, kept in step by hand. If the
+   * cells ever diverge, `revisedNodeEdit` still asks `canvasEditability` for
+   * itself — every gesture guards its own ability. */
   const canvasEdit = useMemo(
     () =>
       canvasEditable
         ? {
             onNodeMove: handleNodeMove,
+            onNodeRevise: handleNodeRevise,
             onNodeDelete: handleNodeDelete,
+            onNodeCreate: handleNodeCreate,
+            onRefCreate: handleRefCreate,
+            onNodeNest: handleNodeNest,
+            onNodeUnnest: handleNodeUnnest,
+            onNodesGroup: handleNodesGroup,
+            onFrameRename: handleFrameRename,
             onUndo: handleCanvasUndo,
           }
         : undefined,
-    [canvasEditable, handleNodeMove, handleNodeDelete, handleCanvasUndo],
+    [
+      canvasEditable,
+      handleNodeMove,
+      handleNodeRevise,
+      handleNodeDelete,
+      handleNodeCreate,
+      handleRefCreate,
+      handleNodeNest,
+      handleNodeUnnest,
+      handleNodesGroup,
+      handleFrameRename,
+      handleCanvasUndo,
+    ],
   );
 
   // Reports which diagram is on screen so edits keep the drill-down place.
@@ -1518,7 +1706,11 @@ export function ViewPlayground({
                 they will look for it. */}
             {CANVAS_EDIT_ENABLED ? (
               <>
-                C4 nodes can be dragged on the canvas, and sequence messages and
+                C4 nodes can be dragged on the canvas, added from its palette,
+                grouped into a boundary with a drag selection (the Select / Pan
+                toggle by the zoom controls makes a drag pan instead), their
+                wording, icon and colour edited in the details panel — where a
+                selected boundary is renamed too — and sequence messages and
                 lifelines added, edited, repointed, reordered, numbered and
                 removed on it; the other kinds lay themselves out from the
                 text.{" "}
@@ -2081,39 +2273,22 @@ export function ViewPlayground({
                     onToggle={() => setSourceCollapsed(!sourceCollapsed)}
                     sourceLabel="document source"
                   />
-                  {/* ONE CONTROL, and only where it can act. The lock renders
-                      for a C4 document the canvas could edit and for nothing
-                      else — the five text-laid-out notations never reach this
-                      branch at all, so there is no disabled button and no
-                      tooltip explaining an absence. A C4 document sitting here
-                      as Mermaid is the one case that is C4 and still cannot be
-                      edited, and it gets the REASON instead of a control that
-                      would do nothing. */}
-                  <span className="flex min-w-0 items-center gap-2">
-                    {showCanvasLock ? (
-                      <CanvasLockButton
-                        locked={canvasLocked}
-                        onToggle={setCanvasLocked}
-                        onAnnounce={setAnnouncement}
-                        copy={CANVAS_LOCK_COPY.c4}
-                      />
-                    ) : null}
-                    {/* THE STATE THE CONTROL DOES NOT REPORT. Its faces are
-                        actions ("Edit", "Lock"), so this word is where a
-                        reader learns which one they are in — one word, read
-                        left to right with the button: "Read-only ✏ Edit". A
-                        refusal outranks it: a C4 document the canvas cannot
-                        edit at all has a reason to give, and no lock beside
-                        it to need a state for. */}
-                    <span className="truncate text-xs text-muted-foreground">
-                      {CANVAS_EDIT_ENABLED &&
-                      doc.kind === "c4" &&
-                      !editability.editable
-                        ? editability.reason
-                        : showCanvasLock
-                          ? canvasStateLabel(canvasLocked)
-                          : "Diagram"}
-                    </span>
+                  {/* THE STATE, IN WORDS. The lock itself moved onto the
+                      canvas (its top-right corner, via the shell's slot
+                      below) and is an icon-only padlock there, so this word
+                      in the strip is now the ONE place the state is spelled
+                      out — it stayed where words fit when the control
+                      stopped carrying any. A refusal outranks it: a C4
+                      document the canvas cannot edit at all has a reason to
+                      give, and no lock on it to need a state for. */}
+                  <span className="truncate text-xs text-muted-foreground">
+                    {CANVAS_EDIT_ENABLED &&
+                    doc.kind === "c4" &&
+                    !editability.editable
+                      ? editability.reason
+                      : showCanvasLock
+                        ? canvasStateLabel(canvasLocked)
+                        : "Diagram"}
                   </span>
                 </div>
                 <ViewerShell
@@ -2133,6 +2308,23 @@ export function ViewPlayground({
                      which would point back here. Capability, not current
                      state; see `canEdit` on the shell. */
                   canEdit={CANVAS_EDIT_ENABLED && editability.editable}
+                  /* ONE CONTROL, and only where it can act: absent, not
+                     disabled, when the document cannot be edited at all —
+                     the strip shows the REASON instead. Handed to the shell
+                     as a slot so it mounts at the canvas's own top right
+                     (the product owner's placement), which also keeps it
+                     reachable in immersive mode, where this strip is
+                     covered. */
+                  lockSlot={
+                    showCanvasLock ? (
+                      <CanvasLockButton
+                        locked={canvasLocked}
+                        onToggle={setCanvasLocked}
+                        onAnnounce={setAnnouncement}
+                        copy={CANVAS_LOCK_COPY.c4}
+                      />
+                    ) : undefined
+                  }
                   /* Passing these is what makes the canvas editable — see
                      `CanvasEditHandlers`. `undefined` leaves the shell's
                      read-only canvas exactly as every other host gets it. */
@@ -2209,22 +2401,6 @@ export function ViewPlayground({
                       exit is one click away, and a menu that opened over a
                       fullscreen diagram would be covering the thing it exports. */}
                   <span className="flex shrink-0 items-center gap-1.5">
-                    {/* THE SAME LOCK, in the branch a sequence document
-                        actually renders in. It gates `sequenceEditable`, so
-                        leaving it in the C4 branch alone meant a reader who
-                        had locked the canvas once could never unlock this
-                        one — see the header of `canvas-lock-button.tsx`.
-                        Offered only for the notation whose canvas can act on
-                        it: the other four have nothing to lock, and a control
-                        that cannot change anything is worse than its absence. */}
-                    {showSequenceCanvasLock ? (
-                      <CanvasLockButton
-                        locked={canvasLocked}
-                        onToggle={setCanvasLocked}
-                        onAnnounce={setAnnouncement}
-                        copy={CANVAS_LOCK_COPY.sequence}
-                      />
-                    ) : null}
                     {isImmersive ? null : doc.kind === "sequence" ? (
                       <>
                         <SequenceShareButton
@@ -2341,6 +2517,27 @@ export function ViewPlayground({
                     onAnnounce={setAnnouncement}
                     extraTourSteps={PLAYGROUND_TOUR_STEPS}
                     edit={sequenceEdit}
+                    /* THE SAME LOCK as the C4 branch's, in the branch a
+                       sequence document actually renders in — it gates
+                       `sequenceEditable`, and leaving it in the C4 branch
+                       alone once meant a reader who had locked the canvas
+                       could never unlock this one (see the header of
+                       `canvas-lock-button.tsx`). A slot at the viewer's
+                       top-right corner, matching the C4 canvas; offered only
+                       for the notation whose canvas can act on it — the
+                       other four in this branch have nothing to lock, and a
+                       control that cannot change anything is worse than its
+                       absence. */
+                    lockSlot={
+                      showSequenceCanvasLock ? (
+                        <CanvasLockButton
+                          locked={canvasLocked}
+                          onToggle={setCanvasLocked}
+                          onAnnounce={setAnnouncement}
+                          copy={CANVAS_LOCK_COPY.sequence}
+                        />
+                      ) : undefined
+                    }
                   />
                 ) : doc.kind === "flowchart" ? (
                   <FlowchartViewer

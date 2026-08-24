@@ -13,15 +13,36 @@
  * Boundary placeholders (`externalRef`) and file-split children (`childRef`)
  * are named honestly instead of showing a dead button. Nothing is invented.
  *
- * Announcements come from the canvas's existing aria-live region, not from
- * this component (same contract as the relationship card).
+ * ON AN EDITABLE CANVAS IT ALSO EDITS. `onRevise` present, the header grows
+ * the same pencil the sequence dock has, and the descriptive rows swap for a
+ * form over the fields the panel already showed — name, technology,
+ * description — plus the element's icon (the shared `IconPicker`) and its
+ * colour (`NODE_TAG_PALETTE` and the document's own coloured tags).
+ * This panel is that editor rather than a new dock because it is
+ * already the one surface showing every field a node has, so "edit this" can
+ * mean "edit all of it" without a second inspector appearing anywhere. The
+ * form's interaction grammar is the sequence dock's, deliberately (habit 2 of
+ * `codebase.md`): plain <form> so Enter submits, Apply/Cancel in that order,
+ * blank optional fields submit as absent, remount per element so fields start
+ * from the new element's values. The form pieces are re-spelled here rather
+ * than imported because the layering runs editor → viewer → sequence — this
+ * feature cannot import the sequence viewer's.
+ *
+ * Announcements come from the host's existing aria-live region, not from
+ * this component (same contract as the relationship card): the playground
+ * says what the applied edit did.
  */
+
+import { useEffect, useRef, useState } from "react";
 
 import {
   ArrowLeftRight,
+  Check,
   Minus,
   MoveLeft,
   MoveRight,
+  Pencil,
+  Trash2,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -31,9 +52,25 @@ import { LEVEL_LABEL } from "@/lib/constants";
 
 import { MetaRow } from "./viewer-meta-row";
 import { cn } from "@/lib/utils";
-import type { C4Edge, C4Level, C4Node } from "@/types";
+import type {
+  C4Edge,
+  C4Frame,
+  C4Level,
+  C4Node,
+  C4NodeColorChoice,
+  C4NodeFrameChoice,
+  C4NodeRevision,
+} from "@/types";
 
+import { IconPicker } from "@/features/editor/components/icon-picker";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
+import {
+  colorRoleForNode,
+  colorTagsOf,
+  NODE_TAG_PALETTE,
+  ROLE_COLOR_VARS,
+  tagFillCss,
+} from "@/features/editor/lib/node-colors";
 import { useIconStyle } from "@/lib/icon-style";
 
 import {
@@ -59,6 +96,34 @@ export interface NodeDetail {
   incoming: NodeConnection[];
   /** Present ⇔ the element has a loaded child diagram to zoom into. */
   drill: { childCount: number; childLevel: C4Level } | null;
+  /**
+   * The level one step deeper, or `null` at `code` where there is nowhere
+   * further to go. What decides whether nesting is even a question for this
+   * element — the panel never offers a nest the grammar has no block for.
+   */
+  childLevel: C4Level | null;
+  /**
+   * The element's child diagram when it EXISTS BUT HOLDS NOTHING — the state
+   * `drill` deliberately refuses to report, because an empty child is not a
+   * drill-down. On an editable canvas it is its own situation: a workspace to
+   * open and fill, and the only child that may be removed again. `exists`
+   * distinguishes an empty block from a DANGLING pointer at no block at all.
+   */
+  emptyChild: { exists: boolean } | null;
+  /**
+   * The diagram's own boundaries — what the edit form's frame select offers
+   * beside "none" and a new label. Frames belong to the diagram rather than
+   * the element, so they arrive with the detail the way `tagColors` does.
+   */
+  frames: readonly C4Frame[];
+  /**
+   * The document's `metadata.tagColors` — what the edit form's colour control
+   * reads to show the element's current colour and to offer the author's own
+   * coloured tags before the built-in palette. Comes with the detail rather
+   * than being plucked from a context because everything else this card
+   * states arrives the same way.
+   */
+  tagColors?: Readonly<Record<string, string>>;
 }
 
 /** Directional glyph for a connection row, seen from the selected element. */
@@ -137,21 +202,408 @@ function ConnectionGroup({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* The edit form — the sequence dock's grammar, on this panel's three fields   */
+/* -------------------------------------------------------------------------- */
+
+/** Blank string -> `undefined`, so clearing a field removes it — the same
+ * "empty means absent" contract the sequence dock forms state: `.alab` can
+ * spell `[""]` and `desc ""`, and a document carrying one renders a blank
+ * field the reader cannot tell from a missing one. */
+function orAbsent(value: string): string | undefined {
+  return value.trim() === "" ? undefined : value;
+}
+
+/** Exported for `viewer-multi-detail`, which renders the same boundary
+ * control this panel's form does — one spelling of the field chrome, so the
+ * two cards cannot drift apart visually. */
+export const FIELD_CLASSES =
+  "mt-0.5 w-full rounded-md border border-border bg-canvas/60 px-2 py-1 " +
+  "text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring " +
+  "focus-visible:outline-none";
+
+/** One labelled control. The <label> WRAPS its control rather than using
+ * `htmlFor`, for the reason the sequence dock's `DockField` gives: an id
+ * would have to be unique per selected element, a name to keep in step for
+ * nothing. Exported for `viewer-multi-detail`, with `FIELD_CLASSES`. */
+export function EditField({
+  term,
+  children,
+}: {
+  term: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-medium text-muted-foreground">
+        {term}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+/**
+ * The node editor. `key`ed on the node id by its caller, so selecting a
+ * different element REMOUNTS it — the fields start from the new element's
+ * values rather than from an effect that syncs them (the sequence forms'
+ * rule, for the sequence forms' reason).
+ *
+ * THE NAME MAY NOT BE BLANKED: the model requires one, and `revisedNodeEdit`
+ * refuses an empty name rather than dropping the edit silently — so the form
+ * submits the name as typed and leaves the refusal to the one authority. The
+ * two optional text fields go through `orAbsent`, exactly as the dock's do.
+ *
+ * THE ICON control reuses the editor inspector's grammar — a button showing
+ * the resolved icon that opens the shared `IconPicker`, a pick landing as
+ * `iconSource: "explicit"` — and clearing it means THE TYPE DEFAULT, spelled
+ * as omission, because that is the only cleared state the format has: an
+ * absent icon renders the type's own mark, never a blank.
+ *
+ * THE COLOUR control offers the document's own coloured tags first, then the
+ * measured `NODE_TAG_PALETTE` (its header argues why there is no free
+ * picker), plus Automatic — the type's role colour. It submits an INTENT
+ * (`C4NodeColorChoice`); `revisedNodeEdit` owns turning that into tag and
+ * header writes. When the choice would take a coloured tag off the element —
+ * the precedence trap `resolveTagColor` documents — the form says which,
+ * BEFORE Apply, so the swap is never silent.
+ */
+/* Sentinel for the frame select's "mint a new one" row. A value no slug can
+   collide with, because `slugify` never emits a leading space. Exported for
+   `viewer-multi-detail`, whose boundary select is this one over N elements. */
+export const NEW_FRAME = " new";
+
+function NodeEditForm({
+  node,
+  tagColors,
+  frames,
+  onSubmit,
+  onCancel,
+}: {
+  node: C4Node;
+  tagColors: Readonly<Record<string, string>> | undefined;
+  frames: readonly C4Frame[];
+  onSubmit: (revision: C4NodeRevision) => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  const [name, setName] = useState(node.name);
+  const [technology, setTechnology] = useState(node.technology ?? "");
+  const [description, setDescription] = useState(node.description ?? "");
+  const [icon, setIcon] = useState(node.icon);
+  const [iconSource, setIconSource] = useState(node.iconSource);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /* The colour the element wears now, by the same precedence the canvas
+     paints with — `worn[0]` wins, the rest are the tags a new choice removes. */
+  const worn = colorTagsOf(node, tagColors);
+  const [colorTag, setColorTag] = useState<string | null>(worn[0] ?? null);
+  /* The frame select carries THREE states in one control, because the
+     grammar's choice is three-way: no boundary, one that exists, or one this
+     edit mints. `NEW_FRAME` is a sentinel option rather than a second
+     checkbox — a checkbox would let the reader ask for a new boundary while
+     an existing one is still selected, a state the revision cannot spell. */
+  const [frameId, setFrameId] = useState<string>(node.frameId ?? "");
+  const [newFrameLabel, setNewFrameLabel] = useState("");
+  const [iconStyle] = useIconStyle();
+
+  /* The document's own coloured tags lead — an author who built a vocabulary
+     should meet it before the built-ins — and a palette name the document
+     already defines is NOT offered twice: the document's colour owns the tag
+     (`revisedNodeEdit` never rewrites an existing `tagcolor` line). */
+  const colorOptions = [
+    ...Object.entries(tagColors ?? {})
+      .filter(([, color]) => typeof color === "string" && color !== "")
+      .map(([tag, color]) => ({ tag, color })),
+    ...NODE_TAG_PALETTE.filter(({ tag }) => (tagColors?.[tag] ?? "") === ""),
+  ];
+  const hexFor = (tag: string): string =>
+    colorOptions.find((option) => option.tag === tag)?.color ?? "";
+  /* Which coloured tags the pending choice takes off the element — worth a
+     sentence exactly when it is not empty. */
+  const replaced = worn.filter((tag) => tag !== colorTag);
+  const roleVars = ROLE_COLOR_VARS[colorRoleForNode(node)];
+
+  const resolvedIcon = resolveIcon(
+    icon !== undefined ? { type: node.type, icon } : { type: node.type },
+  );
+  const IconGlyph = resolvedIcon.def.byStyle[iconStyle];
+
+  /* The name takes focus on mount rather than through `autoFocus`, which
+     jsx-a11y flags and which cannot be scoped to "this remount" — the same
+     note as the sequence forms. */
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    nameRef.current?.select();
+  }, []);
+
+  return (
+    <form
+      className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const color: C4NodeColorChoice =
+          colorTag === null
+            ? { kind: "role" }
+            : { kind: "tag", tag: colorTag, color: hexFor(colorTag) };
+        /* A blank label with "New boundary" chosen is NOT a request to mint
+           an unnamed frame — `revisedNodeEdit` refuses one, and refusing
+           here too would cost the reader their typing. It falls back to
+           whatever membership the element already had. */
+        const frame: C4NodeFrameChoice =
+          frameId === NEW_FRAME
+            ? newFrameLabel.trim() === ""
+              ? node.frameId !== undefined
+                ? { kind: "existing", frameId: node.frameId }
+                : { kind: "none" }
+              : { kind: "new", label: newFrameLabel.trim() }
+            : frameId === ""
+              ? { kind: "none" }
+              : { kind: "existing", frameId };
+        onSubmit({
+          name,
+          technology: orAbsent(technology),
+          description: orAbsent(description),
+          // Spread-guarded so a default icon submits as ABSENT — the same
+          // "empty means absent" contract the text fields state.
+          ...(icon !== undefined ? { icon } : {}),
+          ...(icon !== undefined && iconSource !== undefined
+            ? { iconSource }
+            : {}),
+          color,
+          frame,
+        });
+      }}
+    >
+      <EditField term="Name">
+        <input
+          ref={nameRef}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className={FIELD_CLASSES}
+        />
+      </EditField>
+      <EditField term="Technology">
+        <input
+          value={technology}
+          onChange={(event) => setTechnology(event.target.value)}
+          placeholder="Next.js, PostgreSQL 16 — blank to remove"
+          className={cn(FIELD_CLASSES, "font-mono")}
+        />
+      </EditField>
+      {/* A TEXTAREA because the field may hold newlines the render honours —
+          the same reason the dock's Details field is one. */}
+      <EditField term="Description">
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          rows={3}
+          placeholder="Blank to remove"
+          className={FIELD_CLASSES}
+        />
+      </EditField>
+      {/* A DIV, not an EditField: a <label> wrapping two buttons would hand
+          clicks on the term to whichever button is first. */}
+      <div>
+        <span className="text-[10px] font-medium text-muted-foreground">
+          Icon
+        </span>
+        <div className="mt-0.5 flex items-center gap-1">
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-label={`Change icon (current: ${resolvedIcon.def.name})`}
+            onClick={() => setPickerOpen(true)}
+            className={cn(
+              FIELD_CLASSES,
+              "mt-0 flex min-w-0 flex-1 items-center gap-1.5 text-left hover:bg-secondary",
+            )}
+          >
+            <IconGlyph aria-hidden="true" className="size-4 shrink-0" />
+            <span className="truncate">{resolvedIcon.def.name}</span>
+            {icon === undefined ? (
+              <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">
+                default
+              </span>
+            ) : null}
+          </button>
+          {icon !== undefined ? (
+            <button
+              type="button"
+              onClick={() => {
+                // Clearing means the TYPE DEFAULT (see the form header):
+                // both keys go, exactly as the format omits them.
+                setIcon(undefined);
+                setIconSource(undefined);
+              }}
+              className="shrink-0 rounded-md border border-border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              Use default
+            </button>
+          ) : null}
+        </div>
+        {pickerOpen ? (
+          <IconPicker
+            {...(icon !== undefined ? { value: icon } : {})}
+            nodeType={node.type}
+            onChange={(slug) => {
+              setIcon(slug);
+              // A pick from the panel is the reader's own choice, so it must
+              // never be auto-overridden by a technology edit — "explicit",
+              // the same verdict the editor inspector's picker hands down.
+              setIconSource("explicit");
+              setPickerOpen(false);
+            }}
+            onClose={() => setPickerOpen(false)}
+          />
+        ) : null}
+      </div>
+      {/* BOUNDARY BEFORE COLOUR: membership changes what the diagram says,
+          colour only how it looks, and the form reads top-down from meaning
+          to appearance — the same ordering the read view uses. */}
+      <EditField term="Boundary">
+        <select
+          value={frameId}
+          onChange={(event) => setFrameId(event.target.value)}
+          className={FIELD_CLASSES}
+        >
+          <option value="">None</option>
+          {frames.map((frame) => (
+            <option key={frame.id} value={frame.id}>
+              {frame.label}
+            </option>
+          ))}
+          <option value={NEW_FRAME}>New boundary…</option>
+        </select>
+      </EditField>
+      {frameId === NEW_FRAME ? (
+        <EditField term="Boundary name">
+          <input
+            value={newFrameLabel}
+            onChange={(event) => setNewFrameLabel(event.target.value)}
+            placeholder="Internal, Trust boundary — blank to leave as-is"
+            className={FIELD_CLASSES}
+          />
+        </EditField>
+      ) : null}
+      <div>
+        <span className="text-[10px] font-medium text-muted-foreground">
+          Colour
+        </span>
+        <div
+          role="group"
+          aria-label="Element colour"
+          className="mt-0.5 flex flex-wrap items-center gap-1"
+        >
+          {/* Automatic first: the role colour is the resting state, and the
+              swatch wears the role's own theme variables so it previews what
+              Apply would actually paint. */}
+          <button
+            type="button"
+            aria-pressed={colorTag === null}
+            aria-label="Automatic — the type's own colour"
+            title="Automatic"
+            onClick={() => setColorTag(null)}
+            className={cn(
+              "size-6 shrink-0 rounded-full border-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              colorTag === null && "ring-2 ring-ring ring-offset-1",
+            )}
+            style={{ background: roleVars.fill, borderColor: roleVars.stroke }}
+          />
+          {colorOptions.map(({ tag, color }) => (
+            <button
+              key={tag}
+              type="button"
+              aria-pressed={colorTag === tag}
+              aria-label={`Colour ${tag}`}
+              title={`#${tag}`}
+              onClick={() => setColorTag(tag)}
+              className={cn(
+                "size-6 shrink-0 rounded-full border-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                colorTag === tag && "ring-2 ring-ring ring-offset-1",
+              )}
+              /* The swatch is a miniature of the node it would produce: the
+                 raw hex as the stroke, the fill REBUILT through the same
+                 `tagFillCss` construction the canvas uses — so the preview is
+                 theme-correct by the same mechanism, not by a second one. */
+              style={{ background: tagFillCss(color), borderColor: color }}
+            />
+          ))}
+        </div>
+        {replaced.length > 0 ? (
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Applying removes {replaced.map((tag) => `#${tag}`).join(", ")} from
+            this element — that tag was its colour, and the header keeps the
+            colour for other elements.
+          </p>
+        ) : null}
+      </div>
+      {/* Apply / Cancel, in that order — the primary action nearest the
+          fields, matching the sequence dock's `DockFormActions`. */}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          <Check aria-hidden="true" className="size-3.5" />
+          Apply
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function ViewerNodeDetail({
   detail,
   onDismiss,
   onZoomIn,
+  onRevise,
+  onNest,
+  onUnnest,
 }: {
   detail: NodeDetail;
   onDismiss: () => void;
   /** Drill into the element's child diagram — same path as the zoom chip. */
   onZoomIn: () => void;
+  /**
+   * Rewrite the element's wording. Present only while the canvas is editable
+   * — presence is the signal, so a locked or read-only canvas renders no
+   * pencil rather than a disabled one (the same contract the sequence dock's
+   * `edit` prop states).
+   */
+  onRevise?: (revision: C4NodeRevision) => void;
+  /**
+   * Give the element a fresh, empty child diagram one level down. Presence is
+   * decided PER ELEMENT by the canvas, from the same facts `nestedNodeEdit`
+   * refuses on, so a button that appears is a button the host will honour.
+   */
+  onNest?: () => void;
+  /**
+   * Remove the element's empty child diagram — the way back out of a nest
+   * nobody filled. Present only beside a child the canvas can see is empty.
+   */
+  onUnnest?: () => void;
 }): React.JSX.Element {
-  const { node, level, outgoing, incoming, drill } = detail;
-  const { def } = resolveIcon(node);
-  const [iconStyle] = useIconStyle();
-  const Icon = def.byStyle[iconStyle];
-  const hasConnections = outgoing.length > 0 || incoming.length > 0;
+  const { node } = detail;
+
+  /* Keyed by the TARGET rather than a bare boolean, the sequence dock's rule
+     for the sequence dock's reason: selecting another element must close the
+     form, not re-aim it — an open form holds the reader's half-typed text,
+     and silently re-pointing it would commit that text to an element they
+     were not looking at. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = editingId === node.id;
+
+  /* A boundary placeholder is read-only BY MEANING, not by mode: its name is
+     the referenced node's, derived at parse time (`revisedNodeEdit` refuses it
+     too — one verdict on both sides). So the pencil is withheld, and the card
+     below already says why. */
+  const revisable = onRevise !== undefined && node.externalRef === undefined;
 
   return (
     <aside
@@ -168,16 +620,101 @@ export function ViewerNodeDetail({
         <p className="text-[10px] font-medium tracking-wide text-primary uppercase">
           Element
         </p>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Deselect element"
-          className="-m-1 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          <X aria-hidden="true" className="size-3.5" />
-        </button>
+        <span className="flex items-center gap-0.5">
+          {revisable && !editing ? (
+            <button
+              type="button"
+              onClick={() => setEditingId(node.id)}
+              aria-label="Edit this element"
+              className="-m-1 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Pencil aria-hidden="true" className="size-3.5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Deselect element"
+            className="-m-1 rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <X aria-hidden="true" className="size-3.5" />
+          </button>
+        </span>
       </div>
 
+      {/* The form REPLACES the descriptive rows rather than sitting above
+          them — the sequence dock's shape: two renderings of the same fields
+          at once would leave the reader unsure which one the diagram obeys. */}
+      {revisable && editing ? (
+        <NodeEditForm
+          key={node.id}
+          node={node}
+          tagColors={detail.tagColors}
+          frames={detail.frames}
+          onSubmit={(revision) => {
+            setEditingId(null);
+            onRevise(revision);
+          }}
+          onCancel={() => setEditingId(null)}
+        />
+      ) : (
+        <>
+          <NodeReadView detail={detail} onZoomIn={onZoomIn} />
+          {/* NESTING LIVES OUTSIDE THE FORM, unlike boundary and colour: those
+              are fields of the element's own line, which Apply rewrites as
+              one patch. A child diagram is a whole block elsewhere in the
+              file — an action, not a field, and putting it behind Apply would
+              let Cancel imply it could be taken back after the block existed. */}
+          {onNest !== undefined || onUnnest !== undefined ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
+              {onNest !== undefined ? (
+                <button
+                  type="button"
+                  onClick={onNest}
+                  className={buttonClasses({ variant: "outline", size: "sm" })}
+                >
+                  <ZoomIn aria-hidden="true" className="size-3.5" />
+                  Add{" "}
+                  {detail.childLevel !== null
+                    ? LEVEL_LABEL[detail.childLevel].toLowerCase()
+                    : "child"}{" "}
+                  diagram
+                </button>
+              ) : null}
+              {onUnnest !== undefined ? (
+                <button
+                  type="button"
+                  onClick={onUnnest}
+                  className={buttonClasses({ variant: "outline", size: "sm" })}
+                >
+                  <Trash2 aria-hidden="true" className="size-3.5" />
+                  Remove empty child
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      )}
+    </aside>
+  );
+}
+
+/** The descriptive rows — everything the card shows when it is not a form. */
+function NodeReadView({
+  detail,
+  onZoomIn,
+}: {
+  detail: NodeDetail;
+  onZoomIn: () => void;
+}): React.JSX.Element {
+  const { node, level, outgoing, incoming, drill } = detail;
+  const { def } = resolveIcon(node);
+  const [iconStyle] = useIconStyle();
+  const Icon = def.byStyle[iconStyle];
+  const hasConnections = outgoing.length > 0 || incoming.length > 0;
+
+  return (
+    <>
       <p className="mt-1 flex items-center gap-1.5 text-sm leading-snug font-medium text-pretty text-foreground">
         <Icon aria-hidden="true" className="size-4 shrink-0" />
         <span className={cn(node.type === "codeElement" && "font-mono")}>
@@ -282,6 +819,6 @@ export function ViewerNodeDetail({
           in this view.
         </p>
       ) : null}
-    </aside>
+    </>
   );
 }

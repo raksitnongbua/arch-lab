@@ -9,6 +9,116 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Clicking an element on an editable C4 canvas works again. The change that
+  made a bare drag draw a selection box claimed any press that landed
+  _inside_ the pane — and React Flow renders every node inside it — so
+  pressing a node was cancelled before it could select or drag. The box now
+  claims only the background itself.
+
+- Clicking the background of an editable C4 canvas works again. Making a bare
+  drag draw the selection box meant the canvas had to cancel the press it
+  claimed, and cancelling a press also cancels the two things it quietly did:
+  moving focus, and delivering a plain click. A press on the background now
+  moves focus to the diagram, and one that never travels is treated as the
+  click it is rather than an empty selection box.
+
+### Changed
+
+- The canvas lock wears keyhole padlocks now — open while the diagram is
+  editable, closed while it is locked — on both the C4 and the sequence
+  canvas, which share the one control.
+
+- **Dragging on an editable C4 canvas now draws a selection box instead of
+  panning; a Select / Pan toggle beside the zoom controls hands the drag back
+  to panning.** Drag-to-select is the drawing-tool convention and is what
+  makes the lasso reachable without a modifier; the pan is an explicit mode
+  rather than a held key, so it works the same whatever has keyboard focus
+  and on touch, where there is no key to hold. Select is the default, the
+  pane's cursor follows the mode, and the canvas heading names both halves.
+  A locked or read-only canvas is unaffected: it shows no toggle and has no
+  selection to draw, so dragging simply pans there — which is what every
+  shared link opens as.
+
+### Added
+
+- Several C4 elements can be grouped into a boundary in one action: dragging
+  on an editable canvas draws a selection box, and releasing it over two
+  or more elements opens a compact card offering the diagram's boundaries,
+  "None", and a new boundary you name on the spot. The whole grouping lands as
+  one change to your text — each member's line gains its `in=`, plus one
+  minted `frame` line for a new boundary — so a single Cmd/Ctrl + Z takes the
+  entire boundary back out. A lasso over one element just selects it, and
+  `^ref` placeholders group like anything else. The Mermaid pane refuses the
+  gesture for the reason it refuses the single-element boundary edit: Mermaid
+  C4 has nowhere to keep the membership.
+- A boundary itself can now be selected on the canvas and renamed: click its
+  border or its label band and a card offers the name, written back as a
+  patch of that `frame` line alone. Its members keep their membership — the
+  boundary's identity in the text does not change with its label.
+- A C4 element can now be put inside a boundary from the canvas: the details
+  panel's edit form grows a Boundary select offering the diagram's own frames,
+  "None", and a new boundary you name on the spot — written as `in=` on the
+  element, with the `frame` line minted above the diagram's nodes when the
+  boundary is new. Leaving a boundary never deletes the frame line, so a
+  boundary you emptied is still there for the next element.
+- A C4 element can be given a child diagram from the canvas — the details
+  panel offers "Add container/component/code diagram" wherever the level has
+  somewhere deeper to go and the element has no child yet, and the drill-down
+  the viewer already offered becomes something you can author. A child nobody
+  filled can be removed again from the same panel; one that holds anything
+  cannot, and says so.
+- The Add strip can mirror an element from a level above into the diagram
+  you are looking at, as a read-only `^ref` placeholder — so a container
+  diagram can show the person or system it talks to without redeclaring it.
+  The strip's Reference menu lists each candidate by name and source level,
+  offering only ancestors' elements that are legal at this level and not
+  already mirrored here; Escape closes the menu without also clearing the
+  canvas selection.
+- Adding an element or a reference from the Add strip now brings the newcomer
+  into view: the canvas pans to centre on it (an instant cut under reduced
+  motion) and selects it, so the details panel is already open for the rename
+  the announcement suggests — previously the new element could land entirely
+  off screen below a tall diagram.
+
+- The details panel's edit form now also changes a C4 element's icon and its
+  colour. The icon is picked from the same searchable picker the editor uses
+  and lands in your text as `@slug` (clearing it returns the type's default);
+  colour offers the document's own coloured tags plus five built-in colours
+  measured for legibility on every theme, written as a `#tag` on the element
+  and one shared `tagcolor` header line — so ten amber elements cost the
+  header one line, and free-form colours remain available by typing a
+  `tagcolor` line in the source pane. When an element already wears a
+  coloured tag, picking a new colour replaces that tag on the element (the
+  form says so before Apply) instead of silently losing the precedence race;
+  the header keeps the old colour for other elements. The Mermaid pane
+  refuses these edits because Mermaid C4 has no slot for icons or tag
+  colours.
+- A new element can be added to a C4 diagram from the canvas: an Add strip
+  under the breadcrumb offers exactly the node types the diagram's level
+  accepts (a context diagram will not offer `container`), and one press writes
+  a single new line into your source text, placed on the canvas just below the
+  existing diagram so it never lands on top of anything. The node arrives with
+  a placeholder name — rename it with the pencil the details panel already
+  has — and Cmd/Ctrl + Z with the diagram focused undoes it. The Mermaid pane
+  refuses the gesture because Mermaid C4 carries no geometry, so the placement
+  would be lost.
+- A C4 node's wording — its name, technology and description — can now be
+  edited on the canvas: select an element and the details panel grows a pencil
+  that opens the three fields. The edit is written into your source text as a
+  patch of the node's own lines, so comments and formatting elsewhere in the
+  file are untouched, and Cmd/Ctrl + Z with the diagram focused undoes it. The
+  Mermaid pane refuses the gesture because Mermaid C4 cannot hold technology on
+  people or systems; renaming keeps the node's id stable, so relationships and
+  `^ref` lines keep working.
+- The MCP server (beta) can now tell an agent which icons exist: a `list_icons`
+  tool serves the same icon vocabulary the browser's picker searches — by name,
+  slug or alias, filterable by category — where before an agent had to guess a
+  slug and an unknown one silently rendered the generic fallback icon. The
+  syntax reference's nodes section now points at it, and at the `customicon`
+  header line for icons the registry lacks.
+
+### Fixed
+
 - An old `/view` link carrying a query now keeps it. `/view?e=atlas-shop`
   forwarded to `/live` with the example id dropped, so the reader arrived at the
   seed rather than the diagram they asked for; `?e=` and `?d=` now travel with
@@ -16,6 +126,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The canvas lock changed shape and moved. It is now an icon-only padlock at
+  the diagram's own top-right corner — open while the canvas is editable,
+  closed while it is locked — instead of the labelled pencil/padlock button in
+  the strip above the canvas. Hovering it says what pressing will do, the
+  strip still names the state in words ("Read-only" / "Editable"), and on the
+  C4 canvas the lock now stays reachable in immersive mode, where the old
+  strip was covered.
 - **The playground moved from `/view` to `/live`, and the header entry now
   reads "Live".** The page had not only viewed for two releases — the C4 and
   sequence canvases answer a drag and rewrite your source text under you — so

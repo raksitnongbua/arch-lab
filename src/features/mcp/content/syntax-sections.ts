@@ -265,6 +265,12 @@ const SECTION_BUILDERS: Record<SyntaxSectionId, () => SyntaxSection> = {
       "A node line carrying everything:",
       "",
       code(NODE_EXAMPLE.code),
+      "",
+      "Icon slugs are a fixed vocabulary, and an unknown one never errors —",
+      "the node silently falls back to its type's generic icon — so never",
+      "guess a slug. Over MCP, `list_icons` searches the vocabulary by name,",
+      "slug or alias; an icon it lacks can be supplied by the document itself",
+      "with a `customicon` header line (see the header section).",
     ].join("\n"),
   }),
 

@@ -18,12 +18,16 @@
  * vocabulary for talking about it.
  *
  * THIS FILE HAS NO GRAMMAR IN IT, deliberately. `canvas-edit.ts` (C4) and
- * `sequence-edit.ts` (sequence) stay separate because the two gestures differ
- * all the way down: a C4 edit is keyed by `(diagramId, nodeId)` and patches
- * ONE declaration line (a position can only appear there), while a sequence
- * edit is keyed by an index PATH and patches an element's whole block (`desc`
- * is a continuation line an edit may add or remove). Merging them would mean a
- * function taking both keys and honouring one.
+ * `sequence-edit.ts` (sequence) stay separate because their gestures differ
+ * where it cannot be papered over: a C4 edit is keyed by `(diagramId,
+ * nodeId)`, a sequence edit by an index PATH, and each grammar supplies its
+ * own span map and canonical lines. The splice itself is the genuinely shared
+ * operation — a C4 move patches one declaration line (a position can only
+ * appear there), and a C4 revise patches the element's whole block exactly as
+ * every sequence gesture does (`desc` is a continuation line an edit may add
+ * or remove) — which is why it lives HERE, once, and the two grammar modules
+ * do not merge: a merged module would mean a function taking both keys and
+ * honouring one.
  *
  * PURITY IS LOAD-BEARING, as it is for every module in this directory:
  * `check:canvas-edit` and `check:sequence` load these through Node's type
@@ -59,6 +63,18 @@ export interface CanvasEdit {
   /** The text the source pane must hold. */
   text: string;
   path: CanvasEditPath;
+  /**
+   * The id of the element this gesture CREATED, when it created one — set by
+   * the two C4 create gestures so the canvas can bring the newcomer into view
+   * and select it, keeping the promise the create announcement makes. Absent
+   * on every other gesture: a move, revise or delete has nothing new to show.
+   *
+   * It rides the edit rather than travelling in a second channel because the
+   * edit is the one object that already crosses from the gesture module to
+   * the page: a separate "what was just created" signal could name an id from
+   * a different document than the one being adopted, and nothing would notice.
+   */
+  createdNodeId?: string;
 }
 
 /** One line range of the source, and what replaces it — nothing, to remove it. */
