@@ -256,6 +256,7 @@ const { defaultPositions, defaultSizeFor } = await load(
 const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
 const {
   CANVAS_EDIT_OFFERS,
+  CANVAS_EDITABLE_SUMMARY,
   canvasEditability,
   createdNodeEdit,
   createdNodeName,
@@ -870,6 +871,13 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
   const control = read(
     "src/features/playground/components/canvas-lock-button.tsx",
   );
+  /* The stripped copy, and the fifth time this file has needed one: the
+     comment BELOW warns against `stroke="url(#…)"` by quoting it, so a raw
+     test for its absence fails against the warning itself. Prose assertions
+     read `control`; structural ones read `controlCode`. */
+  const controlCode = code(
+    "src/features/playground/components/canvas-lock-button.tsx",
+  );
   /* THE FACES ARE THE STATE, so they must be two states. The old locked face
      was a pencil offering "Edit" because a state-reporting face plus a label
      was the shipped bug above; with the owner's icon-only padlocks the label
@@ -905,6 +913,31 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      replacing the guarded blur with an unconditional one did not fail it.
      The same trap has now caught two authors in this file — a regex over a
      source file must match syntax the compiler sees, never words. */
+  /* THE GRADIENT MUST NOT BE ABLE TO SWALLOW THE GLYPH. The owner asked for a
+     lock that reads as locking, and the obvious way to do it — painting the
+     lucide path with `stroke="url(#…)"` — renders an INVISIBLE icon whenever
+     the reference fails to resolve. This control floats over the drawing and
+     is the only thing left on a locked canvas saying editing exists, so it is
+     the worst possible place for an icon that can disappear. The gradient
+     therefore lives on the button surface and the glyph keeps a solid token
+     colour. Pinned in both directions: a gradient present, and no url() paint
+     on the icon. */
+  check(
+    "the lock's gradient is on the button, never painted onto the glyph",
+    /bg-gradient-to-/.test(controlCode) && !/stroke="url\(#/.test(controlCode),
+    "the padlock is painted with a gradient reference — if it ever fails to " +
+      "resolve the icon renders nothing, on the one control a locked canvas " +
+      "still needs",
+  );
+  /* Every stop a theme token, for `check:themes`' reason: a hardcoded colour
+     is a colour exactly one theme was designed for. */
+  check(
+    "and every stop of it is a theme token",
+    !/(from|via|to)-\[#/.test(controlCode) &&
+      !/#[0-9a-fA-F]{3,8}\b/.test(controlCode),
+    "the lock's gradient hardcodes a colour, so it is tuned for one theme " +
+      "and merely tolerated by the rest",
+  );
   check(
     "a pointer press hands focus back, so a stray keypress cannot re-toggle the lock",
     /if \(event\.detail > 0\)\s*event\.currentTarget\.blur\(\);/.test(control),
@@ -3880,69 +3913,92 @@ console.log("\nLocking never offers a link to somewhere you already are");
      across source lines at arbitrary points and a phrase like "the other
      kinds" straddles a newline plus fourteen spaces of indentation. */
   const flowed = playground.replace(/\s+/g, " ");
-  /* The window measures how much claim can sit between the two anchors. It
-     grew from 240 to 340 when the sentence learned the grouping clause, and
-     to 380 when the pan moved from a held key to the Select/Pan toggle —
-     naming a control takes more words than naming a keystroke, and the
-     sentence must name it or the reader concludes panning broke. */
-  const claim =
-    /C4 nodes can be dragged.{0,380}?the other kinds lay themselves out/.exec(
-      flowed,
-    );
-  check(
-    "the heading still carries the canvas-editing claim",
-    claim !== null,
-    "the sentence that tells a reader the canvas is editable is gone",
+  const playgroundCode = code(
+    "src/features/playground/components/view-playground.tsx",
   );
-  for (const verb of [
-    "sequence messages",
-    "lifelines",
-    "added",
-    "edited",
-    "repointed",
-    "removed",
-    /* Added with the numbering toggle. This list is hand-kept and section 16 is
-       the derived answer to that, but the two ask different questions: this one
-       is about the sentence a reader meets BEFORE they open the canvas. */
-    "numbered",
-    /* Added with the reorder drag, and this one had to be here rather than only
-       in section 16: a reader who has used a drawing tool arrives ASKING
-       whether they can move things, and the sentence they meet first is the
-       page's own. */
-    "reordered",
-    /* Added with the C4 revise, grown when the same form learned icon and
-       colour. Two strings, because each half can go stale alone: the field
-       list is the gesture, "details panel" is where — a claim naming the
-       first without the second sends the reader double-clicking a box that
-       only drills down. */
-    "wording, icon and colour edited",
-    "details panel",
-    /* Added with the C4 create. One string carrying gesture AND place, unlike
-       the pair above, because "added" alone is already claimed by the
-       sequence half of the sentence and would pass with the palette claim
-       gone. */
-    "added from its palette",
-    /* Added with the marquee grouping. Two strings for the revise pair's
-       reason — each half can go stale alone: the first is WHAT the gesture
-       writes, the second is HOW it is made, and a reader who has used a
-       drawing tool arrives asking for exactly this gesture. */
-    "grouped into a boundary",
-    "drag selection",
-    /* THE PAN MOVED, TWICE: a bare drag stopped panning when it became the
-       lasso, and the hold-Space pan that first replaced it broke three times
-       (keyboard state and focus) and gave way to the explicit Select/Pan
-       toggle. A reader who has panned this canvas by dragging knows the OLD
-       gesture, and a page that names only the lasso leaves them thinking
-       panning broke — which is why the pan's new home is pinned here rather
-       than left to the hint bar. */
-    "Select / Pan toggle",
-  ]) {
+
+  /* THE WALL, AND WHY IT WAS THIS FILE'S FAULT. The intro used to carry every
+     gesture in one sentence between two anchors, and the window this check
+     allowed was widened 240 → 340 → 380 as gestures were added — each
+     widening recorded as if it were maintenance rather than a symptom. Ten
+     gestures are a LIST, and the page now renders one; the reader was being
+     handed a paragraph to parse for "why will my diagram not move?".
+
+     What survives is the goal, which was always right: a gesture the canvas
+     offers that the page never mentions is a feature nobody finds. So these
+     assertions moved with the copy instead of dying with it, and the intro
+     itself is now MEASURED — nothing measured it before, which is exactly how
+     it grew. */
+  const intro = /Nothing leaves your browser/.test(flowed);
+  check(
+    "the intro still promises the reader nothing leaves the browser",
+    intro,
+    "the privacy line is gone from the page's first paragraph",
+  );
+  check(
+    "the intro still says the canvas is editable, in one derived clause",
+    /CANVAS_EDITABLE_SUMMARY/.test(playgroundCode),
+    "the intro no longer tells a reader the canvas can be edited at all, or " +
+      "says so in hand-written prose that can outlive the grid",
+  );
+  /* MEASURED ON THE VALUE, not on the page source — the clause is derived, so
+     the file holds an identifier and the words exist only at runtime. This is
+     the assertion the old window should always have been: a number on the
+     sentence itself, rather than a widening allowance on a regex. One short
+     sentence naming the notations; the gestures live in the disclosure. */
+  check(
+    "and that clause stays one short sentence",
+    CANVAS_EDITABLE_SUMMARY.length <= 120 &&
+      CANVAS_EDITABLE_SUMMARY.split(". ").length === 1,
+    `the intro clause is ${CANVAS_EDITABLE_SUMMARY.length} chars — it is ` +
+      "growing back into the paragraph the gesture list was moved out of",
+  );
+
+  /* DERIVED, NOT HAND-KEPT — the whole reason the list could move safely. The
+     page maps the grid's own `onCanvas` cells and the sequence strip's own
+     gesture record, so a new gesture reaches this page by being added where it
+     is BUILT. Pinning the `.map` is what proves that: a hand-typed copy of
+     today's clauses would pass a "does the page say 'repointed'" test and go
+     stale the day the eleventh gesture landed. */
+  check(
+    "the canvas gestures on the page are the capability grid's own clauses",
+    /CANVAS_GESTURE_CLAUSES\.map\(/.test(playgroundCode),
+    "the page lists gestures it typed out itself — the list the grid knows " +
+      "and the list the reader sees can now disagree",
+  );
+  check(
+    "and the sequence gestures are the canvas strip's own record",
+    /SEQUENCE_MOUSE_GESTURES\.map\(/.test(playgroundCode),
+    "the sequence half of the list is hand-kept again",
+  );
+  check(
+    "the list is somewhere a reader looking for it will open",
+    /What you can do on the canvas/.test(flowed),
+    "the disclosure that replaced the intro sentence is gone, so the gestures " +
+      "are described nowhere a reader meets before opening the canvas",
+  );
+
+  /* THE TWO NO TABLE KNOWS. The marquee and the pan are canvas CONTROLS, not
+     abilities, so no grid cell describes them and they are hand-kept in the
+     page — which is exactly why they are pinned here. The pan in particular:
+     it moved twice (a bare drag stopped panning when it became the lasso, and
+     the hold-Space pan that replaced it broke three times before giving way
+     to the toggle), and a reader who has panned this canvas by dragging knows
+     the OLD gesture. A page naming only the lasso leaves them concluding that
+     panning broke. */
+  for (const phrase of ["drag selection", "Select / Pan toggle"]) {
     check(
-      `the heading's claim names "${verb}"`,
-      claim !== null && claim[0].includes(verb),
-      "a gesture the canvas offers that the page never mentions",
+      `the list names "${phrase}", which no grid cell can describe`,
+      flowed.includes(phrase),
+      "a canvas control the page must name by hand is unnamed",
     );
   }
+  check(
+    "and it still answers the reader whose flowchart box will not move",
+    flowed.includes("the other kinds lay themselves out from the text"),
+    "the refusal half of the answer is gone — the reader who drags a " +
+      "flowchart node now has nowhere to learn why nothing happened",
+  );
 }
 
 /* ----------------------------------------------------------------------- */

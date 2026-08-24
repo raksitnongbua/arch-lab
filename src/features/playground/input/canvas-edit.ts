@@ -575,6 +575,30 @@ const NUMBER_WORD: readonly string[] = [
 const inWords = (count: number): string => NUMBER_WORD[count] ?? String(count);
 
 /**
+ * Every offering cell's `onCanvas` clause, as the list it already is — one
+ * entry per (notation, ability) pair the grid says yes to, in the grid's own
+ * ability-then-notation order.
+ *
+ * Exported for `/live`'s "what you can do on the canvas" disclosure, which
+ * renders these as bullets, and consumed by `CANVAS_EDITING_PASSAGE` below,
+ * which joins them into its one sentence — ONE derivation, so the page a
+ * reader scans and the passage an assistant quotes cannot disagree about what
+ * a gesture writes. The failure this prevents is the intro's old hand-kept
+ * verb list: every new gesture grew the sentence by hand (and grew the
+ * check-window that policed it, 240 → 340 → 380 characters) until the intro
+ * read as a wall. A clause added to the grid now reaches both surfaces with
+ * nothing retyped. `check:canvas-edit` pins this list equal to the grid and
+ * pins the disclosure rendering it.
+ */
+export const CANVAS_GESTURE_CLAUSES: readonly string[] = Object.values(
+  CANVAS_EDIT_OFFERS,
+).flatMap((cells) =>
+  Object.values(cells)
+    .filter((offer) => offer.offers)
+    .map((offer) => offer.onCanvas),
+);
+
+/**
  * THE ONE PASSAGE THE SITE QUOTES about editing, and the reason it is built
  * here rather than typed on each page.
  *
@@ -603,11 +627,6 @@ const inWords = (count: number): string => NUMBER_WORD[count] ?? String(count);
  */
 export const CANVAS_EDITING_PASSAGE: string = (() => {
   const notations = Object.keys(CANVAS_EDIT_OFFERS.move) as Notation[];
-  const clauses = Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
-    Object.values(cells)
-      .filter((offer) => offer.offers)
-      .map((offer) => offer.onCanvas),
-  );
   const editable = new Set(
     notations.filter((notation) =>
       Object.values(CANVAS_EDIT_OFFERS).some((cells) => cells[notation].offers),
@@ -616,9 +635,9 @@ export const CANVAS_EDITING_PASSAGE: string = (() => {
   return (
     `An ${APP_NAME} diagram is edited two ways. All ${inWords(notations.length)} ` +
     `notations are edited as source text; ${inWords(editable.size)} of them are ` +
-    `also editable on the canvas — ${clauses.join(", and ")}. Either way the ` +
-    `change lands in the same one-line-per-element text you review in a pull ` +
-    `request.`
+    `also editable on the canvas — ${CANVAS_GESTURE_CLAUSES.join(", and ")}. ` +
+    `Either way the change lands in the same one-line-per-element text you ` +
+    `review in a pull request.`
   );
 })();
 
@@ -1132,7 +1151,11 @@ export function renamedFrameEdit(
   const span = patchable?.spans.frames.get(spanKey(diagramId, frameId));
   const line = canonicalFrameDeclaration(edited, diagramId, frameId);
   if (span !== undefined && line !== null) {
-    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines: [line] }]));
+    return adopt(
+      doc,
+      edited,
+      applyPatches(sourceText, [{ span, lines: [line] }]),
+    );
   }
   return adopt(doc, edited, null);
 }

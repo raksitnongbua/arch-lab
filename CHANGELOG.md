@@ -24,6 +24,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The `/live` intro is a couple of lines again. The gestures it used to list in
+  one long sentence now sit in a "What you can do on the canvas" disclosure,
+  built from the capability grid itself — so a new gesture reaches the page by
+  being added where it is built. How `.alab`, JSON and Mermaid relate moved into
+  its own disclosure beside it.
+- The canvas lock wears a gradient that reads as sealed when locked and settles
+  almost flat while the diagram is editable.
+
 - The canvas lock wears keyhole padlocks now — open while the diagram is
   editable, closed while it is locked — on both the C4 and the sequence
   canvas, which share the one control.

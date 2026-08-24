@@ -75,11 +75,8 @@ import {
   FileText,
   ChevronDown,
   Info,
-  Link2,
   Pencil,
-  Repeat2,
   Shrink,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -153,6 +150,7 @@ import { ErShareButton, ErViewer, renderErSvg } from "@/features/er";
 import { DictShareButton, DictViewer, renderDictSvg } from "@/features/dict";
 import {
   MERMAID_SEQUENCE_CAVEAT,
+  SEQUENCE_MOUSE_GESTURES,
   SequenceExportButton,
   SequenceShareButton,
   SequenceViewer,
@@ -195,6 +193,8 @@ import {
   type ViewSourceError,
 } from "../input/parse";
 import {
+  CANVAS_EDITABLE_SUMMARY,
+  CANVAS_GESTURE_CLAUSES,
   canvasEditability,
   createdNodeEdit,
   createdRefEdit,
@@ -402,7 +402,6 @@ export function ViewPlayground({
   );
 
   // Share links (`#m=…`): the document arrives inside the fragment.
-  const [openedFromShare, setOpenedFromShare] = useState(false);
   const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
     string | null
   >(null);
@@ -641,7 +640,6 @@ export function ViewPlayground({
       // stale error page. Reset covers "none" too: a fragment with no payload
       // is not a share link, so nothing about one should still be on screen.
       setShareFailure(null);
-      setOpenedFromShare(false);
 
       switch (decoded.status) {
         case "none":
@@ -700,7 +698,6 @@ export function ViewPlayground({
           } else {
             setSharedInitialDiagram(null);
           }
-          setOpenedFromShare(true);
           setAnnouncement(
             "Opened a document from a share link — nothing was uploaded; the pane holds its source.",
           );
@@ -1681,41 +1678,18 @@ export function ViewPlayground({
             C4, sequence, flowchart, use case, ER or dictionary —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
             JSON, or Mermaid, auto-detected and rendered live.{" "}
-            {/* WHERE THE CANVAS-EDITING RULE IS NAMED, and it is named here
-                because this is the sentence a reader is on when they wonder
-                why their ER diagram will not move. Sourced from the flag, so
-                the claim is absent rather than false while the canvas is not
-                shipped.
-
-                IT USED TO NAME C4 AS THE ONLY EDITABLE CANVAS, which went
-                false the moment the sequence canvas became editable and was
-                still on the page when a reader asked where the editing was.
-                The old sentence is deliberately not quoted here: an assertion
-                in `check:canvas-edit` searches this file for it, and prose
-                reproducing it would defeat the check that guards it.
-                The two abilities are named separately on purpose: they are
-                genuinely different, and collapsing them into "C4 and sequence
-                can be edited" would promise a sequence drag that does not
-                exist.
-
-                THE SEQUENCE HALF NAMES THE VERBS, since the gestures grew past
-                "edited": messages and lifelines can now be added, rewritten,
-                repointed and removed. Listing them beats a vaguer "can be
-                edited" for the same reason the sentence is here at all — a
-                reader hunting for the control needs to know it exists before
-                they will look for it. */}
-            {CANVAS_EDIT_ENABLED ? (
-              <>
-                C4 nodes can be dragged on the canvas, added from its palette,
-                grouped into a boundary with a drag selection (the Select / Pan
-                toggle by the zoom controls makes a drag pan instead), their
-                wording, icon and colour edited in the details panel — where a
-                selected boundary is renamed too — and sequence messages and
-                lifelines added, edited, repointed, reordered, numbered and
-                removed on it; the other kinds lay themselves out from the
-                text.{" "}
-              </>
-            ) : null}
+            {/* THE INTRO SAYS THAT the canvas is editable; the disclosure
+                below says WHAT. The full gesture enumeration lived in this
+                sentence and grew with every gesture until the product owner
+                read it as a wall of text — ten gestures are a list, not a
+                sentence. The claim that remains is `CANVAS_EDITABLE_SUMMARY`,
+                derived from the capability grid (a hand-written "only C4"
+                predecessor outlived its own truth once already), and it is
+                sourced from the flag so it is absent rather than false while
+                the canvas is not shipped. `check:canvas-edit` keeps this
+                sentence derived AND keeps it short — the wall grew because
+                nothing measured it. */}
+            {CANVAS_EDIT_ENABLED ? <>{CANVAS_EDITABLE_SUMMARY} </> : null}
             Nothing leaves your browser.{" "}
             <Link
               href="/syntax"
@@ -1725,6 +1699,53 @@ export function ViewPlayground({
             </Link>
           </p>
         </header>
+
+        {/* WHERE THE GESTURES ARE NAMED, one bullet per claim, so a reader
+            can scan for the one they are wondering about ("why will my ER
+            diagram not move?") instead of parsing a paragraph. A disclosure,
+            matching the format-relations one below it: a reader meets it
+            before they open the canvas, which is the surface the old intro
+            sentence existed to be.
+
+            NOTHING HERE IS A HAND-KEPT VERB LIST. The clauses are the
+            capability grid's own `onCanvas` cells (`CANVAS_GESTURE_CLAUSES`)
+            and the sequence bullets are the canvas strip's own gesture
+            record (`SEQUENCE_MOUSE_GESTURES`, pinned to the handler
+            contract) — so a new gesture lands on this page by being added
+            where it is built, not by someone remembering this file. The two
+            exceptions are below, marked, because no table knows them. */}
+        {CANVAS_EDIT_ENABLED ? (
+          <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
+            <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
+              What you can do on the canvas
+            </summary>
+            <ul className="mt-2 max-w-3xl list-disc space-y-1 pl-5 leading-relaxed">
+              {CANVAS_GESTURE_CLAUSES.map((clause) => (
+                <li key={clause}>{clause}</li>
+              ))}
+              {/* HAND-KEPT, deliberately: the marquee and the pan are canvas
+                  CONTROLS, not abilities, so no grid cell describes them —
+                  `check:canvas-edit` pins both phrases here instead. The pan
+                  clause rides the grouping bullet because they are one drag:
+                  which of the two a drag performs is exactly what the toggle
+                  chooses. */}
+              <li>
+                C4 nodes group into a boundary with a drag selection — the
+                Select / Pan toggle by the zoom controls makes a drag pan
+                instead
+              </li>
+              <li>
+                on a sequence diagram:{" "}
+                {SEQUENCE_MOUSE_GESTURES.map((gesture) =>
+                  gesture.label.toLowerCase(),
+                ).join(" · ")}
+              </li>
+              {/* The refusal half of the answer, kept from the old sentence:
+                  this is where a reader who dragged a flowchart box lands. */}
+              <li>the other kinds lay themselves out from the text</li>
+            </ul>
+          </details>
+        ) : null}
 
         <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
           <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
@@ -1832,70 +1853,15 @@ export function ViewPlayground({
                overflow. Below `lg` the chain is deliberately not joined — the
                panes stack there and the page scrolls. */
             <div className="flex min-h-0 flex-col gap-3 lg:min-h-0 lg:flex-1">
-              {/* ---- share-link outcome ---------------------------------- */}
-              {/* Success only. Failure never reaches here — it took over the
-                  page. */}
-              {/* ONE LINE, with the mechanism folded away — the same
-                  progressive disclosure the Mermaid notice above uses, and
-                  the same border, tint and icon-led summary, because a second
-                  notice shape in one rail reads as two unrelated warnings. It
-                  was a three-sentence card explaining that the document
-                  travelled inside the link; that is the interesting part
-                  exactly once, and it sat above the pane on every visit.
-
-                  WHAT MUST NOT SHRINK OUT is "nothing uploaded, nothing
-                  stored". It is not reassurance, it is the product's claim
-                  (`purpose.md`), and it is the one thing a reader who arrived
-                  from someone else's link cannot deduce from the page. The
-                  crawlable, full-length statement lives where crawlers read
-                  it — `/faq#sharing`, `llms.txt` and `llms-full.txt` — and
-                  the link below goes there rather than restating it here. */}
-              {openedFromShare ? (
-                <div className="flex shrink-0 items-start gap-1">
-                  <details className="group min-w-0 flex-1 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-sm text-foreground">
-                    <summary className="flex cursor-pointer list-none items-center gap-2">
-                      <Link2
-                        aria-hidden="true"
-                        className="size-4 shrink-0 text-accent"
-                      />
-                      {/* WRAPS RATHER THAN TRUNCATES, unlike the strip labels
-                          above: this is the claim itself, and a rail narrow
-                          enough to clip it would clip "nothing stored" — the
-                          half that is the point. */}
-                      <span className="min-w-0">
-                        Share link — nothing uploaded, nothing stored.
-                      </span>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground underline-offset-2 group-hover:underline">
-                        how
-                      </span>
-                    </summary>
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                      The document travelled inside the link itself, in the part
-                      after the <span className="font-mono">#</span> that
-                      browsers never send to a server. Any edits you make stay
-                      in this browser.{" "}
-                      <Link
-                        href="/faq#sharing"
-                        className="font-medium text-primary hover:underline"
-                      >
-                        More on share links
-                      </Link>
-                    </p>
-                  </details>
-                  <button
-                    type="button"
-                    onClick={() => setOpenedFromShare(false)}
-                    aria-label="Dismiss the share link notice"
-                    className={buttonClasses({
-                      variant: "ghost",
-                      size: "sm",
-                      className: "shrink-0",
-                    })}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </div>
-              ) : null}
+              {/* NO SHARE-ARRIVAL CARD ANY MORE. A notice saying the document
+                  travelled inside the link sat above the pane for the whole
+                  visit, and the product owner cut it with the rest of the
+                  page's standing prose. The privacy claim it carried does not
+                  leave the page: the intro's "Nothing leaves your browser."
+                  is always on screen, the share-open announcement below tells
+                  an assistive-tech arrival nothing was uploaded, and the
+                  crawlable full statement stays at `/faq#sharing`, `llms.txt`
+                  and `llms-full.txt` (`purpose.md` claim, unchanged). */}
 
               {/* ---- the source pane -------------------------------------- */}
               {/* `lg:flex-1 lg:min-h-0` — the pane takes a share of the
@@ -1965,10 +1931,6 @@ export function ViewPlayground({
                         );
                       })}
                     </div>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Repeat2 aria-hidden="true" className="size-3.5" />
-                      switches by rewriting the text
-                    </span>
                   </div>
                   {/* PANE-LOCAL actions only — Format, Copy, Download, all of
                       which act on the text beside them.
@@ -2101,11 +2063,18 @@ export function ViewPlayground({
                     <Braces aria-hidden="true" />
                     {showJson ? "Hide JSON" : "Show JSON"}
                   </Button>
-                  <p className="text-xs text-muted-foreground">
-                    {showJson
-                      ? "Both panes stay in sync — edit either one."
-                      : "The same model as .archlab.json, the format it saves to. You never have to write it by hand."}
-                  </p>
+                  {/* A sentence only while both panes are open — what "in
+                      sync" means is not guessable from two editors alone.
+                      The collapsed state used to carry a second sentence
+                      explaining .archlab.json; that is the format-relations
+                      disclosure's job (it already says you never write the
+                      JSON by hand), and a paraphrase of it living down here
+                      is the two-copies drift `dry.md` forbids. */}
+                  {showJson ? (
+                    <p className="text-xs text-muted-foreground">
+                      Both panes stay in sync — edit either one.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
