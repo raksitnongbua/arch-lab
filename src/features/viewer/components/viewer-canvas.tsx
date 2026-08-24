@@ -61,7 +61,7 @@ import {
 
 import "@xyflow/react/dist/style.css";
 
-import type { C4Diagram, C4Edge, C4NodeRevision } from "@/types";
+import type { C4Diagram, C4Edge, C4NodeRevision, C4NodeType } from "@/types";
 import { childLevelOf, hasChildDiagram } from "@/types";
 
 import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
@@ -108,6 +108,7 @@ import {
   type ViewerFlowNode,
   type ViewerNodeActions,
 } from "./viewer-node";
+import { ViewerNodePalette } from "./viewer-node-palette";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
 import { useModKey } from "@/lib/mod-key";
@@ -165,6 +166,14 @@ export interface CanvasEditHandlers {
    * the keystroke.
    */
   onNodeDelete: (diagramId: string, nodeId: string) => void;
+  /**
+   * Add a new node of `type` to the diagram, from the Add strip. The host
+   * generates the id, the placeholder name and a spot below the diagram
+   * (`createdNodeEdit`) and refuses a type the diagram's level cannot hold —
+   * the canvas only reports the pressed button, which is itself already
+   * filtered to the level's legal types (`creatableNodeTypes`).
+   */
+  onNodeCreate: (diagramId: string, type: C4NodeType) => void;
   /**
    * Undo the last canvas edit.
    *
@@ -1019,6 +1028,16 @@ function ViewerCanvasInner({
   /** Editable is a property of the handlers' presence — see CanvasEditHandlers. */
   const editable = edit !== undefined;
 
+  /* Resolved to the CURRENT diagram here, exactly as the drag and the delete
+     are: the palette describes one level's types and should not carry the
+     diagram id around. */
+  const handleNodeCreate = useCallback(
+    (type: C4NodeType) => {
+      edit?.onNodeCreate(diagramIdRef.current, type);
+    },
+    [edit],
+  );
+
   const climbTo = useCallback(
     (targetId: string) => {
       const anchorNodeId = climbAnchorNodeId(
@@ -1690,9 +1709,21 @@ function ViewerCanvasInner({
               visibly fails to contain the node it owns, then jump on release. */}
           <FrameLayer diagram={draggedDiagram} onFocus={clearSelection} />
           <Panel position="top-left" className="max-w-full">
-            {/* No `currentLevel`: the last crumb already carries it, and two
-                sources for one fact can disagree. */}
-            <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
+            <div className="flex flex-col items-start gap-2">
+              {/* No `currentLevel`: the last crumb already carries it, and two
+                  sources for one fact can disagree. */}
+              <ViewerToolbar crumbs={crumbs} onNavigate={climbTo} />
+              {/* Under the breadcrumb, not beside it: the crumb trail grows
+                  with the drill depth and would push the palette off a narrow
+                  canvas. Presence-gated like every edit control — a read-only
+                  or locked canvas shows no strip, never a disabled one. */}
+              {editable ? (
+                <ViewerNodePalette
+                  level={diagram.level}
+                  onCreate={handleNodeCreate}
+                />
+              ) : null}
+            </div>
           </Panel>
           <Panel
             position="top-right"

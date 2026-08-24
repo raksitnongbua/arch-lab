@@ -99,6 +99,7 @@ import {
 } from "@/components/ui/split-workbench";
 import type {
   C4NodeRevision,
+  C4NodeType,
   SequenceItemPath,
   SequenceMessageRevision,
   SequenceParticipantRevision,
@@ -193,6 +194,8 @@ import {
 } from "../input/parse";
 import {
   canvasEditability,
+  createdNodeEdit,
+  createdNodeName,
   deletedNodeEdit,
   movedNodeEdit,
   ownsChildDiagram,
@@ -1083,6 +1086,28 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleNodeCreate = useCallback(
+    (diagramId: string, type: C4NodeType) => {
+      const next = createdNodeEdit(doc, text, diagramId, type);
+      /* SAID, not swallowed, unlike a refused move: a no-op drag left the
+         canvas looking exactly as the reader expects, but a pressed Add
+         button that changes nothing looks like a broken button — the same
+         verdict the sequence insert handlers reached. The one refusal a
+         reader can actually cause here is the pane lagging the canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The element was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `“${createdNodeName(type)}” added below the diagram — the source text follows. Select it to rename it in the details panel; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   /* ---- the sequence canvas's own gestures --------------------------------
      Routed through `applyCanvasEdit` exactly as the C4 drag is, so both
      canvases share one undo ring, one "the pane just written is never rewritten
@@ -1418,6 +1443,7 @@ export function ViewPlayground({
             onNodeMove: handleNodeMove,
             onNodeRevise: handleNodeRevise,
             onNodeDelete: handleNodeDelete,
+            onNodeCreate: handleNodeCreate,
             onUndo: handleCanvasUndo,
           }
         : undefined,
@@ -1426,6 +1452,7 @@ export function ViewPlayground({
       handleNodeMove,
       handleNodeRevise,
       handleNodeDelete,
+      handleNodeCreate,
       handleCanvasUndo,
     ],
   );
@@ -1549,11 +1576,11 @@ export function ViewPlayground({
                 they will look for it. */}
             {CANVAS_EDIT_ENABLED ? (
               <>
-                C4 nodes can be dragged on the canvas and their wording, icon
-                and colour edited in the details panel, and sequence messages
-                and lifelines added, edited, repointed, reordered, numbered and
-                removed on it; the other kinds lay themselves out from the
-                text.{" "}
+                C4 nodes can be dragged on the canvas, added from its palette
+                and their wording, icon and colour edited in the details panel,
+                and sequence messages and lifelines added, edited, repointed,
+                reordered, numbered and removed on it; the other kinds lay
+                themselves out from the text.{" "}
               </>
             ) : null}
             Nothing leaves your browser.{" "}

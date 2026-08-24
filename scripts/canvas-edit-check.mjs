@@ -62,7 +62,10 @@
  *      sequence document refuses `move` while offering `revise`, C4 answers
  *      both, and the four text-laid-out notations refuse both. The
  *      one-argument default must keep meaning `move`, or a sequence document
- *      silently reports itself draggable.
+ *      silently reports itself draggable. (The loop count follows the ability
+ *      union — `move`, `revise` and now `create` — and the grid-shape
+ *      assertion pins that count, so a fourth ability fails here until its
+ *      row is complete.)
  *   7. A NUDGE STAYS ON THE GRID, and four of them round a square return the
  *      text to byte-identical — a nudge that rounds or double-applies its
  *      delta would leave a residue the reader cannot see and cannot undo by
@@ -139,6 +142,19 @@
  *      field must not delete the node), the pencil is withheld from a
  *      read-only canvas and from a boundary placeholder, and the page's
  *      heading names the gesture.
+ *  15. A CREATE IS AN INSERT PATCH, and the palette cannot offer what the
+ *      parser refuses. The Add strip's type list is DERIVED from the syntax
+ *      reference's `NODE_TYPE_ROWS` and pinned here — level by level, both
+ *      directions — to `VALID_NODE_TYPES_BY_LEVEL`, the very table the parser
+ *      validates against, because a palette that drifted would ship a button
+ *      that produces an invalid document. The gesture itself is held to
+ *      section 13's standard from non-canonical text: exactly one line gains,
+ *      every other byte survives, the line is what a full serialise would
+ *      emit, the id de-duplicates deterministically against the whole file
+ *      (ids are file-unique), an illegal-at-this-level type refuses (`null`,
+ *      no throw), and the new node's box is MEASURED to overlap nothing —
+ *      after the round trip, since inserting an id reflows the default
+ *      layout, so the pre-insert picture is the wrong one to measure.
  *
  * Exits non-zero on any failure. Run with: pnpm check:canvas-edit
  */
@@ -192,11 +208,16 @@ const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
 const {
   CANVAS_EDIT_OFFERS,
   canvasEditability,
+  createdNodeEdit,
+  createdNodeName,
   deletedNodeEdit,
   movedNodeEdit,
   ownsChildDiagram,
   revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
+const { creatableNodeTypes } = await load(
+  "src/features/viewer/lib/node-palette.ts",
+);
 const {
   revisedMessageEdit,
   revisedParticipantEdit,
@@ -888,10 +909,11 @@ console.log("\nThe capability grid answers every notation for every ability");
   const abilities = Object.keys(CANVAS_EDIT_OFFERS);
   const seededKinds = Object.keys(VIEW_SEED_TEXT).sort();
   check(
-    "the grid names both abilities and nothing else",
-    abilities.length === 2 &&
+    "the grid names the three abilities and nothing else",
+    abilities.length === 3 &&
       abilities.includes("move") &&
-      abilities.includes("revise"),
+      abilities.includes("revise") &&
+      abilities.includes("create"),
     `abilities: ${abilities.join(", ")}`,
   );
 
@@ -3059,6 +3081,336 @@ console.log(
 }
 
 /* ----------------------------------------------------------------------- */
+/* 15. A create is an INSERT patch, and the palette matches the parser      */
+/* ----------------------------------------------------------------------- */
+
+console.log(
+  "\nA create inserts one line, at a spot that collides with nothing",
+);
+
+{
+  const { VALID_NODE_TYPES_BY_LEVEL } = await load("src/types/c4.ts");
+  const { NODE_TYPE_ROWS } = await load(
+    "src/features/syntax-docs/content/snippets.ts",
+  );
+  const { NODE_TYPE_BY_KEYWORD } = await load("src/features/archtext/index.ts");
+
+  /* --- the palette cannot offer what the parser refuses -------------------- */
+
+  /* `creatableNodeTypes` derives from the syntax reference's `NODE_TYPE_ROWS`
+     (which carries the keywords a palette needs); the PARSER validates a
+     node's type against `VALID_NODE_TYPES_BY_LEVEL`. Those are two tables in
+     two features that cannot import each other's reason for existing, so this
+     is the `dry.md` case where a check pins the pair — level by level, SET
+     EQUALITY in both directions, because `every(includes)` passes on a palette
+     that quietly lost a type as well as on one that never gained it. The
+     failure this prevents is the dishonest button: `container` offered on a
+     context diagram creates a document the re-parse refuses, and the reader
+     sees a press that does nothing. */
+  const levels = Object.keys(VALID_NODE_TYPES_BY_LEVEL);
+  check(
+    "the level table is the one the parser uses and is non-trivial",
+    levels.length === 4 && levels.includes("context"),
+    `levels: ${levels.join(", ")}`,
+  );
+  for (const level of levels) {
+    const offered = creatableNodeTypes(level)
+      .map((entry) => entry.type)
+      .sort()
+      .join(",");
+    const legal = [...VALID_NODE_TYPES_BY_LEVEL[level]].sort().join(",");
+    check(
+      `the palette at @${level} offers exactly the types the parser accepts there`,
+      offered === legal && offered.length > 0,
+      `palette: ${offered} / parser: ${legal}`,
+    );
+  }
+  /* And the docs table's own keyword→type column agrees with the grammar's
+     bijection, so the KEYWORD on a palette button names the TYPE the gesture
+     writes. A row that drifted would render a button labelled with one word
+     that inserts another. */
+  for (const row of NODE_TYPE_ROWS) {
+    check(
+      `NODE_TYPE_ROWS maps "${row.keyword}" to the type the grammar does`,
+      NODE_TYPE_BY_KEYWORD[row.keyword] === row.modelType,
+      `docs say ${row.modelType}, grammar says ${NODE_TYPE_BY_KEYWORD[row.keyword]}`,
+    );
+  }
+
+  /* --- the patch, from non-canonical text ---------------------------------- */
+
+  /* Non-canonical for section 13's reason: a re-emit of canonical text IS
+     canonical text, so only comments and author blank lines can catch one. */
+  const authored = [
+    `archlab 1.0`,
+    `title "Create probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // Who uses this thing.`,
+    `  cust:person "Customer" [human]`,
+    `    desc "The paying kind."`,
+    `  web:system "Web App" >backend`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go]`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the create fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  const created = createdNodeEdit(doc, authored, "ctx", "person");
+  check(
+    "a create on authored text takes the PATCH path, by name",
+    created !== null && created.path === "patch",
+    `path: ${created === null ? "refused" : created.path}`,
+  );
+
+  /* AN INSERT IS ONE GAINED LINE AND NO CHANGED ONES. `changedLines` cannot
+     say this (an insert shifts every later index), so it is measured as a
+     splice: remove the one new line and the authored bytes must come back
+     exactly — which covers the comments and blank lines in the same breath. */
+  const beforeLines = authored.split("\n");
+  const afterLines = (created?.text ?? "").split("\n");
+  let insertedAt = -1;
+  for (let i = 0; i < afterLines.length; i += 1) {
+    if (afterLines[i] !== beforeLines[i]) {
+      insertedAt = i;
+      break;
+    }
+  }
+  const spliced = [...afterLines];
+  if (insertedAt !== -1) spliced.splice(insertedAt, 1);
+  check(
+    "a create adds exactly one line and every authored byte survives",
+    afterLines.length === beforeLines.length + 1 &&
+      insertedAt !== -1 &&
+      spliced.join("\n") === authored,
+    created === null
+      ? "the create was refused"
+      : firstDiff(spliced.join("\n"), authored),
+  );
+  /* DIRECTLY AFTER THE DIAGRAM'S LAST NODE DECLARATION — nodes stay with
+     nodes, ahead of the relationship lines, so the reviewer's diff reads as
+     "one element added" rather than a line floating among the edges. */
+  check(
+    "the new line lands directly under the diagram's last node declaration",
+    insertedAt !== -1 &&
+      beforeLines[insertedAt - 1] === `  web:system "Web App" >backend`,
+    `inserted after: ${JSON.stringify(beforeLines[insertedAt - 1])}`,
+  );
+  /* THE INSERTED LINE IS CANONICAL, proved against a FULL serialise of the
+     edited document — section 13's derivation, for section 13's reason: a
+     patch that wrote almost-canonical text would trade a silent loss for a
+     silent divergence. */
+  const canonicalAfter = created === null ? "" : sourceTextFor(created.doc);
+  check(
+    "the inserted line is exactly what a full serialise would write for the node",
+    insertedAt !== -1 &&
+      canonicalAfter.split("\n").includes(afterLines[insertedAt]) &&
+      afterLines[insertedAt].includes("new-person:person"),
+    `inserted: ${JSON.stringify(afterLines[insertedAt])}`,
+  );
+
+  /* --- what the reader gets: a named, legal, visibly-placed node ----------- */
+
+  const createdNode =
+    created === null
+      ? undefined
+      : created.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "ctx")
+          ?.nodes.find((node) => node.id === "new-person");
+  check(
+    "the created node survives the round trip with the placeholder name",
+    createdNode !== undefined &&
+      createdNode.name === createdNodeName("person") &&
+      createdNode.name.length > 0,
+    `node after re-parse: ${JSON.stringify(createdNode)}`,
+  );
+  /* NOT ON TOP OF ANYTHING, measured as rectangle disjointness AGAINST THE
+     RE-PARSED DOCUMENT rather than the pre-insert one: adding an id reflows
+     the default layout, so nodes whose geometry the text omits may have
+     moved, and the pre-insert picture is the wrong one to measure. This is
+     the assertion the gesture exists to satisfy — a node born under another
+     is a create that looks like a delete. */
+  const others =
+    created === null
+      ? []
+      : (created.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "ctx")
+          ?.nodes.filter((node) => node.id !== "new-person") ?? []);
+  const overlaps = others.filter(
+    (node) =>
+      createdNode !== undefined &&
+      createdNode.position.x < node.position.x + node.size.width &&
+      node.position.x < createdNode.position.x + createdNode.size.width &&
+      createdNode.position.y < node.position.y + node.size.height &&
+      node.position.y < createdNode.position.y + createdNode.size.height,
+  );
+  check(
+    "the created node's box overlaps no existing node's box after the re-parse",
+    others.length > 0 && overlaps.length === 0,
+    `overlapping: ${overlaps.map((node) => node.id).join(", ")}`,
+  );
+  check(
+    "the created node lands on the format's grid",
+    createdNode !== undefined &&
+      createdNode.position.x % EDIT_GRID === 0 &&
+      createdNode.position.y % EDIT_GRID === 0,
+    `position: ${JSON.stringify(createdNode?.position)}`,
+  );
+
+  /* --- the id: file-unique, deterministic ---------------------------------- */
+
+  /* Node ids are unique across the FILE (`validate.ts`), not per diagram, so
+     the collision fixture puts the stem in the OTHER diagram — a per-diagram
+     de-dupe would pass a same-diagram probe and still hand back a document
+     the parser refuses. */
+  const collision = c4Document(
+    authored.replace(
+      `  api:container "API" [Go]`,
+      [`  api:container "API" [Go]`, `  new-database:database "Orders"`].join(
+        "\n",
+      ),
+    ),
+  );
+  const collided = createdNodeEdit(
+    collision,
+    sourceTextFor(collision),
+    "backend",
+    "database",
+  );
+  const collidedIds =
+    collided === null
+      ? []
+      : (collided.doc.synced.file.diagrams
+          .find((diagram) => diagram.id === "backend")
+          ?.nodes.map((node) => node.id) ?? []);
+  check(
+    "a taken id stem de-duplicates deterministically to -2",
+    collidedIds.includes("new-database") &&
+      collidedIds.includes("new-database-2"),
+    `ids: ${collidedIds.join(", ")}`,
+  );
+  check(
+    "creating twice from the same document is deterministic",
+    created !== null &&
+      createdNodeEdit(doc, authored, "ctx", "person")?.text === created.text,
+    "two runs over identical input produced different text",
+  );
+
+  /* --- the refusals: null, never a throw ----------------------------------- */
+
+  check(
+    "a type the diagram's level cannot hold refuses",
+    refuses(() => createdNodeEdit(doc, authored, "ctx", "container")),
+    "a context diagram accepted a container — the re-parse will refuse it later, " +
+      "where the reader cannot tell why",
+  );
+  check(
+    "an unknown diagram refuses",
+    refuses(() => createdNodeEdit(doc, authored, "nowhere", "person")),
+    "a create against a missing diagram should be null, not a crash",
+  );
+
+  /* --- the named fallback, both forcing conditions -------------------------- */
+
+  /* Pinned BY NAME, as section 13 pins the move's: `path` is the only thing
+     that says which gestures are safe for the author's bytes. */
+  const jsonPane = { ...doc, format: "json" };
+  const inJson = createdNodeEdit(
+    jsonPane,
+    doc.synced.jsonText,
+    "ctx",
+    "person",
+  );
+  check(
+    "a create against the JSON pane re-emits, and says so",
+    inJson !== null &&
+      inJson.path === "reemit" &&
+      inJson.text === inJson.doc.synced.jsonText,
+    `path: ${inJson === null ? "refused" : inJson.path}`,
+  );
+  /* An EMPTY diagram is the create-specific forcing condition: the spans map
+     holds node and edge lines only, so there is no line to sit after and the
+     module falls back rather than growing a second parser to find the diagram
+     head. An empty diagram has no comments between members to lose. */
+  const emptied = c4Document(
+    [
+      `archlab 1.0`,
+      `title "Empty probe"`,
+      ``,
+      `@context ctx "Context"`,
+      `  web:system "Web App" >backend`,
+      ``,
+      `@container backend owner=web`,
+      ``,
+    ].join("\n"),
+  );
+  const intoEmpty = createdNodeEdit(
+    emptied,
+    [
+      `archlab 1.0`,
+      `title "Empty probe"`,
+      ``,
+      `@context ctx "Context"`,
+      `  web:system "Web App" >backend`,
+      ``,
+      `@container backend owner=web`,
+      ``,
+    ].join("\n"),
+    "backend",
+    "container",
+  );
+  check(
+    "a create into an empty diagram falls back to the re-emit path, and says so",
+    intoEmpty !== null &&
+      intoEmpty.path === "reemit" &&
+      intoEmpty.doc.synced.file.diagrams
+        .find((diagram) => diagram.id === "backend")
+        ?.nodes.some((node) => node.id === "new-container"),
+    `verdict: ${intoEmpty === null ? "refused" : intoEmpty.path}`,
+  );
+
+  /* --- the affordance renders in the editable branch only ------------------ */
+
+  /* Source assertions, the section-9 tactic, because the strip lives in a
+     `.tsx` the harness cannot load. Presence-gated like every edit control:
+     a read-only or locked canvas must show NO strip, never a disabled one —
+     and a strip rendered unconditionally would be section 8's bug (a control
+     in one branch only) inverted into a control that lies in every branch. */
+  const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
+  const palette = read(
+    "src/features/viewer/components/viewer-node-palette.tsx",
+  );
+  check(
+    "the Add strip renders only while the canvas is editable",
+    /\{editable \? \(\s*<ViewerNodePalette/.test(canvas),
+    "the strip is missing, or offered on a canvas that cannot honour it",
+  );
+  check(
+    "the strip's buttons come from the derived palette, not a hand-written list",
+    /creatableNodeTypes\(level\)\.map\(/.test(palette),
+    "a hand-listed strip is the drift this whole section exists to prevent",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("\nLocking never offers a link to somewhere you already are");
 
@@ -3259,6 +3611,11 @@ console.log("\nLocking never offers a link to somewhere you already are");
        only drills down. */
     "wording, icon and colour edited",
     "details panel",
+    /* Added with the C4 create. One string carrying gesture AND place, unlike
+       the pair above, because "added" alone is already claimed by the
+       sequence half of the sentence and would pass with the palette claim
+       gone. */
+    "added from its palette",
   ]) {
     check(
       `the heading's claim names "${verb}"`,
