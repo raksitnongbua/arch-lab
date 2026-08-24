@@ -2,9 +2,10 @@
  * Canvas edits, expressed as edits to the SOURCE TEXT.
  *
  * The playground's C4 canvas is directly editable (behind
- * `CANVAS_EDIT_ENABLED`): drag a node and it moves, and the details panel
- * beside a selected node rewrites its wording. This module is what makes
- * each of those a text edit rather than a second place the diagram lives.
+ * `CANVAS_EDIT_ENABLED`): drag a node and it moves, the details panel beside
+ * a selected node rewrites its wording, and the palette under the breadcrumb
+ * adds a new node. This module is what makes each of those a text edit rather
+ * than a second place the diagram lives.
  *
  * It also holds the CAPABILITY MODEL for both editable canvases —
  * `CANVAS_EDIT_OFFERS`, the notation-against-ability grid, and
@@ -64,18 +65,24 @@ import type {
   C4Diagram,
   C4Node,
   C4NodeRevision,
+  C4NodeType,
   Point,
 } from "@/types";
 
 import {
   canonicalNodeBlock,
   canonicalNodeLine,
+  defaultPositions,
+  defaultSizeFor,
+  KEYWORD_BY_NODE_TYPE,
   parseArchTextWithSpans,
   serializeArchText,
   spanKey,
   type ArchTextSpans,
 } from "@/features/archtext";
 import { parsePane } from "@/features/viewer/input/sync";
+import { EDIT_GRID } from "@/features/viewer/lib/canvas-constants";
+import { creatableNodeTypes } from "@/features/viewer/lib/node-palette";
 import { APP_NAME } from "@/lib/constants";
 
 import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
@@ -109,23 +116,34 @@ export type CanvasEditability =
  *     the canvas to type into, which today means the sequence document
  *     (`sequence-edit.ts`, edited in its dock) and the C4 document
  *     (`revisedNodeEdit` below, edited in the viewer's details panel).
+ *   - `"create"` — add a NEW element at a POSITION the text records. This is
+ *     `move`'s question asked at birth: it needs the same per-element position
+ *     in the grammar (the new node must land somewhere that is not on top of
+ *     an existing one, and the text must be able to say where), plus a palette
+ *     on the canvas to pick a type from. An INSERT INTO AN ORDER is not this
+ *     ability, for the reason a reorder is not a move: the sequence canvas
+ *     adds messages and lifelines, but those land at an INDEX and write no
+ *     coordinate, so they belong to `revise` with the other eight sequence
+ *     gestures — see the sequence `create` cell, whose refusal points at them.
  *
  * A document can therefore refuse one and allow the other — a sequence
  * document refuses `move` while offering `revise`, and the four text-laid-out
- * notations refuse both. That is
+ * notations refuse all three. That is
  * why the answers live in a TABLE below rather than in a chain of
  * `doc.kind !== …` tests: a chain states each notation's answer as the negation
  * of another's, which reads backwards and leaves the grid a reader wants —
  * notation against ability — nowhere on the page.
  *
- * A THIRD ABILITY IS A REAL POSSIBILITY and this union is the place for it, not
- * a per-gesture verdict. The nine sequence gestures share one ability because
- * they gate on the same two facts (an `.alab` sequence pane, the canvas
- * unlocked); a new ability is owed only when a gesture gates on something the
- * existing two do not ask about. Adding one makes `CANVAS_EDIT_OFFERS`
- * incomplete, which is a type error before it is a check failure.
+ * A FOURTH ABILITY IS A REAL POSSIBILITY and this union is the place for it,
+ * not a per-gesture verdict. The nine sequence gestures share one ability
+ * because they gate on the same two facts (an `.alab` sequence pane, the
+ * canvas unlocked); a new ability is owed only when a gesture gates on
+ * something the existing ones do not ask about — `create` earned its row by
+ * gating on a third fact, the diagram level's own set of legal node types.
+ * Adding one makes `CANVAS_EDIT_OFFERS` incomplete, which is a type error
+ * before it is a check failure.
  */
-export type CanvasEditAbility = "move" | "revise";
+export type CanvasEditAbility = "move" | "revise" | "create";
 
 /**
  * The notations a `ViewDocument` can be — the key of the capability table.
@@ -223,6 +241,14 @@ const NO_POSITION_IN_THE_TEXT =
  *  destination is a dead end. */
 const NO_EDITOR_ON_THIS_CANVAS =
   "This canvas has no editor on it, so edit this notation in the source pane.";
+
+/** The `"grammar"` refusal for `create` on every notation that solves its own
+ *  layout: a created element is PLACED, and these have nowhere to write the
+ *  placement — the same fact `NO_POSITION_IN_THE_TEXT` states for a move,
+ *  said for an element that does not exist yet. */
+const NO_PLACE_IN_THE_TEXT =
+  "This notation works out its own layout from the text, so there is no " +
+  "position to place a new element at.";
 
 /**
  * WHICH NOTATION OFFERS WHICH CANVAS EDIT — the whole capability model, as the
@@ -359,6 +385,56 @@ export const CANVAS_EDIT_OFFERS: Record<
       because: NO_EDITOR_ON_THIS_CANVAS,
     },
   },
+  create: {
+    c4: {
+      offers: true,
+      noun: "C4 diagrams",
+      /* "at a spot the text records" carries the ability's whole definition:
+         creation here is a PLACEMENT, and the reader can drag the new node
+         from that spot because the position is a field of the text — the
+         same claim the move clause makes, made at birth. */
+      onCanvas:
+        "a new C4 node added from the palette, at a spot the text records",
+      unlessPane: {
+        format: "mermaid",
+        // The same measurement the `move` cell cites: `serializeMermaidC4`
+        // emits no geometry at all (`mermaid/lib/emit.ts`, "Known lossy
+        // spots"), so the spot this gesture writes could not be said in the
+        // pane's language — the node would appear wherever the default layout
+        // puts it and the placement would be lost on the round trip.
+        because:
+          "Mermaid carries no geometry, so a placed node would not stay put. " +
+          "Switch the pane to .alab to edit on the canvas.",
+      },
+    },
+    /* The one notation that adds elements ANOTHER way. Its inserts land at an
+       INDEX, not a position, so they belong to `revise` (see the ability's
+       doc) — but a refusal that only said "no coordinates" would send the
+       reader away from two add buttons that are right there in the dock. */
+    sequence: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+      instead:
+        "Use the Add controls under the canvas to add a message or a lifeline instead.",
+    },
+    flowchart: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+    },
+    usecase: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+    },
+    er: { offers: false, ground: "grammar", because: NO_PLACE_IN_THE_TEXT },
+    dict: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+    },
+  },
 };
 
 export function canvasEditability(
@@ -385,6 +461,7 @@ export function canvasEditability(
 const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
   move: "dragged on the canvas",
   revise: "edited on the canvas",
+  create: "given a new element on the canvas",
 };
 
 /**
@@ -703,6 +780,165 @@ export function revisedNodeEdit(
   const lines = canonicalNodeBlock(edited, diagramId, nodeId);
   if (span !== undefined && lines !== null) {
     return adopt(doc, edited, applyPatches(sourceText, [{ span, lines }]));
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * The name a created node is born with — "New person", "New database" — from
+ * the type's own `.alab` keyword, so the placeholder teaches the word the
+ * source pane just gained. A placeholder the reader can SEE they have to
+ * change beats an empty box they cannot tell from a rendering fault, and the
+ * model requires a non-empty name anyway (`emitNode` refuses `""`), so there
+ * is no "unnamed" option to choose instead — the same reasoning
+ * `INSERTED_PARTICIPANT_NAME` documents for the sequence canvas. Exported so
+ * the announcement can quote the exact name the reader should go rename.
+ */
+export function createdNodeName(type: C4NodeType): string {
+  return `New ${KEYWORD_BY_NODE_TYPE[type]}`;
+}
+
+/**
+ * The id a created node gets: the keyword-derived stem (`new-person`),
+ * suffixed from 2 until nothing in the file holds it — node ids are unique
+ * FILE-wide, not per diagram (`validate.ts`), so the whole file is scanned.
+ * Deterministic on purpose: pressing the button twice must yield
+ * `new-person`, `new-person-2`, never a random token in the author's text.
+ * Not slugified from the display name, for the reason `INSERTED_PARTICIPANT_ID`
+ * gives: an id is a grammar token, a name is prose, and deriving one from the
+ * other puts a slugifier on the path of every create.
+ */
+function freshNodeId(file: ArchLabFile, type: C4NodeType): string {
+  const stem = `new-${KEYWORD_BY_NODE_TYPE[type]}`;
+  const taken = new Set(
+    file.diagrams.flatMap((diagram) => diagram.nodes.map((node) => node.id)),
+  );
+  if (!taken.has(stem)) return stem;
+  let suffix = 2;
+  while (taken.has(`${stem}-${suffix}`)) suffix += 1;
+  return `${stem}-${suffix}`;
+}
+
+/**
+ * The clear band between the diagram's lowest edge and a created node, px.
+ * A multiple of `EDIT_GRID` (so the snap above cannot eat it) and roughly a
+ * node's height: enough that the newcomer reads as "yours to place", not as a
+ * new bottom row of the diagram — the default layout's own 120px row gutter
+ * would claim exactly that.
+ */
+const CREATED_NODE_GAP = 80;
+
+/**
+ * Where a created node lands: on the format's grid, in a clear band BELOW
+ * everything the diagram already draws.
+ *
+ * BELOW, not "the first free gap": every existing node — authored geometry or
+ * default-laid — keeps its y, so a spot strictly under the lowest bottom edge
+ * cannot overlap anything, and that stays true through the re-parse. That
+ * last clause is the subtle half: inserting a node changes the DEFAULT layout
+ * of the diagram (a new id joins row 0), so nodes whose geometry the text
+ * omits may shift COLUMNS on the way back in — exactly as they would had the
+ * line been typed into the pane — but never rows, because an edgeless node
+ * adds no layer. A gap-seeking position computed against the pre-insert
+ * layout could be stale by the time it is parsed; "below all of it" cannot.
+ *
+ * An EMPTY diagram takes the default layout's own answer for a lone node
+ * rather than a hand-typed origin, so the one magic pair (40, 40) stays where
+ * `defaults.ts` defines it — and the serializer then omits the geometry token
+ * entirely, because the position IS the default.
+ */
+function vacantPosition(diagram: C4Diagram, nodeId: string): Point {
+  if (diagram.nodes.length === 0) {
+    return defaultPositions([nodeId], []).get(nodeId) ?? { x: 0, y: 0 };
+  }
+  const onGrid = (value: number): number =>
+    Math.round(value / EDIT_GRID) * EDIT_GRID;
+  const left = Math.min(...diagram.nodes.map((node) => node.position.x));
+  const bottom = Math.max(
+    ...diagram.nodes.map((node) => node.position.y + node.size.height),
+  );
+  return { x: onGrid(left), y: onGrid(bottom) + CREATED_NODE_GAP };
+}
+
+/**
+ * `doc` with one new node of `type` added to `diagramId`, or `null` when the
+ * edit cannot apply — a document that refuses `"create"`, a diagram that is
+ * not in it, or a type that is not legal at the diagram's level.
+ *
+ * THE TYPE IS RE-CHECKED HERE, not trusted from the palette: the palette and
+ * this guard read the same `creatableNodeTypes` derivation, so they cannot
+ * disagree, and the check pins that derivation to the parser's own
+ * `VALID_NODE_TYPES_BY_LEVEL` — a `container` written into a context diagram
+ * would otherwise come back from the re-parse as an error the reader cannot
+ * act on.
+ *
+ * A CREATE PATCHES EXACTLY ONE LINE — the new declaration, spliced directly
+ * after the diagram's LAST node declaration, so the author's own ordering is
+ * respected (nodes stay with nodes, ahead of the relationship lines) and the
+ * diff a reviewer sees is one added line. The line is `canonicalNodeLine`'s
+ * answer for the edited model, so it cannot be non-canonical; it carries a
+ * geometry token exactly when the chosen spot differs from the default
+ * layout's (see `vacantPosition`).
+ *
+ * A diagram with NO node lines to sit after falls back to the re-emit path,
+ * stated by `path: "reemit"` as every fallback is: the spans map has node and
+ * edge lines only, and inventing a "line after the diagram head" by scanning
+ * the text here would be a second parser — the bug class `codebase.md` bans
+ * outright. An empty diagram has no comments between its members to lose.
+ *
+ * NAME AND ID are placeholders derived from the type (`createdNodeName`,
+ * `freshNodeId`); the details panel's existing edit form is the intended next
+ * gesture, which is why creation does not ask for a name first — one press
+ * adds a legal, visible node, and naming it is the same pencil every node
+ * already has.
+ */
+export function createdNodeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  type: C4NodeType,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "create").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const diagram = doc.synced.file.diagrams.find(
+    (candidate) => candidate.id === diagramId,
+  );
+  if (diagram === undefined) return null;
+  if (!creatableNodeTypes(diagram.level).some((row) => row.type === type)) {
+    return null;
+  }
+
+  const id = freshNodeId(doc.synced.file, type);
+  const node: C4Node = {
+    id,
+    type,
+    name: createdNodeName(type),
+    position: vacantPosition(diagram, id),
+    size: defaultSizeFor(type),
+  };
+  const edited = mapDiagram(doc.synced.file, diagramId, (current) => ({
+    ...current,
+    nodes: [...current.nodes, node],
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const line = canonicalNodeLine(edited, diagramId, id);
+  if (patchable !== null && line !== null) {
+    const ends = diagram.nodes.flatMap((existing) => {
+      const span = patchable.spans.nodes.get(spanKey(diagramId, existing.id));
+      return span === undefined ? [] : [span.end];
+    });
+    if (ends.length > 0) {
+      const after = Math.max(...ends);
+      return adopt(
+        doc,
+        edited,
+        applyPatches(sourceText, [
+          { span: { start: after + 1, end: after }, lines: [line] },
+        ]),
+      );
+    }
   }
   return adopt(doc, edited, null);
 }
