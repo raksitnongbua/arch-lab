@@ -7,7 +7,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Holding Space to pan no longer toggles the canvas lock. Clicking the lock
+  left the button holding focus, and the canvas deliberately will not take
+  Space from a focused control — so the next Space press activated the lock
+  again, and again on every key repeat. A pointer press now hands focus back
+  to the canvas; a keyboard press still keeps it, so tabbing to the lock and
+  pressing Space works exactly as before.
+
 ### Changed
+
+- The canvas lock wears keyhole padlocks now — open while the diagram is
+  editable, closed while it is locked — on both the C4 and the sequence
+  canvas, which share the one control.
 
 - **Dragging on an editable C4 canvas now draws a selection box instead of
   panning; hold Space to pan.** This is the convention drawing tools use,

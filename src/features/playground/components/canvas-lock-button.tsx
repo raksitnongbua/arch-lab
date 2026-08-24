@@ -61,7 +61,7 @@
 
 "use client";
 
-import { Lock, LockOpen } from "lucide-react";
+import { LockKeyhole, LockKeyholeOpen } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
 
@@ -98,11 +98,25 @@ export function CanvasLockButton({
   return (
     <button
       type="button"
-      onClick={() => {
+      onClick={(event) => {
         onToggle(!locked);
         onAnnounce(
           locked ? copy.unlockedAnnouncement : copy.lockedAnnouncement,
         );
+        /* POINTER ACTIVATION GIVES THE FOCUS BACK, and this is a bug fix with
+           a name: hold Space to pan, having just clicked this button, and the
+           canvas correctly declined to claim the key (a focused control keeps
+           its activation) — so every Space press toggled the lock instead of
+           panning. The reader was holding a key to drag and watching the
+           diagram lock and unlock under them.
+
+           `event.detail > 0` is the discriminator, not a pointer listener:
+           the browser reports 0 for a click synthesised from Enter or Space
+           and a real click count for a press. So a POINTER activation drops
+           focus and hands Space back to the canvas, while a KEYBOARD user
+           keeps focus exactly where they put it — blurring them would throw
+           away their place in the tab order to fix a bug they never had. */
+        if (event.detail > 0) event.currentTarget.blur();
       }}
       aria-label={name}
       title={name}
@@ -123,9 +137,9 @@ export function CanvasLockButton({
       })}
     >
       {locked ? (
-        <Lock aria-hidden="true" className="text-primary" />
+        <LockKeyhole aria-hidden="true" className="text-primary" />
       ) : (
-        <LockOpen aria-hidden="true" />
+        <LockKeyholeOpen aria-hidden="true" />
       )}
     </button>
   );

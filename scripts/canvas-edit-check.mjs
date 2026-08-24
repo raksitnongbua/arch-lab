@@ -836,15 +836,41 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      was the shipped bug above; with the owner's icon-only padlocks the label
      is gone, and what is left to pin is that the pair never collapses back
      into the phone bug's single glyph: an OPEN padlock while editable, a
-     CLOSED one while locked, distinguishable at a glance. (`<Lock\b` does not
-     match `<LockOpen` — no word boundary inside "LockO".) */
+     CLOSED one while locked, distinguishable at a glance. Matched on the
+     shared `LockKeyhole` stem with the OPEN suffix as the discriminator, so
+     the pair can be restyled without the assertion going stale, but cannot
+     collapse to one glyph. (`LockKeyhole(?!Open)` is what refuses the
+     collapse — a bare stem on both faces fails.) */
   check(
     "the two faces are distinct padlocks — closed when locked, open when editable",
-    /locked \? \(?\s*<Lock\b/.test(control) &&
-      /:\s*\(?\s*<LockOpen\b/.test(control),
+    /locked \? \(?\s*<LockKeyhole(?!Open)\b/.test(control) &&
+      /:\s*\(?\s*<LockKeyholeOpen\b/.test(control),
     "the two faces are no longer a closed padlock (locked) and an open one " +
       "(editable) — one glyph for both states is the phone bug again, with " +
       "no viewport to blame",
+  );
+  /* SPACE PANS, IT DOES NOT TOGGLE THE LOCK — a reported bug, and a subtle
+     one because both halves were behaving correctly. The canvas declines to
+     claim Space while a control has focus (a focused button must keep its
+     activation), and a pointer click leaves focus ON this button. Composed:
+     click the lock, then hold Space to pan, and every repeat toggled the lock
+     under the reader's hand. The fix is that a POINTER activation returns
+     focus to the canvas; a keyboard activation must NOT, or a keyboard user
+     loses their place in the tab order to fix a bug they never had. Pinning
+     `event.detail` specifically, because that is the only part that
+     distinguishes the two — an unconditional blur would pass a laxer test
+     and silently break keyboard use. MATCHED AS A STATEMENT, not as the bare
+     phrase: the first draft of this assertion tested for `event.detail > 0`
+     anywhere in the file and passed against the PROSE above the code, so
+     replacing the guarded blur with an unconditional one did not fail it.
+     The same trap has now caught two authors in this file — a regex over a
+     source file must match syntax the compiler sees, never words. */
+  check(
+    "a pointer press hands focus back, so a held Space pans instead of toggling",
+    /if \(event\.detail > 0\)\s*event\.currentTarget\.blur\(\);/.test(control),
+    "clicking the lock then holding Space to pan would toggle the lock on " +
+      "every key repeat — the canvas rightly will not steal Space from a " +
+      "focused control, so the control has to stop being focused",
   );
   /* THE NAME IS THE ACTION. The old assertion pinned a visible label; the
      owner removed the words, so the accessible name is now the ONLY channel
