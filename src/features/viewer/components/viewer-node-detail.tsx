@@ -15,9 +15,9 @@
  *
  * ON AN EDITABLE CANVAS IT ALSO EDITS. `onRevise` present, the header grows
  * the same pencil the sequence dock has, and the descriptive rows swap for a
- * form over the fields the panel already showed — name, technology,
- * description — plus the element's icon (the shared `IconPicker`) and its
- * colour (`NODE_TAG_PALETTE` and the document's own coloured tags).
+ * form over the fields the panel already showed — type, name, technology,
+ * description, tags — plus the element's icon (the shared `IconPicker`) and
+ * its colour (`NODE_TAG_PALETTE` and the document's own coloured tags).
  * This panel is that editor rather than a new dock because it is
  * already the one surface showing every field a node has, so "edit this" can
  * mean "edit all of it" without a second inspector appearing anywhere. The
@@ -60,6 +60,7 @@ import type {
   C4NodeColorChoice,
   C4NodeFrameChoice,
   C4NodeRevision,
+  C4NodeType,
 } from "@/types";
 
 import { IconPicker } from "@/features/editor/components/icon-picker";
@@ -82,6 +83,7 @@ import {
   SHAPE_LABEL,
   shapeAddsInformation,
 } from "../lib/labels";
+import { creatableNodeTypes } from "../lib/node-palette";
 
 /** One relationship touching the selected element, in the current diagram. */
 export interface NodeConnection {
@@ -258,6 +260,18 @@ export function EditField({
  * submits the name as typed and leaves the refusal to the one authority. The
  * two optional text fields go through `orAbsent`, exactly as the dock's do.
  *
+ * THE TYPE select offers `creatableNodeTypes(level)` — the Add palette's own
+ * derivation, labelled with the `.alab` keywords — so it cannot offer a type
+ * the parser refuses at this level. What a type change carries (the default
+ * size follows, the icon field does not move) is `revisedNodeEdit`'s verdict,
+ * argued there; the form only reports the chosen keyword.
+ *
+ * THE TAGS field edits the NON-COLOUR tags, whole-value; the colour-carrying
+ * ones are the Colour control's (`C4NodeRevision.tags` carries the division),
+ * and the field SAYS both when it is hiding them and when a typed tag will be
+ * left out for being a colour — silence in either direction would read as a
+ * bug or eat typed text.
+ *
  * THE ICON control reuses the editor inspector's grammar — a button showing
  * the resolved icon that opens the shared `IconPicker`, a pick landing as
  * `iconSource: "explicit"` — and clearing it means THE TYPE DEFAULT, spelled
@@ -302,18 +316,30 @@ const FREE_COLOR_SEED = "#9f6ea3";
 
 function NodeEditForm({
   node,
+  level,
   tagColors,
   frames,
   onSubmit,
   onCancel,
 }: {
   node: C4Node;
+  /** The containing diagram's level — what decides which types the Type
+   *  select may offer (`creatableNodeTypes`, the Add palette's own table). */
+  level: C4Level;
   tagColors: Readonly<Record<string, string>> | undefined;
   frames: readonly C4Frame[];
   onSubmit: (revision: C4NodeRevision) => void;
   onCancel: () => void;
 }): React.JSX.Element {
   const [name, setName] = useState(node.name);
+  /* The type select's options come from the SAME derivation the Add palette
+     reads, so the form cannot offer a keyword the parser refuses at this
+     level — and the labels are the `.alab` keywords themselves, the
+     palette's own argument: the control teaches the word the source pane
+     will change to. The current type is always among them, because the
+     parser accepted the document against the same table. */
+  const [type, setType] = useState(node.type);
+  const typeOptions = creatableNodeTypes(level);
   const [technology, setTechnology] = useState(node.technology ?? "");
   const [description, setDescription] = useState(node.description ?? "");
   const [icon, setIcon] = useState(node.icon);
@@ -323,6 +349,17 @@ function NodeEditForm({
      paints with — `worn[0]` wins, the rest are the tags a new choice removes. */
   const worn = colorTagsOf(node, tagColors);
   const [colorTag, setColorTag] = useState<string | null>(worn[0] ?? null);
+  /* THE TAG FIELD HOLDS THE NON-COLOUR HALF of the element's tags, and only
+     that half — `C4NodeRevision.tags` carries the division: a colour-carrying
+     tag IS the element's colour, owned by the Colour control below, and a
+     field that could edit it would fight that control over precedence. The
+     split is SAID beside the field whenever it hides something, because a tag
+     field that silently refuses to show some of the element's tags reads as
+     a bug rather than a boundary. Comma-separated, since `.alab` quotes a
+     tag containing spaces. */
+  const [tagsText, setTagsText] = useState(() =>
+    (node.tags ?? []).filter((tag) => !worn.includes(tag)).join(", "),
+  );
   /* The free pick. `freeHex` only ever holds `presentableTagColor` output —
      the construction is applied on the way IN, so the preview swatch, the
      warning and the submitted hex cannot disagree about what Apply writes.
@@ -384,8 +421,29 @@ function NodeEditForm({
   const replaced = worn.filter((tag) => tag !== chosenTag);
   const roleVars = ROLE_COLOR_VARS[colorRoleForNode(node)];
 
+  /* The tag field as a LIST, and the part of it the Colour control owns. A
+     typed colour tag is filtered from the submit rather than refused with
+     the whole form (`revisedNodeEdit` would refuse it outright), and the
+     sentence below the field says so BEFORE Apply — dropping typed text
+     silently is the one thing worse than refusing it. A leading `#` is
+     forgiven: the read view prints tags bare, but the format spells them
+     with one. */
+  const typedTags = [
+    ...new Set(
+      tagsText
+        .split(",")
+        .map((tag) => tag.trim().replace(/^#/, ""))
+        .filter((tag) => tag !== ""),
+    ),
+  ];
+  const typedColorTags = typedTags.filter(
+    (tag) => (tagColors?.[tag] ?? "") !== "",
+  );
+
+  /* The PENDING type, so a reader weighing "what does this become" previews
+     the default icon the new keyword brings rather than the old one's. */
   const resolvedIcon = resolveIcon(
-    icon !== undefined ? { type: node.type, icon } : { type: node.type },
+    icon !== undefined ? { type, icon } : { type },
   );
   const IconGlyph = resolvedIcon.def.byStyle[iconStyle];
 
@@ -428,8 +486,12 @@ function NodeEditForm({
               : { kind: "existing", frameId };
         onSubmit({
           name,
+          type,
           technology: orAbsent(technology),
           description: orAbsent(description),
+          // The non-colour half only, colour tags filtered with a sentence
+          // beside the field — the module refuses what this form filters.
+          tags: typedTags.filter((tag) => (tagColors?.[tag] ?? "") === ""),
           // Spread-guarded so a default icon submits as ABSENT — the same
           // "empty means absent" contract the text fields state.
           ...(icon !== undefined ? { icon } : {}),
@@ -448,6 +510,21 @@ function NodeEditForm({
           onChange={(event) => setName(event.target.value)}
           className={FIELD_CLASSES}
         />
+      </EditField>
+      {/* Mono like the Add strip's buttons: the options ARE the `.alab`
+          keywords, and the two controls should visibly speak one language. */}
+      <EditField term="Type">
+        <select
+          value={type}
+          onChange={(event) => setType(event.target.value as C4NodeType)}
+          className={cn(FIELD_CLASSES, "font-mono")}
+        >
+          {typeOptions.map((option) => (
+            <option key={option.type} value={option.type}>
+              {option.keyword}
+            </option>
+          ))}
+        </select>
       </EditField>
       <EditField term="Technology">
         <input
@@ -468,6 +545,33 @@ function NodeEditForm({
           className={FIELD_CLASSES}
         />
       </EditField>
+      <EditField term="Tags">
+        <input
+          value={tagsText}
+          onChange={(event) => setTagsText(event.target.value)}
+          placeholder="pci, team-payments — comma-separated, blank to remove"
+          className={cn(FIELD_CLASSES, "font-mono")}
+        />
+      </EditField>
+      {/* The division, said where it applies: the element HAS more tags than
+          the field shows exactly when it wears a colour, and a field that
+          hides tags without saying why reads as a bug. */}
+      {worn.length > 0 ? (
+        <p className="-mt-1 text-[10px] leading-snug text-muted-foreground">
+          {worn.map((tag) => `#${tag}`).join(", ")}{" "}
+          {worn.length === 1 ? "is" : "are"} this element&apos;s colour —
+          managed by the Colour control below, not here.
+        </p>
+      ) : null}
+      {typedColorTags.length > 0 ? (
+        <p className="-mt-1 text-[10px] leading-snug text-muted-foreground">
+          {typedColorTags.map((tag) => `#${tag}`).join(", ")}{" "}
+          {typedColorTags.length === 1 ? "is" : "are"} a colour in this
+          document, so Apply leaves{" "}
+          {typedColorTags.length === 1 ? "it" : "them"} out — pick the colour in
+          the Colour control below instead.
+        </p>
+      ) : null}
       {/* A DIV, not an EditField: a <label> wrapping two buttons would hand
           clicks on the term to whichever button is first. */}
       <div>
@@ -511,7 +615,7 @@ function NodeEditForm({
         {pickerOpen ? (
           <IconPicker
             {...(icon !== undefined ? { value: icon } : {})}
-            nodeType={node.type}
+            nodeType={type}
             onChange={(slug) => {
               setIcon(slug);
               // A pick from the panel is the reader's own choice, so it must
@@ -773,6 +877,7 @@ export function ViewerNodeDetail({
         <NodeEditForm
           key={node.id}
           node={node}
+          level={detail.level}
           tagColors={detail.tagColors}
           frames={detail.frames}
           onSubmit={(revision) => {

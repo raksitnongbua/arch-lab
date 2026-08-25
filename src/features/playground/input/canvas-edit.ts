@@ -395,21 +395,23 @@ export const CANVAS_EDIT_OFFERS: Record<
          revise gates on; the companion line each one mints (a `frame`
          declaration, a diagram head) follows the colour edit's precedent,
          where the header's `tagcolor` line rides the same gesture. A selected
-         boundary's own rename (`renamedFrameEdit`) rides here for the same
-         test: a frame is an element with its own declaration line and span,
-         so its label edit gates on nothing the other revises do not. A
-         selected RELATIONSHIP's own fields (`revisedEdgeEdit`) and its
-         removal (`deletedEdgeEdit`) ride here by the same test again: an
-         edge is an element with its own relationship line and span
-         (`spans.edges`), both gestures gate on exactly the two facts every
-         revise gates on, and neither asks a question `connect` owns — the
-         relationship SET is not consulted, only one line already in it. */
+         boundary's own rename and removal (`renamedFrameEdit`,
+         `deletedFrameEdit`) ride here for the same test: a frame is an
+         element with its own declaration line and span, so its label edit —
+         and the removal that re-homes what it held — gates on nothing the
+         other revises do not. A selected RELATIONSHIP's own fields
+         (`revisedEdgeEdit`) and its removal (`deletedEdgeEdit`) ride here by
+         the same test again: an edge is an element with its own relationship
+         line and span (`spans.edges`), both gestures gate on exactly the two
+         facts every revise gates on, and neither asks a question `connect`
+         owns — the relationship SET is not consulted, only one line already
+         in it. */
       onCanvas:
-        "a C4 node's name, description, technology, icon, colour and " +
-        "boundary edited in the details panel beside it, where a child " +
-        "view is added or removed, a selected boundary renamed, and a " +
-        "selected relationship's wording, direction and line style " +
-        "edited — or the relationship deleted",
+        "a C4 node's type, name, description, technology, icon, colour, " +
+        "tags and boundary edited in the details panel beside it, where a " +
+        "child view is added or removed, a selected boundary renamed or " +
+        "removed, and a selected relationship's wording, direction and " +
+        "line style edited — or the relationship deleted",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: `serializeMermaidC4`
@@ -417,9 +419,10 @@ export const CANVAS_EDIT_OFFERS: Record<
            forms (`spec.argStyle === "tech"`), so on a person or a system the
            field has nowhere to land, and it emits NO argument at all for a
            node's `icon`, its tags or the header's `tagColors` — its `emitNode`
-           reads tags solely for `boundary:` membership — so the panel's icon
-           and colour edits have nowhere to land on ANY element. The "Known
-           lossy spots" note in `mermaid/lib/emit.ts` and
+           reads tags solely for `boundary:` membership and the `_Ext`
+           coercion (`toElementForm`), every other tag dropped — so the
+           panel's icon, colour and tag edits have nowhere to land on ANY
+           element. The "Known lossy spots" note in `mermaid/lib/emit.ts` and
            `MERMAID_C4_EXPORT_CAVEAT` both record it. The two structural edits
            are measured the same way: the emitter writes ONE diagram (so the
            child view a nest creates is simply not in the pane's text), and
@@ -435,12 +438,13 @@ export const CANVAS_EDIT_OFFERS: Record<
            a pane that cannot spell it would show the change once and lose it
            on the next round trip, which is worse than refusing. */
         because:
-          "Mermaid C4 has no slot for a node's icon or colour, and none for " +
-          "[technology] on person or system elements; it also holds a " +
-          "single diagram whose boundaries come from the import alone, so a " +
-          "boundary or child-view edit would be lost too — and a " +
-          "relationship's undirected form or dashed style has no spelling, " +
-          "so those edits would be lost as well. Switch the pane " +
+          "Mermaid C4 has no slot for a node's icon or colour, keeps a tag " +
+          "only when it marks a boundary or an external element, and has " +
+          "none for [technology] on person or system elements; it also " +
+          "holds a single diagram whose boundaries come from the import " +
+          "alone, so a boundary or child-view edit would be lost too — and " +
+          "a relationship's undirected form or dashed style has no " +
+          "spelling, so those edits would be lost as well. Switch the pane " +
           "to .alab to edit on the canvas.",
       },
     },
@@ -987,6 +991,34 @@ function frameMintPatch(
  * removes the token rather than spelling a default out; `iconSource` travels
  * only with an icon, exactly as `C4Node` states.
  *
+ * A TYPE EDIT REWRITES THE KEYWORD the declaration line opens with, guarded
+ * by `creatableNodeTypes` — the Add palette's own derivation, so the panel's
+ * select and this guard cannot disagree about what is legal at the level
+ * (`container` written into a context diagram would come back from the
+ * re-parse as an error the reader cannot act on). What travels with it is
+ * decided here, each the less-destructive verdict of its pair:
+ *
+ *   - THE DEFAULT SIZE FOLLOWS, an authored one stays. A node whose size is
+ *     the OLD type's default has no geometry token in the text — omission
+ *     means "the default" — so it adopts the NEW type's default and stays
+ *     token-free; keeping the old numbers would freeze an accident of the
+ *     previous type into an explicit size the author never chose. A size
+ *     that differs from the default IS the author's and keeps its bytes.
+ *   - THE ICON FIELD IS UNTOUCHED, all three states. An absent icon already
+ *     follows the type by construction (`DEFAULT_ICON_BY_TYPE` resolves at
+ *     render), an explicit (`!`) one is the author's pick and is never
+ *     auto-overridden (`C4Node`'s own rule for technology edits, applied
+ *     here too), and an inferred (`~`) one derives from `technology`, which
+ *     this edit does not change — so its basis is intact. The silhouette,
+ *     the colour role and the `[Type]` metadata line all follow the new
+ *     keyword on their own, which is what keeps a former database from
+ *     still reading as one.
+ *   - A `^ref` MIRROR ELSEWHERE IS NOT REWRITTEN: a mirror's keyword is its
+ *     own statement about how the element draws at ITS level, not a
+ *     derivation from the source — the format happily mirrors a `system` as
+ *     an `external` one level down, and the level rules can force exactly
+ *     that. Only the NAME is derived, and a type edit does not touch it.
+ *
  * A COLOUR EDIT IS TWO WRITES, because the format spells colour as a pairing:
  * a `#tag` on the node and a `tagcolor` line in the header. The revision
  * carries the INTENT (`C4NodeColorChoice`) and this gesture derives both
@@ -1008,6 +1040,21 @@ function frameMintPatch(
  * `! meta` escape line instead of `tagcolor` lines cannot take a minted line
  * (the parser rejects the field spelled both ways), and re-emitting would eat
  * the reader's comments over a colour change — so the mint is refused there.
+ *
+ * A TAG EDIT OWNS THE NON-COLOUR HALF of the node's tag list, and only that
+ * half — the division `C4NodeRevision.tags` argues: the colour-carrying tags
+ * (`colorTagsOf`) ARE the colour, and a list that could touch them would
+ * fight the colour intent over precedence. So `tags` replaces the plain tags
+ * wholesale, the colour outcome above keeps its own, and a value naming a
+ * tag the document colours — or an empty string, which would spell `#""` —
+ * is REFUSED rather than merged: silently dropping it would eat typed text,
+ * and honouring it would let one control repaint what the other owns. The
+ * panel's tag field shows exactly this half and says where the other lives.
+ * One bounded cost is inherited rather than added: the serializer sorts a
+ * tag list on write (`tagsLine`), so on a hand-written file wearing several
+ * coloured tags out of order ANY block patch can hand the precedence race to
+ * a different tag — true of every revise before this one, since every block
+ * patch respells the tags in canonical order.
  *
  * A BOUNDARY EDIT IS MEMBERSHIP PLUS, AT MOST, ONE MINT — colour's shape on a
  * diagram-level declaration. Membership is the node's own `in=`, already on
@@ -1035,8 +1082,12 @@ export function revisedNodeEdit(
   if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
     return null;
   }
-  const current = findNode(doc.synced.file, diagramId, nodeId);
-  if (current === null) return null;
+  const diagram = doc.synced.file.diagrams.find(
+    (candidate) => candidate.id === diagramId,
+  );
+  if (diagram === undefined) return null;
+  const current = diagram.nodes.find((candidate) => candidate.id === nodeId);
+  if (current === undefined) return null;
   if (current.externalRef !== undefined) return null;
   if (revision.name === "") return null;
 
@@ -1048,30 +1099,47 @@ export function revisedNodeEdit(
      cleared — and `emitNode` writes an optional field only for a string, so an
      explicit `undefined` is simply not written. This destructure and
      `C4NodeRevision` are one unit: a field added there needs a name here or it
-     is silently ignored. */
+     is silently ignored. (`type` and `tags` are the exceptions, resolved
+     below rather than named here, because both are claim-fields whose
+     `undefined` means "keep" — their declarations carry the argument.) */
   const { name, technology, description, icon, color } = revision;
   // "Present only when `icon` is" (C4Node): a source marker on a cleared icon
   // would be a `! iconSource` escape line describing nothing.
   const iconSource = icon === undefined ? undefined : revision.iconSource;
 
-  /* The colour intent, resolved into the two writes it stands for. `worn` is
-     every colour-carrying tag in stored order; the choice is already in force
+  /* The type claim, guarded by the Add palette's own derivation — the header
+     states what follows a change (the default size) and what deliberately
+     does not (the icon field, `^ref` mirrors elsewhere). */
+  const type = revision.type ?? current.type;
+  if (
+    type !== current.type &&
+    !creatableNodeTypes(diagram.level).some((row) => row.type === type)
+  ) {
+    return null;
+  }
+  const oldDefault = defaultSizeFor(current.type);
+  const size =
+    type !== current.type &&
+    current.size.width === oldDefault.width &&
+    current.size.height === oldDefault.height
+      ? defaultSizeFor(type)
+      : current.size;
+
+  /* The colour intent, resolved into the colour-carrying tags the node ends
+     up wearing and, at most, one minted header line. `worn` is every
+     colour-carrying tag in stored order; the choice is already in force
      exactly when the chosen tag is the FIRST of them (or, for "role", when
-     there are none) — anything else and the tag list is rewritten. */
+     there are none) — anything else and the colour half is rewritten. */
   const tagColors = doc.synced.file.metadata.tagColors;
   const worn = colorTagsOf(current, tagColors);
-  let tags = current.tags;
+  let colorHalf: readonly string[] = worn;
   let minted: { tag: string; color: string } | null = null;
   if (color !== undefined) {
     const chosen = color.kind === "tag" ? color : null;
     const inForce =
       chosen === null ? worn.length === 0 : worn[0] === chosen.tag;
     if (!inForce) {
-      const kept = (current.tags ?? []).filter((tag) => !worn.includes(tag));
-      const next = chosen === null ? kept : [...new Set([...kept, chosen.tag])];
-      // Sorted because that is the order the serializer writes and the
-      // re-parse will store; [] becomes absence, as everywhere in the format.
-      tags = next.length === 0 ? undefined : next.sort();
+      colorHalf = chosen === null ? [] : [chosen.tag];
       if (chosen !== null && (tagColors?.[chosen.tag] ?? "") === "") {
         // A mint with no colour in it is not a colour choice.
         if (chosen.color === "") return null;
@@ -1080,12 +1148,38 @@ export function revisedNodeEdit(
     }
   }
 
+  /* The tags claim owns the OTHER half — the header's division. Refusals
+     rather than repairs, because both bad values arrive only from a caller
+     that skipped the panel (the field filters colour tags out and says so):
+     a colour-carrying tag would fight the colour intent over precedence,
+     and an empty string would spell `#""`. */
+  let plainHalf = (current.tags ?? []).filter((tag) => !worn.includes(tag));
+  if (revision.tags !== undefined) {
+    if (
+      revision.tags.some((tag) => tag === "" || (tagColors?.[tag] ?? "") !== "")
+    ) {
+      return null;
+    }
+    plainHalf = [...new Set(revision.tags)];
+  }
+  /* Sorted because that is the order the serializer writes and the re-parse
+     will store; [] becomes absence, as everywhere in the format. The current
+     ARRAY survives (reference untouched) when the members are unchanged, so
+     the no-op test below stays an identity check. */
+  const nextTags = [...new Set([...colorHalf, ...plainHalf])].sort();
+  const currentTags = current.tags ?? [];
+  const tags =
+    nextTags.length === currentTags.length &&
+    nextTags.every((tag) => currentTags.includes(tag))
+      ? current.tags
+      : nextTags.length === 0
+        ? undefined
+        : nextTags;
+
   /* The boundary intent, resolved into membership and at most one mint by the
      helper the marquee's grouping shares — its header carries the refusals
      (an unknown existing frame, a blank new label) and why each is refused. */
-  const diagramFrames =
-    doc.synced.file.diagrams.find((candidate) => candidate.id === diagramId)
-      ?.frames ?? [];
+  const diagramFrames = diagram.frames ?? [];
   let frameId = current.frameId;
   let mintedFrame: { id: string; label: string } | null = null;
   if (revision.frame !== undefined) {
@@ -1096,13 +1190,16 @@ export function revisedNodeEdit(
 
   if (
     current.name === name &&
+    current.type === type &&
     current.technology === technology &&
     current.description === description &&
     current.icon === icon &&
     current.iconSource === iconSource &&
     // Reference equality is the change test on purpose: `tags` is reassigned
-    // exactly when the colour choice computed a genuinely different list.
+    // exactly when a claim computed a genuinely different list, and `size`
+    // exactly when a type change re-derived the default.
     current.tags === tags &&
+    current.size === size &&
     minted === null &&
     current.frameId === frameId &&
     mintedFrame === null
@@ -1110,18 +1207,20 @@ export function revisedNodeEdit(
     return null;
   }
 
-  const withNode = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
-    ...diagram,
+  const withNode = mapDiagram(doc.synced.file, diagramId, (candidate) => ({
+    ...candidate,
     // Spread-guarded so a diagram that has no `frames` key does not gain one
     // holding `undefined` — absence is how the format spells "no boundaries".
     ...(mintedFrame === null
       ? {}
-      : { frames: [...(diagram.frames ?? []), mintedFrame] }),
-    nodes: diagram.nodes.map((node) =>
+      : { frames: [...(candidate.frames ?? []), mintedFrame] }),
+    nodes: candidate.nodes.map((node) =>
       node.id === nodeId
         ? {
             ...node,
             name,
+            type,
+            size,
             technology,
             description,
             icon,
@@ -1256,6 +1355,131 @@ export function renamedFrameEdit(
       edited,
       applyPatches(sourceText, [{ span, lines: [line] }]),
     );
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one frame removed and everything it held RE-HOMED one level out,
+ * or `null` when the edit cannot apply — a document that refuses `"revise"`,
+ * or a frame that is not in the diagram. This is the gesture behind the
+ * boundary card's Remove button.
+ *
+ * THE VERDICT IS THE EDITOR STORE'S (`deleteFrame` in `editor/state/
+ * store.ts`), so the two authoring surfaces draw one line — `nestedNodeEdit`'s
+ * own rule for its refusals: members and nested frames land in the deleted
+ * frame's PARENT, or loose at top level when it had none. Re-home, never
+ * cascade, because a frame owns no elements (`C4Frame`: "purely a view
+ * construct") — deleting the ring around a group must not delete the group,
+ * and cascading nested frames would eat `frame` declarations the author
+ * wrote over the removal of ONE. The mint's "always top-level" verdict next
+ * door is not overturned: lifting a nested frame out states no NEW nesting —
+ * every surviving `in=` was already in the author's text, one ring closer.
+ *
+ * A REMOVAL IS N+1 LINE PATCHES IN ONE EDIT: the frame's own declaration
+ * line comes out, each lifted child frame's declaration is respelled by the
+ * serializer (`canonicalFrameDeclaration`, so the new `in=` — or its absence
+ * — is canonical), and each member's declaration LINE is respelled for its
+ * new membership (`canonicalNodeLine` — never the block, the grouping's
+ * rule: a removal has no business near anyone's `desc` continuations). All
+ * through one `applyPatches`, so the whole removal is one undo entry; every
+ * patch or none, the delete's rule, because a partially-applied removal
+ * would leave `in=` naming a frame the file no longer declares — a parse
+ * error over a diagram the reader can no longer edit.
+ *
+ * NOTHING BEYOND THE STANDARD GUARDS REFUSES, and that is a finding, not an
+ * oversight: the card's spec asked where members and nested frames land, the
+ * other authoring surface had already answered for both (`check:frames`
+ * measures it as "delete re-homes, never cascades"), so every populated case
+ * has an honest one-level-out answer and there is no case left to send to
+ * the source pane.
+ */
+export function deletedFrameEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  frameId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  const frame = diagram?.frames?.find((candidate) => candidate.id === frameId);
+  if (diagram === undefined || frame === undefined) return null;
+
+  /* Where everything the frame held goes: one level out. `undefined` for a
+     top-level home rather than `null`, because membership fields are
+     absent-or-set — a node's `frameId` has no null spelling, and a lifted
+     frame drops its `in=` key entirely (the three-valued `parentFrameId`
+     keeps `in=null` for authors, but writing it here would spell a statement
+     the author never made). */
+  const home = frame.parentFrameId ?? undefined;
+  const liftedIds = (diagram.frames ?? [])
+    .filter((candidate) => (candidate.parentFrameId ?? null) === frameId)
+    .map((candidate) => candidate.id);
+  const memberIds = diagram.nodes
+    .filter((node) => node.frameId === frameId)
+    .map((node) => node.id);
+
+  const edited = mapDiagram(file, diagramId, (candidate) => {
+    const remaining = (candidate.frames ?? [])
+      .filter((survivor) => survivor.id !== frameId)
+      .map((survivor) => {
+        if ((survivor.parentFrameId ?? null) !== frameId) return survivor;
+        if (home !== undefined) return { ...survivor, parentFrameId: home };
+        const lifted = { ...survivor };
+        // The KEY goes, not just the value: `parentFrameId` is three-valued
+        // (absent, `in=null`, an id) and a present-but-undefined key would
+        // make the serializer refuse the frame outright.
+        delete lifted.parentFrameId;
+        return lifted;
+      });
+    const next: C4Diagram = {
+      ...candidate,
+      frames: remaining,
+      // Only the members get new objects — the grouping's identity rule, so
+      // the projection cache re-adopts nothing the gesture did not change.
+      nodes: candidate.nodes.map((node) =>
+        node.frameId === frameId ? { ...node, frameId: home } : node,
+      ),
+    };
+    // An empty `frames` array and an absent one mean the same thing; drop the
+    // key so the model stays in the shape a fresh parse would produce.
+    if (remaining.length === 0) delete next.frames;
+    return next;
+  });
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable !== null) {
+    const doomed = patchable.spans.frames.get(spanKey(diagramId, frameId));
+    const patches: (LinePatch | undefined)[] = [
+      doomed === undefined ? undefined : { span: doomed, lines: [] },
+      ...liftedIds.map((id) => {
+        const frameSpan = patchable.spans.frames.get(spanKey(diagramId, id));
+        const frameLine = canonicalFrameDeclaration(edited, diagramId, id);
+        return frameSpan === undefined || frameLine === null
+          ? undefined
+          : { span: frameSpan, lines: [frameLine] };
+      }),
+      ...memberIds.map((id) => {
+        const nodeSpan = patchable.spans.nodes.get(spanKey(diagramId, id));
+        const nodeLine = canonicalNodeLine(edited, diagramId, id);
+        return nodeSpan === undefined || nodeLine === null
+          ? undefined
+          : {
+              span: { start: nodeSpan.start, end: nodeSpan.start },
+              lines: [nodeLine],
+            };
+      }),
+    ];
+    if (patches.every((patch) => patch !== undefined)) {
+      return adopt(
+        doc,
+        edited,
+        applyPatches(sourceText, patches as LinePatch[]),
+      );
+    }
   }
   return adopt(doc, edited, null);
 }

@@ -209,6 +209,7 @@ import {
   groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
+  deletedFrameEdit,
   renamedFrameEdit,
   revisedEdgeEdit,
   revisedNodeEdit,
@@ -1150,6 +1151,38 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleFrameDelete = useCallback(
+    (diagramId: string, frameId: string) => {
+      /* Counted BEFORE the edit, from the same document it edits, because the
+         announcement's one job is to say what happened to the members — the
+         removal's whole design question — and after the edit they are
+         indistinguishable from nodes that were never in the boundary. */
+      const held =
+        doc.kind === "c4"
+          ? (doc.synced.file.diagrams
+              .find((diagram) => diagram.id === diagramId)
+              ?.nodes.filter((node) => node.frameId === frameId).length ?? 0)
+          : 0;
+      const next = deletedFrameEdit(doc, text, diagramId, frameId);
+      /* SAID, not swallowed — the Add strip's rule: a pressed Remove that
+         changes nothing reads as a broken button. The one refusal a reader
+         can cause is a stale selection while the pane lags the canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The boundary was not removed — the source pane and the diagram do not match yet.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        held > 0
+          ? `Boundary removed — its ${held} ${held === 1 ? "element stays" : "elements stay"} on the canvas, one level out, and the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`
+          : "Boundary removed — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleNodesGroup = useCallback(
     (
       diagramId: string,
@@ -1669,6 +1702,7 @@ export function ViewPlayground({
             onNodeUnnest: handleNodeUnnest,
             onNodesGroup: handleNodesGroup,
             onFrameRename: handleFrameRename,
+            onFrameDelete: handleFrameDelete,
             onEdgeRevise: handleEdgeRevise,
             onEdgeDelete: handleEdgeDelete,
             onNodeConnect: handleNodeConnect,
@@ -1687,6 +1721,7 @@ export function ViewPlayground({
       handleNodeUnnest,
       handleNodesGroup,
       handleFrameRename,
+      handleFrameDelete,
       handleEdgeRevise,
       handleEdgeDelete,
       handleNodeConnect,

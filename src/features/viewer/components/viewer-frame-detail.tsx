@@ -11,21 +11,25 @@
  * ONLY RENDERED ON AN EDITABLE CANVAS, the multi card's rule: frame SELECTION
  * exists only where the FrameLayer runs controlled (see its props), which the
  * viewer canvas does exactly while editable — a read-only or locked canvas
- * keeps the zoom-and-march focus with no card. That is also why `onRename` is
- * required rather than presence-gated like the node card's pencil: there is
- * no read view for this card to fall back to.
+ * keeps the zoom-and-march focus with no card. That is also why `onRename`
+ * and `onDelete` are required rather than presence-gated like the node card's
+ * pencil: there is no read view for this card to fall back to.
  *
- * RENAME ONLY — deliberately no "remove boundary" here yet. A removal must
- * decide where the members and any nested frames land (the parent frame? top
- * level?), which is a gesture with refusals of its own, not a button to
- * approximate; until it is built well the source pane removes a `frame` line
- * honestly.
+ * RENAME AND REMOVE. This card shipped rename-only, its header holding the
+ * removal to a spec: decide where the members and any nested frames land
+ * before offering the button. The answer is `deletedFrameEdit`'s, which took
+ * it from the editor store's shipped verdict (`deleteFrame`: re-home one
+ * level out, never cascade) — so the button removes ONE ring and everything
+ * it held stays on the canvas, and the card says so beside the button
+ * whenever the boundary holds anything, because "remove" next to a populated
+ * group otherwise reads as removing the group.
  */
 
 import { useEffect, useRef, useState } from "react";
 
-import { Check, X } from "lucide-react";
+import { Check, Trash2, X } from "lucide-react";
 
+import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { C4Frame } from "@/types";
 
@@ -44,6 +48,7 @@ export function ViewerFrameDetail({
   detail,
   onDismiss,
   onRename,
+  onDelete,
 }: {
   detail: FrameDetail;
   onDismiss: () => void;
@@ -52,6 +57,13 @@ export function ViewerFrameDetail({
    * turns it into ONE line patch (`renamedFrameEdit`) — one undo entry.
    */
   onRename: (label: string) => void;
+  /**
+   * Remove the boundary. The canvas resolves it to the selected frame and
+   * the host applies `deletedFrameEdit` — members and nested boundaries
+   * re-home one level out, one edit, one undo entry — and announces where
+   * they landed; the card only reports the press.
+   */
+  onDelete: () => void;
 }): React.JSX.Element {
   const { frame, memberCount, childFrameCount } = detail;
   const [label, setLabel] = useState(frame.label);
@@ -68,7 +80,9 @@ export function ViewerFrameDetail({
   const holds = [
     `${memberCount} ${memberCount === 1 ? "element" : "elements"}`,
     ...(childFrameCount > 0
-      ? [`${childFrameCount} nested ${childFrameCount === 1 ? "boundary" : "boundaries"}`]
+      ? [
+          `${childFrameCount} nested ${childFrameCount === 1 ? "boundary" : "boundaries"}`,
+        ]
       : []),
   ].join(", ");
 
@@ -127,6 +141,29 @@ export function ViewerFrameDetail({
           Rename boundary
         </button>
       </form>
+      {/* OUTSIDE the form, the node card's rule for its nest buttons: the
+          rename is a field Apply rewrites in place, the removal is an act —
+          Enter in the name field must never remove the boundary. */}
+      <div className="mt-2 border-t border-border/60 pt-2">
+        <button
+          type="button"
+          onClick={onDelete}
+          className={buttonClasses({
+            variant: "outline",
+            size: "sm",
+            className: "w-full",
+          })}
+        >
+          <Trash2 aria-hidden="true" className="size-3.5" />
+          Remove boundary
+        </button>
+        {memberCount > 0 || childFrameCount > 0 ? (
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Removes the boundary only — everything it holds stays on the canvas,
+            one level out.
+          </p>
+        ) : null}
+      </div>
     </aside>
   );
 }

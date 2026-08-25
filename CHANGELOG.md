@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- An element's type can be changed in the details panel on the editable C4
+  canvas. The select offers only the types legal at the diagram's level; a
+  node still at its old type's default size adopts the new type's default,
+  while a hand-sized node and a chosen icon keep exactly what the author set.
+
+- An element's tags can be edited in the same panel. The field owns the plain
+  tags; a tag that carries the element's colour stays with the colour control,
+  and the form says so rather than hiding it.
+
+- A selected boundary can be removed from its card on the editable C4 canvas.
+  Removal takes only the boundary itself: its elements and any nested
+  boundaries stay on the canvas and move one level out, in one undo step —
+  the same behaviour the editor's boundary delete has always had.
+
 - A selected relationship on the editable C4 canvas can now be edited and
   deleted, not just read. The relationship card grows a pencil — label,
   technology, direction (one-way, bidirectional, undirected) and line style
