@@ -169,16 +169,45 @@ export function CanvasLockButton({
 
            THE TWO FACES READ AS SEALED AND OPEN. Locked pools the primary
            tint at the top-left and falls to the card — light on a closed
-           thing. Editable is near-flat, because a canvas the reader is
-           working on should not have its chrome competing with the diagram.
-           Every stop is a theme token, so each theme supplies its own and
-           none of this is a hardcoded colour. The cross-fade is
-           `motion-safe:` — reduced motion gets the state, not the travel. */
+           thing. That pooled face is STILL, and it stays the whole story for
+           anyone who never sees the gleam above it: the owner asked the
+           locked state to be carried by a travelling gloss, and a highlight
+           that were the ONLY thing saying "locked" would say nothing at all
+           under reduced motion. Editable is near-flat and still, because a
+           canvas the reader is working on should have no moving chrome at
+           all. Every stop is a theme token, so each theme supplies its own
+           and none of this is a hardcoded colour. `relative` is the
+           positioning context the gleam layer below needs, and nothing else
+           depends on it. */
         className: locked
-          ? "w-8 border-primary/40 bg-gradient-to-br from-primary/25 via-primary/10 to-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:from-primary/35 hover:via-primary/15 motion-safe:transition-all motion-safe:duration-300"
+          ? "relative w-8 border-primary/40 bg-gradient-to-br from-primary/25 via-primary/10 to-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:from-primary/35 hover:via-primary/15 motion-safe:transition-all motion-safe:duration-300"
           : "w-8 bg-gradient-to-br from-card/90 to-card/60 px-0 shadow-sm backdrop-blur hover:from-muted/60 hover:to-card/70 motion-safe:transition-all motion-safe:duration-300",
       })}
     >
+      {/* THE GLEAM — a narrow highlight raked across the locked face, crossing
+          in the first third of its cycle and resting for the remainder, so
+          what repeats is a glint rather than a surface in permanent motion.
+          The reversal it implements, and what the old still-face rule was
+          protecting, are argued beside the keyframes in globals.css; the floor
+          under its speed and the rule that only one lock animation may loop
+          are pinned by check:canvas-edit.
+
+          A LAYER OF ITS OWN, deliberately, rather than the face's own
+          background travelling. It leaves the pooled tint underneath intact,
+          which is what still says "locked" to a reader on reduced motion, and
+          it keeps the sweep off the glyph entirely — the padlock rides above
+          this, its colour still the flat token the header's rule requires.
+
+          Rendered for `locked` alone and NOT gated on `travelled`, unlike the
+          settles: those answer a press, so playing them on arrival would claim
+          a press nobody made, while this reports a STATE and must therefore be
+          there the moment a locked diagram opens. */}
+      {locked ? (
+        <span
+          aria-hidden="true"
+          className="af-lock-sheen pointer-events-none absolute inset-0 rounded-[inherit] motion-safe:animate-lock-sheen"
+        />
+      ) : null}
       {/* Each face animates on MOUNT (a toggle swaps the two glyphs, so the
           entering one plays its gesture), gated three ways: `travelled` skips
           the first paint, `motion-safe:` is the reduced-motion opt-out — in
