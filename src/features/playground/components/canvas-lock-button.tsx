@@ -175,7 +175,7 @@ export function CanvasLockButton({
            none of this is a hardcoded colour. The cross-fade is
            `motion-safe:` — reduced motion gets the state, not the travel. */
         className: locked
-          ? "w-8 border-primary/40 bg-gradient-to-br from-primary/25 via-primary/10 to-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:from-primary/35 hover:via-primary/15 motion-safe:transition-all motion-safe:duration-300"
+          ? "af-lock-pulse-face w-8 border-primary/40 bg-gradient-to-br from-primary/35 via-primary/5 to-primary/30 bg-[length:200%_200%] bg-[position:25%_50%] px-0 shadow-sm backdrop-blur hover:border-primary/70 motion-safe:animate-lock-pulse motion-safe:transition-all motion-safe:duration-300"
           : "w-8 bg-gradient-to-br from-card/90 to-card/60 px-0 shadow-sm backdrop-blur hover:from-muted/60 hover:to-card/70 motion-safe:transition-all motion-safe:duration-300",
       })}
     >

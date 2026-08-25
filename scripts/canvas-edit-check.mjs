@@ -967,13 +967,79 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
     [...m[1].matchAll(/([a-z-]+):/g)].map((p) => p[1]),
   );
   check(
-    "the lock's two gestures are one-shot — declared without `infinite`",
+    "the two STATE-CHANGE gestures are one-shot — declared without `infinite`",
     lockAnimTokens.length === 2 &&
       lockAnimTokens.every(
         ([declaration]) => !declaration.includes("infinite"),
       ),
-    "a state-change settle became a loop — continuous motion on the one " +
-      "control floating over a diagram someone is presenting",
+    "a state-change settle became a loop — a press that never stops " +
+      "answering is a different thing from a lit locked face",
+  );
+  /* THE LOOP IS ONE ANIMATION, GOVERNED, NOT MERELY TOLERATED. The owner
+     reversed the still-face rule and asked for the locked state to be carried
+     by a running gradient; what the old rule was protecting is argued beside
+     the keyframes and is now handled by three properties, each pinned here.
+     Without these the reversal would read as "loops are fine now", which it
+     is not: exactly one animation may loop, only while locked, and only
+     slowly. */
+  const pulseToken = /--animate-lock-pulse:([^;]+);/.exec(lockAnimCss);
+  check(
+    "exactly one lock animation loops, and it is the locked face's gradient",
+    pulseToken !== null &&
+      pulseToken[1].includes("infinite") &&
+      (lockAnimCss.match(/--animate-lock-[a-z]+:[^;]*infinite[^;]*;/g) ?? [])
+        .length === 1,
+    "either the running gradient stopped looping, or a SECOND lock animation " +
+      "started to — the reversal covers one face, not the control",
+  );
+  /* WCAG 2.3.1 is the floor here, not a preference. This control is on screen
+     for as long as the canvas is locked, so a "blink" fast enough to read as
+     flashing is a hazard rather than a style. Three per second is the
+     threshold; the period is held an order of magnitude under it, and this
+     asserts the number rather than trusting the comment beside it. */
+  const pulseSeconds = pulseToken
+    ? Number.parseFloat(/([\d.]+)s/.exec(pulseToken[1])?.[1] ?? "0")
+    : 0;
+  check(
+    "and it is slow enough that it can never read as a flash (WCAG 2.3.1)",
+    pulseSeconds >= 1.5,
+    `the locked face's loop runs every ${pulseSeconds}s — under 1.5s it starts ` +
+      "approaching a strobe on a control that stays on screen the whole time " +
+      "the canvas is locked",
+  );
+  const pulseFrames = /@keyframes af-lock-pulse \{([\s\S]*?)\n\}/.exec(
+    lockAnimCss,
+  );
+  const pulseProps = pulseFrames
+    ? [...new Set([...pulseFrames[1].matchAll(/([a-z-]+):/g)].map((m) => m[1]))]
+    : [];
+  check(
+    "the loop travels a background and nothing else — no opacity strobe, no glyph moved",
+    pulseFrames !== null &&
+      pulseProps.length > 0 &&
+      pulseProps.every((prop) => prop === "background-position"),
+    `the loop animates: ${pulseProps.join(", ") || "nothing found"} — an ` +
+      "opacity switch is the literal blink WCAG 2.3.1 is about, and a " +
+      "transform would move the padlock forever",
+  );
+  check(
+    "reduced motion parks the loop on a chosen frame rather than stopping it anywhere",
+    /\.af-lock-pulse-face \{\s*animation: none;\s*background-position: [^;]+;/.test(
+      lockAnimCss,
+    ),
+    "the locked face has no reduced-motion rule, so it freezes wherever the " +
+      "global backstop happens to catch it — the precedent beside it parks " +
+      "the landing page's gradient deliberately",
+  );
+  /* ONLY THE LOCKED FACE MOVES. The whole trade rests on a canvas being
+     EDITED having no moving chrome; if the loop ever reached the editable
+     face it would sit over the diagram the reader is working in. */
+  check(
+    "the loop is on the locked face only — an editable canvas has no moving chrome",
+    /af-lock-pulse-face[^"]*motion-safe:animate-lock-pulse/.test(controlCode) &&
+      !/: "w-8 bg-gradient-to-br[^"]*animate-lock-pulse/.test(controlCode),
+    "the running gradient reached the editable face — a canvas someone is " +
+      "working in would have chrome moving over it",
   );
   check(
     "and they move nothing but transform — the faces' paint stays the tokens'",
@@ -7471,7 +7537,6 @@ console.log("\nRevising and deleting a relationship are line patches");
     "a partial revision would drop label and detail typed but not applied",
   );
 }
-
 
 console.log(
   `\n${failures === 0 ? "PASS" : "FAIL"} — ${assertions - failures}/${assertions} assertions\n`,

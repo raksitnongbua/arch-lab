@@ -57,6 +57,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The canvas lock reads as lit while it holds. The locked padlock's gradient
+  now travels slowly across its face on a loop instead of sitting still, so
+  the state is visible at the edge of vision while you present rather than
+  only when you look at it. It runs only while locked — a canvas you are
+  editing has no moving chrome at all — and it is a slow sweep rather than a
+  flash, well under the rate that would make it a hazard. Reduced motion gets
+  the lit face parked still.
+
 - The Mermaid conversion caveat for C4 models now also says that an
   undirected or dashed relationship comes back as a plain arrow. The loss is
   not new — the caveat now names it, because the relationship editor refuses

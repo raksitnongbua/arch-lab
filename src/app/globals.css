@@ -1191,6 +1191,12 @@
      reads these two declarations to prove it stays that way. */
   --animate-lock-snap: af-lock-snap 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
   --animate-lock-open: af-lock-open 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
+  /* The locked face's running gradient. The ONE lock animation that loops, by
+     the owner's decision (argued beside the keyframes). Slow on purpose: a
+     "blink" fast enough to read as flashing is a WCAG 2.3.1 hazard, so the
+     period is held well below three per second and check:canvas-edit pins a
+     floor under it. */
+  --animate-lock-pulse: af-lock-pulse 2.8s ease-in-out infinite;
 }
 
 @layer base {
@@ -1288,26 +1294,56 @@
     animation: none;
     background-position: 25% 50%;
   }
+
+  /* The locked face parks where the tint pools at the padlock rather than
+     wherever the backstop happens to freeze it — reduced motion still gets a
+     lit face, just one that holds still. */
+  .af-lock-pulse-face {
+    animation: none;
+    background-position: 25% 50%;
+  }
 }
 
 /* ---------------------------------------------------------------------------
    Canvas lock: the padlock answers a press with one physical gesture.
 
    The owner asked for the lock to be ANIMATED to present the secure state.
-   What ships is a one-shot settle on each STATE CHANGE — the closed padlock
-   drops and clicks shut, the open one lifts and springs free — and a still
-   resting state, deliberately: this control floats over a diagram somebody
-   is presenting, and purpose.md's test for resting motion ("would removing
-   it lose information?") answers no here — the secure state at rest is
-   already told twice without movement, by the closed glyph and by the
-   primary-pooled gradient face. A loop would spend the reader's eye on
-   chrome. The moment of locking is where motion ADDS information — "your
-   press did engage" — so that is the only moment that moves.
+   Two things move, and they answer different halves of that.
 
-   TRANSFORM-ONLY, so the glyph's colour stays the theme token the control
-   sets and the button's gradient stays the only paint (both pinned by
-   check:canvas-edit, which also reads these keyframes to hold the
-   transform-only rule). Each face plays on MOUNT (the two faces are distinct
+   THE STATE CHANGE is a one-shot settle — the closed padlock drops and clicks
+   shut, the open one lifts and springs free. That half has never changed.
+
+   THE LOCKED STATE ITSELF now carries a running gradient, and this REVERSES a
+   rule recorded here, so the rule and the reason it existed are kept rather
+   than deleted. It used to rest completely still, on the argument that this
+   control floats over a diagram somebody is presenting and purpose.md's test
+   ("would removing it lose information?") answered no — the secure state is
+   already told twice without movement, by the closed glyph and by the
+   primary-pooled face — so a loop would spend the reader's eye on chrome.
+   The owner judged the still face not beautiful enough to carry the state and
+   asked for a looping gradient instead; the owner is the authority on that
+   trade, exactly as they were on the icon-only reversal the control's own
+   header records. What the argument bought is still true and is now handled
+   rather than avoided: the loop is SLOW and low-contrast, a tint travelling
+   across a 32px face rather than a flash, so it reads as a lit state at the
+   edge of vision instead of competing with the diagram; it runs only while
+   LOCKED, so a canvas being edited has no moving chrome at all; and it stops
+   dead under reduced motion, parked on a deliberate frame the way the
+   landing page's running gradient already is.
+
+   NOT A LITERAL BLINK, deliberately. An opacity strobe fast enough to read as
+   blinking is a WCAG 2.3.1 flash hazard on a control that is on screen for as
+   long as the canvas is locked. The travel of the gradient's bright band does
+   the same work — the face brightens and dims — without anything switching on
+   and off, and check:canvas-edit holds a floor under the period so a later
+   edit cannot quietly turn it into one.
+
+   THE TWO SETTLES ARE TRANSFORM-ONLY, so the glyph's colour stays the theme
+   token the control sets and the button's gradient stays the only paint (both
+   pinned by check:canvas-edit, which reads these keyframes to hold the
+   transform-only rule). The loop is exempt because it moves no glyph at all —
+   it travels a background the face already had, and the padlock rides above it
+   untouched. Each face plays on MOUNT (the two faces are distinct
    lucide glyphs, so a toggle swaps elements); the component skips the very
    first paint so arriving at the page never animates — only a press does.
    Reduced motion: the use sites are `motion-safe:` variants, and the global
@@ -1334,6 +1370,20 @@
   }
   100% {
     transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+/* The locked face's gradient travels across a doubled background box and back,
+   so the primary tint pools at one corner, sweeps through and returns. Same
+   mechanism as the landing page's running headline (.af-running-gradient) —
+   one looping gradient pattern in this codebase, not two. */
+@keyframes af-lock-pulse {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
   }
 }
 
