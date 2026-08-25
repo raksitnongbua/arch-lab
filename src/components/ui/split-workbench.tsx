@@ -26,7 +26,10 @@
  *     reader who has decided how wide their editor is has decided it for more
  *     than one page load.
  *   - COLLAPSE for the extreme — one click, no aim, and the canvas is
- *     everything. The stacked layout's best case, on demand.
+ *     everything. The stacked layout's best case, and where the playground now
+ *     STARTS: the fold defaults to folded, so this is the state a first-time
+ *     reader arrives in and the toggle is their way into the text
+ *     (`playground/lib/source-fold.ts`).
  *   - DOUBLE-CLICK the divider to return to the default, so experimenting
  *     with the drag costs nothing.
  *
@@ -40,15 +43,35 @@
  * `hidden` also takes it out of the tab order, which is what makes the
  * collapsed state real for a keyboard.
  *
- * BELOW `lg` IT STACKS, source first, and the divider is not rendered at all.
- * A 30% column of a phone is ~110px, which is not a text editor, and a
- * resizer for a layout that is not side by side is a control that appears
- * inert.
+ * BELOW `lg` IT STACKS, CANVAS FIRST, and neither the divider nor the collapse
+ * button is rendered at all. A 30% column of a phone is ~110px, which is not a
+ * text editor, and a resizer for a layout that is not side by side is a
+ * control that appears inert.
+ *
+ * The canvas leads that stack, and it used to be the source. Stacked, "first"
+ * means the opening screenful rather than the left-hand side: on a 390×844
+ * phone the chrome above this component plus a 14-row editor and its toolbar
+ * put the diagram around 700px down the document, so a reader — including one
+ * who followed somebody's share link to LOOK at a diagram — got a screen of
+ * monospace text and no drawing at all. Presentation is the product
+ * (`purpose.md`), so the drawing takes the screen the reader arrives on and
+ * the editor sits under it, one scroll away and never hidden. The product's
+ * own claim does not move with it: "Nothing leaves your browser" is in the
+ * page's opening paragraph, above this component.
+ *
+ * It is `order`, not a second DOM arrangement, so ONE tree serves both
+ * breakpoints. The price is that below `lg` the tab order still reaches the
+ * editor before the canvas that is drawn above it. That is the right way round
+ * to be wrong: both panes are labelled landmarks a screen reader navigates
+ * directly, and the source is what a keyboard user came to type in — while a
+ * duplicated tree, or `hidden`-ing one copy per breakpoint, would give the page
+ * two editors to keep in sync and cost the browser's undo stack on resize.
  */
 
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
+import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------- */
@@ -146,20 +169,34 @@ function useRailPercent(): number {
  * hiding one could not touch the other; merging them into one frame is what
  * made "hide the source" and "hide the frame" different things.
  *
- * So immersive is expressed the way it actually behaves: `collapsed` also
- * covers it (`sourceCollapsed || isImmersive`), the canvas fixes itself over
+ * So immersive hides the RAIL and nothing else: the canvas fixes itself over
  * the viewport, and the empty frame stays in the layout behind it — which
  * costs nothing and means leaving immersive restores the rail to whatever the
  * reader had it at.
+ *
+ * IT IS ITS OWN PROP, though, and it used to ride in on `collapsed`
+ * (`sourceCollapsed || isImmersive`). The two stopped being the same thing
+ * when the fold became breakpoint-scoped: the reader's fold may only apply
+ * where a toggle exists to undo it, while immersive must reach every width,
+ * because a rail left in the tab order behind a fullscreen canvas is an editor
+ * a keyboard can enter and nobody can see.
  */
 export function SplitWorkbench({
   collapsed,
+  immersive = false,
   sourceLabel,
   source,
   canvas,
 }: {
-  /** Hides the rail AND its divider. Immersive mode is one of its callers. */
+  /**
+   * The reader's fold, from `SourceRailToggle`. Takes effect at `lg` and up
+   * ONLY — below it the panes stack, no toggle is rendered, and a folded rail
+   * would be an editor whose only way back is a wider window.
+   */
   collapsed: boolean;
+  /** Hides the rail at EVERY width, toggle or not — immersive mode's caller.
+   * See the note above for why this is not `collapsed`. */
+  immersive?: boolean;
   /** Names the left rail, for the section landmark and the divider. */
   sourceLabel: string;
   source: React.ReactNode;
@@ -250,7 +287,13 @@ export function SplitWorkbench({
         style={{ "--rail": `${railPercent}%` } as React.CSSProperties}
         className={cn(
           "flex min-h-0 min-w-0 flex-col gap-2 lg:w-[var(--rail)]",
-          collapsed && "hidden",
+          /* `lg:hidden` for the fold and unprefixed `hidden` for immersive —
+             the asymmetry is the whole point of the two props, and reading it
+             the other way round is what would strand a phone reader with no
+             editor. Both rely on `hidden` taking the textarea out of the tab
+             order, which is what makes either state real for a keyboard. */
+          collapsed && "lg:hidden",
+          immersive && "hidden",
         )}
       >
         {source}
@@ -280,7 +323,7 @@ export function SplitWorkbench({
              `touch-none` stops a drag from scrolling the page under a finger
              instead of moving the divider. */
           "group relative hidden w-3 shrink-0 cursor-col-resize touch-none items-center justify-center focus-visible:outline-none lg:flex",
-          collapsed && "lg:hidden",
+          (collapsed || immersive) && "lg:hidden",
         )}
       >
         <span
@@ -299,8 +342,13 @@ export function SplitWorkbench({
           diagram pane came up empty on a real phone.
 
           Above `lg` the row still shares its width by growing, which is what
-          this was for; below it, the pane's own height is the only rule. */}
-      <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-1">
+          this was for; below it, the pane's own height is the only rule.
+
+          `max-lg:order-first` is the stacked layout's "canvas first" — see the
+          file header for why the drawing takes the screen the reader arrives
+          on. Scoped, because in the `lg` ROW first means leftmost, and the
+          source rail is the left-hand pane this whole component is about. */}
+      <div className="flex min-h-0 min-w-0 flex-col gap-2 max-lg:order-first lg:flex-1">
         {canvas}
       </div>
     </div>
@@ -312,6 +360,30 @@ export function SplitWorkbench({
  * it already has (the sequence pane's toolbar strip, the C4 canvas's control
  * row) rather than have the layout drop a floating button into a corner one
  * of them has already spent.
+ *
+ * THE FOLDED FACE IS AN INVITATION, NOT A CHEVRON, and it carries the
+ * folded-by-default decision in `playground/lib/source-fold.ts` the way the
+ * pencil carries the locked-by-default one in `canvas-lock-button.tsx`. With
+ * the rail folded this button is the ONLY thing on screen that says the
+ * diagram is written as text at all — and the text format is one of the two
+ * things a drawing tool cannot do (`purpose.md`). So it says what pressing it
+ * gives you ("Edit the text") and its full name says where that happens, and
+ * a reader hunting for the format finds a sentence rather than a glyph.
+ *
+ * THE LABEL IS NEVER HIDDEN, and the `hidden xl:inline` it replaced is why
+ * that is written down: between `lg` and `xl` — every 13" laptop — the whole
+ * affordance was one 16px panel glyph in a strip of other glyphs, on a page
+ * that had just decided to open with no editor showing. An icon-only face is
+ * exactly the control nobody thinks to look for.
+ *
+ * IT KEEPS `aria-expanded` where `CanvasLockButton` refuses `aria-pressed`,
+ * and the difference is real: this is a disclosure, so "collapsed" describes
+ * the REGION rather than contradicting the verb on the button, and the region
+ * appearing is the change a screen-reader user needs told.
+ *
+ * BOTH FACES STAY `lg:`-ONLY, because below that breakpoint the panes stack,
+ * there is no rail to fold (`SplitWorkbench` scopes the fold to `lg` too), and
+ * a control that appears inert is worse than none.
  */
 export function SourceRailToggle({
   collapsed,
@@ -324,25 +396,47 @@ export function SourceRailToggle({
   sourceLabel: string;
   className?: string;
 }): React.JSX.Element {
+  /* PanelLeftOpen rather than a pencil, even though the folded face is the
+     invitation: the C4 strip shows this button beside the lock's pencil, and
+     two pencils meaning different edits in one row is worse than a quiet icon.
+     This one draws the pane sliding in from the left, which is what happens. */
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  /* The visible label is the FIRST WORDS of the accessible name, never a
+     different string beside it — a voice-control user says "click Edit the
+     text", and a name starting elsewhere is a control they cannot reach by the
+     words they can see (WCAG 2.5.3). The rest names the pane, which is the part
+     a reader who has never seen this page open cannot guess. */
+  const name = collapsed
+    ? `Edit the text — show the ${sourceLabel} this diagram is written in, beside it`
+    : `Hide the ${sourceLabel} — give the diagram the full width`;
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={!collapsed}
-      aria-label={
-        collapsed ? `Show the ${sourceLabel}` : `Hide the ${sourceLabel}`
-      }
-      title={collapsed ? `Show the ${sourceLabel}` : `Hide the ${sourceLabel}`}
-      className={cn(
-        /* Desktop only: below `lg` the panes stack, so there is no rail to
-           collapse and a control that appears inert is worse than none. */
-        "hidden items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none lg:inline-flex",
-        className,
-      )}
+      aria-label={name}
+      title={name}
+      className={buttonClasses({
+        /* Emphasised only while folded, the same one-control-at-a-time rule the
+           canvas lock follows: an outline with a primary tint reads as "you may
+           press this", and the ghost the open face keeps reads as chrome, which
+           is right once the rail is already there. The LABEL carries the
+           meaning, so a theme with a quiet primary still reads. */
+        variant: collapsed ? "outline" : "ghost",
+        size: "sm",
+        className: cn(
+          "hidden lg:inline-flex",
+          collapsed &&
+            "border-primary/40 hover:border-primary/70 hover:bg-primary/10",
+          className,
+        ),
+      })}
     >
-      <Icon aria-hidden="true" className="size-4" />
-      <span className="hidden xl:inline">{collapsed ? "Source" : "Hide"}</span>
+      <Icon
+        aria-hidden="true"
+        className={collapsed ? "text-primary" : undefined}
+      />
+      <span>{collapsed ? "Edit the text" : "Hide"}</span>
     </button>
   );
 }

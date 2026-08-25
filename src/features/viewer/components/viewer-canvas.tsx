@@ -64,6 +64,7 @@ import "@xyflow/react/dist/style.css";
 import type {
   C4Diagram,
   C4Edge,
+  C4EdgeRevision,
   C4NodeFrameChoice,
   C4NodeRevision,
   C4NodeType,
@@ -95,9 +96,15 @@ import {
   NO_DRAG_OVERLAY,
   type DragOverlay,
 } from "../lib/drag-overlay";
+import { verdictFor } from "@/features/editor/lib/connect-verdict";
+
 import { C4_ABSTRACTION } from "../lib/labels";
 import { VIEWER_DURATIONS } from "../lib/motion";
-import { referenceableNodes } from "../lib/node-palette";
+import {
+  connectTargets,
+  creatableNodeTypes,
+  referenceableNodes,
+} from "../lib/node-palette";
 import {
   createNodeProjectionCache,
   projectViewerNodes,
@@ -112,6 +119,7 @@ import {
   type ViewerFlowEdge,
 } from "./viewer-edge";
 import { FrameLayer } from "@/features/editor/components/frame-layer";
+import type { ViewerConnectActions } from "./viewer-connect-grip";
 import {
   ViewerNode,
   ViewerNodeActionsProvider,
@@ -241,6 +249,63 @@ export interface CanvasEditHandlers {
    * submitted form, exactly as `onNodeRevise` does for a node's fields.
    */
   onFrameRename: (diagramId: string, frameId: string, label: string) => void;
+  /**
+   * Remove one boundary, from the frame card beside the selected frame. The
+   * host resolves it into ONE edit (`deletedFrameEdit`) — the frame line out,
+   * members and nested boundaries re-homed one level out — and announces
+   * where they landed; the canvas only reports the press. The selection
+   * clears itself: the card's detail is derived per render, and a frame that
+   * is no longer in the diagram renders no card.
+   */
+  onFrameDelete: (diagramId: string, frameId: string) => void;
+  /**
+   * Rewrite one relationship's own fields — label, technology, direction and
+   * line style — from the relationship card's edit form. The host turns it
+   * into a line patch (`revisedEdgeEdit`) and refuses what cannot apply; the
+   * canvas only reports the submitted form, exactly as `onNodeRevise` does
+   * for an element's fields.
+   */
+  onEdgeRevise: (
+    diagramId: string,
+    edgeId: string,
+    revision: C4EdgeRevision,
+  ) => void;
+  /**
+   * Remove the relationship — the card's bin, and the Delete/Backspace key
+   * while a connector is selected. The host resolves it into one removed
+   * span (`deletedEdgeEdit`), leaving both endpoints untouched, and says how
+   * to undo it; the canvas only reports the keystroke or the press. The key
+   * shares the element delete's listener and dispatches on WHICH selection
+   * is active — the four selection kinds are mutually exclusive, so the
+   * press is never ambiguous.
+   */
+  onEdgeDelete: (diagramId: string, edgeId: string) => void;
+  /**
+   * Write one relationship from `sourceId` to `targetId`, from the connect
+   * grip — a drag released on an element, or the menu's existing-element
+   * half. The host turns it into an insert patch (`connectedNodesEdit`) and
+   * refuses what cannot apply (the same element twice, an endpoint the pane
+   * no longer holds) with an announcement; a pair already related is a
+   * CAUTION, not a refusal — the verdict model's own call — and the host says
+   * a second relationship was added. The canvas only reports the pair.
+   */
+  onNodeConnect: (
+    diagramId: string,
+    sourceId: string,
+    targetId: string,
+  ) => void;
+  /**
+   * Add a new node of `type` ALREADY connected from `sourceId` — the connect
+   * menu's other half. One text edit and one undo entry
+   * (`connectedNewNodeEdit`); returns the created node's id for the reason
+   * `onNodeCreate` does — the newcomer lands below everything drawn and the
+   * canvas owns the camera that must go find it.
+   */
+  onConnectCreate: (
+    diagramId: string,
+    sourceId: string,
+    type: C4NodeType,
+  ) => string | null;
   /**
    * Undo the last canvas edit.
    *
@@ -1136,18 +1201,6 @@ function ViewerCanvasInner({
     [model, navigateTo],
   );
 
-  /* ---- what a node can navigate to -----------------------------------------
-   * CONTEXT, NOT NODE DATA, and the projection is the reason. Both handlers
-   * close over `model`, so both are new functions on every edit — and a node
-   * object carrying a new function is a new node object, which is the re-adopt
-   * the projection cache exists to avoid (see `lib/project-nodes.ts`). Through
-   * context they can change as freely as they like: a context change re-renders
-   * the node components and leaves the node OBJECTS alone. */
-  const nodeActions = useMemo<ViewerNodeActions>(
-    () => ({ drillInto, openReference }),
-    [drillInto, openReference],
-  );
-
   // Element selection routes through React Flow's onNodeClick, not a handler
   // inside the node component: with every interactive flag off (draggable /
   // selectable / connectable all false), React Flow sets `pointer-events:
@@ -1563,6 +1616,99 @@ function ViewerCanvasInner({
     [editable, model, diagramId],
   );
 
+  /* ---- editing: the connect grip -------------------------------------------
+   * The grip's whole gesture is HAND-ROLLED in the grip component and resolved
+   * here from MODEL GEOMETRY, never through React Flow's connection machinery:
+   * `nodesConnectable` stays false on this flow, no `onConnect*` handler is
+   * declared, and the only per-frame state the drag produces is the grip's own
+   * ghost overlay — nothing the `nodes`/`edges` projections read, which is the
+   * marquee's 4fa7c36 loop-guard applied to the second drag that could have
+   * re-engaged the store. The press cannot fight the other two drags either:
+   * it starts on a `nodrag` button (so React Flow never starts a node drag)
+   * and never on the pane element itself (so the marquee never claims it). */
+
+  /** The element under a screen point, from the model's own geometry — the
+   *  marquee-release arithmetic, reused for the drag's target test. */
+  const nodeAtClientPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const container = containerRef.current;
+      if (container === null) return null;
+      const box = container.getBoundingClientRect();
+      const viewport = getViewport();
+      const x = (clientX - box.left - viewport.x) / viewport.zoom;
+      const y = (clientY - box.top - viewport.y) / viewport.zoom;
+      const current = getDiagram(model, diagramIdRef.current);
+      return (
+        current.nodes.find(
+          (node) =>
+            x >= node.position.x &&
+            x <= node.position.x + node.size.width &&
+            y >= node.position.y &&
+            y <= node.position.y + node.size.height,
+        ) ?? null
+      );
+    },
+    [model, getViewport],
+  );
+
+  const connectActions = useMemo<ViewerConnectActions | null>(() => {
+    if (edit === undefined) return null;
+    return {
+      // The menu's list and the host's guard read the same diagram, and the
+      // duplicate flag comes from the one verdict table (`connectTargets`).
+      targetsFor: (sourceNodeId) =>
+        connectTargets(getDiagram(model, diagramIdRef.current), sourceNodeId),
+      createTypes: creatableNodeTypes(diagram.level),
+      verdictAt: (sourceNodeId, clientX, clientY) => {
+        const hit = nodeAtClientPoint(clientX, clientY);
+        return {
+          verdict: verdictFor({
+            sourceNodeId,
+            targetNodeId: hit?.id ?? null,
+            diagram: getDiagram(model, diagramIdRef.current),
+          }),
+          targetName: hit?.name ?? null,
+        };
+      },
+      completeAt: (sourceNodeId, clientX, clientY) => {
+        const hit = nodeAtClientPoint(clientX, clientY);
+        if (hit === null) {
+          /* SAID, not swallowed — but not an error either: the ghost's
+             caption redirected the whole way, so this is the reminder, and
+             it names the gesture that does create. */
+          setAnnouncement(
+            "Nothing connected — release the connect handle on another element, or click it to add a new one.",
+          );
+          return;
+        }
+        // Back on the source is the universal abort (the verdict model's
+        // `cancel`): silent, exactly as an aborted marquee is.
+        if (hit.id === sourceNodeId) return;
+        edit.onNodeConnect(diagramIdRef.current, sourceNodeId, hit.id);
+      },
+      connectTo: (sourceNodeId, targetNodeId) =>
+        edit.onNodeConnect(diagramIdRef.current, sourceNodeId, targetNodeId),
+      // The created node's id is FOLLOWED, exactly as the Add strip's is:
+      // same ref, same effect, same camera move and selection.
+      createAndConnect: (sourceNodeId, type) =>
+        focusWhenCreated(
+          edit.onConnectCreate(diagramIdRef.current, sourceNodeId, type),
+        ),
+    };
+  }, [edit, model, diagram.level, nodeAtClientPoint, focusWhenCreated]);
+
+  /* ---- what a node can navigate to, and the grip's callbacks ----------------
+   * CONTEXT, NOT NODE DATA, and the projection is the reason. These close
+   * over `model`, so they are new functions on every edit — and a node
+   * object carrying a new function is a new node object, which is the re-adopt
+   * the projection cache exists to avoid (see `lib/project-nodes.ts`). Through
+   * context they can change as freely as they like: a context change re-renders
+   * the node components and leaves the node OBJECTS alone. */
+  const nodeActions = useMemo<ViewerNodeActions>(
+    () => ({ drillInto, openReference, connect: connectActions }),
+    [drillInto, openReference, connectActions],
+  );
+
   const climbTo = useCallback(
     (targetId: string) => {
       const anchorNodeId = climbAnchorNodeId(
@@ -1846,19 +1992,40 @@ function ViewerCanvasInner({
         return;
       }
 
+      const current = getDiagram(model, diagramIdRef.current);
+
+      /* DELETE DISPATCHES ON WHICH SELECTION IS ACTIVE — never on both,
+         because the four selection kinds are mutually exclusive by
+         construction (each incoming selection clears the others), so the
+         key is unambiguous without a priority rule to reason about. The
+         edge branch lives HERE, in the same listener behind the same focus
+         guard and form-field exemption, because a THIRD keydown listener is
+         the "two guards that disagree" shape the undo binding's comment
+         already bans — and `check:canvas-edit` counts the listeners. */
+      if (event.key === "Delete" || event.key === "Backspace") {
+        const nodeId = selectedNodeIdRef.current;
+        // A selection can outlive its element for one render after an edit;
+        // do nothing rather than address what is no longer there.
+        if (nodeId !== null) {
+          if (findNode(current, nodeId) === null) return;
+          event.preventDefault();
+          edit.onNodeDelete(current.id, nodeId);
+          return;
+        }
+        const edgeId = selectedEdgeIdRef.current;
+        if (edgeId !== null && findEdge(current, edgeId) !== null) {
+          event.preventDefault();
+          edit.onEdgeDelete(current.id, edgeId);
+        }
+        return;
+      }
+
       const nodeId = selectedNodeIdRef.current;
       if (nodeId === null) return;
-      const current = getDiagram(model, diagramIdRef.current);
       const node = findNode(current, nodeId);
       // A selection can outlive its node for one render after an edit; do
       // nothing rather than address a node that is no longer there.
       if (node === null) return;
-
-      if (event.key === "Delete" || event.key === "Backspace") {
-        event.preventDefault();
-        edit.onNodeDelete(current.id, nodeId);
-        return;
-      }
 
       const delta = NUDGE[event.key];
       if (delta === undefined) return;
@@ -2102,6 +2269,13 @@ function ViewerCanvasInner({
     [edit],
   );
 
+  /* The card's Remove, resolved to the selected frame exactly as the rename
+     is: at press time from the refs, never at render. */
+  const handleFrameDelete = useCallback(() => {
+    if (edit === undefined || selectedFrameIdRef.current === null) return;
+    edit.onFrameDelete(diagramIdRef.current, selectedFrameIdRef.current);
+  }, [edit]);
+
   const handleDetailZoomIn = useCallback(() => {
     if (selectedNodeIdRef.current !== null) {
       drillInto(selectedNodeIdRef.current);
@@ -2124,6 +2298,38 @@ function ViewerCanvasInner({
               selectedNodeIdRef.current,
               revision,
             );
+          },
+    [edit],
+  );
+
+  /* The relationship card's Apply and bin, resolved to the selected edge the
+     way the node revise is resolved to its node: the card describes one
+     relationship and should not carry ids around, and the refs are what
+     handlers on this canvas already read the selection from — at submit
+     time, inside the callback, never at render (`react-hooks/refs`).
+     `undefined` while read-only, which is what withholds the pencil and the
+     bin — presence is the signal, exactly as `edit` itself is. */
+  const handleEdgeRevise = useMemo(
+    () =>
+      edit === undefined
+        ? undefined
+        : (revision: C4EdgeRevision) => {
+            if (selectedEdgeIdRef.current === null) return;
+            edit.onEdgeRevise(
+              diagramIdRef.current,
+              selectedEdgeIdRef.current,
+              revision,
+            );
+          },
+    [edit],
+  );
+  const handleEdgeDelete = useMemo(
+    () =>
+      edit === undefined
+        ? undefined
+        : () => {
+            if (selectedEdgeIdRef.current === null) return;
+            edit.onEdgeDelete(diagramIdRef.current, selectedEdgeIdRef.current);
           },
     [edit],
   );
@@ -2456,6 +2662,7 @@ function ViewerCanvasInner({
                   detail={frameDetail}
                   onDismiss={handleDetailDismiss}
                   onRename={handleFrameRename}
+                  onDelete={handleFrameDelete}
                 />
               ) : activeMultiIds !== null ? (
                 /* Keyed by the selection so a NEW lasso remounts the card —
@@ -2473,6 +2680,8 @@ function ViewerCanvasInner({
                 <ViewerEdgeDetail
                   detail={detail}
                   onDismiss={handleDetailDismiss}
+                  onRevise={handleEdgeRevise}
+                  onDelete={handleEdgeDelete}
                 />
               )}
             </div>

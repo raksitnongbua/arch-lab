@@ -63,6 +63,8 @@
 import type {
   ArchLabFile,
   C4Diagram,
+  C4Edge,
+  C4EdgeRevision,
   C4Frame,
   C4Node,
   C4NodeFrameChoice,
@@ -75,11 +77,13 @@ import { childLevelOf } from "@/types";
 
 import {
   canonicalDiagramBlock,
+  canonicalEdgeBlock,
   canonicalFrameDeclaration,
   canonicalFrameLine,
   canonicalNodeBlock,
   canonicalNodeLine,
   canonicalTagColorLine,
+  defaultEdgeId,
   defaultPositions,
   defaultSizeFor,
   KEYWORD_BY_NODE_TYPE,
@@ -147,25 +151,39 @@ export type CanvasEditability =
  *     adds messages and lifelines, but those land at an INDEX and write no
  *     coordinate, so they belong to `revise` with the other eight sequence
  *     gestures — see the sequence `create` cell, whose refusal points at them.
+ *   - `"connect"` — write a RELATIONSHIP between two elements: a new line in
+ *     the text that names a PAIR and carries no coordinate. Its own row
+ *     rather than a stretch of an existing one, by both of the tests this
+ *     union states: neither definition holds it (`revise` rewrites one
+ *     element's own fields in place — an edge is not a field of either
+ *     endpoint — and `create` is a placement, which a coordinate-free line
+ *     cannot be), and it gates on a fact no other ability asks about — the
+ *     diagram's own relationship set, because whether a pair may be connected
+ *     (the same element twice, a pair already related) is a question about
+ *     EDGES that move, revise and create never pose. The sequence canvas's
+ *     message insert is deliberately NOT this ability, for the reason its
+ *     cell states: a sequence relationship is an ordered EVENT that lands at
+ *     an index, which is `revise`'s territory with the other inserts.
  *
  * A document can therefore refuse one and allow the other — a sequence
  * document refuses `move` while offering `revise`, and the four text-laid-out
- * notations refuse all three. That is
+ * notations refuse all four. That is
  * why the answers live in a TABLE below rather than in a chain of
  * `doc.kind !== …` tests: a chain states each notation's answer as the negation
  * of another's, which reads backwards and leaves the grid a reader wants —
  * notation against ability — nowhere on the page.
  *
- * A FOURTH ABILITY IS A REAL POSSIBILITY and this union is the place for it,
+ * A FIFTH ABILITY IS A REAL POSSIBILITY and this union is the place for it,
  * not a per-gesture verdict. The nine sequence gestures share one ability
  * because they gate on the same two facts (an `.alab` sequence pane, the
  * canvas unlocked); a new ability is owed only when a gesture gates on
  * something the existing ones do not ask about — `create` earned its row by
- * gating on a third fact, the diagram level's own set of legal node types.
+ * gating on a third fact, the diagram level's own set of legal node types,
+ * and `connect` by gating on the relationship set (see its entry above).
  * Adding one makes `CANVAS_EDIT_OFFERS` incomplete, which is a type error
  * before it is a check failure.
  */
-export type CanvasEditAbility = "move" | "revise" | "create";
+export type CanvasEditAbility = "move" | "revise" | "create" | "connect";
 
 /**
  * The notations a `ViewDocument` can be — the key of the capability table.
@@ -377,13 +395,23 @@ export const CANVAS_EDIT_OFFERS: Record<
          revise gates on; the companion line each one mints (a `frame`
          declaration, a diagram head) follows the colour edit's precedent,
          where the header's `tagcolor` line rides the same gesture. A selected
-         boundary's own rename (`renamedFrameEdit`) rides here for the same
-         test: a frame is an element with its own declaration line and span,
-         so its label edit gates on nothing the other revises do not. */
+         boundary's own rename and removal (`renamedFrameEdit`,
+         `deletedFrameEdit`) ride here for the same test: a frame is an
+         element with its own declaration line and span, so its label edit —
+         and the removal that re-homes what it held — gates on nothing the
+         other revises do not. A selected RELATIONSHIP's own fields
+         (`revisedEdgeEdit`) and its removal (`deletedEdgeEdit`) ride here by
+         the same test again: an edge is an element with its own relationship
+         line and span (`spans.edges`), both gestures gate on exactly the two
+         facts every revise gates on, and neither asks a question `connect`
+         owns — the relationship SET is not consulted, only one line already
+         in it. */
       onCanvas:
-        "a C4 node's name, description, technology, icon, colour and " +
-        "boundary edited in the details panel beside it, where a child " +
-        "view is added or removed and a selected boundary renamed too",
+        "a C4 node's type, name, description, technology, icon, colour, " +
+        "tags and boundary edited in the details panel beside it, where a " +
+        "child view is added or removed, a selected boundary renamed or " +
+        "removed, and a selected relationship's wording, direction and " +
+        "line style edited — or the relationship deleted",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: `serializeMermaidC4`
@@ -391,23 +419,32 @@ export const CANVAS_EDIT_OFFERS: Record<
            forms (`spec.argStyle === "tech"`), so on a person or a system the
            field has nowhere to land, and it emits NO argument at all for a
            node's `icon`, its tags or the header's `tagColors` — its `emitNode`
-           reads tags solely for `boundary:` membership — so the panel's icon
-           and colour edits have nowhere to land on ANY element. The "Known
-           lossy spots" note in `mermaid/lib/emit.ts` and
+           reads tags solely for `boundary:` membership and the `_Ext`
+           coercion (`toElementForm`), every other tag dropped — so the
+           panel's icon, colour and tag edits have nowhere to land on ANY
+           element. The "Known lossy spots" note in `mermaid/lib/emit.ts` and
            `MERMAID_C4_EXPORT_CAVEAT` both record it. The two structural edits
            are measured the same way: the emitter writes ONE diagram (so the
            child view a nest creates is simply not in the pane's text), and
            its boundary blocks are rebuilt from `x-mermaid.boundaries` plus
            `boundary:` tags — it never reads `C4Diagram.frames` or
            `C4Node.frameId`, so a membership edit has nowhere to land either.
-           Writing an edit back through a pane that cannot spell it would show
-           the change once and lose it on the next round trip, which is worse
-           than refusing. */
+           The RELATIONSHIP half is measured the same way: the emitter's
+           relationships loop writes `BiRel` only for `bidirectional` and
+           `Rel` for everything else, with no argument for `style` — so an
+           undirected form comes
+           back `forward` and a dashed line comes back solid, which is two of
+           the four fields the edge card edits. Writing an edit back through
+           a pane that cannot spell it would show the change once and lose it
+           on the next round trip, which is worse than refusing. */
         because:
-          "Mermaid C4 has no slot for a node's icon or colour, and none for " +
-          "[technology] on person or system elements; it also holds a " +
-          "single diagram whose boundaries come from the import alone, so a " +
-          "boundary or child-view edit would be lost too. Switch the pane " +
+          "Mermaid C4 has no slot for a node's icon or colour, keeps a tag " +
+          "only when it marks a boundary or an external element, and has " +
+          "none for [technology] on person or system elements; it also " +
+          "holds a single diagram whose boundaries come from the import " +
+          "alone, so a boundary or child-view edit would be lost too — and " +
+          "a relationship's undirected form or dashed style has no " +
+          "spelling, so those edits would be lost as well. Switch the pane " +
           "to .alab to edit on the canvas.",
       },
     },
@@ -487,6 +524,73 @@ export const CANVAS_EDIT_OFFERS: Record<
       because: NO_PLACE_IN_THE_TEXT,
     },
   },
+  connect: {
+    c4: {
+      offers: true,
+      noun: "C4 diagrams",
+      /* "a relationship line" is the ability's whole definition said outward:
+         what lands is a line naming a PAIR, never a coordinate — the claim
+         that separates this row from `create`. "or onto a new element added
+         with it" is the create-then-connect half, worded so the reader knows
+         one gesture yields both lines. */
+      onCanvas:
+        "a relationship drawn from one C4 element onto another — or onto a " +
+        "new element added with it — landing as a relationship line",
+      unlessPane: {
+        format: "mermaid",
+        /* Measured against the emitter, not assumed: `serializeMermaidC4`
+           writes ONE diagram (its `Rel`/`BiRel` lines carry only source,
+           target, label and technology — no slot for an edge's `id`), so a
+           relationship drawn on any other level is simply not in the pane's
+           text, and a second relationship on an already-related pair — which
+           this gesture may add, `connect-verdict.ts`'s duplicate caution —
+           comes back indistinguishable from the first. Writing an edit back
+           through a pane that cannot spell it would show the change once and
+           lose it on the next round trip, which is worse than refusing. */
+        because:
+          "Mermaid C4 holds a single diagram and gives a relationship no id, " +
+          "so an edge drawn on another level — or a second one on the same " +
+          "pair — would be lost. Switch the pane to .alab to edit on the " +
+          "canvas.",
+      },
+    },
+    /* The one notation whose relationships are EVENTS: a message has a place
+       in time (its index in `items`), so a bare pair-naming line is not in
+       the grammar — and the dock's insert, which does write messages, belongs
+       to `revise` for the reason the ability doc gives. The refusal points at
+       that control rather than at the derived tail, because it is one click
+       away. */
+    sequence: {
+      offers: false,
+      ground: "grammar",
+      because:
+        "In this notation a relationship is a message with a place in time, " +
+        "so there is no bare line between two elements to write.",
+      instead:
+        "Use the Add controls under the canvas to insert a message between two lifelines instead.",
+    },
+    flowchart: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    usecase: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    er: { offers: false, ground: "surface", because: NO_EDITOR_ON_THIS_CANVAS },
+    /* `"grammar"`, unlike its three neighbours: a dictionary's grammar holds
+       no relationship at all — sections and fields, no line between two
+       entries — so no dock could ever move this refusal. */
+    dict: {
+      offers: false,
+      ground: "grammar",
+      because:
+        "A data dictionary declares fields, not relationships, so there is " +
+        "no line between two entries to write.",
+    },
+  },
 };
 
 export function canvasEditability(
@@ -514,6 +618,7 @@ const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
   move: "dragged on the canvas",
   revise: "edited on the canvas",
   create: "given a new element on the canvas",
+  connect: "connected on the canvas",
 };
 
 /**
@@ -575,6 +680,30 @@ const NUMBER_WORD: readonly string[] = [
 const inWords = (count: number): string => NUMBER_WORD[count] ?? String(count);
 
 /**
+ * Every offering cell's `onCanvas` clause, as the list it already is — one
+ * entry per (notation, ability) pair the grid says yes to, in the grid's own
+ * ability-then-notation order.
+ *
+ * Exported for `/live`'s "what you can do on the canvas" disclosure, which
+ * renders these as bullets, and consumed by `CANVAS_EDITING_PASSAGE` below,
+ * which joins them into its one sentence — ONE derivation, so the page a
+ * reader scans and the passage an assistant quotes cannot disagree about what
+ * a gesture writes. The failure this prevents is the intro's old hand-kept
+ * verb list: every new gesture grew the sentence by hand (and grew the
+ * check-window that policed it, 240 → 340 → 380 characters) until the intro
+ * read as a wall. A clause added to the grid now reaches both surfaces with
+ * nothing retyped. `check:canvas-edit` pins this list equal to the grid and
+ * pins the disclosure rendering it.
+ */
+export const CANVAS_GESTURE_CLAUSES: readonly string[] = Object.values(
+  CANVAS_EDIT_OFFERS,
+).flatMap((cells) =>
+  Object.values(cells)
+    .filter((offer) => offer.offers)
+    .map((offer) => offer.onCanvas),
+);
+
+/**
  * THE ONE PASSAGE THE SITE QUOTES about editing, and the reason it is built
  * here rather than typed on each page.
  *
@@ -603,11 +732,6 @@ const inWords = (count: number): string => NUMBER_WORD[count] ?? String(count);
  */
 export const CANVAS_EDITING_PASSAGE: string = (() => {
   const notations = Object.keys(CANVAS_EDIT_OFFERS.move) as Notation[];
-  const clauses = Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
-    Object.values(cells)
-      .filter((offer) => offer.offers)
-      .map((offer) => offer.onCanvas),
-  );
   const editable = new Set(
     notations.filter((notation) =>
       Object.values(CANVAS_EDIT_OFFERS).some((cells) => cells[notation].offers),
@@ -616,9 +740,9 @@ export const CANVAS_EDITING_PASSAGE: string = (() => {
   return (
     `An ${APP_NAME} diagram is edited two ways. All ${inWords(notations.length)} ` +
     `notations are edited as source text; ${inWords(editable.size)} of them are ` +
-    `also editable on the canvas — ${clauses.join(", and ")}. Either way the ` +
-    `change lands in the same one-line-per-element text you review in a pull ` +
-    `request.`
+    `also editable on the canvas — ${CANVAS_GESTURE_CLAUSES.join(", and ")}. ` +
+    `Either way the change lands in the same one-line-per-element text you ` +
+    `review in a pull request.`
   );
 })();
 
@@ -679,7 +803,6 @@ function patchablePane(
   doc: Extract<ViewDocument, { kind: "c4" }>,
   sourceText: string,
 ): { spans: ArchTextSpans } | null {
-  if (doc.format !== "alab") return null;
   let spans: ArchTextSpans;
   try {
     const parsed = parseArchTextWithSpans(sourceText);
@@ -868,6 +991,34 @@ function frameMintPatch(
  * removes the token rather than spelling a default out; `iconSource` travels
  * only with an icon, exactly as `C4Node` states.
  *
+ * A TYPE EDIT REWRITES THE KEYWORD the declaration line opens with, guarded
+ * by `creatableNodeTypes` — the Add palette's own derivation, so the panel's
+ * select and this guard cannot disagree about what is legal at the level
+ * (`container` written into a context diagram would come back from the
+ * re-parse as an error the reader cannot act on). What travels with it is
+ * decided here, each the less-destructive verdict of its pair:
+ *
+ *   - THE DEFAULT SIZE FOLLOWS, an authored one stays. A node whose size is
+ *     the OLD type's default has no geometry token in the text — omission
+ *     means "the default" — so it adopts the NEW type's default and stays
+ *     token-free; keeping the old numbers would freeze an accident of the
+ *     previous type into an explicit size the author never chose. A size
+ *     that differs from the default IS the author's and keeps its bytes.
+ *   - THE ICON FIELD IS UNTOUCHED, all three states. An absent icon already
+ *     follows the type by construction (`DEFAULT_ICON_BY_TYPE` resolves at
+ *     render), an explicit (`!`) one is the author's pick and is never
+ *     auto-overridden (`C4Node`'s own rule for technology edits, applied
+ *     here too), and an inferred (`~`) one derives from `technology`, which
+ *     this edit does not change — so its basis is intact. The silhouette,
+ *     the colour role and the `[Type]` metadata line all follow the new
+ *     keyword on their own, which is what keeps a former database from
+ *     still reading as one.
+ *   - A `^ref` MIRROR ELSEWHERE IS NOT REWRITTEN: a mirror's keyword is its
+ *     own statement about how the element draws at ITS level, not a
+ *     derivation from the source — the format happily mirrors a `system` as
+ *     an `external` one level down, and the level rules can force exactly
+ *     that. Only the NAME is derived, and a type edit does not touch it.
+ *
  * A COLOUR EDIT IS TWO WRITES, because the format spells colour as a pairing:
  * a `#tag` on the node and a `tagcolor` line in the header. The revision
  * carries the INTENT (`C4NodeColorChoice`) and this gesture derives both
@@ -889,6 +1040,21 @@ function frameMintPatch(
  * `! meta` escape line instead of `tagcolor` lines cannot take a minted line
  * (the parser rejects the field spelled both ways), and re-emitting would eat
  * the reader's comments over a colour change — so the mint is refused there.
+ *
+ * A TAG EDIT OWNS THE NON-COLOUR HALF of the node's tag list, and only that
+ * half — the division `C4NodeRevision.tags` argues: the colour-carrying tags
+ * (`colorTagsOf`) ARE the colour, and a list that could touch them would
+ * fight the colour intent over precedence. So `tags` replaces the plain tags
+ * wholesale, the colour outcome above keeps its own, and a value naming a
+ * tag the document colours — or an empty string, which would spell `#""` —
+ * is REFUSED rather than merged: silently dropping it would eat typed text,
+ * and honouring it would let one control repaint what the other owns. The
+ * panel's tag field shows exactly this half and says where the other lives.
+ * One bounded cost is inherited rather than added: the serializer sorts a
+ * tag list on write (`tagsLine`), so on a hand-written file wearing several
+ * coloured tags out of order ANY block patch can hand the precedence race to
+ * a different tag — true of every revise before this one, since every block
+ * patch respells the tags in canonical order.
  *
  * A BOUNDARY EDIT IS MEMBERSHIP PLUS, AT MOST, ONE MINT — colour's shape on a
  * diagram-level declaration. Membership is the node's own `in=`, already on
@@ -916,8 +1082,12 @@ export function revisedNodeEdit(
   if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
     return null;
   }
-  const current = findNode(doc.synced.file, diagramId, nodeId);
-  if (current === null) return null;
+  const diagram = doc.synced.file.diagrams.find(
+    (candidate) => candidate.id === diagramId,
+  );
+  if (diagram === undefined) return null;
+  const current = diagram.nodes.find((candidate) => candidate.id === nodeId);
+  if (current === undefined) return null;
   if (current.externalRef !== undefined) return null;
   if (revision.name === "") return null;
 
@@ -929,30 +1099,47 @@ export function revisedNodeEdit(
      cleared — and `emitNode` writes an optional field only for a string, so an
      explicit `undefined` is simply not written. This destructure and
      `C4NodeRevision` are one unit: a field added there needs a name here or it
-     is silently ignored. */
+     is silently ignored. (`type` and `tags` are the exceptions, resolved
+     below rather than named here, because both are claim-fields whose
+     `undefined` means "keep" — their declarations carry the argument.) */
   const { name, technology, description, icon, color } = revision;
   // "Present only when `icon` is" (C4Node): a source marker on a cleared icon
   // would be a `! iconSource` escape line describing nothing.
   const iconSource = icon === undefined ? undefined : revision.iconSource;
 
-  /* The colour intent, resolved into the two writes it stands for. `worn` is
-     every colour-carrying tag in stored order; the choice is already in force
+  /* The type claim, guarded by the Add palette's own derivation — the header
+     states what follows a change (the default size) and what deliberately
+     does not (the icon field, `^ref` mirrors elsewhere). */
+  const type = revision.type ?? current.type;
+  if (
+    type !== current.type &&
+    !creatableNodeTypes(diagram.level).some((row) => row.type === type)
+  ) {
+    return null;
+  }
+  const oldDefault = defaultSizeFor(current.type);
+  const size =
+    type !== current.type &&
+    current.size.width === oldDefault.width &&
+    current.size.height === oldDefault.height
+      ? defaultSizeFor(type)
+      : current.size;
+
+  /* The colour intent, resolved into the colour-carrying tags the node ends
+     up wearing and, at most, one minted header line. `worn` is every
+     colour-carrying tag in stored order; the choice is already in force
      exactly when the chosen tag is the FIRST of them (or, for "role", when
-     there are none) — anything else and the tag list is rewritten. */
+     there are none) — anything else and the colour half is rewritten. */
   const tagColors = doc.synced.file.metadata.tagColors;
   const worn = colorTagsOf(current, tagColors);
-  let tags = current.tags;
+  let colorHalf: readonly string[] = worn;
   let minted: { tag: string; color: string } | null = null;
   if (color !== undefined) {
     const chosen = color.kind === "tag" ? color : null;
     const inForce =
       chosen === null ? worn.length === 0 : worn[0] === chosen.tag;
     if (!inForce) {
-      const kept = (current.tags ?? []).filter((tag) => !worn.includes(tag));
-      const next = chosen === null ? kept : [...new Set([...kept, chosen.tag])];
-      // Sorted because that is the order the serializer writes and the
-      // re-parse will store; [] becomes absence, as everywhere in the format.
-      tags = next.length === 0 ? undefined : next.sort();
+      colorHalf = chosen === null ? [] : [chosen.tag];
       if (chosen !== null && (tagColors?.[chosen.tag] ?? "") === "") {
         // A mint with no colour in it is not a colour choice.
         if (chosen.color === "") return null;
@@ -961,12 +1148,38 @@ export function revisedNodeEdit(
     }
   }
 
+  /* The tags claim owns the OTHER half — the header's division. Refusals
+     rather than repairs, because both bad values arrive only from a caller
+     that skipped the panel (the field filters colour tags out and says so):
+     a colour-carrying tag would fight the colour intent over precedence,
+     and an empty string would spell `#""`. */
+  let plainHalf = (current.tags ?? []).filter((tag) => !worn.includes(tag));
+  if (revision.tags !== undefined) {
+    if (
+      revision.tags.some((tag) => tag === "" || (tagColors?.[tag] ?? "") !== "")
+    ) {
+      return null;
+    }
+    plainHalf = [...new Set(revision.tags)];
+  }
+  /* Sorted because that is the order the serializer writes and the re-parse
+     will store; [] becomes absence, as everywhere in the format. The current
+     ARRAY survives (reference untouched) when the members are unchanged, so
+     the no-op test below stays an identity check. */
+  const nextTags = [...new Set([...colorHalf, ...plainHalf])].sort();
+  const currentTags = current.tags ?? [];
+  const tags =
+    nextTags.length === currentTags.length &&
+    nextTags.every((tag) => currentTags.includes(tag))
+      ? current.tags
+      : nextTags.length === 0
+        ? undefined
+        : nextTags;
+
   /* The boundary intent, resolved into membership and at most one mint by the
      helper the marquee's grouping shares — its header carries the refusals
      (an unknown existing frame, a blank new label) and why each is refused. */
-  const diagramFrames =
-    doc.synced.file.diagrams.find((candidate) => candidate.id === diagramId)
-      ?.frames ?? [];
+  const diagramFrames = diagram.frames ?? [];
   let frameId = current.frameId;
   let mintedFrame: { id: string; label: string } | null = null;
   if (revision.frame !== undefined) {
@@ -977,13 +1190,16 @@ export function revisedNodeEdit(
 
   if (
     current.name === name &&
+    current.type === type &&
     current.technology === technology &&
     current.description === description &&
     current.icon === icon &&
     current.iconSource === iconSource &&
     // Reference equality is the change test on purpose: `tags` is reassigned
-    // exactly when the colour choice computed a genuinely different list.
+    // exactly when a claim computed a genuinely different list, and `size`
+    // exactly when a type change re-derived the default.
     current.tags === tags &&
+    current.size === size &&
     minted === null &&
     current.frameId === frameId &&
     mintedFrame === null
@@ -991,18 +1207,20 @@ export function revisedNodeEdit(
     return null;
   }
 
-  const withNode = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
-    ...diagram,
+  const withNode = mapDiagram(doc.synced.file, diagramId, (candidate) => ({
+    ...candidate,
     // Spread-guarded so a diagram that has no `frames` key does not gain one
     // holding `undefined` — absence is how the format spells "no boundaries".
     ...(mintedFrame === null
       ? {}
-      : { frames: [...(diagram.frames ?? []), mintedFrame] }),
-    nodes: diagram.nodes.map((node) =>
+      : { frames: [...(candidate.frames ?? []), mintedFrame] }),
+    nodes: candidate.nodes.map((node) =>
       node.id === nodeId
         ? {
             ...node,
             name,
+            type,
+            size,
             technology,
             description,
             icon,
@@ -1132,7 +1350,136 @@ export function renamedFrameEdit(
   const span = patchable?.spans.frames.get(spanKey(diagramId, frameId));
   const line = canonicalFrameDeclaration(edited, diagramId, frameId);
   if (span !== undefined && line !== null) {
-    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines: [line] }]));
+    return adopt(
+      doc,
+      edited,
+      applyPatches(sourceText, [{ span, lines: [line] }]),
+    );
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one frame removed and everything it held RE-HOMED one level out,
+ * or `null` when the edit cannot apply — a document that refuses `"revise"`,
+ * or a frame that is not in the diagram. This is the gesture behind the
+ * boundary card's Remove button.
+ *
+ * THE VERDICT IS THE EDITOR STORE'S (`deleteFrame` in `editor/state/
+ * store.ts`), so the two authoring surfaces draw one line — `nestedNodeEdit`'s
+ * own rule for its refusals: members and nested frames land in the deleted
+ * frame's PARENT, or loose at top level when it had none. Re-home, never
+ * cascade, because a frame owns no elements (`C4Frame`: "purely a view
+ * construct") — deleting the ring around a group must not delete the group,
+ * and cascading nested frames would eat `frame` declarations the author
+ * wrote over the removal of ONE. The mint's "always top-level" verdict next
+ * door is not overturned: lifting a nested frame out states no NEW nesting —
+ * every surviving `in=` was already in the author's text, one ring closer.
+ *
+ * A REMOVAL IS N+1 LINE PATCHES IN ONE EDIT: the frame's own declaration
+ * line comes out, each lifted child frame's declaration is respelled by the
+ * serializer (`canonicalFrameDeclaration`, so the new `in=` — or its absence
+ * — is canonical), and each member's declaration LINE is respelled for its
+ * new membership (`canonicalNodeLine` — never the block, the grouping's
+ * rule: a removal has no business near anyone's `desc` continuations). All
+ * through one `applyPatches`, so the whole removal is one undo entry; every
+ * patch or none, the delete's rule, because a partially-applied removal
+ * would leave `in=` naming a frame the file no longer declares — a parse
+ * error over a diagram the reader can no longer edit.
+ *
+ * NOTHING BEYOND THE STANDARD GUARDS REFUSES, and that is a finding, not an
+ * oversight: the card's spec asked where members and nested frames land, the
+ * other authoring surface had already answered for both (`check:frames`
+ * measures it as "delete re-homes, never cascades"), so every populated case
+ * has an honest one-level-out answer and there is no case left to send to
+ * the source pane.
+ */
+export function deletedFrameEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  frameId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  const frame = diagram?.frames?.find((candidate) => candidate.id === frameId);
+  if (diagram === undefined || frame === undefined) return null;
+
+  /* Where everything the frame held goes: one level out. `undefined` for a
+     top-level home rather than `null`, because membership fields are
+     absent-or-set — a node's `frameId` has no null spelling, and a lifted
+     frame drops its `in=` key entirely (the three-valued `parentFrameId`
+     keeps `in=null` for authors, but writing it here would spell a statement
+     the author never made). */
+  const home = frame.parentFrameId ?? undefined;
+  const liftedIds = (diagram.frames ?? [])
+    .filter((candidate) => (candidate.parentFrameId ?? null) === frameId)
+    .map((candidate) => candidate.id);
+  const memberIds = diagram.nodes
+    .filter((node) => node.frameId === frameId)
+    .map((node) => node.id);
+
+  const edited = mapDiagram(file, diagramId, (candidate) => {
+    const remaining = (candidate.frames ?? [])
+      .filter((survivor) => survivor.id !== frameId)
+      .map((survivor) => {
+        if ((survivor.parentFrameId ?? null) !== frameId) return survivor;
+        if (home !== undefined) return { ...survivor, parentFrameId: home };
+        const lifted = { ...survivor };
+        // The KEY goes, not just the value: `parentFrameId` is three-valued
+        // (absent, `in=null`, an id) and a present-but-undefined key would
+        // make the serializer refuse the frame outright.
+        delete lifted.parentFrameId;
+        return lifted;
+      });
+    const next: C4Diagram = {
+      ...candidate,
+      frames: remaining,
+      // Only the members get new objects — the grouping's identity rule, so
+      // the projection cache re-adopts nothing the gesture did not change.
+      nodes: candidate.nodes.map((node) =>
+        node.frameId === frameId ? { ...node, frameId: home } : node,
+      ),
+    };
+    // An empty `frames` array and an absent one mean the same thing; drop the
+    // key so the model stays in the shape a fresh parse would produce.
+    if (remaining.length === 0) delete next.frames;
+    return next;
+  });
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable !== null) {
+    const doomed = patchable.spans.frames.get(spanKey(diagramId, frameId));
+    const patches: (LinePatch | undefined)[] = [
+      doomed === undefined ? undefined : { span: doomed, lines: [] },
+      ...liftedIds.map((id) => {
+        const frameSpan = patchable.spans.frames.get(spanKey(diagramId, id));
+        const frameLine = canonicalFrameDeclaration(edited, diagramId, id);
+        return frameSpan === undefined || frameLine === null
+          ? undefined
+          : { span: frameSpan, lines: [frameLine] };
+      }),
+      ...memberIds.map((id) => {
+        const nodeSpan = patchable.spans.nodes.get(spanKey(diagramId, id));
+        const nodeLine = canonicalNodeLine(edited, diagramId, id);
+        return nodeSpan === undefined || nodeLine === null
+          ? undefined
+          : {
+              span: { start: nodeSpan.start, end: nodeSpan.start },
+              lines: [nodeLine],
+            };
+      }),
+    ];
+    if (patches.every((patch) => patch !== undefined)) {
+      return adopt(
+        doc,
+        edited,
+        applyPatches(sourceText, patches as LinePatch[]),
+      );
+    }
   }
   return adopt(doc, edited, null);
 }
@@ -1520,6 +1867,387 @@ export function createdRefEdit(
     }
   }
   return asCreated(adopt(doc, edited, null), id);
+}
+
+/** Every edge id in the file — the set a new edge id de-collides against.
+ *  File-wide, matching the editor's `createEdge` (`collectEdgeIds`): edge ids
+ *  follow the node-id uniqueness convention, and a duplicate pair's second
+ *  edge needs a suffixed id the whole file agrees is free. */
+function takenEdgeIds(file: ArchLabFile): Set<string> {
+  return new Set(
+    file.diagrams.flatMap((diagram) => diagram.edges.map((edge) => edge.id)),
+  );
+}
+
+/**
+ * The insert patch for one new relationship line, or `null` when the pane
+ * cannot take the splice (a span the parser did not record) — the caller
+ * falls back to the re-emit path exactly as the create gestures do.
+ *
+ * SPLICED AFTER THE DIAGRAM'S LAST RELATIONSHIP LINE, so edges stay with
+ * edges — the create gesture's ordering argument, one section down. A diagram
+ * with no edge lines yet takes the line after its LAST node declaration, with
+ * the blank separator the serializer writes between the two sections
+ * (`emitDiagram`), so the first connect leaves the diagram spelled exactly as
+ * a full serialise would order it. That anchor can TIE with a node line
+ * another patch inserts (create-then-connect): callers put the node patch
+ * FIRST in their list, because `applyPatches` sorts stably, so the new node's
+ * declaration lands above the blank-plus-edge rather than below it.
+ */
+function edgeInsertPatch(
+  spans: ArchTextSpans,
+  diagram: C4Diagram,
+  edited: ArchLabFile,
+  diagramId: string,
+  edgeId: string,
+): LinePatch | null {
+  const lines = canonicalEdgeBlock(edited, diagramId, edgeId);
+  if (lines === null) return null;
+  const edgeEnds = diagram.edges.flatMap((edge) => {
+    const span = spans.edges.get(spanKey(diagramId, edge.id));
+    return span === undefined ? [] : [span.end];
+  });
+  if (edgeEnds.length < diagram.edges.length) return null;
+  if (edgeEnds.length > 0) {
+    const after = Math.max(...edgeEnds);
+    return { span: { start: after + 1, end: after }, lines };
+  }
+  const nodeEnds = diagram.nodes.flatMap((node) => {
+    const span = spans.nodes.get(spanKey(diagramId, node.id));
+    return span === undefined ? [] : [span.end];
+  });
+  if (nodeEnds.length === 0) return null;
+  const after = Math.max(...nodeEnds);
+  return { span: { start: after + 1, end: after }, lines: ["", ...lines] };
+}
+
+/**
+ * `doc` with one new relationship from `sourceId` to `targetId`, or `null`
+ * when the edit cannot apply — a document that refuses `"connect"`, an
+ * endpoint that is not in THIS diagram, or the same element twice.
+ *
+ * THE REFUSALS FOLLOW THE CONNECT-VERDICT MODEL (`editor/lib/
+ * connect-verdict.ts`), which the drag's preview already paints from, so the
+ * line under the cursor and this verdict cannot disagree:
+ *
+ *   - A SELF-EDGE REFUSES — the verdict model's `cancel`: returning to where
+ *     a gesture started is the universal abort, and the editor's `createEdge`
+ *     refuses the same pair for the same reason.
+ *   - AN UNKNOWN OR CROSS-DIAGRAM TARGET REFUSES. `C4Edge.source`/`target`
+ *     name nodes in the SAME diagram — an edge into another level is not in
+ *     the grammar — so an id this diagram does not hold is refused whether it
+ *     exists elsewhere in the file or nowhere at all. Only a pane lagging the
+ *     canvas can ask for one.
+ *   - A DUPLICATE PAIR IS ALLOWED, deliberately — the verdict model's
+ *     `duplicate` is "a caution, never a refusal": parallel relationships are
+ *     a real feature (`edge-geometry.ts` draws them as separate curves, A
+ *     "reads" B beside A "writes" B), and refusing them here would remove it
+ *     to paper over a discoverability problem. The id de-collides
+ *     (`e-a-b-2`), and the caller announces the caution.
+ *   - A `^ref` PLACEHOLDER IS A LEGAL ENDPOINT, either end — the grouping's
+ *     argument, not the field editor's refusal: an edge is a fact about THIS
+ *     diagram that the serializer writes beside the `^` token, and drawing
+ *     the outer system's mirror talking to local elements is what
+ *     placeholders exist for. Nothing derived is forked.
+ *
+ * WHAT THE LINE CARRIES, and deliberately no more: the pair and the format's
+ * defaults — direction `forward` (the editor's `createEdge` default), no
+ * label, no technology. The relationship's wording is the details panel's
+ * job, exactly as a created node's name is; a gesture that stopped to ask for
+ * a label would cost a form before the reader sees the line land.
+ *
+ * A CONNECT IS AN INSERT PATCH — one relationship line (plus the section's
+ * blank separator when this is the diagram's first), spliced by
+ * `edgeInsertPatch`; every other byte survives because nothing touched it.
+ */
+export function connectedNodesEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  sourceId: string,
+  targetId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "connect").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+
+  if (sourceId === targetId) return null;
+  if (
+    findNode(file, diagramId, sourceId) === null ||
+    findNode(file, diagramId, targetId) === null
+  ) {
+    return null;
+  }
+
+  const edge: C4Edge = {
+    id: uniqueId(defaultEdgeId(sourceId, targetId), takenEdgeIds(file)),
+    source: sourceId,
+    target: targetId,
+    direction: "forward",
+  };
+  const edited = mapDiagram(file, diagramId, (current) => ({
+    ...current,
+    edges: [...current.edges, edge],
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable !== null) {
+    const insert = edgeInsertPatch(
+      patchable.spans,
+      diagram,
+      edited,
+      diagramId,
+      edge.id,
+    );
+    if (insert !== null) {
+      return adopt(doc, edited, applyPatches(sourceText, [insert]));
+    }
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one new node of `type` AND the relationship from `sourceId` to
+ * it, or `null` when the edit cannot apply — the connect grip's "or a new
+ * element" half: the reader asked for "a new thing this one talks to", and
+ * this delivers both halves of that sentence.
+ *
+ * TWO ABILITIES ARE ASKED, because the gesture genuinely does both things:
+ * `"connect"` (its own row — the edge is the point) and `"create"` (it also
+ * places a node, so the placement ability's answer must hold too). For a C4
+ * document the two refuse in exactly the same case (a Mermaid pane), but each
+ * gate guards its own gesture the day the cells diverge — the rule every
+ * entry point in this module follows.
+ *
+ * ONE TEXT, ONE UNDO ENTRY, deliberately: the node line and the relationship
+ * line go through `applyPatches` together, so a single Cmd/Ctrl+Z takes both
+ * back. Splitting it into create-then-connect as two edits was rejected
+ * because the halfway state is one the reader never asked to see — undoing
+ * once would leave a stray unnamed node they did not press for, connected to
+ * nothing, and the announcement would have promised a relationship the undo
+ * quietly kept half of.
+ *
+ * NODE PATCH FIRST in the list, for `edgeInsertPatch`'s tied-anchor rule: on
+ * a diagram with no relationship lines yet, both inserts anchor after the
+ * same last node declaration, and the stable sort keeps list order there.
+ *
+ * The node itself is `createdNodeEdit`'s in every decision — placeholder name
+ * and deterministic id from the type, the clear band below everything drawn
+ * (`vacantPosition`), the type re-checked against `creatableNodeTypes` — so
+ * the two create gestures cannot drift on what a new element is born as.
+ */
+export function connectedNewNodeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  sourceId: string,
+  type: C4NodeType,
+): CanvasEdit | null {
+  if (
+    !canvasEditability(doc, "connect").editable ||
+    !canvasEditability(doc, "create").editable ||
+    doc.kind !== "c4"
+  ) {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  if (findNode(file, diagramId, sourceId) === null) return null;
+  if (!creatableNodeTypes(diagram.level).some((row) => row.type === type)) {
+    return null;
+  }
+
+  const id = freshNodeId(file, type);
+  const node: C4Node = {
+    id,
+    type,
+    name: createdNodeName(type),
+    position: vacantPosition(diagram, id),
+    size: defaultSizeFor(type),
+  };
+  const edge: C4Edge = {
+    id: uniqueId(defaultEdgeId(sourceId, id), takenEdgeIds(file)),
+    source: sourceId,
+    target: id,
+    direction: "forward",
+  };
+  const edited = mapDiagram(file, diagramId, (current) => ({
+    ...current,
+    nodes: [...current.nodes, node],
+    edges: [...current.edges, edge],
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const line = canonicalNodeLine(edited, diagramId, id);
+  if (patchable !== null && line !== null) {
+    const nodeEnds = diagram.nodes.flatMap((existing) => {
+      const span = patchable.spans.nodes.get(spanKey(diagramId, existing.id));
+      return span === undefined ? [] : [span.end];
+    });
+    const insert = edgeInsertPatch(
+      patchable.spans,
+      diagram,
+      edited,
+      diagramId,
+      edge.id,
+    );
+    if (nodeEnds.length > 0 && insert !== null) {
+      const after = Math.max(...nodeEnds);
+      return asCreated(
+        adopt(
+          doc,
+          edited,
+          applyPatches(sourceText, [
+            // FIRST, for the tied-anchor rule the header states.
+            { span: { start: after + 1, end: after }, lines: [line] },
+            insert,
+          ]),
+        ),
+        id,
+      );
+    }
+  }
+  return asCreated(adopt(doc, edited, null), id);
+}
+
+/**
+ * `doc` with one relationship's own fields rewritten, or `null` when the edit
+ * cannot apply — a document that refuses `"revise"`, an edge that is not in
+ * the diagram, or a revision that changes nothing.
+ *
+ * PART OF `"revise"`, NOT OF `connect`, by the ability doc's own test: this
+ * gesture gates on exactly the two facts every revise gates on (an `.alab` C4
+ * pane, the canvas unlocked) and never consults the relationship set —
+ * `connect` earned its row by asking whether a PAIR may be related, and a
+ * rewrite of one line already in the set asks nothing of the kind. An edge is
+ * an element of the grammar with its own relationship line and its own span
+ * (`spans.edges`), so rewriting its fields is the same shape as rewriting a
+ * node's name.
+ *
+ * `null` FOR AN UNCHANGED REVISION keeps "one text change per gesture" true
+ * for a form submitted without an edit in it — every gesture's contract, and
+ * the reason a no-op Apply costs no undo entry.
+ *
+ * A REVISE PATCHES THE EDGE'S WHOLE BLOCK — the relationship line plus any
+ * `!` escape continuations — the node revise's shape, because the arrow, the
+ * label, the `[technology]`, the `id=` and the `style=` all live on one line
+ * the serializer must respell together. `canonicalEdgeBlock` is the
+ * serializer's own answer for those lines, so the patched block cannot be
+ * non-canonical; every byte outside it is untouched.
+ *
+ * WHAT THE ARROW ABSORBS: direction and dashedness are ONE token in the
+ * grammar (six forms — `->`, `..>`, `<->`, `<..>`, `--`, `..`), so a
+ * direction or style change is still a rewrite of the same line, never a
+ * second write anywhere. `style` is taken WHOLE, absence included, because
+ * absent and explicit `style=solid` are different documents that draw the
+ * same line — the revision type states the hazard (`4a1254e`) and the card
+ * owns choosing the spelling, so a hand-written `style=solid` survives a
+ * revise that did not touch the style control.
+ *
+ * WHAT IS DELIBERATELY NOT EDITABLE HERE — the endpoints, `tags`,
+ * `~realizes` and `via` waypoints — is argued at `C4EdgeRevision`; the id
+ * follows the node rule (lines elsewhere may name it, so it is the pane's to
+ * change). Fields the revision does not carry ride the block patch untouched
+ * because the edited model keeps them: only the four named fields are
+ * rewritten on the edge object.
+ */
+export function revisedEdgeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  edgeId: string,
+  revision: C4EdgeRevision,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const current = findEdge(doc.synced.file, diagramId, edgeId);
+  if (current === null) return null;
+
+  /* DESTRUCTURED, not spread — `revisedNodeEdit`'s whole-value contract: an
+     optional key the caller omitted must still overwrite the field, or a
+     cleared label could never come off the line. This destructure and
+     `C4EdgeRevision` are one unit: a field added there needs a name here or
+     it is silently ignored. */
+  const { label, technology, direction, style } = revision;
+
+  if (
+    current.label === label &&
+    current.technology === technology &&
+    current.direction === direction &&
+    current.style === style
+  ) {
+    return null;
+  }
+
+  const edited = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
+    ...diagram,
+    edges: diagram.edges.map((edge) =>
+      edge.id === edgeId
+        ? { ...edge, label, technology, direction, style }
+        : edge,
+    ),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const span = patchable?.spans.edges.get(spanKey(diagramId, edgeId));
+  const lines = canonicalEdgeBlock(edited, diagramId, edgeId);
+  if (span !== undefined && lines !== null) {
+    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines }]));
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one relationship removed — and nothing else — or `null` when
+ * the edit cannot apply: a document that refuses `"revise"`, or an edge that
+ * is not in the diagram.
+ *
+ * PART OF `"revise"`, `revisedEdgeEdit`'s argument verbatim: the gesture
+ * gates on the two facts every revise gates on and consults nothing the
+ * other abilities own.
+ *
+ * THE ENDPOINTS ARE LEFT ALONE, and that is the removal's whole verdict
+ * (`canvas-editing.md`: every removal states one). Deleting a relationship
+ * removes exactly its own span — the line plus any `!` continuations — and
+ * no node's declaration changes, because nothing about either element is
+ * derived from the edge. The span-removal mechanics are `deletedNodeEdit`'s
+ * edge cascade, run for one edge with no node to take with it.
+ *
+ * WHAT IT CARRIES RATHER THAN EATS: a child-level edge whose `~realizes`
+ * names the deleted relationship. The model does not validate `realizes`
+ * (the traceability chip simply stops resolving), so the document still
+ * parses — the same honest state a hand-edit of the pane produces — and
+ * rewriting other diagrams' lines to chase a traceability pointer would give
+ * one deleted line the blast radius of a refactor. Nothing renumbers: edge
+ * ids are names, not indices.
+ */
+export function deletedEdgeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  edgeId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  if (findEdge(doc.synced.file, diagramId, edgeId) === null) return null;
+
+  const edited = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
+    ...diagram,
+    edges: diagram.edges.filter((edge) => edge.id !== edgeId),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const span = patchable?.spans.edges.get(spanKey(diagramId, edgeId));
+  if (span !== undefined) {
+    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines: [] }]));
+  }
+  return adopt(doc, edited, null);
 }
 
 /**
@@ -1952,6 +2680,17 @@ function referrersTo(
       )
       .map((node) => ({ diagramId: diagram.id, nodeId: node.id })),
   );
+}
+
+function findEdge(
+  file: ArchLabFile,
+  diagramId: string,
+  edgeId: string,
+): C4Edge | null {
+  const edge = file.diagrams
+    .find((diagram) => diagram.id === diagramId)
+    ?.edges.find((candidate) => candidate.id === edgeId);
+  return edge === undefined ? null : edge;
 }
 
 function findNode(

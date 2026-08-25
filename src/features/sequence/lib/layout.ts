@@ -39,7 +39,8 @@ import type {
   SequenceItem,
   SequenceLabFile,
   SequenceMessage,
-  SequenceMessageKind,
+  SequenceHeadStyle,
+  SequenceLineStyle,
   SequenceNote,
   SequenceNotePlacement,
   SequenceParticipantKind,
@@ -262,7 +263,8 @@ export interface LaidMessage {
   step: number;
   from: string;
   to: string;
-  kind: SequenceMessageKind;
+  lineStyle: SequenceLineStyle;
+  headStyle: SequenceHeadStyle;
   label: string;
   technology?: string;
   /**
@@ -863,7 +865,8 @@ export function layoutSequence(file: SequenceLabFile): SequenceLayout {
       step: stepCounter,
       from: item.from,
       to: item.to,
-      kind: item.kind,
+      lineStyle: item.lineStyle,
+      headStyle: item.headStyle,
       label: item.label,
       ...(item.technology !== undefined ? { technology: item.technology } : {}),
       ...(item.description !== undefined

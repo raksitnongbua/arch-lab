@@ -137,8 +137,8 @@
     },
 
     "edge-line": {
-      "comment": "`<source> <arrow> <target>` plus attributes. Arrows longest-first, matching the parser's order.",
-      "begin": "^\\s+((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)\\s+(<\\.\\.>|<->|\\.\\.>|->|\\.\\.|--)\\s+((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)",
+      "comment": "`<source> <arrow> <target>` plus attributes. One rule for BOTH grammars: a C4 edge and a sequence message are the same shape, so the alternation is the UNION of the two arrow tables, longest-first. `~>` and the cross forms are sequence-only; the other six are shared. check:vscode-grammar derives the expected set from both tables.",
+      "begin": "^\\s+((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)\\s+(<\\.\\.>|\\.\\.x>|\\.\\.~>|<->|\\.\\.>|--|->|\\.\\.|x>|~>)\\s+((?:\"(?:[^\"\\\\]|\\\\.)*\")|[A-Za-z0-9_-]+)",
       "beginCaptures": {
         "1": { "name": "variable.other.id.source.alab" },
         "2": { "name": "keyword.operator.arrow.alab" },

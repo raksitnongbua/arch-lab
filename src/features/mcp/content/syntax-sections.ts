@@ -20,6 +20,8 @@
 import {
   DIAGRAM_EXAMPLE,
   EDGE_ARROW_ROWS,
+  SEQUENCE_ARROW_ROWS,
+  SEQUENCE_LINE_STYLE_ROWS,
   EDGE_ATTR_ROWS,
   EDGE_EXAMPLE,
   FRAME_EXAMPLE,
@@ -342,8 +344,27 @@ const SECTION_BUILDERS: Record<SyntaxSectionId, () => SyntaxSection> = {
       "",
       '- The label is introduced by **` : `** — `a -> b : "Label"`. A message',
       "  without it does not parse.",
-      "- Three arrows: `->` a synchronous call, `~>` asynchronous (fire and",
-      "  forget), `..>` a reply/return.",
+      "- **An arrow is two independent choices**, not one name: a LINE STYLE",
+      "  (solid or dotted) and a HEAD STYLE (none, arrowhead, cross, open, or",
+      "  a head at each end). Ten arrows, one token each, and each converts",
+      "  to and from its Mermaid equivalent losslessly in both directions.",
+      "  The line says which way the step runs — " +
+        SEQUENCE_LINE_STYLE_ROWS.map(
+          (row) => `\`${row.lineStyle}\` is ${row.meaning}`,
+        ).join(", ") +
+        " — and the head says what happens when it arrives:",
+      "",
+      table(
+        ["Arrow", "Line", "Head", "The head means", "Mermaid"],
+        SEQUENCE_ARROW_ROWS.map((row) => [
+          inline(row.arrow),
+          row.lineStyle,
+          row.headStyle,
+          row.headMeaning,
+          inline(row.mermaid),
+        ]),
+      ),
+      "",
       "- **Activation rides the arrow**, not a separate line: `->+` opens the",
       "  receiver's bar, `..>-` closes the sender's. So a call-and-return pair",
       "  is `web ->+ api` … `api ..>- web`.",

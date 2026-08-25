@@ -101,8 +101,26 @@ const {
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
-const { sequenceItemAt, sequenceItemKey, sequenceMessagePaths } = await import(
-  pathToFileURL(path.join(ROOT, "src/types/index.ts")).href
+const {
+  sequenceItemAt,
+  sequenceItemKey,
+  sequenceMessagePaths,
+  SEQUENCE_ARROWS_GRID,
+  SEQUENCE_HEAD_STYLES,
+  SEQUENCE_LINE_STYLES,
+} = await import(pathToFileURL(path.join(ROOT, "src/types/index.ts")).href);
+const { SEQUENCE_ARROW_MATCH_ORDER, sequenceArrowToken } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+const { MERMAID_SEQUENCE_ARROW_MATCH_ORDER, mermaidSequenceArrow } =
+  await import(
+    pathToFileURL(
+      path.join(ROOT, "src/features/mermaid/lib/sequence-mapping.ts"),
+    ).href
+  );
+const { SEQUENCE_HEAD_SHAPES } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/sequence/lib/arrow-heads.ts"))
+    .href
 );
 const { layoutSequence } = await import(
   pathToFileURL(path.join(ROOT, "src/features/sequence/lib/layout.ts")).href
@@ -296,10 +314,11 @@ check(
 );
 const post = sink.items[1];
 check(
-  "message: kind, label, technology and the + activation suffix survive",
+  "message: both arrow axes, label, technology and the + suffix survive",
   post.from === "web" &&
     post.to === "api" &&
-    post.kind === "sync" &&
+    post.lineStyle === "solid" &&
+    post.headStyle === "arrow" &&
     post.label === "Place the order" &&
     post.technology === "HTTPS" &&
     post.activate === true,
@@ -327,7 +346,8 @@ const happy = alt.branches[0];
 const reply201 = happy.items[2];
 check(
   "the ..>- reply deactivates its source",
-  reply201.kind === "reply" &&
+  reply201.lineStyle === "dotted" &&
+    reply201.headStyle === "arrow" &&
     reply201.deactivate === true &&
     reply201.from === "api",
 );
@@ -346,7 +366,10 @@ check(
 );
 check(
   "async messages (~>) land in the innermost par branches",
-  happy.items[1].branches[0].items[0].branches[0].items[0].kind === "async" &&
+  happy.items[1].branches[0].items[0].branches[0].items[0].lineStyle ===
+    "solid" &&
+    happy.items[1].branches[0].items[0].branches[0].items[0].headStyle ===
+      "open" &&
     happy.items[1].branches[0].items[0].branches[1].items[0].to === "db",
 );
 check(
@@ -384,7 +407,8 @@ const HAND_MODEL = {
       step: "message",
       from: "a",
       to: "loop",
-      kind: "sync",
+      lineStyle: "solid",
+      headStyle: "arrow",
       label: "uses a reserved id",
     },
     {
@@ -412,7 +436,8 @@ const HAND_MODEL = {
                               step: "message",
                               from: "b",
                               to: "b",
-                              kind: "async",
+                              lineStyle: "solid",
+                              headStyle: "open",
                               label: "self-message at depth 3",
                             },
                           ],
@@ -431,7 +456,8 @@ const HAND_MODEL = {
               step: "message",
               from: "b",
               to: "a",
-              kind: "reply",
+              lineStyle: "dotted",
+              headStyle: "arrow",
               label: "done",
               activate: true,
               deactivate: true,
@@ -759,8 +785,11 @@ check(
 );
 const [m1, m2, note1, altFrag, optFrag, selfMsg, note2, note3] = imported.items;
 check(
-  "->> maps to sync and the + shorthand activates the target",
-  m1.kind === "sync" && m2.activate === true && m2.to === "A",
+  "->> imports as solid+arrow and the + shorthand activates the target",
+  m1.lineStyle === "solid" &&
+    m1.headStyle === "arrow" &&
+    m2.activate === true &&
+    m2.to === "A",
 );
 check(
   "Note right of / left of / over X,Y all import",
@@ -786,36 +815,53 @@ check(
 );
 check(
   "the - shorthand deactivates the sender of the reply",
-  inAlt[1].kind === "reply" &&
+  inAlt[1].lineStyle === "dotted" &&
     inAlt[1].deactivate === true &&
     inAlt[3].deactivate === true,
 );
 check(
-  "loop > par nest inside alt; -) and --) import as async",
+  "loop > par nest inside alt; -) and --) keep their line styles apart",
   inAlt[2].kind === "loop" &&
     inAlt[2].branches[0].items[0].kind === "par" &&
-    inAlt[2].branches[0].items[0].branches[0].items[0].kind === "async" &&
-    inAlt[2].branches[0].items[0].branches[1].items[0].kind === "async",
+    inAlt[2].branches[0].items[0].branches[0].items[0].headStyle === "open" &&
+    inAlt[2].branches[0].items[0].branches[0].items[0].lineStyle === "solid" &&
+    inAlt[2].branches[0].items[0].branches[1].items[0].headStyle === "open" &&
+    inAlt[2].branches[0].items[0].branches[1].items[0].lineStyle === "dotted",
   JSON.stringify(inAlt[2]),
 );
 check(
-  "--x imports as async (the ✗ head is the documented loss)",
-  altBranches[1].items[0].kind === "async" &&
+  "--x imports as dotted+cross — the head shape is no longer a loss",
+  altBranches[1].items[0].lineStyle === "dotted" &&
+    altBranches[1].items[0].headStyle === "cross" &&
     altBranches[1].items[0].label === "400 Bad Request",
 );
 check(
-  "opt imports; -> and --> map to sync and reply",
+  /* `->` and `-->` are Mermaid's HEADLESS arrows, and reading them as a call
+     and a reply was the collapse this grammar extension removed. */
+  "opt imports; -> and --> map to headless solid and headless dotted",
   optFrag.kind === "opt" &&
-    optFrag.branches[0].items[0].kind === "sync" &&
-    optFrag.branches[0].items[1].kind === "reply",
+    optFrag.branches[0].items[0].headStyle === "none" &&
+    optFrag.branches[0].items[0].lineStyle === "solid" &&
+    optFrag.branches[0].items[1].headStyle === "none" &&
+    optFrag.branches[0].items[1].lineStyle === "dotted",
 );
 check(
   "a self-message imports (from === to)",
-  selfMsg.from === "A" && selfMsg.to === "A" && selfMsg.kind === "async",
+  selfMsg.from === "A" &&
+    selfMsg.to === "A" &&
+    selfMsg.lineStyle === "solid" &&
+    selfMsg.headStyle === "cross",
 );
 check(
-  "the caveat names what is still lost (arrowheads, autonumber args, unanchored activations, unstorable colours, create/destroy) AND that every block survives",
-  MERMAID_SEQUENCE_CAVEAT.includes("arrowheads collapse") &&
+  /* The arrowhead clause is GONE from the list of losses on purpose: it was
+     the one thing this caveat named that is no longer true, and a caveat that
+     over-claims loss is as misleading as one that under-claims it. What the
+     assertion pins now is that it says so POSITIVELY — "every arrow intact" —
+     rather than merely dropping the sentence, because a silent deletion reads
+     as an oversight to the next person to open the file. */
+  "the caveat names what is still lost (autonumber args, unanchored activations, unstorable colours, create/destroy), says every arrow now survives, AND that every block survives",
+  MERMAID_SEQUENCE_CAVEAT.includes("every arrow intact") &&
+    !MERMAID_SEQUENCE_CAVEAT.includes("arrowheads collapse") &&
     MERMAID_SEQUENCE_CAVEAT.includes("autonumber start/step") &&
     MERMAID_SEQUENCE_CAVEAT.includes("activate/deactivate") &&
     MERMAID_SEQUENCE_CAVEAT.includes("colour") &&
@@ -1838,7 +1884,8 @@ console.log(
   const before = sequenceItemAt(file.items, withDesc);
   const revision = {
     label: "Place the order, revised",
-    kind: before.kind,
+    lineStyle: before.lineStyle,
+    headStyle: before.headStyle,
     technology: before.technology,
     description: before.description,
   };
@@ -1912,7 +1959,8 @@ console.log(
     "a revision that changes nothing is refused, so it costs no undo entry",
     revisedMessageEdit(doc.value, authored, withDesc, {
       label: before.label,
-      kind: before.kind,
+      lineStyle: before.lineStyle,
+      headStyle: before.headStyle,
       technology: before.technology,
       description: before.description,
     }) === null,
@@ -1924,7 +1972,8 @@ console.log(
   {
     const cleared = revisedMessageEdit(doc.value, authored, withDesc, {
       label: before.label,
-      kind: before.kind,
+      lineStyle: before.lineStyle,
+      headStyle: before.headStyle,
     });
     const readBack = sequenceItemAt(cleared.doc.file.items, withDesc);
     check(
@@ -3052,7 +3101,8 @@ console.log(
       "a revision",
       revisedMessageEdit(doc.value, stale, withDesc, {
         label: "x",
-        kind: "sync",
+        lineStyle: "solid",
+        headStyle: "arrow",
       }),
     ],
     [
@@ -3619,6 +3669,279 @@ console.log("\nA reorder swaps two blocks and moves nothing else");
       );
     }
   }
+}
+
+/* ----------------------------------------------------------------------- */
+/* 8. THE ARROW GRID — all ten arrows, driven from the grid                 */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * WHY THIS SECTION IS A LOOP AND NOT TEN ASSERTIONS. The arrow vocabulary is
+ * a cartesian product (2 line styles x 5 head styles), and the failure this
+ * section exists to prevent is an ELEVENTH arrow being added to the model with
+ * no token, no Mermaid spelling, or no canvas head — none of which a
+ * hand-listed set of ten can notice. Everything below iterates
+ * `SEQUENCE_ARROWS_GRID`, which is computed from the two axis arrays, so the
+ * coverage grows with the type rather than with somebody's memory.
+ *
+ * The three arrows the grammar shipped with (`->`, `~>`, `..>`) are three
+ * points in that product and are asserted to still spell themselves, from
+ * NON-CANONICAL source text — a canonical fixture cannot tell a serializer
+ * that reformats from one that does not.
+ */
+
+console.log("\nthe arrow grid (ten arrows, both directions)");
+
+const gridDoc = (token) =>
+  `archlab 1.0 sequence\ntitle "Grid"\n\n@sequence\n  a:participant "A"\n  b:participant "B"\n\n  a ${token} b : "m"\n`;
+
+check(
+  "the grid is the cartesian product of the two axes — ten arrows, no hand-listed set",
+  SEQUENCE_ARROWS_GRID.length ===
+    SEQUENCE_LINE_STYLES.length * SEQUENCE_HEAD_STYLES.length &&
+    SEQUENCE_ARROWS_GRID.length === 10,
+  `grid holds ${SEQUENCE_ARROWS_GRID.length}`,
+);
+
+{
+  /* NO TOKEN MAY BE A PREFIX OF AN EARLIER CANDIDATE. `..` is a prefix of
+     `..>`, `..x>` and `..~>`, so a first-match loop over an unordered table
+     reads every dotted arrow as a headless line and the tip glyphs fail as the
+     target id. The parser's order is derived by length; this asserts the
+     property that ordering has to deliver, not the ordering itself, so a
+     future token that breaks it by some other route is still caught. */
+  const order = SEQUENCE_ARROW_MATCH_ORDER.map(([token]) => token);
+  let shadowed = null;
+  for (let i = 0; i < order.length; i += 1) {
+    for (let j = i + 1; j < order.length; j += 1) {
+      if (order[j].startsWith(order[i]))
+        shadowed = `${order[i]} shadows ${order[j]}`;
+    }
+  }
+  check(
+    "no .alab arrow token shadows a later candidate — the match order is prefix-safe",
+    shadowed === null,
+    shadowed ?? "",
+  );
+  check(
+    "every token in the match order is distinct, so no two arrows share a spelling",
+    new Set(order).size === order.length,
+    order.join(" "),
+  );
+}
+
+{
+  /* THE MERMAID TABLE IS THE SAME SHAPE and needs the same property, and this
+     is the assertion the missing bidirectional support would have failed:
+     `<<->>` and `<<-->>` appeared in no table at all. */
+  const order = MERMAID_SEQUENCE_ARROW_MATCH_ORDER.map(([token]) => token);
+  let shadowed = null;
+  for (let i = 0; i < order.length; i += 1) {
+    for (let j = i + 1; j < order.length; j += 1) {
+      if (order[j].startsWith(order[i]))
+        shadowed = `${order[i]} shadows ${order[j]}`;
+    }
+  }
+  check(
+    "no Mermaid arrow shadows a later candidate — longest-first holds for all ten",
+    shadowed === null,
+    shadowed ?? "",
+  );
+  check(
+    "all ten Mermaid arrows are distinct",
+    new Set(order).size === order.length,
+    order.join(" "),
+  );
+}
+
+for (const arrow of SEQUENCE_ARROWS_GRID) {
+  const label = `${arrow.lineStyle}+${arrow.headStyle}`;
+  const token = sequenceArrowToken(arrow);
+  const mermaidArrow = mermaidSequenceArrow(arrow);
+
+  /* ---- .alab, both directions ------------------------------------------ */
+  const text = gridDoc(token);
+  let parsed = null;
+  let failure = null;
+  try {
+    parsed = parseSequenceText(text);
+  } catch (error) {
+    failure = String(error && error.message);
+  }
+  check(
+    `${label}: "${token}" parses to exactly that pair`,
+    parsed !== null &&
+      parsed.items[0].lineStyle === arrow.lineStyle &&
+      parsed.items[0].headStyle === arrow.headStyle,
+    failure ?? JSON.stringify(parsed && parsed.items[0]),
+  );
+  check(
+    `${label}: "${token}" serializes back byte-identically`,
+    parsed !== null && serializeSequenceText(parsed) === text,
+    parsed === null
+      ? (failure ?? "")
+      : firstDiff(serializeSequenceText(parsed), text),
+  );
+
+  /* ---- Mermaid, both directions ---------------------------------------- */
+  const mm = `sequenceDiagram\n    participant a\n    participant b\n    a${mermaidArrow}b: m\n`;
+  let mermaidFile = null;
+  let mermaidFailure = null;
+  try {
+    mermaidFile = parseMermaidSequence(mm);
+  } catch (error) {
+    mermaidFailure = String(error && error.message);
+  }
+  check(
+    `${label}: Mermaid "${mermaidArrow}" imports to exactly that pair`,
+    mermaidFile !== null &&
+      mermaidFile.items[0].lineStyle === arrow.lineStyle &&
+      mermaidFile.items[0].headStyle === arrow.headStyle,
+    mermaidFailure ?? JSON.stringify(mermaidFile && mermaidFile.items[0]),
+  );
+  check(
+    `${label}: exporting to Mermaid writes "${mermaidArrow}" back`,
+    mermaidFile !== null &&
+      serializeMermaidSequence(mermaidFile).includes(`a${mermaidArrow}b:`),
+    mermaidFile === null
+      ? (mermaidFailure ?? "")
+      : serializeMermaidSequence(mermaidFile),
+  );
+
+  /* ---- the canvas draws it -------------------------------------------- */
+  const shape = SEQUENCE_HEAD_SHAPES[arrow.headStyle](
+    { x: 100, y: 40, direction: 1 },
+    { x: 20, y: 40, direction: -1 },
+  );
+  check(
+    `${label}: the canvas has a head shape for it (or deliberately none)`,
+    shape !== undefined &&
+      Array.isArray(shape.filled) &&
+      Array.isArray(shape.stroked) &&
+      (arrow.headStyle === "none"
+        ? shape.filled.length === 0 && shape.stroked.length === 0
+        : shape.filled.length + shape.stroked.length > 0),
+    JSON.stringify(shape),
+  );
+}
+
+{
+  /* EVERY HEAD DRAWS A DISTINCT MARK, derived from the head union rather than
+     from a list of five. Two head styles that emit the same path data are two
+     arrows a reader cannot tell apart, which is exactly the "half-populated
+     option" `purpose.md` refuses — and it is the failure a copy-paste in the
+     shape table produces. `none` is excluded because its emptiness IS its
+     mark. */
+  const drawn = new Map();
+  let collision = null;
+  for (const headStyle of SEQUENCE_HEAD_STYLES) {
+    if (headStyle === "none") continue;
+    const shape = SEQUENCE_HEAD_SHAPES[headStyle](
+      { x: 100, y: 40, direction: 1 },
+      { x: 20, y: 40, direction: -1 },
+    );
+    const key = JSON.stringify([shape.filled, shape.stroked]);
+    if (drawn.has(key))
+      collision = `${drawn.get(key)} and ${headStyle} draw the same mark`;
+    drawn.set(key, headStyle);
+  }
+  check(
+    "every head style but `none` draws a mark no other head style draws",
+    collision === null,
+    collision ?? "",
+  );
+  check(
+    "the head table is total over the head union — a style with no entry would draw nothing",
+    SEQUENCE_HEAD_STYLES.every(
+      (headStyle) => typeof SEQUENCE_HEAD_SHAPES[headStyle] === "function",
+    ),
+    Object.keys(SEQUENCE_HEAD_SHAPES).join(" "),
+  );
+}
+
+{
+  /* AN UNKNOWN TOKEN IS REFUSED BY NAME. Forward tolerance for a grammar is
+     not "half-parse the line": an older parser meeting a token from a newer
+     minor must say what it found, at the column it found it, and quote the
+     menu — which is what lets the reader upgrade rather than guess. `=>` is
+     chosen because it is a plausible future arrow and is not a prefix of any
+     token in the table, so it reaches the refusal rather than a length
+     mismatch. */
+  let message = null;
+  let found = null;
+  try {
+    parseSequenceText(gridDoc("=>"));
+  } catch (error) {
+    message = String(error && error.message);
+    found = error && error.issues && error.issues[0] && error.issues[0].found;
+  }
+  check(
+    "an unknown arrow token is refused, naming the token it found and the whole menu",
+    message !== null &&
+      message.includes("expected an arrow") &&
+      typeof found === "string" &&
+      found.startsWith("=>") &&
+      SEQUENCE_ARROWS_GRID.every((arrow) =>
+        message.includes(sequenceArrowToken(arrow)),
+      ),
+    message === null
+      ? "the parser ACCEPTED an arrow it does not know"
+      : `${message} @ ${JSON.stringify(found)}`,
+  );
+}
+
+{
+  /* THE THREE ARROWS THAT SHIPPED, from NON-CANONICAL text. A file on
+     somebody's disk cannot change because this shipped, and canonical
+     fixtures cannot prove that: a serializer that reformats emits canonical
+     text either way. The source below is deliberately wrong in every way the
+     serializer would fix — a comment, a blank line, two spaces around the
+     colon, an un-normalised indent — so anything but a faithful re-emit of the
+     ARROW shows up. */
+  const LEGACY = `archlab 1.0 sequence
+title "Legacy"
+
+@sequence
+  web:participant "Web"
+  api:participant "API"
+
+  // Authored by hand in 2026; the arrows below must never be rewritten.
+  web -> api : "call"
+  api ~> web : "notify"
+  api ..> web : "return"
+`;
+  const legacy = parseSequenceText(LEGACY);
+  check(
+    "a hand-authored document using the three original tokens round-trips byte-identically",
+    serializeSequenceText(legacy) ===
+      LEGACY.replace(
+        "  // Authored by hand in 2026; the arrows below must never be rewritten.\n",
+        "",
+      ),
+    firstDiff(serializeSequenceText(legacy), LEGACY),
+  );
+  check(
+    "-> is still solid+arrow, ~> still solid+open, ..> still dotted+arrow",
+    legacy.items[0].lineStyle === "solid" &&
+      legacy.items[0].headStyle === "arrow" &&
+      legacy.items[1].lineStyle === "solid" &&
+      legacy.items[1].headStyle === "open" &&
+      legacy.items[2].lineStyle === "dotted" &&
+      legacy.items[2].headStyle === "arrow",
+    JSON.stringify(legacy.items),
+  );
+  check(
+    "and each of the three emits the token it was written as, not a synonym",
+    (() => {
+      const emitted = serializeSequenceText(legacy);
+      return (
+        emitted.includes('web -> api : "call"') &&
+        emitted.includes('api ~> web : "notify"') &&
+        emitted.includes('api ..> web : "return"')
+      );
+    })(),
+    serializeSequenceText(legacy),
+  );
 }
 
 /* ----------------------------------------------------------------------- */

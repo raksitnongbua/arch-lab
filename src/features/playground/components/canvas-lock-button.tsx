@@ -61,9 +61,12 @@
 
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import { LockKeyhole, LockKeyholeOpen } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export interface CanvasLockCopy {
   /** What unlocking lets the reader do, as a verb phrase completing
@@ -87,6 +90,24 @@ export function CanvasLockButton({
   onAnnounce: (message: string) => void;
   copy: CanvasLockCopy;
 }) {
+  /* THE GLYPH ANSWERS A PRESS WITH ONE GESTURE — the closed padlock drops
+     and clicks shut, the open one springs free — and NOTHING moves at rest
+     or on arrival (the animation decision itself is argued beside the
+     keyframes in globals.css). What this pair implements is the "never on
+     first paint" half: the ref seeds from the CURRENT state, so the first
+     render can never differ from it, and `travelled` only becomes true once
+     the prop has actually changed — a reader opening a locked share link
+     sees a still padlock, not one that theatrically slams shut on a lock
+     they never pressed. Watching the PROP rather than the click matters
+     too: the state can move from outside this control (the cookie, a host
+     reset), and the faces must answer the change, not the gesture. */
+  const previousLocked = useRef(locked);
+  const [travelled, setTravelled] = useState(false);
+  useEffect(() => {
+    if (previousLocked.current !== locked) setTravelled(true);
+    previousLocked.current = locked;
+  }, [locked]);
+
   /* ONE name for `aria-label` and `title`, saying what PRESSING DOES. The
      faces report the state (that is what a padlock pair can say); the name
      must therefore be the half a padlock cannot draw — the action — or an
@@ -136,15 +157,47 @@ export function CanvasLockButton({
            a locked canvas withdraws every other editing affordance, so this
            is the one thing left on screen that can say editing exists at
            all, and it has to read as pressable rather than as chrome. */
+        /* THE GRADIENT IS ON THE BUTTON, NEVER ON THE GLYPH'S STROKE, and
+           that is a safety choice rather than a stylistic one. A lucide icon
+           painted with `stroke="url(#id)"` renders NOTHING when the reference
+           fails to resolve — a different component tree, an export, a
+           `<defs>` that moved — and this control floats over the drawing as
+           the only thing left saying the canvas can be edited. An icon that
+           can vanish is the exact bug `check:icon-contrast` exists for. So
+           the glyph keeps one solid token colour and the gradient lives
+           behind it, where the worst failure is a flat button.
+
+           THE TWO FACES READ AS SEALED AND OPEN. Locked pools the primary
+           tint at the top-left and falls to the card — light on a closed
+           thing. Editable is near-flat, because a canvas the reader is
+           working on should not have its chrome competing with the diagram.
+           Every stop is a theme token, so each theme supplies its own and
+           none of this is a hardcoded colour. The cross-fade is
+           `motion-safe:` — reduced motion gets the state, not the travel. */
         className: locked
-          ? "w-8 border-primary/40 bg-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:bg-primary/10"
-          : "w-8 bg-card/80 px-0 shadow-sm backdrop-blur",
+          ? "w-8 border-primary/40 bg-gradient-to-br from-primary/25 via-primary/10 to-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:from-primary/35 hover:via-primary/15 motion-safe:transition-all motion-safe:duration-300"
+          : "w-8 bg-gradient-to-br from-card/90 to-card/60 px-0 shadow-sm backdrop-blur hover:from-muted/60 hover:to-card/70 motion-safe:transition-all motion-safe:duration-300",
       })}
     >
+      {/* Each face animates on MOUNT (a toggle swaps the two glyphs, so the
+          entering one plays its gesture), gated three ways: `travelled` skips
+          the first paint, `motion-safe:` is the reduced-motion opt-out — in
+          CSS, not JS, so it holds on that very first toggle frame — and the
+          keyframes are transform-only, so the token colour below and the
+          button's gradient stay the only paint either face ever has. */}
       {locked ? (
-        <LockKeyhole aria-hidden="true" className="text-primary" />
+        <LockKeyhole
+          aria-hidden="true"
+          className={cn(
+            "text-primary",
+            travelled && "motion-safe:animate-lock-snap",
+          )}
+        />
       ) : (
-        <LockKeyholeOpen aria-hidden="true" />
+        <LockKeyholeOpen
+          aria-hidden="true"
+          className={cn(travelled && "motion-safe:animate-lock-open")}
+        />
       )}
     </button>
   );

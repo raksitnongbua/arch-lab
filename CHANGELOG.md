@@ -7,6 +7,39 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- An element's type can be changed in the details panel on the editable C4
+  canvas. The select offers only the types legal at the diagram's level; a
+  node still at its old type's default size adopts the new type's default,
+  while a hand-sized node and a chosen icon keep exactly what the author set.
+
+- An element's tags can be edited in the same panel. The field owns the plain
+  tags; a tag that carries the element's colour stays with the colour control,
+  and the form says so rather than hiding it.
+
+- A selected boundary can be removed from its card on the editable C4 canvas.
+  Removal takes only the boundary itself: its elements and any nested
+  boundaries stay on the canvas and move one level out, in one undo step —
+  the same behaviour the editor's boundary delete has always had.
+
+- A selected relationship on the editable C4 canvas can now be edited and
+  deleted, not just read. The relationship card grows a pencil — label,
+  technology, direction (one-way, bidirectional, undirected) and line style
+  (solid or dashed) — and a bin; Delete or Backspace with a connector
+  selected removes it too. Edits land as a one-line patch of the source text,
+  a delete takes exactly its own line and leaves both endpoints alone, and
+  Cmd/Ctrl+Z undoes either. A hand-written `style=solid` survives edits that
+  do not touch the style control.
+
+- The element colour control offers any colour, not just the five presets: a
+  colour wheel and hex entry sit beside the swatches. A picked colour is
+  gently adjusted — hue kept, lightness moved the minimum distance — whenever
+  the exact hex would be illegible on any theme, and the form says so beside
+  a preview of what will actually be painted. Picking the same colour on a
+  second element reuses the first one's `tagcolor` line instead of minting a
+  duplicate.
+
 ### Fixed
 
 - Clicking an element on an editable C4 canvas works again. The change that
@@ -24,6 +57,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The Mermaid conversion caveat for C4 models now also says that an
+  undirected or dashed relationship comes back as a plain arrow. The loss is
+  not new — the caveat now names it, because the relationship editor refuses
+  a Mermaid pane on the strength of it.
+
+- The `/live` intro is a couple of lines again. The gestures it used to list in
+  one long sentence now sit in a "What you can do on the canvas" disclosure,
+  built from the capability grid itself — so a new gesture reaches the page by
+  being added where it is built. How `.alab`, JSON and Mermaid relate moved into
+  its own disclosure beside it.
+- The canvas lock wears a gradient that reads as sealed when locked and settles
+  almost flat while the diagram is editable.
+
+- The canvas padlock answers a press with a short physical gesture — locking
+  clicks the closed padlock shut, unlocking springs the open one free — and
+  holds still otherwise, including for reduced-motion readers and on first
+  arrival at a locked diagram.
+
 - The canvas lock wears keyhole padlocks now — open while the diagram is
   editable, closed while it is locked — on both the C4 and the sequence
   canvas, which share the one control.
@@ -40,6 +91,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   shared link opens as.
 
 ### Added
+
+- Relationships can be drawn on the editable C4 canvas. Every element grows a
+  connect handle at its top right: drag it onto another element to relate the
+  two — a preview line says the whole way whether the release relates, warns
+  of an already-related pair, or cancels — or click it for a menu of the
+  diagram's elements plus the level's node types, so "a new element this one
+  talks to" lands as one change: the declaration and the relationship
+  together, undone by a single Cmd/Ctrl + Z. Already-related pairs may be
+  connected again (the new line draws beside the old one); an element never
+  connects to itself, and `^ref` placeholders connect like anything else. The
+  Mermaid pane refuses the gesture: Mermaid C4 holds a single diagram and
+  gives a relationship no id, so the edit would be lost on the round trip.
+
+- A freshly added child diagram can be entered from the canvas immediately:
+  nesting an element now shows its zoom chip while the child is still empty
+  (wearing "empty" instead of a count), on the editable canvas only — a
+  read-only canvas still hides empty children, which are nothing a reader can
+  drill into.
 
 - Several C4 elements can be grouped into a boundary in one action: dragging
   on an editable canvas draws a selection box, and releasing it over two
@@ -117,8 +186,67 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   syntax reference's nodes section now points at it, and at the `customicon`
   header line for icons the registry lacks.
 
+- **Every arrow a sequence diagram can draw — all ten of them.** A sequence
+  message used to be one of three kinds; it is now two independent choices, a
+  line style and a head style, which is the same model Mermaid's arrow table
+  is. The full grid, with the three arrows that already existed spelled exactly
+  as before:
+
+  |            | no head | arrowhead | cross  | open   | both ends |
+  | ---------- | ------- | --------- | ------ | ------ | --------- |
+  | **solid**  | `--`    | `->`      | `x>`   | `~>`   | `<->`     |
+  | **dotted** | `..`    | `..>`     | `..x>` | `..~>` | `<..>`    |
+  - **Grammar.** Seven new tokens. The no-head and both-ends spellings are
+    borrowed verbatim from the C4 grammar, which has written `--`, `..`, `<->`
+    and `<..>` for the same four drawings since 1.0; `x>` is the cross both
+    Mermaid and PlantUML use for a lost message, and `..` is the dotted prefix
+    this grammar already used in `..>`.
+  - **Canvas.** Five head shapes, each drawn distinctly: the filled triangle, its
+    unfilled twin for an open async head, a cross centred on the endpoint for a
+    message that never arrives, a head at each end, and nothing at all for a
+    plain line. They paint through the same theme tokens the line does, so they
+    follow the theme and escalate with the line on focus. A dotted line dashes
+    and a solid one carries the travelling comet — decided by the line style
+    now, so all five dotted arrows dash rather than only the reply.
+  - **Mermaid conversion is lossless in both directions, for all ten.** Import
+    used to collapse eight arrows onto three kinds, discarding both the head
+    shape and solid-versus-dotted; export wrote one canonical arrow per kind.
+    Both now read one table. `<<->>` and `<<-->>` import for the first time —
+    they were handled by neither direction and were not refused by name either,
+    so a diagram using one failed with an error about its source participant.
+  - **Editing.** The details panel has two menus, Line and Head, each acting the
+    moment you pick from it.
+  - **Everywhere else.** `/syntax` and the MCP syntax reference carry the arrow
+    table, generated from the grammar rather than typed out; `validate_sequence`
+    counts messages per axis; the VS Code grammar highlights all ten (`~>` had
+    never been highlit at all); and the bundled Payment capture example uses all
+    five heads where each one says something the others cannot.
+
+  **Not a breaking change for any file you have**, and every existing document
+  round-trips byte-identically — `->`, `~>` and `..>` mean and serialize as
+  exactly what they did. It **is** forward-incompatible in one direction: a
+  document using one of the seven new tokens will be refused, by name and with
+  the full token menu, by any older parser.
+
 ### Fixed
 
+- Changing a sequence message's arrow style now takes effect when you pick it.
+  The From and To menus beside it already did, so the kind menu looked like a
+  control that did nothing; every menu in the details panel acts at once, and
+  Apply belongs to the typing. A lifeline's kind had the same defect.
+
+### Fixed
+
+- An old `/view` link no longer shows "Opening the playground…" on the way to
+  `/live`. The forward now happens while the page is still being parsed instead
+  of waiting for the app to load, so there is nothing to read before the address
+  changes.
+
+### Fixed
+
+- On a phone, a rail folded on a wider screen no longer hides the editor with no
+  way back. The remembered fold now applies only at the widths that render a
+  control to undo it.
 - An old `/view` link carrying a query now keeps it. `/view?e=atlas-shop`
   forwarded to `/live` with the example id dropped, so the reader arrived at the
   seed rather than the diagram they asked for; `?e=` and `?d=` now travel with
@@ -133,6 +261,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   strip still names the state in words ("Read-only" / "Editable"), and on the
   C4 canvas the lock now stays reachable in immersive mode, where the old
   strip was covered.
+
+- **The playground opens on the diagram, not on the editor.** `/live` rendered
+  the source rail expanded on a first visit, so the page showed a monospace
+  editor before it showed anything it draws. The rail now starts folded on a
+  desktop window, where the canvas takes the whole width; on a narrow one —
+  where the panes stack and no fold control is offered — the canvas comes first
+  instead, so a phone no longer opens on a screenful of text with the diagram
+  below the fold. Both are decided before the page renders, so nothing moves or
+  re-fits after it appears.
+- **The rail's control now says what is behind it.** Folded, it reads "Edit the
+  text" with a tinted border instead of showing an unlabelled panel icon, and it
+  keeps that label at every width the rail exists at. The playground tour's
+  source step names it too.
+- A reader who had already chosen to keep the rail open keeps it open — only the
+  never-set case changed meaning, and the fold is still remembered across
+  visits.
 - **The playground moved from `/view` to `/live`, and the header entry now
   reads "Live".** The page had not only viewed for two releases — the C4 and
   sequence canvases answer a drag and rewrite your source text under you — so

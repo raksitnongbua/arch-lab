@@ -76,6 +76,20 @@ description "A reset that survives a lost inbox: the link is single-use and the 
  * (they are ordinary Mermaid) and least likely to discover from the other two
  * examples, which predate them. A construct nobody can see an example of is,
  * for practical purposes, undocumented.
+ *
+ * IT NOW CARRIES ALL FIVE HEAD STYLES for the same reason, and each one earns
+ * its place in the money leg rather than being planted to fill the grid:
+ *
+ *   - `x>` — the webhook that never arrives. A cross is the one head that says
+ *     "this message did not land", which is exactly the failure a capture flow
+ *     has to be able to draw; drawn as an ordinary arrow it would read as a
+ *     step that worked.
+ *   - `..~>` — the processor calling US back. Dotted because it is a return
+ *     leg, open because nothing waits on it.
+ *   - `<->` — the idempotency-key exchange, which is genuinely symmetric: one
+ *     arrow each way would draw two steps where the reader sees one round trip.
+ *   - `--` — the ledger and the API share a schema. A headless line says "these
+ *     two are coupled" without inventing a direction the system does not have.
  */
 const PAYMENT_CAPTURE = `archlab 1.0 sequence
 title "Payment capture — the money leg"
@@ -90,7 +104,9 @@ description "Where an order stops being a promise: authorise, capture, and the t
     psp:participant "Card Processor" @external [Stripe]
     risk:participant "Fraud Scoring" @ai-model
 
+  api -- ledger : "Shares the idempotency key"
   rect tint=#bfdfff
+    api <-> psp : "Exchange idempotency keys" [REST]
     api ->+ psp : "Authorise the card" [REST]
       desc "POST /v1/payment_intents\\nbody { amount, currency, card_token }\\n201 → { intent_id, status: requires_capture }"
     psp ~> risk : "Score the attempt"
@@ -98,8 +114,10 @@ description "Where an order stops being a promise: authorise, capture, and the t
   critical "Capture within 7 days"
     api ->+ psp : "Capture the intent" [REST]
     psp ..>- api : "succeeded"
+    psp ..~> api : "payment_intent.succeeded (webhook)"
     api -> ledger : "Post the entry" [SQL]
   option "processor unreachable"
+    psp x> api : "Webhook never arrives"
     api -> api : "Schedules a retry with backoff"
     note right api : "The authorisation holds; only the capture is late"
   option "already captured"

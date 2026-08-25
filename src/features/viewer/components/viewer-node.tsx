@@ -43,6 +43,10 @@ import {
 } from "@/features/editor/components/nodes/node-shapes";
 
 import { C4_ABSTRACTION } from "../lib/labels";
+import {
+  ViewerConnectGrip,
+  type ViewerConnectActions,
+} from "./viewer-connect-grip";
 
 /**
  * PURE DATA, no callbacks — and that is load-bearing rather than tidy. The
@@ -79,12 +83,22 @@ export interface ViewerNodeData extends Record<string, unknown> {
 
 export type ViewerFlowNode = Node<ViewerNodeData, "c4">;
 
-/** The two navigations a node can start. The canvas owns both. */
+/**
+ * The two navigations a node can start, plus the connect grip's callbacks.
+ * The canvas owns all of it — actions travel through context rather than
+ * node data for the projection-cache reason the interface above states.
+ */
 export interface ViewerNodeActions {
   /** Zoom into this node's child diagram. */
   drillInto: (nodeId: string) => void;
   /** Follow a `^ref` placeholder to the node it names, and select it there. */
   openReference: (nodeId: string) => void;
+  /**
+   * The connect grip's callbacks — present exactly while the canvas is
+   * editable, `null` otherwise, which is what withholds the grip: presence
+   * is the signal, exactly as `edit` itself is on the canvas.
+   */
+  connect: ViewerConnectActions | null;
 }
 
 const ViewerNodeActionsContext = createContext<ViewerNodeActions | null>(null);
@@ -193,7 +207,7 @@ function ViewerNodeInner({
   data,
 }: NodeProps<ViewerFlowNode>): React.JSX.Element {
   const { node, drill, isPlaceholder, refSourceLevel } = data;
-  const { drillInto, openReference } = useViewerNodeActions();
+  const { drillInto, openReference, connect } = useViewerNodeActions();
   const { def } = resolveIcon(node);
   const [iconStyle] = useIconStyle();
   const Icon = def.byStyle[iconStyle];
@@ -393,8 +407,22 @@ function ViewerNodeInner({
         <button
           type="button"
           data-child-badge
-          aria-label={`Zoom into ${node.name} — ${drill.childLevelLabel} view, ${drill.childCount} elements`}
-          title={`Zoom into ${node.name}`}
+          /* `childCount === 0` is reachable only on an EDITABLE canvas (the
+             projection's two-rules note, project-nodes.ts): the author just
+             nested this child and the chip is their way into it. The wording
+             says "empty" rather than counting to zero, because a chip
+             promising "0 elements" reads as a broken count — the affordance
+             is the way in, not the contents. */
+          aria-label={
+            drill.childCount > 0
+              ? `Zoom into ${node.name} — ${drill.childLevelLabel} view, ${drill.childCount} elements`
+              : `Zoom into ${node.name} — ${drill.childLevelLabel} view, empty — add elements there`
+          }
+          title={
+            drill.childCount > 0
+              ? `Zoom into ${node.name}`
+              : `Zoom into ${node.name} and fill it in`
+          }
           onClick={(event) => {
             event.stopPropagation();
             drillInto(node.id);
@@ -407,7 +435,9 @@ function ViewerNodeInner({
           )}
         >
           <ZoomIn aria-hidden="true" className="size-3" />
-          {drill.childCount}
+          {/* The count only when there is one — the icon alone is the honest
+              face for an empty child (see the aria-label note above). */}
+          {drill.childCount > 0 ? drill.childCount : null}
         </button>
       ) : null}
       {refSourceLevel !== null ? (
@@ -416,6 +446,15 @@ function ViewerNodeInner({
           nodeName={node.name}
           onOpen={() => openReference(node.id)}
         />
+      ) : null}
+      {/* The connect grip, top-right — the drill chip owns bottom-right and
+          the ref badge bottom-left. Presence-gated on the context's connect
+          actions, so a read-only or locked canvas renders no grip, never a
+          disabled one. A `^ref` placeholder keeps it: an edge is a local
+          fact of this diagram, the very thing a mirror exists to draw (the
+          grouping's argument, restated at `connectTargets`). */}
+      {connect !== null ? (
+        <ViewerConnectGrip node={node} connect={connect} />
       ) : null}
     </div>
   );

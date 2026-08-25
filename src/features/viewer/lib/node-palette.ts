@@ -35,6 +35,12 @@ import type { C4Diagram, C4Level, C4Node, C4NodeType } from "@/types";
 import { VALID_NODE_TYPES_BY_LEVEL } from "@/types";
 
 import { NODE_TYPE_BY_KEYWORD } from "@/features/archtext";
+// A deep import, but a PURE one — the precedent `canvas-edit.ts` states for
+// its own: `connect-verdict.ts` is the ONE table that decides what a
+// connection means (self = cancel, either-direction pair = duplicate), and a
+// second copy of the pair test here is how the menu and the drag preview
+// would come to disagree about the same target.
+import { verdictFor } from "@/features/editor/lib/connect-verdict";
 import { NODE_TYPE_ROWS } from "@/features/syntax-docs/content/snippets";
 
 /**
@@ -64,6 +70,47 @@ export function creatableNodeTypes(
       type: NODE_TYPE_BY_KEYWORD[row.keyword],
     }),
   );
+}
+
+/**
+ * One offerable connect target: an element of the SAME diagram the connect
+ * grip's menu can name, and whether the pair is already related — the verdict
+ * model's `duplicate` caution, carried so the menu can warn BEFORE the choice
+ * rather than announce after it.
+ */
+export interface ConnectTarget {
+  node: C4Node;
+  /** True when an edge already joins the pair in either direction. */
+  related: boolean;
+}
+
+/**
+ * The elements `sourceNodeId` may be connected to on the canvas — every other
+ * node of the SAME diagram, `^ref` placeholders included (an edge is a local
+ * fact the serializer writes beside the `^` token; drawing the mirrored
+ * system talking to local elements is what placeholders exist for).
+ *
+ * Derived HERE, beside `creatableNodeTypes`, for the same one-derivation
+ * contract: the connect menu and the gesture guard (`connectedNodesEdit`)
+ * both read this diagram's nodes, so the menu can only offer a target the
+ * guard will honour — the source itself is the one exclusion, because
+ * self-connection is the verdict model's `cancel` and the guard's refusal.
+ * Already-related pairs stay OFFERED, flagged: the verdict model calls a
+ * duplicate "a caution, never a refusal" (parallel relationships are a real
+ * feature), and dropping them from the menu would remove it silently.
+ */
+export function connectTargets(
+  diagram: C4Diagram,
+  sourceNodeId: string,
+): readonly ConnectTarget[] {
+  return diagram.nodes
+    .filter((node) => node.id !== sourceNodeId)
+    .map((node) => ({
+      node,
+      related:
+        verdictFor({ sourceNodeId, targetNodeId: node.id, diagram }) ===
+        "duplicate",
+    }));
 }
 
 /**

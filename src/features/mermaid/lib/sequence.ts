@@ -10,8 +10,9 @@
  * failure names a line and column) and the `<br/>` text codec.
  *
  * Supported: `participant`/`actor` (with `as` aliases and implicit
- * declaration on first use), `create`/`destroy` lifecycle lines, `->>` `-->>`
- * `->` `-->` `-x` `--x` `-)` `--)` arrows, self-messages,
+ * declaration on first use), `create`/`destroy` lifecycle lines, ALL TEN
+ * of Mermaid's arrow types (the table is `./sequence-mapping.ts`),
+ * self-messages,
  * `activate`/`deactivate` and the `+`/`-` shorthand, `Note left of` /
  * `Note right of` / `Note over` (one or two participants),
  * `loop`/`alt`/`else`/`opt`/`par`/`and`/`critical`/`option`/`break`/`end`,
@@ -24,7 +25,9 @@
  * refused. Two earlier versions of this file did both and both were wrong:
  * refusing rejected a whole diagram over a background tint, and flattening
  * silently deleted a grouping the author drew on purpose. What survives an
- * import is now a question about the ARROWS, not about the boxes.
+ * import was a question about the ARROWS, and is no longer one either: the
+ * arrow table is now the same two-axis grid in both directions, so the trip
+ * is bijective for every arrow Mermaid can draw.
  *
  * The colours come too: `rect rgb(191, 223, 255)` and `box Aqua Name` are
  * normalised to `#rrggbb` (`@/lib/tint`) and drawn as a wash. A colour this
@@ -46,7 +49,6 @@ import type {
   SequenceItem,
   SequenceLabFile,
   SequenceMessage,
-  SequenceMessageKind,
   SequenceNote,
   SequenceParticipant,
 } from "@/types";
@@ -54,6 +56,10 @@ import type {
 import { normalizeTint } from "@/lib/tint";
 
 import { MERMAID_IMPORT_TIMESTAMP } from "./defaults";
+import {
+  MERMAID_SEQUENCE_ARROW_LIST,
+  MERMAID_SEQUENCE_ARROW_MATCH_ORDER,
+} from "./sequence-mapping";
 import { failAt } from "./errors";
 import { decodeInlineBreaks } from "./text";
 
@@ -66,10 +72,11 @@ import { decodeInlineBreaks } from "./text";
  * say exactly what changed, the way `MERMAID_CAVEAT` does for C4:
  */
 export const MERMAID_SEQUENCE_CAVEAT =
-  "Mermaid sequenceDiagram is an import format: converting it is one-way " +
-  "and lossy — the eight arrowheads collapse to three kinds (->>, -> " +
-  "become sync; -->>, --> become replies; -x, --x, -), --) become async, " +
-  "losing the open, cross and async head shapes), autonumber start/step " +
+  "Mermaid sequenceDiagram imports with every arrow intact: all ten of " +
+  `Mermaid's arrow types (${MERMAID_SEQUENCE_ARROW_LIST}) are the same two ` +
+  "axes a .alab arrow is — solid or dotted, tipped with nothing, an " +
+  "arrowhead, a cross, an open async head or a head at each end — so none " +
+  "of them is approximated. What is still lossy: autonumber start/step " +
   "arguments are dropped, an activate/deactivate line that does not " +
   "bracket the message next to it is dropped, a rect or box colour that is " +
   "not a hex, rgb() or common named colour is dropped, and create/destroy " +
@@ -96,23 +103,14 @@ const DEFAULT_TITLE = "Untitled sequence diagram";
 /* -------------------------------------------------------------------------- */
 
 /**
- * Mermaid arrow → message kind. LONGEST FIRST at any given position — the
- * only ordering that keeps `-->>` from being read as `--` + `>>` or `->`
- * from shadowing `->>`. The three-kind collapse is the documented loss:
- * solid+head is a call, dotted is a return, crosses and open async heads
- * are all fire-and-forget.
+ * The characters an arrow may START with, derived from the shared table. The
+ * message scanner uses it to skip cheaply over the participant name without
+ * hardcoding a guess about the alphabet of the operator set — see
+ * `readMessage` for the bug that guess caused.
  */
-const MERMAID_SEQ_ARROWS: readonly (readonly [string, SequenceMessageKind])[] =
-  [
-    ["-->>", "reply"],
-    ["--x", "async"],
-    ["--)", "async"],
-    ["-->", "reply"],
-    ["->>", "sync"],
-    ["-x", "async"],
-    ["-)", "async"],
-    ["->", "sync"],
-  ];
+const ARROW_FIRST_CHARS: ReadonlySet<string> = new Set(
+  MERMAID_SEQUENCE_ARROW_MATCH_ORDER.map(([token]) => token.charAt(0)),
+);
 
 /**
  * Block keywords that OPEN a fragment. One-to-one with the model's kinds —
@@ -529,12 +527,21 @@ function parseMessage(
 ): SequenceMessage {
   /* Find the EARLIEST arrow occurrence, matching longest-first at that
      position, so a `-` inside a participant name cannot split the line in
-     the wrong place and `-->>` is never read as `-->`. */
+     the wrong place and `-->>` is never read as `-->`.
+
+     THE CANDIDATE-START TEST IS DERIVED, and that is the whole reason the two
+     bidirectional arrows now import. This loop used to skip every character
+     that was not `-`, which is true of eight of Mermaid's ten arrows and
+     false of `<<->>` and `<<-->>`: they were unreachable, so a diagram using
+     one failed as "not a recognised statement" naming the SOURCE
+     PARTICIPANT rather than the arrow. A hand-written set of first characters
+     is the same bug waiting for the eleventh arrow, so the set comes from the
+     table. */
   let arrowAt = -1;
-  let arrow: (typeof MERMAID_SEQ_ARROWS)[number] | undefined;
+  let arrow: (typeof MERMAID_SEQUENCE_ARROW_MATCH_ORDER)[number] | undefined;
   for (let i = 0; i < text.length && arrow === undefined; i += 1) {
-    if (text.charAt(i) !== "-") continue;
-    for (const candidate of MERMAID_SEQ_ARROWS) {
+    if (!ARROW_FIRST_CHARS.has(text.charAt(i))) continue;
+    for (const candidate of MERMAID_SEQUENCE_ARROW_MATCH_ORDER) {
       if (text.startsWith(candidate[0], i)) {
         arrowAt = i;
         arrow = candidate;
@@ -600,7 +607,8 @@ function parseMessage(
     step: "message",
     from,
     to,
-    kind: arrow[1],
+    lineStyle: arrow[1].lineStyle,
+    headStyle: arrow[1].headStyle,
     label: decodeInlineBreaks(rest.slice(colonAt + 1).trim()),
   };
   if (activate) message.activate = true;

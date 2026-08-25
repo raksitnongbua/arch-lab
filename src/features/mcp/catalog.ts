@@ -239,7 +239,9 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "`archlab 1.0 sequence`) and pasted Mermaid `sequenceDiagram` code, " +
       "reporting the line, column and offending source line on failure. On " +
       "success it summarises what the flow contains — participants, messages " +
-      "split by kind, self-messages, how many messages carry a `desc` detail, " +
+      "split by line style (solid/dotted) and by head style (none, arrowhead, " +
+      "cross, open, bidirectional), self-messages, how many messages carry a " +
+      "`desc` detail, " +
       "fragments and their nesting depth, notes, and a FIT report — the " +
       "rendered pixel size plus any labels too wide for their own arrow, " +
       "which is the one defect a parse cannot see and a caller cannot look " +
@@ -254,8 +256,12 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     description:
       "Rewrite sequence text as canonical `.alab` sequence — the exact bytes " +
       "arch-lab would write, so diffs stay minimal. Also the way to turn a " +
-      "pasted Mermaid `sequenceDiagram` into an `.alab` sequence document, " +
-      "which is a one-way lossy import: the response names what was dropped. " +
+      "pasted Mermaid `sequenceDiagram` into an `.alab` sequence document. " +
+      "ALL TEN of Mermaid's arrow types survive that trip in both directions " +
+      "(`->` `->>` `-x` `-)` `<<->>` and their dotted twins) — an arrow is " +
+      "two axes here too, a line style and a head style, so nothing is " +
+      "approximated. The import is still lossy in other ways and the " +
+      "response names what was dropped. " +
       "Worth a call after writing a message `desc`, which is a JSON string and " +
       "therefore the one place hand-escaping goes wrong: this reports the bad " +
       "escape with a line and column, and returns the canonical single-line " +

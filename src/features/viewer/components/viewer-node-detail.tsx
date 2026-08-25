@@ -15,9 +15,9 @@
  *
  * ON AN EDITABLE CANVAS IT ALSO EDITS. `onRevise` present, the header grows
  * the same pencil the sequence dock has, and the descriptive rows swap for a
- * form over the fields the panel already showed — name, technology,
- * description — plus the element's icon (the shared `IconPicker`) and its
- * colour (`NODE_TAG_PALETTE` and the document's own coloured tags).
+ * form over the fields the panel already showed — type, name, technology,
+ * description, tags — plus the element's icon (the shared `IconPicker`) and
+ * its colour (`NODE_TAG_PALETTE` and the document's own coloured tags).
  * This panel is that editor rather than a new dock because it is
  * already the one surface showing every field a node has, so "edit this" can
  * mean "edit all of it" without a second inspector appearing anywhere. The
@@ -60,10 +60,15 @@ import type {
   C4NodeColorChoice,
   C4NodeFrameChoice,
   C4NodeRevision,
+  C4NodeType,
 } from "@/types";
 
 import { IconPicker } from "@/features/editor/components/icon-picker";
 import { resolveIcon } from "@/features/editor/lib/icons/registry";
+import {
+  freeColorTag,
+  presentableTagColor,
+} from "@/features/editor/lib/free-color";
 import {
   colorRoleForNode,
   colorTagsOf,
@@ -78,6 +83,7 @@ import {
   SHAPE_LABEL,
   shapeAddsInformation,
 } from "../lib/labels";
+import { creatableNodeTypes } from "../lib/node-palette";
 
 /** One relationship touching the selected element, in the current diagram. */
 export interface NodeConnection {
@@ -254,6 +260,18 @@ export function EditField({
  * submits the name as typed and leaves the refusal to the one authority. The
  * two optional text fields go through `orAbsent`, exactly as the dock's do.
  *
+ * THE TYPE select offers `creatableNodeTypes(level)` — the Add palette's own
+ * derivation, labelled with the `.alab` keywords — so it cannot offer a type
+ * the parser refuses at this level. What a type change carries (the default
+ * size follows, the icon field does not move) is `revisedNodeEdit`'s verdict,
+ * argued there; the form only reports the chosen keyword.
+ *
+ * THE TAGS field edits the NON-COLOUR tags, whole-value; the colour-carrying
+ * ones are the Colour control's (`C4NodeRevision.tags` carries the division),
+ * and the field SAYS both when it is hiding them and when a typed tag will be
+ * left out for being a colour — silence in either direction would read as a
+ * bug or eat typed text.
+ *
  * THE ICON control reuses the editor inspector's grammar — a button showing
  * the resolved icon that opens the shared `IconPicker`, a pick landing as
  * `iconSource: "explicit"` — and clearing it means THE TYPE DEFAULT, spelled
@@ -261,32 +279,67 @@ export function EditField({
  * absent icon renders the type's own mark, never a blank.
  *
  * THE COLOUR control offers the document's own coloured tags first, then the
- * measured `NODE_TAG_PALETTE` (its header argues why there is no free
- * picker), plus Automatic — the type's role colour. It submits an INTENT
+ * measured `NODE_TAG_PALETTE`, then ANY colour — a wheel plus hex entry —
+ * plus Automatic, the type's role colour. It submits an INTENT
  * (`C4NodeColorChoice`); `revisedNodeEdit` owns turning that into tag and
  * header writes. When the choice would take a coloured tag off the element —
  * the precedence trap `resolveTagColor` documents — the form says which,
  * BEFORE Apply, so the swap is never silent.
+ *
+ * THE FREE COLOUR goes through `presentableTagColor` before it is previewed
+ * or submitted, and the form never holds an unconstructed hex: the wheel is
+ * a native `<input type="color">` (keyboard- and AT-operable, brings the
+ * platform's own spectrum, costs no dependency — a custom wheel would have
+ * to re-earn all three), the text field takes a typed hex and simply does
+ * not commit until it parses, and when the construction had to move the
+ * colour the form SAYS so beside a swatch of what Apply will actually paint.
+ * The tag is `freeColorTag`'s — derived from the hex, so the same colour on
+ * a second element reuses the first element's header line (the module
+ * headers carry both arguments).
  */
 /* Sentinel for the frame select's "mint a new one" row. A value no slug can
    collide with, because `slugify` never emits a leading space. Exported for
    `viewer-multi-detail`, whose boundary select is this one over N elements. */
 export const NEW_FRAME = " new";
 
+/* Sentinel for the colour control's free pick, `NEW_FRAME`'s shape for
+   `NEW_FRAME`'s reason: no tag can start with a space (`slugify` and the
+   bare-tag grammar both refuse one), so this can never shadow a real tag. */
+const FREE_COLOR = " custom";
+
+/* What the free picker holds before the reader touches it when the element
+   has no colour of its own to seed from: mid-lightness, mid-chroma, a hue no
+   role uses — already inside `presentableTagColor`'s band, so the seed is
+   what the swatch shows. An arbitrary but stated choice; nothing is written
+   until the reader picks. */
+const FREE_COLOR_SEED = "#9f6ea3";
+
 function NodeEditForm({
   node,
+  level,
   tagColors,
   frames,
   onSubmit,
   onCancel,
 }: {
   node: C4Node;
+  /** The containing diagram's level — what decides which types the Type
+   *  select may offer (`creatableNodeTypes`, the Add palette's own table). */
+  level: C4Level;
   tagColors: Readonly<Record<string, string>> | undefined;
   frames: readonly C4Frame[];
   onSubmit: (revision: C4NodeRevision) => void;
   onCancel: () => void;
 }): React.JSX.Element {
   const [name, setName] = useState(node.name);
+  /* The type select's options come from the SAME derivation the Add palette
+     reads, so the form cannot offer a keyword the parser refuses at this
+     level — and the labels are the `.alab` keywords themselves, the
+     palette's own argument: the control teaches the word the source pane
+     will change to. The current type is always among them, because the
+     parser accepted the document against the same table. */
+  const [type, setType] = useState(node.type);
+  const typeOptions = creatableNodeTypes(level);
   const [technology, setTechnology] = useState(node.technology ?? "");
   const [description, setDescription] = useState(node.description ?? "");
   const [icon, setIcon] = useState(node.icon);
@@ -296,6 +349,47 @@ function NodeEditForm({
      paints with — `worn[0]` wins, the rest are the tags a new choice removes. */
   const worn = colorTagsOf(node, tagColors);
   const [colorTag, setColorTag] = useState<string | null>(worn[0] ?? null);
+  /* THE TAG FIELD HOLDS THE NON-COLOUR HALF of the element's tags, and only
+     that half — `C4NodeRevision.tags` carries the division: a colour-carrying
+     tag IS the element's colour, owned by the Colour control below, and a
+     field that could edit it would fight that control over precedence. The
+     split is SAID beside the field whenever it hides something, because a tag
+     field that silently refuses to show some of the element's tags reads as
+     a bug rather than a boundary. Comma-separated, since `.alab` quotes a
+     tag containing spaces. */
+  const [tagsText, setTagsText] = useState(() =>
+    (node.tags ?? []).filter((tag) => !worn.includes(tag)).join(", "),
+  );
+  /* The free pick. `freeHex` only ever holds `presentableTagColor` output —
+     the construction is applied on the way IN, so the preview swatch, the
+     warning and the submitted hex cannot disagree about what Apply writes.
+     It seeds from the element's own colour (constructed) so "nudge my
+     current colour" starts from it rather than from a stranger. */
+  const [freeHex, setFreeHex] = useState(() => {
+    const wornHex = worn[0] === undefined ? "" : (tagColors?.[worn[0]] ?? "");
+    return (
+      presentableTagColor(wornHex === "" ? FREE_COLOR_SEED : wornHex)?.hex ??
+      FREE_COLOR_SEED
+    );
+  });
+  /* Whether the LAST pick had to move to stay legible — drives the one
+     sentence that keeps the clamp honest. Seeding never sets it: nothing was
+     picked yet, so there is nothing to disclose. */
+  const [freeAdjusted, setFreeAdjusted] = useState(false);
+  /* The hex field as TYPED — kept apart from `freeHex` so a half-typed value
+     neither commits nor gets rewritten under the reader's cursor. */
+  const [hexText, setHexText] = useState(() => freeHex);
+  /* A wheel pick or a parsed hex both land here: construct, remember whether
+     construction moved it, and make the free colour the pending choice — the
+     reader just used the picker, so the pick IS the intent. */
+  const commitFreeColor = (raw: string, typed?: string) => {
+    const constructed = presentableTagColor(raw);
+    if (constructed === null) return;
+    setFreeHex(constructed.hex);
+    setFreeAdjusted(constructed.adjusted);
+    setHexText(typed ?? constructed.hex);
+    setColorTag(FREE_COLOR);
+  };
   /* The frame select carries THREE states in one control, because the
      grammar's choice is three-way: no boundary, one that exists, or one this
      edit mints. `NEW_FRAME` is a sentinel option rather than a second
@@ -317,13 +411,39 @@ function NodeEditForm({
   ];
   const hexFor = (tag: string): string =>
     colorOptions.find((option) => option.tag === tag)?.color ?? "";
+  /* The pending choice as the TAG it would store — the free pick resolves to
+     its hex-derived tag here, so the replacement warning and the submit
+     cannot disagree with each other about which tag is chosen. */
+  const chosenTag =
+    colorTag === FREE_COLOR ? freeColorTag(freeHex, tagColors) : colorTag;
   /* Which coloured tags the pending choice takes off the element — worth a
      sentence exactly when it is not empty. */
-  const replaced = worn.filter((tag) => tag !== colorTag);
+  const replaced = worn.filter((tag) => tag !== chosenTag);
   const roleVars = ROLE_COLOR_VARS[colorRoleForNode(node)];
 
+  /* The tag field as a LIST, and the part of it the Colour control owns. A
+     typed colour tag is filtered from the submit rather than refused with
+     the whole form (`revisedNodeEdit` would refuse it outright), and the
+     sentence below the field says so BEFORE Apply — dropping typed text
+     silently is the one thing worse than refusing it. A leading `#` is
+     forgiven: the read view prints tags bare, but the format spells them
+     with one. */
+  const typedTags = [
+    ...new Set(
+      tagsText
+        .split(",")
+        .map((tag) => tag.trim().replace(/^#/, ""))
+        .filter((tag) => tag !== ""),
+    ),
+  ];
+  const typedColorTags = typedTags.filter(
+    (tag) => (tagColors?.[tag] ?? "") !== "",
+  );
+
+  /* The PENDING type, so a reader weighing "what does this become" previews
+     the default icon the new keyword brings rather than the old one's. */
   const resolvedIcon = resolveIcon(
-    icon !== undefined ? { type: node.type, icon } : { type: node.type },
+    icon !== undefined ? { type, icon } : { type },
   );
   const IconGlyph = resolvedIcon.def.byStyle[iconStyle];
 
@@ -341,9 +461,15 @@ function NodeEditForm({
       onSubmit={(event) => {
         event.preventDefault();
         const color: C4NodeColorChoice =
-          colorTag === null
+          chosenTag === null
             ? { kind: "role" }
-            : { kind: "tag", tag: colorTag, color: hexFor(colorTag) };
+            : {
+                kind: "tag",
+                tag: chosenTag,
+                // The free pick submits its constructed hex; a swatch pick
+                // submits the hex it was offered as.
+                color: colorTag === FREE_COLOR ? freeHex : hexFor(chosenTag),
+              };
         /* A blank label with "New boundary" chosen is NOT a request to mint
            an unnamed frame — `revisedNodeEdit` refuses one, and refusing
            here too would cost the reader their typing. It falls back to
@@ -360,8 +486,12 @@ function NodeEditForm({
               : { kind: "existing", frameId };
         onSubmit({
           name,
+          type,
           technology: orAbsent(technology),
           description: orAbsent(description),
+          // The non-colour half only, colour tags filtered with a sentence
+          // beside the field — the module refuses what this form filters.
+          tags: typedTags.filter((tag) => (tagColors?.[tag] ?? "") === ""),
           // Spread-guarded so a default icon submits as ABSENT — the same
           // "empty means absent" contract the text fields state.
           ...(icon !== undefined ? { icon } : {}),
@@ -380,6 +510,21 @@ function NodeEditForm({
           onChange={(event) => setName(event.target.value)}
           className={FIELD_CLASSES}
         />
+      </EditField>
+      {/* Mono like the Add strip's buttons: the options ARE the `.alab`
+          keywords, and the two controls should visibly speak one language. */}
+      <EditField term="Type">
+        <select
+          value={type}
+          onChange={(event) => setType(event.target.value as C4NodeType)}
+          className={cn(FIELD_CLASSES, "font-mono")}
+        >
+          {typeOptions.map((option) => (
+            <option key={option.type} value={option.type}>
+              {option.keyword}
+            </option>
+          ))}
+        </select>
       </EditField>
       <EditField term="Technology">
         <input
@@ -400,6 +545,33 @@ function NodeEditForm({
           className={FIELD_CLASSES}
         />
       </EditField>
+      <EditField term="Tags">
+        <input
+          value={tagsText}
+          onChange={(event) => setTagsText(event.target.value)}
+          placeholder="pci, team-payments — comma-separated, blank to remove"
+          className={cn(FIELD_CLASSES, "font-mono")}
+        />
+      </EditField>
+      {/* The division, said where it applies: the element HAS more tags than
+          the field shows exactly when it wears a colour, and a field that
+          hides tags without saying why reads as a bug. */}
+      {worn.length > 0 ? (
+        <p className="-mt-1 text-[10px] leading-snug text-muted-foreground">
+          {worn.map((tag) => `#${tag}`).join(", ")}{" "}
+          {worn.length === 1 ? "is" : "are"} this element&apos;s colour —
+          managed by the Colour control below, not here.
+        </p>
+      ) : null}
+      {typedColorTags.length > 0 ? (
+        <p className="-mt-1 text-[10px] leading-snug text-muted-foreground">
+          {typedColorTags.map((tag) => `#${tag}`).join(", ")}{" "}
+          {typedColorTags.length === 1 ? "is" : "are"} a colour in this
+          document, so Apply leaves{" "}
+          {typedColorTags.length === 1 ? "it" : "them"} out — pick the colour in
+          the Colour control below instead.
+        </p>
+      ) : null}
       {/* A DIV, not an EditField: a <label> wrapping two buttons would hand
           clicks on the term to whichever button is first. */}
       <div>
@@ -443,7 +615,7 @@ function NodeEditForm({
         {pickerOpen ? (
           <IconPicker
             {...(icon !== undefined ? { value: icon } : {})}
-            nodeType={node.type}
+            nodeType={type}
             onChange={(slug) => {
               setIcon(slug);
               // A pick from the panel is the reader's own choice, so it must
@@ -528,6 +700,62 @@ function NodeEditForm({
             />
           ))}
         </div>
+        {/* ANY colour: wheel, hex, and the pressable result. The three stay
+            one row so the preview is never out of sight of the inputs that
+            move it. */}
+        <div className="mt-1 flex items-center gap-1.5">
+          <input
+            type="color"
+            value={freeHex}
+            onChange={(event) => commitFreeColor(event.target.value)}
+            aria-label="Any colour — opens a colour wheel"
+            title="Any colour"
+            className="size-6 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          />
+          <input
+            value={hexText}
+            onChange={(event) => {
+              const typed = event.target.value;
+              setHexText(typed);
+              /* Long form commits as it completes; shorthand waits for blur —
+                 expanding "#a47" under a cursor still heading for "#a47c13"
+                 would hijack the reader's typing. */
+              if (/^#[0-9a-fA-F]{6}$/.test(typed)) {
+                commitFreeColor(typed, typed);
+              }
+            }}
+            onBlur={() => commitFreeColor(hexText)}
+            aria-label="Any colour as a hex code"
+            placeholder="#rrggbb"
+            className={cn(FIELD_CLASSES, "mt-0 w-24 font-mono")}
+          />
+          <button
+            type="button"
+            aria-pressed={colorTag === FREE_COLOR}
+            aria-label={`Use this colour (${freeHex})`}
+            title={freeHex}
+            onClick={() => setColorTag(FREE_COLOR)}
+            className={cn(
+              "size-6 shrink-0 rounded-full border-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              colorTag === FREE_COLOR && "ring-2 ring-ring ring-offset-1",
+            )}
+            /* The same miniature the palette swatches are: the CONSTRUCTED
+               hex as the stroke, the fill rebuilt through `tagFillCss` — the
+               preview shows what Apply writes, by the same mechanism. */
+            style={{ background: tagFillCss(freeHex), borderColor: freeHex }}
+          />
+        </div>
+        {colorTag === FREE_COLOR && freeAdjusted ? (
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Adjusted to stay readable on every theme — the hue is yours, the
+            lightness moved to where the border keeps its contrast.
+          </p>
+        ) : null}
+        {presentableTagColor(hexText) === null ? (
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Not a hex colour yet — #rgb or #rrggbb.
+          </p>
+        ) : null}
         {replaced.length > 0 ? (
           <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
             Applying removes {replaced.map((tag) => `#${tag}`).join(", ")} from
@@ -649,6 +877,7 @@ export function ViewerNodeDetail({
         <NodeEditForm
           key={node.id}
           node={node}
+          level={detail.level}
           tagColors={detail.tagColors}
           frames={detail.frames}
           onSubmit={(revision) => {

@@ -379,8 +379,25 @@ Facts that are easy to get wrong:
 
 - The label is introduced by **` : `** — `a -> b : "Label"`. A message
   without it does not parse.
-- Three arrows: `->` a synchronous call, `~>` asynchronous (fire and
-  forget), `..>` a reply/return.
+- **An arrow is two independent choices**, not one name: a LINE STYLE
+  (solid or dotted) and a HEAD STYLE (none, arrowhead, cross, open, or
+  a head at each end). Ten arrows, one token each, and each converts
+  to and from its Mermaid equivalent losslessly in both directions.
+  The line says which way the step runs — `solid` is a call outward, `dotted` is a return or a callback — and the head says what happens when it arrives:
+
+| Arrow | Line | Head | The head means | Mermaid |
+| --- | --- | --- | --- | --- |
+| `--` | solid | none | no direction claimed | `->` |
+| `->` | solid | arrow | the sender waits on it | `->>` |
+| `x>` | solid | cross | lost — it never arrives | `-x` |
+| `~>` | solid | open | fire and forget | `-)` |
+| `<->` | solid | bidirectional | both ways at once | `<<->>` |
+| `..` | dotted | none | no direction claimed | `-->` |
+| `..>` | dotted | arrow | the sender waits on it | `-->>` |
+| `..x>` | dotted | cross | lost — it never arrives | `--x` |
+| `..~>` | dotted | open | fire and forget | `--)` |
+| `<..>` | dotted | bidirectional | both ways at once | `<<-->>` |
+
 - **Activation rides the arrow**, not a separate line: `->+` opens the
   receiver's bar, `..>-` closes the sender's. So a call-and-return pair
   is `web ->+ api` … `api ..>- web`.
@@ -419,6 +436,10 @@ title "Message kinds"
   api -> api : "Validates the cart"
   api ~> queue : "order.created" [Avro]
   queue ..> api : "ack"
+  api x> queue : "stale.event (dropped)"
+  api <-> queue : "Health handshake"
+  queue ..~> api : "replay.offer"
+  web -- api : "Shares a session cookie"
   note right api : "Retries are idempotent"
   note over api queue : "Both sides are at-least-once"
 ```

@@ -40,7 +40,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relative) => readFileSync(join(root, relative), "utf8");
 
 const css = read("src/features/sequence/styles/sequence-motion.css");
+/* RULES ONLY. Every assertion below that says "no rule does X" must read
+   declarations, not prose: this stylesheet's comments quote the selectors they
+   replaced, and one earlier assertion in this repo passed on a COMMENT rather
+   than on code. */
+const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, "");
 const motion = read("src/features/sequence/lib/motion.ts");
+const heads = read("src/features/sequence/lib/arrow-heads.ts");
 const diagram = read("src/features/sequence/components/sequence-diagram.tsx");
 
 let assertions = 0;
@@ -79,15 +85,23 @@ function dashoffsetRange(name) {
     : { from: Number(from[1]), to: Number(to[1]) };
 }
 
-/* ---- 1. the solid kinds stay solid, and glint --------------------------- */
+/* ---- 1. a solid line stays solid, and glints ---------------------------- */
 
-const solidLine = ruleBody(
-  ':not\\(\\[data-kind="reply"\\]\\)\\s*\\.af-seq-line',
-);
+/* MATCHED ON `[data-line="solid"]`, POSITIVELY. The selector used to be
+   `:not([data-kind="reply"])`, and that shape is the reason this whole rule
+   pair had to be rewritten: a negation over one kind name silently widened to
+   cover four NEW dotted arrows the moment the grammar grew, and a comet riding
+   a dashed line is not something a CSS parser can report. Asserting the
+   POSITIVE selector is what makes the negation unable to come back. */
+const solidLine = ruleBody('\\[data-line="solid"\\]\\s*\\.af-seq-line');
 check("there is a rule for idle solid lines", solidLine !== null);
 check(
-  "an idle SOLID line is given NO dash — a dashed sync arrow reads as async or reply",
+  "an idle SOLID line is given NO dash — a dashed solid arrow reads as dotted",
   solidLine !== null && /stroke-dasharray:\s*none/.test(solidLine),
+);
+check(
+  "no march rule keys on a MESSAGE KIND — the axis is the line style, and a kind-shaped selector cannot see an arrow it has never heard of",
+  !/data-kind=/.test(cssRules),
 );
 check(
   "an idle solid line has no dash ANIMATION either",
@@ -106,12 +120,12 @@ check(
 
 /* ---- 2. the reply march's arithmetic ------------------------------------ */
 
-const replyLine = ruleBody('\\[data-kind="reply"\\]\\s*\\.af-seq-line');
-check("there is a rule for idle reply lines", replyLine !== null);
+const replyLine = ruleBody('\\[data-line="dotted"\\]\\s*\\.af-seq-line');
+check("there is a rule for idle dotted lines", replyLine !== null);
 
 const replyDash = replyLine?.match(/stroke-dasharray:\s*([\d.]+)\s+([\d.]+)/);
 check(
-  "a reply marches the SAME 6/5 it wears at rest, so the toggle never changes what a reply is",
+  "a dotted line marches the SAME 6/5 it wears at rest, so the toggle never changes what a dotted line is",
   replyDash != null && Number(replyDash[1]) === 6 && Number(replyDash[2]) === 5,
 );
 
@@ -329,9 +343,60 @@ check(
 );
 
 check(
-  "the renderer omits the comet on replies and on the focused set",
-  /idle && kind !== "reply" && paintId !== null/.test(diagram),
+  "the renderer omits the comet on dotted lines and on the focused set",
+  /idle && lineStyle === "solid" && paintId !== null/.test(diagram),
 );
+
+/* ---- 3b. every head style is PAINTED, in every theme -------------------- */
+
+/*
+ * THE HALF-POPULATED PALETTE, closed at the source. Five head styles are drawn
+ * (`SEQUENCE_HEAD_SHAPES`), and each contributes FILLED paths, STROKED paths or
+ * neither. The failure this guards is the one `purpose.md` cares most about: a
+ * head that renders with no paint at all is an invisible arrowhead, and a head
+ * painted with a literal colour is an arrowhead that is wrong in five of the
+ * six themes — neither is something a type can catch, and neither throws.
+ *
+ * The two facts are asserted RELATIONALLY rather than by naming colours: the
+ * classes come from the SHAPE TABLE (so a sixth head style is covered the day
+ * it exists), and the paint is required to be a `var(--…)` token, which
+ * `check:themes` separately proves every theme redefines. That is what "every
+ * theme defines it" means here — there is nothing per-head to complete, by
+ * construction.
+ */
+
+const HEAD_PAINT_CLASS = {
+  filled: "af-seq-head-fill",
+  stroked: "af-seq-head-line",
+};
+
+for (const [channel, className] of Object.entries(HEAD_PAINT_CLASS)) {
+  const rule = css.match(new RegExp(`\\.${className}\\s*\\{([^}]*)\\}`, "s"));
+  check(`.${className} has a paint rule`, rule !== null);
+  const property = channel === "filled" ? "fill" : "stroke";
+  check(
+    `.${className} paints its ${property} through a theme token, never a literal colour — a literal is right in one theme and wrong in the other five`,
+    rule !== null &&
+      new RegExp(`${property}:\\s*var\\(--`).test(rule[1]) &&
+      !/(oklch\(|#[0-9a-f]{3})/i.test(rule[1]),
+    rule === null ? "" : rule[1].trim(),
+  );
+}
+
+check(
+  "the renderer emits BOTH paint classes, so a stroked head is never left with a fill rule and no stroke",
+  diagram.includes(`af-seq-head ${HEAD_PAINT_CLASS.filled}`) &&
+    diagram.includes(`af-seq-head ${HEAD_PAINT_CLASS.stroked}`),
+);
+check(
+  "the head shapes carry NO SVG filter — a percentage filter region on a flat path collapses and paints bands across the diagram (`new-diagram-type.md`)",
+  !/filter/.test(heads),
+);
+/* WHETHER EVERY HEAD STYLE ACTUALLY EMITS A MARK is asserted in
+   `check:sequence`, which loads the real shape table through type stripping.
+   This script is deliberately text-only — it reads the stylesheet and the
+   renderer as SOURCE — so a table-derived loop here would need a module
+   resolver this file has no other use for. */
 
 /* ---- 4. reduced motion parks on the MEANINGFUL appearance --------------- */
 
@@ -352,16 +417,16 @@ check(
     /\.af-seq-flow\s*\{[^}]*display:\s*none/s.test(reduced[1]),
 );
 check(
-  "reduced motion puts replies BACK on 6/5 rather than withdrawing the dash — a dashless reply reads as a call, not a return",
+  "reduced motion puts dotted lines BACK on 6/5 rather than withdrawing the dash — a dashless dotted line reads as a call, not a return",
   reduced !== null &&
-    /\[data-kind="reply"\][^{]*\.af-seq-line\s*\{[^}]*stroke-dasharray:\s*6\s+5/s.test(
+    /\[data-line="dotted"\][^{]*\.af-seq-line\s*\{[^}]*stroke-dasharray:\s*6\s+5/s.test(
       reduced[1],
     ),
 );
 check(
-  "reduced motion leaves the solid kinds solid",
+  "reduced motion leaves a solid line solid",
   reduced !== null &&
-    /:not\(\[data-kind="reply"\]\)[^{]*\.af-seq-line\s*\{[^}]*stroke-dasharray:\s*none/s.test(
+    /\[data-line="solid"\][^{]*\.af-seq-line\s*\{[^}]*stroke-dasharray:\s*none/s.test(
       reduced[1],
     ),
 );

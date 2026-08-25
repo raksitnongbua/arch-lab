@@ -82,7 +82,14 @@ export function dependenciesOf(
   participantId: string,
 ): Set<string> {
   const messages = eachMessage(file.items);
-  const calls = messages.filter((m) => m.kind !== "reply" && m.from !== m.to);
+  /* A CALL IS A MESSAGE ON A SOLID LINE. This used to read `kind !== "reply"`,
+     which was the same test while `reply` was the only dotted arrow; with the
+     dotted axis carrying five heads, asking about the LINE keeps the meaning
+     ("a return, not a call") and cannot be surprised by a head it has not
+     heard of. */
+  const calls = messages.filter(
+    (m) => m.lineStyle !== "dotted" && m.from !== m.to,
+  );
 
   /** Everything reachable from `start` over call edges, `start` excluded. */
   const reachable = (start: string): Set<string> => {

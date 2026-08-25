@@ -256,17 +256,24 @@ const { defaultPositions, defaultSizeFor } = await load(
 const { EDIT_GRID } = await load("src/features/viewer/lib/canvas-constants.ts");
 const {
   CANVAS_EDIT_OFFERS,
+  CANVAS_EDITABLE_SUMMARY,
   canvasEditability,
+  connectedNewNodeEdit,
+  connectedNodesEdit,
   createdNodeEdit,
   createdNodeName,
   createdRefEdit,
+  deletedEdgeEdit,
+  deletedFrameEdit,
   deletedNodeEdit,
   groupedNodesEdit,
   movedNodeEdit,
+  nestedNodeEdit,
   ownsChildDiagram,
+  revisedEdgeEdit,
   revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
-const { creatableNodeTypes } = await load(
+const { connectTargets, creatableNodeTypes } = await load(
   "src/features/viewer/lib/node-palette.ts",
 );
 const {
@@ -870,6 +877,13 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
   const control = read(
     "src/features/playground/components/canvas-lock-button.tsx",
   );
+  /* The stripped copy, and the fifth time this file has needed one: the
+     comment BELOW warns against `stroke="url(#…)"` by quoting it, so a raw
+     test for its absence fails against the warning itself. Prose assertions
+     read `control`; structural ones read `controlCode`. */
+  const controlCode = code(
+    "src/features/playground/components/canvas-lock-button.tsx",
+  );
   /* THE FACES ARE THE STATE, so they must be two states. The old locked face
      was a pencil offering "Edit" because a state-reporting face plus a label
      was the shipped bug above; with the owner's icon-only padlocks the label
@@ -905,6 +919,98 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      replacing the guarded blur with an unconditional one did not fail it.
      The same trap has now caught two authors in this file — a regex over a
      source file must match syntax the compiler sees, never words. */
+  /* THE GRADIENT MUST NOT BE ABLE TO SWALLOW THE GLYPH. The owner asked for a
+     lock that reads as locking, and the obvious way to do it — painting the
+     lucide path with `stroke="url(#…)"` — renders an INVISIBLE icon whenever
+     the reference fails to resolve. This control floats over the drawing and
+     is the only thing left on a locked canvas saying editing exists, so it is
+     the worst possible place for an icon that can disappear. The gradient
+     therefore lives on the button surface and the glyph keeps a solid token
+     colour. Pinned in both directions: a gradient present, and no url() paint
+     on the icon. */
+  check(
+    "the lock's gradient is on the button, never painted onto the glyph",
+    /bg-gradient-to-/.test(controlCode) && !/stroke="url\(#/.test(controlCode),
+    "the padlock is painted with a gradient reference — if it ever fails to " +
+      "resolve the icon renders nothing, on the one control a locked canvas " +
+      "still needs",
+  );
+  /* Every stop a theme token, for `check:themes`' reason: a hardcoded colour
+     is a colour exactly one theme was designed for. */
+  check(
+    "and every stop of it is a theme token",
+    !/(from|via|to)-\[#/.test(controlCode) &&
+      !/#[0-9a-fA-F]{3,8}\b/.test(controlCode),
+    "the lock's gradient hardcodes a colour, so it is tuned for one theme " +
+      "and merely tolerated by the rest",
+  );
+  /* THE LOCK ANIMATES ITS STATE CHANGE, AND ONLY THAT. The owner asked for
+     the padlock to be animated; what shipped is a one-shot settle per toggle
+     and a still resting state (the trade is argued beside the keyframes in
+     globals.css — a loop on the one control floating over a presented
+     diagram spends the reader's eye on chrome). Three properties keep the
+     motion inside that decision, each pinned below: it can never run
+     forever, it can never fire for a reader who asked for reduced motion or
+     one who merely arrived at the page, and it can never repaint the glyph —
+     the token-colour and gradient assertions above stay the whole story of
+     what the faces look like. */
+  const lockAnimCss = read("src/app/globals.css");
+  const lockAnimTokens = [
+    ...lockAnimCss.matchAll(/--animate-lock-(snap|open):([^;]+);/g),
+  ];
+  const lockKeyframes = [
+    ...lockAnimCss.matchAll(
+      /@keyframes af-lock-(?:snap|open) \{([\s\S]*?)\n\}/g,
+    ),
+  ];
+  const lockKeyframeProps = lockKeyframes.flatMap((m) =>
+    [...m[1].matchAll(/([a-z-]+):/g)].map((p) => p[1]),
+  );
+  check(
+    "the lock's two gestures are one-shot — declared without `infinite`",
+    lockAnimTokens.length === 2 &&
+      lockAnimTokens.every(
+        ([declaration]) => !declaration.includes("infinite"),
+      ),
+    "a state-change settle became a loop — continuous motion on the one " +
+      "control floating over a diagram someone is presenting",
+  );
+  check(
+    "and they move nothing but transform — the faces' paint stays the tokens'",
+    lockKeyframes.length === 2 &&
+      lockKeyframeProps.length > 0 &&
+      lockKeyframeProps.every((prop) => prop === "transform"),
+    `keyframes animate: ${[...new Set(lockKeyframeProps)].join(", ") || "none found"} — ` +
+      "a colour or stroke in the gesture would repaint the glyph the token " +
+      "assertions above vouch for",
+  );
+  /* `motion-safe:` on BOTH faces, and no unguarded spelling anywhere. This is
+     the reduced-motion STOP the canvas promises elsewhere — the variant is a
+     media query, so it already holds on the first toggle frame, before any
+     JS-written preference could. Structural (stripped source): the comment
+     beside the icons explains the class it applies. */
+  check(
+    "the lock's motion is behind motion-safe on both faces — reduced motion stops it",
+    /motion-safe:animate-lock-snap/.test(controlCode) &&
+      /motion-safe:animate-lock-open/.test(controlCode) &&
+      !/(?<!motion-safe:)animate-lock-/.test(controlCode),
+    "a lock gesture escaped the motion-safe gate — reduced motion would " +
+      "still see the padlock travel",
+  );
+  /* NEVER ON FIRST PAINT. The ref is seeded from the CURRENT prop — the one
+     shape that makes the first render unable to differ from itself — and the
+     class is gated on `travelled`, which only a real change sets. A reader
+     opening a locked share link must meet a still padlock, not one slamming
+     shut on a press nobody made. */
+  check(
+    "the gesture fires only on a state CHANGE, never on arrival",
+    /useRef\(locked\)/.test(controlCode) &&
+      /previousLocked\.current !== locked/.test(controlCode) &&
+      /travelled && "motion-safe:animate-lock-snap"/.test(controlCode) &&
+      /travelled && "motion-safe:animate-lock-open"/.test(controlCode),
+    "the first paint can animate — opening a locked diagram would play a " +
+      "lock gesture the reader never pressed for",
+  );
   check(
     "a pointer press hands focus back, so a stray keypress cannot re-toggle the lock",
     /if \(event\.detail > 0\)\s*event\.currentTarget\.blur\(\);/.test(control),
@@ -1022,11 +1128,12 @@ console.log("\nThe capability grid answers every notation for every ability");
   const abilities = Object.keys(CANVAS_EDIT_OFFERS);
   const seededKinds = Object.keys(VIEW_SEED_TEXT).sort();
   check(
-    "the grid names the three abilities and nothing else",
-    abilities.length === 3 &&
+    "the grid names the four abilities and nothing else",
+    abilities.length === 4 &&
       abilities.includes("move") &&
       abilities.includes("revise") &&
-      abilities.includes("create"),
+      abilities.includes("create") &&
+      abilities.includes("connect"),
     `abilities: ${abilities.join(", ")}`,
   );
 
@@ -1799,6 +1906,115 @@ console.log("\nA canvas edit re-projects only the node it changed");
     /useState\(createNodeProjectionCache\)/.test(canvasSource),
     "the cache is no longer created once per canvas — a cache built during " +
       "render remembers nothing and the projection is a plain map again",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 11a. A just-nested EMPTY child shows its zoom chip — on the editable      */
+/*      canvas only                                                          */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA fresh empty child offers its way in, without lying about it");
+
+{
+  /* THE BUG THIS PINS (reported): nest a node from the details panel and the
+     canvas showed no zoom chip, because the chip was gated on the child's
+     COUNT — a rule written for a READ-ONLY canvas, where an empty child is
+     nothing a reader can do anything with. The author who just minted the
+     child had nowhere on the canvas to enter the diagram they made. Both
+     rules are asserted here, per canvas state, so neither can quietly take
+     the other's place. */
+  const doc = c4Document(VIEW_SEED_TEXT.c4);
+  const rootId = doc.synced.model.rootDiagramId;
+  const root = doc.synced.model.diagrams[rootId];
+  const leaf = root.nodes.find(
+    (node) =>
+      !node.childDiagramId &&
+      node.childRef === undefined &&
+      node.externalRef === undefined,
+  );
+  check(
+    "the seed has a childless node to nest",
+    leaf !== undefined,
+    "no nestable node in the seed — the empty-child rule is untested",
+  );
+  const nested = nestedNodeEdit(doc, sourceTextFor(doc), rootId, leaf.id);
+  check(
+    "nesting the node yields the empty child this section is about",
+    nested !== null &&
+      nested.doc.synced.model.diagrams[
+        nested.doc.synced.model.diagrams[rootId].nodes.find(
+          (node) => node.id === leaf.id,
+        ).childDiagramId
+      ]?.nodes.length === 0,
+    "the nest gesture did not produce an empty child diagram",
+  );
+  const projectAs = (editable) =>
+    projectViewerNodes({
+      model: nested.doc.synced.model,
+      diagram: nested.doc.synced.model.diagrams[rootId],
+      editable,
+      cache: createNodeProjectionCache(),
+    }).find((node) => node.id === leaf.id);
+  const editableNode = projectAs(true);
+  check(
+    "the EDITABLE canvas offers the empty child's chip the moment it exists",
+    editableNode?.data.drill !== null &&
+      editableNode?.data.drill.childCount === 0,
+    `drill: ${JSON.stringify(editableNode?.data.drill)} — the author who ` +
+      "just nested this child has no way into it from the canvas",
+  );
+  check(
+    "the READ-ONLY canvas still refuses it — an empty child is not a reader's drill-down",
+    projectAs(false)?.data.drill === null,
+    "a read-only canvas grew a chip into an empty diagram — the rule the " +
+      "count gate existed for",
+  );
+  /* A DANGLING pointer offers nothing in either state: `drillInto` would
+     no-op, and a chip that does nothing is worse than none. Built by
+     deleting the child block from the nested text by hand. */
+  const childId = nested.doc.synced.model.diagrams[rootId].nodes.find(
+    (node) => node.id === leaf.id,
+  ).childDiagramId;
+  const dangling = c4Document(
+    nested.text
+      .split("\n")
+      .filter((line) => !line.startsWith(`@`) || !line.includes(` ${childId} `))
+      .join("\n"),
+  );
+  check(
+    "the dangling fixture really lost the child diagram",
+    dangling.synced.model.diagrams[childId] === undefined,
+    "the child block survived the filter — the assertion below is vacuous",
+  );
+  const danglingNode = projectViewerNodes({
+    model: dangling.synced.model,
+    diagram: dangling.synced.model.diagrams[rootId],
+    editable: true,
+    cache: createNodeProjectionCache(),
+  }).find((node) => node.id === leaf.id);
+  check(
+    "a dangling child pointer offers no chip even while editable",
+    danglingNode?.data.drill === null,
+    `drill: ${JSON.stringify(danglingNode?.data.drill)} — the chip would ` +
+      "navigate to a diagram the model does not hold",
+  );
+  /* THE WORDING IS THE OTHER HALF: a chip that appears for an empty child
+     must not COUNT to zero — "0 elements" reads as a broken count, and the
+     affordance is the way in, not the contents. Source assertions (the
+     section-9 tactic — the chip renders in a `.tsx`). */
+  const nodeSource = code("src/features/viewer/components/viewer-node.tsx");
+  check(
+    "the chip's face shows the count only when there is one",
+    /\{drill\.childCount > 0 \? drill\.childCount : null\}/.test(nodeSource),
+    "the chip face counts to zero — an affordance that lies about contents",
+  );
+  check(
+    "the chip's accessible name says 'empty' instead of counting to zero",
+    /empty — add elements there/.test(
+      read("src/features/viewer/components/viewer-node.tsx"),
+    ),
+    "the empty child's chip promises contents it does not have",
   );
 }
 
@@ -2643,6 +2859,35 @@ console.log("\nA revise rewrites one node's block and nothing else");
       explicitFile.diagrams.find((d) => d.id === "backend").title === "Web App",
     "an explicit title was renamed along with the owner node",
   );
+  /* THE SLOT REACHES EACH CANVAS. Section 8's founding bug was a control
+     correct in the module and unreachable on the screen; a slot prop is a new
+     way to reproduce it (built, passed, never mounted), so each hop is
+     pinned: the shell forwards, and each canvas renders — the C4 one inside
+     its top-right panel, where the details card already lives, the sequence
+     one over its diagram pane. */
+  const shellSrc = read("src/features/viewer/components/viewer-shell.tsx");
+  const canvasSrc = read("src/features/viewer/components/viewer-canvas.tsx");
+  const sequenceSrc = read(
+    "src/features/sequence/components/sequence-viewer.tsx",
+  );
+  check(
+    "the shell forwards the lock slot to the C4 canvas",
+    /lockSlot=\{lockSlot\}/.test(shellSrc),
+    "the playground hands the shell a lock the canvas never receives",
+  );
+  check(
+    "the C4 canvas mounts the lock slot in its top-right panel",
+    /position="top-right"[\s\S]{0,700}\{lockSlot\}/.test(canvasSrc),
+    "the C4 lock is built but never reaches the canvas corner — section 8's " +
+      "bug in slot form",
+  );
+  check(
+    "the sequence canvas mounts the lock slot over its diagram pane",
+    /\{lockSlot !== undefined \?/.test(sequenceSrc) &&
+      /\{lockSlot\}/.test(sequenceSrc),
+    "the sequence lock is built but never reaches the canvas — the branch " +
+      "this section exists for, again",
+  );
 
   /* --- round trip, and the named fallback ---------------------------------- */
 
@@ -2965,9 +3210,11 @@ console.log("\nA revise carries the icon and the colour, both as patches");
      border, and the on-screen fill is rebuilt as
      oklch(from <hex> tag-fill-l min(c, tag-fill-c) h) — so both are computed
      here exactly as the browser computes them, per theme, and a swatch that
-     would vanish on any theme cannot ship. A free colour picker is refused in
-     the palette's header for exactly this reason: an arbitrary hex is the one
-     thing this loop cannot vouch for. */
+     would vanish on any theme cannot ship. An arbitrary hex is the one thing
+     this loop cannot vouch for — which is why the free picker beside these
+     swatches never writes one: everything it can emit goes through
+     `presentableTagColor`, and the section after this loop audits that
+     function's whole OUTPUT SPACE against the same two bars. */
   const { parseHex, oklchToLinear, contrast, parseOklch } = await import(
     pathToFileURL(path.join(ROOT, "scripts/lib/oklch.mjs")).href
   );
@@ -3028,6 +3275,248 @@ console.log("\nA revise carries the icon and the colour, both as patches");
       worst.map((w) => `${w.tag} ${w.name.toFixed(2)}:1`).join(", "),
     );
   }
+
+  /* --- the free picker: its whole output space measured on every theme ------ */
+
+  /* The palette loop above vouches for five hexes; the free picker can emit
+     ANY hex, so what gets audited is the emitting FUNCTION. Everything the
+     form can write goes through `presentableTagColor`, so driving a grid over
+     its input space — every hue, lightness from near-black to near-white,
+     chroma past its own cap — and holding every OUTPUT to the palette's two
+     bars proves the picker cannot ship an invisible border, which is the
+     documented reason a free picker used to be refused. */
+  const {
+    presentableTagColor,
+    freeColorTag,
+    hexToOklch,
+    oklchToLinearRgb,
+    TAG_FILL_BY_THEME,
+  } = await load("src/features/editor/lib/free-color.ts");
+
+  /* The module's theme table is a deliberate twin of globals.css (CSS cannot
+     be imported); this is the pin its header promises. A drifted pair would
+     make the clamp solve against fills no theme paints — legible by its own
+     arithmetic, invisible on the screen. */
+  check(
+    "the clamp's theme fill table matches globals.css, theme by theme",
+    themes.every((theme) => {
+      const tokens = tokensOf(css, theme) ?? baseline;
+      const entry = TAG_FILL_BY_THEME[theme];
+      return (
+        entry !== undefined &&
+        entry.l ===
+          Number.parseFloat(resolveToken("--tag-fill-l", tokens, baseline)) &&
+        entry.c ===
+          Number.parseFloat(resolveToken("--tag-fill-c", tokens, baseline))
+      );
+    }),
+    themes
+      .map((theme) => `${theme}: ${JSON.stringify(TAG_FILL_BY_THEME[theme])}`)
+      .join("; "),
+  );
+  /* And its colour maths is a twin of scripts/lib/oklch.mjs (app code cannot
+     import the check suite) — pinned on a colour grid, both directions, so
+     the sweep below cannot pass because the module measures with different
+     arithmetic than this file audits with. */
+  const mathsAgree = [];
+  for (let h = 0; h < 360; h += 45) {
+    for (const [L, C] of [
+      [0.3, 0.05],
+      [0.61, 0.14],
+      [0.85, 0.03],
+    ]) {
+      const a = oklchToLinearRgb(L, C, h);
+      const b = oklchToLinear(L, C, h);
+      mathsAgree.push(a.every((v, i) => Math.abs(v - b[i]) < 1e-9));
+      const hex = `#${b
+        .map((c) =>
+          Math.round(
+            (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055) * 255,
+          )
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("")}`;
+      const ours = hexToOklch(hex);
+      const theirs = parseHex(hex);
+      mathsAgree.push(
+        ours !== null &&
+          theirs !== null &&
+          ours.oklch.every((v, i) => Math.abs(v - theirs.oklch[i]) < 1e-9),
+      );
+    }
+  }
+  check(
+    "the module's oklch maths agrees with the check suite's, both directions",
+    mathsAgree.every(Boolean),
+    "the clamp and this audit measure colour differently — one of them is wrong",
+  );
+
+  /* The measuring half of the sweep, per theme, with THIS FILE's machinery. */
+  const worstOn = (hex) => {
+    const parsed = parseHex(hex);
+    if (parsed === null) return null;
+    let stroke = Number.POSITIVE_INFINITY;
+    let name = Number.POSITIVE_INFINITY;
+    for (const theme of themes) {
+      const tokens = tokensOf(css, theme) ?? baseline;
+      const fillL = Number.parseFloat(
+        resolveToken("--tag-fill-l", tokens, baseline),
+      );
+      const fillC = Number.parseFloat(
+        resolveToken("--tag-fill-c", tokens, baseline),
+      );
+      const nameInk = parseOklch(
+        resolveToken("--node-foreground", tokens, baseline),
+      );
+      const [, C, h] = parsed.oklch;
+      const fill = oklchToLinear(fillL, Math.min(C, fillC), h);
+      stroke = Math.min(stroke, contrast(parsed.rgb, fill));
+      name = Math.min(name, contrast(nameInk.rgb, fill));
+    }
+    return { stroke, name };
+  };
+
+  const gammaEncode = (c) =>
+    c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+  const sweep = {
+    inputs: 0,
+    refused: 0,
+    worstStroke: Number.POSITIVE_INFINITY,
+    worstName: Number.POSITIVE_INFINITY,
+    notIdempotent: 0,
+    dishonestVerbatim: 0,
+  };
+  for (let h = 0; h < 360; h += 5) {
+    for (const L of [0.03, 0.2, 0.45, 0.61, 0.75, 0.97]) {
+      for (const C of [0, 0.05, 0.11, 0.17, 0.3]) {
+        const input = `#${oklchToLinear(L, C, h)
+          .map((c) =>
+            Math.round(gammaEncode(c) * 255)
+              .toString(16)
+              .padStart(2, "0"),
+          )
+          .join("")}`;
+        sweep.inputs += 1;
+        const out = presentableTagColor(input);
+        if (out === null) {
+          sweep.refused += 1;
+          continue;
+        }
+        const measured = worstOn(out.hex);
+        sweep.worstStroke = Math.min(sweep.worstStroke, measured.stroke);
+        sweep.worstName = Math.min(sweep.worstName, measured.name);
+        /* `adjusted: false` is the form's promise that the author got their
+           exact colour — a construction that changed the hex while claiming
+           it did not would hide the one disclosure that keeps it honest. */
+        if (out.adjusted === false && out.hex !== input) {
+          sweep.dishonestVerbatim += 1;
+        }
+        /* Idempotence is what keeps a reopened colour still: a clamp that
+           moves its own output would walk a node's colour a step per edit. */
+        const again = presentableTagColor(out.hex);
+        if (again === null || again.hex !== out.hex || again.adjusted) {
+          sweep.notIdempotent += 1;
+        }
+      }
+    }
+  }
+  check(
+    "every free-pick construction holds >=3:1 stroke and >=7:1 title on every theme",
+    sweep.refused === 0 && sweep.worstStroke >= 3 && sweep.worstName >= 7,
+    `over ${sweep.inputs} inputs: ${sweep.refused} refused, worst stroke ${sweep.worstStroke.toFixed(3)}:1, worst title ${sweep.worstName.toFixed(2)}:1`,
+  );
+  check(
+    "the construction is idempotent and verbatim only when it truly changed nothing",
+    sweep.notIdempotent === 0 && sweep.dishonestVerbatim === 0,
+    `${sweep.notIdempotent} outputs moved when fed back in; ${sweep.dishonestVerbatim} claimed verbatim while changed`,
+  );
+  /* An already-safe hex comes back BYTE-IDENTICAL — the five palette colours
+     are the measured proof such hexes exist. A clamp that touched them would
+     mean the free picker and the swatches disagree about the same colour. */
+  check(
+    "a hex that already passes ships verbatim — the palette colours untouched",
+    NODE_TAG_PALETTE.every(({ color }) => {
+      const out = presentableTagColor(color);
+      return out !== null && out.hex === color && out.adjusted === false;
+    }),
+    "the clamp rewrote a colour the palette audit already vouches for",
+  );
+  check(
+    "non-colours are refused and shorthand is expanded to the long form",
+    presentableTagColor("red") === null &&
+      presentableTagColor("#12") === null &&
+      presentableTagColor("#gggggg") === null &&
+      /^#[0-9a-f]{6}$/.test(presentableTagColor("#ABC")?.hex ?? ""),
+    "an input the serializer cannot carry got past the picker",
+  );
+
+  /* --- the free tag: derived from the hex, so a repeat is a reuse ------------ */
+
+  check(
+    "the free tag is deterministic, grammar-bare, and never the external residue",
+    freeColorTag("#a47c13", undefined) === "c-a47c13" &&
+      /^[A-Za-z0-9_][A-Za-z0-9_.:-]*$/.test(
+        freeColorTag("#a47c13", undefined),
+      ) &&
+      freeColorTag("#a47c13", undefined) !== EXTERNAL_TAG,
+    `derived: ${freeColorTag("#a47c13", undefined)}`,
+  );
+  check(
+    "a colliding author tag is stepped around; a matching one is reused",
+    freeColorTag("#a47c13", { "c-a47c13": "#000000" }) !== "c-a47c13" &&
+      freeColorTag("#a47c13", { "c-a47c13": "#a47c13" }) === "c-a47c13",
+    "the free pick would repaint (or needlessly twin) an author's own tag",
+  );
+  /* End to end, on the same non-canonical fixture: the FIRST free pick mints
+     one header line; the SAME pick on a second element joins it. This is the
+     answer to "a free picker fattens the header with junk tags": ten elements
+     in one custom colour cost one line, exactly as a palette colour does. */
+  const freePick = presentableTagColor("#00ff88");
+  const freeTag = freeColorTag(freePick.hex, docColors);
+  const firstPick = revisedNodeEdit(doc, authored, "ctx", "api", {
+    name: "API",
+    color: { kind: "tag", tag: freeTag, color: freePick.hex },
+  });
+  check(
+    "the first free pick is a patch that mints exactly one header line",
+    firstPick !== null &&
+      firstPick.path === "patch" &&
+      firstPick.text.split("\n").filter((l) => l.startsWith("tagcolor "))
+        .length ===
+        authored.split("\n").filter((l) => l.startsWith("tagcolor ")).length +
+          1 &&
+      firstPick.text.includes(`tagcolor ${freeTag} "${freePick.hex}"`),
+    `path: ${firstPick === null ? "refused" : firstPick.path}`,
+  );
+  const secondPick =
+    firstPick === null
+      ? null
+      : revisedNodeEdit(firstPick.doc, firstPick.text, "ctx", "web", {
+          name: "Web App",
+          technology: "Next.js",
+          color: {
+            kind: "tag",
+            tag: freeColorTag(
+              freePick.hex,
+              firstPick.doc.synced.file.metadata.tagColors,
+            ),
+            color: freePick.hex,
+          },
+        });
+  check(
+    "the same colour on a second element reuses the line — no twin is minted",
+    secondPick !== null &&
+      secondPick.path === "patch" &&
+      secondPick.text.split("\n").filter((l) => l.startsWith("tagcolor "))
+        .length ===
+        firstPick.text.split("\n").filter((l) => l.startsWith("tagcolor "))
+          .length &&
+      secondPick.text
+        .split("\n")
+        .some((l) => l.includes("web:system") && l.includes(`#${freeTag}`)),
+    `path: ${secondPick === null ? "refused" : secondPick.path}`,
+  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -3190,6 +3679,368 @@ console.log(
     "the form warns which coloured tag a new choice replaces, before Apply",
     /replaced\.length > 0/.test(panel) && /Applying removes/.test(panel),
     "a colour swap that silently takes tags off the element",
+  );
+  /* THE FREE PICK NEVER BYPASSES THE CONSTRUCTION. The comments in the form
+     name the construction functions while arguing for them, so these are
+     structural reads of the stripped source: the wheel is the native colour
+     input, every path into `freeHex` runs through `presentableTagColor`, the
+     submitted tag is `freeColorTag`'s, and the preview swatch paints through
+     the same `tagFillCss` the canvas uses. A form that held a raw hex
+     anywhere would pass the module sweep above and still ship one — the
+     construction only protects hexes that actually go through it. */
+  const panelCode = code(
+    "src/features/viewer/components/viewer-node-detail.tsx",
+  );
+  check(
+    "the free pick is a native colour input plus a validated hex field",
+    /type="color"/.test(panelCode) && /#\[0-9a-fA-F\]\{6\}/.test(panelCode),
+    "the wheel or the hex validation is gone — a free pick with no way in, " +
+      "or one that commits half-typed text",
+  );
+  check(
+    "every committed free colour is presentableTagColor's, and its tag is derived",
+    /setFreeHex\(constructed\.hex\)/.test(panelCode) &&
+      !/setFreeHex\((?!constructed\.hex)/.test(panelCode) &&
+      /freeColorTag\(freeHex, tagColors\)/.test(panelCode),
+    "a raw hex can reach the submit — the clamp only protects colours that " +
+      "pass through it",
+  );
+  check(
+    "the free preview is the constructed hex through tagFillCss",
+    /tagFillCss\(freeHex\)/.test(panelCode),
+    "the preview swatch shows a colour the node will never be",
+  );
+  /* The disclosure is PROSE, so it is read from the raw source: when the
+     construction moved the colour, the form says so — a silent clamp is an
+     author wondering why their brand hex shifted. */
+  check(
+    "the form discloses an adjusted colour the moment it happens",
+    /freeAdjusted \?/.test(panelCode) &&
+      /Adjusted to stay readable on every theme/.test(panel),
+    "the clamp moved a colour and nothing said so",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 14c. The same revise carries the TYPE and the PLAIN TAGS                 */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA revise can change the type, and edits only the plain tags");
+{
+  /* Non-canonical for section 13's reason, with the shapes only THESE two
+     claims can get wrong: a coloured tag beside a plain one (the division the
+     tags claim must not cross), an explicit (`!`) and an inferred (`~`) icon
+     (the two states a type change must not move), an authored size beside a
+     default one (the two size verdicts), and a `^ref` mirror whose keyword
+     differs from its source's (the proof a mirror's type is its OWN and must
+     not be chased). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Type and tags probe"`,
+    `tagcolor amber "#a47c13"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // Who uses this thing.`,
+    `  cust:person "Customer" #amber #pci`,
+    `    desc "The paying kind."`,
+    `  web:system "Web App" @nextjs! (400,240 200x120) >backend`,
+    `  pay:system "Payments" @stripe~`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go]`,
+    `  mirror:external ^ctx/pay`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the type: level-legal by the parser's own table --------------------- */
+
+  /* Swept over EVERY type the format has, with the verdict DERIVED from
+     `VALID_NODE_TYPES_BY_LEVEL` rather than a hand-picked "container refuses"
+     — a hand-picked case cannot notice the type it never heard of
+     (`codebase.md` habit 4). The description changes alongside, so a LEGAL
+     type always yields an edit and `null` can only mean the refusal under
+     test, never the no-op. The failure this prevents: a type keyword written
+     into a level whose parser refuses it comes back from the re-parse as an
+     error the reader cannot act on. */
+  const { VALID_NODE_TYPES_BY_LEVEL: LEVEL_TABLE } =
+    await load("src/types/c4.ts");
+  const everyType = [...new Set(Object.values(LEVEL_TABLE).flat())];
+  check(
+    "a type change stays level-legal — accepted and refused exactly as the parser's table says",
+    everyType.length === 8 &&
+      everyType.every((type) => {
+        const legal = LEVEL_TABLE.context.includes(type);
+        const edit = (() => {
+          try {
+            return revisedNodeEdit(doc, authored, "ctx", "cust", {
+              name: "Customer",
+              description: "Renamed to force a change.",
+              type,
+            });
+          } catch {
+            return "threw";
+          }
+        })();
+        return legal ? edit !== null && edit !== "threw" : edit === null;
+      }),
+    "a type the parser refuses at @context got through, or a legal one was refused",
+  );
+  /* STRUCTURAL COMPANION, because the sweep above cannot catch the gate's
+     removal: `adopt` re-parses every edit, so an illegal keyword is refused
+     by the parser even with the module's own guard gone — the "passed on a
+     different guard's refusal" trap by name. Observed: deleting the guard
+     left the sweep green. What the guard buys is a refusal the CALLER can
+     distinguish and announce cheaply, and one derivation shared with the two
+     create gestures — so the shared spelling is pinned, all three readers. */
+  const canvasEditCode = code("src/features/playground/input/canvas-edit.ts");
+  check(
+    "the type gate is the module's own palette derivation, shared with both create gestures",
+    (
+      canvasEditCode.match(
+        /creatableNodeTypes\(diagram\.level\)\.some\(\(row\) => row\.type === type\)/g,
+      ) ?? []
+    ).length === 3,
+    "revisedNodeEdit no longer asks creatableNodeTypes itself — an illegal " +
+      "keyword would be refused only by the re-parse, at full parse cost",
+  );
+
+  /* --- what a type change writes, and what travels with it ----------------- */
+
+  const retyped = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    description: "The paying kind.",
+    type: "externalSystem",
+  });
+  const retypedLine = (retyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("cust:"));
+  check(
+    "a type change rewrites the declaration keyword, on the patch path",
+    retyped !== null &&
+      retyped.path === "patch" &&
+      retypedLine === `  cust:external "Customer" #amber #pci`,
+    `cust line: ${JSON.stringify(retypedLine)}`,
+  );
+  /* THE DEFAULT SIZE FOLLOWS THE TYPE. `cust` sat at person's default
+     (160×96), so its line carries no geometry token — and must STILL carry
+     none after the change, with the re-parse handing it the NEW type's
+     default. Freezing the old numbers in would write `(… 160x96)` — an
+     explicit size the author never chose, visible above. The re-parse half is
+     measured against `defaultSizeFor` itself, not a retyped pair. */
+  const retypedSize = retyped?.doc.synced.file.diagrams
+    .find((d) => d.id === "ctx")
+    .nodes.find((n) => n.id === "cust").size;
+  const externalDefault = defaultSizeFor("externalSystem");
+  check(
+    "a node at the old type's default size adopts the new type's default",
+    retypedSize !== undefined &&
+      retypedSize.width === externalDefault.width &&
+      retypedSize.height === externalDefault.height,
+    `size after: ${JSON.stringify(retypedSize)} vs default ${JSON.stringify(externalDefault)}`,
+  );
+  /* An AUTHORED size is the author's and keeps its bytes — and so does an
+     explicit (`!`) icon, `C4Node`'s own never-auto-overridden rule applied to
+     the one edit that could tempt a swap. Both measured on `web`'s line. The
+     revision CARRIES the icon because icon is whole-value in the form's
+     contract (the form always resubmits the current pick); what is measured
+     is that the type change does not move it. */
+  const webRetyped = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Web App",
+    type: "externalSystem",
+    icon: "nextjs",
+    iconSource: "explicit",
+  });
+  const webLine = (webRetyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("web:"));
+  check(
+    "an authored size and an explicit icon both survive a type change",
+    webRetyped !== null &&
+      webLine !== undefined &&
+      webLine.includes("@nextjs!") &&
+      webLine.includes("(400,240 200x120)") &&
+      webLine.startsWith("  web:external"),
+    `web line: ${JSON.stringify(webLine)}`,
+  );
+  /* An INFERRED (`~`) icon survives too: it derives from `technology`, which
+     a type change does not touch, so its basis is intact — clearing it would
+     eat a derivation for no reason. */
+  const payRetyped = revisedNodeEdit(doc, authored, "ctx", "pay", {
+    name: "Payments",
+    type: "externalSystem",
+    icon: "stripe",
+    iconSource: "inferred",
+  });
+  const payLine = (payRetyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("pay:"));
+  check(
+    "an inferred icon survives a type change — technology, its basis, did not move",
+    payRetyped !== null &&
+      payLine !== undefined &&
+      payLine.includes("@stripe~"),
+    `pay line: ${JSON.stringify(payLine)}`,
+  );
+  /* A `^ref` MIRROR IS NOT CHASED. The fixture mirrors `pay` (a system) as
+     `mirror:external` — the format's proof that a mirror's keyword is its own
+     statement at its own level, not a derivation. Rewriting it would give a
+     type change the blast radius of a delete; leaving it is what the format
+     itself does. Byte-identical, not merely still-parsing. */
+  const mirrorLine = (payRetyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("mirror:"));
+  check(
+    "a ^ref mirror elsewhere keeps its own keyword, byte-identical",
+    mirrorLine === `  mirror:external ^ctx/pay`,
+    `mirror line: ${JSON.stringify(mirrorLine)}`,
+  );
+
+  /* --- the tags claim: the plain half only ---------------------------------- */
+
+  /* THE REQUIRED PROPERTY: the panel's tag field never SHOWS the
+     colour-carrying tags (they are the Colour control's), so a submitted
+     empty list means "no plain tags" — and must be unable to take `#amber`
+     off the node. A whole-value list that could would let the one control
+     destroy the other's state through a field the reader saw as blank. */
+  const bareTags = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    description: "The paying kind.",
+    tags: [],
+  });
+  const bareLine = (bareTags?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("cust:"));
+  check(
+    "the tag editor cannot destroy a colour tag it does not show",
+    bareTags !== null &&
+      bareTags.path === "patch" &&
+      bareLine === `  cust:person "Customer" #amber` &&
+      JSON.stringify(
+        bareTags.doc.synced.file.diagrams
+          .find((d) => d.id === "ctx")
+          .nodes.find((n) => n.id === "cust").tags,
+      ) === JSON.stringify(["amber"]),
+    `cust line: ${JSON.stringify(bareLine)}`,
+  );
+  check(
+    "a tags claim naming a documented colour refuses — that tag is the colour control's",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        tags: ["amber"],
+      }),
+    ),
+    "a colour-carrying tag reached the node through the tag field",
+  );
+  check(
+    'an empty-string tag refuses — it would spell #"" into the text',
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        tags: [""],
+      }),
+    ),
+    "an empty tag reached the serializer",
+  );
+  /* Adding plain tags lands them sorted beside the colour tag — the
+     serializer's own order — and the block patch touches only the block. */
+  const addedTags = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    description: "The paying kind.",
+    tags: ["zone-a", "pci"],
+  });
+  const addedLine = (addedTags?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("cust:"));
+  check(
+    "added plain tags land in canonical order beside the untouched colour tag",
+    addedTags !== null &&
+      addedTags.path === "patch" &&
+      addedLine === `  cust:person "Customer" #amber #pci #zone-a`,
+    `cust line: ${JSON.stringify(addedLine)}`,
+  );
+  check(
+    "a tags claim that changes nothing refuses, so an idle Apply costs no undo entry",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        description: "The paying kind.",
+        tags: ["pci"],
+      }),
+    ),
+    "identical plain tags still rewrote the pane",
+  );
+  /* NO CLAIM MEANS HANDS OFF — the same `undefined` contract colour states:
+     a wording-only revision must not touch a tag vocabulary it never saw. */
+  const wordingOnly = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Shopper",
+    description: "The paying kind.",
+  });
+  check(
+    "a revision with no tags claim leaves the whole tag list alone",
+    wordingOnly !== null &&
+      (
+        wordingOnly.text.split("\n").find((line) => line.includes("cust:")) ??
+        ""
+      ).includes("#amber #pci"),
+    "an absent claim still rewrote the tags",
+  );
+
+  /* --- the form half: one derivation, and the division said ----------------- */
+
+  const panel = read("src/features/viewer/components/viewer-node-detail.tsx");
+  const panelCode = code(
+    "src/features/viewer/components/viewer-node-detail.tsx",
+  );
+  /* The select reads the SAME `creatableNodeTypes` the Add palette and the
+     module's guard read — a hand-written option list is the stale-claim shape
+     (`codebase.md` habit 4) with a parse error at the end of it. */
+  check(
+    "the form's type options derive from creatableNodeTypes, the palette's own table",
+    /creatableNodeTypes\(level\)/.test(panelCode) &&
+      /option\.keyword/.test(panelCode),
+    "the type select hand-lists its options, or stopped teaching the keywords",
+  );
+  /* The tag field seeds from the NON-colour half by the same `colorTagsOf`
+     the module splits on — two readings of "which tags are the colour" is
+     how the field would come to show a tag the module refuses to accept. */
+  check(
+    "the tag field seeds from the non-colour half, split by colorTagsOf",
+    /filter\(\(tag\) => !worn\.includes\(tag\)\)/.test(panelCode),
+    "the field's idea of 'plain' diverged from the module's",
+  );
+  /* And the submit filters what the module refuses, with the division SAID
+     on both sides — a hidden tag with no sentence reads as a bug, and a
+     silently-dropped typed tag eats the reader's text. */
+  check(
+    "the form filters colour tags from the submit rather than submitting a refusal",
+    /typedTags\.filter\(\(tag\) => \(tagColors\?\.\[tag\] \?\? ""\) === ""\)/.test(
+      panelCode,
+    ),
+    "a typed colour tag reaches revisedNodeEdit, which refuses the whole form",
+  );
+  check(
+    "the division is said beside the field, in both directions",
+    /managed by the Colour control below/.test(panel) &&
+      /Apply leaves/.test(panel),
+    "the field hides colour tags, or drops typed ones, without a sentence",
   );
 }
 
@@ -3643,9 +4494,9 @@ console.log(
     "src/features/playground/components/view-playground.tsx",
   );
   check(
-    "both create handlers hand the created id back to the canvas",
+    "all three create handlers hand the created id back to the canvas",
     (playgroundSrc.match(/return next\.createdNodeId \?\? null;/g) ?? [])
-      .length === 2,
+      .length === 3,
     "a create the canvas cannot follow — the new element stays off screen " +
       "while the announcement promises a rename",
   );
@@ -3880,69 +4731,92 @@ console.log("\nLocking never offers a link to somewhere you already are");
      across source lines at arbitrary points and a phrase like "the other
      kinds" straddles a newline plus fourteen spaces of indentation. */
   const flowed = playground.replace(/\s+/g, " ");
-  /* The window measures how much claim can sit between the two anchors. It
-     grew from 240 to 340 when the sentence learned the grouping clause, and
-     to 380 when the pan moved from a held key to the Select/Pan toggle —
-     naming a control takes more words than naming a keystroke, and the
-     sentence must name it or the reader concludes panning broke. */
-  const claim =
-    /C4 nodes can be dragged.{0,380}?the other kinds lay themselves out/.exec(
-      flowed,
-    );
-  check(
-    "the heading still carries the canvas-editing claim",
-    claim !== null,
-    "the sentence that tells a reader the canvas is editable is gone",
+  const playgroundCode = code(
+    "src/features/playground/components/view-playground.tsx",
   );
-  for (const verb of [
-    "sequence messages",
-    "lifelines",
-    "added",
-    "edited",
-    "repointed",
-    "removed",
-    /* Added with the numbering toggle. This list is hand-kept and section 16 is
-       the derived answer to that, but the two ask different questions: this one
-       is about the sentence a reader meets BEFORE they open the canvas. */
-    "numbered",
-    /* Added with the reorder drag, and this one had to be here rather than only
-       in section 16: a reader who has used a drawing tool arrives ASKING
-       whether they can move things, and the sentence they meet first is the
-       page's own. */
-    "reordered",
-    /* Added with the C4 revise, grown when the same form learned icon and
-       colour. Two strings, because each half can go stale alone: the field
-       list is the gesture, "details panel" is where — a claim naming the
-       first without the second sends the reader double-clicking a box that
-       only drills down. */
-    "wording, icon and colour edited",
-    "details panel",
-    /* Added with the C4 create. One string carrying gesture AND place, unlike
-       the pair above, because "added" alone is already claimed by the
-       sequence half of the sentence and would pass with the palette claim
-       gone. */
-    "added from its palette",
-    /* Added with the marquee grouping. Two strings for the revise pair's
-       reason — each half can go stale alone: the first is WHAT the gesture
-       writes, the second is HOW it is made, and a reader who has used a
-       drawing tool arrives asking for exactly this gesture. */
-    "grouped into a boundary",
-    "drag selection",
-    /* THE PAN MOVED, TWICE: a bare drag stopped panning when it became the
-       lasso, and the hold-Space pan that first replaced it broke three times
-       (keyboard state and focus) and gave way to the explicit Select/Pan
-       toggle. A reader who has panned this canvas by dragging knows the OLD
-       gesture, and a page that names only the lasso leaves them thinking
-       panning broke — which is why the pan's new home is pinned here rather
-       than left to the hint bar. */
-    "Select / Pan toggle",
-  ]) {
+
+  /* THE WALL, AND WHY IT WAS THIS FILE'S FAULT. The intro used to carry every
+     gesture in one sentence between two anchors, and the window this check
+     allowed was widened 240 → 340 → 380 as gestures were added — each
+     widening recorded as if it were maintenance rather than a symptom. Ten
+     gestures are a LIST, and the page now renders one; the reader was being
+     handed a paragraph to parse for "why will my diagram not move?".
+
+     What survives is the goal, which was always right: a gesture the canvas
+     offers that the page never mentions is a feature nobody finds. So these
+     assertions moved with the copy instead of dying with it, and the intro
+     itself is now MEASURED — nothing measured it before, which is exactly how
+     it grew. */
+  const intro = /Nothing leaves your browser/.test(flowed);
+  check(
+    "the intro still promises the reader nothing leaves the browser",
+    intro,
+    "the privacy line is gone from the page's first paragraph",
+  );
+  check(
+    "the intro still says the canvas is editable, in one derived clause",
+    /CANVAS_EDITABLE_SUMMARY/.test(playgroundCode),
+    "the intro no longer tells a reader the canvas can be edited at all, or " +
+      "says so in hand-written prose that can outlive the grid",
+  );
+  /* MEASURED ON THE VALUE, not on the page source — the clause is derived, so
+     the file holds an identifier and the words exist only at runtime. This is
+     the assertion the old window should always have been: a number on the
+     sentence itself, rather than a widening allowance on a regex. One short
+     sentence naming the notations; the gestures live in the disclosure. */
+  check(
+    "and that clause stays one short sentence",
+    CANVAS_EDITABLE_SUMMARY.length <= 120 &&
+      CANVAS_EDITABLE_SUMMARY.split(". ").length === 1,
+    `the intro clause is ${CANVAS_EDITABLE_SUMMARY.length} chars — it is ` +
+      "growing back into the paragraph the gesture list was moved out of",
+  );
+
+  /* DERIVED, NOT HAND-KEPT — the whole reason the list could move safely. The
+     page maps the grid's own `onCanvas` cells and the sequence strip's own
+     gesture record, so a new gesture reaches this page by being added where it
+     is BUILT. Pinning the `.map` is what proves that: a hand-typed copy of
+     today's clauses would pass a "does the page say 'repointed'" test and go
+     stale the day the eleventh gesture landed. */
+  check(
+    "the canvas gestures on the page are the capability grid's own clauses",
+    /CANVAS_GESTURE_CLAUSES\.map\(/.test(playgroundCode),
+    "the page lists gestures it typed out itself — the list the grid knows " +
+      "and the list the reader sees can now disagree",
+  );
+  check(
+    "and the sequence gestures are the canvas strip's own record",
+    /SEQUENCE_MOUSE_GESTURES\.map\(/.test(playgroundCode),
+    "the sequence half of the list is hand-kept again",
+  );
+  check(
+    "the list is somewhere a reader looking for it will open",
+    /What you can do on the canvas/.test(flowed),
+    "the disclosure that replaced the intro sentence is gone, so the gestures " +
+      "are described nowhere a reader meets before opening the canvas",
+  );
+
+  /* THE TWO NO TABLE KNOWS. The marquee and the pan are canvas CONTROLS, not
+     abilities, so no grid cell describes them and they are hand-kept in the
+     page — which is exactly why they are pinned here. The pan in particular:
+     it moved twice (a bare drag stopped panning when it became the lasso, and
+     the hold-Space pan that replaced it broke three times before giving way
+     to the toggle), and a reader who has panned this canvas by dragging knows
+     the OLD gesture. A page naming only the lasso leaves them concluding that
+     panning broke. */
+  for (const phrase of ["drag selection", "Select / Pan toggle"]) {
     check(
-      `the heading's claim names "${verb}"`,
-      claim !== null && claim[0].includes(verb),
-      "a gesture the canvas offers that the page never mentions",
+      `the list names "${phrase}", which no grid cell can describe`,
+      flowed.includes(phrase),
+      "a canvas control the page must name by hand is unnamed",
     );
   }
+  check(
+    "and it still answers the reader whose flowchart box will not move",
+    flowed.includes("the other kinds lay themselves out from the text"),
+    "the refusal half of the answer is gone — the reader who drags a " +
+      "flowchart node now has nowhere to learn why nothing happened",
+  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -5372,6 +6246,1232 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
       "gate that can disagree with the mode",
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* 20a. Removing a boundary re-homes what it held — never its members          */
+/* -------------------------------------------------------------------------- */
+
+/* The frame card shipped rename-only, holding removal to a written spec:
+   decide where the members and any nested frames land before offering the
+   button. `deletedFrameEdit` answers with the editor store's shipped verdict
+   (`deleteFrame`: re-home one level out, never cascade — `check:frames`
+   measures the store's half), and these assertions measure the canvas half
+   against the same line, so the two authoring surfaces cannot mean different
+   things by "remove". */
+console.log("\nRemoving a boundary re-homes what it held");
+{
+  /* Non-canonical for section 13's reason, with the shapes only a REMOVAL
+     meets: a nested frame (must lift out, not cascade), a member with a
+     `desc` continuation (a removal patches declaration lines only), a member
+     in the INNER frame (must land in the outer one, not loose), and a loose
+     node (must not be touched at all). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Boundary removal probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    `  frame f-outer "Outer"`,
+    `  frame f-inner "Inner" in=f-outer`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" in=f-outer`,
+    `    desc "The paying kind."`,
+    `  ops:person "Ops" in=f-inner`,
+    `  web:system "Web App"`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+  const ctxOf = (edit) =>
+    edit?.doc.synced.file.diagrams.find((d) => d.id === "ctx");
+
+  /* --- the outer ring comes off; everything it held stays ------------------- */
+
+  const removed = deletedFrameEdit(doc, authored, "ctx", "f-outer");
+  const removedCtx = ctxOf(removed);
+  /* THE REQUIRED PROPERTY, and the whole design question the spec posed: a
+     boundary is a view construct that owns no elements (`C4Frame`), so
+     removing the ring must not remove the group — a removal that ate members
+     would be a multi-delete wearing a smaller button's label. */
+  check(
+    "a boundary deletion leaves its members in the document",
+    removed !== null &&
+      removedCtx.nodes.length === 3 &&
+      ["cust", "ops", "web"].every((id) =>
+        removedCtx.nodes.some((n) => n.id === id),
+      ),
+    `nodes after: ${JSON.stringify(removedCtx?.nodes.map((n) => n.id))}`,
+  );
+  /* `removed !== null` is load-bearing: a refused edit would leave the whole
+     chain `undefined === undefined` and pass this vacuously — observed while
+     break-testing the member-eating variant. */
+  check(
+    "members of the removed top-level frame land loose",
+    removed !== null &&
+      removedCtx.nodes.find((n) => n.id === "cust").frameId === undefined,
+    "a member kept a membership naming a frame the file no longer declares",
+  );
+  /* THE NESTED FRAME LIFTS OUT, never cascades: its declaration is the
+     author's and survives the removal of the ring AROUND it, respelled by
+     the serializer with its `in=` gone — no new nesting is stated, which is
+     what keeps the mint's "always top-level" verdict intact next door. */
+  check(
+    "a nested frame lifts out — kept, top-level, its own members untouched",
+    removedCtx?.frames?.length === 1 &&
+      removedCtx.frames[0].id === "f-inner" &&
+      (removedCtx.frames[0].parentFrameId ?? null) === null &&
+      removedCtx.nodes.find((n) => n.id === "ops").frameId === "f-inner",
+    `frames after: ${JSON.stringify(removedCtx?.frames)}`,
+  );
+  check(
+    "the removal takes the patch path on authored text",
+    removed !== null && removed.path === "patch",
+    `path: ${removed === null ? "refused" : removed.path}`,
+  );
+  /* EVERY byte the removal is not about survives, by subtraction: take the
+     frame lines and the re-homed member's declaration out of both texts and
+     the remainders must be identical — the comment above the members, the
+     `desc` continuation, the loose node, the relationship line. */
+  const touched = (line) =>
+    line.trimStart().startsWith("frame ") ||
+    line.trimStart().startsWith("cust:person");
+  check(
+    "every line the removal is not about is byte-identical",
+    removed !== null &&
+      JSON.stringify(authored.split("\n").filter((l) => !touched(l))) ===
+        JSON.stringify(removed.text.split("\n").filter((l) => !touched(l))),
+    removed === null
+      ? "the removal was refused"
+      : firstDiff(
+          removed.text
+            .split("\n")
+            .filter((l) => !touched(l))
+            .join("\n"),
+          authored
+            .split("\n")
+            .filter((l) => !touched(l))
+            .join("\n"),
+        ),
+  );
+  /* The respelled lines are CANONICAL — section 13's derivation: measured
+     against a full serialise of the edited document, so a lifted frame's
+     dropped `in=` and a re-homed member's membership are the serializer's
+     own bytes. */
+  const canonicalAfter = sourceTextFor(removed?.doc ?? doc);
+  check(
+    "the lifted frame's line and the member's line are the serializer's own",
+    ["frame f-inner", "cust:person"].every(
+      (stem) =>
+        (removed?.text ?? "")
+          .split("\n")
+          .find((line) => line.trimStart().startsWith(stem)) ===
+        canonicalAfter
+          .split("\n")
+          .find((line) => line.trimStart().startsWith(stem)),
+    ),
+    "a respelled line diverged from canonical form",
+  );
+  /* ONE TEXT, ONE UNDO ENTRY — the grouping's contract, measured the same
+     way: the undo ring stores whole texts, so "one entry" is exactly "one
+     edit whose text carries the whole removal", and the PRE-edit parse must
+     hold everything the removal changed — the frame, the nesting AND the
+     membership — or an undo would land on an intermediate state. */
+  const preEdit = c4Document(authored).synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "one undo entry restores the boundary, the nesting and the memberships",
+    removed !== null &&
+      preEdit.frames?.some((f) => f.id === "f-outer") === true &&
+      preEdit.frames?.find((f) => f.id === "f-inner")?.parentFrameId ===
+        "f-outer" &&
+      preEdit.nodes.find((n) => n.id === "cust").frameId === "f-outer",
+    "part of the removal predates the edit — an undo would only partly reverse it",
+  );
+
+  /* --- an inner ring's members land in the OUTER one, not loose ------------- */
+
+  const inner = deletedFrameEdit(doc, authored, "ctx", "f-inner");
+  const innerOps = (inner?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("ops:"));
+  check(
+    "members of a nested frame re-home to its parent — one level out, not loose",
+    inner !== null &&
+      innerOps !== undefined &&
+      innerOps.includes("in=f-outer") &&
+      ctxOf(inner).nodes.find((n) => n.id === "ops").frameId === "f-outer",
+    `ops line: ${JSON.stringify(innerOps)}`,
+  );
+
+  /* --- the last frame's removal leaves no empty frames key ------------------ */
+
+  /* Absence is how the format spells "no boundaries" — an empty array left
+     behind would be a model shape no fresh parse produces, and the JSON twin
+     would carry a `"frames": []` the author never wrote. */
+  const bothGone = deletedFrameEdit(inner.doc, inner.text, "ctx", "f-outer");
+  check(
+    "removing the last boundary drops the frames key, not leaves it empty",
+    bothGone !== null && ctxOf(bothGone).frames === undefined,
+    `frames after: ${JSON.stringify(ctxOf(bothGone)?.frames)}`,
+  );
+
+  /* --- the refusals, and the panes ------------------------------------------ */
+
+  check(
+    "an unknown frame refuses rather than throws",
+    refuses(() => deletedFrameEdit(doc, authored, "ctx", "f-ghost")),
+    "a stale selection would take the page down instead of doing nothing",
+  );
+  check(
+    "a Mermaid pane refuses the removal — the C4 revise cell's own caveat",
+    refuses(() =>
+      deletedFrameEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        "f-outer",
+      ),
+    ),
+    "a boundary edit was written against a pane whose emitter never reads frames",
+  );
+  const inJson = deletedFrameEdit(
+    { ...doc, format: "json" },
+    doc.synced.jsonText,
+    "ctx",
+    "f-outer",
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    inJson !== null && inJson.path === "reemit",
+    `path: ${inJson === null ? "refused" : inJson.path}`,
+  );
+
+  /* --- the host and the card ------------------------------------------------ */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const frameCardCode = code(
+    "src/features/viewer/components/viewer-frame-detail.tsx",
+  );
+  const deleteBody =
+    /const handleFrameDelete = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleFrameDelete applies through exactly one applyCanvasEdit and announces the refusal",
+    deleteBody !== null &&
+      (deleteBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      deleteBody[1].includes("deletedFrameEdit(") &&
+      !deleteBody[1].includes("setText(") &&
+      deleteBody[1].includes("if (next === null)") &&
+      /Cmd or Ctrl \+ Z/.test(deleteBody[1]),
+    "a second apply would split one gesture into two undo entries, or a " +
+      "refused removal went silent",
+  );
+  /* The announcement answers the design question the reader will actually
+     have — "what happened to my elements?" — rather than only naming the
+     frame that went. */
+  check(
+    "the announcement says where the members landed",
+    deleteBody !== null && /one level out/.test(deleteBody[1]),
+    "the one thing a removal must say is unsaid",
+  );
+  /* The card's Remove sits OUTSIDE the rename form: the rename is a field
+     Apply rewrites, the removal is an act — Enter in the name field must
+     never remove the boundary. Positional, like the edit-keys exemption:
+     the button has to come after the form closes. */
+  const formEnd = frameCardCode.indexOf("</form>");
+  const removeAt = frameCardCode.indexOf("onClick={onDelete}");
+  check(
+    "the card's Remove button lives outside the rename form",
+    formEnd !== -1 && removeAt !== -1 && formEnd < removeAt,
+    "Enter in the rename field would submit a removal",
+  );
+  /* Read from `code(...)`, NOT the raw source: the card's own header comment
+     states the contract in almost the same words, and the raw-source version
+     of this assertion stayed green with the sentence deleted from the JSX —
+     the sixth firing of the trap `code()` exists for, observed while
+     break-testing this very section. */
+  check(
+    "the card says everything the boundary holds stays, whenever it holds anything",
+    /everything it holds stays on the\s+canvas/.test(
+      frameCardCode.replace(/\s+/g, " "),
+    ),
+    "Remove beside a populated group reads as removing the group",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 21. A connect is an INSERT patch, and one gesture can mint both lines       */
+/* -------------------------------------------------------------------------- */
+
+console.log("\nConnecting two elements is one inserted relationship line");
+{
+  /* NON-CANONICAL for section 13's reason, with the shapes only a CONNECT
+     meets: an existing relationship line (the insert must land under it, and
+     its pair is the duplicate fixture), a diagram with NO relationship lines
+     (the blank-separator anchor), and a `^ref` placeholder (a legal endpoint
+     — an edge is a local fact — where the field editor refuses). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Connect probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" (400,240 160x96)`,
+    `    desc "The paying kind."`,
+    `  ops:person "Operator" (640,240 160x96)`,
+    `  web:system "Web App" (400,480 160x96) >backend`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go] (400,240 160x96)`,
+    `  db:database "Orders DB" (640,240 160x96)`,
+    `  mirror:external ^ctx/cust (880,240 160x96)`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const before = authored.split("\n");
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the fresh pair: one line, under the last relationship line ----------- */
+
+  const connected = connectedNodesEdit(doc, authored, "ctx", "ops", "web");
+  check(
+    "a connect on authored text takes the PATCH path, by name",
+    connected !== null && connected.path === "patch",
+    `path: ${connected === null ? "refused" : connected.path}`,
+  );
+  const after = (connected?.text ?? "").split("\n");
+  check(
+    "the connect adds exactly one line — the relationship",
+    after.length === before.length + 1,
+    `${before.length} lines became ${after.length}`,
+  );
+  const edgeLineAt = before.indexOf(`  cust -> web :"uses"`) + 1;
+  check(
+    "the new line sits directly under the diagram's last relationship line",
+    after[edgeLineAt] === `  ops -> web`,
+    `line under the existing edge: ${JSON.stringify(after[edgeLineAt])}`,
+  );
+  check(
+    "every line the connect is not about is byte-identical",
+    JSON.stringify([
+      ...after.slice(0, edgeLineAt),
+      ...after.slice(edgeLineAt + 1),
+    ]) === JSON.stringify(before),
+    firstDiff(
+      [...after.slice(0, edgeLineAt), ...after.slice(edgeLineAt + 1)].join(
+        "\n",
+      ),
+      authored,
+    ),
+  );
+  /* The patched line is CANONICAL, proved against a full serialise of the
+     connected document — section 13's derivation, section 13's reason. */
+  check(
+    "the inserted line is byte-identical to what the serializer would emit",
+    connected !== null &&
+      sourceTextFor(connected.doc).split("\n").includes(after[edgeLineAt]),
+    "the spliced relationship diverged from canonical form",
+  );
+  const connectedDiagram = connected?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "the re-parse holds the relationship, forward, under its default id",
+    connectedDiagram?.edges.some(
+      (e) =>
+        e.id === "e-ops-web" &&
+        e.source === "ops" &&
+        e.target === "web" &&
+        e.direction === "forward",
+    ) === true,
+    `edges: ${JSON.stringify(connectedDiagram?.edges.map((e) => e.id))}`,
+  );
+
+  /* --- the duplicate: a CAUTION, never a refusal ----------------------------- */
+
+  /* The verdict model's own call (`connect-verdict.ts`): parallel
+     relationships are a real feature the canvas already draws as separate
+     curves, so the module must not refuse them — it de-collides the id
+     instead, and the id must land on the line or the round trip would fuse
+     the pair back into one. */
+  const doubled = connectedNodesEdit(doc, authored, "ctx", "cust", "web");
+  check(
+    "an already-related pair connects again — a caution, never a refusal",
+    doubled !== null &&
+      doubled.path === "patch" &&
+      doubled.text.includes("  cust -> web id=e-cust-web-2") &&
+      doubled.doc.synced.file.diagrams
+        .find((d) => d.id === "ctx")
+        .edges.filter((e) => e.source === "cust" && e.target === "web")
+        .length === 2,
+    `text gained: ${JSON.stringify(
+      changedLines(authored, doubled?.text ?? authored).map((l) => l.after),
+    )}`,
+  );
+
+  /* --- the refusals ---------------------------------------------------------- */
+
+  check(
+    "the same element twice refuses — the verdict model's cancel",
+    refuses(() => connectedNodesEdit(doc, authored, "ctx", "cust", "cust")),
+    "a self-edge was written",
+  );
+  check(
+    "a cross-diagram target refuses — an edge names nodes of ONE diagram",
+    refuses(() => connectedNodesEdit(doc, authored, "ctx", "cust", "api")),
+    "an edge was written into a diagram that does not hold its target",
+  );
+  check(
+    "an unknown target refuses",
+    refuses(() => connectedNodesEdit(doc, authored, "ctx", "cust", "ghost")),
+    "an edge was written against a node the file does not hold",
+  );
+  check(
+    "a Mermaid pane refuses the connect — the connect cell's own caveat",
+    refuses(() =>
+      connectedNodesEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        "ops",
+        "web",
+      ),
+    ),
+    "an edge was written against a pane that gives it no id and one diagram",
+  );
+  const jsonConnected = connectedNodesEdit(
+    { ...doc, format: "json" },
+    JSON.stringify({ not: "the alab text" }),
+    "ctx",
+    "ops",
+    "web",
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    jsonConnected !== null && jsonConnected.path === "reemit",
+    `path: ${jsonConnected === null ? "refused" : jsonConnected.path}`,
+  );
+
+  /* --- the ^ref endpoint, and the first edge of a diagram --------------------- */
+
+  /* One gesture, two facts: a placeholder is a LEGAL endpoint (an edge is a
+     local fact the serializer writes beside the `^` token — the grouping's
+     argument, not the field editor's refusal), and a diagram with no
+     relationship lines yet takes the blank separator the serializer writes
+     between the sections, so the first connect leaves the diagram spelled
+     exactly as a full serialise would order it. */
+  const toMirror = connectedNodesEdit(
+    doc,
+    authored,
+    "backend",
+    "api",
+    "mirror",
+  );
+  const mirrorAfter = (toMirror?.text ?? "").split("\n");
+  const mirrorDeclAt = before.indexOf(
+    `  mirror:external ^ctx/cust (880,240 160x96)`,
+  );
+  check(
+    "a ^ref placeholder is a legal endpoint — an edge is local, not derived",
+    toMirror !== null &&
+      toMirror.path === "patch" &&
+      toMirror.doc.synced.file.diagrams
+        .find((d) => d.id === "backend")
+        .edges.some((e) => e.source === "api" && e.target === "mirror"),
+    "connecting to a mirror was refused — drawing the outer system talking " +
+      "to local elements is what placeholders exist for",
+  );
+  check(
+    "the diagram's first relationship arrives with the canonical blank separator",
+    mirrorAfter.length === before.length + 2 &&
+      mirrorAfter[mirrorDeclAt + 1] === "" &&
+      mirrorAfter[mirrorDeclAt + 2] === "  api -> mirror",
+    `lines under the last node: ${JSON.stringify(
+      mirrorAfter.slice(mirrorDeclAt + 1, mirrorDeclAt + 3),
+    )}`,
+  );
+
+  /* --- the menu's list shares the verdict table ------------------------------ */
+
+  const ctxDiagram = doc.synced.file.diagrams.find((d) => d.id === "ctx");
+  const targets = connectTargets(ctxDiagram, "cust");
+  check(
+    "connectTargets offers every OTHER element, flagging the related pair",
+    targets.length === 2 &&
+      targets.every((t) => t.node.id !== "cust") &&
+      targets.find((t) => t.node.id === "web")?.related === true &&
+      targets.find((t) => t.node.id === "ops")?.related === false,
+    `targets: ${JSON.stringify(
+      targets.map((t) => `${t.node.id}:${t.related}`),
+    )}`,
+  );
+  check(
+    "the reverse direction wears the same flag — the pair is unordered",
+    connectTargets(ctxDiagram, "web").find((t) => t.node.id === "cust")
+      ?.related === true,
+    "B→A of an existing A→B reads as fresh — the parallel-curve surprise the " +
+      "verdict model exists to warn about",
+  );
+
+  /* --- create-then-connect: two lines, ONE text, ONE undo entry --------------- */
+
+  const minted = connectedNewNodeEdit(
+    doc,
+    authored,
+    "ctx",
+    "web",
+    "softwareSystem",
+  );
+  check(
+    "create-then-connect patches, names its node, and stays ONE edit",
+    minted !== null &&
+      minted.path === "patch" &&
+      minted.createdNodeId === "new-system",
+    `got: ${minted === null ? "refused" : `${minted.path}, ${minted.createdNodeId}`}`,
+  );
+  const mintedAfter = (minted?.text ?? "").split("\n");
+  const webDeclAt = before.findIndex((line) => line.startsWith(`  web:system`));
+  check(
+    "it adds exactly two lines — the declaration under the nodes, the relationship under the edges",
+    mintedAfter.length === before.length + 2 &&
+      mintedAfter[webDeclAt + 1].startsWith(`  new-system:system`) &&
+      mintedAfter[edgeLineAt + 1] === `  web -> new-system`,
+    `node slot: ${JSON.stringify(mintedAfter[webDeclAt + 1])}, edge slot: ${JSON.stringify(mintedAfter[edgeLineAt + 1])}`,
+  );
+  /* ONE TEXT IS ONE UNDO ENTRY, measured as the grouping measures it: the
+     pre-edit text holds NEITHER half, so putting it back reverses both at
+     once and no intermediate state exists for an undo to land on. Two edits
+     here would strand the reader with a stray unnamed node connected to
+     nothing after one Cmd/Ctrl+Z. */
+  const preEdit = c4Document(authored).synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "one undo entry reverses both halves — the pre-edit text holds neither",
+    minted !== null &&
+      preEdit.nodes.every((n) => n.id !== "new-system") &&
+      preEdit.edges.every((e) => e.target !== "new-system"),
+    "half the gesture predates the edit — an undo would only partly reverse it",
+  );
+  /* The minted node lands in the clear band BELOW everything drawn —
+     `vacantPosition`'s contract, re-measured on this call path because it is
+     a separate entry point from the Add strip's. */
+  const mintedDiagram = minted?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  const mintedNode = mintedDiagram?.nodes.find((n) => n.id === "new-system");
+  check(
+    "the connected newcomer overlaps nothing",
+    mintedNode !== undefined &&
+      mintedDiagram.nodes.every(
+        (other) =>
+          other.id === mintedNode.id ||
+          other.position.x + other.size.width <= mintedNode.position.x ||
+          mintedNode.position.x + mintedNode.size.width <= other.position.x ||
+          other.position.y + other.size.height <= mintedNode.position.y ||
+          mintedNode.position.y + mintedNode.size.height <= other.position.y,
+      ),
+    `newcomer at ${JSON.stringify(mintedNode?.position)}`,
+  );
+  check(
+    "a type the level refuses is refused here too — the palette's own gate",
+    refuses(() =>
+      connectedNewNodeEdit(doc, authored, "ctx", "web", "container"),
+    ),
+    "a container was written into a context diagram",
+  );
+  /* THE TIED ANCHOR: on a diagram with no relationship lines, the node line
+     and the blank-plus-edge insert anchor after the same last declaration,
+     and the node patch's list position is what keeps the declaration ABOVE
+     the relationship — `applyPatches` sorts stably. This is the assertion
+     that fails if someone reorders the patch list. */
+  const backendMint = connectedNewNodeEdit(
+    doc,
+    authored,
+    "backend",
+    "api",
+    "container",
+  );
+  const backendAfter = (backendMint?.text ?? "").split("\n");
+  check(
+    "on a diagram with no edges, the declaration lands above the blank and the relationship",
+    backendMint !== null &&
+      backendAfter[mirrorDeclAt + 1].startsWith(`  new-container:container`) &&
+      backendAfter[mirrorDeclAt + 2] === "" &&
+      backendAfter[mirrorDeclAt + 3] === `  api -> new-container`,
+    `lines under the last node: ${JSON.stringify(
+      backendAfter.slice(mirrorDeclAt + 1, mirrorDeclAt + 4),
+    )}`,
+  );
+
+  /* --- the Mermaid caveat is MEASURED against the real emitter ---------------- */
+
+  /* The connect cell's `unlessPane.because` claims two losses; both are read
+     off `serializeMermaidC4`'s real output here, not off its comments, so the
+     refusal cannot outlive the emitter growing the slot. */
+  const { serializeMermaidC4 } = await load("src/features/mermaid/lib/emit.ts");
+  const mermaid = serializeMermaidC4(doubled.doc.synced.file);
+  check(
+    "the Mermaid emitter writes no edge id — a duplicate pair fuses on the round trip",
+    mermaid.includes("Rel(cust, web") && !mermaid.includes("e-cust-web-2"),
+    "the emitter now carries an edge id — the connect cell's caveat is stale " +
+      "and the Mermaid refusal may be droppable",
+  );
+  check(
+    "the Mermaid emitter writes ONE diagram — an edge on another level is not in the pane",
+    !mermaid.includes("api") && !mermaid.includes("backend"),
+    "the emitter now writes more than the root diagram — re-measure the caveat",
+  );
+
+  /* --- the host: one applyCanvasEdit per gesture, refusals announced ---------- */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const connectBody =
+    /const handleNodeConnect = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleNodeConnect applies through exactly one applyCanvasEdit and announces the refusal",
+    connectBody !== null &&
+      (connectBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      connectBody[1].includes("connectedNodesEdit(") &&
+      !connectBody[1].includes("setText(") &&
+      connectBody[1].includes("if (next === null)") &&
+      /Cmd or Ctrl \+ Z/.test(connectBody[1]),
+    "a second apply would split one gesture into two undo entries, or a " +
+      "refused connect went silent",
+  );
+  const mintBody =
+    /const handleConnectCreate = useCallback\(([\s\S]*?)\n  \);/.exec(
+      playground,
+    );
+  check(
+    "handleConnectCreate applies ONCE — the one-undo contract crosses the host too",
+    mintBody !== null &&
+      (mintBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      mintBody[1].includes("connectedNewNodeEdit(") &&
+      !mintBody[1].includes("setText("),
+    "the node and its relationship became two undo entries on the way through",
+  );
+
+  /* --- the gesture never re-engages React Flow's connection machinery --------- */
+
+  /* The 4fa7c36 discipline, applied to the SECOND drag that could have woken
+     the store: the viewer's flow declares no connection handler and keeps
+     `nodesConnectable` false, and the grip is hand-rolled — pointer capture
+     on its own button, per-frame state feeding its own portal overlay and
+     nothing the projections read. Matched as JSX PROPS (`name=`) via
+     `code(...)`, the marquee guard's rule: comments rightly NAME these props
+     while warning against them. */
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
+  check(
+    "the flow keeps every connection prop off",
+    /nodesConnectable=\{false\}/.test(canvasCode) &&
+      !canvasCode.includes("onConnect=") &&
+      !canvasCode.includes("onConnectStart=") &&
+      !canvasCode.includes("onConnectEnd=") &&
+      !canvasCode.includes("connectionMode="),
+    "React Flow's connection machinery is reachable — its per-move connection " +
+      "state re-engages the store the marquee guard keeps disengaged",
+  );
+  const gripCode = code(
+    "src/features/viewer/components/viewer-connect-grip.tsx",
+  );
+  check(
+    "the grip is hand-rolled — it never imports React Flow",
+    !gripCode.includes("@xyflow/react"),
+    "the grip reached for the library's connection machinery — re-read the " +
+      "marquee guard (4fa7c36) before wiring any of it",
+  );
+  check(
+    "the grip's press cannot start a node drag — nodrag, stopped, captured",
+    /af-connect-grip nodrag/.test(gripCode) &&
+      /event\.stopPropagation\(\);\s*\n\s*event\.preventDefault\(\);\s*\n\s*event\.currentTarget\.setPointerCapture\(/.test(
+        gripCode,
+      ),
+    "a press on the grip would drag the node under it — the relate grip's " +
+      "own bug, reintroduced on the viewer",
+  );
+  check(
+    "the grip's menu shares the dismissal hook, so Escape closes it without clearing the selection",
+    /useMenuDismissal\(/.test(gripCode),
+    "a third dismissal implementation — the copy that drifts is the one that " +
+      "forgets to consume Escape",
+  );
+  /* The projections must not read anything the grip's drag writes — the ghost
+     is the grip's OWN state. The nodes memo's pinned dep list (the marquee
+     guard) already proves the canvas side; this proves the grip keeps its
+     per-frame state local instead of lifting it. */
+  check(
+    "the ghost line is the grip's own state, portalled, never canvas state",
+    /const \[ghost, setGhost\] = useState<GhostLine \| null>\(null\);/.test(
+      gripCode,
+    ) && /createPortal\(/.test(gripCode),
+    "the drag's per-frame state left the grip — the projection memos are one " +
+      "dependency away from a per-frame identity change",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 22. Revising and deleting a relationship: the edge card is the node card's  */
+/*     twin                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/* WHY THIS SECTION EXISTS. The relationship card shipped read-only for a
+   release after the connect grip could CREATE edges — the text could spell a
+   label, an arrow and a deletion the canvas could not. These gestures ride
+   `"revise"` (they gate on the two facts every revise gates on and never
+   consult the relationship set, which is `connect`'s own question), so this
+   section holds them to section 14's standard: block patch, no-op refusal,
+   authored bytes outside the span untouched — plus the two facts only an edge
+   has: direction and dashedness are ONE arrow token with six spellings, and
+   solid has TWO spellings (`->` and `style=solid`) that a careless toggle
+   would collapse (`4a1254e`, the numbering toggle's shipped bug). */
+console.log("\nRevising and deleting a relationship are line patches");
+{
+  const authored = [
+    `archlab 1.0`,
+    `title "Edge probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" (400,240 160x96)`,
+    `    desc "The paying kind."`,
+    `  ops:person "Operator" (640,240 160x96)`,
+    `  web:system "Web App" (400,480 160x96) >backend`,
+    ``,
+    `  // Reads and writes.`,
+    `  cust -> web :"uses" [HTTPS]`,
+    `  ops -> web :"operates" style=solid`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go] (400,240 160x96)`,
+    `  db:database "Orders DB" (640,240 160x96)`,
+    ``,
+    `  api -> db :"reads" ~e-cust-web`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const before = authored.split("\n");
+  const edgeLineAt = before.indexOf(`  cust -> web :"uses" [HTTPS]`);
+
+  /* --- a revise is a block patch of the edge's own line ---------------------- */
+
+  const reworded = revisedEdgeEdit(doc, authored, "ctx", "e-cust-web", {
+    label: "places orders",
+    technology: undefined,
+    direction: "forward",
+    style: undefined,
+  });
+  check(
+    "an edge revise on authored text takes the PATCH path, by name",
+    reworded !== null && reworded.path === "patch",
+    `path: ${reworded === null ? "refused" : reworded.path}`,
+  );
+  const rewordedAfter = (reworded?.text ?? "").split("\n");
+  check(
+    /* Clearing `technology` must REMOVE the `[…]` token, not write `[""]` —
+       the form's "blank means absent" contract measured on the module side,
+       the way section 14 measures it for a node's desc. */
+    "the revise rewrites the relationship line, clearing a field removes its token",
+    rewordedAfter[edgeLineAt] === `  cust -> web : "places orders"`,
+    `line: ${JSON.stringify(rewordedAfter[edgeLineAt])}`,
+  );
+  check(
+    "every line the revise is not about is byte-identical",
+    JSON.stringify([
+      ...rewordedAfter.slice(0, edgeLineAt),
+      ...rewordedAfter.slice(edgeLineAt + 1),
+    ]) ===
+      JSON.stringify([
+        ...before.slice(0, edgeLineAt),
+        ...before.slice(edgeLineAt + 1),
+      ]),
+    firstDiff(reworded?.text ?? "", authored),
+  );
+  check(
+    /* Section 13's derivation, section 13's reason: a patch that writes
+       almost-canonical text trades a silent loss for a worse one. */
+    "the patched relationship line is byte-identical to a full serialise's",
+    reworded !== null &&
+      sourceTextFor(reworded.doc)
+        .split("\n")
+        .includes(rewordedAfter[edgeLineAt]),
+    "the spliced relationship line diverged from canonical form",
+  );
+
+  /* --- a no-op revise costs no undo entry ------------------------------------ */
+
+  check(
+    /* The host pushes the pre-edit text onto the undo ring on every applied
+       edit, so `null` here IS the assertion that an untouched Apply costs no
+       undo entry — the same contract every gesture in the module states. */
+    "a revise that changes nothing refuses (null) — no text change, no undo entry",
+    revisedEdgeEdit(doc, authored, "ctx", "e-cust-web", {
+      label: "uses",
+      technology: "HTTPS",
+      direction: "forward",
+      style: undefined,
+    }) === null,
+    "an untouched form rewrote the pane and cost the reader an undo entry",
+  );
+  check(
+    "an unknown edge refuses rather than throwing",
+    revisedEdgeEdit(doc, authored, "ctx", "e-ghost", {
+      label: undefined,
+      technology: undefined,
+      direction: "forward",
+      style: undefined,
+    }) === null,
+    "expected null",
+  );
+  check(
+    "an edge of ANOTHER diagram refuses — spans are per (diagram, edge)",
+    revisedEdgeEdit(doc, authored, "ctx", "e-api-db", {
+      label: undefined,
+      technology: undefined,
+      direction: "forward",
+      style: undefined,
+    }) === null,
+    "a backend edge was revised through the context diagram",
+  );
+
+  /* --- the six arrow forms round-trip ----------------------------------------- */
+
+  /* Direction × dashedness is ONE token with six spellings (`ARROWS` in
+     archtext/lib/keywords.ts). Each is driven through the revise and read
+     back off the RE-PARSE, so the assertion is the round trip — a revise
+     whose arrow did not survive the parser would show once and snap back. */
+  const ARROW_FORMS = [
+    { direction: "forward", style: undefined, arrow: "->" },
+    { direction: "forward", style: "dashed", arrow: "..>" },
+    { direction: "bidirectional", style: undefined, arrow: "<->" },
+    { direction: "bidirectional", style: "dashed", arrow: "<..>" },
+    { direction: "none", style: undefined, arrow: "--" },
+    { direction: "none", style: "dashed", arrow: ".." },
+  ];
+  for (const form of ARROW_FORMS) {
+    const revised = revisedEdgeEdit(doc, authored, "ctx", "e-cust-web", {
+      // A fresh label per form so the forward-solid case is not the no-op.
+      label: `probe ${form.arrow}`,
+      technology: undefined,
+      direction: form.direction,
+      ...(form.style === undefined ? {} : { style: form.style }),
+    });
+    const line = (revised?.text ?? "").split("\n")[edgeLineAt] ?? "";
+    const parsedBack = revised?.doc.synced.file.diagrams
+      .find((d) => d.id === "ctx")
+      ?.edges.find((e) => e.id === "e-cust-web");
+    check(
+      `direction "${form.direction}"${form.style === "dashed" ? " dashed" : ""} round-trips through ${form.arrow}`,
+      revised !== null &&
+        line.startsWith(`  cust ${form.arrow} web`) &&
+        parsedBack?.direction === form.direction &&
+        parsedBack?.style === form.style,
+      `line: ${JSON.stringify(line)}, parsed back: ${JSON.stringify({
+        direction: parsedBack?.direction,
+        style: parsedBack?.style,
+      })}`,
+    );
+  }
+
+  /* --- solid's TWO spellings both survive ------------------------------------- */
+
+  /* `ops -> web … style=solid` is the author writing the default out. A
+     wording-only revise submits the CURRENT spelling (the card's contract at
+     `C4EdgeRevision`), so the hand-written attribute must still be on the
+     line — the transition that loses information, asserted directly, which
+     is the lesson `4a1254e` bought. */
+  const opsLineAt = before.indexOf(`  ops -> web :"operates" style=solid`);
+  const wordingOnly = revisedEdgeEdit(doc, authored, "ctx", "e-ops-web", {
+    label: "runs",
+    technology: undefined,
+    direction: "forward",
+    style: "solid",
+  });
+  check(
+    "a wording-only revise keeps a hand-written style=solid on the line",
+    wordingOnly !== null &&
+      wordingOnly.text.split("\n")[opsLineAt] ===
+        `  ops -> web : "runs" style=solid`,
+    `line: ${JSON.stringify(wordingOnly?.text.split("\n")[opsLineAt])}`,
+  );
+
+  /* --- the Mermaid refusal, measured against the real emitter ----------------- */
+
+  /* The revise cell's caveat now claims a relationship's undirected form and
+     dashed style would be lost through a Mermaid pane. Measured the way the
+     node fields are: an undirected dashed edge goes through the app's own
+     converter and comes back a plain forward arrow — while a BIDIRECTIONAL
+     edge survives (BiRel), so the refusal claims exactly the losses that are
+     real and no more. */
+  const { convertedSourceText } = await load(
+    "src/features/playground/input/parse.ts",
+  );
+  const arrowProbe = c4Document(
+    [
+      `archlab 1.0`,
+      `title "Arrow probe"`,
+      ``,
+      `@context ctx "Context"`,
+      `  a:system "A"`,
+      `  b:system "B"`,
+      `  c:system "C"`,
+      ``,
+      `  a .. b :"peers"`,
+      `  a <-> c :"syncs"`,
+      ``,
+    ].join("\n"),
+  );
+  const probeBack = parseViewSource(convertedSourceText(arrowProbe, "mermaid"));
+  const probeEdges =
+    probeBack.status === "ok" && probeBack.value.kind === "c4"
+      ? probeBack.value.synced.file.diagrams[0].edges
+      : [];
+  const peers = probeEdges.find((e) => e.source === "a" && e.target === "b");
+  const syncs = probeEdges.find((e) => e.source === "a" && e.target === "c");
+  check(
+    "an undirected dashed edge is measured to come back forward and solid",
+    peers !== undefined &&
+      peers.direction === "forward" &&
+      peers.style === undefined,
+    `after the round trip: ${JSON.stringify({
+      direction: peers?.direction,
+      style: peers?.style,
+    })}`,
+  );
+  check(
+    "a bidirectional edge is measured to SURVIVE — the refusal must not over-claim",
+    syncs !== undefined && syncs.direction === "bidirectional",
+    `after the round trip: ${JSON.stringify(syncs?.direction)} — if BiRel is ` +
+      "gone the caveat under-claims instead",
+  );
+  const mermaidVerdict = canvasEditability(
+    { ...doc, format: "mermaid" },
+    "revise",
+  );
+  check(
+    "the Mermaid revise refusal names the relationship losses beside the node's",
+    mermaidVerdict.editable === false &&
+      /undirected form or dashed style/.test(mermaidVerdict.reason ?? ""),
+    `reason: ${JSON.stringify(mermaidVerdict)}`,
+  );
+  const { MERMAID_C4_EXPORT_CAVEAT } = await load(
+    "src/features/playground/input/parse.ts",
+  );
+  check(
+    "the C4 export caveat documents the arrow loss the refusal cites",
+    /undirected or dashed line/.test(MERMAID_C4_EXPORT_CAVEAT),
+    "the caveat no longer supports the refusal that cites it",
+  );
+  check(
+    "a Mermaid pane refuses the edge revise and the edge delete outright",
+    revisedEdgeEdit(
+      { ...doc, format: "mermaid" },
+      authored,
+      "ctx",
+      "e-cust-web",
+      {
+        label: "x",
+        technology: undefined,
+        direction: "forward",
+        style: undefined,
+      },
+    ) === null &&
+      deletedEdgeEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        "e-cust-web",
+      ) === null,
+    "an edge edit was written against a pane that cannot spell it",
+  );
+  const jsonRevised = revisedEdgeEdit(
+    { ...doc, format: "json" },
+    JSON.stringify({ not: "the alab text" }),
+    "ctx",
+    "e-cust-web",
+    {
+      label: "x",
+      technology: undefined,
+      direction: "forward",
+      style: undefined,
+    },
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    jsonRevised !== null && jsonRevised.path === "reemit",
+    `path: ${jsonRevised === null ? "refused" : jsonRevised.path}`,
+  );
+
+  /* --- a delete removes ITS line and nothing else ----------------------------- */
+
+  const deleted = deletedEdgeEdit(doc, authored, "ctx", "e-cust-web");
+  check(
+    "an edge delete on authored text takes the PATCH path, by name",
+    deleted !== null && deleted.path === "patch",
+    `path: ${deleted === null ? "refused" : deleted.path}`,
+  );
+  const deletedAfter = (deleted?.text ?? "").split("\n");
+  check(
+    /* THE ENDPOINTS ARE LEFT ALONE — the removal's stated verdict. Nothing
+       about either element derives from the edge, so exactly one line goes
+       and every other byte survives; contrast the NODE delete, whose edges
+       must cascade or the document stops parsing. */
+    "deleting a relationship removes exactly its own line — endpoints untouched",
+    deletedAfter.length === before.length - 1 &&
+      JSON.stringify(deletedAfter) ===
+        JSON.stringify([
+          ...before.slice(0, edgeLineAt),
+          ...before.slice(edgeLineAt + 1),
+        ]),
+    firstDiff(
+      deleted?.text ?? "",
+      [...before.slice(0, edgeLineAt), ...before.slice(edgeLineAt + 1)].join(
+        "\n",
+      ),
+    ),
+  );
+  const deletedDiagram = deleted?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "the re-parse drops the relationship and keeps both elements",
+    deletedDiagram !== undefined &&
+      deletedDiagram.edges.every((e) => e.id !== "e-cust-web") &&
+      deletedDiagram.nodes.some((n) => n.id === "cust") &&
+      deletedDiagram.nodes.some((n) => n.id === "web"),
+    `edges: ${JSON.stringify(deletedDiagram?.edges.map((e) => e.id))}, ` +
+      `nodes: ${JSON.stringify(deletedDiagram?.nodes.map((n) => n.id))}`,
+  );
+  check(
+    "deleting an unknown edge refuses rather than throwing",
+    deletedEdgeEdit(doc, authored, "ctx", "e-ghost") === null,
+    "expected null",
+  );
+  /* WHAT IT CARRIES RATHER THAN EATS: the child edge's `~realizes` names the
+     deleted relationship, the model does not validate the pointer, and
+     rewriting another diagram's line to chase it would give one deleted line
+     a refactor's blast radius. The edit must APPLY and the pointer must
+     still be there — dangling, visibly, the reader's to fix in the pane. */
+  const childEdge = deleted?.doc.synced.file.diagrams
+    .find((d) => d.id === "backend")
+    ?.edges.find((e) => e.id === "e-api-db");
+  check(
+    "a child edge's ~realizes naming the deleted edge is carried, not eaten",
+    deleted !== null && childEdge?.realizes === "e-cust-web",
+    `realizes after the delete: ${JSON.stringify(childEdge?.realizes)}`,
+  );
+
+  /* --- the key dispatches on WHICH selection is active ------------------------ */
+
+  /* Structural, so `code(...)`: the comments in the listener rightly quote
+     the very calls asserted here. One listener, one focus guard, one
+     form-field exemption — the edge branch must sit in the SAME listener
+     (the two-keydown count at the top of this file pins that there is no
+     third), after the exemption, and behind the node branch so a node
+     selection still wins the key it always had. */
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
+  const exemptAt = canvasCode.indexOf('focused.tagName === "TEXTAREA"');
+  const nodeDeleteAt = canvasCode.indexOf("edit.onNodeDelete(");
+  const edgeDeleteAt = canvasCode.indexOf("edit.onEdgeDelete(");
+  check(
+    "Delete dispatches node-first then edge, inside the exempted edit-keys listener",
+    exemptAt !== -1 &&
+      nodeDeleteAt !== -1 &&
+      edgeDeleteAt !== -1 &&
+      exemptAt < nodeDeleteAt &&
+      nodeDeleteAt < edgeDeleteAt,
+    "the edge delete key sits outside the guarded listener, or ahead of the " +
+      "node branch — Backspace in the card's label field would eat the edge",
+  );
+
+  /* --- the card: the node card's twin, presence-gated the same way ------------ */
+
+  const cardCode = code(
+    "src/features/viewer/components/viewer-edge-detail.tsx",
+  );
+  const card = read("src/features/viewer/components/viewer-edge-detail.tsx");
+  check(
+    "the pencil and the bin are presence-gated — no disabled controls, ever",
+    /onRevise !== undefined && !editing \?/.test(cardCode) &&
+      /onDelete !== undefined && !editing \?/.test(cardCode),
+    "a locked or read-only canvas would render a dead pencil or bin",
+  );
+  check(
+    "the form is keyed by the edge, so selecting another connector cannot re-aim it",
+    /<EdgeEditForm\s+key=\{edge\.id\}/.test(card),
+    "an open form would silently point at a relationship the reader was not editing",
+  );
+  check(
+    "the form submits blank optional fields as absent",
+    /label: orAbsent\(label\)/.test(cardCode) &&
+      /technology: orAbsent\(technology\)/.test(cardCode),
+    'a cleared field would submit "" and write a token the reader cannot see',
+  );
+  check(
+    /* The card half of the `style=solid` contract measured on the module
+       above: solid submits the edge's OWN spelling, so only a genuine flip
+       changes it. */
+    "the style submit preserves the authored solid spelling",
+    /edge\.style === "solid"/.test(cardCode) && /"dashed"/.test(cardCode),
+    "the card collapses solid's two spellings — the numbering toggle's bug, " +
+      "one format over",
+  );
+
+  /* --- the host: one applyCanvasEdit per gesture, refusals said ---------------- */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const reviseBody =
+    /const handleEdgeRevise = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleEdgeRevise applies ONCE and lets a null refuse quietly — no undo entry",
+    reviseBody !== null &&
+      (reviseBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      reviseBody[1].includes("revisedEdgeEdit(") &&
+      !reviseBody[1].includes("setText(") &&
+      reviseBody[1].includes("if (next === null) return;") &&
+      /Cmd or Ctrl \+ Z/.test(reviseBody[1]),
+    "a second apply, a refusal that rewrites the pane, or no stated way back",
+  );
+  const deleteBody =
+    /const handleEdgeDelete = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleEdgeDelete applies ONCE, announces its refusal, and names the undo key",
+    deleteBody !== null &&
+      (deleteBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      deleteBody[1].includes("deletedEdgeEdit(") &&
+      !deleteBody[1].includes("setText(") &&
+      deleteBody[1].includes("setAnnouncement(") &&
+      /Cmd or Ctrl \+ Z/.test(deleteBody[1]),
+    "a pressed bin that goes silent on refusal, or a delete with no stated " +
+      "way back",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 23. Every menu in the dock acts at once                                     */
+/* -------------------------------------------------------------------------- */
+
+/* REPORTED AS "I cannot change the style of the line". The reader could — the
+   gesture writes `~>` and `..>` correctly — but the arrow-kind menu only called
+   `setKind`, so nothing happened until an Apply nobody knew was owed, while the
+   From and To menus one row above committed on change. Two semantics in one
+   panel with no signal which was which.
+
+   DERIVED FROM THE FORMS, not from a list of the two menus that were wrong: the
+   failure a hand-listed pair cannot notice is the THIRD menu somebody adds. So
+   this finds every `<select>` in the viewer and requires each one's `onChange`
+   to reach a commit — `onSubmit`, `onRepointTo`, or another handler prop — and
+   not merely a `setX`. A text input is deliberately exempt: typing is
+   mid-thought until its author says otherwise, which is what Apply is for. */
+{
+  const viewer = read("src/features/sequence/components/sequence-viewer.tsx");
+
+  /* Each select's onChange body, taken from the tag to its closing brace. A
+     count guard first, because a regex that matched nothing would make every
+     assertion below vacuously true — the way three checks on this branch passed
+     while the feature under them was broken. */
+  /* Sliced from each `<select` to the next one (or the end), rather than
+     matched with a closing anchor: the first spelling ended on
+     `}\n<spaces>className`, which prettier's reflow moved, so it found two of
+     the four and the loop below passed on a sample that excluded both menus
+     that were broken. A count guard alone would not have caught that — 2 is
+     also >= 2 — which is why the guard now knows how many selects exist. */
+  /* THE onChange EXPRESSION ONLY, brace-matched. Two earlier spellings were
+     both wrong in the same direction — too greedy — and the second passed while
+     the reported bug was reintroduced:
+
+       - anchoring the end on `}\n<spaces>className` found two of the four,
+         because prettier's reflow moved that shape;
+       - slicing from one `<select` to the NEXT swallowed everything between,
+         including the Apply button's own `onSubmit`, so a menu that only called
+         `setKind` still matched a commit that belonged to its neighbour.
+
+     Counting braces from the `{` after `onChange=` cannot do either. */
+  const onChangeBodies = (source) => {
+    const bodies = [];
+    for (const tag of [...source.matchAll(/<select\b/g)]) {
+      const at = source.indexOf("onChange={", tag.index ?? 0);
+      if (at === -1) {
+        bodies.push("");
+        continue;
+      }
+      let depth = 0;
+      let index = at + "onChange=".length;
+      const from = index;
+      for (; index < source.length; index += 1) {
+        if (source[index] === "{") depth += 1;
+        else if (source[index] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      bodies.push(source.slice(from, index + 1));
+    }
+    return bodies;
+  };
+  const selects = onChangeBodies(viewer);
+  for (const [index, body] of selects.entries()) {
+    check(
+      `select ${index + 1} commits on change rather than waiting for Apply`,
+      /onSubmit\(|onRepointTo\(|onToggle|onPick/.test(body),
+      "a menu that only sets state reads as a control that does nothing",
+    );
+  }
+  /* AND THE COMMIT CARRIES THE WHOLE FORM, which is what makes acting at once
+     safe. A select that submitted only its own field would discard whatever the
+     reader had typed and not yet applied — trading a control that appears
+     broken for one that silently destroys an edit in progress. */
+  check(
+    "an immediate commit carries the rest of the form with it",
+    (viewer.match(/revisionWith\(/g) ?? []).length >= 4,
+    "a partial revision would drop label and detail typed but not applied",
+  );
+}
+
 
 console.log(
   `\n${failures === 0 ? "PASS" : "FAIL"} — ${assertions - failures}/${assertions} assertions\n`,

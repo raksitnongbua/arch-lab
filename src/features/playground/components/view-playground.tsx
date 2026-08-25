@@ -75,11 +75,8 @@ import {
   FileText,
   ChevronDown,
   Info,
-  Link2,
   Pencil,
-  Repeat2,
   Shrink,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -98,6 +95,7 @@ import {
   SplitWorkbench,
 } from "@/components/ui/split-workbench";
 import type {
+  C4EdgeRevision,
   C4NodeFrameChoice,
   C4NodeRevision,
   C4NodeType,
@@ -153,6 +151,7 @@ import { ErShareButton, ErViewer, renderErSvg } from "@/features/er";
 import { DictShareButton, DictViewer, renderDictSvg } from "@/features/dict";
 import {
   MERMAID_SEQUENCE_CAVEAT,
+  SEQUENCE_MOUSE_GESTURES,
   SequenceExportButton,
   SequenceShareButton,
   SequenceViewer,
@@ -195,17 +194,24 @@ import {
   type ViewSourceError,
 } from "../input/parse";
 import {
+  CANVAS_EDITABLE_SUMMARY,
+  CANVAS_GESTURE_CLAUSES,
   canvasEditability,
+  connectedNewNodeEdit,
+  connectedNodesEdit,
   createdNodeEdit,
   createdRefEdit,
   nestedNodeEdit,
   unnestedNodeEdit,
   createdNodeName,
+  deletedEdgeEdit,
   deletedNodeEdit,
   groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
+  deletedFrameEdit,
   renamedFrameEdit,
+  revisedEdgeEdit,
   revisedNodeEdit,
   type CanvasEdit,
 } from "../input/canvas-edit";
@@ -226,6 +232,7 @@ import {
 } from "../input/sequence-edit";
 import { CANVAS_LOCKED_BY_DEFAULT } from "../lib/canvas-lock";
 import { KIND_BLURB } from "../lib/kind-copy";
+import { SOURCE_FOLDED_BY_DEFAULT } from "../lib/source-fold";
 import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
 
 /**
@@ -267,11 +274,18 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
       "diagram. Escape brings it back — a focused message clears first.",
     icon: Expand,
   },
+  /* THE RAIL GETS A STEP for the same reason the lock below does, and it
+     arrived with the same change: the rail is folded by default
+     (`lib/source-fold.ts`), so this is the second chance to say that the
+     diagram is drawn from a text document you can edit. The strip's own "Edit
+     the text" is meant to answer it without help; this says where the pane
+     appears and what typing in it does, which a two-word button cannot. */
   {
     title: "The text behind it",
     body:
-      "The source that draws this diagram sits beside it — edit the pane and " +
-      "the diagram re-renders as you type.",
+      "This diagram is drawn from a text document. “Edit the text” at the top " +
+      "of this pane opens it alongside the diagram — type in it and the " +
+      "drawing re-renders as you go.",
     icon: FileText,
   },
   /* THE LOCK GETS A STEP because it is the one control that takes every other
@@ -329,7 +343,7 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
 export function ViewPlayground({
   seed,
   initialText,
-  initialSourceCollapsed = false,
+  initialSourceCollapsed = SOURCE_FOLDED_BY_DEFAULT,
   initialCanvasLocked = CANVAS_LOCKED_BY_DEFAULT,
 }: {
   /** Which example fills the pane when no share payload does. */
@@ -344,8 +358,12 @@ export function ViewPlayground({
    * The reader's stored rail fold, read from the request cookie by the route
    * that mounts this. Passed in rather than read here because only a SERVER
    * component can see the request, and the whole point is that the first
-   * rendered byte already has the right layout. Defaults to expanded, which
-   * is what a caller with no request context (a test, a story) should get.
+   * rendered byte already has the right layout.
+   *
+   * Defaults to the module's own constant rather than a second literal, so a
+   * host that omits the prop cannot disagree with the server's read of the
+   * cookie — the same rule as the lock below. See `lib/source-fold.ts` for why
+   * folded is that default and what the toggle owes the reader in return.
    */
   initialSourceCollapsed?: boolean;
   /**
@@ -402,7 +420,6 @@ export function ViewPlayground({
   );
 
   // Share links (`#m=…`): the document arrives inside the fragment.
-  const [openedFromShare, setOpenedFromShare] = useState(false);
   const [sharedInitialDiagram, setSharedInitialDiagram] = useState<
     string | null
   >(null);
@@ -423,11 +440,14 @@ export function ViewPlayground({
   const [startersOpen, setStartersOpen] = useState(false);
   const startersMenuId = useId();
 
-  /** The left rail's fold. The toggle lives in the canvas column's own strip,
-   * because a control that vanishes with the thing it hides cannot restore it.
-   * REMEMBERED across visits in a cookie the SERVER reads, so the first
-   * rendered byte already has the right layout — see `lib/source-fold.ts` for
-   * why localStorage could not do that without a visible correction. */
+  /** The left rail's fold, FOLDED unless the reader has said otherwise. The
+   * toggle lives in the canvas column's own strip, because a control that
+   * vanishes with the thing it hides cannot restore it — and with folding the
+   * default, that strip is where a first-time reader learns the diagram is
+   * written as text at all. REMEMBERED across visits in a cookie the SERVER
+   * reads, so the first rendered byte already has the right layout — see
+   * `lib/source-fold.ts` for why localStorage could not do that without a
+   * visible correction, and for the argument that the default rests on. */
   const [sourceCollapsed, setSourceCollapsed] = useSourceCollapsed(
     initialSourceCollapsed,
   );
@@ -641,7 +661,6 @@ export function ViewPlayground({
       // stale error page. Reset covers "none" too: a fragment with no payload
       // is not a share link, so nothing about one should still be on screen.
       setShareFailure(null);
-      setOpenedFromShare(false);
 
       switch (decoded.status) {
         case "none":
@@ -700,7 +719,6 @@ export function ViewPlayground({
           } else {
             setSharedInitialDiagram(null);
           }
-          setOpenedFromShare(true);
           setAnnouncement(
             "Opened a document from a share link — nothing was uploaded; the pane holds its source.",
           );
@@ -1093,6 +1111,46 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleEdgeRevise = useCallback(
+    (diagramId: string, edgeId: string, revision: C4EdgeRevision) => {
+      const next = revisedEdgeEdit(doc, text, diagramId, edgeId, revision);
+      // null covers "nothing changed" as well as every refusal, so submitting
+      // an untouched form costs no text change and no undo entry — the node
+      // revise's own contract.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Relationship ${edgeId} updated — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleEdgeDelete = useCallback(
+    (diagramId: string, edgeId: string) => {
+      const next = deletedEdgeEdit(doc, text, diagramId, edgeId);
+      /* SAID, not swallowed, unlike the node delete's null: this arrives from
+         a card button as well as the key, and a pressed bin that changes
+         nothing reads as a broken control. The one refusal a reader can
+         cause is the pane lagging the canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The relationship was not deleted — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      /* The undo key is NAMED, the node delete's rule: a delete is the edit
+         with nothing left on screen to put back by hand. "Its elements stay"
+         is the removal's verdict said to the reader — the gesture takes one
+         line, never an endpoint. */
+      applyCanvasEdit(
+        next,
+        `Relationship ${edgeId} deleted — its elements stay. The source text follows; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleFrameRename = useCallback(
     (diagramId: string, frameId: string, label: string) => {
       const next = renamedFrameEdit(doc, text, diagramId, frameId, label);
@@ -1103,6 +1161,38 @@ export function ViewPlayground({
       applyCanvasEdit(
         next,
         `Boundary renamed to “${label.trim()}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleFrameDelete = useCallback(
+    (diagramId: string, frameId: string) => {
+      /* Counted BEFORE the edit, from the same document it edits, because the
+         announcement's one job is to say what happened to the members — the
+         removal's whole design question — and after the edit they are
+         indistinguishable from nodes that were never in the boundary. */
+      const held =
+        doc.kind === "c4"
+          ? (doc.synced.file.diagrams
+              .find((diagram) => diagram.id === diagramId)
+              ?.nodes.filter((node) => node.frameId === frameId).length ?? 0)
+          : 0;
+      const next = deletedFrameEdit(doc, text, diagramId, frameId);
+      /* SAID, not swallowed — the Add strip's rule: a pressed Remove that
+         changes nothing reads as a broken button. The one refusal a reader
+         can cause is a stale selection while the pane lags the canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The boundary was not removed — the source pane and the diagram do not match yet.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        held > 0
+          ? `Boundary removed — its ${held} ${held === 1 ? "element stays" : "elements stay"} on the canvas, one level out, and the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`
+          : "Boundary removed — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.",
       );
     },
     [doc, text, applyCanvasEdit],
@@ -1185,6 +1275,64 @@ export function ViewPlayground({
       applyCanvasEdit(
         next,
         "Reference added below the diagram and selected — the source text follows. It mirrors an element from a level above and is read-only here; press Cmd or Ctrl + Z with the diagram focused to undo.",
+      );
+      return next.createdNodeId ?? null;
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleNodeConnect = useCallback(
+    (diagramId: string, sourceId: string, targetId: string) => {
+      /* THE DUPLICATE CAUTION IS READ BEFORE THE EDIT, from the same
+         unordered-pair fact the verdict model warns on: the module ALLOWS a
+         second relationship (parallel edges are a feature), so the sentence
+         is the only place the caution can land after the release. */
+      const already =
+        doc.kind === "c4" &&
+        (
+          doc.synced.file.diagrams.find((d) => d.id === diagramId)?.edges ?? []
+        ).some(
+          (e) =>
+            (e.source === sourceId && e.target === targetId) ||
+            (e.source === targetId && e.target === sourceId),
+        );
+      const next = connectedNodesEdit(doc, text, diagramId, sourceId, targetId);
+      /* SAID, not swallowed — the Add strip's rule: a completed drag that
+         changes nothing reads as a broken gesture. Two causes share the
+         sentence honestly: the same element twice, and the pane lagging the
+         canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The relationship was not added — an element cannot connect to itself, or the source pane and the diagram do not match yet.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        already
+          ? `A second relationship added from ${sourceId} to ${targetId} — they were already related, and the new line draws beside the old one. Press Cmd or Ctrl + Z with the diagram focused to undo.`
+          : `Relationship added from ${sourceId} to ${targetId} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleConnectCreate = useCallback(
+    (diagramId: string, sourceId: string, type: C4NodeType): string | null => {
+      const next = connectedNewNodeEdit(doc, text, diagramId, sourceId, type);
+      if (next === null) {
+        setAnnouncement(
+          "The element was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return null;
+      }
+      applyCanvasEdit(
+        next,
+        /* "one undo takes both back" is the gesture's whole contract said to
+           the reader: the node and its relationship are ONE text edit
+           (`connectedNewNodeEdit`), so the announcement must not read as two
+           steps. */
+        `“${createdNodeName(type)}” added below the diagram, connected from ${sourceId} and selected — the source text follows. Rename it in the details panel; one Cmd or Ctrl + Z with the diagram focused takes both back.`,
       );
       return next.createdNodeId ?? null;
     },
@@ -1569,6 +1717,11 @@ export function ViewPlayground({
             onNodeUnnest: handleNodeUnnest,
             onNodesGroup: handleNodesGroup,
             onFrameRename: handleFrameRename,
+            onFrameDelete: handleFrameDelete,
+            onEdgeRevise: handleEdgeRevise,
+            onEdgeDelete: handleEdgeDelete,
+            onNodeConnect: handleNodeConnect,
+            onConnectCreate: handleConnectCreate,
             onUndo: handleCanvasUndo,
           }
         : undefined,
@@ -1583,6 +1736,11 @@ export function ViewPlayground({
       handleNodeUnnest,
       handleNodesGroup,
       handleFrameRename,
+      handleFrameDelete,
+      handleEdgeRevise,
+      handleEdgeDelete,
+      handleNodeConnect,
+      handleConnectCreate,
       handleCanvasUndo,
     ],
   );
@@ -1681,41 +1839,18 @@ export function ViewPlayground({
             C4, sequence, flowchart, use case, ER or dictionary —{" "}
             <span className="font-mono text-foreground">.alab</span>, arch-lab
             JSON, or Mermaid, auto-detected and rendered live.{" "}
-            {/* WHERE THE CANVAS-EDITING RULE IS NAMED, and it is named here
-                because this is the sentence a reader is on when they wonder
-                why their ER diagram will not move. Sourced from the flag, so
-                the claim is absent rather than false while the canvas is not
-                shipped.
-
-                IT USED TO NAME C4 AS THE ONLY EDITABLE CANVAS, which went
-                false the moment the sequence canvas became editable and was
-                still on the page when a reader asked where the editing was.
-                The old sentence is deliberately not quoted here: an assertion
-                in `check:canvas-edit` searches this file for it, and prose
-                reproducing it would defeat the check that guards it.
-                The two abilities are named separately on purpose: they are
-                genuinely different, and collapsing them into "C4 and sequence
-                can be edited" would promise a sequence drag that does not
-                exist.
-
-                THE SEQUENCE HALF NAMES THE VERBS, since the gestures grew past
-                "edited": messages and lifelines can now be added, rewritten,
-                repointed and removed. Listing them beats a vaguer "can be
-                edited" for the same reason the sentence is here at all — a
-                reader hunting for the control needs to know it exists before
-                they will look for it. */}
-            {CANVAS_EDIT_ENABLED ? (
-              <>
-                C4 nodes can be dragged on the canvas, added from its palette,
-                grouped into a boundary with a drag selection (the Select / Pan
-                toggle by the zoom controls makes a drag pan instead), their
-                wording, icon and colour edited in the details panel — where a
-                selected boundary is renamed too — and sequence messages and
-                lifelines added, edited, repointed, reordered, numbered and
-                removed on it; the other kinds lay themselves out from the
-                text.{" "}
-              </>
-            ) : null}
+            {/* THE INTRO SAYS THAT the canvas is editable; the disclosure
+                below says WHAT. The full gesture enumeration lived in this
+                sentence and grew with every gesture until the product owner
+                read it as a wall of text — ten gestures are a list, not a
+                sentence. The claim that remains is `CANVAS_EDITABLE_SUMMARY`,
+                derived from the capability grid (a hand-written "only C4"
+                predecessor outlived its own truth once already), and it is
+                sourced from the flag so it is absent rather than false while
+                the canvas is not shipped. `check:canvas-edit` keeps this
+                sentence derived AND keeps it short — the wall grew because
+                nothing measured it. */}
+            {CANVAS_EDIT_ENABLED ? <>{CANVAS_EDITABLE_SUMMARY} </> : null}
             Nothing leaves your browser.{" "}
             <Link
               href="/syntax"
@@ -1725,6 +1860,53 @@ export function ViewPlayground({
             </Link>
           </p>
         </header>
+
+        {/* WHERE THE GESTURES ARE NAMED, one bullet per claim, so a reader
+            can scan for the one they are wondering about ("why will my ER
+            diagram not move?") instead of parsing a paragraph. A disclosure,
+            matching the format-relations one below it: a reader meets it
+            before they open the canvas, which is the surface the old intro
+            sentence existed to be.
+
+            NOTHING HERE IS A HAND-KEPT VERB LIST. The clauses are the
+            capability grid's own `onCanvas` cells (`CANVAS_GESTURE_CLAUSES`)
+            and the sequence bullets are the canvas strip's own gesture
+            record (`SEQUENCE_MOUSE_GESTURES`, pinned to the handler
+            contract) — so a new gesture lands on this page by being added
+            where it is built, not by someone remembering this file. The two
+            exceptions are below, marked, because no table knows them. */}
+        {CANVAS_EDIT_ENABLED ? (
+          <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
+            <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
+              What you can do on the canvas
+            </summary>
+            <ul className="mt-2 max-w-3xl list-disc space-y-1 pl-5 leading-relaxed">
+              {CANVAS_GESTURE_CLAUSES.map((clause) => (
+                <li key={clause}>{clause}</li>
+              ))}
+              {/* HAND-KEPT, deliberately: the marquee and the pan are canvas
+                  CONTROLS, not abilities, so no grid cell describes them —
+                  `check:canvas-edit` pins both phrases here instead. The pan
+                  clause rides the grouping bullet because they are one drag:
+                  which of the two a drag performs is exactly what the toggle
+                  chooses. */}
+              <li>
+                C4 nodes group into a boundary with a drag selection — the
+                Select / Pan toggle by the zoom controls makes a drag pan
+                instead
+              </li>
+              <li>
+                on a sequence diagram:{" "}
+                {SEQUENCE_MOUSE_GESTURES.map((gesture) =>
+                  gesture.label.toLowerCase(),
+                ).join(" · ")}
+              </li>
+              {/* The refusal half of the answer, kept from the old sentence:
+                  this is where a reader who dragged a flowchart box lands. */}
+              <li>the other kinds lay themselves out from the text</li>
+            </ul>
+          </details>
+        ) : null}
 
         <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
           <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
@@ -1798,19 +1980,26 @@ export function ViewPlayground({
           </details>
         ) : null}
 
-        {/* ---- the workbench: source at 30%, canvas at 70% ----
+        {/* ---- the workbench: the canvas, and the source at 30% beside it ----
           The pane and the diagram it describes are on screen TOGETHER; both
           predecessor pages arrived at this layout the hard way (see
-          components/ui/split-workbench.tsx for the argument). The rail's
-          collapse gives the canvas everything when a wide diagram needs it. */}
+          components/ui/split-workbench.tsx for the argument).
+
+          IT OPENS WITH THE RAIL FOLDED, so the arrangement above is what the
+          reader gets on the second press rather than the first: presentation is
+          the product, and the drawing takes the opening moment
+          (`lib/source-fold.ts` carries the argument and its cost). Nothing
+          about it settles after paint — the fold is decided from the request
+          cookie, so the canvas is already the width it will keep. */}
         <SplitWorkbench
-          /* Immersive collapses the RAIL; it must not hide the workbench,
-             because the canvas that fixes itself over the viewport is inside
-             it and `display: none` on an ancestor beats `position: fixed` on
-             a descendant. (Fixed once already on the branch that carries the
-             `SplitWorkbench` change; restated here because this branch is cut
-             from main, which does not have it yet.) */
-          collapsed={sourceCollapsed || isImmersive}
+          /* TWO PROPS, not `sourceCollapsed || isImmersive`. The reader's fold
+             applies at `lg` and up, where the toggle exists to undo it;
+             immersive hides the rail at every width. Neither may hide the
+             WORKBENCH: the canvas that fixes itself over the viewport is
+             inside it, and `display: none` on an ancestor beats
+             `position: fixed` on a descendant. */
+          collapsed={sourceCollapsed}
+          immersive={isImmersive}
           sourceLabel="document source"
           source={
             /* THE RAIL IS A COLUMN THAT FILLS ITS HEIGHT, not a scrolling
@@ -1832,70 +2021,15 @@ export function ViewPlayground({
                overflow. Below `lg` the chain is deliberately not joined — the
                panes stack there and the page scrolls. */
             <div className="flex min-h-0 flex-col gap-3 lg:min-h-0 lg:flex-1">
-              {/* ---- share-link outcome ---------------------------------- */}
-              {/* Success only. Failure never reaches here — it took over the
-                  page. */}
-              {/* ONE LINE, with the mechanism folded away — the same
-                  progressive disclosure the Mermaid notice above uses, and
-                  the same border, tint and icon-led summary, because a second
-                  notice shape in one rail reads as two unrelated warnings. It
-                  was a three-sentence card explaining that the document
-                  travelled inside the link; that is the interesting part
-                  exactly once, and it sat above the pane on every visit.
-
-                  WHAT MUST NOT SHRINK OUT is "nothing uploaded, nothing
-                  stored". It is not reassurance, it is the product's claim
-                  (`purpose.md`), and it is the one thing a reader who arrived
-                  from someone else's link cannot deduce from the page. The
-                  crawlable, full-length statement lives where crawlers read
-                  it — `/faq#sharing`, `llms.txt` and `llms-full.txt` — and
-                  the link below goes there rather than restating it here. */}
-              {openedFromShare ? (
-                <div className="flex shrink-0 items-start gap-1">
-                  <details className="group min-w-0 flex-1 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-sm text-foreground">
-                    <summary className="flex cursor-pointer list-none items-center gap-2">
-                      <Link2
-                        aria-hidden="true"
-                        className="size-4 shrink-0 text-accent"
-                      />
-                      {/* WRAPS RATHER THAN TRUNCATES, unlike the strip labels
-                          above: this is the claim itself, and a rail narrow
-                          enough to clip it would clip "nothing stored" — the
-                          half that is the point. */}
-                      <span className="min-w-0">
-                        Share link — nothing uploaded, nothing stored.
-                      </span>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground underline-offset-2 group-hover:underline">
-                        how
-                      </span>
-                    </summary>
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                      The document travelled inside the link itself, in the part
-                      after the <span className="font-mono">#</span> that
-                      browsers never send to a server. Any edits you make stay
-                      in this browser.{" "}
-                      <Link
-                        href="/faq#sharing"
-                        className="font-medium text-primary hover:underline"
-                      >
-                        More on share links
-                      </Link>
-                    </p>
-                  </details>
-                  <button
-                    type="button"
-                    onClick={() => setOpenedFromShare(false)}
-                    aria-label="Dismiss the share link notice"
-                    className={buttonClasses({
-                      variant: "ghost",
-                      size: "sm",
-                      className: "shrink-0",
-                    })}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </div>
-              ) : null}
+              {/* NO SHARE-ARRIVAL CARD ANY MORE. A notice saying the document
+                  travelled inside the link sat above the pane for the whole
+                  visit, and the product owner cut it with the rest of the
+                  page's standing prose. The privacy claim it carried does not
+                  leave the page: the intro's "Nothing leaves your browser."
+                  is always on screen, the share-open announcement below tells
+                  an assistive-tech arrival nothing was uploaded, and the
+                  crawlable full statement stays at `/faq#sharing`, `llms.txt`
+                  and `llms-full.txt` (`purpose.md` claim, unchanged). */}
 
               {/* ---- the source pane -------------------------------------- */}
               {/* `lg:flex-1 lg:min-h-0` — the pane takes a share of the
@@ -1965,10 +2099,6 @@ export function ViewPlayground({
                         );
                       })}
                     </div>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Repeat2 aria-hidden="true" className="size-3.5" />
-                      switches by rewriting the text
-                    </span>
                   </div>
                   {/* PANE-LOCAL actions only — Format, Copy, Download, all of
                       which act on the text beside them.
@@ -2101,11 +2231,18 @@ export function ViewPlayground({
                     <Braces aria-hidden="true" />
                     {showJson ? "Hide JSON" : "Show JSON"}
                   </Button>
-                  <p className="text-xs text-muted-foreground">
-                    {showJson
-                      ? "Both panes stay in sync — edit either one."
-                      : "The same model as .archlab.json, the format it saves to. You never have to write it by hand."}
-                  </p>
+                  {/* A sentence only while both panes are open — what "in
+                      sync" means is not guessable from two editors alone.
+                      The collapsed state used to carry a second sentence
+                      explaining .archlab.json; that is the format-relations
+                      disclosure's job (it already says you never write the
+                      JSON by hand), and a paraphrase of it living down here
+                      is the two-copies drift `dry.md` forbids. */}
+                  {showJson ? (
+                    <p className="text-xs text-muted-foreground">
+                      Both panes stay in sync — edit either one.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 

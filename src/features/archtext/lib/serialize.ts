@@ -443,6 +443,46 @@ export function canonicalNodeLine(
 }
 
 /**
+ * The canonical BLOCK for one edge — byte for byte the lines
+ * `serializeArchText` would write for it: the `  <source> -> <target> …`
+ * relationship line plus any `!` escape continuations the edge carries.
+ *
+ * Exists for the connect gesture (`playground/input/canvas-edit.ts`), which
+ * splices a NEW relationship into the author's own text: deriving the lines
+ * from the emitter is what keeps a patched edge canonical — the duty
+ * `canonicalNodeBlock` discharges for nodes, one element kind over. A freshly
+ * minted edge's block is exactly one line, but this returns whatever the
+ * serializer would write so the derivation cannot silently narrow (the
+ * `canonicalDiagramBlock` argument).
+ *
+ * `null` when `diagramId` or `edgeId` is not in `file`.
+ */
+export function canonicalEdgeBlock(
+  file: ArchLabFile,
+  diagramId: string,
+  edgeId: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const diagramsValue = file.diagrams;
+  if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
+  const diagram = diagramsValue.find(
+    (candidate) => isRecord(candidate) && candidate.id === diagramId,
+  ) as Record<string, unknown> | undefined;
+  if (diagram === undefined) return null;
+  const edgesValue = diagram.edges;
+  if (!Array.isArray(edgesValue)) {
+    invalid(`diagram "${diagramId}".edges`, edgesValue);
+  }
+  const edge = edgesValue.find(
+    (candidate) => isRecord(candidate) && candidate.id === edgeId,
+  ) as Record<string, unknown> | undefined;
+  if (edge === undefined) return null;
+  const lines: string[] = [];
+  emitEdge(lines, edge);
+  return lines;
+}
+
+/**
  * The canonical header line for one `tagColors` entry — byte for byte the
  * line `serializeArchText` writes for it, kept HERE so the one place that
  * knows when a tag or a colour needs quoting (`tagKeyToken`) is the one that

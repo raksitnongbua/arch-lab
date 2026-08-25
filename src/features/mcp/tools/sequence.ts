@@ -21,8 +21,14 @@
 
 import {
   isSelfMessage,
+  SEQUENCE_HEAD_STYLE_PHRASE,
+  SEQUENCE_HEAD_STYLES,
+  SEQUENCE_LINE_STYLE_PHRASE,
+  SEQUENCE_LINE_STYLES,
+  type SequenceHeadStyle,
   type SequenceItem,
   type SequenceLabFile,
+  type SequenceLineStyle,
 } from "@/types/sequence";
 
 import { serializeSequenceText } from "@/features/archtext";
@@ -129,9 +135,16 @@ export function readSequence(source: string): ReadSequenceResult {
 
 interface SequenceCounts {
   messages: number;
-  sync: number;
-  async: number;
-  reply: number;
+  /**
+   * How many messages wear each line style and each head style, TALLIED PER
+   * AXIS rather than per arrow. Ten counters (or thirty words of prose) would
+   * bury the two facts an agent reviewing a flow actually acts on — "nothing
+   * here is a return" and "these three are lost messages" — and a
+   * per-arrow breakdown of a ten-cell grid is mostly zeroes. Both records are
+   * seeded from the axis lists, so a new head style appears here with no edit.
+   */
+  byLineStyle: Record<SequenceLineStyle, number>;
+  byHeadStyle: Record<SequenceHeadStyle, number>;
   self: number;
   /**
    * Messages carrying a `desc`. Counted because it is the one fact about a
@@ -150,6 +163,13 @@ interface SequenceCounts {
   maxDepth: number;
 }
 
+/** A per-axis tally with every value at zero — the seed for the two records
+ * in `SequenceCounts`, built from the axis list so the tally cannot be one
+ * value short of the type it claims to cover. */
+function zeroed<K extends string>(keys: readonly K[]): Record<K, number> {
+  return Object.fromEntries(keys.map((key) => [key, 0])) as Record<K, number>;
+}
+
 /**
  * Walks the item tree once. A sequence document's items are a TREE (fragments
  * carry branches, each branch carries items), so every count here has to
@@ -160,9 +180,8 @@ interface SequenceCounts {
 function countItems(items: readonly SequenceItem[]): SequenceCounts {
   const counts: SequenceCounts = {
     messages: 0,
-    sync: 0,
-    async: 0,
-    reply: 0,
+    byLineStyle: zeroed(SEQUENCE_LINE_STYLES),
+    byHeadStyle: zeroed(SEQUENCE_HEAD_STYLES),
     self: 0,
     detailed: 0,
     fragments: 0,
@@ -176,7 +195,8 @@ function countItems(items: readonly SequenceItem[]): SequenceCounts {
     for (const item of list) {
       if (item.step === "message") {
         counts.messages += 1;
-        counts[item.kind] += 1;
+        counts.byLineStyle[item.lineStyle] += 1;
+        counts.byHeadStyle[item.headStyle] += 1;
         if (isSelfMessage(item)) counts.self += 1;
         if (item.description !== undefined) counts.detailed += 1;
       } else if (item.step === "note") {
@@ -205,11 +225,24 @@ function renderParticipants(file: SequenceLabFile): string {
 }
 
 function renderSummary(file: SequenceLabFile, counts: SequenceCounts): string {
+  /* Only the axis values PRESENT in the document are named. A line reading
+     "0 cross, 0 bidirectional" on every flow that uses neither would make the
+     summary longer and the signal weaker; the reader wants to know what is
+     there. */
   const parts = [
     `${counts.messages} message${counts.messages === 1 ? "" : "s"}`,
-    `${counts.sync} sync`,
-    `${counts.async} async`,
-    `${counts.reply} reply`,
+    ...SEQUENCE_LINE_STYLES.filter(
+      (style) => counts.byLineStyle[style] > 0,
+    ).map(
+      (style) =>
+        `${counts.byLineStyle[style]} ${SEQUENCE_LINE_STYLE_PHRASE[style]}`,
+    ),
+    ...SEQUENCE_HEAD_STYLES.filter(
+      (style) => counts.byHeadStyle[style] > 0,
+    ).map(
+      (style) =>
+        `${counts.byHeadStyle[style]} with ${SEQUENCE_HEAD_STYLE_PHRASE[style]}`,
+    ),
   ];
   if (counts.self > 0) parts.push(`${counts.self} self-message`);
 

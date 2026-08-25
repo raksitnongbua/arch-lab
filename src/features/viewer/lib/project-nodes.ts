@@ -50,7 +50,7 @@ import { childLevelOf, hasChildDiagram, isBoundaryPlaceholder } from "@/types";
 import { nodeColorStyle } from "@/features/editor/lib/node-colors";
 
 import type { ViewerFlowNode } from "../components/viewer-node";
-import { getDiagram, type ViewerModel } from "./model";
+import type { ViewerModel } from "./model";
 import { VIEWER_DURATIONS } from "./motion";
 
 interface CacheEntry {
@@ -117,13 +117,25 @@ function project(
   const childLevel = childLevelOf(diagram.level);
   const drillable =
     hasChildDiagram(node) && typeof node.childDiagramId === "string";
-  // Gated on the child COUNT, not on `childDiagramId` merely existing: a
-  // pointer at an empty diagram is nothing to zoom into, and a chip reading
-  // "0" is an affordance that lies.
-  const childCount =
+  /* TWO RULES, ONE PER CANVAS STATE, and the split is deliberate:
+     - READ-ONLY, the chip is gated on the child COUNT. A pointer at an empty
+       diagram is nothing a READER can zoom into, and a chip reading "0" is an
+       affordance that lies — the rule this projection has always applied.
+     - EDITABLE, a child that EXISTS is offered even while empty, because the
+       nest gesture mints exactly that: an empty child is the workspace the
+       author just created, and gating on count left them with a diagram they
+       could not enter from the canvas they made it on (the details panel's
+       `emptyChild` was the only way in). The chip's wording downstream
+       (viewer-node.tsx) says "empty" rather than promising contents.
+     A DANGLING pointer offers nothing in either state — `drillInto` would
+     no-op on a diagram the model does not hold, and a chip that does nothing
+     is worse than none. Resolved via the map (the `refSourceLevel` pattern
+     below), never `getDiagram`, which throws on exactly that case. */
+  const child =
     drillable && node.childDiagramId
-      ? getDiagram(model, node.childDiagramId).nodes.length
-      : 0;
+      ? (model.diagrams[node.childDiagramId] ?? null)
+      : null;
+  const childCount = child === null ? 0 : child.nodes.length;
   return {
     id: node.id,
     type: "c4" as const,
@@ -166,7 +178,9 @@ function project(
           ? (model.diagrams[node.externalRef.diagramId]?.level ?? null)
           : null,
       drill:
-        node.childDiagramId && childLevel !== null && childCount > 0
+        node.childDiagramId &&
+        childLevel !== null &&
+        (childCount > 0 || (editable && child !== null))
           ? {
               childDiagramId: node.childDiagramId,
               childLevelLabel: childLevel,
