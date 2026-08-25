@@ -263,11 +263,13 @@ const {
   createdNodeEdit,
   createdNodeName,
   createdRefEdit,
+  deletedEdgeEdit,
   deletedNodeEdit,
   groupedNodesEdit,
   movedNodeEdit,
   nestedNodeEdit,
   ownsChildDiagram,
+  revisedEdgeEdit,
   revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
 const { connectTargets, creatableNodeTypes } = await load(
@@ -6318,6 +6320,453 @@ console.log("\nConnecting two elements is one inserted relationship line");
     ) && /createPortal\(/.test(gripCode),
     "the drag's per-frame state left the grip — the projection memos are one " +
       "dependency away from a per-frame identity change",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 22. Revising and deleting a relationship: the edge card is the node card's  */
+/*     twin                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/* WHY THIS SECTION EXISTS. The relationship card shipped read-only for a
+   release after the connect grip could CREATE edges — the text could spell a
+   label, an arrow and a deletion the canvas could not. These gestures ride
+   `"revise"` (they gate on the two facts every revise gates on and never
+   consult the relationship set, which is `connect`'s own question), so this
+   section holds them to section 14's standard: block patch, no-op refusal,
+   authored bytes outside the span untouched — plus the two facts only an edge
+   has: direction and dashedness are ONE arrow token with six spellings, and
+   solid has TWO spellings (`->` and `style=solid`) that a careless toggle
+   would collapse (`4a1254e`, the numbering toggle's shipped bug). */
+console.log("\nRevising and deleting a relationship are line patches");
+{
+  const authored = [
+    `archlab 1.0`,
+    `title "Edge probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" (400,240 160x96)`,
+    `    desc "The paying kind."`,
+    `  ops:person "Operator" (640,240 160x96)`,
+    `  web:system "Web App" (400,480 160x96) >backend`,
+    ``,
+    `  // Reads and writes.`,
+    `  cust -> web :"uses" [HTTPS]`,
+    `  ops -> web :"operates" style=solid`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go] (400,240 160x96)`,
+    `  db:database "Orders DB" (640,240 160x96)`,
+    ``,
+    `  api -> db :"reads" ~e-cust-web`,
+    ``,
+  ].join("\n");
+
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const before = authored.split("\n");
+  const edgeLineAt = before.indexOf(`  cust -> web :"uses" [HTTPS]`);
+
+  /* --- a revise is a block patch of the edge's own line ---------------------- */
+
+  const reworded = revisedEdgeEdit(doc, authored, "ctx", "e-cust-web", {
+    label: "places orders",
+    technology: undefined,
+    direction: "forward",
+    style: undefined,
+  });
+  check(
+    "an edge revise on authored text takes the PATCH path, by name",
+    reworded !== null && reworded.path === "patch",
+    `path: ${reworded === null ? "refused" : reworded.path}`,
+  );
+  const rewordedAfter = (reworded?.text ?? "").split("\n");
+  check(
+    /* Clearing `technology` must REMOVE the `[…]` token, not write `[""]` —
+       the form's "blank means absent" contract measured on the module side,
+       the way section 14 measures it for a node's desc. */
+    "the revise rewrites the relationship line, clearing a field removes its token",
+    rewordedAfter[edgeLineAt] === `  cust -> web : "places orders"`,
+    `line: ${JSON.stringify(rewordedAfter[edgeLineAt])}`,
+  );
+  check(
+    "every line the revise is not about is byte-identical",
+    JSON.stringify([
+      ...rewordedAfter.slice(0, edgeLineAt),
+      ...rewordedAfter.slice(edgeLineAt + 1),
+    ]) ===
+      JSON.stringify([
+        ...before.slice(0, edgeLineAt),
+        ...before.slice(edgeLineAt + 1),
+      ]),
+    firstDiff(reworded?.text ?? "", authored),
+  );
+  check(
+    /* Section 13's derivation, section 13's reason: a patch that writes
+       almost-canonical text trades a silent loss for a worse one. */
+    "the patched relationship line is byte-identical to a full serialise's",
+    reworded !== null &&
+      sourceTextFor(reworded.doc)
+        .split("\n")
+        .includes(rewordedAfter[edgeLineAt]),
+    "the spliced relationship line diverged from canonical form",
+  );
+
+  /* --- a no-op revise costs no undo entry ------------------------------------ */
+
+  check(
+    /* The host pushes the pre-edit text onto the undo ring on every applied
+       edit, so `null` here IS the assertion that an untouched Apply costs no
+       undo entry — the same contract every gesture in the module states. */
+    "a revise that changes nothing refuses (null) — no text change, no undo entry",
+    revisedEdgeEdit(doc, authored, "ctx", "e-cust-web", {
+      label: "uses",
+      technology: "HTTPS",
+      direction: "forward",
+      style: undefined,
+    }) === null,
+    "an untouched form rewrote the pane and cost the reader an undo entry",
+  );
+  check(
+    "an unknown edge refuses rather than throwing",
+    revisedEdgeEdit(doc, authored, "ctx", "e-ghost", {
+      label: undefined,
+      technology: undefined,
+      direction: "forward",
+      style: undefined,
+    }) === null,
+    "expected null",
+  );
+  check(
+    "an edge of ANOTHER diagram refuses — spans are per (diagram, edge)",
+    revisedEdgeEdit(doc, authored, "ctx", "e-api-db", {
+      label: undefined,
+      technology: undefined,
+      direction: "forward",
+      style: undefined,
+    }) === null,
+    "a backend edge was revised through the context diagram",
+  );
+
+  /* --- the six arrow forms round-trip ----------------------------------------- */
+
+  /* Direction × dashedness is ONE token with six spellings (`ARROWS` in
+     archtext/lib/keywords.ts). Each is driven through the revise and read
+     back off the RE-PARSE, so the assertion is the round trip — a revise
+     whose arrow did not survive the parser would show once and snap back. */
+  const ARROW_FORMS = [
+    { direction: "forward", style: undefined, arrow: "->" },
+    { direction: "forward", style: "dashed", arrow: "..>" },
+    { direction: "bidirectional", style: undefined, arrow: "<->" },
+    { direction: "bidirectional", style: "dashed", arrow: "<..>" },
+    { direction: "none", style: undefined, arrow: "--" },
+    { direction: "none", style: "dashed", arrow: ".." },
+  ];
+  for (const form of ARROW_FORMS) {
+    const revised = revisedEdgeEdit(doc, authored, "ctx", "e-cust-web", {
+      // A fresh label per form so the forward-solid case is not the no-op.
+      label: `probe ${form.arrow}`,
+      technology: undefined,
+      direction: form.direction,
+      ...(form.style === undefined ? {} : { style: form.style }),
+    });
+    const line = (revised?.text ?? "").split("\n")[edgeLineAt] ?? "";
+    const parsedBack = revised?.doc.synced.file.diagrams
+      .find((d) => d.id === "ctx")
+      ?.edges.find((e) => e.id === "e-cust-web");
+    check(
+      `direction "${form.direction}"${form.style === "dashed" ? " dashed" : ""} round-trips through ${form.arrow}`,
+      revised !== null &&
+        line.startsWith(`  cust ${form.arrow} web`) &&
+        parsedBack?.direction === form.direction &&
+        parsedBack?.style === form.style,
+      `line: ${JSON.stringify(line)}, parsed back: ${JSON.stringify({
+        direction: parsedBack?.direction,
+        style: parsedBack?.style,
+      })}`,
+    );
+  }
+
+  /* --- solid's TWO spellings both survive ------------------------------------- */
+
+  /* `ops -> web … style=solid` is the author writing the default out. A
+     wording-only revise submits the CURRENT spelling (the card's contract at
+     `C4EdgeRevision`), so the hand-written attribute must still be on the
+     line — the transition that loses information, asserted directly, which
+     is the lesson `4a1254e` bought. */
+  const opsLineAt = before.indexOf(`  ops -> web :"operates" style=solid`);
+  const wordingOnly = revisedEdgeEdit(doc, authored, "ctx", "e-ops-web", {
+    label: "runs",
+    technology: undefined,
+    direction: "forward",
+    style: "solid",
+  });
+  check(
+    "a wording-only revise keeps a hand-written style=solid on the line",
+    wordingOnly !== null &&
+      wordingOnly.text.split("\n")[opsLineAt] ===
+        `  ops -> web : "runs" style=solid`,
+    `line: ${JSON.stringify(wordingOnly?.text.split("\n")[opsLineAt])}`,
+  );
+
+  /* --- the Mermaid refusal, measured against the real emitter ----------------- */
+
+  /* The revise cell's caveat now claims a relationship's undirected form and
+     dashed style would be lost through a Mermaid pane. Measured the way the
+     node fields are: an undirected dashed edge goes through the app's own
+     converter and comes back a plain forward arrow — while a BIDIRECTIONAL
+     edge survives (BiRel), so the refusal claims exactly the losses that are
+     real and no more. */
+  const { convertedSourceText } = await load(
+    "src/features/playground/input/parse.ts",
+  );
+  const arrowProbe = c4Document(
+    [
+      `archlab 1.0`,
+      `title "Arrow probe"`,
+      ``,
+      `@context ctx "Context"`,
+      `  a:system "A"`,
+      `  b:system "B"`,
+      `  c:system "C"`,
+      ``,
+      `  a .. b :"peers"`,
+      `  a <-> c :"syncs"`,
+      ``,
+    ].join("\n"),
+  );
+  const probeBack = parseViewSource(convertedSourceText(arrowProbe, "mermaid"));
+  const probeEdges =
+    probeBack.status === "ok" && probeBack.value.kind === "c4"
+      ? probeBack.value.synced.file.diagrams[0].edges
+      : [];
+  const peers = probeEdges.find((e) => e.source === "a" && e.target === "b");
+  const syncs = probeEdges.find((e) => e.source === "a" && e.target === "c");
+  check(
+    "an undirected dashed edge is measured to come back forward and solid",
+    peers !== undefined &&
+      peers.direction === "forward" &&
+      peers.style === undefined,
+    `after the round trip: ${JSON.stringify({
+      direction: peers?.direction,
+      style: peers?.style,
+    })}`,
+  );
+  check(
+    "a bidirectional edge is measured to SURVIVE — the refusal must not over-claim",
+    syncs !== undefined && syncs.direction === "bidirectional",
+    `after the round trip: ${JSON.stringify(syncs?.direction)} — if BiRel is ` +
+      "gone the caveat under-claims instead",
+  );
+  const mermaidVerdict = canvasEditability(
+    { ...doc, format: "mermaid" },
+    "revise",
+  );
+  check(
+    "the Mermaid revise refusal names the relationship losses beside the node's",
+    mermaidVerdict.editable === false &&
+      /undirected form or dashed style/.test(mermaidVerdict.reason ?? ""),
+    `reason: ${JSON.stringify(mermaidVerdict)}`,
+  );
+  const { MERMAID_C4_EXPORT_CAVEAT } = await load(
+    "src/features/playground/input/parse.ts",
+  );
+  check(
+    "the C4 export caveat documents the arrow loss the refusal cites",
+    /undirected or dashed line/.test(MERMAID_C4_EXPORT_CAVEAT),
+    "the caveat no longer supports the refusal that cites it",
+  );
+  check(
+    "a Mermaid pane refuses the edge revise and the edge delete outright",
+    revisedEdgeEdit(
+      { ...doc, format: "mermaid" },
+      authored,
+      "ctx",
+      "e-cust-web",
+      {
+        label: "x",
+        technology: undefined,
+        direction: "forward",
+        style: undefined,
+      },
+    ) === null &&
+      deletedEdgeEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        "e-cust-web",
+      ) === null,
+    "an edge edit was written against a pane that cannot spell it",
+  );
+  const jsonRevised = revisedEdgeEdit(
+    { ...doc, format: "json" },
+    JSON.stringify({ not: "the alab text" }),
+    "ctx",
+    "e-cust-web",
+    {
+      label: "x",
+      technology: undefined,
+      direction: "forward",
+      style: undefined,
+    },
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    jsonRevised !== null && jsonRevised.path === "reemit",
+    `path: ${jsonRevised === null ? "refused" : jsonRevised.path}`,
+  );
+
+  /* --- a delete removes ITS line and nothing else ----------------------------- */
+
+  const deleted = deletedEdgeEdit(doc, authored, "ctx", "e-cust-web");
+  check(
+    "an edge delete on authored text takes the PATCH path, by name",
+    deleted !== null && deleted.path === "patch",
+    `path: ${deleted === null ? "refused" : deleted.path}`,
+  );
+  const deletedAfter = (deleted?.text ?? "").split("\n");
+  check(
+    /* THE ENDPOINTS ARE LEFT ALONE — the removal's stated verdict. Nothing
+       about either element derives from the edge, so exactly one line goes
+       and every other byte survives; contrast the NODE delete, whose edges
+       must cascade or the document stops parsing. */
+    "deleting a relationship removes exactly its own line — endpoints untouched",
+    deletedAfter.length === before.length - 1 &&
+      JSON.stringify(deletedAfter) ===
+        JSON.stringify([
+          ...before.slice(0, edgeLineAt),
+          ...before.slice(edgeLineAt + 1),
+        ]),
+    firstDiff(
+      deleted?.text ?? "",
+      [...before.slice(0, edgeLineAt), ...before.slice(edgeLineAt + 1)].join(
+        "\n",
+      ),
+    ),
+  );
+  const deletedDiagram = deleted?.doc.synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "the re-parse drops the relationship and keeps both elements",
+    deletedDiagram !== undefined &&
+      deletedDiagram.edges.every((e) => e.id !== "e-cust-web") &&
+      deletedDiagram.nodes.some((n) => n.id === "cust") &&
+      deletedDiagram.nodes.some((n) => n.id === "web"),
+    `edges: ${JSON.stringify(deletedDiagram?.edges.map((e) => e.id))}, ` +
+      `nodes: ${JSON.stringify(deletedDiagram?.nodes.map((n) => n.id))}`,
+  );
+  check(
+    "deleting an unknown edge refuses rather than throwing",
+    deletedEdgeEdit(doc, authored, "ctx", "e-ghost") === null,
+    "expected null",
+  );
+  /* WHAT IT CARRIES RATHER THAN EATS: the child edge's `~realizes` names the
+     deleted relationship, the model does not validate the pointer, and
+     rewriting another diagram's line to chase it would give one deleted line
+     a refactor's blast radius. The edit must APPLY and the pointer must
+     still be there — dangling, visibly, the reader's to fix in the pane. */
+  const childEdge = deleted?.doc.synced.file.diagrams
+    .find((d) => d.id === "backend")
+    ?.edges.find((e) => e.id === "e-api-db");
+  check(
+    "a child edge's ~realizes naming the deleted edge is carried, not eaten",
+    deleted !== null && childEdge?.realizes === "e-cust-web",
+    `realizes after the delete: ${JSON.stringify(childEdge?.realizes)}`,
+  );
+
+  /* --- the key dispatches on WHICH selection is active ------------------------ */
+
+  /* Structural, so `code(...)`: the comments in the listener rightly quote
+     the very calls asserted here. One listener, one focus guard, one
+     form-field exemption — the edge branch must sit in the SAME listener
+     (the two-keydown count at the top of this file pins that there is no
+     third), after the exemption, and behind the node branch so a node
+     selection still wins the key it always had. */
+  const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
+  const exemptAt = canvasCode.indexOf('focused.tagName === "TEXTAREA"');
+  const nodeDeleteAt = canvasCode.indexOf("edit.onNodeDelete(");
+  const edgeDeleteAt = canvasCode.indexOf("edit.onEdgeDelete(");
+  check(
+    "Delete dispatches node-first then edge, inside the exempted edit-keys listener",
+    exemptAt !== -1 &&
+      nodeDeleteAt !== -1 &&
+      edgeDeleteAt !== -1 &&
+      exemptAt < nodeDeleteAt &&
+      nodeDeleteAt < edgeDeleteAt,
+    "the edge delete key sits outside the guarded listener, or ahead of the " +
+      "node branch — Backspace in the card's label field would eat the edge",
+  );
+
+  /* --- the card: the node card's twin, presence-gated the same way ------------ */
+
+  const cardCode = code(
+    "src/features/viewer/components/viewer-edge-detail.tsx",
+  );
+  const card = read("src/features/viewer/components/viewer-edge-detail.tsx");
+  check(
+    "the pencil and the bin are presence-gated — no disabled controls, ever",
+    /onRevise !== undefined && !editing \?/.test(cardCode) &&
+      /onDelete !== undefined && !editing \?/.test(cardCode),
+    "a locked or read-only canvas would render a dead pencil or bin",
+  );
+  check(
+    "the form is keyed by the edge, so selecting another connector cannot re-aim it",
+    /<EdgeEditForm\s+key=\{edge\.id\}/.test(card),
+    "an open form would silently point at a relationship the reader was not editing",
+  );
+  check(
+    "the form submits blank optional fields as absent",
+    /label: orAbsent\(label\)/.test(cardCode) &&
+      /technology: orAbsent\(technology\)/.test(cardCode),
+    'a cleared field would submit "" and write a token the reader cannot see',
+  );
+  check(
+    /* The card half of the `style=solid` contract measured on the module
+       above: solid submits the edge's OWN spelling, so only a genuine flip
+       changes it. */
+    "the style submit preserves the authored solid spelling",
+    /edge\.style === "solid"/.test(cardCode) && /"dashed"/.test(cardCode),
+    "the card collapses solid's two spellings — the numbering toggle's bug, " +
+      "one format over",
+  );
+
+  /* --- the host: one applyCanvasEdit per gesture, refusals said ---------------- */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const reviseBody =
+    /const handleEdgeRevise = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleEdgeRevise applies ONCE and lets a null refuse quietly — no undo entry",
+    reviseBody !== null &&
+      (reviseBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      reviseBody[1].includes("revisedEdgeEdit(") &&
+      !reviseBody[1].includes("setText(") &&
+      reviseBody[1].includes("if (next === null) return;") &&
+      /Cmd or Ctrl \+ Z/.test(reviseBody[1]),
+    "a second apply, a refusal that rewrites the pane, or no stated way back",
+  );
+  const deleteBody =
+    /const handleEdgeDelete = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleEdgeDelete applies ONCE, announces its refusal, and names the undo key",
+    deleteBody !== null &&
+      (deleteBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      deleteBody[1].includes("deletedEdgeEdit(") &&
+      !deleteBody[1].includes("setText(") &&
+      deleteBody[1].includes("setAnnouncement(") &&
+      /Cmd or Ctrl \+ Z/.test(deleteBody[1]),
+    "a pressed bin that goes silent on refusal, or a delete with no stated " +
+      "way back",
   );
 }
 
