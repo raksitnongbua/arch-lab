@@ -35,9 +35,10 @@
  * reasoning originated before the constant moved to the codec.
  */
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 
+import { useBrowserCapability } from "@/lib/browser-capability";
 import { serializeArchText } from "@/features/archtext";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -48,12 +49,6 @@ import {
   encodeShareFragment,
   MAX_HANDOFF_URL_LENGTH,
 } from "../share/codec";
-
-/* `canEncodeShare` is a client-only capability check, constant for the page's
- * life. Read through useSyncExternalStore rather than an effect: false on the
- * server and during hydration, real on the client, with no setState cascade. */
-const subscribeToNothing = (): (() => void) => () => {};
-const readFalse = (): boolean => false;
 
 export function EditModeLink({
   model,
@@ -69,11 +64,7 @@ export function EditModeLink({
     null,
   );
   const [tooLarge, setTooLarge] = useState(false);
-  const canEncode = useSyncExternalStore(
-    subscribeToNothing,
-    canEncodeShare,
-    readFalse,
-  );
+  const canEncode = useBrowserCapability(canEncodeShare);
 
   // View mode never mutates the model, so this is stable for the page's life —
   // unlike the editor side, which has to debounce every dragged pixel.

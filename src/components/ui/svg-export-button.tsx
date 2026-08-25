@@ -30,7 +30,7 @@
  * must not all look like the button doing nothing.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ClipboardCopy,
@@ -40,6 +40,11 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import {
+  PNG_SCALE_BY_SHARPNESS,
+  type Sharpness,
+} from "@/features/viewer/export/sharpness";
+import { useBrowserCapability } from "@/lib/browser-capability";
 import { buttonClasses } from "@/components/ui/button";
 import {
   MENU_ITEM_CLASSES,
@@ -69,27 +74,6 @@ export interface SvgExportButtonProps {
   onAnnounce: (message: string) => void;
 }
 
-/**
- * PNG scale per sharpness — 1x is the diagram's own pixel size.
- *
- * The same three keys and multipliers the C4, sequence, flowchart and use-case
- * exporters each declare, so "Sharp" means one thing across the product. Those
- * four hold their own copies; unifying all six is the follow-up that goes with
- * it, and is not attempted here because rewriting four working exporters to
- * land two is how a feature becomes a regression.
- */
-const PNG_SCALE_BY_SHARPNESS = {
-  compact: 1,
-  standard: 2,
-  sharp: 3,
-} as const;
-
-type Sharpness = keyof typeof PNG_SCALE_BY_SHARPNESS;
-
-/* Same shape the other exporters use for their capability read. */
-const subscribeToNothing = (): (() => void) => () => {};
-const readFalse = (): boolean => false;
-
 export function SvgExportButton({
   render,
   title,
@@ -102,13 +86,7 @@ export function SvgExportButton({
   const [sharpness, setSharpness] = useState<Sharpness>("standard");
   const root = useRef<HTMLDivElement>(null);
 
-  /* Read through the store so the server render and the first client render
-     agree — `canCopyPng()` per render would make the button flicker. */
-  const canCopy = useSyncExternalStore(
-    subscribeToNothing,
-    canCopyPng,
-    readFalse,
-  );
+  const canCopy = useBrowserCapability(canCopyPng);
 
   useEffect(() => {
     if (!open) return;

@@ -26,14 +26,7 @@
  * outcome ("Exported shopflow-diagrams.zip") is announced politely.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   ClipboardCopy,
   ChevronDown,
@@ -43,6 +36,7 @@ import {
   Film,
 } from "lucide-react";
 
+import { useBrowserCapability } from "@/lib/browser-capability";
 import { buttonClasses } from "@/components/ui/button";
 import { MENU_ITEM_CLASSES } from "@/components/ui/menu-item";
 import { toast } from "@/components/ui/toast";
@@ -116,11 +110,6 @@ function ScopeOption({
   );
 }
 
-/* Tiny stores for a browser capability that never changes for the page's
-   life: false on the server, real after hydration, with no setState cascade. */
-const subscribeToNothing = (): (() => void) => () => {};
-const readFalse = (): boolean => false;
-
 export interface ViewerExportButtonProps {
   modelTitle: string;
   /** The diagram currently on screen — what the "This view" scope exports. */
@@ -160,15 +149,9 @@ export function ViewerExportButton({
   );
   const [busy, setBusy] = useState(false);
   const [announcement, setAnnouncement] = useState("");
-  /* A browser capability, so it is false on the server and true after
-     hydration — read through useSyncExternalStore rather than an effect, the
-     shape `canEncodeShare` already uses here. The menu is shut until someone
-     opens it, so the item never appears late in front of a reader. */
-  const copyable = useSyncExternalStore(
-    subscribeToNothing,
-    canCopyPng,
-    readFalse,
-  );
+  /* The menu is shut until someone opens it, so the Copy row never appears
+     late in front of a reader. */
+  const copyable = useBrowserCapability(canCopyPng);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
