@@ -111,6 +111,7 @@ import {
   ZOOM_PILL_CLASSES,
   ZOOM_STEP,
 } from "@/components/ui/zoom-pill";
+import { orAbsent } from "@/lib/absent";
 import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
 
@@ -2634,11 +2635,6 @@ function DockCodeRow({
  * model requires: an empty label submits as the empty string it already
  * permits, and the arrow simply draws without one.
  */
-
-/** Blank string -> `undefined`, so clearing a field removes it. */
-function orAbsent(value: string): string | undefined {
-  return value.trim() === "" ? undefined : value;
-}
 
 const FIELD_CLASSES =
   "mt-1 w-full rounded-md border border-border bg-card px-2 py-1 text-sm " +
