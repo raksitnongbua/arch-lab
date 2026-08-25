@@ -9,6 +9,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- A selected relationship on the editable C4 canvas can now be edited and
+  deleted, not just read. The relationship card grows a pencil — label,
+  technology, direction (one-way, bidirectional, undirected) and line style
+  (solid or dashed) — and a bin; Delete or Backspace with a connector
+  selected removes it too. Edits land as a one-line patch of the source text,
+  a delete takes exactly its own line and leaves both endpoints alone, and
+  Cmd/Ctrl+Z undoes either. A hand-written `style=solid` survives edits that
+  do not touch the style control.
+
 - The element colour control offers any colour, not just the five presets: a
   colour wheel and hex entry sit beside the swatches. A picked colour is
   gently adjusted — hue kept, lightness moved the minimum distance — whenever
@@ -33,6 +42,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   click it is rather than an empty selection box.
 
 ### Changed
+
+- The Mermaid conversion caveat for C4 models now also says that an
+  undirected or dashed relationship comes back as a plain arrow. The loss is
+  not new — the caveat now names it, because the relationship editor refuses
+  a Mermaid pane on the strength of it.
 
 - The `/live` intro is a couple of lines again. The gestures it used to list in
   one long sentence now sit in a "What you can do on the canvas" disclosure,
