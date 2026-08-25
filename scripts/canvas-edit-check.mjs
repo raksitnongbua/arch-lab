@@ -982,11 +982,11 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      Without these the reversal would read as "loops are fine now", which it
      is not: exactly one animation may loop, only while locked, and only
      slowly. */
-  const pulseToken = /--animate-lock-pulse:([^;]+);/.exec(lockAnimCss);
+  const sheenToken = /--animate-lock-sheen:([^;]+);/.exec(lockAnimCss);
   check(
-    "exactly one lock animation loops, and it is the locked face's gradient",
-    pulseToken !== null &&
-      pulseToken[1].includes("infinite") &&
+    "exactly one lock animation loops, and it is the locked face's gleam",
+    sheenToken !== null &&
+      sheenToken[1].includes("infinite") &&
       (lockAnimCss.match(/--animate-lock-[a-z]+:[^;]*infinite[^;]*;/g) ?? [])
         .length === 1,
     "either the running gradient stopped looping, or a SECOND lock animation " +
@@ -997,49 +997,87 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      flashing is a hazard rather than a style. Three per second is the
      threshold; the period is held an order of magnitude under it, and this
      asserts the number rather than trusting the comment beside it. */
-  const pulseSeconds = pulseToken
-    ? Number.parseFloat(/([\d.]+)s/.exec(pulseToken[1])?.[1] ?? "0")
+  const sheenSeconds = sheenToken
+    ? Number.parseFloat(/([\d.]+)s/.exec(sheenToken[1])?.[1] ?? "0")
     : 0;
   check(
     "and it is slow enough that it can never read as a flash (WCAG 2.3.1)",
-    pulseSeconds >= 1.5,
-    `the locked face's loop runs every ${pulseSeconds}s — under 1.5s it starts ` +
+    sheenSeconds >= 1.5,
+    `the locked face's loop runs every ${sheenSeconds}s — under 1.5s it starts ` +
       "approaching a strobe on a control that stays on screen the whole time " +
       "the canvas is locked",
   );
-  const pulseFrames = /@keyframes af-lock-pulse \{([\s\S]*?)\n\}/.exec(
+  const sheenFrames = /@keyframes af-lock-sheen \{([\s\S]*?)\n\}/.exec(
     lockAnimCss,
   );
-  const pulseProps = pulseFrames
-    ? [...new Set([...pulseFrames[1].matchAll(/([a-z-]+):/g)].map((m) => m[1]))]
+  const sheenProps = sheenFrames
+    ? [...new Set([...sheenFrames[1].matchAll(/([a-z-]+):/g)].map((m) => m[1]))]
     : [];
   check(
     "the loop travels a background and nothing else — no opacity strobe, no glyph moved",
-    pulseFrames !== null &&
-      pulseProps.length > 0 &&
-      pulseProps.every((prop) => prop === "background-position"),
-    `the loop animates: ${pulseProps.join(", ") || "nothing found"} — an ` +
+    sheenFrames !== null &&
+      sheenProps.length > 0 &&
+      sheenProps.every((prop) => prop === "background-position"),
+    `the loop animates: ${sheenProps.join(", ") || "nothing found"} — an ` +
       "opacity switch is the literal blink WCAG 2.3.1 is about, and a " +
       "transform would move the padlock forever",
   );
   check(
-    "reduced motion parks the loop on a chosen frame rather than stopping it anywhere",
-    /\.af-lock-pulse-face \{\s*animation: none;\s*background-position: [^;]+;/.test(
+    "reduced motion parks the gleam OFF the face, never frozen mid-sweep",
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.af-lock-sheen \{\s*animation: none;\s*background-position: -\d+% 0;/.test(
       lockAnimCss,
     ),
-    "the locked face has no reduced-motion rule, so it freezes wherever the " +
-      "global backstop happens to catch it — the precedent beside it parks " +
-      "the landing page's gradient deliberately",
+    "the gleam has no reduced-motion rule, or parks somewhere on the face — a " +
+      "highlight halted halfway across is a bright streak sitting on the " +
+      "button forever, which is worse than no gleam at all",
   );
   /* ONLY THE LOCKED FACE MOVES. The whole trade rests on a canvas being
      EDITED having no moving chrome; if the loop ever reached the editable
      face it would sit over the diagram the reader is working in. */
   check(
     "the loop is on the locked face only — an editable canvas has no moving chrome",
-    /af-lock-pulse-face[^"]*motion-safe:animate-lock-pulse/.test(controlCode) &&
-      !/: "w-8 bg-gradient-to-br[^"]*animate-lock-pulse/.test(controlCode),
+    /locked \? \([\s\S]{0,200}af-lock-sheen[^"]*motion-safe:animate-lock-sheen/.test(
+      controlCode,
+    ) && !/: "w-8 bg-gradient-to-br[^"]*animate-lock-sheen/.test(controlCode),
     "the running gradient reached the editable face — a canvas someone is " +
       "working in would have chrome moving over it",
+  );
+  /* THE FACE UNDER IT STAYS LIT WITHOUT MOTION. The whole reversal is safe
+     only because the gleam ADDS to a face that already reads as locked; if the
+     pooled tint were ever traded for the highlight, reduced motion — where the
+     gleam parks off-screen — would leave the locked state told by the glyph
+     alone, on a control whose own header calls the face one of the two things
+     that says it. */
+  check(
+    "the locked face keeps its still pooled tint under the gleam",
+    /\? "relative w-8 border-primary\/40 bg-gradient-to-br from-primary\/25 via-primary\/10 to-card\/80/.test(
+      controlCode,
+    ),
+    "the locked face stopped carrying its own tint — with the gleam parked " +
+      "under reduced motion, nothing but the glyph would say locked",
+  );
+  /* Decoration, measured on the gleam's own element: `aria-hidden` appears on
+     both faces too, so a file-wide search would pass while the layer itself
+     was announced. */
+  const sheenSpan =
+    /<span\b[^>]*af-lock-sheen[^>]*\/>|<span\b[^>]*\n?[^>]*af-lock-sheen[\s\S]{0,200}?\/>/.exec(
+      controlCode,
+    );
+  check(
+    "the gleam is decoration: hidden from assistive tech and untouchable",
+    sheenSpan !== null &&
+      /aria-hidden="true"/.test(sheenSpan[0]) &&
+      /pointer-events-none/.test(sheenSpan[0]),
+    "the gleam is reachable or announced — it repeats what the face, the " +
+      "glyph and the announcement already say",
+  );
+  /* It follows the button's own corner by inheriting it, so no theme's radius
+     is hardcoded here the way the earlier attempt had to. */
+  check(
+    "and it takes the button's own corner rather than naming one",
+    /af-lock-sheen[^"]*rounded-\[inherit\]/.test(controlCode),
+    "the gleam's corner is spelled out, so it squares off against paper's " +
+      "tighter radius or rounds past everything else's",
   );
   check(
     "and they move nothing but transform — the faces' paint stays the tokens'",
