@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
+import { orAbsent } from "@/lib/absent";
 import { LEVEL_LABEL } from "@/lib/constants";
 
 import { MetaRow } from "./viewer-meta-row";
@@ -211,14 +212,6 @@ function ConnectionGroup({
 /* -------------------------------------------------------------------------- */
 /* The edit form — the sequence dock's grammar, on this panel's three fields   */
 /* -------------------------------------------------------------------------- */
-
-/** Blank string -> `undefined`, so clearing a field removes it — the same
- * "empty means absent" contract the sequence dock forms state: `.alab` can
- * spell `[""]` and `desc ""`, and a document carrying one renders a blank
- * field the reader cannot tell from a missing one. */
-function orAbsent(value: string): string | undefined {
-  return value.trim() === "" ? undefined : value;
-}
 
 /** Exported for `viewer-multi-detail`, which renders the same boundary
  * control this panel's form does — one spelling of the field chrome, so the
