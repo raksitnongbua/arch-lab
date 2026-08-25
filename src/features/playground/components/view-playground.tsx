@@ -95,6 +95,7 @@ import {
   SplitWorkbench,
 } from "@/components/ui/split-workbench";
 import type {
+  C4EdgeRevision,
   C4NodeFrameChoice,
   C4NodeRevision,
   C4NodeType,
@@ -203,11 +204,13 @@ import {
   nestedNodeEdit,
   unnestedNodeEdit,
   createdNodeName,
+  deletedEdgeEdit,
   deletedNodeEdit,
   groupedNodesEdit,
   movedNodeEdit,
   ownsChildDiagram,
   renamedFrameEdit,
+  revisedEdgeEdit,
   revisedNodeEdit,
   type CanvasEdit,
 } from "../input/canvas-edit";
@@ -1092,6 +1095,46 @@ export function ViewPlayground({
     [doc, text, applyCanvasEdit],
   );
 
+  const handleEdgeRevise = useCallback(
+    (diagramId: string, edgeId: string, revision: C4EdgeRevision) => {
+      const next = revisedEdgeEdit(doc, text, diagramId, edgeId, revision);
+      // null covers "nothing changed" as well as every refusal, so submitting
+      // an untouched form costs no text change and no undo entry — the node
+      // revise's own contract.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `Relationship ${edgeId} updated — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleEdgeDelete = useCallback(
+    (diagramId: string, edgeId: string) => {
+      const next = deletedEdgeEdit(doc, text, diagramId, edgeId);
+      /* SAID, not swallowed, unlike the node delete's null: this arrives from
+         a card button as well as the key, and a pressed bin that changes
+         nothing reads as a broken control. The one refusal a reader can
+         cause is the pane lagging the canvas. */
+      if (next === null) {
+        setAnnouncement(
+          "The relationship was not deleted — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      /* The undo key is NAMED, the node delete's rule: a delete is the edit
+         with nothing left on screen to put back by hand. "Its elements stay"
+         is the removal's verdict said to the reader — the gesture takes one
+         line, never an endpoint. */
+      applyCanvasEdit(
+        next,
+        `Relationship ${edgeId} deleted — its elements stay. The source text follows; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
   const handleFrameRename = useCallback(
     (diagramId: string, frameId: string, label: string) => {
       const next = renamedFrameEdit(doc, text, diagramId, frameId, label);
@@ -1626,6 +1669,8 @@ export function ViewPlayground({
             onNodeUnnest: handleNodeUnnest,
             onNodesGroup: handleNodesGroup,
             onFrameRename: handleFrameRename,
+            onEdgeRevise: handleEdgeRevise,
+            onEdgeDelete: handleEdgeDelete,
             onNodeConnect: handleNodeConnect,
             onConnectCreate: handleConnectCreate,
             onUndo: handleCanvasUndo,
@@ -1642,6 +1687,8 @@ export function ViewPlayground({
       handleNodeUnnest,
       handleNodesGroup,
       handleFrameRename,
+      handleEdgeRevise,
+      handleEdgeDelete,
       handleNodeConnect,
       handleConnectCreate,
       handleCanvasUndo,

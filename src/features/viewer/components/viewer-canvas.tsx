@@ -64,6 +64,7 @@ import "@xyflow/react/dist/style.css";
 import type {
   C4Diagram,
   C4Edge,
+  C4EdgeRevision,
   C4NodeFrameChoice,
   C4NodeRevision,
   C4NodeType,
@@ -248,6 +249,28 @@ export interface CanvasEditHandlers {
    * submitted form, exactly as `onNodeRevise` does for a node's fields.
    */
   onFrameRename: (diagramId: string, frameId: string, label: string) => void;
+  /**
+   * Rewrite one relationship's own fields — label, technology, direction and
+   * line style — from the relationship card's edit form. The host turns it
+   * into a line patch (`revisedEdgeEdit`) and refuses what cannot apply; the
+   * canvas only reports the submitted form, exactly as `onNodeRevise` does
+   * for an element's fields.
+   */
+  onEdgeRevise: (
+    diagramId: string,
+    edgeId: string,
+    revision: C4EdgeRevision,
+  ) => void;
+  /**
+   * Remove the relationship — the card's bin, and the Delete/Backspace key
+   * while a connector is selected. The host resolves it into one removed
+   * span (`deletedEdgeEdit`), leaving both endpoints untouched, and says how
+   * to undo it; the canvas only reports the keystroke or the press. The key
+   * shares the element delete's listener and dispatches on WHICH selection
+   * is active — the four selection kinds are mutually exclusive, so the
+   * press is never ambiguous.
+   */
+  onEdgeDelete: (diagramId: string, edgeId: string) => void;
   /**
    * Write one relationship from `sourceId` to `targetId`, from the connect
    * grip — a drag released on an element, or the menu's existing-element
@@ -1960,19 +1983,40 @@ function ViewerCanvasInner({
         return;
       }
 
+      const current = getDiagram(model, diagramIdRef.current);
+
+      /* DELETE DISPATCHES ON WHICH SELECTION IS ACTIVE — never on both,
+         because the four selection kinds are mutually exclusive by
+         construction (each incoming selection clears the others), so the
+         key is unambiguous without a priority rule to reason about. The
+         edge branch lives HERE, in the same listener behind the same focus
+         guard and form-field exemption, because a THIRD keydown listener is
+         the "two guards that disagree" shape the undo binding's comment
+         already bans — and `check:canvas-edit` counts the listeners. */
+      if (event.key === "Delete" || event.key === "Backspace") {
+        const nodeId = selectedNodeIdRef.current;
+        // A selection can outlive its element for one render after an edit;
+        // do nothing rather than address what is no longer there.
+        if (nodeId !== null) {
+          if (findNode(current, nodeId) === null) return;
+          event.preventDefault();
+          edit.onNodeDelete(current.id, nodeId);
+          return;
+        }
+        const edgeId = selectedEdgeIdRef.current;
+        if (edgeId !== null && findEdge(current, edgeId) !== null) {
+          event.preventDefault();
+          edit.onEdgeDelete(current.id, edgeId);
+        }
+        return;
+      }
+
       const nodeId = selectedNodeIdRef.current;
       if (nodeId === null) return;
-      const current = getDiagram(model, diagramIdRef.current);
       const node = findNode(current, nodeId);
       // A selection can outlive its node for one render after an edit; do
       // nothing rather than address a node that is no longer there.
       if (node === null) return;
-
-      if (event.key === "Delete" || event.key === "Backspace") {
-        event.preventDefault();
-        edit.onNodeDelete(current.id, nodeId);
-        return;
-      }
 
       const delta = NUDGE[event.key];
       if (delta === undefined) return;
@@ -2238,6 +2282,38 @@ function ViewerCanvasInner({
               selectedNodeIdRef.current,
               revision,
             );
+          },
+    [edit],
+  );
+
+  /* The relationship card's Apply and bin, resolved to the selected edge the
+     way the node revise is resolved to its node: the card describes one
+     relationship and should not carry ids around, and the refs are what
+     handlers on this canvas already read the selection from — at submit
+     time, inside the callback, never at render (`react-hooks/refs`).
+     `undefined` while read-only, which is what withholds the pencil and the
+     bin — presence is the signal, exactly as `edit` itself is. */
+  const handleEdgeRevise = useMemo(
+    () =>
+      edit === undefined
+        ? undefined
+        : (revision: C4EdgeRevision) => {
+            if (selectedEdgeIdRef.current === null) return;
+            edit.onEdgeRevise(
+              diagramIdRef.current,
+              selectedEdgeIdRef.current,
+              revision,
+            );
+          },
+    [edit],
+  );
+  const handleEdgeDelete = useMemo(
+    () =>
+      edit === undefined
+        ? undefined
+        : () => {
+            if (selectedEdgeIdRef.current === null) return;
+            edit.onEdgeDelete(diagramIdRef.current, selectedEdgeIdRef.current);
           },
     [edit],
   );
@@ -2587,6 +2663,8 @@ function ViewerCanvasInner({
                 <ViewerEdgeDetail
                   detail={detail}
                   onDismiss={handleDetailDismiss}
+                  onRevise={handleEdgeRevise}
+                  onDelete={handleEdgeDelete}
                 />
               )}
             </div>
