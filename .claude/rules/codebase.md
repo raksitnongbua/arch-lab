@@ -20,9 +20,24 @@ placement are in [`dry.md`](dry.md). This file covers everything else.
   through Node's type stripping, so a check exercises what the app ships rather
   than a copy of it. Never reimplement app logic inside a check.
 
+## Two layers of tests
+
+- `pnpm test` is the **unit** layer (vitest, node environment, no DOM): pure
+  functions only — grammar, geometry, codecs, helpers. A failure here names the
+  function that broke. Tests sit beside the code as `foo.test.ts`.
+- The `check:*` scripts are the **integration** layer. A failure there says
+  "something moved", which is the right answer to a different question.
+- Which layer does a new test belong in? If it can be proved with a pure
+  function over data, it is a unit test. If it needs a rendered page, real
+  geometry off the DOM, or a route, it belongs behind a `check:*` script — do
+  not reach for jsdom to simulate what a check script can measure for real.
+- **A component test is not a substitute for either.** The large viewer
+  components are covered by the check suite; when one is broken up, the extracted
+  pure helpers should arrive with unit tests in the same commit.
+
 ## The check suite is the safety net
 
-- There are 32 `check:*` scripts. If you change a **format, converter, layout,
+- There are 48 `check:*` scripts. If you change a **format, converter, layout,
   or route**, one of them almost certainly already has an opinion — find it and
   run it before assuming your change is free.
 - Each script's header states what it proves and, usually, which shipped bug
@@ -37,7 +52,7 @@ placement are in [`dry.md`](dry.md). This file covers everything else.
 ## Before opening a pull request
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm build
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
 All of it must pass, plus every `check:*` your change touches. `pnpm lint` has
