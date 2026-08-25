@@ -175,8 +175,8 @@ export function CanvasLockButton({
            none of this is a hardcoded colour. The cross-fade is
            `motion-safe:` — reduced motion gets the state, not the travel. */
         className: locked
-          ? "w-8 border-primary/40 bg-gradient-to-br from-primary/25 via-primary/10 to-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:from-primary/35 hover:via-primary/15 motion-safe:transition-all motion-safe:duration-300"
-          : "w-8 bg-gradient-to-br from-card/90 to-card/60 px-0 shadow-sm backdrop-blur hover:from-muted/60 hover:to-card/70 motion-safe:transition-all motion-safe:duration-300",
+          ? "relative w-8 border-primary/40 bg-gradient-to-br from-primary/25 via-primary/10 to-card/80 px-0 shadow-sm backdrop-blur hover:border-primary/70 hover:from-primary/35 hover:via-primary/15 motion-safe:transition-all motion-safe:duration-300"
+          : "relative w-8 bg-gradient-to-br from-card/90 to-card/60 px-0 shadow-sm backdrop-blur hover:from-muted/60 hover:to-card/70 motion-safe:transition-all motion-safe:duration-300",
       })}
     >
       {/* Each face animates on MOUNT (a toggle swaps the two glyphs, so the
@@ -185,6 +185,49 @@ export function CanvasLockButton({
           CSS, not JS, so it holds on that very first toggle frame — and the
           keyframes are transform-only, so the token colour below and the
           button's gradient stay the only paint either face ever has. */}
+      {/* THE SEAL — one line travelling the button's own edge as the canvas
+          closes. Rendered only for `locked && travelled`, which is narrower
+          than the faces above on purpose: it marks the moment of SEALING, so
+          it has no meaning on the way open, and `travelled` keeps it off the
+          first paint exactly as it keeps the settle off.
+
+          IT IS DECORATION AND NOTHING ELSE — `aria-hidden`, no pointer
+          surface, and the state it accompanies is already carried by the
+          glyph, the face and the announcement. That is also what makes it the
+          one place in this control a stroke may live: the header's rule keeps
+          paint off the GLYPH, whose disappearance would cost the reader the
+          only affordance a locked canvas has. If this ring fails to draw,
+          nothing is lost.
+
+          `currentColor` from `text-primary`, so it is the same theme token
+          the closed glyph already uses and no colour is spelled here. The
+          rect is normalised with `pathLength="1"`, so the keyframes trace any
+          size; `rx` follows the theme through the CSS rule beside them, with
+          the attribute as the fallback. `opacity-0` is the resting state, so
+          a reader on reduced motion — where the animation never runs — sees
+          the control exactly as it was before this existed. */}
+      {locked && travelled ? (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 32 32"
+          className="pointer-events-none absolute inset-0 size-full text-primary"
+        >
+          <rect
+            className="af-lock-seal-ring opacity-0 motion-safe:animate-lock-seal"
+            x="1"
+            y="1"
+            width="30"
+            height="30"
+            rx="9"
+            pathLength="1"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeDasharray="1"
+          />
+        </svg>
+      ) : null}
       {locked ? (
         <LockKeyhole
           aria-hidden="true"

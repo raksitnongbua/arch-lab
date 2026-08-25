@@ -956,7 +956,7 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
      what the faces look like. */
   const lockAnimCss = read("src/app/globals.css");
   const lockAnimTokens = [
-    ...lockAnimCss.matchAll(/--animate-lock-(snap|open):([^;]+);/g),
+    ...lockAnimCss.matchAll(/--animate-lock-(snap|open|seal):([^;]+);/g),
   ];
   const lockKeyframes = [
     ...lockAnimCss.matchAll(
@@ -967,8 +967,8 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
     [...m[1].matchAll(/([a-z-]+):/g)].map((p) => p[1]),
   );
   check(
-    "the lock's two gestures are one-shot — declared without `infinite`",
-    lockAnimTokens.length === 2 &&
+    "the lock's three gestures are one-shot — declared without `infinite`",
+    lockAnimTokens.length === 3 &&
       lockAnimTokens.every(
         ([declaration]) => !declaration.includes("infinite"),
       ),
@@ -976,13 +976,86 @@ console.log("\nThe canvas lock defaults to locked and is read server-side");
       "control floating over a diagram someone is presenting",
   );
   check(
-    "and they move nothing but transform — the faces' paint stays the tokens'",
+    "and the two FACES move nothing but transform — their paint stays the tokens'",
     lockKeyframes.length === 2 &&
       lockKeyframeProps.length > 0 &&
       lockKeyframeProps.every((prop) => prop === "transform"),
     `keyframes animate: ${[...new Set(lockKeyframeProps)].join(", ") || "none found"} — ` +
       "a colour or stroke in the gesture would repaint the glyph the token " +
       "assertions above vouch for",
+  );
+  /* THE SEAL IS HELD TO THE SAME DECISION BY A DIFFERENT ROUTE. It is the one
+     lock gesture that may paint, because it paints no glyph — so the rule it
+     must not escape is not "transform only" but "leaves nothing behind": it
+     ends invisible, it rests invisible, and it marks the transition INTO
+     locked rather than decorating the state. A ring that ended drawn would be
+     a second border competing with the button's own; one that ran forever
+     would be the loop the keyframes' own comment refuses, on the one control
+     floating over a diagram being presented. */
+  const sealFrames = /@keyframes af-lock-seal \{([\s\S]*?)\n\}/.exec(
+    lockAnimCss,
+  );
+  const sealProps = sealFrames
+    ? [...new Set([...sealFrames[1].matchAll(/([a-z-]+):/g)].map((m) => m[1]))]
+    : [];
+  check(
+    "the seal animates only its own stroke and opacity — never a transform of the glyph",
+    sealFrames !== null &&
+      sealProps.length > 0 &&
+      sealProps.every(
+        (prop) => prop === "stroke-dashoffset" || prop === "opacity",
+      ),
+    `the seal animates: ${sealProps.join(", ") || "nothing found"} — anything ` +
+      "else and it stops being a ring drawn beside the glyph",
+  );
+  check(
+    "the seal ends invisible, so the button is never left wearing a second border",
+    sealFrames !== null &&
+      /100% \{\s*stroke-dashoffset: 0;\s*opacity: 0;\s*\}/.test(sealFrames[0]),
+    "the traced ring rests drawn — a locked button would carry two borders, " +
+      "and the resting-motion decision would have been reversed by accident",
+  );
+  check(
+    "the seal follows the theme's own corner rather than hardcoding one",
+    /\.af-lock-seal-ring \{\s*rx: calc\(var\(--radius\) - 1px\);/.test(
+      lockAnimCss,
+    ),
+    "the seal's corner is a fixed number, so it traces a rounded ring around " +
+      "paper's squared button — a shape correct on every theme but one",
+  );
+  /* IT MARKS THE SEALING, NOT THE STATE. Narrower than the faces on purpose:
+     `locked` alone would draw it on arrival at a locked share link, and
+     dropping `travelled` would do the same — the very bug the settle's own
+     gate exists to prevent, reintroduced by a second element. */
+  check(
+    "the seal draws only on the way INTO locked, and never on first paint",
+    /locked && travelled \? \(/.test(controlCode) &&
+      /motion-safe:animate-lock-seal/.test(controlCode) &&
+      /opacity-0 motion-safe:animate-lock-seal/.test(controlCode),
+    "the seal is not gated on both `locked` and `travelled`, or it is not " +
+      "invisible at rest — opening a locked diagram would trace a seal for a " +
+      "press nobody made, or reduced motion would be left a static ring",
+  );
+  /* Measured on the SEAL'S OWN ELEMENT, not on the file: `aria-hidden` appears
+     on both faces too, so a file-wide search would pass while the ring itself
+     was announced. This pulls the svg that carries the ring and asks of that
+     element alone. */
+  const sealSvg = /<svg\b[^>]*>(?:(?!<\/svg>)[\s\S])*?af-lock-seal-ring/.exec(
+    controlCode,
+  );
+  check(
+    "the seal is decoration: hidden from assistive tech and untouchable",
+    sealSvg !== null &&
+      /aria-hidden="true"/.test(sealSvg[0]) &&
+      /pointer-events-none/.test(sealSvg[0]),
+    "the seal is reachable or announced — it repeats what the glyph, the " +
+      "face and the announcement already say",
+  );
+  check(
+    "and it spells no colour of its own — currentColor from the same token the glyph uses",
+    /stroke="currentColor"/.test(controlCode) &&
+      !/stroke="#|stroke="rgb/.test(controlCode),
+    "the seal hardcodes a stroke colour, so it is tuned for one theme",
   );
   /* `motion-safe:` on BOTH faces, and no unguarded spelling anywhere. This is
      the reduced-motion STOP the canvas promises elsewhere — the variant is a
@@ -7471,7 +7544,6 @@ console.log("\nRevising and deleting a relationship are line patches");
     "a partial revision would drop label and detail typed but not applied",
   );
 }
-
 
 console.log(
   `\n${failures === 0 ? "PASS" : "FAIL"} — ${assertions - failures}/${assertions} assertions\n`,

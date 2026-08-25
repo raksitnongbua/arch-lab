@@ -57,6 +57,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Locking the canvas now seals it visibly: a line travels once around the
+  padlock button's own edge as the lock closes, finishing just after the
+  padlock settles so the two read as one gesture. It marks the moment of
+  locking rather than decorating the state — it plays only on the way into
+  locked, never on arrival at an already-locked diagram, and leaves nothing
+  behind, so the control still rests still while you present. Reduced motion
+  gets the state without the travel, and the line follows each theme's own
+  corner radius.
+
 - The Mermaid conversion caveat for C4 models now also says that an
   undirected or dashed relationship comes back as a plain arrow. The loss is
   not new — the caveat now names it, because the relationship editor refuses

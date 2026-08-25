@@ -1191,6 +1191,12 @@
      reads these two declarations to prove it stays that way. */
   --animate-lock-snap: af-lock-snap 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
   --animate-lock-open: af-lock-open 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
+  /* The seal: one line travelling the button's own edge as the canvas closes.
+     Longer than the settle above and eased out rather than sprung, so the line
+     is still arriving as the padlock stops moving and the two read as one
+     gesture rather than two things happening at once. `both` and no
+     `infinite`, under the same rule as its neighbours. */
+  --animate-lock-seal: af-lock-seal 0.62s cubic-bezier(0.35, 0, 0.2, 1) both;
 }
 
 @layer base {
@@ -1335,6 +1341,65 @@
   100% {
     transform: translateY(0) rotate(0deg) scale(1);
   }
+}
+
+/* The seal draws the lock's edge ONCE, at the moment locking becomes true, and
+   then leaves nothing behind.
+
+   WHY IT DOES NOT LOOP, given the request was for a line running the edge to
+   present the locked state: the decision recorded above — that this control
+   rests still — is what a loop would reverse, and it was not reversed. A line
+   running forever sits on the one control floating over a diagram someone is
+   presenting to a room, and purpose.md's test asks whether removing the motion
+   loses information. It would not: the closed glyph and the primary-pooled
+   face already say "locked" twice, at rest, in every frame. What the edge adds
+   is the SEALING — a boundary closing around the canvas at the instant it
+   closes — which is information exactly once. So it plays on the transition
+   and ends invisible.
+
+   NOT TRANSFORM-ONLY, and it is the one lock gesture that may not be. Its
+   neighbours are pinned to `transform` because they move the GLYPH, whose
+   paint the token assertions vouch for; repainting it there would make those
+   assertions lies. This paints no glyph — it is a separate decorative ring
+   whose worst failure is that nothing is drawn, which is why it is also the
+   safe place for the stroke the icon itself may never carry. `stroke-dashoffset`
+   over a `pathLength="1"` rect is what makes it size-independent: the
+   perimeter is normalised to 1, so the same keyframes trace a 32px button
+   whatever a theme does to its corner radius.
+
+   It ends at opacity 0 rather than resting drawn, so the button is never left
+   wearing a second border competing with its own. At rest — and under reduced
+   motion, where this animation never runs — the ring is `opacity-0` and the
+   control looks exactly as it did before the seal existed.
+   --------------------------------------------------------------------------- */
+@keyframes af-lock-seal {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  72% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+/* The traced path sits a hair inside the button's edge, so its corner is the
+   button's corner less that inset. `rx` AS A CSS PROPERTY IS DELIBERATE: the
+   radius is a theme token, and `.paper` cuts its corners to 4px where every
+   other theme rounds to 10px — a hardcoded corner would trace a rounded seal
+   around a squared button on exactly one theme, which is the "correct and
+   ugly" purpose.md refuses. The `rx` attribute in the markup stays as the
+   fallback for an engine that does not take the CSS form: still a rounded
+   square, just not paper's tighter one. */
+.af-lock-seal-ring {
+  rx: calc(var(--radius) - 1px);
 }
 
 /* ---------------------------------------------------------------------------
