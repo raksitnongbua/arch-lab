@@ -31,11 +31,15 @@
  */
 
 import type {
+  SequenceArrow,
   SequenceFragmentKind,
-  SequenceMessageKind,
+  SequenceHeadStyle,
+  SequenceLineStyle,
   SequenceNotePlacement,
   SequenceParticipantKind,
 } from "@/types";
+
+import { SEQUENCE_ARROWS_GRID, sequenceArrowPhrase } from "@/types";
 
 /** The word after the version that marks a sequence document. */
 export const SEQUENCE_HEADER_WORD = "sequence";
@@ -44,35 +48,85 @@ export const SEQUENCE_HEADER_WORD = "sequence";
 export const SEQUENCE_BLOCK = "@sequence";
 
 /**
- * Arrow token ⇄ message kind (bijective). Chosen so that no token is a
- * prefix of another — unlike the C4 `ARROWS` table this one needs no
- * longest-first ordering, which removes a whole class of tokenizer bugs:
+ * THE ARROW GRID: line style → head style → the one token that spells it.
+ * A total `Record<Record<>>` rather than a flat list of ten pairs, so the
+ * table cannot be written with a hole in it — see `SequenceLineStyle` for why
+ * the model is two axes instead of ten names.
  *
- *   ->   sync   (solid, filled head — matches the C4 grammar's forward arrow)
- *   ~>   async  (the tilde reads as "fire and forget"; `-)` was rejected as
- *                unbalanced-paren noise and `->>` as a prefix trap on `->`)
- *   ..>  reply  (dashed return, same dash spelling the C4 grammar uses)
+ * HOW A TOKEN IS SPELLED. Every token ends in the glyph that says what the
+ * tip is, and what comes before it says what the LINE is:
  *
- * An arrow may carry activation suffixes (see the parser): `+` starts a bar
- * on the target, `-` ends the bar on the source; canonical order is `+-`.
+ *   - The line: `..` is dotted, exactly as it is in the C4 grammar's `..>`
+ *     and in this grammar's own `..>` reply. Solid writes `-` in the plain
+ *     `->`, and writes nothing before a head glyph — `-~>` and `-x>` read as
+ *     two operators fighting, and `~>` has spelled solid+open since 1.0 and
+ *     must keep doing so byte for byte.
+ *   - The tip: bare `>` is an arrowhead, `x>` is a cross (the spelling both
+ *     Mermaid and PlantUML use for a lost message), `~>` is an open head
+ *     (the tilde reads as "fire and forget").
+ *   - THE TWO EXTREMES ARE BORROWED VERBATIM FROM THE C4 GRAMMAR rather than
+ *     invented here: `--`/`..` for a line with no head and `<->`/`<..>` for
+ *     one with a head at each end are the same four tokens `ARROWS` in
+ *     `../keywords.ts` has spelled that way since 1.0. An author who knows
+ *     one grammar already knows these, and a second spelling for one drawing
+ *     would be the "two halves that disagree" failure in the vocabulary
+ *     itself.
+ *
+ * ORDERING NOW MATTERS, and it did not before. With three tokens no token
+ * was a prefix of another; `..` is a prefix of `..>`, `..x>` and `..~>`, so
+ * the parser must try candidates LONGEST FIRST or `a .. b` and `a ..> b`
+ * become the same statement. `SEQUENCE_ARROW_MATCH_ORDER` is that ordering,
+ * derived from this table by length rather than hand-listed — a hand-listed
+ * order is one that a new token gets appended to in the wrong place.
  */
-export const SEQUENCE_ARROWS: readonly (readonly [
-  string,
-  SequenceMessageKind,
-])[] = [
-  ["->", "sync"],
-  ["~>", "async"],
-  ["..>", "reply"],
-];
-
-/** Message kind → canonical arrow token (inverse of `SEQUENCE_ARROWS`). */
-export const ARROW_BY_MESSAGE_KIND: Readonly<
-  Record<SequenceMessageKind, string>
+export const SEQUENCE_ARROW_TOKENS: Readonly<
+  Record<SequenceLineStyle, Readonly<Record<SequenceHeadStyle, string>>>
 > = {
-  sync: "->",
-  async: "~>",
-  reply: "..>",
+  solid: {
+    none: "--",
+    arrow: "->",
+    cross: "x>",
+    open: "~>",
+    bidirectional: "<->",
+  },
+  dotted: {
+    none: "..",
+    arrow: "..>",
+    cross: "..x>",
+    open: "..~>",
+    bidirectional: "<..>",
+  },
 };
+
+/** The one token that spells `arrow` — the inverse direction of the grid,
+ * as a function so no caller indexes the nested table by hand. */
+export function sequenceArrowToken(arrow: SequenceArrow): string {
+  return SEQUENCE_ARROW_TOKENS[arrow.lineStyle][arrow.headStyle];
+}
+
+/**
+ * Every token with the arrow it means, LONGEST FIRST — the order the parser
+ * must try them in. Derived from `SEQUENCE_ARROW_TOKENS` and from the grid
+ * product, so a token added to the table joins this list in the right place
+ * without anybody editing a second list.
+ */
+export const SEQUENCE_ARROW_MATCH_ORDER: readonly (readonly [
+  string,
+  SequenceArrow,
+])[] = SEQUENCE_ARROWS_GRID.map((arrow): readonly [string, SequenceArrow] => [
+  sequenceArrowToken(arrow),
+  arrow,
+]).sort((a, b) => b[0].length - a[0].length);
+
+/**
+ * The token menu quoted by the parser's "expected an arrow" error, in grid
+ * order so the reader sees the two axes rather than an alphabet soup. Built
+ * from the table for the reason every agent- and user-facing string in this
+ * repo is: a menu that lists nine of ten tokens is worse than no menu.
+ */
+export const SEQUENCE_ARROW_MENU: string = SEQUENCE_ARROWS_GRID.map(
+  (arrow) => `${sequenceArrowToken(arrow)} ${sequenceArrowPhrase(arrow)}`,
+).join(", ");
 
 /** `id:keyword` participant kinds — same `id:type` shape as C4 node lines.
  * A participant line WITHOUT `:kind` means kind unstated (absent in the

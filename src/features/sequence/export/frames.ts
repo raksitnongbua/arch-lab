@@ -15,13 +15,13 @@
  * never promise.
  *
  * WHY THE CLOCKS ARE NOT THE APP'S. On screen the comet takes 4200ms per
- * traversal and a reply's dash 2750ms per period, and those two do not divide
+ * traversal and a dotted line's dash 2750ms per period, and those two do not divide
  * into each other: over any finite window one of them is caught mid-cycle. That
  * is fine for motion that never stops and fatal for a LOOP, where the last frame
  * must hand back to the first without a jump. So the export picks its own
  * window and fits WHOLE cycles of both into it — one comet traversal and a
  * round number of dash periods. The result loops seamlessly at the cost of the
- * reply marching a little faster than it does on screen, which is the right
+ * a dotted dash marching a little faster than it does on screen, which is the right
  * trade: nobody compares a GIF to the page side by side, and everybody sees a
  * stutter at the loop point.
  */
@@ -63,13 +63,13 @@ export const DEFAULT_GIF_QUALITY: GifQuality = {
 };
 
 /**
- * Dash periods a reply completes per loop. An INTEGER, which is the whole point:
+ * Dash periods a dotted line completes per loop. An INTEGER, which is the whole point:
  * a fractional count leaves the dash mid-stride when the loop wraps.
  */
-const REPLY_PERIODS = 4;
+const DOTTED_PERIODS = 4;
 
-/** The reply dash's period in user units — `6 + 5`, matching the stylesheet. */
-const REPLY_PERIOD = 11;
+/** The dotted dash's period in user units — `6 + 5`, matching the stylesheet. */
+const DOTTED_PERIOD = 11;
 
 /**
  * The comet bands and their dash lengths, from sequence-motion.css. Each band
@@ -133,7 +133,7 @@ export async function buildSequenceFrames(
   }
   const movingParts =
     probe.documentElement.querySelectorAll(".af-seq-flow-head").length +
-    probe.documentElement.querySelectorAll('[data-kind="reply"] .af-seq-line')
+    probe.documentElement.querySelectorAll('[data-line="dotted"] .af-seq-line')
       .length;
   if (movingParts === 0) return null;
 
@@ -154,12 +154,12 @@ export async function buildSequenceFrames(
       }
     }
 
-    // The reply dash: whole periods per loop, so the wrap is invisible.
-    const replyOffset = REPLY_PERIOD * (1 - ((t * REPLY_PERIODS) % 1));
+    // The dotted dash: whole periods per loop, so the wrap is invisible.
+    const dottedOffset = DOTTED_PERIOD * (1 - ((t * DOTTED_PERIODS) % 1));
     for (const node of root.querySelectorAll(
-      '[data-kind="reply"] .af-seq-line',
+      '[data-line="dotted"] .af-seq-line',
     )) {
-      setStyle(node, "stroke-dashoffset", `${replyOffset}`);
+      setStyle(node, "stroke-dashoffset", `${dottedOffset}`);
     }
 
     frames.push({

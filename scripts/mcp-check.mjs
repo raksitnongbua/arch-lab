@@ -485,10 +485,14 @@ check(
     const text = expectOk(validateSequence(VALID_SEQUENCE));
     assert.match(text, /^VALID as \.alab sequence\./m);
     assert.match(text, /Participants: 2/);
-    // The counts must be per-KIND, not just a total: an agent checking whether
-    // its reply arrows landed cannot see that from "3 messages".
-    assert.match(text, /2 sync/);
-    assert.match(text, /1 reply/);
+    // The counts must be PER AXIS, not just a total: an agent checking whether
+    // its reply arrows landed cannot see that from "3 messages". Both axes are
+    // named, and only the values actually present — a summary listing "0
+    // cross, 0 bidirectional" on every flow would be longer and say less.
+    assert.match(text, /2 solid/);
+    assert.match(text, /1 dotted/);
+    assert.match(text, /3 with an arrowhead/);
+    assert.doesNotMatch(text, /with a cross/);
     assert.match(text, /1 self-message/);
     assert.match(text, /`cust`.*Customer.*actor/);
   },
@@ -583,28 +587,36 @@ title "Order intake"
   failed -> check : "retry"
 `;
 
-check("validate_flowchart accepts .alab flowchart and summarises the graph", () => {
-  const text = expectOk(validateFlowchart(VALID_FLOWCHART));
-  assert.match(text, /^VALID as \.alab flowchart\./m);
-  // Nodes reported BY SHAPE, not just counted: an agent checking whether its
-  // decision actually became a diamond cannot learn that from "5 nodes".
-  assert.match(text, /1 start/);
-  assert.match(text, /1 decision/);
-  assert.match(text, /2 end/);
-  // The loop count comes from the layout's own cycle-breaking, and is the one
-  // fact that tells a caller its retry arrow was understood as a loop.
-  assert.match(text, /1 looping back/);
-  assert.match(text, /Size: \d+ x \d+ px/);
-  assert.match(text, /`ok`.*Cart valid\?.*decision/);
-});
+check(
+  "validate_flowchart accepts .alab flowchart and summarises the graph",
+  () => {
+    const text = expectOk(validateFlowchart(VALID_FLOWCHART));
+    assert.match(text, /^VALID as \.alab flowchart\./m);
+    // Nodes reported BY SHAPE, not just counted: an agent checking whether its
+    // decision actually became a diamond cannot learn that from "5 nodes".
+    assert.match(text, /1 start/);
+    assert.match(text, /1 decision/);
+    assert.match(text, /2 end/);
+    // The loop count comes from the layout's own cycle-breaking, and is the one
+    // fact that tells a caller its retry arrow was understood as a loop.
+    assert.match(text, /1 looping back/);
+    assert.match(text, /Size: \d+ x \d+ px/);
+    assert.match(text, /`ok`.*Cart valid\?.*decision/);
+  },
+);
 
 check("validate_flowchart names the three defects a parse cannot see", () => {
   // An unguarded decision: two exits, neither labelled. Parses perfectly, and
   // draws a diamond that asks a question and refuses to answer it — the single
   // most common flowchart defect, and invisible to a grammar.
-  const unguarded = VALID_FLOWCHART.replace('ok -> done : "yes"', "ok -> done")
-    .replace('ok -> failed : "no"', "ok -> failed");
-  assert.match(expectOk(validateFlowchart(unguarded)), /Unguarded decisions:.*`ok`/s);
+  const unguarded = VALID_FLOWCHART.replace(
+    'ok -> done : "yes"',
+    "ok -> done",
+  ).replace('ok -> failed : "no"', "ok -> failed");
+  assert.match(
+    expectOk(validateFlowchart(unguarded)),
+    /Unguarded decisions:.*`ok`/s,
+  );
 
   // A node nothing arrives at, which is not a start: draws detached, and reads
   // as a rendering fault rather than an authoring one. It is given an OUTGOING
@@ -613,7 +625,10 @@ check("validate_flowchart names the three defects a parse cannot see", () => {
   const orphan = VALID_FLOWCHART.replace(
     "  begin -> check\n",
     "  begin -> check\n  stray -> done\n",
-  ).replace('  step check "Validate the cart"\n', '  step check "Validate the cart"\n  step stray "Nobody calls me"\n');
+  ).replace(
+    '  step check "Validate the cart"\n',
+    '  step check "Validate the cart"\n  step stray "Nobody calls me"\n',
+  );
   assert.match(expectOk(validateFlowchart(orphan)), /Unreachable:.*`stray`/s);
 
   // A node nothing leaves, which is not an end: the reader follows the flow
@@ -622,7 +637,10 @@ check("validate_flowchart names the three defects a parse cannot see", () => {
   const deadEnd = VALID_FLOWCHART.replace(
     "  begin -> check\n",
     "  begin -> check\n  check -> limbo\n",
-  ).replace('  step check "Validate the cart"\n', '  step check "Validate the cart"\n  step limbo "Goes nowhere"\n');
+  ).replace(
+    '  step check "Validate the cart"\n',
+    '  step check "Validate the cart"\n  step limbo "Goes nowhere"\n',
+  );
   assert.match(expectOk(validateFlowchart(deadEnd)), /Dead ends:.*`limbo`/s);
 });
 
@@ -636,7 +654,10 @@ check("validate_flowchart is quiet when the graph is sound", () => {
 });
 
 check("validate_flowchart locates a broken flowchart document", () => {
-  const broken = VALID_FLOWCHART.replace('decision ok "Cart valid?"', "decision ok");
+  const broken = VALID_FLOWCHART.replace(
+    'decision ok "Cart valid?"',
+    "decision ok",
+  );
   const text = expectError(validateFlowchart(broken));
   assert.match(text, /^INVALID as \.alab flowchart\./m);
   assert.match(text, /line \d+, column \d+:/);
@@ -646,7 +667,9 @@ check("validate_flowchart locates a broken flowchart document", () => {
 check("validate_flowchart reads Mermaid flowchart and graph alike", () => {
   for (const header of ["flowchart TD", "graph LR"]) {
     const text = expectOk(
-      validateFlowchart(`${header}\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]\n`),
+      validateFlowchart(
+        `${header}\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]\n`,
+      ),
     );
     assert.match(text, /^VALID as Mermaid flowchart\./m);
     assert.match(text, /1 decision/);
@@ -704,20 +727,23 @@ title "Food delivery"
   customer --|> guest
 `;
 
-check("validate_usecase accepts .alab usecase and summarises who can do what", () => {
-  const text = expectOk(validateUseCase(VALID_USECASE));
-  assert.match(text, /^VALID as \.alab use case\./m);
-  assert.match(text, /Actors: 2/);
-  assert.match(text, /Use cases: 3/);
-  // Edges split BY KIND, not totalled: an agent checking whether its include
-  // actually became a dependency cannot learn that from "4 edges".
-  assert.match(text, /2 association/);
-  assert.match(text, /1 dependency/);
-  assert.match(text, /1 generalization/);
-  assert.match(text, /Food Delivery Service \(3\)/);
-  assert.match(text, /Size: \d+ x \d+ px/);
-  assert.match(text, /`guest`.*Guest.*actor/);
-});
+check(
+  "validate_usecase accepts .alab usecase and summarises who can do what",
+  () => {
+    const text = expectOk(validateUseCase(VALID_USECASE));
+    assert.match(text, /^VALID as \.alab use case\./m);
+    assert.match(text, /Actors: 2/);
+    assert.match(text, /Use cases: 3/);
+    // Edges split BY KIND, not totalled: an agent checking whether its include
+    // actually became a dependency cannot learn that from "4 edges".
+    assert.match(text, /2 association/);
+    assert.match(text, /1 dependency/);
+    assert.match(text, /1 generalization/);
+    assert.match(text, /Food Delivery Service \(3\)/);
+    assert.match(text, /Size: \d+ x \d+ px/);
+    assert.match(text, /`guest`.*Guest.*actor/);
+  },
+);
 
 check("validate_usecase is quiet when the diagram is sound", () => {
   // A review note that fires every time is one a caller learns to ignore.
@@ -738,10 +764,7 @@ check("validate_usecase names the defects a parse cannot see", () => {
 
   // A use case no actor reaches and nothing includes: a capability that cannot
   // be invoked, which no parser has an opinion about.
-  const unreachable = VALID_USECASE.replace(
-    "  order ..> pay : include\n",
-    "",
-  );
+  const unreachable = VALID_USECASE.replace("  order ..> pay : include\n", "");
   assert.match(
     expectOk(validateUseCase(unreachable)),
     /nobody can invoke:.*`pay`/s,
@@ -761,7 +784,10 @@ check("validate_usecase flags a use case outside every boundary", () => {
   const loose = VALID_USECASE.replace(
     '    usecase pay "Pay for the order"\n',
     "",
-  ).replace("  guest -- browse\n", '  usecase pay "Pay for the order"\n  guest -- browse\n');
+  ).replace(
+    "  guest -- browse\n",
+    '  usecase pay "Pay for the order"\n  guest -- browse\n',
+  );
   const text = expectOk(validateUseCase(loose));
   assert.match(text, /Outside every boundary:.*`pay`/s);
 });
@@ -779,10 +805,7 @@ check("format_usecase canonicalises and is idempotent", () => {
   assert.match(once, /archlab 1\.0 usecase/);
   assert.match(once, /@usecase/);
   const body = once.split("```\n")[1].split("\n```")[0] + "\n";
-  assert.match(
-    expectOk(validateUseCase(body)),
-    /^VALID as \.alab use case\./m,
-  );
+  assert.match(expectOk(validateUseCase(body)), /^VALID as \.alab use case\./m);
   assert.equal(
     expectOk(formatUseCase(body)).split("```\n")[1],
     once.split("```\n")[1],
@@ -790,14 +813,17 @@ check("format_usecase canonicalises and is idempotent", () => {
   );
 });
 
-check("the use-case tools refuse the other three kinds without a parse error", () => {
-  // The misdirection guard every kind-specific pair carries: a document of the
-  // wrong kind must be told which tool to use, never handed a line-1 syntax
-  // error that reads as "your document is wrong".
-  for (const source of [VALID_ALAB, VALID_SEQUENCE, VALID_FLOWCHART]) {
-    assert.doesNotMatch(expectError(validateUseCase(source)), /^INVALID as/m);
-  }
-});
+check(
+  "the use-case tools refuse the other three kinds without a parse error",
+  () => {
+    // The misdirection guard every kind-specific pair carries: a document of the
+    // wrong kind must be told which tool to use, never handed a line-1 syntax
+    // error that reads as "your document is wrong".
+    for (const source of [VALID_ALAB, VALID_SEQUENCE, VALID_FLOWCHART]) {
+      assert.doesNotMatch(expectError(validateUseCase(source)), /^INVALID as/m);
+    }
+  },
+);
 
 check("the C4 tools send a use-case document to the right tool", () => {
   // read.ts promises `validate_usecase` exists — this is what keeps that
@@ -831,15 +857,18 @@ check("create_share_link mints a use-case link that decodes back", async () => {
   );
 });
 
-check("the flowchart tools refuse the other two kinds without a parse error", () => {
-  // Same misdirection guard the sequence pair has: a C4 or sequence document
-  // fed here must be told which tool to use, not handed a line-1 syntax error
-  // that reads as "your document is wrong" when only the tool choice was.
-  for (const source of [VALID_ALAB, VALID_SEQUENCE]) {
-    const text = expectError(validateFlowchart(source));
-    assert.doesNotMatch(text, /^INVALID as/m);
-  }
-});
+check(
+  "the flowchart tools refuse the other two kinds without a parse error",
+  () => {
+    // Same misdirection guard the sequence pair has: a C4 or sequence document
+    // fed here must be told which tool to use, not handed a line-1 syntax error
+    // that reads as "your document is wrong" when only the tool choice was.
+    for (const source of [VALID_ALAB, VALID_SEQUENCE]) {
+      const text = expectError(validateFlowchart(source));
+      assert.doesNotMatch(text, /^INVALID as/m);
+    }
+  },
+);
 
 check("the documented section list names every real section", () => {
   const tool = MCP_TOOLS.find((t) => t.name === "get_syntax_reference");
@@ -1402,33 +1431,36 @@ check("create_share_link mints a sequence link that decodes back", async () => {
   );
 });
 
-check("create_share_link mints a flowchart link that decodes back", async () => {
-  // The C4 reader's flowchart guard points callers at `create_share_link`, so
-  // this tool MUST accept a flowchart — otherwise that advice is a loop. It
-  // also pins the shared single-document path (`singleDocumentShareLink`),
-  // which the sequence branch now goes through too.
-  const canonical = expectOk(formatFlowchart(VALID_FLOWCHART))
-    .split("```\n")[1]
-    .split("\n```")[0];
+check(
+  "create_share_link mints a flowchart link that decodes back",
+  async () => {
+    // The C4 reader's flowchart guard points callers at `create_share_link`, so
+    // this tool MUST accept a flowchart — otherwise that advice is a loop. It
+    // also pins the shared single-document path (`singleDocumentShareLink`),
+    // which the sequence branch now goes through too.
+    const canonical = expectOk(formatFlowchart(VALID_FLOWCHART))
+      .split("```\n")[1]
+      .split("\n```")[0];
 
-  const text = expectOk(
-    await createShareLink(VALID_FLOWCHART, "auto", undefined, undefined),
-  );
-  const url = text.split("\n").find((line) => line.startsWith("http"));
-  assert.ok(url !== undefined, `no URL in:\n${text}`);
-  // Minted against bare `/live`, never the `/live/flow` trampoline: a share
-  // link must land on the real page, which check:share-capacity also pins.
-  assert.match(url, /\/live#m=AF1\./);
-  assert.doesNotMatch(url, /\/live\/(flow|seq|sequence|c4)/);
+    const text = expectOk(
+      await createShareLink(VALID_FLOWCHART, "auto", undefined, undefined),
+    );
+    const url = text.split("\n").find((line) => line.startsWith("http"));
+    assert.ok(url !== undefined, `no URL in:\n${text}`);
+    // Minted against bare `/live`, never the `/live/flow` trampoline: a share
+    // link must land on the real page, which check:share-capacity also pins.
+    assert.match(url, /\/live#m=AF1\./);
+    assert.doesNotMatch(url, /\/live\/(flow|seq|sequence|c4)/);
 
-  const decoded = await decodeShareFragment(new URL(url).hash);
-  assert.equal(decoded.status, "ok");
-  assert.equal(
-    decoded.aftText.replace(/\n$/, ""),
-    canonical.replace(/\n$/, ""),
-    "the graph recovered from the link must be the canonical flowchart text",
-  );
-});
+    const decoded = await decodeShareFragment(new URL(url).hash);
+    assert.equal(decoded.status, "ok");
+    assert.equal(
+      decoded.aftText.replace(/\n$/, ""),
+      canonical.replace(/\n$/, ""),
+      "the graph recovered from the link must be the canonical flowchart text",
+    );
+  },
+);
 
 check("create_share_link rejects diagram_id on a flowchart", async () => {
   // A flowchart is one graph with nothing to open at, so the argument is a

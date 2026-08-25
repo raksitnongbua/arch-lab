@@ -39,7 +39,8 @@ import { isMultiBranch, sequenceItemKey } from "@/types";
 import type {
   SequenceFragmentKind,
   SequenceLabFile,
-  SequenceMessageKind,
+  SequenceHeadStyle,
+  SequenceLineStyle,
   SequenceNotePlacement,
   SequenceParticipantKind,
 } from "@/types";
@@ -71,7 +72,8 @@ import {
   FRAGMENT_KIND_BY_KEYWORD,
   PARTICIPANT_KIND_BY_KEYWORD,
   RESERVED_BODY_WORDS,
-  SEQUENCE_ARROWS,
+  SEQUENCE_ARROW_MATCH_ORDER,
+  SEQUENCE_ARROW_MENU,
   SEQUENCE_BLOCK,
   SEQUENCE_HEADER_WORD,
   TINT_ATTRIBUTE,
@@ -131,7 +133,8 @@ interface PendMessage extends PendBlock {
   fromLoc: Loc;
   to: string;
   toLoc: Loc;
-  kind: SequenceMessageKind;
+  lineStyle: SequenceLineStyle;
+  headStyle: SequenceHeadStyle;
   label: string;
   technology?: string;
   description?: string;
@@ -998,8 +1001,12 @@ function parseMessageLine(
       from,
     );
   }
-  let arrow: (typeof SEQUENCE_ARROWS)[number] | undefined;
-  for (const candidate of SEQUENCE_ARROWS) {
+  /* LONGEST FIRST, which `SEQUENCE_ARROW_MATCH_ORDER` guarantees: `..` is a
+     prefix of `..>`, `..x>` and `..~>`, so a first-match loop over an
+     unordered table would read every dotted arrow as a headless line and
+     leave the tip glyphs to fail as the target id. */
+  let arrow: (typeof SEQUENCE_ARROW_MATCH_ORDER)[number] | undefined;
+  for (const candidate of SEQUENCE_ARROW_MATCH_ORDER) {
     if (cursor.text.startsWith(candidate[0], cursor.pos)) {
       arrow = candidate;
       break;
@@ -1007,7 +1014,7 @@ function parseMessageLine(
   }
   if (arrow === undefined) {
     cursor.fail(
-      'expected an arrow (-> sync, ~> async, ..> reply) — or, for a participant, a quoted "Name" after the id',
+      `expected an arrow (${SEQUENCE_ARROW_MENU}) — or, for a participant, a quoted "Name" after the id`,
       cursor.foundHere(),
     );
   }
@@ -1054,7 +1061,8 @@ function parseMessageLine(
     fromLoc: loc,
     to,
     toLoc,
-    kind: arrow[1],
+    lineStyle: arrow[1].lineStyle,
+    headStyle: arrow[1].headStyle,
     label,
     raw: new Map(),
     unknowns: [],
@@ -1693,7 +1701,8 @@ function resolve(
         add("step", "message");
         add("from", item.from);
         add("to", item.to);
-        add("kind", item.kind);
+        add("lineStyle", item.lineStyle);
+        add("headStyle", item.headStyle);
         add("label", item.label);
         add("technology", pick(item.technology, item.raw, "technology"));
         add("description", pick(item.description, item.raw, "description"));

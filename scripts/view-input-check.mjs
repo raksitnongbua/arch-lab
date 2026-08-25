@@ -662,9 +662,25 @@ for (const kind of ["c4", "sequence", "flowchart", "usecase"]) {
   const workbench = read("src/components/ui/split-workbench.tsx")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/[^\n]*/g, "");
+  /* FOUND BY THE ELEMENT, not by its exact class string. This asserted the
+     whole `className` verbatim, so adding `max-lg:order-first` to the same
+     wrapper — a change that cannot affect a height — failed it, which is an
+     assertion about a value where the rule is about a property. The wrapper is
+     identified by the child it renders instead, and only the growth rule is
+     measured. */
+  const canvasWrapper = /<div className="([^"]*)">\s*\{canvas\}/.exec(
+    workbench,
+  );
+  check(
+    "the workbench's canvas wrapper is findable by the canvas it renders",
+    canvasWrapper !== null,
+    "no `<div className=…>{canvas}</div>` in split-workbench.tsx — the growth rule below cannot be measured",
+  );
   check(
     "the workbench's canvas wrapper only grows at lg, so the pane's own height rules below it",
-    /className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-1"/.test(workbench),
+    canvasWrapper !== null &&
+      /(^|\s)lg:flex-1(\s|$)/.test(canvasWrapper[1]) &&
+      !/(^|\s)flex-1(\s|$)/.test(canvasWrapper[1]),
     "the wrapper grows unprefixed again — it will cancel the pane's max-lg height",
   );
 }

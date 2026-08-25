@@ -30,6 +30,8 @@ import {
   SEQUENCE_CURL_EXAMPLE,
   SEQUENCE_FRAGMENT_EXAMPLE,
   SEQUENCE_GROUPING_EXAMPLE,
+  SEQUENCE_ARROW_ROWS,
+  SEQUENCE_LINE_STYLE_ROWS,
   SEQUENCE_MESSAGE_EXAMPLE,
   SEQUENCE_MINIMAL_EXAMPLE,
   UNKNOWN_FIELDS_EXAMPLE,
@@ -395,18 +397,40 @@ export function SyntaxReference(): React.JSX.Element {
         <P>
           The label is introduced by <Code>:</Code> —{" "}
           <Code>a -&gt; b : &quot;Label&quot;</Code> — and a message without one
-          does not parse. Three arrows carry the kind: <Code>-&gt;</Code> a
-          synchronous call, <Code>~&gt;</Code> asynchronous, <Code>..&gt;</Code>{" "}
-          a reply. <strong>Activation rides the arrow</strong> rather than
-          sitting on its own line: <Code>-&gt;+</Code> opens the receiver&apos;s
-          bar and <Code>..&gt;-</Code> closes the sender&apos;s, so a call and
-          its return read <Code>web -&gt;+ api</Code> …{" "}
-          <Code>api ..&gt;- web</Code>. A participant&apos;s kind is optional
-          and only two exist — a bare <Code>web &quot;Storefront&quot;</Code> is
-          a participant, <Code>cust:actor</Code> draws the stick figure. A
-          message from a participant to itself draws a self-loop, and{" "}
-          <Code>autonumber</Code> numbers every step.
+          does not parse. <strong>An arrow is two choices, not one name</strong>
+          : the line is solid or dotted, and the head is one of five — none, an
+          arrowhead, a cross, an open async head, or a head at each end. Ten
+          arrows in all, one token each, and every one converts to and from its
+          Mermaid equivalent without loss. The line says which way the step runs
+          —{" "}
+          {SEQUENCE_LINE_STYLE_ROWS.map((row, at) => (
+            <span key={row.lineStyle}>
+              {at > 0 ? ", " : ""}
+              <Code>{row.lineStyle}</Code> is {row.meaning}
+            </span>
+          ))}{" "}
+          — and the head says what happens when it arrives.{" "}
+          <strong>Activation rides the arrow</strong> rather than sitting on its
+          own line: <Code>-&gt;+</Code> opens the receiver&apos;s bar and{" "}
+          <Code>..&gt;-</Code> closes the sender&apos;s, so a call and its
+          return read <Code>web -&gt;+ api</Code> … <Code>api ..&gt;- web</Code>
+          . A participant&apos;s kind is optional and only two exist — a bare{" "}
+          <Code>web &quot;Storefront&quot;</Code> is a participant,{" "}
+          <Code>cust:actor</Code> draws the stick figure. A message from a
+          participant to itself draws a self-loop, and <Code>autonumber</Code>{" "}
+          numbers every step.
         </P>
+        <Table
+          caption="Sequence arrows"
+          head={["Arrow", "Line", "Head", "The head means", "Mermaid"]}
+          rows={SEQUENCE_ARROW_ROWS.map((row) => [
+            <Code key="a">{row.arrow}</Code>,
+            <Code key="l">{row.lineStyle}</Code>,
+            <Code key="h">{row.headStyle}</Code>,
+            row.headMeaning,
+            <Code key="m">{row.mermaid}</Code>,
+          ])}
+        />
         <CodeBlock code={SEQUENCE_MESSAGE_EXAMPLE.code} label="message kinds" />
         <P>
           <strong>Keep the label short and put the rest in a</strong>{" "}

@@ -52,11 +52,15 @@ export const PARTICIPANT_KEYS = [
   "description",
 ] as const;
 
+/* `lineStyle` and `headStyle` sit where the single `kind` used to, in the
+   order the arrow token reads them: the line style is the glyph run before the
+   tip glyph. */
 export const MESSAGE_KEYS = [
   "step",
   "from",
   "to",
-  "kind",
+  "lineStyle",
+  "headStyle",
   "label",
   "technology",
   "description",

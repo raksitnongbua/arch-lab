@@ -52,11 +52,14 @@ import type {
   SequenceItem,
   SequenceLabFile,
   SequenceMessage,
-  SequenceMessageKind,
   SequenceNote,
   SequenceParticipant,
 } from "@/types";
 
+import {
+  MERMAID_SEQUENCE_ARROW_LIST,
+  mermaidSequenceArrow,
+} from "./sequence-mapping";
 import { encodeInlineBreaks, mermaidSafeId } from "./text";
 
 /** What an EXPORT to Mermaid drops. The mirror of
@@ -66,23 +69,16 @@ export const MERMAID_SEQUENCE_EXPORT_CAVEAT =
   "message's desc detail, [technology] on participants and messages, and " +
   "every header field except the title (description, owner, tags, " +
   "timestamps) have no Mermaid equivalent and are left behind, a participant " +
-  "icon has nowhere to go (Mermaid draws no icons), " +
+  "icon has nowhere to go (Mermaid draws no icons), a participant " +
   "whose kind is unstated comes back as a participant (Mermaid has only " +
   "participant and actor), and a rect that carries both a label and a tint " +
   "keeps the tint. Everything else survives: participants, boxes, messages, " +
-  "activation bars, notes, autonumber and every fragment — loop, alt/else, " +
-  "opt, par/and, critical/option, break and rect.";
+  "every arrow — both line styles and all five head styles map one-to-one " +
+  `onto Mermaid's own ten (${MERMAID_SEQUENCE_ARROW_LIST}) — activation ` +
+  "bars, notes, autonumber and every fragment — loop, alt/else, opt, " +
+  "par/and, critical/option, break and rect.";
 
 const INDENT = "    ";
-
-/** Message kind → the Mermaid arrow this writes. The IMPORT table maps eight
- * arrows onto three kinds; going out there is one canonical arrow per kind,
- * chosen as the one Mermaid's own docs lead with. */
-const ARROW_BY_KIND: Readonly<Record<SequenceMessageKind, string>> = {
-  sync: "->>",
-  async: "-)",
-  reply: "-->>",
-};
 
 /** The shared substitution rule (see `mermaidSafeId`); `p_` = participant. */
 function mermaidId(id: string): string {
@@ -211,7 +207,11 @@ const CONTINUATION_BY_KIND: Readonly<Record<string, string>> = {
 };
 
 function messageLine(message: SequenceMessage): string {
-  const arrow = ARROW_BY_KIND[message.kind];
+  /* The SAME table the importer reads (`./sequence-mapping.ts`). While export
+     had a table of its own, "one canonical arrow per kind", the round trip
+     could not be bijective even in principle — nine of Mermaid's ten arrows
+     had no way back out. */
+  const arrow = mermaidSequenceArrow(message);
   /* `+`/`-` ride the arrow, exactly as the importer reads them. */
   const activation =
     (message.activate === true ? "+" : "") +

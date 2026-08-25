@@ -429,7 +429,7 @@ check("LZW output is chunked into sub-blocks and zero-terminated", () => {
 /*
  * The GIF is a LOOP of the diagram's idle motion, and a loop only reads as one
  * if every moving thing completes whole cycles inside it. On screen the comet
- * (4200ms per traversal) and the reply dash (2750ms per period) do not divide
+ * (4200ms per traversal) and the dotted dash (2750ms per period) do not divide
  * into each other, so the export picks its own window — one comet traversal and
  * an INTEGER number of dash periods.
  *
@@ -442,12 +442,12 @@ const framesSource = readFileSync(
   "utf8",
 );
 
-check("the reply dash completes a whole number of periods per loop", () => {
-  const match = framesSource.match(/REPLY_PERIODS\s*=\s*([\d.]+)/);
-  assert.ok(match, "REPLY_PERIODS is not declared");
+check("the dotted dash completes a whole number of periods per loop", () => {
+  const match = framesSource.match(/DOTTED_PERIODS\s*=\s*([\d.]+)/);
+  assert.ok(match, "DOTTED_PERIODS is not declared");
   assert.ok(
     Number.isInteger(Number(match[1])),
-    `REPLY_PERIODS is ${match[1]} — a fraction leaves the dash mid-stride at the wrap`,
+    `DOTTED_PERIODS is ${match[1]} — a fraction leaves the dash mid-stride at the wrap`,
   );
 });
 

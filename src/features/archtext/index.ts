@@ -104,10 +104,12 @@ export {
 export { detectAlabKind } from "./lib/sequence/detect";
 export type { AlabDocumentKind } from "./lib/sequence/detect";
 export {
-  SEQUENCE_ARROWS,
-  ARROW_BY_MESSAGE_KIND,
   FRAGMENT_KIND_BY_KEYWORD,
   PARTICIPANT_KIND_BY_KEYWORD,
+  SEQUENCE_ARROW_MATCH_ORDER,
+  SEQUENCE_ARROW_MENU,
+  SEQUENCE_ARROW_TOKENS,
+  sequenceArrowToken,
 } from "./lib/sequence/keywords";
 export { parseFlowchartText } from "./lib/flowchart/parse";
 export { serializeFlowchartText } from "./lib/flowchart/serialize";

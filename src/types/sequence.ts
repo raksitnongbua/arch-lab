@@ -81,17 +81,138 @@ export interface SequenceParticipant {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The three message semantics a sequence diagram distinguishes:
+ * AN ARROW IS TWO INDEPENDENT AXES, not one enum. `line` says whether the
+ * wire is drawn solid or dotted; `head` says how it is tipped. The product is
+ * total — every one of the 2 x 5 combinations is a real arrow a reader can
+ * draw and every consumer must handle all of them — which is exactly why the
+ * pair is stored rather than a flat name per combination.
  *
- *   - `sync`  — a call the sender waits on (solid line, filled head).
- *   - `async` — fire-and-forget (solid line, open head).
- *   - `reply` — a return to an earlier call (dashed line).
+ * WHY NOT TEN NAMES. The alternative shipped everywhere else is a single
+ * union (`sync | async | reply | …`) with ten members. It was rejected for
+ * two reasons that both cost real bugs in the version this replaced:
  *
- * A SELF-message is not a fourth kind: it is any message whose `from` equals
- * `to`. Deriving it keeps one source of truth — a stored `kind: "self"`
- * could contradict the endpoints, and then one of the two would be a lie.
+ *   - Every consumer that cares about only ONE axis has to know all ten
+ *     names. The canvas dashes a line for `reply` and nothing else, so a
+ *     dotted-open arrow added later draws solid until somebody remembers this
+ *     one `===` comparison. With two axes the canvas asks about `line` and
+ *     cannot be wrong about a head it has never heard of.
+ *   - A `Record<Kind, …>` over ten names is a hand-listed set of ten, and a
+ *     hand-listed set cannot notice an eleventh. A
+ *     `Record<Line, Record<Head, …>>` is the grid itself: TypeScript refuses
+ *     to compile a table with a hole in it, so the arrow vocabulary and the
+ *     tables that map it are the same shape by construction. The `.alab`
+ *     token table, the Mermaid arrow table and the canvas head table are all
+ *     that shape (`SEQUENCE_ARROW_TOKENS`, `MERMAID_SEQUENCE_ARROWS`,
+ *     `SEQUENCE_HEAD_SHAPES`). The two field names are `lineStyle` and
+ *     `headStyle` rather than the shorter `line`/`head`: `line` already means
+ *     a SOURCE LINE NUMBER throughout the parser (`Loc.line`), and one
+ *     identifier with two meanings in neighbouring modules is how a `Loc` and
+ *     a message once tried to share a field.
+ *
+ * The three arrows this grammar shipped with are three points in the grid,
+ * and their `.alab` spelling is unchanged: `->` is solid+arrow (a call the
+ * sender waits on), `~>` is solid+open (fire and forget), `..>` is
+ * dotted+arrow (a return).
+ *
+ * A SELF-message is not a head style: it is any message whose `from` equals
+ * `to`. Deriving it keeps one source of truth — a stored `"self"` could
+ * contradict the endpoints, and then one of the two would be a lie.
  */
-export type SequenceMessageKind = "sync" | "async" | "reply";
+export type SequenceLineStyle = "solid" | "dotted";
+
+/**
+ * How an arrow is tipped. `bidirectional` puts an arrowhead at BOTH ends —
+ * the head field describes the tipping of the whole wire, not of one end, so
+ * that a two-ended arrow is one value rather than a second boolean free to
+ * disagree with this one.
+ *
+ * `none` is a real choice, not a missing value: an undirected line between
+ * two lifelines says "these two talked" without claiming who called whom, and
+ * the C4 grammar has spelled that `--` since 1.0.
+ */
+export type SequenceHeadStyle =
+  "none" | "arrow" | "cross" | "open" | "bidirectional";
+
+/** Every line style, for iterating the grid. Order is the order the docs and
+ * the edit form list them in. */
+export const SEQUENCE_LINE_STYLES: readonly SequenceLineStyle[] = [
+  "solid",
+  "dotted",
+];
+
+/** Every head style, for iterating the grid. */
+export const SEQUENCE_HEAD_STYLES: readonly SequenceHeadStyle[] = [
+  "none",
+  "arrow",
+  "cross",
+  "open",
+  "bidirectional",
+];
+
+/**
+ * Every arrow in the grid, as `{ line, head }` pairs — the CARTESIAN PRODUCT,
+ * computed, so a check that iterates this cannot be one arrow short of the
+ * type. Anything that wants "for each arrow" reads this rather than writing
+ * two nested loops of its own.
+ */
+export const SEQUENCE_ARROWS_GRID: readonly SequenceArrow[] =
+  SEQUENCE_LINE_STYLES.flatMap((lineStyle) =>
+    SEQUENCE_HEAD_STYLES.map((headStyle) => ({ lineStyle, headStyle })),
+  );
+
+/** The two axes together — the shape every arrow table is keyed by, and the
+ * shape a gesture passes around when it means "this arrow". */
+export interface SequenceArrow {
+  lineStyle: SequenceLineStyle;
+  headStyle: SequenceHeadStyle;
+}
+
+/** How a line style reads in a sentence (an accessible name, a refusal, the
+ * edit form's menu). One phrase per axis value rather than ten per pair: the
+ * pair's phrase is composed, so a new head needs one string, not five. */
+export const SEQUENCE_LINE_STYLE_PHRASE: Record<SequenceLineStyle, string> = {
+  solid: "solid",
+  dotted: "dotted",
+};
+
+export const SEQUENCE_HEAD_STYLE_PHRASE: Record<SequenceHeadStyle, string> = {
+  none: "no head",
+  arrow: "an arrowhead",
+  cross: "a cross",
+  open: "an open head",
+  bidirectional: "an arrowhead at both ends",
+};
+
+/**
+ * What choosing each value MEANS for the flow, as the edit form's menus say
+ * it. Separate from the phrase records above because the two answer different
+ * questions — a phrase describes the drawing ("dotted line"), a meaning
+ * describes the step ("a return or a callback") — and the form needs both on
+ * one row.
+ *
+ * These are the sentences the retired three-way menu carried ("a call the
+ * sender waits on", "fire and forget", "a return"), split onto the axis each
+ * one was really about: the waiting was the head, the returning was the line.
+ */
+export const SEQUENCE_LINE_STYLE_MEANING: Record<SequenceLineStyle, string> = {
+  solid: "a call outward",
+  dotted: "a return or a callback",
+};
+
+export const SEQUENCE_HEAD_STYLE_MEANING: Record<SequenceHeadStyle, string> = {
+  none: "no direction claimed",
+  arrow: "the sender waits on it",
+  cross: "lost — it never arrives",
+  open: "fire and forget",
+  bidirectional: "both ways at once",
+};
+
+/** "a dotted line with an open head" — the one wording, so the canvas's
+ * accessible name and the edit form's menu cannot describe the same arrow
+ * two ways. */
+export function sequenceArrowPhrase(arrow: SequenceArrow): string {
+  return `${SEQUENCE_LINE_STYLE_PHRASE[arrow.lineStyle]} line with ${SEQUENCE_HEAD_STYLE_PHRASE[arrow.headStyle]}`;
+}
 
 export interface SequenceMessage {
   /** Discriminant of the `SequenceItem` union. */
@@ -100,7 +221,12 @@ export interface SequenceMessage {
   from: string;
   /** Participant id. `to === from` is a self-message. */
   to: string;
-  kind: SequenceMessageKind;
+  /** Required, both of them — see {@link SequenceLineStyle} for why an arrow
+   * is two fields. Neither has a default: "absent" and "solid" would be two
+   * spellings of one document, which is the shape that lost a hand-written
+   * `autonumber false` once already. */
+  lineStyle: SequenceLineStyle;
+  headStyle: SequenceHeadStyle;
   /** Required — an unlabelled arrow says nothing; may be `""` for imported
    * documents whose source allowed it. The arrow's TITLE: what the step does
    * ("Call login API"), kept short because it is drawn on the wire and its
@@ -292,7 +418,7 @@ export interface SequenceLabFile {
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/** Whether a message loops back to its own lifeline (see `SequenceMessageKind`
+/** Whether a message loops back to its own lifeline (see `SequenceLineStyle`
  * for why this is derived rather than stored). */
 export function isSelfMessage(message: SequenceMessage): boolean {
   return message.from === message.to;
@@ -467,7 +593,11 @@ export function sequenceItemKey(path: SequenceItemPath): string {
  */
 export interface SequenceMessageRevision {
   label: string;
-  kind: SequenceMessageKind;
+  /** Both axes, always both — the form shows two menus and submits two
+   * values, so a revision that carried one would let the head follow a line
+   * change nobody made. */
+  lineStyle: SequenceLineStyle;
+  headStyle: SequenceHeadStyle;
   technology?: string;
   description?: string;
 }

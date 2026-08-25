@@ -81,7 +81,7 @@ import type {
   SequenceItemPath,
   SequenceLabFile,
   SequenceMessage,
-  SequenceMessageKind,
+  SequenceArrow,
   SequenceParticipant,
 } from "@/types";
 import {
@@ -153,8 +153,13 @@ const ROOT_ITEM_INDENT = "  ";
  */
 export const INSERTED_MESSAGE_LABEL = "New message";
 
-/** The kind a two-click insert gives its new message: the ordinary call. */
-export const INSERTED_MESSAGE_KIND: SequenceMessageKind = "sync";
+/** The arrow a two-click insert gives its new message: the ordinary call —
+ * solid line, arrowhead. One constant holding BOTH axes, so an insert cannot
+ * be given a line style without a head. */
+export const INSERTED_MESSAGE_ARROW: SequenceArrow = {
+  lineStyle: "solid",
+  headStyle: "arrow",
+};
 
 /**
  * The display name a new participant is created with, on the same reasoning as
@@ -241,11 +246,12 @@ export function revisedMessageEdit(
      `check:sequence` pins it from the outside ("clearing technology and
      details removes the fields, never blanks them"), which is what would fail
      if the serializer ever started emitting an escape for `undefined`. */
-  const { label, kind, technology, description } = revision;
+  const { label, lineStyle, headStyle, technology, description } = revision;
   const edited = replaceItem(doc.file, path, {
     ...current,
     label,
-    kind,
+    lineStyle,
+    headStyle,
     technology,
     description,
   });
@@ -335,7 +341,7 @@ export function insertedMessageEdit(
     step: "message",
     from,
     to,
-    kind: INSERTED_MESSAGE_KIND,
+    ...INSERTED_MESSAGE_ARROW,
     label: INSERTED_MESSAGE_LABEL,
   };
 

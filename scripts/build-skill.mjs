@@ -42,6 +42,13 @@ registerHooks({
       if (!(existsSync(asPath) && statSync(asPath).isFile())) {
         if (existsSync(`${asPath}.ts`)) {
           resolved = pathToFileURL(`${asPath}.ts`).href;
+        } else if (existsSync(path.join(asPath, "index.ts"))) {
+          /* A DIRECTORY IMPORT, i.e. a barrel: `@/types` is `src/types/index.ts`.
+             Every check script's hook already did this; this one did not, so the
+             first module reached from here that imported a barrel failed the
+             BUILD rather than a check — and the skill is generated, so the
+             failure surfaced as a stale SKILL.md. */
+          resolved = pathToFileURL(path.join(asPath, "index.ts")).href;
         }
       }
     }

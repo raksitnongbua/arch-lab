@@ -69,7 +69,12 @@ registerHooks({
 const { NODE_TYPE_BY_KEYWORD, ARROWS, ARCHTEXT_EXTENSION } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/lib/keywords.ts")).href
 );
-const { parseArchText } = await import(
+const { SEQUENCE_ARROW_MATCH_ORDER } = await import(
+  pathToFileURL(
+    path.join(ROOT, "src/features/archtext/lib/sequence/keywords.ts"),
+  ).href
+);
+const { parseArchText, parseSequenceText } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
 
@@ -159,7 +164,19 @@ for (const keyword of Object.keys(NODE_TYPE_BY_KEYWORD)) {
 /* --- 2. arrows, longest-first ------------------------------------------ */
 
 const edgeLine = grammar.repository?.["edge-line"]?.begin ?? "";
-const arrowTokens = ARROWS.map(([token]) => token);
+/* THE UNION OF BOTH GRAMMARS' ARROWS. One `edge-line` rule highlights a C4
+   edge and a sequence message alike — they are the same `id arrow id` shape —
+   so the alternation must hold every token either grammar can spell. Derived
+   from the two tables rather than listed: the four sequence-only tokens
+   (`x>`, `~>`, `..x>`, `..~>`) were exactly the ones an editor left unhighlit
+   before this, and `~>` had been unhighlit since the sequence grammar shipped
+   because nobody thought to widen a rule named for C4 edges. */
+const arrowTokens = [
+  ...new Set([
+    ...ARROWS.map(([token]) => token),
+    ...SEQUENCE_ARROW_MATCH_ORDER.map(([token]) => token),
+  ]),
+].sort((left, right) => right.length - left.length);
 
 /**
  * Pull the arrow alternation out as a GROUP rather than searching for each
@@ -183,12 +200,27 @@ if (arrowGroup === undefined) {
   );
 } else {
   ok(`edge-line holds all ${arrowTokens.length} arrows`);
-  if (arrowGroup.join(" ") === arrowTokens.join(" ")) {
-    ok("arrow alternation is ordered longest-first, as the parser requires");
+  /* THE PROPERTY, NOT THE PERMUTATION. This compared the alternation against
+     the table's own order, which failed the moment the alternation held the
+     UNION of two tables: `->` and `--` are both two characters and neither is
+     a prefix of the other, so their relative order cannot matter — and an
+     assertion that fails on a difference that cannot matter is a rule that
+     manufactures work (`codebase.md`, habit 5). What "longest-first" is
+     actually FOR is that no alternative shadows a longer one it prefixes, so
+     that is what is asserted; any ordering satisfying it highlights
+     correctly. */
+  const shadowed = arrowGroup.flatMap((earlier, at) =>
+    arrowGroup
+      .slice(at + 1)
+      .filter((later) => later.startsWith(earlier))
+      .map((later) => `${earlier} before ${later}`),
+  );
+  if (shadowed.length === 0) {
+    ok("no arrow alternative shadows a longer one it is a prefix of");
   } else {
     fail(
-      "arrow alternation is ordered longest-first, as the parser requires",
-      `parser order:  ${arrowTokens.join(" ")}\n    grammar order: ${arrowGroup.join(" ")}`,
+      "no arrow alternative shadows a longer one it is a prefix of",
+      `${shadowed.join(", ")} — in "${arrowGroup.join("|")}"`,
     );
   }
 }
@@ -386,6 +418,55 @@ const EXPECTATIONS = [
   ["customer -> shopflow", "HTTPS/JSON", "constant.other.technology.alab"],
 ];
 
+/**
+ * A SECOND SAMPLE, and the reason there has to be one: `edge-line` is the rule
+ * that highlights a C4 edge AND a sequence message, because both are
+ * `id arrow id`. Every tokenizer expectation lived in a C4 document, so the
+ * sequence-only arrows had no coverage at all — `~>` shipped unhighlit with the
+ * sequence grammar and nothing noticed, because the check that would have
+ * noticed only ever read a C4 file. This sample is validated by the SEQUENCE
+ * parser, so it cannot drift into being invalid `.alab` either.
+ */
+const SEQUENCE_SAMPLE = `archlab 1.0 sequence
+title "Arrow highlighting"
+
+@sequence
+  web:participant "Web"
+  api:participant "API"
+  queue:participant "Events"
+
+  web -> api : "Call"
+  api ~> queue : "publish"
+  api x> queue : "dropped"
+  api ..x> queue : "dropped reply"
+  api ..~> web : "replay offer"
+  api <..> web : "sync both ways"
+`;
+
+/** The sequence-only tokens. `..x>` is here specifically because it contains
+ * both `..>` and `x>`: a wrong alternation order tokenizes it as two operators
+ * and highlights neither correctly. */
+const SEQUENCE_EXPECTATIONS = [
+  ["api ~> queue", "~>", "keyword.operator.arrow.alab"],
+  ["api x> queue", "x>", "keyword.operator.arrow.alab"],
+  ["api ..x> queue", "..x>", "keyword.operator.arrow.alab"],
+  ["api ..~> web", "..~>", "keyword.operator.arrow.alab"],
+  ["api <..> web", "<..>", "keyword.operator.arrow.alab"],
+];
+
+try {
+  parseSequenceText(SEQUENCE_SAMPLE);
+  ok(
+    "the sequence highlighting sample is valid .alab (real parseSequenceText)",
+  );
+} catch (error) {
+  tokenizeReady = false;
+  fail(
+    "the sequence highlighting sample is valid .alab (real parseSequenceText)",
+    error.message,
+  );
+}
+
 if (tokenizeReady) {
   // Both ship as CommonJS, so the namespace object carries them on `default`.
   const vsctmModule = await import("vscode-textmate");
@@ -476,6 +557,58 @@ if (tokenizeReady) {
           label,
           `line ${lineIndex + 1} col ${column}: must NOT be scoped "${forbiddenScope}", got ${scopes.join(" ")}`,
         );
+      }
+    }
+
+    /* THE SEQUENCE SAMPLE, through the same grammar and the same scope test.
+       Tokenized separately rather than concatenated: the two document kinds
+       never mix in one file, and a fused sample would be text no parser
+       accepts. */
+    {
+      const seqLines = SEQUENCE_SAMPLE.split("\n");
+      const seqTokens = [];
+      let seqStack = vsctm.INITIAL;
+      for (const line of seqLines) {
+        const result = tmGrammar.tokenizeLine(line, seqStack);
+        seqTokens.push(result.tokens);
+        seqStack = result.ruleStack;
+      }
+      for (const [
+        lineSubstring,
+        tokenSubstring,
+        requiredScope,
+      ] of SEQUENCE_EXPECTATIONS) {
+        const label = `${requiredScope} on "${tokenSubstring}" (sequence)`;
+        const lineIndex = seqLines.findIndex((line) =>
+          line.includes(lineSubstring),
+        );
+        if (lineIndex === -1) {
+          fail(label, `sequence sample has no "${lineSubstring}"`);
+          continue;
+        }
+        const column = seqLines[lineIndex].indexOf(tokenSubstring);
+        const token = seqTokens[lineIndex].find(
+          (candidate) =>
+            column >= candidate.startIndex && column < candidate.endIndex,
+        );
+        /* BOTH the scope AND the token BOUNDS, in one assertion: a `..x>`
+           highlighted as `..>` + `x>` would carry the right scope on the first
+           half and still be wrong. */
+        if (
+          token !== undefined &&
+          token.scopes.includes(requiredScope) &&
+          token.startIndex === column &&
+          token.endIndex === column + tokenSubstring.length
+        ) {
+          ok(label);
+        } else {
+          fail(
+            label,
+            token === undefined
+              ? "no token at the arrow"
+              : `scopes ${token.scopes.join(" ")} span [${token.startIndex},${token.endIndex}), expected [${column},${column + tokenSubstring.length})`,
+          );
+        }
       }
     }
 

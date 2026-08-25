@@ -776,25 +776,88 @@ await check(
    were actually wrong — that the incoming query is read at all, and that it is
    MERGED rather than appended (five of six destinations carry their own `?d=`,
    and `?d=seq?e=x` makes `d` read as `seq?e=x`, matching no kind). */
-await check("the trampoline reads the incoming query at all", () => {
-  const forward = readSource("src/components/share/alias-forward.tsx");
+/* CODE, NOT PROSE. These read the files with comments removed, because the
+   first spelling of the third assertion passed on a COMMENT: the trampoline was
+   split into an inline script plus a fallback, `normalizeShareFragment` moved
+   to the fallback, and the remaining mention in `alias-forward.tsx` was a
+   sentence explaining why the script does NOT reimplement it. Green, measuring
+   prose. Same treatment `share-parity-check.mjs` and `og-cards-check.mjs`
+   already use. */
+const stripComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(?<!:)\/\/[^\n]*/g, "");
+const forwardCode = stripComments(
+  readSource("src/components/share/alias-forward.tsx"),
+);
+const fallbackCode = stripComments(
+  readSource("src/components/share/alias-forward-fallback.tsx"),
+);
+
+await check("both forward paths read the incoming query", () => {
+  for (const [name, code] of [
+    ["inline script", forwardCode],
+    ["fallback effect", fallbackCode],
+  ]) {
+    assert.ok(
+      /searchParams/.test(code),
+      `${name} drops the query — every ?e= and ?d= link ever shared loses it`,
+    );
+    assert.ok(
+      /searchParams\.has\(/.test(code),
+      `${name} appends instead of merging: ?d=seq?e=x makes d read as seq?e=x`,
+    );
+  }
+});
+
+/* THE SCRIPT IS WHY THE READER NEVER SEES THE HOLDING LINE, and its POSITION is
+   the whole mechanism. A script in the body runs as the parser reaches it, so
+   placed before the paragraph it forwards before there is anything painted to
+   read. Moved after the text, it still works and the flash comes back — which
+   is why this asserts the order and not merely the presence. */
+await check("the forward runs during parse, before the holding line", () => {
   assert.ok(
-    /searchParams/.test(forward),
-    "dropping the query loses every ?e= and ?d= link ever shared",
+    /location\.replace\(/.test(forwardCode),
+    "no inline forward: the reader waits for hydration to leave",
+  );
+  /* Measured on the RENDERED elements, not the first mention of each name: the
+     fallback is imported at the top of the file, so comparing bare identifiers
+     put it before everything and failed on a file that was correct. */
+  const script = forwardCode.indexOf("<script");
+  const fallback = forwardCode.indexOf("<AliasForwardFallback");
+  assert.notEqual(script, -1, "no <script> is rendered");
+  assert.notEqual(fallback, -1, "the fallback element is not rendered");
+  assert.ok(
+    script < fallback,
+    "the holding line is parsed before the forward — the flash is back",
   );
 });
-await check("the trampoline MERGES the query rather than appending it", () => {
-  const forward = readSource("src/components/share/alias-forward.tsx");
+
+/* THE FALLBACK IS NOT OPTIONAL. If the script is blocked or throws, this is the
+   only thing that leaves the trampoline, and a reader stranded there has landed
+   on the one page in the app with nothing on it for them. */
+await check("the fallback still forwards on its own", () => {
   assert.ok(
-    /searchParams\.has\(/.test(forward),
-    "?d=seq?e=x makes d read as seq?e=x, which matches no kind",
+    /useEffect/.test(fallbackCode) && /router\.replace\(/.test(fallbackCode),
+    "the belt is gone and only the braces remain",
+  );
+  assert.ok(
+    /normalizeShareFragment/.test(fallbackCode),
+    "the path that can tidy the address no longer does",
   );
 });
-await check("the forward emits the query and the normalized fragment", () => {
-  const forward = readSource("src/components/share/alias-forward.tsx");
+
+/* FORWARDING THE RAW FRAGMENT IS SAFE ONLY BECAUSE THE DESTINATION NORMALIZES.
+   The script deliberately does not reimplement `normalizeShareFragment` — that
+   would be one rule in two languages, one of them a string in a template. This
+   asserts the property that licenses the omission, so if the reader ever stops
+   normalizing, this fails rather than a share link quietly failing to open. */
+await check("the destination normalizes the fragment it reads", () => {
+  const codec = stripComments(readSource("src/features/viewer/share/codec.ts"));
+  const decode = codec.slice(
+    codec.indexOf("export async function decodeShareFragment"),
+  );
   assert.ok(
-    /\.search\b/.test(forward) && /normalizeShareFragment/.test(forward),
-    "one half emitted without the other is the bug this section records",
+    /normalizeShareFragment\(/.test(decode.slice(0, 400)),
+    "the decoder stopped normalizing, so a doubled #m= now strands the reader",
   );
 });
 
