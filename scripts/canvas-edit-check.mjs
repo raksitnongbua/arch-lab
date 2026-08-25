@@ -2859,6 +2859,35 @@ console.log("\nA revise rewrites one node's block and nothing else");
       explicitFile.diagrams.find((d) => d.id === "backend").title === "Web App",
     "an explicit title was renamed along with the owner node",
   );
+  /* THE SLOT REACHES EACH CANVAS. Section 8's founding bug was a control
+     correct in the module and unreachable on the screen; a slot prop is a new
+     way to reproduce it (built, passed, never mounted), so each hop is
+     pinned: the shell forwards, and each canvas renders — the C4 one inside
+     its top-right panel, where the details card already lives, the sequence
+     one over its diagram pane. */
+  const shellSrc = read("src/features/viewer/components/viewer-shell.tsx");
+  const canvasSrc = read("src/features/viewer/components/viewer-canvas.tsx");
+  const sequenceSrc = read(
+    "src/features/sequence/components/sequence-viewer.tsx",
+  );
+  check(
+    "the shell forwards the lock slot to the C4 canvas",
+    /lockSlot=\{lockSlot\}/.test(shellSrc),
+    "the playground hands the shell a lock the canvas never receives",
+  );
+  check(
+    "the C4 canvas mounts the lock slot in its top-right panel",
+    /position="top-right"[\s\S]{0,700}\{lockSlot\}/.test(canvasSrc),
+    "the C4 lock is built but never reaches the canvas corner — section 8's " +
+      "bug in slot form",
+  );
+  check(
+    "the sequence canvas mounts the lock slot over its diagram pane",
+    /\{lockSlot !== undefined \?/.test(sequenceSrc) &&
+      /\{lockSlot\}/.test(sequenceSrc),
+    "the sequence lock is built but never reaches the canvas — the branch " +
+      "this section exists for, again",
+  );
 
   /* --- round trip, and the named fallback ---------------------------------- */
 
