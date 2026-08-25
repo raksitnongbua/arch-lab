@@ -394,13 +394,16 @@ export const CANVAS_EDIT_OFFERS: Record<
          revise gates on; the companion line each one mints (a `frame`
          declaration, a diagram head) follows the colour edit's precedent,
          where the header's `tagcolor` line rides the same gesture. A selected
-         boundary's own rename (`renamedFrameEdit`) rides here for the same
-         test: a frame is an element with its own declaration line and span,
-         so its label edit gates on nothing the other revises do not. */
+         boundary's own rename and removal (`renamedFrameEdit`,
+         `deletedFrameEdit`) ride here for the same test: a frame is an
+         element with its own declaration line and span, so its label edit —
+         and the removal that re-homes what it held — gates on nothing the
+         other revises do not. */
       onCanvas:
         "a C4 node's type, name, description, technology, icon, colour, " +
         "tags and boundary edited in the details panel beside it, where a " +
-        "child view is added or removed and a selected boundary renamed too",
+        "child view is added or removed and a selected boundary renamed " +
+        "or removed too",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: `serializeMermaidC4`
@@ -1337,6 +1340,131 @@ export function renamedFrameEdit(
       edited,
       applyPatches(sourceText, [{ span, lines: [line] }]),
     );
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one frame removed and everything it held RE-HOMED one level out,
+ * or `null` when the edit cannot apply — a document that refuses `"revise"`,
+ * or a frame that is not in the diagram. This is the gesture behind the
+ * boundary card's Remove button.
+ *
+ * THE VERDICT IS THE EDITOR STORE'S (`deleteFrame` in `editor/state/
+ * store.ts`), so the two authoring surfaces draw one line — `nestedNodeEdit`'s
+ * own rule for its refusals: members and nested frames land in the deleted
+ * frame's PARENT, or loose at top level when it had none. Re-home, never
+ * cascade, because a frame owns no elements (`C4Frame`: "purely a view
+ * construct") — deleting the ring around a group must not delete the group,
+ * and cascading nested frames would eat `frame` declarations the author
+ * wrote over the removal of ONE. The mint's "always top-level" verdict next
+ * door is not overturned: lifting a nested frame out states no NEW nesting —
+ * every surviving `in=` was already in the author's text, one ring closer.
+ *
+ * A REMOVAL IS N+1 LINE PATCHES IN ONE EDIT: the frame's own declaration
+ * line comes out, each lifted child frame's declaration is respelled by the
+ * serializer (`canonicalFrameDeclaration`, so the new `in=` — or its absence
+ * — is canonical), and each member's declaration LINE is respelled for its
+ * new membership (`canonicalNodeLine` — never the block, the grouping's
+ * rule: a removal has no business near anyone's `desc` continuations). All
+ * through one `applyPatches`, so the whole removal is one undo entry; every
+ * patch or none, the delete's rule, because a partially-applied removal
+ * would leave `in=` naming a frame the file no longer declares — a parse
+ * error over a diagram the reader can no longer edit.
+ *
+ * NOTHING BEYOND THE STANDARD GUARDS REFUSES, and that is a finding, not an
+ * oversight: the card's spec asked where members and nested frames land, the
+ * other authoring surface had already answered for both (`check:frames`
+ * measures it as "delete re-homes, never cascades"), so every populated case
+ * has an honest one-level-out answer and there is no case left to send to
+ * the source pane.
+ */
+export function deletedFrameEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  frameId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  const frame = diagram?.frames?.find((candidate) => candidate.id === frameId);
+  if (diagram === undefined || frame === undefined) return null;
+
+  /* Where everything the frame held goes: one level out. `undefined` for a
+     top-level home rather than `null`, because membership fields are
+     absent-or-set — a node's `frameId` has no null spelling, and a lifted
+     frame drops its `in=` key entirely (the three-valued `parentFrameId`
+     keeps `in=null` for authors, but writing it here would spell a statement
+     the author never made). */
+  const home = frame.parentFrameId ?? undefined;
+  const liftedIds = (diagram.frames ?? [])
+    .filter((candidate) => (candidate.parentFrameId ?? null) === frameId)
+    .map((candidate) => candidate.id);
+  const memberIds = diagram.nodes
+    .filter((node) => node.frameId === frameId)
+    .map((node) => node.id);
+
+  const edited = mapDiagram(file, diagramId, (candidate) => {
+    const remaining = (candidate.frames ?? [])
+      .filter((survivor) => survivor.id !== frameId)
+      .map((survivor) => {
+        if ((survivor.parentFrameId ?? null) !== frameId) return survivor;
+        if (home !== undefined) return { ...survivor, parentFrameId: home };
+        const lifted = { ...survivor };
+        // The KEY goes, not just the value: `parentFrameId` is three-valued
+        // (absent, `in=null`, an id) and a present-but-undefined key would
+        // make the serializer refuse the frame outright.
+        delete lifted.parentFrameId;
+        return lifted;
+      });
+    const next: C4Diagram = {
+      ...candidate,
+      frames: remaining,
+      // Only the members get new objects — the grouping's identity rule, so
+      // the projection cache re-adopts nothing the gesture did not change.
+      nodes: candidate.nodes.map((node) =>
+        node.frameId === frameId ? { ...node, frameId: home } : node,
+      ),
+    };
+    // An empty `frames` array and an absent one mean the same thing; drop the
+    // key so the model stays in the shape a fresh parse would produce.
+    if (remaining.length === 0) delete next.frames;
+    return next;
+  });
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable !== null) {
+    const doomed = patchable.spans.frames.get(spanKey(diagramId, frameId));
+    const patches: (LinePatch | undefined)[] = [
+      doomed === undefined ? undefined : { span: doomed, lines: [] },
+      ...liftedIds.map((id) => {
+        const frameSpan = patchable.spans.frames.get(spanKey(diagramId, id));
+        const frameLine = canonicalFrameDeclaration(edited, diagramId, id);
+        return frameSpan === undefined || frameLine === null
+          ? undefined
+          : { span: frameSpan, lines: [frameLine] };
+      }),
+      ...memberIds.map((id) => {
+        const nodeSpan = patchable.spans.nodes.get(spanKey(diagramId, id));
+        const nodeLine = canonicalNodeLine(edited, diagramId, id);
+        return nodeSpan === undefined || nodeLine === null
+          ? undefined
+          : {
+              span: { start: nodeSpan.start, end: nodeSpan.start },
+              lines: [nodeLine],
+            };
+      }),
+    ];
+    if (patches.every((patch) => patch !== undefined)) {
+      return adopt(
+        doc,
+        edited,
+        applyPatches(sourceText, patches as LinePatch[]),
+      );
+    }
   }
   return adopt(doc, edited, null);
 }

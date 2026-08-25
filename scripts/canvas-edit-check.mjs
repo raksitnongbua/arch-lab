@@ -263,6 +263,7 @@ const {
   createdNodeEdit,
   createdNodeName,
   createdRefEdit,
+  deletedFrameEdit,
   deletedNodeEdit,
   groupedNodesEdit,
   movedNodeEdit,
@@ -6212,6 +6213,274 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
     "spaceHeld or a panActivationKeyCode prop is back in viewer-canvas.tsx — " +
       "the pan is the Select/Pan toggle now, and a key beside it is a second " +
       "gate that can disagree with the mode",
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 20a. Removing a boundary re-homes what it held — never its members          */
+/* -------------------------------------------------------------------------- */
+
+/* The frame card shipped rename-only, holding removal to a written spec:
+   decide where the members and any nested frames land before offering the
+   button. `deletedFrameEdit` answers with the editor store's shipped verdict
+   (`deleteFrame`: re-home one level out, never cascade — `check:frames`
+   measures the store's half), and these assertions measure the canvas half
+   against the same line, so the two authoring surfaces cannot mean different
+   things by "remove". */
+console.log("\nRemoving a boundary re-homes what it held");
+{
+  /* Non-canonical for section 13's reason, with the shapes only a REMOVAL
+     meets: a nested frame (must lift out, not cascade), a member with a
+     `desc` continuation (a removal patches declaration lines only), a member
+     in the INNER frame (must land in the outer one, not loose), and a loose
+     node (must not be touched at all). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Boundary removal probe"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    `  frame f-outer "Outer"`,
+    `  frame f-inner "Inner" in=f-outer`,
+    ``,
+    `  // The people.`,
+    `  cust:person "Customer" in=f-outer`,
+    `    desc "The paying kind."`,
+    `  ops:person "Ops" in=f-inner`,
+    `  web:system "Web App"`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+  const ctxOf = (edit) =>
+    edit?.doc.synced.file.diagrams.find((d) => d.id === "ctx");
+
+  /* --- the outer ring comes off; everything it held stays ------------------- */
+
+  const removed = deletedFrameEdit(doc, authored, "ctx", "f-outer");
+  const removedCtx = ctxOf(removed);
+  /* THE REQUIRED PROPERTY, and the whole design question the spec posed: a
+     boundary is a view construct that owns no elements (`C4Frame`), so
+     removing the ring must not remove the group — a removal that ate members
+     would be a multi-delete wearing a smaller button's label. */
+  check(
+    "a boundary deletion leaves its members in the document",
+    removed !== null &&
+      removedCtx.nodes.length === 3 &&
+      ["cust", "ops", "web"].every((id) =>
+        removedCtx.nodes.some((n) => n.id === id),
+      ),
+    `nodes after: ${JSON.stringify(removedCtx?.nodes.map((n) => n.id))}`,
+  );
+  /* `removed !== null` is load-bearing: a refused edit would leave the whole
+     chain `undefined === undefined` and pass this vacuously — observed while
+     break-testing the member-eating variant. */
+  check(
+    "members of the removed top-level frame land loose",
+    removed !== null &&
+      removedCtx.nodes.find((n) => n.id === "cust").frameId === undefined,
+    "a member kept a membership naming a frame the file no longer declares",
+  );
+  /* THE NESTED FRAME LIFTS OUT, never cascades: its declaration is the
+     author's and survives the removal of the ring AROUND it, respelled by
+     the serializer with its `in=` gone — no new nesting is stated, which is
+     what keeps the mint's "always top-level" verdict intact next door. */
+  check(
+    "a nested frame lifts out — kept, top-level, its own members untouched",
+    removedCtx?.frames?.length === 1 &&
+      removedCtx.frames[0].id === "f-inner" &&
+      (removedCtx.frames[0].parentFrameId ?? null) === null &&
+      removedCtx.nodes.find((n) => n.id === "ops").frameId === "f-inner",
+    `frames after: ${JSON.stringify(removedCtx?.frames)}`,
+  );
+  check(
+    "the removal takes the patch path on authored text",
+    removed !== null && removed.path === "patch",
+    `path: ${removed === null ? "refused" : removed.path}`,
+  );
+  /* EVERY byte the removal is not about survives, by subtraction: take the
+     frame lines and the re-homed member's declaration out of both texts and
+     the remainders must be identical — the comment above the members, the
+     `desc` continuation, the loose node, the relationship line. */
+  const touched = (line) =>
+    line.trimStart().startsWith("frame ") ||
+    line.trimStart().startsWith("cust:person");
+  check(
+    "every line the removal is not about is byte-identical",
+    removed !== null &&
+      JSON.stringify(authored.split("\n").filter((l) => !touched(l))) ===
+        JSON.stringify(removed.text.split("\n").filter((l) => !touched(l))),
+    removed === null
+      ? "the removal was refused"
+      : firstDiff(
+          removed.text
+            .split("\n")
+            .filter((l) => !touched(l))
+            .join("\n"),
+          authored
+            .split("\n")
+            .filter((l) => !touched(l))
+            .join("\n"),
+        ),
+  );
+  /* The respelled lines are CANONICAL — section 13's derivation: measured
+     against a full serialise of the edited document, so a lifted frame's
+     dropped `in=` and a re-homed member's membership are the serializer's
+     own bytes. */
+  const canonicalAfter = sourceTextFor(removed?.doc ?? doc);
+  check(
+    "the lifted frame's line and the member's line are the serializer's own",
+    ["frame f-inner", "cust:person"].every(
+      (stem) =>
+        (removed?.text ?? "")
+          .split("\n")
+          .find((line) => line.trimStart().startsWith(stem)) ===
+        canonicalAfter
+          .split("\n")
+          .find((line) => line.trimStart().startsWith(stem)),
+    ),
+    "a respelled line diverged from canonical form",
+  );
+  /* ONE TEXT, ONE UNDO ENTRY — the grouping's contract, measured the same
+     way: the undo ring stores whole texts, so "one entry" is exactly "one
+     edit whose text carries the whole removal", and the PRE-edit parse must
+     hold everything the removal changed — the frame, the nesting AND the
+     membership — or an undo would land on an intermediate state. */
+  const preEdit = c4Document(authored).synced.file.diagrams.find(
+    (d) => d.id === "ctx",
+  );
+  check(
+    "one undo entry restores the boundary, the nesting and the memberships",
+    removed !== null &&
+      preEdit.frames?.some((f) => f.id === "f-outer") === true &&
+      preEdit.frames?.find((f) => f.id === "f-inner")?.parentFrameId ===
+        "f-outer" &&
+      preEdit.nodes.find((n) => n.id === "cust").frameId === "f-outer",
+    "part of the removal predates the edit — an undo would only partly reverse it",
+  );
+
+  /* --- an inner ring's members land in the OUTER one, not loose ------------- */
+
+  const inner = deletedFrameEdit(doc, authored, "ctx", "f-inner");
+  const innerOps = (inner?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("ops:"));
+  check(
+    "members of a nested frame re-home to its parent — one level out, not loose",
+    inner !== null &&
+      innerOps !== undefined &&
+      innerOps.includes("in=f-outer") &&
+      ctxOf(inner).nodes.find((n) => n.id === "ops").frameId === "f-outer",
+    `ops line: ${JSON.stringify(innerOps)}`,
+  );
+
+  /* --- the last frame's removal leaves no empty frames key ------------------ */
+
+  /* Absence is how the format spells "no boundaries" — an empty array left
+     behind would be a model shape no fresh parse produces, and the JSON twin
+     would carry a `"frames": []` the author never wrote. */
+  const bothGone = deletedFrameEdit(inner.doc, inner.text, "ctx", "f-outer");
+  check(
+    "removing the last boundary drops the frames key, not leaves it empty",
+    bothGone !== null && ctxOf(bothGone).frames === undefined,
+    `frames after: ${JSON.stringify(ctxOf(bothGone)?.frames)}`,
+  );
+
+  /* --- the refusals, and the panes ------------------------------------------ */
+
+  check(
+    "an unknown frame refuses rather than throws",
+    refuses(() => deletedFrameEdit(doc, authored, "ctx", "f-ghost")),
+    "a stale selection would take the page down instead of doing nothing",
+  );
+  check(
+    "a Mermaid pane refuses the removal — the C4 revise cell's own caveat",
+    refuses(() =>
+      deletedFrameEdit(
+        { ...doc, format: "mermaid" },
+        authored,
+        "ctx",
+        "f-outer",
+      ),
+    ),
+    "a boundary edit was written against a pane whose emitter never reads frames",
+  );
+  const inJson = deletedFrameEdit(
+    { ...doc, format: "json" },
+    doc.synced.jsonText,
+    "ctx",
+    "f-outer",
+  );
+  check(
+    "a JSON pane re-emits rather than splicing .alab line numbers into JSON",
+    inJson !== null && inJson.path === "reemit",
+    `path: ${inJson === null ? "refused" : inJson.path}`,
+  );
+
+  /* --- the host and the card ------------------------------------------------ */
+
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+  const frameCardCode = code(
+    "src/features/viewer/components/viewer-frame-detail.tsx",
+  );
+  const deleteBody =
+    /const handleFrameDelete = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
+  check(
+    "handleFrameDelete applies through exactly one applyCanvasEdit and announces the refusal",
+    deleteBody !== null &&
+      (deleteBody[1].match(/applyCanvasEdit\(/g) ?? []).length === 1 &&
+      deleteBody[1].includes("deletedFrameEdit(") &&
+      !deleteBody[1].includes("setText(") &&
+      deleteBody[1].includes("if (next === null)") &&
+      /Cmd or Ctrl \+ Z/.test(deleteBody[1]),
+    "a second apply would split one gesture into two undo entries, or a " +
+      "refused removal went silent",
+  );
+  /* The announcement answers the design question the reader will actually
+     have — "what happened to my elements?" — rather than only naming the
+     frame that went. */
+  check(
+    "the announcement says where the members landed",
+    deleteBody !== null && /one level out/.test(deleteBody[1]),
+    "the one thing a removal must say is unsaid",
+  );
+  /* The card's Remove sits OUTSIDE the rename form: the rename is a field
+     Apply rewrites, the removal is an act — Enter in the name field must
+     never remove the boundary. Positional, like the edit-keys exemption:
+     the button has to come after the form closes. */
+  const formEnd = frameCardCode.indexOf("</form>");
+  const removeAt = frameCardCode.indexOf("onClick={onDelete}");
+  check(
+    "the card's Remove button lives outside the rename form",
+    formEnd !== -1 && removeAt !== -1 && formEnd < removeAt,
+    "Enter in the rename field would submit a removal",
+  );
+  /* Read from `code(...)`, NOT the raw source: the card's own header comment
+     states the contract in almost the same words, and the raw-source version
+     of this assertion stayed green with the sentence deleted from the JSX —
+     the sixth firing of the trap `code()` exists for, observed while
+     break-testing this very section. */
+  check(
+    "the card says everything the boundary holds stays, whenever it holds anything",
+    /everything it holds stays on the\s+canvas/.test(
+      frameCardCode.replace(/\s+/g, " "),
+    ),
+    "Remove beside a populated group reads as removing the group",
   );
 }
 

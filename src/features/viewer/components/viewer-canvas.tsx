@@ -249,6 +249,15 @@ export interface CanvasEditHandlers {
    */
   onFrameRename: (diagramId: string, frameId: string, label: string) => void;
   /**
+   * Remove one boundary, from the frame card beside the selected frame. The
+   * host resolves it into ONE edit (`deletedFrameEdit`) — the frame line out,
+   * members and nested boundaries re-homed one level out — and announces
+   * where they landed; the canvas only reports the press. The selection
+   * clears itself: the card's detail is derived per render, and a frame that
+   * is no longer in the diagram renders no card.
+   */
+  onFrameDelete: (diagramId: string, frameId: string) => void;
+  /**
    * Write one relationship from `sourceId` to `targetId`, from the connect
    * grip — a drag released on an element, or the menu's existing-element
    * half. The host turns it into an insert patch (`connectedNodesEdit`) and
@@ -2216,6 +2225,13 @@ function ViewerCanvasInner({
     [edit],
   );
 
+  /* The card's Remove, resolved to the selected frame exactly as the rename
+     is: at press time from the refs, never at render. */
+  const handleFrameDelete = useCallback(() => {
+    if (edit === undefined || selectedFrameIdRef.current === null) return;
+    edit.onFrameDelete(diagramIdRef.current, selectedFrameIdRef.current);
+  }, [edit]);
+
   const handleDetailZoomIn = useCallback(() => {
     if (selectedNodeIdRef.current !== null) {
       drillInto(selectedNodeIdRef.current);
@@ -2570,6 +2586,7 @@ function ViewerCanvasInner({
                   detail={frameDetail}
                   onDismiss={handleDetailDismiss}
                   onRename={handleFrameRename}
+                  onDelete={handleFrameDelete}
                 />
               ) : activeMultiIds !== null ? (
                 /* Keyed by the selection so a NEW lasso remounts the card —

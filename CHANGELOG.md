@@ -18,6 +18,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   tags; a tag that carries the element's colour stays with the colour control,
   and the form says so rather than hiding it.
 
+- A selected boundary can be removed from its card on the editable C4 canvas.
+  Removal takes only the boundary itself: its elements and any nested
+  boundaries stay on the canvas and move one level out, in one undo step —
+  the same behaviour the editor's boundary delete has always had.
+
 - The element colour control offers any colour, not just the five presets: a
   colour wheel and hex entry sit beside the swatches. A picked colour is
   gently adjusted — hue kept, lightness moved the minimum distance — whenever
