@@ -15,7 +15,8 @@
  * Known lossy spots (documented): node `technology` has no slot on
  * Person/System forms; node `icon`, tags (beyond `boundary:` membership) and
  * the header's `tagColors` have no slot on any form; edge direction `none`
- * emits as `Rel`; `code`-level diagrams emit as `C4Component`.
+ * emits as `Rel` and edge `style` has no slot at all, so dashed comes back
+ * solid; `code`-level diagrams emit as `C4Component`.
  *
  * Imported by `scripts/mermaid-check.mjs` through Node's type stripping:
  * keep the syntax erasable and type-only imports as `import type`.

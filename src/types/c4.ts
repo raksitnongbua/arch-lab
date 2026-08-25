@@ -300,6 +300,37 @@ export interface C4Edge {
   waypoints?: Point[];
 }
 
+/**
+ * The editable subset of a relationship, given WHOLE rather than as a diff —
+ * `C4NodeRevision`'s contract, one element kind over, and it lives here for
+ * the same layering reason: the viewer's relationship card collects it and
+ * `playground/input/canvas-edit.ts` turns it into a line patch. `undefined`
+ * means the field is absent from the document, not "leave it as it was".
+ *
+ * `style` MIRRORS THE MODEL'S OWN THREE STATES, absence included, because
+ * absent and `"solid"` are different documents that render the same line: the
+ * grammar spells solid as the arrow's default and `style=solid` as the
+ * author writing the default out (`emitEdge`). A two-state field here would
+ * force the card to collapse them, and a no-op Apply would eat a hand-written
+ * `style=solid` — the numbering toggle's shipped bug (`4a1254e`), one format
+ * over. The card therefore submits the CURRENT spelling when the control was
+ * not moved, and the canonical spelling (dashed, or absence for solid) when
+ * it was.
+ *
+ * WHAT IS DELIBERATELY NOT HERE: `source`/`target` (repointing changes the
+ * default id `e-<source>-<target>` and drags every `id=`/`~realizes` naming
+ * it — a refactor for the pane, not a card edit), `tags`, `realizes` and
+ * `via` waypoints (all text-first; each arrives with the control that edits
+ * it, so this type never promises a field the canvas cannot write). The `id`
+ * is not editable for the node revision's reason: lines elsewhere name it.
+ */
+export interface C4EdgeRevision {
+  label?: string;
+  technology?: string;
+  direction: EdgeDirection;
+  style?: EdgeStyle;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Diagrams                                                                    */
 /* -------------------------------------------------------------------------- */

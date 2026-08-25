@@ -64,6 +64,7 @@ import type {
   ArchLabFile,
   C4Diagram,
   C4Edge,
+  C4EdgeRevision,
   C4Frame,
   C4Node,
   C4NodeFrameChoice,
@@ -396,11 +397,19 @@ export const CANVAS_EDIT_OFFERS: Record<
          where the header's `tagcolor` line rides the same gesture. A selected
          boundary's own rename (`renamedFrameEdit`) rides here for the same
          test: a frame is an element with its own declaration line and span,
-         so its label edit gates on nothing the other revises do not. */
+         so its label edit gates on nothing the other revises do not. A
+         selected RELATIONSHIP's own fields (`revisedEdgeEdit`) and its
+         removal (`deletedEdgeEdit`) ride here by the same test again: an
+         edge is an element with its own relationship line and span
+         (`spans.edges`), both gestures gate on exactly the two facts every
+         revise gates on, and neither asks a question `connect` owns — the
+         relationship SET is not consulted, only one line already in it. */
       onCanvas:
         "a C4 node's name, description, technology, icon, colour and " +
         "boundary edited in the details panel beside it, where a child " +
-        "view is added or removed and a selected boundary renamed too",
+        "view is added or removed, a selected boundary renamed, and a " +
+        "selected relationship's wording, direction and line style " +
+        "edited — or the relationship deleted",
       unlessPane: {
         format: "mermaid",
         /* Measured against the emitter, not assumed: `serializeMermaidC4`
@@ -417,14 +426,21 @@ export const CANVAS_EDIT_OFFERS: Record<
            its boundary blocks are rebuilt from `x-mermaid.boundaries` plus
            `boundary:` tags — it never reads `C4Diagram.frames` or
            `C4Node.frameId`, so a membership edit has nowhere to land either.
-           Writing an edit back through a pane that cannot spell it would show
-           the change once and lose it on the next round trip, which is worse
-           than refusing. */
+           The RELATIONSHIP half is measured the same way: the emitter's
+           relationships loop writes `BiRel` only for `bidirectional` and
+           `Rel` for everything else, with no argument for `style` — so an
+           undirected form comes
+           back `forward` and a dashed line comes back solid, which is two of
+           the four fields the edge card edits. Writing an edit back through
+           a pane that cannot spell it would show the change once and lose it
+           on the next round trip, which is worse than refusing. */
         because:
           "Mermaid C4 has no slot for a node's icon or colour, and none for " +
           "[technology] on person or system elements; it also holds a " +
           "single diagram whose boundaries come from the import alone, so a " +
-          "boundary or child-view edit would be lost too. Switch the pane " +
+          "boundary or child-view edit would be lost too — and a " +
+          "relationship's undirected form or dashed style has no spelling, " +
+          "so those edits would be lost as well. Switch the pane " +
           "to .alab to edit on the canvas.",
       },
     },
@@ -1875,6 +1891,142 @@ export function connectedNewNodeEdit(
 }
 
 /**
+ * `doc` with one relationship's own fields rewritten, or `null` when the edit
+ * cannot apply — a document that refuses `"revise"`, an edge that is not in
+ * the diagram, or a revision that changes nothing.
+ *
+ * PART OF `"revise"`, NOT OF `connect`, by the ability doc's own test: this
+ * gesture gates on exactly the two facts every revise gates on (an `.alab` C4
+ * pane, the canvas unlocked) and never consults the relationship set —
+ * `connect` earned its row by asking whether a PAIR may be related, and a
+ * rewrite of one line already in the set asks nothing of the kind. An edge is
+ * an element of the grammar with its own relationship line and its own span
+ * (`spans.edges`), so rewriting its fields is the same shape as rewriting a
+ * node's name.
+ *
+ * `null` FOR AN UNCHANGED REVISION keeps "one text change per gesture" true
+ * for a form submitted without an edit in it — every gesture's contract, and
+ * the reason a no-op Apply costs no undo entry.
+ *
+ * A REVISE PATCHES THE EDGE'S WHOLE BLOCK — the relationship line plus any
+ * `!` escape continuations — the node revise's shape, because the arrow, the
+ * label, the `[technology]`, the `id=` and the `style=` all live on one line
+ * the serializer must respell together. `canonicalEdgeBlock` is the
+ * serializer's own answer for those lines, so the patched block cannot be
+ * non-canonical; every byte outside it is untouched.
+ *
+ * WHAT THE ARROW ABSORBS: direction and dashedness are ONE token in the
+ * grammar (six forms — `->`, `..>`, `<->`, `<..>`, `--`, `..`), so a
+ * direction or style change is still a rewrite of the same line, never a
+ * second write anywhere. `style` is taken WHOLE, absence included, because
+ * absent and explicit `style=solid` are different documents that draw the
+ * same line — the revision type states the hazard (`4a1254e`) and the card
+ * owns choosing the spelling, so a hand-written `style=solid` survives a
+ * revise that did not touch the style control.
+ *
+ * WHAT IS DELIBERATELY NOT EDITABLE HERE — the endpoints, `tags`,
+ * `~realizes` and `via` waypoints — is argued at `C4EdgeRevision`; the id
+ * follows the node rule (lines elsewhere may name it, so it is the pane's to
+ * change). Fields the revision does not carry ride the block patch untouched
+ * because the edited model keeps them: only the four named fields are
+ * rewritten on the edge object.
+ */
+export function revisedEdgeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  edgeId: string,
+  revision: C4EdgeRevision,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const current = findEdge(doc.synced.file, diagramId, edgeId);
+  if (current === null) return null;
+
+  /* DESTRUCTURED, not spread — `revisedNodeEdit`'s whole-value contract: an
+     optional key the caller omitted must still overwrite the field, or a
+     cleared label could never come off the line. This destructure and
+     `C4EdgeRevision` are one unit: a field added there needs a name here or
+     it is silently ignored. */
+  const { label, technology, direction, style } = revision;
+
+  if (
+    current.label === label &&
+    current.technology === technology &&
+    current.direction === direction &&
+    current.style === style
+  ) {
+    return null;
+  }
+
+  const edited = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
+    ...diagram,
+    edges: diagram.edges.map((edge) =>
+      edge.id === edgeId
+        ? { ...edge, label, technology, direction, style }
+        : edge,
+    ),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const span = patchable?.spans.edges.get(spanKey(diagramId, edgeId));
+  const lines = canonicalEdgeBlock(edited, diagramId, edgeId);
+  if (span !== undefined && lines !== null) {
+    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines }]));
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with one relationship removed — and nothing else — or `null` when
+ * the edit cannot apply: a document that refuses `"revise"`, or an edge that
+ * is not in the diagram.
+ *
+ * PART OF `"revise"`, `revisedEdgeEdit`'s argument verbatim: the gesture
+ * gates on the two facts every revise gates on and consults nothing the
+ * other abilities own.
+ *
+ * THE ENDPOINTS ARE LEFT ALONE, and that is the removal's whole verdict
+ * (`canvas-editing.md`: every removal states one). Deleting a relationship
+ * removes exactly its own span — the line plus any `!` continuations — and
+ * no node's declaration changes, because nothing about either element is
+ * derived from the edge. The span-removal mechanics are `deletedNodeEdit`'s
+ * edge cascade, run for one edge with no node to take with it.
+ *
+ * WHAT IT CARRIES RATHER THAN EATS: a child-level edge whose `~realizes`
+ * names the deleted relationship. The model does not validate `realizes`
+ * (the traceability chip simply stops resolving), so the document still
+ * parses — the same honest state a hand-edit of the pane produces — and
+ * rewriting other diagrams' lines to chase a traceability pointer would give
+ * one deleted line the blast radius of a refactor. Nothing renumbers: edge
+ * ids are names, not indices.
+ */
+export function deletedEdgeEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  edgeId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  if (findEdge(doc.synced.file, diagramId, edgeId) === null) return null;
+
+  const edited = mapDiagram(doc.synced.file, diagramId, (diagram) => ({
+    ...diagram,
+    edges: diagram.edges.filter((edge) => edge.id !== edgeId),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const span = patchable?.spans.edges.get(spanKey(diagramId, edgeId));
+  if (span !== undefined) {
+    return adopt(doc, edited, applyPatches(sourceText, [{ span, lines: [] }]));
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
  * `doc` with one node — and every relationship touching it — removed, or
  * `null` when the edit cannot apply.
  *
@@ -2304,6 +2456,17 @@ function referrersTo(
       )
       .map((node) => ({ diagramId: diagram.id, nodeId: node.id })),
   );
+}
+
+function findEdge(
+  file: ArchLabFile,
+  diagramId: string,
+  edgeId: string,
+): C4Edge | null {
+  const edge = file.diagrams
+    .find((diagram) => diagram.id === diagramId)
+    ?.edges.find((candidate) => candidate.id === edgeId);
+  return edge === undefined ? null : edge;
 }
 
 function findNode(

@@ -454,7 +454,8 @@ export function convertedSourceText(
 export const MERMAID_C4_EXPORT_CAVEAT =
   "Mermaid C4 holds a single diagram, so a multi-level model keeps only one " +
   "level, and geometry, drill-down links, icons, tag colours and technology " +
-  "on people/systems are dropped. The .alab keeps everything.";
+  "on people/systems are dropped; a relationship's undirected or dashed " +
+  "line comes back as a plain arrow. The .alab keeps everything.";
 
 /** "a C4 model (arch-lab JSON)" — for parse announcements. */
 export function describeDocument(doc: ViewDocument): string {
