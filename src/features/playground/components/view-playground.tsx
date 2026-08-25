@@ -1824,32 +1824,36 @@ export function ViewPlayground({
       >
         {/* One heading for all three routes, deliberately kind-neutral: the
             routes differ only in their seed, and a heading that flipped with
-            the detected kind would rewrite the page around every paste. */}
+            the detected kind would rewrite the page around every paste.
+
+            ONE NAME FOR THE PAGE, chosen by the product owner: the route is
+            `/live`, the browser title is "Diagram playground", and so is this.
+            It used to read "Write your own diagram", which made a third name —
+            the same "one page, two names for itself" fault the badge note
+            below was written about, committed by the heading that replaced
+            the badge. */}
         <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            Write your own diagram
+            Diagram playground
           </h1>
           {/* THE "live editor" BADGE IS GONE. It was a status pill — the shape
               this site uses for a release stage (`MCP_STATUS_LABEL`) — spent on
               a claim that is neither news nor a stage: every pane on this page
-              is live, which the reader learns by typing one character. It also
-              said "editor" while the page's own heading says "write your own
-              diagram", giving one page two names for itself. */}
+              is live, which the reader learns by typing one character. */}
+          {/* ONE LINE, and what it costs is deliberate. The notations and the
+              three formats used to open this paragraph; the page DETECTS both
+              from the first thing you paste, so the sentence was telling a
+              reader something the next keystroke tells them better, above a
+              canvas whose height it was spending. What a reader cannot
+              discover by typing stays: that the canvas can be edited at all
+              (`CANVAS_EDITABLE_SUMMARY`, derived from the capability grid,
+              since a hand-written "only C4" predecessor outlived its own truth
+              once already), and the privacy promise, which is a reason to use
+              this page rather than a description of it. The formats moved into
+              the disclosure below, where a reader goes looking for them.
+              `check:canvas-edit` keeps this sentence derived AND short — the
+              paragraph it replaced grew because nothing measured it. */}
           <p className="w-full text-sm leading-relaxed text-muted-foreground sm:w-auto sm:flex-1">
-            C4, sequence, flowchart, use case, ER or dictionary —{" "}
-            <span className="font-mono text-foreground">.alab</span>, arch-lab
-            JSON, or Mermaid, auto-detected and rendered live.{" "}
-            {/* THE INTRO SAYS THAT the canvas is editable; the disclosure
-                below says WHAT. The full gesture enumeration lived in this
-                sentence and grew with every gesture until the product owner
-                read it as a wall of text — ten gestures are a list, not a
-                sentence. The claim that remains is `CANVAS_EDITABLE_SUMMARY`,
-                derived from the capability grid (a hand-written "only C4"
-                predecessor outlived its own truth once already), and it is
-                sourced from the flag so it is absent rather than false while
-                the canvas is not shipped. `check:canvas-edit` keeps this
-                sentence derived AND keeps it short — the wall grew because
-                nothing measured it. */}
             {CANVAS_EDIT_ENABLED ? <>{CANVAS_EDITABLE_SUMMARY} </> : null}
             Nothing leaves your browser.{" "}
             <Link
@@ -1875,11 +1879,19 @@ export function ViewPlayground({
             contract) — so a new gesture lands on this page by being added
             where it is built, not by someone remembering this file. The two
             exceptions are below, marked, because no table knows them. */}
-        {CANVAS_EDIT_ENABLED ? (
-          <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
-            <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
-              What you can do on the canvas
-            </summary>
+        {/* THE DISCLOSURE ITSELF IS UNCONDITIONAL, and only the gesture half
+            is gated. The formats are true whether or not the canvas ships, so
+            hanging the whole thing off the flag would take the format
+            explanation off the page the day editing was switched off — a
+            regression the merge into one disclosure would otherwise have
+            introduced silently. */}
+        <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
+          <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
+            {CANVAS_EDIT_ENABLED
+              ? "What you can do on the canvas, and how the formats relate"
+              : "How .alab, JSON and Mermaid relate"}
+          </summary>
+          {CANVAS_EDIT_ENABLED ? (
             <ul className="mt-2 max-w-3xl list-disc space-y-1 pl-5 leading-relaxed">
               {CANVAS_GESTURE_CLAUSES.map((clause) => (
                 <li key={clause}>{clause}</li>
@@ -1905,14 +1917,17 @@ export function ViewPlayground({
                   this is where a reader who dragged a flowchart box lands. */}
               <li>the other kinds lay themselves out from the text</li>
             </ul>
-          </details>
-        ) : null}
-
-        <details className="group -mt-2 shrink-0 text-sm text-muted-foreground">
-          <summary className="cursor-pointer text-xs text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline">
-            How .alab, JSON and Mermaid relate
-          </summary>
-          <p className="mt-2 max-w-3xl leading-relaxed">
+          ) : null}
+          {/* THE FORMATS, FOLDED IN HERE rather than sitting in a disclosure
+                of their own. Two grey summary links stacked one above the
+                other are the same control twice, competing for the same glance
+                and each costing a row above a canvas that is height-capped —
+                and both are reference material a reader opens when a question
+                arrives, not before. One link, two sections. The privacy
+                sentence that used to close this paragraph is gone: the intro
+                already promises it, and saying it twice made neither saying
+                count. */}
+          <p className="mt-3 max-w-3xl leading-relaxed">
             <span className="font-mono text-foreground">.alab</span> is the
             format to write: it is what the syntax reference documents, what
             share links carry, and what reads cleanly in a code review.{" "}
@@ -1922,7 +1937,7 @@ export function ViewPlayground({
             both directions (proved on every build), so you never have to write
             the JSON by hand. Mermaid is read and written too, lossily — the
             format toggle above the pane converts in place and states what each
-            direction drops. Nothing you type is uploaded or stored.
+            direction drops.
           </p>
         </details>
 

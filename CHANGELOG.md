@@ -57,6 +57,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The live page's header is one line again, leaving more of the window for
+  the diagram. The opening paragraph no longer lists the six notations and
+  three formats — the page detects both from whatever you paste — and the two
+  separate disclosure links have become one, covering the canvas gestures and
+  how the formats relate. The privacy promise is made once rather than twice.
+
+- The live page calls itself one thing. The heading now reads "Diagram
+  playground", matching the browser tab, where it used to say "Write your own
+  diagram" and give the page a third name alongside its title and its URL.
+
 - The Mermaid conversion caveat for C4 models now also says that an
   undirected or dashed relationship comes back as a plain arrow. The loss is
   not new — the caveat now names it, because the relationship editor refuses
