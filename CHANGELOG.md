@@ -9,6 +9,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- An element's type can be changed in the details panel on the editable C4
+  canvas. The select offers only the types legal at the diagram's level; a
+  node still at its old type's default size adopts the new type's default,
+  while a hand-sized node and a chosen icon keep exactly what the author set.
+
+- An element's tags can be edited in the same panel. The field owns the plain
+  tags; a tag that carries the element's colour stays with the colour control,
+  and the form says so rather than hiding it.
+
 - The element colour control offers any colour, not just the five presets: a
   colour wheel and hex entry sit beside the swatches. A picked colour is
   gently adjusted — hue kept, lightness moved the minimum distance — whenever

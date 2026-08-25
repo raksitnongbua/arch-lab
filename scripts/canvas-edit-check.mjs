@@ -3690,6 +3690,329 @@ console.log(
 }
 
 /* ----------------------------------------------------------------------- */
+/* 14c. The same revise carries the TYPE and the PLAIN TAGS                 */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA revise can change the type, and edits only the plain tags");
+{
+  /* Non-canonical for section 13's reason, with the shapes only THESE two
+     claims can get wrong: a coloured tag beside a plain one (the division the
+     tags claim must not cross), an explicit (`!`) and an inferred (`~`) icon
+     (the two states a type change must not move), an authored size beside a
+     default one (the two size verdicts), and a `^ref` mirror whose keyword
+     differs from its source's (the proof a mirror's type is its OWN and must
+     not be chased). */
+  const authored = [
+    `archlab 1.0`,
+    `title "Type and tags probe"`,
+    `tagcolor amber "#a47c13"`,
+    ``,
+    `// The file's own note.`,
+    `@context ctx "System context"`,
+    ``,
+    `  // Who uses this thing.`,
+    `  cust:person "Customer" #amber #pci`,
+    `    desc "The paying kind."`,
+    `  web:system "Web App" @nextjs! (400,240 200x120) >backend`,
+    `  pay:system "Payments" @stripe~`,
+    ``,
+    `  cust -> web :"uses"`,
+    ``,
+    `@container backend owner=web`,
+    `  api:container "API" [Go]`,
+    `  mirror:external ^ctx/pay`,
+    ``,
+  ].join("\n");
+  const doc = c4Document(authored);
+  check(
+    "the fixture is genuinely not canonical — otherwise this section is vacuous",
+    authored !== sourceTextFor(doc),
+    "the authored text already equals what the serializer emits",
+  );
+  const refuses = (run) => {
+    try {
+      return run() === null;
+    } catch {
+      return false;
+    }
+  };
+
+  /* --- the type: level-legal by the parser's own table --------------------- */
+
+  /* Swept over EVERY type the format has, with the verdict DERIVED from
+     `VALID_NODE_TYPES_BY_LEVEL` rather than a hand-picked "container refuses"
+     — a hand-picked case cannot notice the type it never heard of
+     (`codebase.md` habit 4). The description changes alongside, so a LEGAL
+     type always yields an edit and `null` can only mean the refusal under
+     test, never the no-op. The failure this prevents: a type keyword written
+     into a level whose parser refuses it comes back from the re-parse as an
+     error the reader cannot act on. */
+  const { VALID_NODE_TYPES_BY_LEVEL: LEVEL_TABLE } =
+    await load("src/types/c4.ts");
+  const everyType = [...new Set(Object.values(LEVEL_TABLE).flat())];
+  check(
+    "a type change stays level-legal — accepted and refused exactly as the parser's table says",
+    everyType.length === 8 &&
+      everyType.every((type) => {
+        const legal = LEVEL_TABLE.context.includes(type);
+        const edit = (() => {
+          try {
+            return revisedNodeEdit(doc, authored, "ctx", "cust", {
+              name: "Customer",
+              description: "Renamed to force a change.",
+              type,
+            });
+          } catch {
+            return "threw";
+          }
+        })();
+        return legal ? edit !== null && edit !== "threw" : edit === null;
+      }),
+    "a type the parser refuses at @context got through, or a legal one was refused",
+  );
+  /* STRUCTURAL COMPANION, because the sweep above cannot catch the gate's
+     removal: `adopt` re-parses every edit, so an illegal keyword is refused
+     by the parser even with the module's own guard gone — the "passed on a
+     different guard's refusal" trap by name. Observed: deleting the guard
+     left the sweep green. What the guard buys is a refusal the CALLER can
+     distinguish and announce cheaply, and one derivation shared with the two
+     create gestures — so the shared spelling is pinned, all three readers. */
+  const canvasEditCode = code("src/features/playground/input/canvas-edit.ts");
+  check(
+    "the type gate is the module's own palette derivation, shared with both create gestures",
+    (
+      canvasEditCode.match(
+        /creatableNodeTypes\(diagram\.level\)\.some\(\(row\) => row\.type === type\)/g,
+      ) ?? []
+    ).length === 3,
+    "revisedNodeEdit no longer asks creatableNodeTypes itself — an illegal " +
+      "keyword would be refused only by the re-parse, at full parse cost",
+  );
+
+  /* --- what a type change writes, and what travels with it ----------------- */
+
+  const retyped = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    description: "The paying kind.",
+    type: "externalSystem",
+  });
+  const retypedLine = (retyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("cust:"));
+  check(
+    "a type change rewrites the declaration keyword, on the patch path",
+    retyped !== null &&
+      retyped.path === "patch" &&
+      retypedLine === `  cust:external "Customer" #amber #pci`,
+    `cust line: ${JSON.stringify(retypedLine)}`,
+  );
+  /* THE DEFAULT SIZE FOLLOWS THE TYPE. `cust` sat at person's default
+     (160×96), so its line carries no geometry token — and must STILL carry
+     none after the change, with the re-parse handing it the NEW type's
+     default. Freezing the old numbers in would write `(… 160x96)` — an
+     explicit size the author never chose, visible above. The re-parse half is
+     measured against `defaultSizeFor` itself, not a retyped pair. */
+  const retypedSize = retyped?.doc.synced.file.diagrams
+    .find((d) => d.id === "ctx")
+    .nodes.find((n) => n.id === "cust").size;
+  const externalDefault = defaultSizeFor("externalSystem");
+  check(
+    "a node at the old type's default size adopts the new type's default",
+    retypedSize !== undefined &&
+      retypedSize.width === externalDefault.width &&
+      retypedSize.height === externalDefault.height,
+    `size after: ${JSON.stringify(retypedSize)} vs default ${JSON.stringify(externalDefault)}`,
+  );
+  /* An AUTHORED size is the author's and keeps its bytes — and so does an
+     explicit (`!`) icon, `C4Node`'s own never-auto-overridden rule applied to
+     the one edit that could tempt a swap. Both measured on `web`'s line. The
+     revision CARRIES the icon because icon is whole-value in the form's
+     contract (the form always resubmits the current pick); what is measured
+     is that the type change does not move it. */
+  const webRetyped = revisedNodeEdit(doc, authored, "ctx", "web", {
+    name: "Web App",
+    type: "externalSystem",
+    icon: "nextjs",
+    iconSource: "explicit",
+  });
+  const webLine = (webRetyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("web:"));
+  check(
+    "an authored size and an explicit icon both survive a type change",
+    webRetyped !== null &&
+      webLine !== undefined &&
+      webLine.includes("@nextjs!") &&
+      webLine.includes("(400,240 200x120)") &&
+      webLine.startsWith("  web:external"),
+    `web line: ${JSON.stringify(webLine)}`,
+  );
+  /* An INFERRED (`~`) icon survives too: it derives from `technology`, which
+     a type change does not touch, so its basis is intact — clearing it would
+     eat a derivation for no reason. */
+  const payRetyped = revisedNodeEdit(doc, authored, "ctx", "pay", {
+    name: "Payments",
+    type: "externalSystem",
+    icon: "stripe",
+    iconSource: "inferred",
+  });
+  const payLine = (payRetyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("pay:"));
+  check(
+    "an inferred icon survives a type change — technology, its basis, did not move",
+    payRetyped !== null &&
+      payLine !== undefined &&
+      payLine.includes("@stripe~"),
+    `pay line: ${JSON.stringify(payLine)}`,
+  );
+  /* A `^ref` MIRROR IS NOT CHASED. The fixture mirrors `pay` (a system) as
+     `mirror:external` — the format's proof that a mirror's keyword is its own
+     statement at its own level, not a derivation. Rewriting it would give a
+     type change the blast radius of a delete; leaving it is what the format
+     itself does. Byte-identical, not merely still-parsing. */
+  const mirrorLine = (payRetyped?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("mirror:"));
+  check(
+    "a ^ref mirror elsewhere keeps its own keyword, byte-identical",
+    mirrorLine === `  mirror:external ^ctx/pay`,
+    `mirror line: ${JSON.stringify(mirrorLine)}`,
+  );
+
+  /* --- the tags claim: the plain half only ---------------------------------- */
+
+  /* THE REQUIRED PROPERTY: the panel's tag field never SHOWS the
+     colour-carrying tags (they are the Colour control's), so a submitted
+     empty list means "no plain tags" — and must be unable to take `#amber`
+     off the node. A whole-value list that could would let the one control
+     destroy the other's state through a field the reader saw as blank. */
+  const bareTags = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    description: "The paying kind.",
+    tags: [],
+  });
+  const bareLine = (bareTags?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("cust:"));
+  check(
+    "the tag editor cannot destroy a colour tag it does not show",
+    bareTags !== null &&
+      bareTags.path === "patch" &&
+      bareLine === `  cust:person "Customer" #amber` &&
+      JSON.stringify(
+        bareTags.doc.synced.file.diagrams
+          .find((d) => d.id === "ctx")
+          .nodes.find((n) => n.id === "cust").tags,
+      ) === JSON.stringify(["amber"]),
+    `cust line: ${JSON.stringify(bareLine)}`,
+  );
+  check(
+    "a tags claim naming a documented colour refuses — that tag is the colour control's",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        tags: ["amber"],
+      }),
+    ),
+    "a colour-carrying tag reached the node through the tag field",
+  );
+  check(
+    'an empty-string tag refuses — it would spell #"" into the text',
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        tags: [""],
+      }),
+    ),
+    "an empty tag reached the serializer",
+  );
+  /* Adding plain tags lands them sorted beside the colour tag — the
+     serializer's own order — and the block patch touches only the block. */
+  const addedTags = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Customer",
+    description: "The paying kind.",
+    tags: ["zone-a", "pci"],
+  });
+  const addedLine = (addedTags?.text ?? "")
+    .split("\n")
+    .find((line) => line.trimStart().startsWith("cust:"));
+  check(
+    "added plain tags land in canonical order beside the untouched colour tag",
+    addedTags !== null &&
+      addedTags.path === "patch" &&
+      addedLine === `  cust:person "Customer" #amber #pci #zone-a`,
+    `cust line: ${JSON.stringify(addedLine)}`,
+  );
+  check(
+    "a tags claim that changes nothing refuses, so an idle Apply costs no undo entry",
+    refuses(() =>
+      revisedNodeEdit(doc, authored, "ctx", "cust", {
+        name: "Customer",
+        description: "The paying kind.",
+        tags: ["pci"],
+      }),
+    ),
+    "identical plain tags still rewrote the pane",
+  );
+  /* NO CLAIM MEANS HANDS OFF — the same `undefined` contract colour states:
+     a wording-only revision must not touch a tag vocabulary it never saw. */
+  const wordingOnly = revisedNodeEdit(doc, authored, "ctx", "cust", {
+    name: "Shopper",
+    description: "The paying kind.",
+  });
+  check(
+    "a revision with no tags claim leaves the whole tag list alone",
+    wordingOnly !== null &&
+      (
+        wordingOnly.text.split("\n").find((line) => line.includes("cust:")) ??
+        ""
+      ).includes("#amber #pci"),
+    "an absent claim still rewrote the tags",
+  );
+
+  /* --- the form half: one derivation, and the division said ----------------- */
+
+  const panel = read("src/features/viewer/components/viewer-node-detail.tsx");
+  const panelCode = code(
+    "src/features/viewer/components/viewer-node-detail.tsx",
+  );
+  /* The select reads the SAME `creatableNodeTypes` the Add palette and the
+     module's guard read — a hand-written option list is the stale-claim shape
+     (`codebase.md` habit 4) with a parse error at the end of it. */
+  check(
+    "the form's type options derive from creatableNodeTypes, the palette's own table",
+    /creatableNodeTypes\(level\)/.test(panelCode) &&
+      /option\.keyword/.test(panelCode),
+    "the type select hand-lists its options, or stopped teaching the keywords",
+  );
+  /* The tag field seeds from the NON-colour half by the same `colorTagsOf`
+     the module splits on — two readings of "which tags are the colour" is
+     how the field would come to show a tag the module refuses to accept. */
+  check(
+    "the tag field seeds from the non-colour half, split by colorTagsOf",
+    /filter\(\(tag\) => !worn\.includes\(tag\)\)/.test(panelCode),
+    "the field's idea of 'plain' diverged from the module's",
+  );
+  /* And the submit filters what the module refuses, with the division SAID
+     on both sides — a hidden tag with no sentence reads as a bug, and a
+     silently-dropped typed tag eats the reader's text. */
+  check(
+    "the form filters colour tags from the submit rather than submitting a refusal",
+    /typedTags\.filter\(\(tag\) => \(tagColors\?\.\[tag\] \?\? ""\) === ""\)/.test(
+      panelCode,
+    ),
+    "a typed colour tag reaches revisedNodeEdit, which refuses the whole form",
+  );
+  check(
+    "the division is said beside the field, in both directions",
+    /managed by the Colour control below/.test(panel) &&
+      /Apply leaves/.test(panel),
+    "the field hides colour tags, or drops typed ones, without a sentence",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 /* 15. A create is an INSERT patch, and the palette matches the parser      */
 /* ----------------------------------------------------------------------- */
 

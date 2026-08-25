@@ -239,15 +239,23 @@ export type C4NodeFrameChoice =
  * the pane where the reader can see every line it touches. The display NAME is
  * the safe rename: nothing addresses a node by its name.
  *
- * `type` and `tags` as free text are absent because the panel has no control
- * for them yet; each arrives with the control that edits it, so this type
- * never promises a field the canvas cannot write. The drill-down pointers are
- * absent for a different reason: giving a node a child diagram writes a whole
- * diagram block as well as the node's own line, so it is its own gesture
- * (`nestedNodeEdit`) rather than a form field.
+ * The drill-down pointers are absent deliberately: giving a node a child
+ * diagram writes a whole diagram block as well as the node's own line, so it
+ * is its own gesture (`nestedNodeEdit`) rather than a form field.
  */
 export interface C4NodeRevision {
   name: string;
+  /**
+   * NOT WHOLE-VALUE, but for the opposite of colour's reason: a node's type
+   * has NO absent spelling — every declaration line opens with a keyword —
+   * so `undefined` is free to mean "no claim — keep the keyword as written",
+   * which keeps a caller that edits only wording away from a change with
+   * side effects it never asked about. The value must be legal at the
+   * diagram's level (`creatableNodeTypes`, the Add palette's own derivation);
+   * what a type change carries with it — the default size, the icon verdicts
+   * — is decided at the gesture (`revisedNodeEdit`), not here.
+   */
+  type?: C4NodeType;
   technology?: string;
   description?: string;
   /** Absent means the type's default icon — the same omission the format
@@ -271,6 +279,17 @@ export interface C4NodeRevision {
    * edits only wording away from boundaries it never looked at.
    */
   frame?: C4NodeFrameChoice;
+  /**
+   * THE NON-COLOUR TAGS ONLY, whole-value for that subset; `undefined` makes
+   * no claim. The split exists because the colour machinery treats
+   * colour-carrying tags as THE COLOUR (`colorTagsOf` precedence decides
+   * which one paints the node), so a tag list that could add, drop or
+   * reorder them would fight `color` above over the same bytes. A value
+   * naming a tag the document colours is therefore refused at the gesture
+   * rather than merged — the two controls each own their half of the node's
+   * tag list, and neither can reach across.
+   */
+  tags?: readonly string[];
 }
 
 /* -------------------------------------------------------------------------- */
