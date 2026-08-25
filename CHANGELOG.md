@@ -57,6 +57,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The canvas lock catches the light while it holds. A soft highlight now rakes
+  across the locked padlock every few seconds — a gloss passing over a polished
+  surface — so the locked state reads at the edge of vision while you present
+  rather than only when you look at it. The sweep crosses in about a third of
+  its cycle and the button rests for the remainder, so it glints rather than
+  moves constantly, and it appears only while locked: a canvas you are editing
+  has no moving chrome at all. It is a sweep rather than a flash, well under
+  the rate that would make it a hazard, and reduced motion gets the still lit
+  face with no sweep at all.
+
 - The Mermaid conversion caveat for C4 models now also says that an
   undirected or dashed relationship comes back as a plain arrow. The loss is
   not new — the caveat now names it, because the relationship editor refuses

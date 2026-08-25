@@ -1191,6 +1191,14 @@
      reads these two declarations to prove it stays that way. */
   --animate-lock-snap: af-lock-snap 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
   --animate-lock-open: af-lock-open 0.45s cubic-bezier(0.3, 1.3, 0.4, 1) both;
+  /* The locked face's gleam. The ONE lock animation that loops, by the owner's
+     decision (argued beside the keyframes). The band crosses in the first
+     third and the face rests for the remainder, so what repeats is a GLINT
+     rather than continuous travel. Slow on purpose: anything fast enough to
+     read as flashing is a WCAG 2.3.1 hazard, so the period is held well below
+     three per second and check:canvas-edit pins a floor under it. */
+  --animate-lock-sheen: af-lock-sheen 3.6s cubic-bezier(0.4, 0, 0.15, 1)
+    infinite;
 }
 
 @layer base {
@@ -1288,26 +1296,66 @@
     animation: none;
     background-position: 25% 50%;
   }
+
+  /* The gleam parks OFF the face rather than mid-sweep. Freezing a highlight
+     halfway across would leave a bright streak sitting on the button forever,
+     which is worse than no gleam at all; the still pooled tint underneath is
+     what carries the locked state here. */
+  .af-lock-sheen {
+    animation: none;
+    background-position: -140% 0;
+  }
 }
 
 /* ---------------------------------------------------------------------------
    Canvas lock: the padlock answers a press with one physical gesture.
 
    The owner asked for the lock to be ANIMATED to present the secure state.
-   What ships is a one-shot settle on each STATE CHANGE — the closed padlock
-   drops and clicks shut, the open one lifts and springs free — and a still
-   resting state, deliberately: this control floats over a diagram somebody
-   is presenting, and purpose.md's test for resting motion ("would removing
-   it lose information?") answers no here — the secure state at rest is
-   already told twice without movement, by the closed glyph and by the
-   primary-pooled gradient face. A loop would spend the reader's eye on
-   chrome. The moment of locking is where motion ADDS information — "your
-   press did engage" — so that is the only moment that moves.
+   Two things move, and they answer different halves of that.
 
-   TRANSFORM-ONLY, so the glyph's colour stays the theme token the control
-   sets and the button's gradient stays the only paint (both pinned by
-   check:canvas-edit, which also reads these keyframes to hold the
-   transform-only rule). Each face plays on MOUNT (the two faces are distinct
+   THE STATE CHANGE is a one-shot settle — the closed padlock drops and clicks
+   shut, the open one lifts and springs free. That half has never changed.
+
+   THE LOCKED STATE ITSELF now carries a travelling gleam, and this REVERSES a
+   rule recorded here, so the rule and the reason it existed are kept rather
+   than deleted. It used to rest completely still, on the argument that this
+   control floats over a diagram somebody is presenting and purpose.md's test
+   ("would removing it lose information?") answered no — the secure state is
+   already told twice without movement, by the closed glyph and by the
+   primary-pooled face — so a loop would spend the reader's eye on chrome.
+   The owner judged the still face not beautiful enough to carry the state and
+   asked for a looping gradient — then for that gradient to read as a GLOSS,
+   a highlight travelling a polished surface. The owner is the authority on that
+   trade, exactly as they were on the icon-only reversal the control's own
+   header records. What the argument bought is still true and is now handled
+   rather than avoided, and the gloss shape helps rather than hurts here: the
+   band CROSSES IN THE FIRST THIRD of the cycle and the face is still for the
+   rest, so most of the time nothing is moving at all — a glint that repeats,
+   not a surface in permanent motion. It runs only while LOCKED, so a canvas
+   being edited has no moving chrome whatever; and under reduced motion the
+   band parks OFF the face entirely rather than freezing mid-sweep, because a
+   gleam halted halfway is just a bright streak across a button.
+
+   NOT A LITERAL BLINK, deliberately. An opacity strobe fast enough to read as
+   blinking is a WCAG 2.3.1 flash hazard on a control that is on screen for as
+   long as the canvas is locked. A highlight sweeping across does the same work
+   — the face catches the light and loses it — without anything switching on
+   and off, and check:canvas-edit holds a floor under the period so a later
+   edit cannot quietly turn it into one.
+
+   THE GLEAM IS ITS OWN LAYER, over the face rather than replacing it. The
+   locked face keeps the still pooled tint it always had, so the state is still
+   told without movement for anyone who never sees the animation; the gleam is
+   an overlay that adds to it. Its colour is mixed from `--primary` rather than
+   from white: on a light theme the face is nearly white already, so a white
+   highlight would be invisible on exactly the themes that look brightest.
+
+   THE TWO SETTLES ARE TRANSFORM-ONLY, so the glyph's colour stays the theme
+   token the control sets and the button's gradient stays the only paint (both
+   pinned by check:canvas-edit, which reads these keyframes to hold the
+   transform-only rule). The loop is exempt because it moves no glyph at all —
+   it travels a background on a layer of its own, and the padlock rides above
+   it untouched. Each face plays on MOUNT (the two faces are distinct
    lucide glyphs, so a toggle swaps elements); the component skips the very
    first paint so arriving at the page never animates — only a press does.
    Reduced motion: the use sites are `motion-safe:` variants, and the global
@@ -1335,6 +1383,41 @@
   100% {
     transform: translateY(0) rotate(0deg) scale(1);
   }
+}
+
+/* The band starts off one edge, crosses, and leaves — then the remaining ~62%
+   of the cycle is the pause between glints. Same mechanism as the landing
+   page's running headline (.af-running-gradient), one looping-gradient pattern
+   in this codebase rather than two; the difference is that this one travels in
+   ONE direction and rests, because a highlight that slid back and forth would
+   read as a surface wobbling rather than light passing over it. */
+@keyframes af-lock-sheen {
+  0% {
+    background-position: -140% 0;
+  }
+  38%,
+  100% {
+    background-position: 240% 0;
+  }
+}
+
+/* A narrow, soft-edged highlight raked across the face. Mixed from `--primary`
+   for the reason argued above — a white gloss disappears on the light themes,
+   whose card is already near-white. The stops are tight (42%–58%) so what
+   crosses is a band of light rather than a wash, and the resting position puts
+   it off the face so a reader who never sees it animate sees nothing at all. */
+.af-lock-sheen {
+  background-image: linear-gradient(
+    105deg,
+    transparent 42%,
+    color-mix(in oklch, var(--primary) 24%, transparent) 47%,
+    color-mix(in oklch, var(--primary) 62%, transparent) 50%,
+    color-mix(in oklch, var(--primary) 24%, transparent) 53%,
+    transparent 58%
+  );
+  background-repeat: no-repeat;
+  background-size: 220% 100%;
+  background-position: -140% 0;
 }
 
 /* ---------------------------------------------------------------------------
