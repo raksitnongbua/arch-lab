@@ -51,6 +51,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 
+import { useBrowserCapability } from "@/lib/browser-capability";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
@@ -85,8 +86,6 @@ function subscribeToFullscreen(callback: () => void): () => void {
   document.addEventListener("fullscreenchange", callback);
   return () => document.removeEventListener("fullscreenchange", callback);
 }
-
-const subscribeToNothing = (): (() => void) => () => {};
 
 function readIsFullscreen(): boolean {
   return document.fullscreenElement !== null;
@@ -276,11 +275,7 @@ export function ViewerShell({
 
   /* ---- native fullscreen ---------------------------------------------------- */
 
-  const fullscreenSupported = useSyncExternalStore(
-    subscribeToNothing,
-    readFullscreenSupported,
-    readFalse,
-  );
+  const fullscreenSupported = useBrowserCapability(readFullscreenSupported);
   const isFullscreen = useSyncExternalStore(
     subscribeToFullscreen,
     readIsFullscreen,
