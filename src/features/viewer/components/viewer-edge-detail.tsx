@@ -246,26 +246,21 @@ export function ViewerEdgeDetail({
    * behind a pencil the reader opened to reword something.
    */
   onDelete?: () => void;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   /* Keyed by the TARGET rather than a bare boolean — the element card's rule:
      selecting another connector must close the form, not re-aim it at a
      relationship the reader was not editing. */
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  if (detail === null) {
-    // Empty state: teach the interaction instead of leaving a hole.
-    return (
-      <div className="hidden w-56 rounded-lg border border-border/60 bg-card/80 p-3 backdrop-blur sm:block">
-        <p className="text-xs font-medium text-foreground">
-          Inspect the diagram
-        </p>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          Click any element to see what it is and what it talks to, or any
-          connector — the line or its label — to trace that relationship.
-        </p>
-      </div>
-    );
-  }
+  /* NOTHING SELECTED, NOTHING RENDERED. This used to hold a standing hint
+     explaining that elements and connectors are clickable — a card that never
+     changed, occupying the corner of every diagram nobody had clicked yet.
+     A presentation surface should show the diagram, not instructions for it,
+     and the corner it was holding is the one place a reader looks first.
+     Returning null rather than an empty box also means the panel's column
+     contributes no gap, so the lock above it sits where it does with a card
+     open. */
+  if (detail === null) return null;
 
   const { edge, source, target, realizes } = detail;
   const editing = editingId === edge.id;

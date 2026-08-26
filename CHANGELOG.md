@@ -40,6 +40,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   second element reuses the first one's `tagcolor` line instead of minting a
   duplicate.
 
+### Removed
+
+- The standing "Inspect the diagram" hint no longer occupies the top-right
+  corner of a diagram with nothing selected. It explained that elements and
+  connectors are clickable and never changed once read; the corner now stays
+  empty until a selection puts a card there.
+
 ### Fixed
 
 - Clicking an element on an editable C4 canvas works again. The change that
