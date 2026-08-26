@@ -198,6 +198,27 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
 /**
+ * The playground's editing surface, which is TWO files since the canvas
+ * gestures moved out of the page into `lib/use-canvas-editing.ts`: the page
+ * owns the document, the panes and the shell; the hook owns every gesture and
+ * the `applyCanvasEdit` funnel they share.
+ *
+ * Assertions about a HANDLER'S BODY read both, because which of the two files
+ * hosts it was never what they were proving. The rules bought here — applies
+ * once, announces its refusal, names the undo key — are about what the handler
+ * DOES, and they were written when it was inline. Assertions about the PAGE
+ * itself (its panes, its share wiring, its headings) still read the page alone,
+ * which is why this is a second reader and not a replacement for `read`.
+ */
+const readPlaygroundEditSurface = () =>
+  [
+    "src/features/playground/components/view-playground.tsx",
+    "src/features/playground/lib/use-canvas-editing.ts",
+  ]
+    .map(read)
+    .join("\n");
+
+/**
  * The same source with its comments removed, for assertions that pin CODE.
  *
  * Written after the trap fired three times in this file. A regex over a
@@ -704,12 +725,12 @@ console.log("\nDeleting a node leaves a document that still parses");
 console.log("\nThe canvas undo ring is bounded and stays out of the pane");
 
 {
-  /* The ring lives in a `.tsx` component, which type stripping cannot load,
-     so these are source assertions — the same tactic `check:shortcuts` and
-     `check:viewer-motion` use for facts that only exist in a component. Each
-     names the failure it prevents; a source scan that merely restated the
+  /* The ring lives inside a React hook, which cannot be called outside a
+     render, so these are source assertions — the same tactic `check:shortcuts`
+     and `check:viewer-motion` use for facts that only exist in a component.
+     Each names the failure it prevents; a source scan that merely restated the
      implementation would pass forever. */
-  const page = read("src/features/playground/components/view-playground.tsx");
+  const page = readPlaygroundEditSurface();
   const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
 
   check(
@@ -3637,9 +3658,7 @@ console.log(
 {
   const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
   const panel = read("src/features/viewer/components/viewer-node-detail.tsx");
-  const playground = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playground = readPlaygroundEditSurface();
 
   const contract = /export interface CanvasEditHandlers \{([\s\S]*?)\n\}/.exec(
     canvas,
@@ -4594,9 +4613,7 @@ console.log(
      screen on a tall diagram. Each hop is pinned: the host hands the id back,
      the canvas keeps it until the model containing the node arrives, and the
      one effect both selects and centres. */
-  const playgroundSrc = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playgroundSrc = readPlaygroundEditSurface();
   check(
     "all three create handlers hand the created id back to the canvas",
     (playgroundSrc.match(/return next\.createdNodeId \?\? null;/g) ?? [])
@@ -4943,9 +4960,7 @@ console.log("\nLocking never offers a link to somewhere you already are");
 console.log("\nEvery sequence gesture is reachable from the canvas it edits");
 {
   const viewer = read("src/features/sequence/components/sequence-viewer.tsx");
-  const playground = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playground = readPlaygroundEditSurface();
 
   const contract =
     /export interface SequenceEditHandlers \{([\s\S]*?)\n\}/.exec(viewer);
@@ -5509,9 +5524,7 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
    These assert the host computes one — the other half of a coupling that
    `sequence-edit.ts`'s header and the check's own helper both claim exists. */
 {
-  const playground = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playground = readPlaygroundEditSurface();
 
   check(
     "the playground remembers an off spelling for the numbering toggle",
@@ -6118,9 +6131,7 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
 
   /* --- the gesture reaches the module through ONE host call ----------------- */
 
-  const playground = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playground = readPlaygroundEditSurface();
   const canvas = read("src/features/viewer/components/viewer-canvas.tsx");
   const canvasCode = code("src/features/viewer/components/viewer-canvas.tsx");
   const groupBody =
@@ -6567,9 +6578,7 @@ console.log("\nRemoving a boundary re-homes what it held");
 
   /* --- the host and the card ------------------------------------------------ */
 
-  const playground = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playground = readPlaygroundEditSurface();
   const frameCardCode = code(
     "src/features/viewer/components/viewer-frame-detail.tsx",
   );
@@ -6961,9 +6970,7 @@ console.log("\nConnecting two elements is one inserted relationship line");
 
   /* --- the host: one applyCanvasEdit per gesture, refusals announced ---------- */
 
-  const playground = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playground = readPlaygroundEditSurface();
   const connectBody =
     /const handleNodeConnect = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
   check(
@@ -7465,9 +7472,7 @@ console.log("\nRevising and deleting a relationship are line patches");
 
   /* --- the host: one applyCanvasEdit per gesture, refusals said ---------------- */
 
-  const playground = read(
-    "src/features/playground/components/view-playground.tsx",
-  );
+  const playground = readPlaygroundEditSurface();
   const reviseBody =
     /const handleEdgeRevise = useCallback\(([\s\S]*?)\n  \);/.exec(playground);
   check(
