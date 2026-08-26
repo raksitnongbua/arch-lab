@@ -10,7 +10,7 @@ so the pre-merge run described in [`codebase.md`](codebase.md) is the only gate
 between a change and production:
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm build
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
 - Never merge to `main` on the assumption something else will catch it. Nothing

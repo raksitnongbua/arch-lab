@@ -23,13 +23,7 @@
  * the button doing nothing.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ClipboardCopy,
@@ -40,6 +34,11 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import {
+  PNG_SCALE_BY_SHARPNESS,
+  type Sharpness,
+} from "@/features/viewer/export/sharpness";
+import { useBrowserCapability } from "@/lib/browser-capability";
 import { buttonClasses } from "@/components/ui/button";
 import {
   MENU_ITEM_CLASSES,
@@ -75,21 +74,6 @@ import { renderFlowchartPngBlob, renderFlowchartSvg } from "./render-svg";
 
 type ExportAction = "png" | "svg" | "gif" | "copy";
 
-/** PNG scale per sharpness — 1× is the chart's own pixel size. The same
- * three keys and multipliers as the sequence exporter's PNG axis, so "Sharp"
- * means one thing across the product. */
-const PNG_SCALE_BY_SHARPNESS = {
-  compact: 1,
-  standard: 2,
-  sharp: 3,
-} as const;
-
-type Sharpness = keyof typeof PNG_SCALE_BY_SHARPNESS;
-
-/* Same shape the other two exporters use for their capability read. */
-const subscribeToNothing = (): (() => void) => () => {};
-const readFalse = (): boolean => false;
-
 export function FlowchartExportButton({
   /** The parsed document — the export renders from this, not from the DOM. */
   file,
@@ -115,15 +99,7 @@ export function FlowchartExportButton({
   const [smoothness, setSmoothness] = useState<GifSmoothness>(
     DEFAULT_FLOWCHART_GIF_QUALITY.smoothness,
   );
-  /* A browser capability: false on the server pass, real after hydration,
-     read without a setState cascade — the same construction as the sequence
-     exporter, because a bare `canCopyPng()` per render would make the server
-     HTML and the first client render disagree about the Copy row. */
-  const copyable = useSyncExternalStore(
-    subscribeToNothing,
-    canCopyPng,
-    readFalse,
-  );
+  const copyable = useBrowserCapability(canCopyPng);
 
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const summaryRef = useRef<HTMLElement>(null);

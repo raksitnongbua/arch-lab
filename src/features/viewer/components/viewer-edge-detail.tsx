@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 
+import { orAbsent } from "@/lib/absent";
 import { LEVEL_LABEL } from "@/lib/constants";
 
 import { MetaRow } from "./viewer-meta-row";
@@ -73,16 +74,6 @@ const DIRECTION_OPTIONS: readonly EdgeDirection[] = [
   "bidirectional",
   "none",
 ];
-
-/** Blank string -> `undefined`, so clearing a field removes it — the same
- * "empty means absent" contract the element card's form states: `.alab` can
- * spell `: ""` and `[""]`, and a document carrying one renders a blank field
- * the reader cannot tell from a missing one. Re-spelled here by hand because
- * the element card keeps its `orAbsent` module-private; the twin lives in
- * `viewer-node-detail.tsx`. */
-function orAbsent(value: string): string | undefined {
-  return value.trim() === "" ? undefined : value;
-}
 
 function nodeMeta(node: C4Node): string {
   return node.technology !== undefined && node.technology !== ""

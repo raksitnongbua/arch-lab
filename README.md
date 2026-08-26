@@ -70,12 +70,24 @@ editors/vscode/ the .alab grammar
 ### Before you open a pull request
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm build
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
 pnpm check:roundtrip   # ...and every other check:* your change touches
 ```
 
 All of it must pass. `pnpm lint` has three known warnings and no errors; a
 fourth is yours.
+
+### Two layers of tests
+
+`pnpm test` runs the **unit** layer (vitest, ~0.2s): pure functions — grammar,
+geometry, codecs, helpers — where a failure names the function that broke.
+Tests live beside the code as `foo.test.ts`, so you can see at a glance whether
+a module is covered.
+
+The `check:*` scripts are the **integration** layer: they render real pages and
+compare real output. Both matter, and neither replaces the other — a unit test
+tells you _what_ broke, a check script tells you _whether the product still
+works_.
 
 ### The two conventions that surprise people
 
@@ -94,7 +106,7 @@ NOT be deduplicated and why.
 
 ### The `check:*` scripts
 
-There are 31, and they are the project's safety net rather than a formality.
+There are 48, and they are the project's safety net rather than a formality.
 They load the **real** library code from `src/` through Node's type stripping,
 so they exercise what the app ships rather than a copy of it.
 

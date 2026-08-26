@@ -23,13 +23,7 @@
  * it cannot pick up a second diagram elsewhere on the page.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 /* The SAME glyph per format the C4 exporter uses — a PNG row that is a
    picture in one menu and a camera in the other is the drift this pass is
    closing. */
@@ -43,6 +37,8 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import { PNG_SCALE_BY_SHARPNESS } from "@/features/viewer/export/sharpness";
+import { useBrowserCapability } from "@/lib/browser-capability";
 import { buttonClasses } from "@/components/ui/button";
 import {
   MENU_ITEM_CLASSES,
@@ -79,24 +75,6 @@ import { renderSequenceSvg } from "./render-svg";
  */
 type ExportAction = "png" | "svg" | "gif" | "copy";
 
-/**
- * PNG scale per sharpness — 1× is the diagram's own pixel size. Module scope, so
- * it is one object rather than a new one per render that every callback
- * depending on it would have to churn for.
- *
- * A MULTIPLIER, unlike `GIF_SHARPNESS` in `./frames`, which is a pixel width
- * for the same three keys — hence the name.
- */
-const PNG_SCALE_BY_SHARPNESS: Record<GifSharpness, number> = {
-  compact: 1,
-  standard: 2,
-  sharp: 3,
-};
-
-/* Same shape the C4 exporter uses for its capability read. */
-const subscribeToNothing = (): (() => void) => () => {};
-const readFalse = (): boolean => false;
-
 export function SequenceExportButton({
   /** Scopes the lookup: the element containing the diagram to export. */
   paneRef,
@@ -122,13 +100,7 @@ export function SequenceExportButton({
     | { kind: "error"; message: string }
   >({ kind: "idle" });
   const busy = status.kind === "busy";
-  /* A browser capability: false on the server, real after hydration, read
-     without a setState cascade. */
-  const copyable = useSyncExternalStore(
-    subscribeToNothing,
-    canCopyPng,
-    readFalse,
-  );
+  const copyable = useBrowserCapability(canCopyPng);
 
   /*
    * TWO AXES, not one "quality" slider. Sharpness is pixels — whether small

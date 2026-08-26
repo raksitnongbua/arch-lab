@@ -34,6 +34,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "check:roundtrip": "node scripts/roundtrip-check.mjs",
     "check:mermaid": "node scripts/mermaid-check.mjs",
     "check:archtext": "node scripts/archtext-check.mjs",
@@ -114,6 +116,7 @@
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
   }
