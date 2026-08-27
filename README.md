@@ -106,7 +106,7 @@ NOT be deduplicated and why.
 
 ### The `check:*` scripts
 
-There are 48, and they are the project's safety net rather than a formality.
+There are 49, and they are the project's safety net rather than a formality.
 They load the **real** library code from `src/` through Node's type stripping,
 so they exercise what the app ships rather than a copy of it.
 
