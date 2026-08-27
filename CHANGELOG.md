@@ -47,6 +47,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   connectors are clickable and never changed once read; the corner now stays
   empty until a selection puts a card there.
 
+### Removed
+
+- The "View mode · read-only" tag beside the model title is gone. It claimed
+  read-only whatever the lock was doing, so unlocking a C4 canvas to edit it put
+  "Editable" in the strip above the diagram and "read-only" in the strip below
+  it at the same time. The strip above the canvas is now the only place the
+  state is spelled out.
+
 ### Fixed
 
 - Clicking an element on an editable C4 canvas works again. The change that

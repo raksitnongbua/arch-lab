@@ -4826,6 +4826,30 @@ console.log("\nLocking never offers a link to somewhere you already are");
     `${stateWords.length} canvasStateLabel() uses for ${lockable.length} lockable kinds`,
   );
 
+  /* AND NOTHING ELSE ON THE PAGE CONTRADICTS IT. The claim above — that the
+     strip is the only place the state is spelled out — was false when it was
+     written. `viewer-shell.tsx` carried an unconditional "View mode ·
+     read-only" tag beside the model title, and the shell is mounted by the
+     playground with edit handlers whenever the reader has the canvas unlocked.
+     So unlocking put "Editable" in the strip above the canvas and "read-only"
+     in the strip below it, at the same time, a screen apart.
+
+     The tag is GONE rather than gated. Gating it on `edit` would have made it
+     honest and left it pointless — a label reading "View mode" on the page the
+     reader is already looking at — so the assertion is an ABSENCE: the shell
+     must not spell a canvas state at all. That is the stronger pin as well as
+     what shipped, because it also forbids the word returning in some third
+     wording. Structural, not prose: the removal's own comment recounts the bug,
+     and a regex over the comments would match the story instead of the code. */
+  const shellCode = code("src/features/viewer/components/viewer-shell.tsx");
+  check(
+    "the shell spells no canvas state beside the title",
+    !/read-only/i.test(shellCode),
+    "the view-mode tag is back — on the playground it labels an unlocked " +
+      'canvas read-only one strip below the word "Editable", which is the ' +
+      "state the lock exists to make legible",
+  );
+
   /* THE HEADING'S CLAIM MATCHES WHAT SHIPS. It said "C4 diagrams can also be
      edited on the canvas; the other kinds lay themselves out from the text"
      for as long as the sequence canvas was editable, and it was still on the
