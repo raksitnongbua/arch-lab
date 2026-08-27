@@ -9,6 +9,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- The Share panel offers "Open immersive": the link it mints opens the diagram
+  filling the recipient's window with the site chrome hidden, for a diagram
+  meant to be presented rather than read alongside its source. Off by default,
+  offered for both an edited document and a bundled model, and the recipient
+  leaves with Escape or the canvas's own toggle. It rides in the link as
+  `?i=1`, so it survives the older `/live/*` and `/view/*` paths and is honoured
+  on arrival rather than after a flash of the page around it.
+
 - An element's type can be changed in the details panel on the editable C4
   canvas. The select offers only the types legal at the diagram's level; a
   node still at its old type's default size adopts the new type's default,

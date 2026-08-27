@@ -12,17 +12,25 @@
  *      reach the server, so only the client can) and reopens the shell on
  *      that diagram. Unknown or missing ids fall back to the root — a stale
  *      link still renders the model.
+ *   3. It reads `?i=1` — a share link that asked to open immersive — for a
+ *      reason the query param does NOT share with the fragment: this route is
+ *      statically prerendered for every bundled model (`generateStaticParams`),
+ *      and taking `searchParams` on the server would opt all of them out of
+ *      that. So the one place the param is read late is the one route that
+ *      pays nothing else for reading it early.
  *
- * The hash is an external store (server snapshot: empty — fragments cannot
- * take part in server-rendered markup); when it names a valid non-root
- * diagram the shell is remounted (keyed) starting there. The one frame on
- * the root before that is the price of hydration correctness.
+ * Both live in an external store (server snapshot: empty — neither a fragment
+ * nor a client-only URL read can take part in server-rendered markup); when
+ * the hash names a valid non-root diagram the shell is remounted (keyed)
+ * starting there. The one frame on the root before that is the price of
+ * hydration correctness, and immersive arrives on the same frame.
  */
 
 import { useSyncExternalStore } from "react";
 
 import type { ViewerModel } from "../lib/model";
 import { diagramIdFromHash } from "../share/codec";
+import { immersiveFromSearch } from "../share/immersive-param";
 import { ViewerShell } from "./viewer-shell";
 
 /* The location hash as an external store: `""` on the server (fragments
@@ -37,6 +45,14 @@ function readHash(): string {
   return window.location.hash;
 }
 
+/* The query, read the same way and for the same reason — see the header. It
+ * subscribes to `hashchange` too rather than to nothing: a query cannot change
+ * without a navigation, so there is no event of its own to listen for, and
+ * sharing the subscription keeps the two reads on one frame. */
+function readSearch(): string {
+  return window.location.search;
+}
+
 const readEmpty = (): string => "";
 
 export function ViewerBundledView({
@@ -45,6 +61,7 @@ export function ViewerBundledView({
   model: ViewerModel;
 }): React.JSX.Element {
   const hash = useSyncExternalStore(subscribeToHash, readHash, readEmpty);
+  const search = useSyncExternalStore(subscribeToHash, readSearch, readEmpty);
 
   const target = diagramIdFromHash(hash);
   const initialDiagramId =
@@ -60,12 +77,14 @@ export function ViewerBundledView({
       model={model}
       initialDiagramId={initialDiagramId ?? undefined}
       share={{ kind: "bundled", modelId: model.id }}
-      // Deliberately NOT immersive by default any more. Hiding the site chrome
-      // on arrival dropped a reader somewhere with no visible route back to the
-      // rest of the app, and made this route behave unlike `/live` for a reason
-      // nobody could infer from the screen. Immersive is still one click away on
-      // the strip under the canvas — a choice now, rather than a state you have
-      // to notice and undo.
+      // Immersive ONLY when the link asked for it. Defaulting this route to
+      // immersive dropped a reader somewhere with no visible route back to the
+      // rest of the app, and made it behave unlike `/live` for a reason nobody
+      // could infer from the screen — so the default went. `?i=1` is not that
+      // default returning: it is a sharer deciding, for one link, that the
+      // diagram is the whole point, and the strip's toggle and Escape still
+      // undo it.
+      defaultImmersive={immersiveFromSearch(search)}
     />
   );
 }

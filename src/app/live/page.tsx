@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
 import { ViewPlayground } from "@/features/playground";
+import { immersiveFromParam, SHARE_PARAM_IMMERSIVE } from "@/features/viewer";
 import {
   isCollapsedCookie,
   SOURCE_FOLD_COOKIE,
@@ -92,6 +93,12 @@ export default async function ViewPage({
     <ViewPlayground
       seed={seedFromParam(params[VIEW_SEED_PARAM])}
       initialText={example ?? undefined}
+      /* `?i=1` — a share link that asked to open immersive. Read on the
+         SERVER for the same reason as the fold and the lock below: immersive
+         applied after paint means the reader watches the site chrome appear
+         and be taken away, which is precisely the arrival a presentation link
+         is minted to avoid. See `share/immersive-param.ts`. */
+      initialImmersive={immersiveFromParam(params[SHARE_PARAM_IMMERSIVE])}
       initialSourceCollapsed={isCollapsedCookie(
         store.get(SOURCE_FOLD_COOKIE)?.value,
       )}

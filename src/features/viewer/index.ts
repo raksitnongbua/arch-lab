@@ -56,4 +56,12 @@ export {
   SHARE_FORWARD_ATTRIBUTE,
 } from "./share/codec";
 
+/* The one QUERY parameter a share link carries. Exported because the ROUTE
+ * reads it — `/live` turns `?i=1` into the playground's starting mode, which
+ * is the only way immersive can be true in the first painted byte. */
+export {
+  immersiveFromParam,
+  SHARE_PARAM_IMMERSIVE,
+} from "./share/immersive-param";
+
 export { downloadBlob, sourceFileStem } from "./export/download";
