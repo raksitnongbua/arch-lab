@@ -37,7 +37,7 @@ placement are in [`dry.md`](dry.md). This file covers everything else.
 
 ## The check suite is the safety net
 
-- There are 48 `check:*` scripts. If you change a **format, converter, layout,
+- There are 49 `check:*` scripts. If you change a **format, converter, layout,
   or route**, one of them almost certainly already has an opinion — find it and
   run it before assuming your change is free.
 - Each script's header states what it proves and, usually, which shipped bug

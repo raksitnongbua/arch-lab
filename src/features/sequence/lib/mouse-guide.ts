@@ -147,7 +147,7 @@ const MOUSE_PATH: Record<
     icon: "plus",
     label: "Add a step",
     mouse:
-      "+ in the bottom-left pill, then the sending lifeline, then the receiving one",
+      "+ in the bottom-right pill, then the sending lifeline, then the receiving one",
   },
   onInsertParticipant: {
     icon: "user-plus",

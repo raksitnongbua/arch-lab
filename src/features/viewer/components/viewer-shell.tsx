@@ -135,7 +135,7 @@ const C4_TOUR_STEPS: readonly TourStep[] = [
   {
     title: "Zoom the canvas",
     body:
-      "In the bottom-left pill, − and + step the zoom and the readout opens " +
+      "In the bottom-right pill, − and + step the zoom and the readout opens " +
       "presets (Fit, 50–200%). Pinch, or hold ⌘/Ctrl and scroll, zooms at " +
       "the pointer; dragging empty canvas pans.",
     icon: ZoomIn,
@@ -143,9 +143,9 @@ const C4_TOUR_STEPS: readonly TourStep[] = [
   {
     title: "The minimap",
     body:
-      "Bottom-right, on screens wide enough to spare it: the whole diagram " +
-      "in thumbnail, with your viewport marked. Drag it to pan; scroll it " +
-      "to zoom.",
+      "Off by default, so the diagram opens clean. The map button in the " +
+      "bottom-right pill — or M — shows the whole diagram in thumbnail " +
+      "with your viewport marked. Drag it to pan; scroll it to zoom.",
     icon: MapIcon,
   },
   {
@@ -401,9 +401,11 @@ export function ViewerShell({
         />
         {/* First visit it opens itself (remembered per browser — see
             components/ui/tour.tsx for the persistence verdicts); the strip's
-            Tour button replays it. Anchored above the canvas's bottom-left
-            zoom pill — the corner its first steps point at — and clear of
-            the top-right detail panel and bottom-right minimap. */}
+            Tour button replays it. Bottom-left, which is now the QUIET
+            corner: the camera controls and the map moved to the right to sit
+            together, so this clears the whole navigation column as well as the
+            top-right detail panel, and only ever shares its corner with the
+            drag-mode toggle an editable canvas shows. */}
         {tourEnabled ? (
           <Tour
             steps={C4_TOUR_STEPS}

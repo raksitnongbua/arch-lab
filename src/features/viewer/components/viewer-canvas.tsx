@@ -130,6 +130,7 @@ import { ViewerModeToggle, type CanvasDragMode } from "./viewer-mode-toggle";
 import { ViewerNodePalette } from "./viewer-node-palette";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
+import { useMinimap } from "@/components/ui/use-minimap";
 import { useModKey } from "@/lib/mod-key";
 
 import { ViewerZoomControls } from "./viewer-zoom-controls";
@@ -1284,6 +1285,9 @@ function ViewerCanvasInner({
    * held focus — and never existed on touch, which has no Space key. Plain
    * state, no ref twin: nothing reads it mid-gesture, because Pan mode works
    * by DETACHMENT rather than by a per-press bail. */
+  /* The minimap is closed on arrival and summoned — see `use-minimap.ts`
+     for why a presentation surface does not open with a thumbnail on it. */
+  const minimap = useMinimap();
   const [dragMode, setDragMode] = useState<CanvasDragMode>("select");
 
   /* ---- editing: the marquee — several elements in one gesture ---------------
@@ -2686,32 +2690,41 @@ function ViewerCanvasInner({
               )}
             </div>
           </Panel>
+          {/* THE DRAG MODE KEEPS THE LEFT CORNER, ALONE. It used to sit above
+              the zoom pill, on the argument that bottom-left was already the
+              "how do I move around this canvas" cluster. The camera controls
+              have since moved to the right corner to join the map they answer
+              with, and the mode did NOT follow: it governs what a PRESS does,
+              not where the camera is, and it exists on exactly one of the seven
+              canvases that wear the zoom cluster. Grouping a one-canvas editing
+              mode into shared camera chrome is how that chrome starts differing
+              per canvas. Presence-gated like every edit affordance — a
+              read-only or locked canvas always pans, so it shows NO control,
+              never a disabled one offering a Select mode that does not exist
+              there. */}
           <Panel position="bottom-left">
-            <div className="flex flex-col items-start gap-2">
-              {/* The drag-mode toggle lives with the ZOOM PILL, because the
-                  bottom-left cluster is already the "how do I move around
-                  this canvas" chrome — the mode governs the same gesture the
-                  pill's scroll hints do — and it is the one corner with room:
-                  top-left grows with the breadcrumb and the palette, top-right
-                  is the lock + details column, bottom-centre is the hint bar.
-                  ABOVE the pill rather than inside it: the pill is shared
-                  chrome across three canvases (`zoom-pill.tsx`) and the mode
-                  exists on exactly one. Presence-gated like every edit
-                  affordance — a read-only or locked canvas always pans, so it
-                  shows NO control, never a disabled one offering a Select
-                  mode that does not exist there. */}
-              {editable ? (
-                <ViewerModeToggle
-                  mode={dragMode}
-                  onModeChange={handleDragModeChange}
-                />
-              ) : null}
-              <ViewerZoomControls />
+            {editable ? (
+              <ViewerModeToggle
+                mode={dragMode}
+                onModeChange={handleDragModeChange}
+              />
+            ) : null}
+          </Panel>
+          {/* ONE NAVIGATION CORNER: the map stacked over the controls that
+              drive it. The map answers "where am I" and the zoom cluster
+              answers "how close am I" — the same question — and they used to
+              sit in opposite corners, so answering it took a trip across the
+              whole canvas. `CanvasMinimap` is `!static` now precisely so this
+              column owns the corner instead of the map pinning itself. */}
+          <Panel position="bottom-right">
+            <div className="flex flex-col items-end gap-2">
+              {minimap.open ? <CanvasMinimap /> : null}
+              <ViewerZoomControls
+                minimapOpen={minimap.open}
+                onMinimapToggle={minimap.toggle}
+              />
             </div>
           </Panel>
-          {/* Not in a Panel: React Flow's MiniMap positions itself, and
-              wrapping it would fight its own corner offsets. */}
-          <CanvasMinimap />
           {/* The gesture clause is here as well as in the zoom pill's menu, and
               the repetition is the point: a plain wheel PANS this canvas, so a
               reader who tries it concludes the wheel does not zoom and never

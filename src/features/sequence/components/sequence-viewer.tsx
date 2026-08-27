@@ -1762,7 +1762,7 @@ export function SequenceViewer({
           </p>
         )}
 
-        {/* ---- zoom controls (bottom-left, the C4 viewer's pill pattern) ----
+        {/* ---- zoom controls (bottom-right, the C4 viewer's pill pattern) ----
             The hand-rolled fitView/zoomTo: FIT is the default and the reset
             (the whole flow visible at once); the percent button jumps to
             actual size; +/− step by a fixed factor from whatever is on
@@ -1772,7 +1772,20 @@ export function SequenceViewer({
             are state, not motion (the SVG re-renders at the new size), so
             reduced motion needs no branch here; announcements go through
             the page's one live region. */}
-        <div className={cn("absolute bottom-3 left-3 z-10", ZOOM_PILL_CLASSES)}>
+        <div
+          className={cn(
+            "absolute bottom-3 z-10",
+            /* SLIDES LEFT OF THE DOCK, exactly as the lock above it does and
+               for the same reason: the details dock owns the right edge on
+               `md` and up, so a cluster pinned to `right-3` would sit under it
+               precisely when the reader is mid-edit. Below `md` the dock is a
+               bottom sheet and covers this corner whichever side it is on —
+               it covered the old bottom-LEFT position identically — so there
+               is nothing to win by branching further. */
+            dockOpen ? "right-3 md:right-[18.75rem]" : "right-3",
+            ZOOM_PILL_CLASSES,
+          )}
+        >
           <button
             type="button"
             onClick={() => stepZoom(-1)}
@@ -2546,7 +2559,7 @@ const FOLD_TOUR_STEP: TourStep = {
 const ZOOM_TOUR_STEP: TourStep = {
   title: "Zoom the flow",
   body:
-    "In the bottom-left pill, − and + step the zoom, the readout opens " +
+    "In the bottom-right pill, − and + step the zoom, the readout opens " +
     "presets (Fit, 50–400%), and the frame icon refits the whole flow. " +
     "Pinch, or hold ⌘/Ctrl and scroll, zooms at the pointer.",
   icon: ZoomIn,

@@ -548,8 +548,10 @@ export function UseCaseViewer({
           </div>
         </div>
 
-        {/* ---- zoom pill (bottom-left, the house pattern) ---- */}
-        <div className={cn("absolute bottom-3 left-3 z-10", ZOOM_PILL_CLASSES)}>
+        {/* ---- zoom pill (bottom-right, the house pattern) ---- */}
+        <div
+          className={cn("absolute right-3 bottom-3 z-10", ZOOM_PILL_CLASSES)}
+        >
           <button
             type="button"
             onClick={() => stepZoom(-1)}

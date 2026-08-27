@@ -2,7 +2,7 @@
 
 /**
  * Zoom controls. Owned by ; mounted by `canvas.tsx` in the
- * bottom-left panel.
+ * bottom-right panel, beneath the minimap.
  *
  * It was a bare percentage for a long time, and that made the editor the only
  * canvas here where zooming in needed a gesture (⌘/ctrl + scroll, pinch) or a
@@ -20,6 +20,7 @@ import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { useReactFlow, useViewport } from "@xyflow/react";
 
 import { IconStyleToggle } from "@/components/ui/icon-style-toggle";
+import { MinimapToggle } from "@/components/ui/minimap-toggle";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
@@ -32,7 +33,13 @@ import {
 import { FIT_VIEW_PADDING_PX, MAX_ZOOM } from "../lib/canvas-constants";
 import { duration } from "../lib/motion";
 
-export function ZoomIndicator(): React.JSX.Element {
+export function ZoomIndicator({
+  minimapOpen,
+  onMinimapToggle,
+}: {
+  minimapOpen: boolean;
+  onMinimapToggle: () => void;
+}): React.JSX.Element {
   const { zoom } = useViewport();
   const { fitView, zoomTo, getZoom } = useReactFlow();
   const percent = Math.round(zoom * 100);
@@ -56,6 +63,7 @@ export function ZoomIndicator(): React.JSX.Element {
 
   return (
     <div className={ZOOM_PILL_CLASSES}>
+      <MinimapToggle open={minimapOpen} onToggle={onMinimapToggle} />
       <button
         type="button"
         onClick={() => step(-1)}

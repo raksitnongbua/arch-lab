@@ -45,7 +45,7 @@ export const EDIT_GRID = 8;
 export const FIT_PADDING = {
   /** Breadcrumb + level chips (top-left). */
   top: "72px",
-  /** Zoom control (bottom-left) and the hint pill, which wraps to two lines
+  /** Zoom control (bottom-right) and the hint pill, which wraps to two lines
    *  on a narrow canvas — hence a little more than the top. */
   bottom: "80px",
   x: "7%",
