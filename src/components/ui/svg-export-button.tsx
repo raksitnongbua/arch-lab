@@ -141,9 +141,10 @@ export function SvgExportButton({
       {open ? (
         <div
           role="menu"
-          /* Downward, like the Share panel beside it: this toolbar sits above
-             the canvas mid-page, and opening upward would cover the diagram. */
-          className="absolute right-0 z-30 mt-1.5 w-72 rounded-xl border border-border bg-background p-1.5 shadow-lg"
+          /* Upward, like the Share panel beside it: this toolbar sits UNDER
+             the canvas, so a downward panel would open off the bottom of the
+             pane. */
+          className="absolute right-0 bottom-full z-30 mb-1.5 w-72 rounded-xl border border-border bg-background p-1.5 shadow-lg"
         >
           {canCopy ? (
             <button

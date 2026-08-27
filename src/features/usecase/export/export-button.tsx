@@ -198,7 +198,7 @@ export function UseCaseExportButton({
         {/* Capped on both axes for the reason the sequence panel states: a
             menu wider or taller than its column is clipped, not scrolled,
             unless it caps itself. */}
-        <div className="absolute right-0 z-20 mt-1 flex max-h-[min(32rem,70svh)] w-72 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg">
+        <div className="absolute right-0 bottom-full z-20 mb-1 flex max-h-[min(32rem,70svh)] w-72 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg">
           <div className="flex flex-col">
             {copyable ? (
               <button

@@ -60,9 +60,9 @@ export function FlowchartShareButton({
       documentTitle={title}
       route={SHARE_ROUTE}
       noun="flowchart"
-      /* Same reason as the sequence wrapper: this toolbar sits above the
-         canvas mid-page — opening upward would cover the chart. */
-      panelSide="down"
+      /* Same reason as the sequence wrapper: this toolbar sits under the
+         canvas, so a downward panel would open off the bottom of the pane. */
+      panelSide="up"
       downloadExtension={format === "mermaid" ? ".mmd" : ARCHTEXT_EXTENSION}
       onAnnounce={onAnnounce}
     />

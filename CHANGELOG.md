@@ -80,6 +80,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Share, Export and Immersive now sit **under** the diagram on the playground,
+  not above it, for all six notations. The diagram gets the top of its pane —
+  which is what you came for, and what a phone was spending on a row of
+  buttons — and the controls read as its footer. Their menus open upward. The
+  Hide button and the canvas-state word stay above the diagram, where they
+  were: they are about the pane, not the drawing.
+
+- The sequence canvas no longer keeps its ten editing gestures permanently on
+  screen. The row under the diagram now offers **How to edit this diagram**,
+  which opens the same list — and shows each gesture's full instruction, which
+  used to be hover-only. The page's "What you can do on the canvas" summary and
+  the feature tour are unchanged.
+
 - The minimap and the zoom controls now share the bottom-right corner of every
   canvas, with the map docked above the controls that drive it. Five canvases
   moved their zoom pill from the bottom left; the ER and data-dictionary

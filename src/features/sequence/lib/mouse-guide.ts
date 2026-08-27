@@ -1,7 +1,7 @@
 /**
  * HOW TO EDIT THIS CANVAS WITH A MOUSE, written down once and rendered twice —
- * as a strip of icon affordances under the diagram, and as prose in the feature
- * tour.
+ * as a list in the "How to edit this diagram" panel the strip under the
+ * diagram opens, and as prose in the feature tour.
  *
  * WHY THIS EXISTS AS A MODULE rather than as prose in the component. Twice on
  * this branch a reader could not find a control that was already shipped and
@@ -170,12 +170,12 @@ export const SEQUENCE_MOUSE_GESTURES: readonly SequenceMouseGesture[] =
  * separator the viewer's hint bars already use for their focus and zoom
  * clauses, so the editing list reads as another row of the same text.
  *
- * STILL DERIVED FROM THE SAME RECORD even though the strip under the canvas no
- * longer renders it. The tour is where a reader goes to be TAUGHT, and prose is
- * the right shape there; the strip is where they go to be reminded, and a glyph
- * is the right shape there. What must never happen again is the two of them
- * being written twice — that is how the tour came to describe the endpoint
- * gesture in words the panel no longer used.
+ * STILL DERIVED FROM THE SAME RECORD, which is now the only reason two shapes
+ * of one list is safe. The tour is where a reader goes to be TAUGHT, so it gets
+ * the joined prose; the canvas's own disclosure is where they go to be
+ * reminded, so it gets the entries with their glyphs. What must never happen
+ * again is the two of them being written twice — that is how the tour came to
+ * describe the endpoint gesture in words the panel no longer used.
  */
 export const SEQUENCE_MOUSE_GUIDE = SEQUENCE_MOUSE_GESTURES.map(
   (gesture) => gesture.mouse,

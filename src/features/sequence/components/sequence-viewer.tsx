@@ -54,7 +54,14 @@
  * happen in event handlers.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowLeftRight,
   ArrowUpDown,
@@ -62,6 +69,7 @@ import {
   Columns3,
   EyeOff,
   HelpCircle,
+  Keyboard,
   ListOrdered,
   MousePointerClick,
   Pencil,
@@ -104,6 +112,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
 import { IconStyleToggle } from "@/components/ui/icon-style-toggle";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
+import { useMenuDismissal } from "@/components/ui/menu-dismissal";
 import {
   ZOOM_BUTTON_CLASSES,
   ZOOM_IN_TITLE,
@@ -449,6 +458,30 @@ export function SequenceViewer({
     }
     return counts;
   }, [file]);
+
+  /* ---- the gesture guide, behind one button --------------------------------
+     It used to be the strip's own contents: ten glyph-and-label pairs plus the
+     caveat sentence, scrolling sideways inside a 28px row, permanently on
+     screen. Three surfaces already taught the same list — the page's "What you
+     can do on the canvas" disclosure, this strip, and the tour — so the row was
+     the redundant one AND the only one the reader could not put away. The
+     product owner asked for minimal.
+
+     A DISCLOSURE RATHER THAN A DELETION: the list stays derived from
+     `SequenceEditHandlers` (`mouse-guide.ts`), which is what stops a shipped
+     gesture going unnamed — twice on this branch a working gesture was reported
+     as broken because no surface mentioned it. One click is a fair price for
+     that; a deletion is not.
+
+     Dismissal is `useMenuDismissal`, the contract the zoom menu and the node
+     palette already own: Escape closes and is CONSUMED, so one press does not
+     also clear the canvas selection or leave immersive mode. */
+
+  const guidePanelId = useId();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guideWrapperRef = useRef<HTMLDivElement>(null);
+  const closeGuide = useCallback(() => setGuideOpen(false), []);
+  useMenuDismissal(guideOpen, closeGuide, guideWrapperRef);
 
   /* ---- the tour ------------------------------------------------------------ */
 
@@ -2360,14 +2393,14 @@ export function SequenceViewer({
           `SequenceEditHandlers` — so a gesture added to the canvas cannot ship
           without an entry, an icon and a name. Twice on this branch a correct,
           shipped gesture was reported as broken because no surface named it. */}
-      {/* ---- THE LEGEND'S HEIGHT IS FIXED, and that is the whole point ----
+      {/* ---- THE AFFORDANCE STRIP: one row, one control ----
 
-          The drawing is PANE-FITTED: `fit` scales by
-          `min(paneW/vbW, paneH/vbH)`, so anything that changes this strip's
-          height re-fits the entire diagram at a different scale. The dock is an
-          overlay for exactly that reason, and its comment names the failure —
-          "precisely the reflow-jump the overlay was chosen to avoid". This
-          strip was a layout sibling and reintroduced it twice over:
+          THE HEIGHT IS FIXED, and that is the whole point. The drawing is
+          PANE-FITTED — `fit` scales by `min(paneW/vbW, paneH/vbH)` — so
+          anything that changes this strip's height re-fits the entire diagram
+          at a different scale. The dock is an overlay for exactly that reason,
+          and its comment names the failure. This strip was a layout sibling and
+          reintroduced it twice over:
 
             - `flex-wrap` let the row count follow the pane width, so the
               caveat's `basis-full` took a second row at some widths and not
@@ -2377,48 +2410,88 @@ export function SequenceViewer({
               quietly shrank the diagram — the reader's first act on the canvas
               resized it.
 
-          So: one row that never wraps, scrolling sideways when the glyphs do
-          not fit, and PRESENT WHETHER OR NOT EDITING IS ON. `h-7` is stated
+          So: one row that never wraps, scrolling sideways if its content ever
+          outgrows it, and PRESENT WHETHER OR NOT EDITING IS ON. `h-7` is stated
           rather than left to the content because a fixed height is the property
-          being defended; `check:sequence-layout` pins all three.
+          being defended; `check:canvas-edit` pins all three.
 
-          A read-only canvas gets the one sentence that is true of it instead of
-          a legend of gestures it does not offer — same row, same height, so the
-          toggle changes what the strip SAYS and never what it occupies. */}
-      <div className="hidden h-7 shrink-0 items-center gap-x-3 overflow-x-auto border-t border-border bg-card px-4 text-xs whitespace-nowrap text-muted-foreground sm:flex">
-        {edit === undefined ? (
-          <span>{SEQUENCE_READ_ONLY_HINT}</span>
-        ) : (
-          <>
-            {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
-              const Glyph = GUIDE_GLYPH[gesture.icon];
-              return (
-                <span
-                  key={gesture.handler}
-                  /* The full path on hover for a mouse user, and as the item's
-                     accessible name for everyone else — the long half is
-                     demoted, never dropped. */
-                  title={gesture.mouse}
-                  className="inline-flex shrink-0 items-center gap-1"
-                >
-                  <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
-                  <span>{gesture.label}</span>
-                  <span className="sr-only">— {gesture.mouse}</span>
-                </span>
-              );
-            })}
+          WHAT IT HOLDS IS NOW ONE BUTTON, where it used to hold ten labelled
+          glyphs and a 45-word caveat scrolling sideways. The gestures moved
+          into the panel that button opens — see the guide state above for why.
+          A read-only canvas still gets the one sentence that is true of it
+          instead of a guide to gestures it does not offer: same row, same
+          height, so the toggle changes what the strip SAYS and never what it
+          occupies.
+
+          THE WRAPPER IS THE POSITIONING CONTEXT, not the strip. `overflow-x`
+          on the strip computes `overflow-y` to `auto` as well, so a panel
+          anchored inside it would be clipped on both axes; anchoring to a
+          `relative` parent instead lets the panel open UPWARD over the diagram,
+          which also keeps it out of the layout and away from the re-fit. */}
+      <div ref={guideWrapperRef} className="relative shrink-0">
+        {guideOpen ? (
+          <div
+            id={guidePanelId}
+            className="absolute bottom-full left-2 z-30 mb-1 max-h-[min(24rem,60svh)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg"
+          >
+            <ul className="space-y-2">
+              {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
+                const Glyph = GUIDE_GLYPH[gesture.icon];
+                return (
+                  <li
+                    key={gesture.handler}
+                    className="flex items-start gap-2 text-xs leading-relaxed"
+                  >
+                    <Glyph
+                      aria-hidden="true"
+                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0">
+                      {/* THE FULL PATH IS THE BODY NOW, not a `title`
+                          attribute. In the row it was hover-only — invisible to
+                          a touch reader and to anyone who did not think to
+                          hover — because a 28px row had nowhere to put it. A
+                          panel does, so the long half stops being demoted. */}
+                      <span className="font-medium text-foreground">
+                        {gesture.label}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        — {gesture.mouse}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
             {/* THE CAVEAT STAYS, and stays last — it is the only entry about
                 what dragging does NOT do, so it has no glyph to lead with, and
                 it is what a reader arriving from a drawing tool needs before
-                their first drag. It rides the same scroll rather than taking a
-                row of its own, which is what used to make the strip two lines
-                tall at some widths; the tour card still reads it out in full to
-                a reader who opens it to be taught. */}
-            <span className="shrink-0 text-muted-foreground/80">
+                their first drag. */}
+            <p className="mt-3 border-t border-border pt-2 text-xs leading-relaxed text-muted-foreground/80">
               {SEQUENCE_MOUSE_GUIDE_CAVEAT}
-            </span>
-          </>
-        )}
+            </p>
+          </div>
+        ) : null}
+        <div className="hidden h-7 shrink-0 items-center gap-x-3 overflow-x-auto border-t border-border bg-card px-4 text-xs whitespace-nowrap text-muted-foreground sm:flex">
+          {edit === undefined ? (
+            <span>{SEQUENCE_READ_ONLY_HINT}</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setGuideOpen(!guideOpen)}
+              aria-expanded={guideOpen}
+              aria-controls={guidePanelId}
+              /* A DISCLOSURE, so `aria-expanded` rather than `aria-pressed`:
+                 what changes is a region appearing, which is the fact a screen
+                 reader needs, and the button's own words stay a verb. */
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Keyboard aria-hidden="true" className="size-3.5 shrink-0" />
+              <span>How to edit this diagram</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Text alternative: the whole story as an ordered list, for readers
@@ -2526,16 +2599,17 @@ const FOCUS_TOUR_STEP: TourStep = {
    fold step rides: a tour step naming a control that is not on screen sends the
    reader hunting for it. */
 /* THE BODY IS DERIVED, not written here, and that is the point: it is the same
-   `lib/mouse-guide.ts` list the hint bar under the canvas renders. Two hand-kept
+   `lib/mouse-guide.ts` list the canvas's own guide renders. Two hand-kept
    copies of "how to edit this" is how the endpoint gesture came to be mentioned
    in one place, in the past tense of a control that had moved, while a reader
    hunted for it — and how the numbering flag was mentioned in neither. */
 /**
- * THE LONG PROSE'S HOME, now that the strip under the canvas leads with glyphs
- * instead. The tour is where a reader goes to be taught, so it gets every
- * sentence in full; the strip is where they go to be reminded, so it gets the
- * icon. Both read `lib/mouse-guide.ts` — writing either one by hand is how the
- * tour came to describe the endpoint gesture in words the panel no longer used.
+ * THE LONG PROSE'S HOME. The tour is where a reader goes to be TAUGHT, so it
+ * gets every sentence joined into one; the "How to edit this diagram" panel
+ * under the canvas is where they go to be REMINDED, so it gets the entries with
+ * their glyphs. Both read `lib/mouse-guide.ts` — writing either one by hand is
+ * how the tour came to describe the endpoint gesture in words the panel no
+ * longer used.
  */
 const EDIT_TOUR_STEP: TourStep = {
   title: "Edit the flow on the canvas",

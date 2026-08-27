@@ -208,7 +208,7 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
   {
     title: "Go immersive",
     body:
-      "Immersive, at the top right of this pane, hides everything but the " +
+      "Immersive, in the strip under the diagram, hides everything but the " +
       "diagram. Escape brings it back — a focused message clears first.",
     icon: Expand,
   },
@@ -1663,24 +1663,32 @@ export function ViewPlayground({
                    canvas wrapper in `split-workbench.tsx` for the full story. */
                 className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border shadow-sm max-lg:h-[70svh] lg:flex-1"
               >
-                {/* A slim strip for the rail toggle. The shell below owns its
-                    own controls (immersive, export, share, tour) in a strip
-                    UNDER the canvas; the rail toggle belongs to the page, not
-                    to the shell, so it gets its own row rather than reaching
-                    into the shell's. */}
+                {/* A slim strip for the rail toggle and the state word, ABOVE
+                    the canvas. The shell below owns the DIAGRAM'S OWN controls
+                    — share, export, immersive, tour — in a strip UNDER the
+                    canvas; these two are the page talking about the pane, not
+                    the diagram, and they are the row a reader reaches for
+                    before they have looked at anything.
+
+                    THEY WERE BRIEFLY FOLDED INTO THAT FOOTER, through a slot on
+                    the shell, to save this second row. The product owner asked
+                    for them back: in a row of actions the toggle stopped
+                    reading as the way to the text, and "Editable" stopped
+                    reading as a state. Two rows is the price and it is the
+                    right one — the slot is gone rather than left unused. */}
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
                   <SourceRailToggle
                     collapsed={sourceCollapsed}
                     onToggle={() => setSourceCollapsed(!sourceCollapsed)}
                     sourceLabel="document source"
                   />
-                  {/* THE STATE, IN WORDS. The lock itself moved onto the
-                      canvas (its top-right corner, via the shell's slot
-                      below) and is an icon-only padlock there, so this word
-                      in the strip is now the ONE place the state is spelled
-                      out — it stayed where words fit when the control
-                      stopped carrying any. A refusal outranks it: a C4
-                      document the canvas cannot edit at all has a reason to
+                  {/* THE STATE, IN WORDS. The lock itself is an icon-only
+                      padlock on the canvas (top-right, via the shell's
+                      `lockSlot`), so this word is the ONE place the state is
+                      spelled out — it stayed where words fit when the control
+                      stopped carrying any, and it sits in the SAME strip so it
+                      stays near the pane it describes. A refusal outranks it: a
+                      C4 document the canvas cannot edit at all has a reason to
                       give, and no lock on it to need a state for. */}
                   <span className="truncate text-xs text-muted-foreground">
                     {CANVAS_EDIT_ENABLED &&
@@ -1771,34 +1779,102 @@ export function ViewPlayground({
                     : "rounded-xl border border-border shadow-sm max-lg:h-[70svh]",
                 )}
               >
-                {/* The toolbar strip stays visible in immersive mode too — the
-                    exit must always be one click away, not only one keystroke. */}
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
-                  <span className="flex min-w-0 items-center gap-1">
-                    {/* The rail toggle sits with the CANVAS, not with the rail
-                        it hides: a control that vanishes along with the thing
-                        it controls cannot bring it back. */}
-                    {isImmersive ? null : (
-                      <SourceRailToggle
-                        collapsed={sourceCollapsed}
-                        onToggle={() => setSourceCollapsed(!sourceCollapsed)}
-                        sourceLabel="document source"
-                      />
-                    )}
-                    {/* Same one word as the C4 strip, from the same helper —
-                        see the note there. Immersive outranks it: the way out
-                        is the only thing a reader needs from this slot while
-                        the diagram covers the viewport. */}
-                    <span className="truncate text-xs text-muted-foreground">
-                      {isImmersive
-                        ? "Immersive — Escape exits (a focused message clears first)"
-                        : showSequenceCanvasLock
-                          ? canvasStateLabel(canvasLocked)
-                          : "Diagram"}
-                    </span>
+                {/* THE PAGE'S STRIP, above the canvas — the same two controls
+                    in the same place as the C4 pane's, for the same reason
+                    given there. It is a separate row from the actions below on
+                    purpose: this one is about the PANE (is the text showing, is
+                    the canvas editable) and the one under the diagram is about
+                    the DIAGRAM (share it, export it, fill the screen with it).
+                    They were one row briefly; merging them made the toggle read
+                    as a fourth action and the state word as a label on it. */}
+                <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-1">
+                  {/* The rail toggle sits with the CANVAS, not with the rail
+                      it hides: a control that vanishes along with the thing
+                      it controls cannot bring it back. */}
+                  {isImmersive ? null : (
+                    <SourceRailToggle
+                      collapsed={sourceCollapsed}
+                      onToggle={() => setSourceCollapsed(!sourceCollapsed)}
+                      sourceLabel="document source"
+                    />
+                  )}
+                  {/* Same one word as the C4 strip, from the same helper — see
+                      the note there, and at the SAME END of the row: control on
+                      the left, state on the right, so a reader moving between a
+                      C4 document and a sequence one finds each in one place.
+
+                      `ml-auto` where the C4 strip uses `justify-between`, and
+                      the difference is not cosmetic: this row's toggle is
+                      CONDITIONAL — immersive mode drops it — and
+                      `justify-between` with one child left the lone immersive
+                      hint hard against the left edge, which is the one state
+                      where the row says something the reader urgently needs.
+                      Pushing the span itself right holds the position whether
+                      or not the toggle is there.
+
+                      Immersive outranks the state word: the way out is the only
+                      thing a reader needs from this slot while the diagram
+                      covers the viewport. */}
+                  <span className="ml-auto truncate text-xs text-muted-foreground">
+                    {isImmersive
+                      ? "Immersive — Escape exits (a focused message clears first)"
+                      : showSequenceCanvasLock
+                        ? canvasStateLabel(canvasLocked)
+                        : "Diagram"}
                   </span>
+                </div>
+                {doc.kind === "sequence" ? (
+                  <SequenceViewer
+                    file={doc.file}
+                    onAnnounce={setAnnouncement}
+                    extraTourSteps={PLAYGROUND_TOUR_STEPS}
+                    edit={sequenceEdit}
+                    /* THE SAME LOCK as the C4 branch's, in the branch a
+                       sequence document actually renders in — it gates
+                       `sequenceEditable`, and leaving it in the C4 branch
+                       alone once meant a reader who had locked the canvas
+                       could never unlock this one (see the header of
+                       `canvas-lock-button.tsx`). A slot at the viewer's
+                       top-right corner, matching the C4 canvas; offered only
+                       for the notation whose canvas can act on it — the
+                       other four in this branch have nothing to lock, and a
+                       control that cannot change anything is worse than its
+                       absence. */
+                    lockSlot={
+                      showSequenceCanvasLock ? (
+                        <CanvasLockButton
+                          locked={canvasLocked}
+                          onToggle={setCanvasLocked}
+                          onAnnounce={setAnnouncement}
+                          copy={CANVAS_LOCK_COPY.sequence}
+                        />
+                      ) : undefined
+                    }
+                  />
+                ) : doc.kind === "flowchart" ? (
+                  <FlowchartViewer
+                    file={doc.file}
+                    onAnnounce={setAnnouncement}
+                  />
+                ) : doc.kind === "usecase" ? (
+                  <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
+                ) : doc.kind === "er" ? (
+                  <ErViewer file={doc.file} onAnnounce={setAnnouncement} />
+                ) : (
+                  <DictViewer file={doc.file} onAnnounce={setAnnouncement} />
+                )}
+                {/* THE DIAGRAM'S OWN STRIP, UNDER the diagram, where the C4
+                    shell has always put its equivalent: the drawing is what the
+                    reader came for, so it takes the top of the pane and these
+                    read as its footer. It mattered most on a phone, where this
+                    row above a `70svh` pane spent the first thing you saw on
+                    buttons.
+
+                    It stays visible in immersive mode — the exit must always be
+                    one click away, not only one keystroke. */}
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-card px-3 py-1">
                   {/* Share and Export live in the CANVAS strip, matching the
-                      C4 shell's own strip control-for-control. Two reasons,
+                      C4 shell's own footer control-for-control. Two reasons,
                       and the first is a defect: in the source rail their
                       dropdown panels were clipped by that column's scroll box
                       (see the note on the rail's action row). The second is
@@ -1806,9 +1882,19 @@ export function ViewPlayground({
                       screen, Share hands over the document being drawn — so
                       the canvas is where they belonged anyway.
 
+                      THEIR PANELS OPEN UPWARD, and that is a consequence of
+                      this row rather than a preference: every share button in
+                      this branch passes `panelSide="up"` and every export panel
+                      anchors `bottom-full`, the way the C4 exporter already did
+                      from its own footer. A panel that opened downward from
+                      here would open off the bottom of the pane.
+
                       Hidden in immersive: the strip stays visible there so the
                       exit is one click away, and a menu that opened over a
-                      fullscreen diagram would be covering the thing it exports. */}
+                      fullscreen diagram would be covering the thing it exports.
+                      The reason is weaker from the bottom edge — an upward
+                      panel covers a band of the drawing rather than its middle —
+                      but weaker is not wrong, and Share's panel is tall. */}
                   <span className="flex shrink-0 items-center gap-1.5">
                     {isImmersive ? null : doc.kind === "sequence" ? (
                       <>
@@ -1920,46 +2006,6 @@ export function ViewPlayground({
                     </button>
                   </span>
                 </div>
-                {doc.kind === "sequence" ? (
-                  <SequenceViewer
-                    file={doc.file}
-                    onAnnounce={setAnnouncement}
-                    extraTourSteps={PLAYGROUND_TOUR_STEPS}
-                    edit={sequenceEdit}
-                    /* THE SAME LOCK as the C4 branch's, in the branch a
-                       sequence document actually renders in — it gates
-                       `sequenceEditable`, and leaving it in the C4 branch
-                       alone once meant a reader who had locked the canvas
-                       could never unlock this one (see the header of
-                       `canvas-lock-button.tsx`). A slot at the viewer's
-                       top-right corner, matching the C4 canvas; offered only
-                       for the notation whose canvas can act on it — the
-                       other four in this branch have nothing to lock, and a
-                       control that cannot change anything is worse than its
-                       absence. */
-                    lockSlot={
-                      showSequenceCanvasLock ? (
-                        <CanvasLockButton
-                          locked={canvasLocked}
-                          onToggle={setCanvasLocked}
-                          onAnnounce={setAnnouncement}
-                          copy={CANVAS_LOCK_COPY.sequence}
-                        />
-                      ) : undefined
-                    }
-                  />
-                ) : doc.kind === "flowchart" ? (
-                  <FlowchartViewer
-                    file={doc.file}
-                    onAnnounce={setAnnouncement}
-                  />
-                ) : doc.kind === "usecase" ? (
-                  <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
-                ) : doc.kind === "er" ? (
-                  <ErViewer file={doc.file} onAnnounce={setAnnouncement} />
-                ) : (
-                  <DictViewer file={doc.file} onAnnounce={setAnnouncement} />
-                )}
               </section>
             )
           }
