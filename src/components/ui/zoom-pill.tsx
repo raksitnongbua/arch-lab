@@ -1,6 +1,13 @@
 /**
- * The zoom pill's CHROME — the bottom-left cluster every canvas in this app
- * wears: the C4 viewer, the C4 editor and the sequence viewer.
+ * The zoom pill's CHROME — the bottom-RIGHT cluster every canvas in this app
+ * wears: the two C4 canvases, the sequence, flowchart, use-case and ER
+ * viewers, and the data dictionary.
+ *
+ * The corner is shared for a reason worth recording: before it was, two of the
+ * seven already disagreed — the ER and dictionary viewers pinned the pill
+ * bottom-right while the other five pinned it bottom-left — so the drift this
+ * module was written to stop had already happened in POSITION while the
+ * controls stayed in step. `check:canvas-chrome` now pins the corner too.
  *
  * Only the look lives here, deliberately. The three canvases zoom by genuinely
  * different mechanisms (React Flow's viewport in the two C4 canvases, a

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Canvas overlay (bottom-left): the camera controls the viewer owns.
+ * Canvas overlay (bottom-right, under the minimap): the camera controls the
+ * viewer owns.
  *
  *  - Zoom out / zoom in — one {@link ZOOM_STEP} press either way, clamped by
  *    React Flow to the viewer's own `MIN_ZOOM`/`MAX_ZOOM`. These used to be

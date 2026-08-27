@@ -1055,11 +1055,15 @@ function CanvasInner(): React.JSX.Element {
         <LevelTransition />
         <DeleteConfirmDialog />
         <NodeContextMenu />
-        <Panel position="bottom-left">
-          <ZoomIndicator />
+        {/* ONE NAVIGATION CORNER, the same arrangement the viewer wears: the
+            map stacked over the controls that drive it, rather than the two
+            halves of "where am I / how close am I" in opposite corners. */}
+        <Panel position="bottom-right">
+          <div className="flex flex-col items-end gap-2">
+            <CanvasMinimap />
+            <ZoomIndicator />
+          </div>
         </Panel>
-        {/* Not in a Panel: React Flow's MiniMap owns its own corner offsets. */}
-        <CanvasMinimap />
       </ReactFlow>
     </div>
   );

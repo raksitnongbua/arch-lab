@@ -2,7 +2,7 @@
 
 /**
  * Zoom controls. Owned by ; mounted by `canvas.tsx` in the
- * bottom-left panel.
+ * bottom-right panel, beneath the minimap.
  *
  * It was a bare percentage for a long time, and that made the editor the only
  * canvas here where zooming in needed a gesture (⌘/ctrl + scroll, pinch) or a
