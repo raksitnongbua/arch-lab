@@ -60,9 +60,9 @@ export function UseCaseShareButton({
       documentTitle={title}
       route={SHARE_ROUTE}
       noun="use-case diagram"
-      /* Same reason as the other wrappers: this toolbar sits above the
-         canvas mid-page — opening upward would cover the diagram. */
-      panelSide="down"
+      /* Same reason as the other wrappers: this toolbar sits under the
+         canvas, so a downward panel would open off the bottom of the pane. */
+      panelSide="up"
       downloadExtension={format === "mermaid" ? ".mmd" : ARCHTEXT_EXTENSION}
       onAnnounce={onAnnounce}
     />

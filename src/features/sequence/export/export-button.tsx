@@ -335,7 +335,11 @@ export function SequenceExportButton({
             when the button briefly sat in the 30% source rail. Capping both
             axes means the worst case is a panel that scrolls, which is a menu
             you can still read and use. */}
-        <div className="absolute right-0 z-20 mt-1 flex max-h-[min(32rem,70svh)] w-72 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg">
+        {/* UPWARD (`bottom-full`), because this toolbar sits UNDER the
+            canvas — a downward panel would open off the bottom of the pane.
+            The C4 exporter has anchored this way from its own footer all
+            along. */}
+        <div className="absolute right-0 bottom-full z-20 mb-1 flex max-h-[min(32rem,70svh)] w-72 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg">
           {/* A ROW PER OUTCOME, each naming what you get — the shape the C4
               exporter has and this panel did not. It used to ask for a format
               in a <select> and then offer a generic "Download", so the reader

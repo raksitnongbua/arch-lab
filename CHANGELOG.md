@@ -72,6 +72,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- Share, Export and Immersive now sit **under** the diagram on the playground,
+  not above it, for all six notations. The diagram gets the top of its pane —
+  which is what you came for, and what a phone was spending on a row of
+  buttons — and the controls read as its footer. Their menus open upward. The
+  C4 pane loses its separate top row entirely: the source-rail toggle and the
+  canvas-state word join the strip that already sat below that diagram.
+
 - The minimap and the zoom controls now share the bottom-right corner of every
   canvas, with the map docked above the controls that drive it. Five canvases
   moved their zoom pill from the bottom left; the ER and data-dictionary

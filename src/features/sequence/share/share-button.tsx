@@ -64,9 +64,12 @@ export function SequenceShareButton({
       documentTitle={title}
       route={SHARE_ROUTE}
       noun="flow"
-      /* This toolbar sits ABOVE the source pane mid-page — opening upward
-         would cover the diagram the sharer is looking at. */
-      panelSide="down"
+      /* This toolbar sits UNDER the canvas, so a downward panel would open
+         off the bottom of the pane. It used to sit above the canvas and open
+         downward for the mirror-image reason; the strip moved so the diagram
+         gets the top of its pane, and the panel followed it. Same direction
+         the C4 exporter has always used from its own footer. */
+      panelSide="up"
       downloadExtension={format === "mermaid" ? ".mmd" : ARCHTEXT_EXTENSION}
       onAnnounce={onAnnounce}
     />

@@ -51,8 +51,8 @@ export function ErShareButton({
       documentTitle={title}
       route={SHARE_ROUTE}
       noun="ER diagram"
-      /* Opening upward would cover the canvas this toolbar sits above. */
-      panelSide="down"
+      /* Opening downward would leave the pane this toolbar sits under. */
+      panelSide="up"
       downloadExtension={format === "mermaid" ? ".mmd" : ARCHTEXT_EXTENSION}
       onAnnounce={onAnnounce}
     />

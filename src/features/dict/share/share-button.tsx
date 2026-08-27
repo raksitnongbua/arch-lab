@@ -31,7 +31,8 @@ export function DictShareButton({
       documentTitle={title}
       route={SHARE_ROUTE}
       noun="data dictionary"
-      panelSide="down"
+      /* Under the canvas, like every other wrapper in this branch. */
+      panelSide="up"
       downloadExtension={ARCHTEXT_EXTENSION}
       onAnnounce={onAnnounce}
     />
