@@ -1716,7 +1716,7 @@ export function ViewPlayground({
                     the DIAGRAM (share it, export it, fill the screen with it).
                     They were one row briefly; merging them made the toggle read
                     as a fourth action and the state word as a label on it. */}
-                <div className="flex shrink-0 items-center gap-1 border-b border-border bg-card px-3 py-1">
+                <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-1">
                   {/* The rail toggle sits with the CANVAS, not with the rail
                       it hides: a control that vanishes along with the thing
                       it controls cannot bring it back. */}
@@ -1728,10 +1728,23 @@ export function ViewPlayground({
                     />
                   )}
                   {/* Same one word as the C4 strip, from the same helper — see
-                      the note there. Immersive outranks it: the way out is the
-                      only thing a reader needs from this slot while the diagram
+                      the note there, and at the SAME END of the row: control on
+                      the left, state on the right, so a reader moving between a
+                      C4 document and a sequence one finds each in one place.
+
+                      `ml-auto` where the C4 strip uses `justify-between`, and
+                      the difference is not cosmetic: this row's toggle is
+                      CONDITIONAL — immersive mode drops it — and
+                      `justify-between` with one child left the lone immersive
+                      hint hard against the left edge, which is the one state
+                      where the row says something the reader urgently needs.
+                      Pushing the span itself right holds the position whether
+                      or not the toggle is there.
+
+                      Immersive outranks the state word: the way out is the only
+                      thing a reader needs from this slot while the diagram
                       covers the viewport. */}
-                  <span className="truncate text-xs text-muted-foreground">
+                  <span className="ml-auto truncate text-xs text-muted-foreground">
                     {isImmersive
                       ? "Immersive — Escape exits (a focused message clears first)"
                       : showSequenceCanvasLock
