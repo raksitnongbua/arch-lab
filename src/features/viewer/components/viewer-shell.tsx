@@ -165,7 +165,6 @@ export function ViewerShell({
   edit,
   canEdit,
   lockSlot,
-  chromeSlot,
   defaultImmersive = false,
   tour: tourEnabled = true,
   titleAs: TitleTag = "h1",
@@ -209,29 +208,6 @@ export function ViewerShell({
    * chrome is covered.
    */
   lockSlot?: React.ReactNode;
-  /**
-   * The host's own chrome, seated at the LEFT of the footer strip ahead of the
-   * title. The playground fills it with the source-rail toggle and the
-   * one-word canvas state.
-   *
-   * A SLOT, for the reason `lockSlot` is one: the control belongs to the host
-   * and the placement belongs to the shell. It replaced a second strip the
-   * playground drew ABOVE the canvas to hold these two, whose comment argued
-   * that the rail toggle "belongs to the page, not to the shell, so it gets
-   * its own row rather than reaching into the shell's". The ownership half of
-   * that was right and the conclusion was not: a slot lets the page keep the
-   * controls while the shell keeps the row, and the row it was avoiding cost
-   * the diagram the top of its own pane — the one thing this shell's layout
-   * exists to protect.
-   *
-   * The rail is a playground concept, so it does not become a pair of
-   * `collapsed`/`onToggle` props here: `/live/[modelId]` has no rail to fold
-   * and would be given controls for a pane it does not have.
-   *
-   * COVERED IN IMMERSIVE MODE, like everything else in this strip that is not
-   * the way out. Nothing in it is the exit.
-   */
-  chromeSlot?: React.ReactNode;
   /**
    * Start in immersive mode. For a page that exists only to show one model
    * (`/live/[modelId]`) — where the diagram IS the page, so the site chrome is
@@ -444,12 +420,6 @@ export function ViewerShell({
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              {/* The host's chrome leads the row, AHEAD of the title: the
-                  playground's rail toggle is a control and the title is a
-                  caption, and a control buried after a truncating heading is
-                  one nobody finds. Absent on every other host, which is why
-                  this is a slot and not a layout branch — see `chromeSlot`. */}
-              {chromeSlot}
               <TitleTag className="truncate text-lg font-semibold tracking-tight text-foreground">
                 {frozenModel.title}
               </TitleTag>
@@ -465,11 +435,9 @@ export function ViewerShell({
 
                   Gating it on `edit` would have made it honest and left it
                   pointless: a tag reading "View mode" on the page the reader is
-                  already looking at. The state has ONE home, the host's
-                  `chromeSlot` at the head of this very row, where
-                  `canvasStateLabel` is its single source. That home moved INTO
-                  this strip after the tag was removed from it, which does not
-                  reopen the question: one word, from one source, once. Even on the
+                  already looking at. The state has ONE home, the strip above
+                  the canvas, where `canvasStateLabel` is its single source and
+                  the padlock sits beside the diagram it governs. Even on the
                   bundled page the tag was not the last word, since that page
                   offers `EditModeLink` — "read-only" beside a link to go and
                   edit it. Do not reintroduce a state word here;

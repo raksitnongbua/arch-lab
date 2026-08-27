@@ -208,7 +208,7 @@ const PLAYGROUND_TOUR_STEPS: readonly TourStep[] = [
   {
     title: "Go immersive",
     body:
-      "Immersive, at the top right of this pane, hides everything but the " +
+      "Immersive, in the strip under the diagram, hides everything but the " +
       "diagram. Escape brings it back — a focused message clears first.",
     icon: Expand,
   },
@@ -1600,6 +1600,43 @@ export function ViewPlayground({
                    canvas wrapper in `split-workbench.tsx` for the full story. */
                 className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border shadow-sm max-lg:h-[70svh] lg:flex-1"
               >
+                {/* A slim strip for the rail toggle and the state word, ABOVE
+                    the canvas. The shell below owns the DIAGRAM'S OWN controls
+                    — share, export, immersive, tour — in a strip UNDER the
+                    canvas; these two are the page talking about the pane, not
+                    the diagram, and they are the row a reader reaches for
+                    before they have looked at anything.
+
+                    THEY WERE BRIEFLY FOLDED INTO THAT FOOTER, through a slot on
+                    the shell, to save this second row. The product owner asked
+                    for them back: in a row of actions the toggle stopped
+                    reading as the way to the text, and "Editable" stopped
+                    reading as a state. Two rows is the price and it is the
+                    right one — the slot is gone rather than left unused. */}
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-1">
+                  <SourceRailToggle
+                    collapsed={sourceCollapsed}
+                    onToggle={() => setSourceCollapsed(!sourceCollapsed)}
+                    sourceLabel="document source"
+                  />
+                  {/* THE STATE, IN WORDS. The lock itself is an icon-only
+                      padlock on the canvas (top-right, via the shell's
+                      `lockSlot`), so this word is the ONE place the state is
+                      spelled out — it stayed where words fit when the control
+                      stopped carrying any, and it sits in the SAME strip so it
+                      stays near the pane it describes. A refusal outranks it: a
+                      C4 document the canvas cannot edit at all has a reason to
+                      give, and no lock on it to need a state for. */}
+                  <span className="truncate text-xs text-muted-foreground">
+                    {CANVAS_EDIT_ENABLED &&
+                    doc.kind === "c4" &&
+                    !editability.editable
+                      ? editability.reason
+                      : showCanvasLock
+                        ? canvasStateLabel(canvasLocked)
+                        : "Diagram"}
+                  </span>
+                </div>
                 <ViewerShell
                   key={shellEpoch}
                   /* The page owns the `h1`; the model's title is a level
@@ -1633,39 +1670,6 @@ export function ViewPlayground({
                         copy={CANVAS_LOCK_COPY.c4}
                       />
                     ) : undefined
-                  }
-                  /* THE PAGE'S OWN TWO CONTROLS, seated in the shell's
-                     footer rather than in a strip of their own above the
-                     canvas. That strip existed because the rail toggle
-                     "belongs to the page, not to the shell" — true, and not a
-                     reason to spend a whole row: `chromeSlot` keeps the
-                     ownership and borrows the placement, and the row it
-                     replaced was costing the diagram the top of its pane.
-
-                     THE STATE, IN WORDS. The lock itself is an icon-only
-                     padlock on the canvas (top-right, via `lockSlot`), so this
-                     word is the ONE place the state is spelled out — it stayed
-                     where words fit when the control stopped carrying any. A
-                     refusal outranks it: a C4 document the canvas cannot edit
-                     at all has a reason to give, and no lock on it to need a
-                     state for. */
-                  chromeSlot={
-                    <>
-                      <SourceRailToggle
-                        collapsed={sourceCollapsed}
-                        onToggle={() => setSourceCollapsed(!sourceCollapsed)}
-                        sourceLabel="document source"
-                      />
-                      <span className="truncate text-xs text-muted-foreground">
-                        {CANVAS_EDIT_ENABLED &&
-                        doc.kind === "c4" &&
-                        !editability.editable
-                          ? editability.reason
-                          : showCanvasLock
-                            ? canvasStateLabel(canvasLocked)
-                            : "Diagram"}
-                      </span>
-                    </>
                   }
                   /* Passing these is what makes the canvas editable — see
                      `CanvasEditHandlers`. `undefined` leaves the shell's
@@ -1704,6 +1708,37 @@ export function ViewPlayground({
                     : "rounded-xl border border-border shadow-sm max-lg:h-[70svh]",
                 )}
               >
+                {/* THE PAGE'S STRIP, above the canvas — the same two controls
+                    in the same place as the C4 pane's, for the same reason
+                    given there. It is a separate row from the actions below on
+                    purpose: this one is about the PANE (is the text showing, is
+                    the canvas editable) and the one under the diagram is about
+                    the DIAGRAM (share it, export it, fill the screen with it).
+                    They were one row briefly; merging them made the toggle read
+                    as a fourth action and the state word as a label on it. */}
+                <div className="flex shrink-0 items-center gap-1 border-b border-border bg-card px-3 py-1">
+                  {/* The rail toggle sits with the CANVAS, not with the rail
+                      it hides: a control that vanishes along with the thing
+                      it controls cannot bring it back. */}
+                  {isImmersive ? null : (
+                    <SourceRailToggle
+                      collapsed={sourceCollapsed}
+                      onToggle={() => setSourceCollapsed(!sourceCollapsed)}
+                      sourceLabel="document source"
+                    />
+                  )}
+                  {/* Same one word as the C4 strip, from the same helper — see
+                      the note there. Immersive outranks it: the way out is the
+                      only thing a reader needs from this slot while the diagram
+                      covers the viewport. */}
+                  <span className="truncate text-xs text-muted-foreground">
+                    {isImmersive
+                      ? "Immersive — Escape exits (a focused message clears first)"
+                      : showSequenceCanvasLock
+                        ? canvasStateLabel(canvasLocked)
+                        : "Diagram"}
+                  </span>
+                </div>
                 {doc.kind === "sequence" ? (
                   <SequenceViewer
                     file={doc.file}
@@ -1744,55 +1779,16 @@ export function ViewPlayground({
                 ) : (
                   <DictViewer file={doc.file} onAnnounce={setAnnouncement} />
                 )}
-                {/* THE STRIP SITS UNDER THE DIAGRAM, and it used to sit over
-                    it. The rule is the one `viewer-shell.tsx` states for the
-                    C4 canvas and now applies to all six notations: the diagram
-                    is what the reader came for, so it gets the top of the pane
-                    and the chrome reads as its footer. It mattered most on a
-                    phone, where a row of controls above a `70svh` pane spent
-                    the first thing you saw on buttons.
-
-                    ONE strip, where the C4 pane needed two: the shell owns its
-                    own footer, so the rail toggle could not go in it without a
-                    slot (it has one now — `chromeSlot`). Here the strip is the
-                    page's outright, so everything shares the row.
+                {/* THE DIAGRAM'S OWN STRIP, UNDER the diagram, where the C4
+                    shell has always put its equivalent: the drawing is what the
+                    reader came for, so it takes the top of the pane and these
+                    read as its footer. It mattered most on a phone, where this
+                    row above a `70svh` pane spent the first thing you saw on
+                    buttons.
 
                     It stays visible in immersive mode — the exit must always be
                     one click away, not only one keystroke. */}
-                <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-card px-3 py-1">
-                  <span className="flex min-w-0 items-center gap-1">
-                    {/* The rail toggle sits with the CANVAS, not with the rail
-                        it hides: a control that vanishes along with the thing
-                        it controls cannot bring it back. */}
-                    {isImmersive ? null : (
-                      <SourceRailToggle
-                        collapsed={sourceCollapsed}
-                        onToggle={() => setSourceCollapsed(!sourceCollapsed)}
-                        sourceLabel="document source"
-                      />
-                    )}
-                    {/* Same one word as the C4 footer, from the same helper —
-                        see the note there. Immersive outranks it: the way out
-                        is the only thing a reader needs from this slot while
-                        the diagram covers the viewport.
-
-                        IT IS NOW A PANE AWAY FROM THE PADLOCK IT DESCRIBES,
-                        which is what moving the strip down cost: the lock is an
-                        overlay at the canvas's TOP right (`sequence-viewer.tsx`
-                        pins it `top-3`) and this word is at the bottom. The
-                        trade was made knowingly — the word is already a
-                        second-best, kept because the control stopped carrying
-                        any text of its own, so it was never tightly paired
-                        with the glyph. Keeping it up here would have cost a
-                        whole second row of chrome to hold two controls. */}
-                    <span className="truncate text-xs text-muted-foreground">
-                      {isImmersive
-                        ? "Immersive — Escape exits (a focused message clears first)"
-                        : showSequenceCanvasLock
-                          ? canvasStateLabel(canvasLocked)
-                          : "Diagram"}
-                    </span>
-                  </span>
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-card px-3 py-1">
                   {/* Share and Export live in the CANVAS strip, matching the
                       C4 shell's own footer control-for-control. Two reasons,
                       and the first is a defect: in the source rail their

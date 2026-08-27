@@ -5446,18 +5446,22 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
     "the strip is writing its own copy of the gesture list",
   );
   check(
-    "the strip renders each entry's icon, its label and its full name",
+    "the guide renders each entry's icon, its label and its full name",
     /GUIDE_GLYPH\[gesture\.icon\]/.test(viewer) &&
       /\{gesture\.label\}/.test(viewer) &&
-      /sr-only[^>]*>—? ?\{gesture\.mouse\}/.test(viewer),
-    /* AN ICON WITH NO NAME is the regression an icon strip ships. The visible
-       label is short by design, so the sr-only sentence is what makes the item
-       findable by a screen-reader user at all. */
+      /\{gesture\.mouse\}/.test(viewer),
+    /* AN ICON WITH NO NAME is the regression an icon strip ships. This used to
+       require `gesture.mouse` inside an `sr-only` span, because the list lived
+       in a 28px row that had nowhere to put the long half and hid it in a
+       `title` — hover-only, so invisible to a touch reader. The list now opens
+       in a panel, where the full path is ordinary visible text, so the
+       assertion asks that it is RENDERED rather than that it is hidden from
+       sight. Demanding `sr-only` here would now forbid the fix. */
     "an entry is rendered without one of its three parts",
   );
   check(
     "the icons are aria-hidden, so the name comes from the text and not from a filename",
-    /<Glyph aria-hidden="true"/.test(viewer),
+    /<Glyph\s+aria-hidden="true"/.test(viewer),
     "a lucide glyph with no aria-hidden is announced as an unnamed graphic",
   );
   check(
@@ -5478,18 +5482,30 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
      default, pressing Edit both revealed the legend and shrank the diagram —
      the reader's first act on the canvas resized it.
 
-     So both halves are asserted separately now: the gestures stay behind the
-     gate, and the container stays outside it. */
+     So both halves are asserted separately: the gestures stay behind the gate,
+     and the container stays outside it.
+
+     WHAT THE STRIP HOLDS CHANGED, AND THESE ASSERTIONS FOLLOWED IT. The ten
+     labelled glyphs and the caveat used to BE the strip's contents, scrolling
+     sideways in the row. Three surfaces taught that same list — the page's
+     disclosure, this strip, and the tour — and this was the only one a reader
+     could not put away, so it became one button opening a panel. Every rule
+     the row bought stays (fixed height, no wrap, present either way); what is
+     re-pinned is the list's REACHABILITY, since a panel with no trigger is
+     section 8's unreachable-control bug in a new costume. */
   /* ANCHORED ON WHAT THE STRIP IS, not on a property asserted below. An earlier
      spelling anchored on `h-7`, so removing the height made the block "not
      found" and failed every assertion here identically — a break has to name
-     the thing it broke. The caveat is the strip's last child and is required by
-     its own assertion elsewhere, which makes it a stable landmark. */
-  const stripAt = /<div className="hidden[^"]*"/.exec(viewer);
+     the thing it broke. The strip is the one `hidden … sm:flex` row in the
+     file; its close is the next `</div>` at the row's own indent. The caveat is
+     no longer the landmark it was: it moved into the panel, which is a SIBLING
+     of the strip rather than a child (see the clipping assertion below), so
+     anchoring on it would now walk past the end of the row. */
+  const stripAt = /<div className="hidden[^"]*sm:flex"/.exec(viewer);
   const strip =
     stripAt === null
       ? ""
-      : (/^[\s\S]{0,2600}?SEQUENCE_MOUSE_GUIDE_CAVEAT[\s\S]{0,240}?\n      <\/div>/.exec(
+      : (/^[\s\S]{0,1600}?\n        <\/div>/.exec(
           viewer.slice(stripAt.index),
         )?.[0] ?? "");
   /* READ THE TEXT BEFORE THE CONTAINER, not the container itself. The first
@@ -5508,16 +5524,17 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
     "a strip that appears with the edit toggle rescales a pane-fitted drawing",
   );
   check(
-    "the gesture legend is still gated on the edit handlers",
-    /edit === undefined \? \([\s\S]{0,400}?SEQUENCE_READ_ONLY_HINT[\s\S]{0,400}?SEQUENCE_MOUSE_GESTURES/.test(
-      strip,
-    ),
-    "a read-only canvas would list gestures it does not offer",
+    "the gesture guide is still gated on the edit handlers",
+    /edit === undefined \? \([\s\S]{0,400}?SEQUENCE_READ_ONLY_HINT/.test(strip),
+    "a read-only canvas would offer a guide to gestures it does not have",
   );
   /* HEIGHT STATED, NOT INFERRED FROM CONTENT, and no wrapping — the two
      properties that keep the pane a constant size. `flex-wrap` is what let the
      caveat take a second row at some widths and not others, so resizing the
-     window rescaled the drawing; the sideways scroll is what replaces it. */
+     window rescaled the drawing; the sideways scroll is what replaces it. The
+     row holds one button now and could not plausibly overflow, and the rules
+     stay anyway: they are what makes the height independent of the content,
+     which is the property being defended, not a reaction to today's content. */
   check(
     "the strip states a fixed height and never wraps",
     /\bh-7\b/.test(strip) &&
@@ -5530,6 +5547,36 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
     "the read-only canvas gets a sentence of its own rather than an empty strip",
     /SEQUENCE_READ_ONLY_HINT/.test(viewer),
     "a blank row holds the height but tells the reader nothing",
+  );
+  /* THE LIST IS REACHABLE. Putting the gestures behind a disclosure is only
+     safe while something opens it: a panel built, rendered and openable by
+     nothing is exactly section 8's founding bug — correct in the module,
+     absent from the screen — and it is how a shipped gesture goes unnamed for
+     a release. So the trigger is pinned as a DISCLOSURE specifically: a button
+     that owns the panel by id and says whether it is open. */
+  check(
+    "a disclosure opens the gesture guide, and says so",
+    /aria-expanded=\{guideOpen\}/.test(viewer) &&
+      /aria-controls=\{guidePanelId\}/.test(viewer) &&
+      /id=\{guidePanelId\}/.test(viewer),
+    "the guide is rendered behind a control that does not exist, does not " +
+      "own it, or does not report its state — the list is unreachable, or " +
+      "unreachable to a screen reader",
+  );
+  /* AND IT IS NOT CLIPPED BY THE ROW IT HANGS OFF. `overflow-x` on the strip
+     computes `overflow-y` to `auto` as well, so a panel nested inside the strip
+     is clipped on BOTH axes — it would open into a 28px slot and show one line
+     of itself. The panel is therefore a SIBLING that precedes the strip inside
+     a `relative` wrapper, which is also what keeps it out of the layout and
+     away from the pane re-fit. Ordering is the cheap structural proof: if the
+     panel is ever nested back inside the strip, it stops preceding it. */
+  check(
+    "the guide panel hangs outside the scrolling row, not inside it",
+    stripAt !== null &&
+      viewer.indexOf("id={guidePanelId}") !== -1 &&
+      viewer.indexOf("id={guidePanelId}") < stripAt.index,
+    "a panel inside the `overflow-x-auto` strip is clipped to the row's own " +
+      "28 pixels on both axes",
   );
 }
 
