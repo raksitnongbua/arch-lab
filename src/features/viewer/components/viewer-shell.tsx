@@ -143,9 +143,9 @@ const C4_TOUR_STEPS: readonly TourStep[] = [
   {
     title: "The minimap",
     body:
-      "Docked above the zoom pill, on screens wide enough to spare it: the " +
-      "whole diagram in thumbnail, with your viewport marked. Drag it to " +
-      "pan; scroll it to zoom.",
+      "Off by default, so the diagram opens clean. The map button in the " +
+      "bottom-right pill — or M — shows the whole diagram in thumbnail " +
+      "with your viewport marked. Drag it to pan; scroll it to zoom.",
     icon: MapIcon,
   },
   {

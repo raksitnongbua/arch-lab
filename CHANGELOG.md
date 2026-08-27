@@ -64,6 +64,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The minimap and the zoom controls now share the bottom-right corner of every
+  canvas, with the map docked above the controls that drive it. Five canvases
+  moved their zoom pill from the bottom left; the ER and data-dictionary
+  viewers already sat there. The drag-mode toggle keeps the bottom-left corner
+  on its own.
+
+- The minimap is off until asked for. A map button at the left of the zoom pill
+  — or **M** — shows and hides it on the two C4 canvases, so a diagram opens
+  with nothing on it but the diagram. The choice is not remembered: every visit
+  starts clean.
+
 - The canvas lock catches the light while it holds. A soft highlight now rakes
   across the locked padlock every few seconds — a gloss passing over a polished
   surface — so the locked state reads at the edge of vision while you present

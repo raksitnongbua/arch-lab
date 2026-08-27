@@ -101,6 +101,7 @@ import { FrameLayer } from "./frame-layer";
 import { CreateNodeDialog } from "./overlays/create-node-dialog";
 import { QuickAddMenu } from "./overlays/quick-add-menu";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
+import { useMinimap } from "@/components/ui/use-minimap";
 
 import { ZoomIndicator } from "./zoom-indicator";
 
@@ -329,6 +330,8 @@ function sameNodes(
 }
 
 function CanvasInner(): React.JSX.Element {
+  /* Closed on arrival, summoned with the button or `m` — `use-minimap.ts`. */
+  const minimap = useMinimap();
   const activeDiagramId = useEditorStore((s) => s.activeDiagramId);
   // Frames follow their members, so this re-reads on every model change. The
   // selector returns the stored diagram object, which is referentially stable
@@ -1060,8 +1063,11 @@ function CanvasInner(): React.JSX.Element {
             halves of "where am I / how close am I" in opposite corners. */}
         <Panel position="bottom-right">
           <div className="flex flex-col items-end gap-2">
-            <CanvasMinimap />
-            <ZoomIndicator />
+            {minimap.open ? <CanvasMinimap /> : null}
+            <ZoomIndicator
+              minimapOpen={minimap.open}
+              onMinimapToggle={minimap.toggle}
+            />
           </div>
         </Panel>
       </ReactFlow>

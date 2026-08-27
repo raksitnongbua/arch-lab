@@ -130,6 +130,7 @@ import { ViewerModeToggle, type CanvasDragMode } from "./viewer-mode-toggle";
 import { ViewerNodePalette } from "./viewer-node-palette";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
+import { useMinimap } from "@/components/ui/use-minimap";
 import { useModKey } from "@/lib/mod-key";
 
 import { ViewerZoomControls } from "./viewer-zoom-controls";
@@ -1284,6 +1285,9 @@ function ViewerCanvasInner({
    * held focus — and never existed on touch, which has no Space key. Plain
    * state, no ref twin: nothing reads it mid-gesture, because Pan mode works
    * by DETACHMENT rather than by a per-press bail. */
+  /* The minimap is closed on arrival and summoned — see `use-minimap.ts`
+     for why a presentation surface does not open with a thumbnail on it. */
+  const minimap = useMinimap();
   const [dragMode, setDragMode] = useState<CanvasDragMode>("select");
 
   /* ---- editing: the marquee — several elements in one gesture ---------------
@@ -2714,8 +2718,11 @@ function ViewerCanvasInner({
               column owns the corner instead of the map pinning itself. */}
           <Panel position="bottom-right">
             <div className="flex flex-col items-end gap-2">
-              <CanvasMinimap />
-              <ViewerZoomControls />
+              {minimap.open ? <CanvasMinimap /> : null}
+              <ViewerZoomControls
+                minimapOpen={minimap.open}
+                onMinimapToggle={minimap.toggle}
+              />
             </div>
           </Panel>
           {/* The gesture clause is here as well as in the zoom pill's menu, and

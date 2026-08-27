@@ -32,6 +32,7 @@ import { Scan, ZoomIn, ZoomOut } from "lucide-react";
 import { useReactFlow, useViewport } from "@xyflow/react";
 
 import { IconStyleToggle } from "@/components/ui/icon-style-toggle";
+import { MinimapToggle } from "@/components/ui/minimap-toggle";
 import { ZoomMenu } from "@/components/ui/zoom-menu";
 import {
   ZOOM_BUTTON_CLASSES,
@@ -44,7 +45,13 @@ import { duration } from "@/features/editor/lib/motion";
 
 import { FIT_PADDING, MAX_ZOOM } from "../lib/canvas-constants";
 
-export function ViewerZoomControls(): React.JSX.Element {
+export function ViewerZoomControls({
+  minimapOpen,
+  onMinimapToggle,
+}: {
+  minimapOpen: boolean;
+  onMinimapToggle: () => void;
+}): React.JSX.Element {
   const { fitView, zoomTo, getZoom } = useReactFlow();
   const { zoom } = useViewport();
   const percent = Math.round(zoom * 100);
@@ -59,6 +66,7 @@ export function ViewerZoomControls(): React.JSX.Element {
 
   return (
     <div className={ZOOM_PILL_CLASSES}>
+      <MinimapToggle open={minimapOpen} onToggle={onMinimapToggle} />
       <button
         type="button"
         onClick={() => step(-1)}
