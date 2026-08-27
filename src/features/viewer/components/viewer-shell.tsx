@@ -2,9 +2,9 @@
 
 /**
  * The view-mode page body: the view-only canvas, with a slim strip under it
- * naming the model (title, read-only badge, and — on a host that cannot edit
- * in place — the way into the playground) — plus the two ways the canvas can
- * take the whole screen:
+ * naming the model (title, description, and — on a host that cannot edit in
+ * place — the way into the playground) — plus the two ways the canvas can take
+ * the whole screen:
  *
  *  1. Native fullscreen — the Fullscreen API on this shell's root element,
  *     feature-detected, state tracked through `fullscreenchange` so the
@@ -423,10 +423,25 @@ export function ViewerShell({
               <TitleTag className="truncate text-lg font-semibold tracking-tight text-foreground">
                 {frozenModel.title}
               </TitleTag>
-              <Badge variant="accent">
-                <span className="size-1.5 rounded-full bg-accent" />
-                View mode · read-only
-              </Badge>
+              {/* NO STATE TAG HERE. This carried "View mode · read-only" beside
+                  the title, unconditionally, and the shell has two hosts: the
+                  bundled `/live/[modelId]` page, which cannot be edited, and
+                  the playground, which passes edit handlers whenever the reader
+                  has the canvas unlocked. Unlocking therefore put "Editable" in
+                  the strip above the canvas and "read-only" in the strip below
+                  it, a screen apart, at the same time — the exact illegibility
+                  the lock exists to prevent, arriving from a direction
+                  `canvas-lock.ts` was not watching.
+
+                  Gating it on `edit` would have made it honest and left it
+                  pointless: a tag reading "View mode" on the page the reader is
+                  already looking at. The state has ONE home, the strip above
+                  the canvas, where `canvasStateLabel` is its single source and
+                  the padlock sits beside the diagram it governs. Even on the
+                  bundled page the tag was not the last word, since that page
+                  offers `EditModeLink` — "read-only" beside a link to go and
+                  edit it. Do not reintroduce a state word here;
+                  `check:canvas-edit` fails if one appears. */}
             </div>
             <p className="mt-0.5 max-w-2xl truncate text-sm leading-relaxed text-muted-foreground">
               {frozenModel.description}
