@@ -25,6 +25,15 @@
  * A sequence document has no sub-diagrams, so its viewer simply omits the
  * `diagram` props and the whole affordance disappears — nothing is faked.
  *
+ * TWO THINGS THE SHARER PICKS, and both are minted into the URL rather than
+ * stored anywhere: an expiry (payload links only — a bundled model has no
+ * payload to expire) and whether the link OPENS IMMERSIVE (`?i=1`, the one
+ * query parameter a share link carries — see `immersive-param.ts`). Both are
+ * off by default, and both follow the same contract: the value is passed into
+ * `buildLink` as an argument, never read from state inside it, because a
+ * choice that does not rebuild the URL leaves Copy handing over a link that
+ * disagrees with the panel. That bug shipped once, for the expiry.
+ *
  * Honesty about limits, in the codec's tiers (see the reasoning on the
  * constants in `codec.ts`): under `SHARE_URL_SAFE_LENGTH` the link is handed
  * out clean; up to `MAX_SHARE_URL_LENGTH` it is handed out WITH a caveat
@@ -57,6 +66,7 @@ import {
   shareDigestFor,
   type ShareExpiry,
 } from "./codec";
+import { immersiveQuery } from "./immersive-param";
 import { mintExpiry } from "./mint-expiry";
 import { parseDurationList } from "./duration";
 import { canVerifyExpiry } from "./signature";
@@ -210,6 +220,12 @@ export function ShareButton({
   /** Seconds; null = never expires, which stays the default (opt-in). */
   const [ttlSeconds, setTtlSeconds] = useState<number | null>(null);
   /**
+   * Mint a link that opens immersive — the diagram filling the window, no site
+   * chrome. Off by default: a link that swallows the rest of the app is a
+   * choice the sharer makes for a presentation, never one they inherit.
+   */
+  const [openImmersive, setOpenImmersive] = useState(false);
+  /**
    * A link is on screen and a newer one is being built. Distinct from the
    * `building` status: that one has nothing to show, this one has something
    * STALE to show, and the difference decides whether the panel may be torn
@@ -249,6 +265,9 @@ export function ShareButton({
    * `handleTtlChange` already rebuilds on its own.
    */
   const ttlRef = useRef<number | null>(null);
+  /** The immersive choice, readable from the rebuild effect for the same
+   * reason as `ttlRef`: that effect fires for a CHANGED DOCUMENT only. */
+  const immersiveRef = useRef(false);
   /**
    * Whether a link is already on screen. A ref, not the `link` state, so
    * `buildLink` can branch on it without taking `link` as a dependency — that
@@ -266,7 +285,7 @@ export function ShareButton({
    * immediately with the value it just set, without waiting for a re-render.
    */
   const buildLink = useCallback(
-    (ttl: number | null) => {
+    (ttl: number | null, immersive: boolean) => {
       buildTokenRef.current += 1;
       const token = buildTokenRef.current;
 
@@ -277,9 +296,13 @@ export function ShareButton({
             : "";
         // A bundled link points at a model that ships with the app; there is no
         // payload to expire, so the TTL control is not offered for these.
+        // Immersive IS offered: it describes how the page opens, which has
+        // nothing to do with where the document came from.
         setLink({
           status: "ready",
-          url: `${window.location.origin}/live/${share.modelId}${suffix}`,
+          url:
+            `${window.location.origin}/live/${share.modelId}` +
+            `${immersiveQuery(immersive)}${suffix}`,
           expiresAt: null,
           overSafeLength: false,
         });
@@ -336,7 +359,11 @@ export function ShareButton({
         // Minted against the viewer's own route (`/live/c4`, `/live/sequence`)
         // rather than the legacy `/live#m=` — the chooser still forwards old
         // links, but new links skip that hop and land on their parser directly.
-        const url = `${window.location.origin}${route}#${fragment}`;
+        // The query sits BEFORE the fragment, which is the only order a URL
+        // has: everything after the first `#` is the fragment, so `?i=1`
+        // appended to the end would become part of the payload and the
+        // version check would refuse the link.
+        const url = `${window.location.origin}${route}${immersiveQuery(immersive)}#${fragment}`;
         const tooLong = url.length > MAX_SHARE_URL_LENGTH;
         hasLinkRef.current = !tooLong;
         setLink(
@@ -353,8 +380,8 @@ export function ShareButton({
         setRebuilding(false);
       })();
     },
-    // `ttlSeconds` is deliberately NOT a dependency: the value arrives as an
-    // argument, so this callback is stable across dropdown changes.
+    // Neither choice is a dependency: both arrive as arguments, so this
+    // callback stays stable across a dropdown change and a checkbox press.
     [share, route, diagramId, includeDiagram],
   );
 
@@ -364,16 +391,29 @@ export function ShareButton({
       return;
     }
     setCopied(false);
-    buildLink(ttlSeconds);
+    buildLink(ttlSeconds, openImmersive);
     setOpen(true);
-  }, [open, buildLink, ttlSeconds]);
+  }, [open, buildLink, ttlSeconds, openImmersive]);
 
   /** Change the expiry and rebuild at once — the fix for the stale-link bug. */
   const handleTtlChange = useCallback(
     (next: number | null) => {
       setTtlSeconds(next);
       ttlRef.current = next;
-      buildLink(next);
+      buildLink(next, immersiveRef.current);
+    },
+    [buildLink],
+  );
+
+  /** Same contract as the expiry: set it and rebuild in one go, with the value
+   * passed in rather than read from state. A checkbox that left the URL on
+   * screen — and the one Copy hands over — describing the PREVIOUS choice is
+   * the exact bug the `ttl` parameter above was added to kill. */
+  const handleImmersiveChange = useCallback(
+    (next: boolean) => {
+      setOpenImmersive(next);
+      immersiveRef.current = next;
+      buildLink(ttlRef.current, next);
     },
     [buildLink],
   );
@@ -404,7 +444,7 @@ export function ShareButton({
     const payloadText = share.text;
     if (payloadText === builtPayloadRef.current) return;
     const timer = window.setTimeout(() => {
-      buildLink(ttlRef.current);
+      buildLink(ttlRef.current, immersiveRef.current);
     }, REBUILD_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [open, share, buildLink]);
@@ -577,6 +617,40 @@ export function ShareButton({
                   </p>
                 )
               ) : null}
+
+              {/* HOW THE LINK OPENS, offered for both share kinds: immersive
+                  describes the arrival, not the payload, so a bundled model's
+                  plain page address takes it too (`?i=1` — five characters).
+                  A NATIVE checkbox in a label, matching the native select
+                  below rather than inventing a switch beside it.
+                  Off by default. A link that hides the rest of the site is a
+                  decision the sharer makes for a presentation; inheriting it
+                  is how `/live/[modelId]` used to strand readers with no
+                  visible way back, which is why that default was removed. */}
+              <div className="mt-3 flex flex-col gap-1.5">
+                <label
+                  htmlFor={`${panelId}-immersive`}
+                  className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                >
+                  <span>Open immersive</span>
+                  <input
+                    id={`${panelId}-immersive`}
+                    type="checkbox"
+                    checked={openImmersive}
+                    onChange={(event) => {
+                      handleImmersiveChange(event.target.checked);
+                    }}
+                    className="size-3.5 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  />
+                </label>
+                {openImmersive ? (
+                  <p className="text-xs text-muted-foreground">
+                    The {noun} fills the recipient&rsquo;s window with the site
+                    chrome hidden. Escape brings it back — they are not stuck
+                    there.
+                  </p>
+                ) : null}
+              </div>
 
               {/* Offered only for payload links (a bundled link has no payload
                   to expire) and only where the deployment can verify — without

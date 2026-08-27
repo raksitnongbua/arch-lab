@@ -281,6 +281,7 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
 export function ViewPlayground({
   seed,
   initialText,
+  initialImmersive = false,
   initialSourceCollapsed = SOURCE_FOLDED_BY_DEFAULT,
   initialCanvasLocked = CANVAS_LOCKED_BY_DEFAULT,
 }: {
@@ -304,6 +305,23 @@ export function ViewPlayground({
    * folded is that default and what the toggle owes the reader in return.
    */
   initialSourceCollapsed?: boolean;
+  /**
+   * A share link that asked to open immersive (`?i=1` — see
+   * `viewer/share/immersive-param.ts`). Read from the QUERY by the route, so
+   * the first painted byte is already immersive: a mode applied after
+   * hydration shows the reader the site chrome and then takes it away, which
+   * is the arrival a presentation link exists to avoid.
+   *
+   * A STARTING MODE, never a lock. It seeds this page's own immersive state
+   * for the sequence, flowchart, use-case, ER and dictionary canvases and the
+   * shell's `defaultImmersive` for a C4 one, and every way out — the toggle,
+   * the Escape ladder — works exactly as it does without the param.
+   *
+   * Defaults to `false` rather than to a shared constant because there is no
+   * stored preference behind it: unlike the fold and the lock below, nothing
+   * remembers immersive between visits. It is off unless a link asked.
+   */
+  initialImmersive?: boolean;
   /**
    * The reader's stored canvas lock, read from the request cookie by the route
    * that mounts this — same server-side reasoning as the rail fold above, and
@@ -417,23 +435,45 @@ export function ViewPlayground({
    * without re-registering — a re-registered window listener moves to the
    * back of the listener order, BEHIND the viewers' rung-2 listeners, and
    * the Escape ladder would run bottom-up. The C4 shell brings its own
-   * immersive control, so this pair drives the other three canvases only. */
+   * immersive control, so this pair drives every OTHER canvas. */
 
-  const [isImmersive, setIsImmersive] = useState(false);
-  const immersiveRef = useRef(false);
+  /* Seeded from the link's `?i=1`, but only when the mounted canvas is one
+     this page owns immersive for. A C4 seed means the shell below owns it —
+     starting `true` here as well would make the effect that enforces that
+     ownership announce "Immersive mode off" on arrival, over a shell that had
+     just opened immersive. Same rule as the effect, applied at mount. */
+  const immersiveOnMount = initialImmersive && doc.kind !== "c4";
+  const [isImmersive, setIsImmersive] = useState(immersiveOnMount);
+  const immersiveRef = useRef(immersiveOnMount);
 
-  const setImmersive = useCallback((next: boolean) => {
+  /**
+   * The state write on its own, with no announcement.
+   *
+   * Split out because a share link's `?i=1` is not a click: it arrives with an
+   * announcement of its own ("Opened a document from a share link…"), and two
+   * writes to one polite live region in the same tick means the reader hears
+   * only the second. The arrival path folds the Escape hint into that one
+   * sentence instead; see `openFromHash` below.
+   */
+  const applyImmersive = useCallback((next: boolean) => {
     immersiveRef.current = next;
     setIsImmersive(next);
-    // The page's ONE polite live region carries this too — same channel as
-    // parse results, and the two never race (parsing is debounced, this is
-    // a click).
-    setAnnouncement(
-      next
-        ? "Immersive mode on — the diagram fills the window and the source pane is hidden. Press Escape to exit (a focused message clears first)."
-        : "Immersive mode off — the source pane is back.",
-    );
   }, []);
+
+  const setImmersive = useCallback(
+    (next: boolean) => {
+      applyImmersive(next);
+      // The page's ONE polite live region carries this too — same channel as
+      // parse results, and the two never race (parsing is debounced, this is
+      // a click).
+      setAnnouncement(
+        next
+          ? "Immersive mode on — the diagram fills the window and the source pane is hidden. Press Escape to exit (a focused message clears first)."
+          : "Immersive mode off — the source pane is back.",
+      );
+    },
+    [applyImmersive],
+  );
 
   useEffect(() => {
     if (!isImmersive) return;
@@ -656,9 +696,25 @@ export function ViewPlayground({
             setShellEpoch((epoch) => epoch + 1);
           } else {
             setSharedInitialDiagram(null);
+            /* The link's immersive request, re-applied now the KIND is known.
+               The C4 branch above needs nothing: the shell it remounts takes
+               `defaultImmersive` and owns the mode itself. This branch does,
+               because the effect that enforces that ownership drops this
+               page's copy of immersive whenever the document is C4 — and the
+               seed on screen while the fragment decoded is C4 by default, so
+               a shared sequence flow would otherwise have arrived with the
+               request already thrown away. */
+            applyImmersive(initialImmersive);
           }
           setAnnouncement(
-            "Opened a document from a share link — nothing was uploaded; the pane holds its source.",
+            "Opened a document from a share link — nothing was uploaded; the pane holds its source." +
+              /* ONE sentence, not a second announcement: the live region is
+                 polite and a second write in the same tick replaces the
+                 first. Immersive hides the way out, so a reader who cannot
+                 see the toggle is told the key that works. */
+              (initialImmersive
+                ? " The link opens it immersive — press Escape to bring the page back."
+                : ""),
           );
           return;
         }
@@ -684,7 +740,7 @@ export function ViewPlayground({
       cancelled = true;
       window.removeEventListener("hashchange", onHashChange);
     };
-  }, [adoptDocument]);
+  }, [adoptDocument, applyImmersive, initialImmersive]);
 
   /* ---- keeping the URL shareable as you edit ---------------------------- */
   /**
@@ -739,7 +795,14 @@ export function ViewPlayground({
             : null,
         );
         if (cancelled) return;
-        const url = `${window.location.origin}${window.location.pathname}#${fragment}`;
+        /* THE QUERY IS PART OF THE LENGTH, and part of the link. `?i=1` says
+           the page opens immersive, so an address bar meant to be copyable
+           has to keep it — and it costs characters the ceiling below counts,
+           exactly as the Share panel counts them. (A bare `#…` resolves
+           against the current URL and keeps the query on its own; only the
+           refusal branch, which writes a whole path, could drop it.) */
+        const { pathname, search } = window.location;
+        const url = `${window.location.origin}${pathname}${search}#${fragment}`;
         // Past the share HARD ceiling — not the handoff guard — because the
         // address bar's whole point here is to be copyable as a link: it must
         // track what the Share panel would hand over, and clear rather than
@@ -748,7 +811,7 @@ export function ViewPlayground({
           null,
           "",
           url.length > MAX_SHARE_URL_LENGTH
-            ? window.location.pathname
+            ? `${pathname}${search}`
             : `#${fragment}`,
         );
       })();
@@ -1638,6 +1701,14 @@ export function ViewPlayground({
                   titleAs="h2"
                   model={doc.synced.model}
                   initialDiagramId={sharedInitialDiagram ?? undefined}
+                  /* The link's `?i=1`, handed to the canvas that owns
+                     immersive for a C4 document. Passed on every mount of
+                     this shell rather than consumed once: the URL still says
+                     immersive, so a remount (a share payload arriving, or a
+                     deep-linked diagram vanishing from the text) honours it
+                     again. Escape and the shell's own toggle leave it, as
+                     they do for a reader who pressed the button. */
+                  defaultImmersive={initialImmersive}
                   share={{ kind: "payload", text: doc.synced.aftText }}
                   onDiagramChange={handleDiagramChange}
                   /* The playground can always edit a C4 document, even while

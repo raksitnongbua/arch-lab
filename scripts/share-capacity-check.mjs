@@ -99,6 +99,9 @@ const {
   MAX_SHARE_URL_LENGTH,
   SHARE_URL_SAFE_LENGTH,
 } = await loadModule("src/features/viewer/share/codec.ts");
+const { immersiveFromSearch, immersiveQuery } = await loadModule(
+  "src/features/viewer/share/immersive-param.ts",
+);
 const { createShareLink } = await loadModule("src/features/mcp/tools/share.ts");
 
 const readSource = (relative) =>
@@ -560,6 +563,86 @@ await check("a minted link round-trips the document", async () => {
   assert.equal(decoded.status, "ok");
   assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
 });
+
+await check(
+  "an immersive link keeps its payload readable, and every host reads the param",
+  async () => {
+    /* `?i=1` is the ONE query parameter a share link carries, and it sits in
+       the one place a URL allows: before the `#`. Appending it after the
+       fragment would fold `?i=1` into the payload, whose version check would
+       then refuse the whole link — a mode option silently breaking the
+       document it decorates. Built the way the panel builds it and decoded
+       back, so the ORDER is what is proved, not the string. */
+    const url = `https://example.test/live${immersiveQuery(true)}#${FROZEN_SEQ_FRAGMENT}`;
+    const parsed = new URL(url);
+    assert.equal(parsed.pathname, "/live", "immersive must not move the route");
+    assert.equal(
+      immersiveFromSearch(parsed.search),
+      true,
+      "the minted query must read back as an immersive request",
+    );
+    const decoded = await decodeShareFragment(parsed.hash);
+    assert.equal(decoded.status, "ok", "the payload must still decode");
+    assert.equal(decoded.aftText, FROZEN_SEQ_TEXT);
+
+    /* BOTH ROUTES A SHARE LINK LANDS ON must honour it, and they read it
+       differently for a reason worth pinning: `/live` reads `searchParams` on
+       the server so immersive is in the first painted byte, while
+       `/live/[modelId]` is statically prerendered for every bundled model and
+       reads the live URL on the client instead — taking `searchParams` there
+       would opt all of them out of prerendering. A host that mints the option
+       and then ignores it is the failure this covers. */
+    const playgroundRoute = readSource("src/app/live/page.tsx");
+    assert.ok(
+      playgroundRoute.includes("immersiveFromParam") &&
+        playgroundRoute.includes("initialImmersive="),
+      "/live must turn ?i=1 into the playground's starting mode",
+    );
+    assert.ok(
+      playgroundRoute.includes("params[SHARE_PARAM_IMMERSIVE]"),
+      '/live must key off the exported constant, not a retyped "i"',
+    );
+    const bundled = readSource(
+      "src/features/viewer/components/viewer-bundled-view.tsx",
+    );
+    assert.ok(
+      bundled.includes("immersiveFromSearch") &&
+        bundled.includes("defaultImmersive="),
+      "/live/[modelId] must honour ?i=1 on the client",
+    );
+    assert.ok(
+      !readSource("src/app/live/[modelId]/page.tsx").includes("searchParams"),
+      "reading searchParams there would drop every bundled model's prerender",
+    );
+
+    /* The panel must pass the choice as an ARGUMENT, the way it already does
+       for the expiry. Reading it from state inside `buildLink` is the shipped
+       bug that check exists for: the URL on screen — and the one Copy hands
+       over — kept describing the PREVIOUS choice. */
+    const panel = readSource("src/features/viewer/share/share-button.tsx");
+    assert.match(
+      panel,
+      /buildLink = useCallback\(\s*\(ttl: number \| null, immersive: boolean\)/,
+      "both share options must reach buildLink as arguments",
+    );
+    /* BOTH SHARE KINDS, named separately: the option describes the arrival,
+       not the payload, so a bundled model's plain page address carries it too
+       — and one call site passing while the other silently dropped it is a
+       panel whose checkbox works for half the documents it is offered on.
+       Each is asserted as the whole template so the QUERY-BEFORE-FRAGMENT
+       order is pinned at the site that writes it. */
+    assert.ok(
+      panel.includes(
+        "${window.location.origin}${route}${immersiveQuery(immersive)}#${fragment}",
+      ),
+      "a payload link must mint the query before its fragment",
+    );
+    assert.ok(
+      panel.includes("${immersiveQuery(immersive)}${suffix}"),
+      "a bundled link must mint the query before its #d= suffix",
+    );
+  },
+);
 
 await check("merging the playground shortened every minted URL", async () => {
   /* `/live/seq` existed to spend 5 fewer characters than `/live/sequence`
