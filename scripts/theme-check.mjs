@@ -25,6 +25,15 @@
  * while this was written: the luminance formula wants LINEAR sRGB, and
  * gamma-decoding it a second time reported 1.45:1 where the file says 3.61:1.
  *
+ * AND THEN REACHABILITY, which is a third way a theme fails invisibly: a
+ * complete, legible palette nobody can select is not offered. The picker lives
+ * in the site header, and immersive mode covers the site header with a fixed
+ * canvas — so for the length of the one mode built for presenting a diagram to
+ * a room, every theme in `THEMES` was unreachable. That is the mode where the
+ * choice matters most (a projector is not a laptop screen), and the only way
+ * out was to leave the mode. The last section scans the two hosts that own an
+ * immersive strip and pins the control into both of them.
+ *
  * Exits non-zero on any failure. Run with: pnpm check:themes
  */
 
@@ -231,6 +240,52 @@ for (const [theme, tokens] of palettes) {
     `${theme}: every measured pair clears its minimum`,
     failed.length === 0,
     failed.join("; "),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Reachability — the picker survives the mode that hides the site header    */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nthe picker is reachable in immersive mode");
+
+/* COMMENTS STRIPPED, the `canvas-edit-check.mjs` precaution: every one of these
+   patterns is also DESCRIBED in prose beside the code it pins, so a scan over
+   the raw source would match the sentence saying what the code does and pass
+   with the code deleted. */
+const readCode = (rel) =>
+  read(rel)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+check(
+  "the site header still carries the picker, unconditionally",
+  /<ThemeToggle\s*\/>/.test(readCode("src/components/layout/header.tsx")),
+  "the header's copy is the one every non-immersive route relies on; the " +
+    "immersive strips below are a second home, not a replacement",
+);
+
+/* THE TWO HOSTS THAT OWN AN IMMERSIVE STRIP, and it is exactly two: the C4
+   shell (which every C4 host mounts — the playground, the bundled model page)
+   and the playground's section for the other five notations. A third would
+   need adding here; `purpose.md` fixes the order of work for a new notation and
+   this is one of the surfaces it lands on. */
+for (const host of [
+  "src/features/viewer/components/viewer-shell.tsx",
+  "src/features/playground/components/view-playground.tsx",
+]) {
+  const code = readCode(host);
+  /* GATED ON THE MODE, opening UPWARD, in one pattern — because the two
+     failures are different and both silent. Ungated, the strip shows a second
+     picker on every screen that already has one in the header. Anchored
+     `top-full`, the menu opens off the bottom of the viewport from a footer
+     strip and the reader sees a sliver of its first row. */
+  check(
+    `${host.split("/").pop()} offers the picker while immersive, opening upward`,
+    /isImmersive \?\s*\(\s*<ThemeToggle[\s\S]{0,400}?panelSide="up"/.test(code),
+    "either the picker is not gated on immersive (a second copy of a control " +
+      'the header already carries) or it is not passing panelSide="up" (a menu ' +
+      "opening off the bottom of the pane it was opened from)",
   );
 }
 

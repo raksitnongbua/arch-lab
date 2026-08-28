@@ -80,6 +80,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { buttonClasses, Button } from "@/components/ui/button";
 import {
   CANVAS_LOCK_COPY,
@@ -1981,6 +1982,19 @@ export function ViewPlayground({
                           onAnnounce={setAnnouncement}
                         />
                       </>
+                    ) : null}
+                    {/* THE THEME, AND ONLY WHILE IMMERSIVE — the same control
+                        in the same place as the C4 shell's footer (see the note
+                        there for the whole argument). Ghost to match this
+                        strip's own buttons rather than the shell's outlined
+                        ones: the border and the card ground are what the site
+                        header needs to separate it from the nav, and this row
+                        has nothing to be separated from. */}
+                    {isImmersive ? (
+                      <ThemeToggle
+                        panelSide="up"
+                        triggerClassName="size-8 border-transparent bg-transparent backdrop-blur-none hover:border-transparent hover:bg-transparent"
+                      />
                     ) : null}
                     <button
                       type="button"

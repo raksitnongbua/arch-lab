@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 
 import { useBrowserCapability } from "@/lib/browser-capability";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
@@ -557,6 +558,24 @@ export function ViewerShell({
             >
               <Waves aria-hidden="true" />
             </button>
+            {/* THE THEME, AND ONLY WHILE IMMERSIVE. The site header carries this
+                control everywhere else, and a second copy of it in this strip
+                would be two ways to the same menu on the same screen. Immersive
+                is the one state where the header is not reachable — it is
+                behind a fixed canvas — and it is also the state where the
+                choice matters most: a diagram on a projector in a bright room
+                wants a different ground from the same diagram on a laptop, and
+                until now the only way to change it was to leave the mode you
+                had just entered to present.
+
+                Upward, at the row's own height: the menu would otherwise open
+                off the bottom of the viewport from a footer strip, and a 36px
+                square would be the tallest thing in a row of `h-8` controls.
+                Its Escape is consumed by the menu, so it costs the immersive
+                ladder nothing — one press shuts the menu, the next exits. */}
+            {isImmersive ? (
+              <ThemeToggle panelSide="up" triggerClassName="size-8" />
+            ) : null}
             <button
               type="button"
               onClick={() => setImmersive(!isImmersive)}

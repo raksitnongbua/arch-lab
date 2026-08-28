@@ -90,9 +90,37 @@ const THEME_META: Record<
  *
  * Dismissal is the `ui/zoom-menu.tsx` arrangement: Escape closes,
  * pointerdown-outside closes, no focus trap. A short list of radio rows under a
- * button is not a dialog.
+ * button is not a dialog. That Escape is CONSUMED, which is what lets this
+ * control sit inside immersive mode without arming a trap: one press shuts the
+ * menu, the next reaches the viewer's own Escape ladder and leaves the mode.
+ *
+ * IT HAS TWO HOMES. The site header is one; the other is the strip under an
+ * immersive diagram, where the header is behind a fixed canvas and the theme
+ * would otherwise be unreachable in the one mode meant for presenting — the
+ * mode where a reader is most likely to want a different ground, because the
+ * diagram is on somebody else's projector. `triggerClassName` and `panelSide`
+ * exist for that second home; nothing else about the control changes.
  */
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({
+  className,
+  triggerClassName,
+  panelSide = "down",
+}: {
+  className?: string;
+  /* THE HOST'S METRICS, because this control has two homes with different
+     ones. In the site header it is a 36px square beside a 36px nav toggle
+     (`layout/header.tsx` forces that button's height for the same reason). In
+     the strip under an immersive diagram it stands in a row of `h-8` controls,
+     ghost on the playground's strip and outline on the C4 shell's — so the
+     host passes the size and, where it matters, the border. One prop rather
+     than a `variant` union: there are two callers, and neither wants a name
+     for its combination. */
+  triggerClassName?: string;
+  /* Which way the menu opens, the same prop and the same reason as
+     `viewer/share/share-button.tsx`: opened from a footer strip, a menu
+     anchored `top-full` opens off the bottom of the pane. */
+  panelSide?: "up" | "down";
+}) {
   const { theme, setTheme } = useTheme();
   const hydrated = useIsHydrated();
   const [open, setOpen] = useState(false);
@@ -140,6 +168,7 @@ export function ThemeToggle({ className }: { className?: string }) {
           "af-theme-toggle relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground backdrop-blur",
           "transition-colors duration-200 hover:border-foreground/25 hover:bg-card hover:text-foreground",
           "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+          triggerClassName,
         )}
       >
         {/* Both icons are always mounted and cross-fade on the `dark:` variant,
@@ -174,7 +203,10 @@ export function ThemeToggle({ className }: { className?: string }) {
           id={menuId}
           role="menu"
           aria-label="Theme"
-          className="af-glass absolute top-full right-0 z-50 mt-1.5 min-w-52 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+          className={cn(
+            "af-glass absolute right-0 z-50 min-w-52 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg",
+            panelSide === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
+          )}
         >
           {THEMES.map((name) => {
             const meta = THEME_META[name];
