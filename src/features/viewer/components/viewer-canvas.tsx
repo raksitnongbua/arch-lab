@@ -817,8 +817,10 @@ function ViewerCanvasInner({
   onDiagramChange,
   edit,
   lockSlot,
+  immersive = false,
 }: {
   model: ViewerModel;
+  immersive?: boolean;
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
   edit?: CanvasEditHandlers;
@@ -2730,7 +2732,15 @@ function ViewerCanvasInner({
               reader who tries it concludes the wheel does not zoom and never
               reaches for the modifier. The failure looks like an answer, which
               is the one case worth saying twice. */}
-          <Panel position="bottom-center" className="hidden sm:block">
+          <Panel
+            position="bottom-center"
+            /* A plain ternary, not `cn(… && "!hidden")`: the base class is
+               already `hidden` at small widths, so the immersive branch is the
+               SAME class with the `sm:` escape removed — expressing that as an
+               override would need `!important` to beat a variant that is only
+               conditionally there. */
+            className={immersive ? "hidden" : "hidden sm:block"}
+          >
             <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
               Click an <span className="font-medium text-primary">element</span>{" "}
               or <span className="font-medium text-primary">connector</span> for
@@ -2777,6 +2787,7 @@ export function ViewerCanvas({
   onDiagramChange,
   edit,
   lockSlot,
+  immersive,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -2797,6 +2808,20 @@ export function ViewerCanvas({
    * handlers, so a lock gated on them could never be pressed to undo itself.
    */
   lockSlot?: React.ReactNode;
+  /**
+   * True while the host has the view fixed over the whole viewport.
+   *
+   * The canvas uses it for ONE thing: the gesture sentence at the bottom
+   * centre stops rendering. That sentence exists because a plain wheel pans
+   * this canvas, so a reader who tries it concludes the wheel does not zoom —
+   * a silent failure worth saying twice. Immersive is the case where the
+   * second telling stops being worth it: the view has been fixed over the
+   * screen to be PRESENTED, the people looking at it are usually not the
+   * person driving, and the zoom pill's own menu still carries the clause for
+   * whoever is. `check:viewer-motion` reads both sentences out of this file,
+   * so hiding one here cannot quietly delete it.
+   */
+  immersive?: boolean;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
@@ -2806,6 +2831,7 @@ export function ViewerCanvas({
         onDiagramChange={onDiagramChange}
         edit={edit}
         lockSlot={lockSlot}
+        immersive={immersive}
       />
     </ReactFlowProvider>
   );
