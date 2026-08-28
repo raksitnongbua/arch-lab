@@ -80,6 +80,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- The toolbar under a sequence, flowchart, use-case, ER or data-dictionary
+  diagram is now built to the same metrics as the one under a C4 diagram. It
+  had the pane's top-strip padding instead of the C4 footer's, so the same
+  buttons sat in a row 8px shorter with a quarter of the side padding, against a
+  different ground — and the Immersive button and the theme dial were borderless
+  in a row of bordered ones. Most visible in immersive mode, where Share and
+  Export are hidden and that row is the whole toolbar. A reader switches
+  notation by typing, so the chrome around the drawing no longer moves when they
+  do.
+
+- The theme menu no longer gets cut off when it opens from an immersive diagram
+  on a short screen. Eight rows opening upward could run past the top of the
+  pane, which clips them with no scrollbar to say anything was missing.
+
 - Clicking an element on an editable C4 canvas works again. The change that
   made a bare drag draw a selection box claimed any press that landed
   _inside_ the pane — and React Flow renders every node inside it — so
