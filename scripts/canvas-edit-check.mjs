@@ -5485,6 +5485,16 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
      So both halves are asserted separately: the gestures stay behind the gate,
      and the container stays outside it.
 
+     ONE OTHER GATE IS LEGITIMATE, and only one: immersive mode, where the row
+     stops rendering at all. The rule this section defends is that a row must
+     not appear or vanish INSIDE a stable layout, because that re-fits a
+     pane-fitted drawing at a different scale. Entering immersive takes the
+     whole pane out of flow and re-fits the drawing by definition, so a row
+     removed on that transition costs nothing the transition was not already
+     spending. `edit` has no such excuse and stays forbidden — which is what
+     these assertions measure, so the immersive gate needs no exception in
+     them.
+
      WHAT THE STRIP HOLDS CHANGED, AND THESE ASSERTIONS FOLLOWED IT. The ten
      labelled glyphs and the caveat used to BE the strip's contents, scrolling
      sideways in the row. Three surfaces taught that same list — the page's
@@ -5497,15 +5507,22 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
      spelling anchored on `h-7`, so removing the height made the block "not
      found" and failed every assertion here identically — a break has to name
      the thing it broke. The strip is the one `hidden … sm:flex` row in the
-     file; its close is the next `</div>` at the row's own indent. The caveat is
-     no longer the landmark it was: it moved into the panel, which is a SIBLING
-     of the strip rather than a child (see the clipping assertion below), so
-     anchoring on it would now walk past the end of the row. */
+     file. The caveat is no longer the landmark it was: it moved into the panel,
+     which is a SIBLING of the strip rather than a child (see the clipping
+     assertion below), so anchoring on it would now walk past the end of the
+     row.
+
+     THE CLOSING TAG IS MATCHED AT ANY INDENT, and hard-coding eight spaces was
+     a bug this file shipped for one commit: wrapping the row in a conditional
+     re-indents it, so every assertion in this section failed at once and none
+     named the thing that had actually changed — the exact fault the paragraph
+     above was written about, committed in the fix for it. The row contains no
+     nested `</div>`, so the first close at any indent is its own. */
   const stripAt = /<div className="hidden[^"]*sm:flex"/.exec(viewer);
   const strip =
     stripAt === null
       ? ""
-      : (/^[\s\S]{0,1600}?\n        <\/div>/.exec(
+      : (/^[\s\S]{0,1600}?\n\s*<\/div>/.exec(
           viewer.slice(stripAt.index),
         )?.[0] ?? "");
   /* READ THE TEXT BEFORE THE CONTAINER, not the container itself. The first

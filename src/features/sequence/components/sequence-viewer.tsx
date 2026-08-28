@@ -259,6 +259,7 @@ export function SequenceViewer({
   file,
   onAnnounce,
   extraTourSteps,
+  immersive = false,
   tour: tourEnabled = true,
   edit,
   lockSlot,
@@ -282,6 +283,27 @@ export function SequenceViewer({
    * storage key covers every host: the tour is about the viewer, not a route.
    */
   extraTourSteps?: readonly TourStep[];
+  /**
+   * True while the host has this pane fixed over the whole viewport.
+   *
+   * BOTH FOOTER ROWS STOP RENDERING — the reading hints and the affordance
+   * strip. Immersive is the mode whose own control is labelled "hide the site
+   * chrome", and this viewer was answering that with two bands of text under
+   * the drawing; embedded in another canvas as an iframe, that read as more
+   * chrome than diagram. The C4 shell makes the same trade for the same reason
+   * (`viewer-shell.tsx`), and what survives is what a presenter still needs:
+   * the zoom pill, the padlock, and the host's way out.
+   *
+   * THE FIXED-HEIGHT RULE IS NOT BROKEN BY THIS, though it looks like it might
+   * be. That rule exists because a row appearing or disappearing INSIDE a
+   * stable layout re-fits a pane-fitted drawing at a different scale — which is
+   * what pressing Edit used to do. Entering immersive already relays the whole
+   * pane out of flow (`fixed inset-0`) and re-fits the drawing by definition,
+   * so removing a row on that transition costs nothing that the transition was
+   * not already spending. The gate must never move to `edit`, which is the
+   * case that has no such excuse; `check:canvas-edit` still forbids it.
+   */
+  immersive?: boolean;
   /**
    * Whether this viewer offers the tour at all. On by default — every page
    * that exists to SHOW a flow wants it.
@@ -2348,7 +2370,18 @@ export function SequenceViewer({
           the least discoverable thing in the viewer — a 10px minus in a card
           corner, explained only by the accessible name of a control a mouse
           user never hears. */}
-      <p className="hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block">
+      <p
+        className={
+          /* Gone while immersive — see the prop. A plain ternary rather than a
+             `cn(… && "!hidden")`: the base is already `hidden` below `sm`, so
+             the immersive branch is that same class with the escape removed,
+             and expressing it as an override would need `!important` to beat a
+             variant that is only conditionally present. */
+          immersive
+            ? "hidden"
+            : "hidden border-t border-border bg-card px-4 py-1.5 text-xs text-muted-foreground sm:block"
+        }
+      >
         Click a message, participant, or fragment chip to focus it · a{" "}
         <span aria-hidden="true">•</span> after a label means that message
         carries details · ← → move between messages ·{" "}
@@ -2428,70 +2461,79 @@ export function SequenceViewer({
           anchored inside it would be clipped on both axes; anchoring to a
           `relative` parent instead lets the panel open UPWARD over the diagram,
           which also keeps it out of the layout and away from the re-fit. */}
+      {/* THE WRAPPER STAYS MOUNTED, its CONTENTS go. An empty `relative
+          shrink-0` div contributes no height, so immersive loses the band
+          either way — but keeping the element means the strip's own classes,
+          and the assertions that read them, sit at one indentation forever
+          instead of shifting every time this gate changes. */}
       <div ref={guideWrapperRef} className="relative shrink-0">
-        {guideOpen ? (
-          <div
-            id={guidePanelId}
-            className="absolute bottom-full left-2 z-30 mb-1 max-h-[min(24rem,60svh)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg"
-          >
-            <ul className="space-y-2">
-              {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
-                const Glyph = GUIDE_GLYPH[gesture.icon];
-                return (
-                  <li
-                    key={gesture.handler}
-                    className="flex items-start gap-2 text-xs leading-relaxed"
-                  >
-                    <Glyph
-                      aria-hidden="true"
-                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                    />
-                    <span className="min-w-0">
-                      {/* THE FULL PATH IS THE BODY NOW, not a `title`
+        {immersive ? null : (
+          <>
+            {guideOpen ? (
+              <div
+                id={guidePanelId}
+                className="absolute bottom-full left-2 z-30 mb-1 max-h-[min(24rem,60svh)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-lg"
+              >
+                <ul className="space-y-2">
+                  {SEQUENCE_MOUSE_GESTURES.map((gesture) => {
+                    const Glyph = GUIDE_GLYPH[gesture.icon];
+                    return (
+                      <li
+                        key={gesture.handler}
+                        className="flex items-start gap-2 text-xs leading-relaxed"
+                      >
+                        <Glyph
+                          aria-hidden="true"
+                          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                        />
+                        <span className="min-w-0">
+                          {/* THE FULL PATH IS THE BODY NOW, not a `title`
                           attribute. In the row it was hover-only — invisible to
                           a touch reader and to anyone who did not think to
                           hover — because a 28px row had nowhere to put it. A
                           panel does, so the long half stops being demoted. */}
-                      <span className="font-medium text-foreground">
-                        {gesture.label}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {" "}
-                        — {gesture.mouse}
-                      </span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-            {/* THE CAVEAT STAYS, and stays last — it is the only entry about
+                          <span className="font-medium text-foreground">
+                            {gesture.label}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {" "}
+                            — {gesture.mouse}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {/* THE CAVEAT STAYS, and stays last — it is the only entry about
                 what dragging does NOT do, so it has no glyph to lead with, and
                 it is what a reader arriving from a drawing tool needs before
                 their first drag. */}
-            <p className="mt-3 border-t border-border pt-2 text-xs leading-relaxed text-muted-foreground/80">
-              {SEQUENCE_MOUSE_GUIDE_CAVEAT}
-            </p>
-          </div>
-        ) : null}
-        <div className="hidden h-7 shrink-0 items-center gap-x-3 overflow-x-auto border-t border-border bg-card px-4 text-xs whitespace-nowrap text-muted-foreground sm:flex">
-          {edit === undefined ? (
-            <span>{SEQUENCE_READ_ONLY_HINT}</span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setGuideOpen(!guideOpen)}
-              aria-expanded={guideOpen}
-              aria-controls={guidePanelId}
-              /* A DISCLOSURE, so `aria-expanded` rather than `aria-pressed`:
+                <p className="mt-3 border-t border-border pt-2 text-xs leading-relaxed text-muted-foreground/80">
+                  {SEQUENCE_MOUSE_GUIDE_CAVEAT}
+                </p>
+              </div>
+            ) : null}
+            <div className="hidden h-7 shrink-0 items-center gap-x-3 overflow-x-auto border-t border-border bg-card px-4 text-xs whitespace-nowrap text-muted-foreground sm:flex">
+              {edit === undefined ? (
+                <span>{SEQUENCE_READ_ONLY_HINT}</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setGuideOpen(!guideOpen)}
+                  aria-expanded={guideOpen}
+                  aria-controls={guidePanelId}
+                  /* A DISCLOSURE, so `aria-expanded` rather than `aria-pressed`:
                  what changes is a region appearing, which is the fact a screen
                  reader needs, and the button's own words stay a verb. */
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            >
-              <Keyboard aria-hidden="true" className="size-3.5 shrink-0" />
-              <span>How to edit this diagram</span>
-            </button>
-          )}
-        </div>
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <Keyboard aria-hidden="true" className="size-3.5 shrink-0" />
+                  <span>How to edit this diagram</span>
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Text alternative: the whole story as an ordered list, for readers
