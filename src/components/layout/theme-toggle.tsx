@@ -5,6 +5,7 @@ import {
   Check,
   Contrast,
   Layers,
+  Monitor,
   Moon,
   MoonStar,
   Palette,
@@ -20,6 +21,12 @@ import {
 } from "react";
 
 import { THEMES, type Theme } from "@/lib/constants";
+import { themeForScheme } from "@/lib/theme-default";
+import {
+  useFollowSystem,
+  usePrefersDark,
+  writeFollowSystem,
+} from "@/lib/theme-follow";
 import { cn } from "@/lib/utils";
 
 const NOOP_SUBSCRIBE = () => () => {};
@@ -98,6 +105,12 @@ const THEME_META: Record<
  * control sit inside immersive mode without arming a trap: one press shuts the
  * menu, the next reaches the viewer's own Escape ladder and leaves the mode.
  *
+ * IT OFFERS EIGHT ROWS FOR SEVEN THEMES. The first hands the decision back to
+ * the machine (`System`) and the rest name a palette; `lib/theme-default.ts`
+ * owns that preference and explains why it is a flag beside the theme rather
+ * than an eighth entry in `THEMES`. Only one row is ever ticked: a followed
+ * palette is named in the System row's hint, never by a second tick.
+ *
  * IT HAS TWO HOMES. The site header is one; the other is the strip under an
  * immersive diagram, where the header is behind a fixed canvas and the theme
  * would otherwise be unreachable in the one mode meant for presenting — the
@@ -127,6 +140,8 @@ export function ThemeToggle({
 }) {
   const { theme, setTheme } = useTheme();
   const hydrated = useIsHydrated();
+  const follows = useFollowSystem();
+  const prefersDark = usePrefersDark();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -152,11 +167,25 @@ export function ThemeToggle({
     };
   }, [open]);
 
-  const current = hydrated ? (theme as Theme | undefined) : undefined;
-  const label =
-    current === undefined
-      ? "Theme"
-      : `Theme — ${THEME_META[current]?.label ?? current}`;
+  const following = hydrated ? follows : false;
+  /* THE PINNED THEME, or `undefined` while the reader is following. Both rows
+     cannot be ticked at once — the group is `menuitemradio` and there is one
+     answer to "what did you choose" — so a followed palette is named in the
+     System row's own hint rather than by a second tick further down the list. */
+  const current =
+    hydrated && !following ? (theme as Theme | undefined) : undefined;
+  const resolved = THEME_META[themeForScheme(prefersDark)].label;
+  /* WHAT THE TRIGGER ANNOUNCES, and it has to distinguish the two states: a
+     reader on VoiceOver who is following the system and one who pinned high
+     contrast both used to hear the same palette name, so the button gave no way
+     to tell whether anything would change when the machine did. */
+  const label = !hydrated
+    ? "Theme"
+    : following
+      ? `Theme — follows your system (${resolved})`
+      : current === undefined
+        ? "Theme"
+        : `Theme — ${THEME_META[current]?.label ?? current}`;
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
@@ -212,43 +241,99 @@ export function ThemeToggle({
             panelSide === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
           )}
         >
+          {/* FIRST, AND SEPARATED, because it is a different KIND of answer:
+              every row below names a palette, this one hands the decision back
+              to the machine. It is also the row a reader arrives already on —
+              the default follows the system (`lib/theme-default.ts`) — so a
+              menu that opened with `Light` ticked would have misrepresented the
+              page on a first visit.
+
+              ITS HINT NAMES WHAT IT CURRENTLY RESOLVES TO, which is the whole
+              reason this row can exist without a `.system` palette: the class
+              on <html> is always a real theme, so the row has something true to
+              say instead of a mode nobody can see the value of. */}
+          <ThemeRow
+            Icon={Monitor}
+            label="System"
+            hint={`Follows your system · ${resolved.toLowerCase()} right now`}
+            checked={following}
+            onSelect={() => {
+              writeFollowSystem(true);
+              setTheme(themeForScheme(prefersDark));
+              setOpen(false);
+            }}
+          />
+          <span aria-hidden="true" className="my-1 block h-px bg-border" />
           {THEMES.map((name) => {
             const meta = THEME_META[name];
-            const isCurrent = current === name;
             return (
-              <button
+              <ThemeRow
                 key={name}
-                type="button"
-                role="menuitemradio"
-                aria-checked={isCurrent}
-                onClick={() => {
+                Icon={meta.Icon}
+                label={meta.label}
+                hint={meta.hint}
+                checked={current === name}
+                /* PINS, and the order matters: the flag has to be cleared
+                   before `setTheme`, because the root's `FollowSystemTheme`
+                   effect reads the flag when the OS changes and a reader who
+                   has just chosen a palette must not have it overwritten at
+                   sunset. */
+                onSelect={() => {
+                  writeFollowSystem(false);
                   setTheme(name);
                   setOpen(false);
                 }}
-                className={cn(
-                  "flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
-                  isCurrent ? "text-foreground" : "text-muted-foreground",
-                )}
-              >
-                <meta.Icon aria-hidden="true" className="size-4 shrink-0" />
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-xs font-medium">{meta.label}</span>
-                  <span className="text-[11px] leading-tight opacity-70">
-                    {meta.hint}
-                  </span>
-                </span>
-                <Check
-                  aria-hidden="true"
-                  className={cn(
-                    "ml-auto size-3.5 shrink-0",
-                    !isCurrent && "invisible",
-                  )}
-                />
-              </button>
+              />
             );
           })}
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One row of the menu.
+ *
+ * EXTRACTED WHEN THE SECOND KIND OF ROW ARRIVED, rather than copied: `System`
+ * and a palette differ only in what selecting them does, and the markup carries
+ * the radio semantics, the tick's reserved space (`invisible`, not absent, so
+ * the label column does not shift as the choice moves) and the two-line label.
+ * Two copies of that would be two places to keep a menu looking like one menu.
+ */
+function ThemeRow({
+  Icon,
+  label,
+  hint,
+  checked,
+  onSelect,
+}: {
+  Icon: typeof Sun;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={checked}
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
+        checked ? "text-foreground" : "text-muted-foreground",
+      )}
+    >
+      <Icon aria-hidden="true" className="size-4 shrink-0" />
+      <span className="flex min-w-0 flex-col">
+        <span className="text-xs font-medium">{label}</span>
+        <span className="text-[11px] leading-tight opacity-70">{hint}</span>
+      </span>
+      <Check
+        aria-hidden="true"
+        className={cn("ml-auto size-3.5 shrink-0", !checked && "invisible")}
+      />
+    </button>
   );
 }

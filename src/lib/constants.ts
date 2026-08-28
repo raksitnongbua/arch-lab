@@ -150,11 +150,11 @@ export type Theme = (typeof THEMES)[number];
  * in `marketing/og/card.tsx` with it: it is derived from whatever this says, by
  * hand, and `check:og-cards` only pins the lane colours.
  *
- * THE PICKER NO LONGER NAMES A DEFAULT. Its `contrast` row used to read "The
- * default", and that stopped being true for half of all readers the moment the
- * default started following `prefers-color-scheme` — a menu row cannot say
- * which of two it is without reading the preference itself, and the row that
- * would say it is the one the reader is already looking at. */
+ * THE PICKER NAMES THE DEFAULT AS A STATE, not as a palette. Its `contrast` row
+ * used to read "The default", which stopped being true for half of all readers
+ * the moment the default started following `prefers-color-scheme`. The word
+ * moved to the `System` row, which is the state a first-time reader is actually
+ * in and can say what it currently resolves to — see `lib/theme-default.ts`. */
 export const DEFAULT_THEME: Theme = "contrast";
 
 /**
@@ -179,6 +179,24 @@ export const DEFAULT_THEME_BY_SCHEME: Record<"light" | "dark", Theme> = {
 
 /** localStorage key next-themes persists the choice under. */
 export const THEME_STORAGE_KEY = "arch-lab-theme";
+
+/**
+ * localStorage key for "let my system decide", the picker's `System` row.
+ *
+ * A SECOND KEY RATHER THAN A SEVENTH THEME NAME. next-themes owns
+ * `THEME_STORAGE_KEY` and stamps whatever it finds there onto <html> as a class,
+ * so a value of `"system"` would need a `.system` palette in `globals.css` —
+ * the light tokens normally and the contrast tokens under a media query, which
+ * is a second copy of a palette this repo already has (`dry.md`). Keeping the
+ * follow flag beside the theme instead means the class on <html> is always a
+ * real palette, `THEMES` stays a list of palettes, and every `check:themes`
+ * assertion that iterates it keeps its meaning.
+ *
+ * `"1"` means follow; absent means the reader pinned a theme. Both states are
+ * written explicitly — see `lib/theme-default.ts`, which sets the flag on the
+ * first visit so that "no flag" can only ever mean a deliberate choice.
+ */
+export const THEME_FOLLOW_STORAGE_KEY = "arch-lab-theme-follow";
 
 /* -------------------------------------------------------------------------- */
 /* C4 level presentation                                                       */
