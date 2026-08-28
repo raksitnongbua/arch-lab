@@ -11,11 +11,7 @@ import {
   SHARE_FORWARD_ATTRIBUTE,
   SHARE_PARAM_MODEL,
 } from "@/features/viewer/share/codec";
-import {
-  APP_DESCRIPTION,
-  APP_NAME,
-  CANVAS_EDIT_ENABLED,
-} from "@/lib/constants";
+import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
 import "./globals.css";
 
@@ -31,34 +27,42 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-/* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and six document
-   kinds will not fit in them. So it names the two categories people search by
-   name ("C4 diagram tool", "sequence diagram as text") and then a general
-   phrase that covers the rest, rather than truncating a list of six mid-way.
-   The full set is named in the home page's notation cards, in the JSON-LD
-   `featureList` derived from them, and in `/llms.txt`, where there is room for
-   it — NOT in `APP_DESCRIPTION`, which used to carry it and gave the
-   enumeration up to stay inside its own budget (see the note there).
+/* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and it used to
+   spend them on "beautiful C4 and sequence diagram editor" — an enumeration of
+   TWO while six notations shipped. A reader who arrived for a flowchart, a use
+   case, an ER diagram or a data dictionary read a title saying this site does
+   not draw one. `APP_DESCRIPTION` gave its own enumeration up for exactly this
+   reason (see the note there); the title was the last budgeted surface still
+   counting, and it was counting to two.
 
-   IT ALSO HAS TO SELL, which the previous wording did not. "C4, sequence and
-   flowchart editor" was three of four kinds and a category noun — a true
-   sentence that gives a reader no reason to prefer this over the twenty other
-   results saying the same thing. The one word that does is the one the project
-   is actually about (see `.claude/rules/purpose.md`: presentation is the
-   product), and it is a phrase people already type — "beautiful C4 diagram"
-   has been in `keywords` below for exactly that reason, while being absent from
-   the one field that ranks. Now it leads.
+   SO THE LIST WENT AND THE PROMISE TOOK ITS PLACE. "architecture diagrams"
+   covers all six without naming any, and the space it buys goes to what the
+   project is actually sold on (`.claude/rules/purpose.md`: presentation is the
+   product) — the same claim the home page's H1 makes ("Architecture diagrams
+   you can present"), and the reason the playground route is called `/live`.
 
-   Both variants stay under the budget: 51 and 53 characters. Measure any
-   replacement before shipping it.
+   NO ADJECTIVE, AND THAT IS A CHOICE WITH A COST. The slot held "beautiful",
+   which was not a matter of taste: "beautiful C4 diagram" is a phrase people
+   type, it is in `keywords` below for that reason, and an adjective is the
+   usual way a title earns a click against twenty results describing the same
+   category. What replaced it is a claim rather than a boast — "built to be
+   presented" says what the product is FOR, which no competitor's title says
+   and which a reader can check against the page in one scroll. The quality
+   claim did not disappear from the site; it moved to the surfaces with room
+   to back it up, the hero copy and the notation cards.
 
-   SOURCED FROM `CANVAS_EDIT_ENABLED` since `/editor` was retired and
-   `EDITOR_ENABLED` with it. "Editor" is a claim about a canvas you can move
-   things on, and the page that offers one is the playground — so the word
-   appears in the title exactly while that canvas ships. */
-const DEFAULT_TITLE = CANVAS_EDIT_ENABLED
-  ? `${APP_NAME} — beautiful C4 and sequence diagram editor`
-  : `${APP_NAME} — beautiful C4 and sequence diagrams as text`;
+   THE NAMES ARE STILL SOMEWHERE WITH ROOM — the home page's notation cards, the
+   JSON-LD `featureList` derived from them, `/llms.txt`, and `/live`'s own
+   description, which names all six because that is the route ranking for them.
+
+   IT NO LONGER BRANCHES ON `CANVAS_EDIT_ENABLED`. That branch existed because
+   "editor" is a claim about a canvas you can move things on, so the word had to
+   disappear with the flag. The title makes no editing claim now, leaving the
+   flag nothing to gate here; the editing claim lives on the home page and on
+   `/live`, both of which do read it.
+
+   Measured at 54 characters. Measure any replacement before shipping it. */
+const DEFAULT_TITLE = `${APP_NAME} — architecture diagrams built to be presented`;
 
 export const metadata: Metadata = {
   // The same resolution order share links use (env override → Vercel
@@ -99,6 +103,11 @@ export const metadata: Metadata = {
     "C4 diagram you can zoom",
     "drill-down C4 diagram",
     "presentation-ready architecture diagram",
+    // Added with the title's own move to presentation: the phrases that match
+    // what the title now promises, so the vocabulary here and the field that
+    // ranks say the same thing.
+    "live architecture diagram",
+    "present architecture diagrams",
     "architecture diagram as code",
     "diagram as code",
     "software architecture diagram",

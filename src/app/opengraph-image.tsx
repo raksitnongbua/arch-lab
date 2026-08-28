@@ -32,6 +32,13 @@ import { APP_NAME } from "@/lib/constants";
  * so no crawler reads a word of it, and the notations are named in the page copy
  * and the structured data where a crawler does.
  *
+ * THE HEADLINE IS THE HOME PAGE'S H1, deliberately the same sentence. It used
+ * to read "that survive review", which is the line the H1 dropped for being
+ * written at someone who already believed in diagrams-as-text — a newcomer's
+ * question is "why not draw.io", and the answer is that this one is meant to be
+ * PRESENTED (`.claude/rules/purpose.md`). A social card is the first surface a
+ * stranger meets, so it is the last place that argument should be the old one.
+ *
  * WHAT IT DELIBERATELY DOES NOT SAY is which notations, or that a sequence drag
  * is a REORDER rather than a position. That distinction needs a sentence
  * (`CANVAS_EDITING_PASSAGE`) and this frame has room for a phrase, so promising
@@ -42,7 +49,7 @@ import { APP_NAME } from "@/lib/constants";
  * `features/marketing/og/card.tsx`.
  */
 
-export const alt = `${APP_NAME} — architecture diagrams as plain text`;
+export const alt = `${APP_NAME} — architecture diagrams you can present`;
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
 
@@ -51,7 +58,7 @@ export default function OpenGraphImage() {
     <OgCard
       eyebrow=".alab — plain text on disk"
       headline="Architecture diagrams"
-      headlineTail="that survive review."
+      headlineTail="you can present."
       footer={`${APP_NAME} · six notations · text or canvas`}
       art={<OgKindMix />}
     />,
