@@ -209,6 +209,20 @@ export const SEQUENCE_MOUSE_GUIDE_CAVEAT =
  * one action, and a legend of eight gestures a reader cannot use yet would be
  * the "shipped control nobody can find" failure inverted — eight they can see
  * and none they can do.
+ *
+ * NAMING THE CONTROL ONLY WORKS WHILE THE NAME IS TRUE, and this sentence
+ * stopped being true without anything failing. It read "press Edit above" from
+ * when the lock was a labelled button in the strip over the canvas; the product
+ * owner moved it onto the canvas as an icon-only padlock at the top right, and
+ * the sentence kept pointing at a control that had neither that name nor that
+ * position. It was found in a screenshot of an embed, not by a check — exactly
+ * the "prose in the past tense of a control that had moved" failure the header
+ * above describes, committed by the line written to prevent it.
+ *
+ * The twin is `CANVAS_LOCK_COPY` in the playground, which is where the padlock
+ * and its wording live. This cannot import it — that would be a deep import
+ * into another feature (`dry.md`) — so it is hand-kept: if the lock moves
+ * corner or grows a label, this sentence moves with it.
  */
 export const SEQUENCE_READ_ONLY_HINT =
-  "Read-only — press Edit above to change this diagram on the canvas.";
+  "Read-only — the padlock at the top right of the diagram unlocks it.";

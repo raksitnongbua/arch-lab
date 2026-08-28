@@ -398,6 +398,7 @@ export function ViewerShell({
           onDiagramChange={handleDiagramChange}
           edit={edit}
           lockSlot={lockSlot}
+          immersive={isImmersive}
         />
         {/* First visit it opens itself (remembered per browser — see
             components/ui/tour.tsx for the persistence verdicts); the strip's
@@ -417,7 +418,15 @@ export function ViewerShell({
       </div>
 
       <header className="border-t border-border/60 bg-background">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+        <div
+          className={cn(
+            "mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 sm:flex-row sm:items-center sm:justify-between sm:px-8",
+            /* Tighter while immersive, because the row is shorter there — the
+               description is gone, so nothing in it is taller than an `h-8`
+               control and `py-3` was padding a line that is no longer set. */
+            isImmersive ? "py-2" : "py-3",
+          )}
+        >
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <TitleTag className="truncate text-lg font-semibold tracking-tight text-foreground">
@@ -443,9 +452,30 @@ export function ViewerShell({
                   edit it. Do not reintroduce a state word here;
                   `check:canvas-edit` fails if one appears. */}
             </div>
-            <p className="mt-0.5 max-w-2xl truncate text-sm leading-relaxed text-muted-foreground">
-              {frozenModel.description}
-            </p>
+            {/* NOT WHILE IMMERSIVE, and the reason is the mode's own promise:
+                the control that opens it is labelled "hide the site chrome",
+                and this strip was answering that by keeping a title, a
+                description and five buttons on screen. The description is the
+                line with the weakest claim on the space — it is `truncate`d, so
+                past roughly sixty characters it ends in an ellipsis nobody can
+                resolve. A sentence you cannot finish reading, in the mode that
+                exists to clear everything but the drawing, is height spent on
+                nothing.
+
+                THE TITLE STAYS. A diagram put on a screen in front of an
+                audience still has to say what it is, and one line is what
+                immersive can afford; it is also all that is left naming the
+                model once the site chrome is gone.
+
+                Found from an embed: dropped into a Miro board as an iframe,
+                the strip read as oversized chrome around somebody else's
+                canvas — the case where every line of it has to earn its
+                place. */}
+            {isImmersive ? null : (
+              <p className="mt-0.5 max-w-2xl truncate text-sm leading-relaxed text-muted-foreground">
+                {frozenModel.description}
+              </p>
+            )}
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">

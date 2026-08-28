@@ -1786,48 +1786,52 @@ export function ViewPlayground({
                     the canvas editable) and the one under the diagram is about
                     the DIAGRAM (share it, export it, fill the screen with it).
                     They were one row briefly; merging them made the toggle read
-                    as a fourth action and the state word as a label on it. */}
-                <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-1">
-                  {/* The rail toggle sits with the CANVAS, not with the rail
-                      it hides: a control that vanishes along with the thing
-                      it controls cannot bring it back. */}
-                  {isImmersive ? null : (
+                    as a fourth action and the state word as a label on it.
+
+                    GONE ENTIRELY WHILE IMMERSIVE, where it used to survive as a
+                    band carrying one sentence: "Immersive — Escape exits (a
+                    focused message clears first)". Both controls in it are
+                    about the pane, and immersive has removed the pane from the
+                    page — there is no rail to unfold and the padlock on the
+                    canvas states the lock. The sentence it carried is not lost:
+                    entering immersive announces it to the live region in full,
+                    and the Exit button's own name is "Exit immersive mode
+                    (Escape at the top level)". A whole row for a sentence the
+                    button beside it already says is the trade this mode is
+                    least able to afford — it was the first of five bands
+                    stacked around a sequence diagram embedded in a Miro
+                    board. */}
+                {isImmersive ? null : (
+                  <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-1">
+                    {/* The rail toggle sits with the CANVAS, not with the rail
+                        it hides: a control that vanishes along with the thing
+                        it controls cannot bring it back. */}
                     <SourceRailToggle
                       collapsed={sourceCollapsed}
                       onToggle={() => setSourceCollapsed(!sourceCollapsed)}
                       sourceLabel="document source"
                     />
-                  )}
-                  {/* Same one word as the C4 strip, from the same helper — see
-                      the note there, and at the SAME END of the row: control on
-                      the left, state on the right, so a reader moving between a
-                      C4 document and a sequence one finds each in one place.
-
-                      `ml-auto` where the C4 strip uses `justify-between`, and
-                      the difference is not cosmetic: this row's toggle is
-                      CONDITIONAL — immersive mode drops it — and
-                      `justify-between` with one child left the lone immersive
-                      hint hard against the left edge, which is the one state
-                      where the row says something the reader urgently needs.
-                      Pushing the span itself right holds the position whether
-                      or not the toggle is there.
-
-                      Immersive outranks the state word: the way out is the only
-                      thing a reader needs from this slot while the diagram
-                      covers the viewport. */}
-                  <span className="ml-auto truncate text-xs text-muted-foreground">
-                    {isImmersive
-                      ? "Immersive — Escape exits (a focused message clears first)"
-                      : showSequenceCanvasLock
+                    {/* Same one word as the C4 strip, from the same helper — see
+                        the note there, and at the SAME END of the row: control
+                        on the left, state on the right, so a reader moving
+                        between a C4 document and a sequence one finds each in
+                        one place. */}
+                    <span className="ml-auto truncate text-xs text-muted-foreground">
+                      {showSequenceCanvasLock
                         ? canvasStateLabel(canvasLocked)
                         : "Diagram"}
-                  </span>
-                </div>
+                    </span>
+                  </div>
+                )}
                 {doc.kind === "sequence" ? (
                   <SequenceViewer
                     file={doc.file}
                     onAnnounce={setAnnouncement}
                     extraTourSteps={PLAYGROUND_TOUR_STEPS}
+                    /* Immersive takes this viewer's own two footer rows away —
+                       see the prop. The other four canvases in this branch have
+                       no footer chrome of their own, so they need nothing. */
+                    immersive={isImmersive}
                     edit={sequenceEdit}
                     /* THE SAME LOCK as the C4 branch's, in the branch a
                        sequence document actually renders in — it gates
