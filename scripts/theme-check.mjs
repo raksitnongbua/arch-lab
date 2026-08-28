@@ -31,8 +31,19 @@
  * canvas — so for the length of the one mode built for presenting a diagram to
  * a room, every theme in `THEMES` was unreachable. That is the mode where the
  * choice matters most (a projector is not a laptop screen), and the only way
- * out was to leave the mode. The last section scans the two hosts that own an
+ * out was to leave the mode. One section below scans the two hosts that own an
  * immersive strip and pins the control into both of them.
+ *
+ * AND THE DEFAULT, which is not a palette question at all but is decided in the
+ * same two files. It follows `prefers-color-scheme` now, resolved into a real
+ * theme name before first paint (`lib/theme-default.ts`), and every part of
+ * that mechanism is invisible when it breaks: a seed that runs after
+ * next-themes reads storage is a write nobody consumes, a `System` row that
+ * does not set the flag is a row that forgets by the next load, and a
+ * `themeColor` left behind is a coloured bar around a differently-coloured
+ * page. What the script DOES is proved by `src/lib/theme-default.test.ts`,
+ * which executes the string; the last section pins the wiring no unit test can
+ * see.
  *
  * Exits non-zero on any failure. Run with: pnpm check:themes
  */
@@ -287,6 +298,122 @@ for (const host of [
       'the header already carries) or it is not passing panelSide="up" (a menu ' +
       "opening off the bottom of the pane it was opened from)",
   );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The default a first-time visitor gets, and the chrome around it          */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nthe system-derived default");
+
+/* ORDER IS THE WHOLE MECHANISM. `lib/theme-default.ts` writes the resolved
+   theme name into storage; next-themes' own blocking script then reads it. Both
+   are pre-paint, so if the seed ever renders AFTER `<Providers>` the read
+   happens first, the seed is a write nobody consumes, and every first-time
+   visitor silently goes back to one unconditional default — with nothing on
+   screen to show it. What the script DOES is proved by
+   `src/lib/theme-default.test.ts`, which executes the string; this pins where
+   it runs, which no unit test can see. */
+{
+  const layout = readCode("src/app/layout.tsx");
+  const seed = layout.indexOf('id="theme-default"');
+  const providers = layout.indexOf("<Providers>");
+  check(
+    "the seed script renders before <Providers>, where next-themes' script is",
+    seed !== -1 && providers !== -1 && seed < providers,
+    "the seed must run before next-themes reads storage; beforeInteractive puts " +
+      "it in <head> only while it is rendered above the provider that owns the " +
+      "body script",
+  );
+}
+
+/* THE PICKER OFFERS THE STATE, not just the palettes. Without a `System` row
+   the default is system-aware exactly once and there is no way back to
+   following — a reader who tries any other theme has silently pinned it
+   forever. And the row is only worth having if selecting it WRITES the flag,
+   which is the half a scan can catch: a row that merely applied the resolved
+   palette would look identical on the click and forget by the next load. */
+{
+  const picker = readCode("src/components/layout/theme-toggle.tsx");
+  check(
+    "the picker offers a System row that records the choice",
+    /label="System"/.test(picker) && /writeFollowSystem\(true\)/.test(picker),
+    "the System row is what makes following reachable a second time; setting " +
+      "the theme without setting the flag forgets by the next load",
+  );
+  check(
+    "choosing a palette pins it, clearing the flag",
+    /writeFollowSystem\(false\)/.test(picker),
+    "a palette chosen while following must clear the flag, or the root's OS " +
+      "listener overwrites the reader's choice the next time the system changes",
+  );
+}
+
+/* THE SERVER-SAFE HALF STAYS SERVER-SAFE. `lib/theme-default.ts` is imported by
+   the root layout, a server component, so it may not depend on React hooks —
+   the preference store lives in `lib/theme-follow.ts` for that reason. Turbopack
+   does fail the build on this, but only at `pnpm build`, and the fix is a file
+   split rather than a one-line edit: naming it here says why the two files
+   exist before somebody helpfully merges them back. */
+check(
+  "the module the root layout imports has no React dependency",
+  !/from "react"/.test(read("src/lib/theme-default.ts")),
+  "a server component cannot import a module that depends on hooks; the store " +
+    "and its hooks belong in lib/theme-follow.ts",
+);
+
+/* THE LIVE HALF, MOUNTED ONCE AND AT THE ROOT. The pre-paint script covers
+   every load; the listener covers a system that changes with the page already
+   on screen. It belongs beside the provider because `ThemeToggle` mounts twice
+   on a playground route (the header and the immersive strip), and two listeners
+   would race to write the same value on every change. */
+check(
+  "the OS-change listener is mounted inside the provider, once",
+  /<FollowSystemTheme \/>/.test(readCode("src/app/providers.tsx")),
+  "without it, a reader following the system has to reload to see a change " +
+    "their machine made while the tab was open",
+);
+
+/* THE BROWSER CHROME AGREES WITH THE GROUND IT WRAPS. `viewport.themeColor` is
+   two hand-converted hex values keyed on `prefers-color-scheme` — the same
+   question the default is keyed on — and hand-converted is why this is checked:
+   the palette moves in `globals.css` and nothing else in the repo would notice
+   that the phone's title bar is still painting the old one. Measured, not
+   eyeballed, from the same oklch parser the contrast assertions use. */
+const hex = (oklch) => {
+  const parsed = parseOklch(oklch);
+  if (parsed === null) return null;
+  return `#${parsed.rgb
+    .map((channel) =>
+      Math.round(Math.min(1, Math.max(0, channel)) * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+};
+
+{
+  const layout = read("src/app/layout.tsx");
+  /* The two themes the default resolves to, in the order the media queries
+     name them: `:root` is what the `light` theme renders as (it has no block of
+     its own — see `tokensOf`), and `.contrast` is the dark side. */
+  for (const [scheme, selector] of [
+    ["light", "light"],
+    ["dark", "contrast"],
+  ]) {
+    const tokens = tokensOf(CSS, selector);
+    const expected = tokens === null ? null : hex(tokens.get("--background"));
+    const declared = new RegExp(
+      `media:\\s*"\\(prefers-color-scheme:\\s*${scheme}\\)"\\s*,\\s*color:\\s*"(#[0-9a-f]{6})"`,
+      "i",
+    ).exec(layout)?.[1];
+    check(
+      `themeColor for a ${scheme} system is the ${selector} palette's own ground`,
+      expected !== null && declared?.toLowerCase() === expected,
+      `viewport.themeColor declares ${declared ?? "nothing"} for ${scheme}; ` +
+        `the ${selector} palette's --background converts to ${expected ?? "an unparsed value"}`,
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */

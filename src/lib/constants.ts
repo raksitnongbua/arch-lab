@@ -123,8 +123,18 @@ export const THEMES = [
 export type Theme = (typeof THEMES)[number];
 
 /**
- * The theme a first-time visitor gets. A product decision, not an OS preference
- * — see `enableSystem={false}` in `app/providers.tsx`.
+ * The theme a first-time visitor gets WHEN THEIR SYSTEM PREFERS DARK, and the
+ * fallback whenever the preference cannot be read at all — see
+ * `DEFAULT_THEME_BY_SCHEME` below and `lib/theme-default.ts` for how it is
+ * resolved before first paint.
+ *
+ * IT USED TO BE THE ONLY DEFAULT, unconditionally, and the argument for that is
+ * recorded here because it was a real one: the default is a decision about what
+ * a diagram should be read on, not a reflection of what the OS happens to be
+ * set to. What it got wrong is the reader it was written for — someone who has
+ * told their machine they want light surfaces, and arrived at a near-black page
+ * with no way to know a picker existed. A default is a first guess, and the
+ * best available guess about a reader is the one they have already made.
  *
  * HIGH CONTRAST, not `dark`. `contrast` separates by OUTLINE rather than by
  * fill: its ground is `oklch(0.05 0 0)` and its cards sit 0.07 above that, so
@@ -136,15 +146,57 @@ export type Theme = (typeof THEMES)[number];
  * theme whose palette is tuned — the dark-grey ground at #1c1e24, the role fills
  * lifted 0.03 with brightened borders, the wash measured against its own
  * top stop — and none of that is what a visitor now sees first. `contrast` is
- * deliberately starker than beautiful. If this moves back, move the picker's
- * "The default" hint in `theme-toggle.tsx` and the OG palette in
- * `marketing/og/card.tsx` with it: both are derived from whatever this says, by
+ * deliberately starker than beautiful. If this moves back, move the OG palette
+ * in `marketing/og/card.tsx` with it: it is derived from whatever this says, by
  * hand, and `check:og-cards` only pins the lane colours.
- */
+ *
+ * THE PICKER NAMES THE DEFAULT AS A STATE, not as a palette. Its `contrast` row
+ * used to read "The default", which stopped being true for half of all readers
+ * the moment the default started following `prefers-color-scheme`. The word
+ * moved to the `System` row, which is the state a first-time reader is actually
+ * in and can say what it currently resolves to — see `lib/theme-default.ts`. */
 export const DEFAULT_THEME: Theme = "contrast";
+
+/**
+ * The default a first-time visitor gets, per `prefers-color-scheme`.
+ *
+ * TWO NAMED THEMES, not a light/dark pair invented for the occasion: both
+ * values are members of `THEMES`, so the reader's stored preference is always a
+ * theme the picker can show a tick beside, and every argument the palettes
+ * carry (`DEFAULT_THEME` above for the dark side) applies unchanged.
+ *
+ * WHY NOT next-themes' OWN `enableSystem`. It resolves the system preference to
+ * the literal names "light" and "dark" and then maps THAT through its `value`
+ * option — so asking it for high contrast under a dark system would also
+ * repaint the `dark` theme, which is a palette a reader can explicitly choose
+ * and a preference some already have stored. The mapping has to happen before
+ * next-themes sees a name, which is what `lib/theme-default.ts` does.
+ */
+export const DEFAULT_THEME_BY_SCHEME: Record<"light" | "dark", Theme> = {
+  light: "light",
+  dark: DEFAULT_THEME,
+};
 
 /** localStorage key next-themes persists the choice under. */
 export const THEME_STORAGE_KEY = "arch-lab-theme";
+
+/**
+ * localStorage key for "let my system decide", the picker's `System` row.
+ *
+ * A SECOND KEY RATHER THAN A SEVENTH THEME NAME. next-themes owns
+ * `THEME_STORAGE_KEY` and stamps whatever it finds there onto <html> as a class,
+ * so a value of `"system"` would need a `.system` palette in `globals.css` —
+ * the light tokens normally and the contrast tokens under a media query, which
+ * is a second copy of a palette this repo already has (`dry.md`). Keeping the
+ * follow flag beside the theme instead means the class on <html> is always a
+ * real palette, `THEMES` stays a list of palettes, and every `check:themes`
+ * assertion that iterates it keeps its meaning.
+ *
+ * `"1"` means follow; absent means the reader pinned a theme. Both states are
+ * written explicitly — see `lib/theme-default.ts`, which sets the flag on the
+ * first visit so that "no flag" can only ever mean a deliberate choice.
+ */
+export const THEME_FOLLOW_STORAGE_KEY = "arch-lab-theme-follow";
 
 /* -------------------------------------------------------------------------- */
 /* C4 level presentation                                                       */

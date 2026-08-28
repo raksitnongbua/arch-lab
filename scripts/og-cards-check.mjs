@@ -287,11 +287,21 @@ check(
 );
 
 check(
-  "the browser-chrome colour is the same ground",
+  "the browser chrome a dark system gets is the card's own ground",
   (() => {
-    /* `themeColor` paints the phone's own chrome around the page. A value left
-       behind by a theme change is a coloured bar around a differently-coloured
-       page, which is more noticeable on a phone than anything else on this list. */
+    /* `themeColor` paints the phone's own chrome around the page, and this card
+       is a single static PNG painted in `DEFAULT_THEME` — so the one reader who
+       sees the card and the chrome as one surface is the one on a dark system,
+       and for them the two hexes have to be the same. A value left behind by a
+       theme change is a coloured bar around a differently-coloured page, which
+       is more noticeable on a phone than anything else on this list.
+
+       IT READS THE DARK ENTRY, because `themeColor` is a media-keyed pair now:
+       the default follows `prefers-color-scheme` (`lib/theme-default.ts`), so a
+       single value would have wrapped a light page in this card's black. That
+       the LIGHT entry matches its own palette is measured in `check:themes`,
+       which owns the scheme map; what is asserted here is the half this card
+       has an opinion about. */
     const constants = read("src/lib/constants.ts");
     const theme = /DEFAULT_THEME: Theme = "([\w-]+)"/.exec(constants)?.[1];
     const selector = theme === "light" ? ":root" : `\\.${theme}`;
@@ -302,12 +312,13 @@ check(
     const want = tokenHex(
       new RegExp("^  --background: ([^;]+);", "m").exec(block?.[1] ?? "")?.[1],
     );
-    const got = /themeColor: "(#[0-9a-fA-F]{6})"/.exec(
-      read("src/app/layout.tsx"),
-    )?.[1];
+    const got =
+      /media: "\(prefers-color-scheme: dark\)", color: "(#[0-9a-fA-F]{6})"/.exec(
+        read("src/app/layout.tsx").replace(/\s+/g, " "),
+      )?.[1];
     return want !== null && got !== undefined && want === got.toLowerCase();
   })(),
-  "layout.tsx's themeColor must be DEFAULT_THEME's --background, converted",
+  "layout.tsx's dark themeColor entry must be DEFAULT_THEME's --background, converted",
 );
 
 check(

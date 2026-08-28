@@ -12,6 +12,7 @@ import {
   SHARE_PARAM_MODEL,
 } from "@/features/viewer/share/codec";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
+import { THEME_DEFAULT_SCRIPT } from "@/lib/theme-default";
 
 import "./globals.css";
 
@@ -138,14 +139,29 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // Single value on purpose: the app has ONE default theme regardless of the OS
-  // preference (enableSystem={false}), so keying this off prefers-color-scheme
-  // would paint light browser chrome around a dark page.
-  // Pure black because that is what `.contrast`'s `--background` — the default
-  // since this commit — converts to exactly: `oklch(0.05 0 0)` falls below the
-  // sRGB transfer function's linear segment. It reads as a deliberate choice on
-  // a phone rather than as a missing value, which is the risk with #000 here.
-  themeColor: "#000000",
+  /* TWO VALUES, keyed the same way the default theme now is. This was a single
+     "#000000", and the comment defending it said the app has one default theme
+     regardless of the OS preference — true then, wrong the moment
+     `lib/theme-default.ts` started resolving that default from
+     `prefers-color-scheme`. A light-preference reader would have got the light
+     page it now gives them, wrapped in black browser chrome.
+
+     THE COLOURS ARE THE TWO GROUNDS, converted by hand from the palettes the
+     default resolves to: `:root`'s `oklch(0.985 0.002 250)` is #f2f4f7, and
+     `.contrast`'s `oklch(0.05 0 0)` is exactly #000000 — it falls below the sRGB
+     transfer function's linear segment. Pure black reads as a deliberate choice
+     on a phone rather than as a missing value, which is the risk with #000 here.
+
+     WHAT THIS STILL CANNOT KNOW is a stored choice. A reader who picked `paper`
+     on a dark machine gets black chrome around a cream page, because a static
+     viewport export cannot read localStorage. That was true of the single value
+     too, for every reader whose theme was not the default; keying off the media
+     query makes it right for the one group it can be right for — everybody who
+     has not touched the picker. */
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f4f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
 };
 
 /**
@@ -215,6 +231,17 @@ export default function RootLayout({
           id="share-forward-flag"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: SHARE_FLAG_SCRIPT }}
+        />
+        {/* THE DEFAULT THEME, resolved from the reader's system preference
+            before anything paints. It has to run before next-themes' own
+            blocking script — which is inside `<Providers>`, in the body — and
+            `beforeInteractive` puts it in <head>, which is what guarantees the
+            order. The whole argument, including what it deliberately does NOT
+            do, is in `lib/theme-default.ts`. */}
+        <Script
+          id="theme-default"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: THEME_DEFAULT_SCRIPT }}
         />
         <Providers>
           {/* ONE Toaster, for the whole app. It lived in `editor-shell.tsx`,

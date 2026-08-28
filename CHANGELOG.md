@@ -9,6 +9,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- The theme picker opens with a **System** row, above the seven palettes. It is
+  where a reader starts, it says what it currently resolves to ("Follows your
+  system · light right now"), and it is the way back after picking a palette —
+  choosing any named theme pins it and stops the system deciding. Only one row
+  is ever ticked: while following, the palette in use is named in the System
+  row's own hint rather than by a second tick further down the list.
+
 - The theme picker is reachable in immersive mode, in the strip under the
   diagram, on all six notations. Immersive covers the site header — and with it
   the only theme control — so choosing a lighter ground for a bright room or a
@@ -87,6 +94,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   click it is rather than an empty selection box.
 
 ### Changed
+
+- The theme follows your system unless you tell it otherwise: **light** on a
+  machine set to light, **high contrast** on one set to dark. Before, everyone
+  landed on high contrast — so a reader who had told their machine they want
+  light surfaces met a near-black page and no reason to suspect a picker
+  existed. It is resolved before the first paint, so there is no flash of the
+  wrong palette, and it keeps following: change the system setting and the page
+  moves with it, with the tab open or on the next visit.
 
 - The site's search result and link preview say what the site is. The title
   read "beautiful C4 and sequence diagram editor" — two notations out of six,
