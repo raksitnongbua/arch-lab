@@ -87,6 +87,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Hide button and the canvas-state word stay above the diagram, where they
   were: they are about the pane, not the drawing.
 
+- Immersive mode on a C4 diagram now hides what it says it hides. The strip
+  under the diagram drops the model description — a line that was truncated
+  mid-sentence anyway — and the gesture hint over the canvas goes with it; the
+  title, the controls and the zoom pill's own copy of the hint all stay. The
+  strip is about a third shorter, which is what you notice when the view is
+  embedded in another canvas as an iframe.
+
 - The sequence canvas no longer keeps its ten editing gestures permanently on
   screen. The row under the diagram now offers **How to edit this diagram**,
   which opens the same list — and shows each gesture's full instruction, which
