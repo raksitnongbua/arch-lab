@@ -9,6 +9,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- The theme picker is reachable in immersive mode, in the strip under the
+  diagram, on all six notations. Immersive covers the site header — and with it
+  the only theme control — so choosing a lighter ground for a bright room or a
+  darker one for a projector meant leaving the mode you had just entered to
+  present. It appears only while immersive, since the header carries it
+  everywhere else, and its menu opens upward over the diagram. Escape closes
+  the menu first and exits immersive on the next press.
+
 - The Share panel offers "Open immersive": the link it mints opens the diagram
   filling the recipient's window with the site chrome hidden, for a diagram
   meant to be presented rather than read alongside its source. Off by default,
