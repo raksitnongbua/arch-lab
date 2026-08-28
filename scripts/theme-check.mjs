@@ -349,6 +349,20 @@ console.log("\nthe system-derived default");
   );
 }
 
+/* THE PANEL IS PLACED BY MEASUREMENT, not by a static side. `panelSide` is a
+   PREFERENCE now: the dial has two homes at opposite ends of the viewport and a
+   reader can be on a window shorter than the panel is tall, so a fixed
+   `bottom-full` put the list above the trigger whether or not there was room
+   above the trigger — the rows past the edge simply were not there, with no
+   scrollbar to say so. Reverting to a class-only side would restore that
+   silently, on the one screen size nobody tests. */
+check(
+  "the theme panel asks where it fits before it opens",
+  /placePanel\(/.test(readCode("src/components/layout/theme-toggle.tsx")),
+  "a class-only side cannot know whether there is room on that side; " +
+    "see components/ui/panel-placement.ts",
+);
+
 /* THE SERVER-SAFE HALF STAYS SERVER-SAFE. `lib/theme-default.ts` is imported by
    the root layout, a server component, so it may not depend on React hooks —
    the preference store lives in `lib/theme-follow.ts` for that reason. Turbopack
