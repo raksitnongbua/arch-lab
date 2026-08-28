@@ -80,6 +80,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The site's search result and link preview say what the site is. The title
+  read "beautiful C4 and sequence diagram editor" — two notations out of six,
+  so a search for a flowchart, a use case, an ER diagram or a data dictionary
+  found a title saying arch-lab does not draw one. It now reads "architecture
+  diagrams built to be presented", and the social card's headline is
+  the home page's own promise ("Architecture diagrams you can present")
+  instead of the retired "that survive review". The six notations are still
+  named where there is room for them: the home page, the structured data,
+  `/llms.txt` and the playground's own description.
+
 - Share, Export and Immersive now sit **under** the diagram on the playground,
   not above it, for all six notations. The diagram gets the top of its pane —
   which is what you came for, and what a phone was spending on a row of
