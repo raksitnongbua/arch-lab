@@ -5512,19 +5512,31 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
      assertion below), so anchoring on it would now walk past the end of the
      row.
 
-     THE CLOSING TAG IS MATCHED AT ANY INDENT, and hard-coding eight spaces was
-     a bug this file shipped for one commit: wrapping the row in a conditional
-     re-indents it, so every assertion in this section failed at once and none
-     named the thing that had actually changed — the exact fault the paragraph
-     above was written about, committed in the fix for it. The row contains no
-     nested `</div>`, so the first close at any indent is its own. */
+     NO HARD-CODED SHAPE IN THE END ANCHOR, because two of them bit in
+     consecutive commits: first an eight-space indent, so wrapping the row in a
+     conditional re-indented it; then a 1600-character ceiling, so growing a
+     comment inside the row pushed its close out of range. Both times every
+     assertion in this section failed at once and none named what had actually
+     changed — the exact fault the paragraph above warns about, committed twice
+     in fixes for it.
+
+     The end is now the first `</div>`, at any indent and any distance, and the
+     premise that makes that correct is asserted rather than assumed. */
   const stripAt = /<div className="hidden[^"]*sm:flex"/.exec(viewer);
   const strip =
     stripAt === null
       ? ""
-      : (/^[\s\S]{0,1600}?\n\s*<\/div>/.exec(
-          viewer.slice(stripAt.index),
-        )?.[0] ?? "");
+      : (/^[\s\S]*?\n\s*<\/div>/.exec(viewer.slice(stripAt.index))?.[0] ?? "");
+  /* THE PREMISE OF THAT END ANCHOR, ASSERTED. "First `</div>` is the row's own"
+     holds only while the row has no nested `<div>`; if one ever appears the
+     extraction stops early and every measurement below silently describes a
+     fragment of the row instead of the row. */
+  check(
+    "the strip extraction stopped at the strip's own closing tag",
+    strip !== "" && !/<div\b/.test(strip.slice(1)),
+    "the row grew a nested <div>, so this section measures the wrong element " +
+      "and its other assertions cannot be trusted",
+  );
   /* READ THE TEXT BEFORE THE CONTAINER, not the container itself. The first
      spelling of this tested `strip` for a leading `{edit === undefined ? null :`
      — which sits OUTSIDE the match, so re-introducing the original bug passed
@@ -5540,10 +5552,35 @@ console.log("\nThe guide gives every gesture an icon and an accessible name");
       !/edit === undefined \? null :/.test(beforeStrip),
     "a strip that appears with the edit toggle rescales a pane-fitted drawing",
   );
+  /* THE GATE MOVED INTO THE PANEL, with the sentence it switches between. The
+     row used to hold a button when editing was on and the read-only sentence
+     when it was not; it holds one control in both states now, and the panel
+     carries the difference — so this reads the panel. Same rule, one surface
+     later: a read-only canvas must not list gestures it cannot offer. */
   check(
     "the gesture guide is still gated on the edit handlers",
-    /edit === undefined \? \([\s\S]{0,400}?SEQUENCE_READ_ONLY_HINT/.test(strip),
+    /edit === undefined \? \([\s\S]{0,400}?SEQUENCE_READ_ONLY_HINT[\s\S]{0,600}?SEQUENCE_MOUSE_GESTURES/.test(
+      viewer,
+    ),
     "a read-only canvas would offer a guide to gestures it does not have",
+  );
+  /* AND THE READING HALF SURVIVED THE MOVE. It was a row of its own under the
+     diagram before it became a section of this panel, and a row deleted in a
+     refactor leaves nothing behind to notice — no import breaks, no type
+     fails, and the loss is one sentence in a screenshot nobody takes. Two
+     clauses are pinned: the one naming what to click, which is this viewer's
+     whole interaction, and the fold clause, which is conditional and therefore
+     the easiest to drop by accident. */
+  /* Named apart from section 14's `flowed`, which flattens the PAGE. Two
+     bindings of one name over two different sources, in one file, is how a
+     later edit reads the wrong one. */
+  const viewerFlowed = viewer.replace(/\s+/g, " ");
+  check(
+    "the guide still teaches reading, not only editing",
+    /fragment chip to focus it/.test(viewerFlowed) &&
+      /folds away the services only it uses/.test(viewerFlowed),
+    "the reading clauses were dropped rather than moved — nothing on the " +
+      "canvas says its messages and lifelines can be clicked",
   );
   /* HEIGHT STATED, NOT INFERRED FROM CONTENT, and no wrapping — the two
      properties that keep the pane a constant size. `flex-wrap` is what let the

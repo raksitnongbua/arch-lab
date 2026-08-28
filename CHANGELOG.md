@@ -99,11 +99,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   had moved: it said "press Edit above" long after the lock became a padlock on
   the diagram's top right. It now names the padlock.
 
-- The sequence canvas no longer keeps its ten editing gestures permanently on
-  screen. The row under the diagram now offers **How to edit this diagram**,
-  which opens the same list — and shows each gesture's full instruction, which
-  used to be hover-only. The page's "What you can do on the canvas" summary and
-  the feature tour are unchanged.
+- The sequence canvas no longer keeps its help permanently on screen. Two rows
+  of prose under the diagram — a paragraph on reading it and a strip of ten
+  editing gestures — become one row and one button, **How to read and edit this
+  diagram**, opening a panel with both. Nothing was cut: each gesture's full
+  instruction is visible text there, where it used to be hover-only, and a
+  locked canvas says so in the panel instead of spending a row on it. The
+  page's "What you can do on the canvas" summary and the feature tour are
+  unchanged.
 
 - The minimap and the zoom controls now share the bottom-right corner of every
   canvas, with the map docked above the controls that drive it. Five canvases
