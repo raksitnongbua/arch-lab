@@ -90,9 +90,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   notation by typing, so the chrome around the drawing no longer moves when they
   do.
 
-- The theme menu no longer gets cut off when it opens from an immersive diagram
-  on a short screen. Eight rows opening upward could run past the top of the
-  pane, which clips them with no scrollbar to say anything was missing.
+- The theme menu now opens where there is room for it. It was placed above its
+  button unconditionally, so on a short window — or with the button low in an
+  immersive pane — the list ran past the top edge and the rows past it were
+  simply not there, with no scrollbar to say anything was missing. It now
+  measures the space on both sides when you open it, keeps its usual side
+  whenever a usable amount of the list fits there, and caps its height to the
+  room actually available so it scrolls instead of spilling.
 
 - Clicking an element on an editable C4 canvas works again. The change that
   made a bare drag draw a selection box claimed any press that landed
