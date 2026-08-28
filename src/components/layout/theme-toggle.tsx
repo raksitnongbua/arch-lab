@@ -236,8 +236,16 @@ export function ThemeToggle({
           id={menuId}
           role="menu"
           aria-label="Theme"
+          /* CAPPED AND SCROLLABLE, which the header's copy never needed and the
+             immersive one does. Eight rows come to ~380px, and this menu opens
+             UPWARD from a footer strip inside a section that is `overflow-hidden`
+             while immersive — so on a short viewport the top rows are simply cut
+             off, with no scrollbar to say anything is missing. `min(32rem,70svh)`
+             clears all eight wherever there is room and scrolls only where there
+             is not. Same guard, same reasoning as the sequence viewer's gesture
+             panel, which opens upward over its diagram for the same reason. */
           className={cn(
-            "af-glass absolute right-0 z-50 min-w-52 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg",
+            "af-glass absolute right-0 z-50 max-h-[min(32rem,70svh)] min-w-52 overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg",
             panelSide === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
           )}
         >

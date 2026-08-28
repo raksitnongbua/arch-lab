@@ -1876,153 +1876,184 @@ export function ViewPlayground({
                     buttons.
 
                     It stays visible in immersive mode — the exit must always be
-                    one click away, not only one keystroke. */}
-                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-card px-3 py-1">
-                  {/* Share and Export live in the CANVAS strip, matching the
-                      C4 shell's own footer control-for-control. Two reasons,
-                      and the first is a defect: in the source rail their
-                      dropdown panels were clipped by that column's scroll box
-                      (see the note on the rail's action row). The second is
-                      that both act on the diagram — Export renders what is on
-                      screen, Share hands over the document being drawn — so
-                      the canvas is where they belonged anyway.
+                    one click away, not only one keystroke.
 
-                      THEIR PANELS OPEN UPWARD, and that is a consequence of
-                      this row rather than a preference: every share button in
-                      this branch passes `panelSide="up"` and every export panel
-                      anchors `bottom-full`, the way the C4 exporter already did
-                      from its own footer. A panel that opened downward from
-                      here would open off the bottom of the pane.
+                    ITS METRICS ARE THE C4 SHELL'S FOOTER, not this pane's top
+                    strip. The note below already claimed this row matched that
+                    footer "control-for-control", and in CONTENT it did — but it
+                    was built to the top strip's `px-3 py-1`, so the same buttons
+                    sat in a row 8px shorter with a quarter of the side padding,
+                    against a `bg-card` ground where the C4 footer uses
+                    `bg-background`. Put the two notations side by side in
+                    immersive and the sequence toolbar read as a different,
+                    flimsier control set — which is the one comparison this pane
+                    exists to survive, since a reader switches notation by typing
+                    and the chrome around the drawing should not move when they
+                    do. `max-w-7xl` and the `py` pair come from
+                    `viewer-shell.tsx`'s own footer; keep them in step by hand,
+                    the way the two panes' top strips already are. */}
+                <div className="shrink-0 border-t border-border/60 bg-background">
+                  <div
+                    className={cn(
+                      "mx-auto flex w-full max-w-7xl items-center justify-end gap-2 px-5 sm:px-8",
+                      isImmersive ? "py-2" : "py-3",
+                    )}
+                  >
+                    {/* Share and Export live in the CANVAS strip, matching the
+                        C4 shell's own footer control-for-control. Two reasons,
+                        and the first is a defect: in the source rail their
+                        dropdown panels were clipped by that column's scroll box
+                        (see the note on the rail's action row). The second is
+                        that both act on the diagram — Export renders what is on
+                        screen, Share hands over the document being drawn — so
+                        the canvas is where they belonged anyway.
 
-                      Hidden in immersive: the strip stays visible there so the
-                      exit is one click away, and a menu that opened over a
-                      fullscreen diagram would be covering the thing it exports.
-                      The reason is weaker from the bottom edge — an upward
-                      panel covers a band of the drawing rather than its middle —
-                      but weaker is not wrong, and Share's panel is tall. */}
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    {isImmersive ? null : doc.kind === "sequence" ? (
-                      <>
-                        <SequenceShareButton
-                          text={text}
-                          title={documentTitle(doc)}
-                          format={doc.format}
-                          onAnnounce={setAnnouncement}
-                        />
-                        <SequenceExportButton
-                          paneRef={diagramPaneRef}
-                          title={documentTitle(doc)}
-                          onAnnounce={setAnnouncement}
-                        />
-                      </>
-                    ) : doc.kind === "flowchart" ? (
-                      <>
-                        <FlowchartShareButton
-                          text={text}
-                          title={documentTitle(doc)}
-                          format={doc.format}
-                          onAnnounce={setAnnouncement}
-                        />
-                        {/* Renders from the parsed file, not the live DOM —
-                            which is why no paneRef is passed (the flowchart
-                            exporter's header argues that side). */}
-                        <FlowchartExportButton
-                          file={doc.file}
-                          title={documentTitle(doc)}
-                          onAnnounce={setAnnouncement}
-                        />
-                      </>
-                    ) : doc.kind === "usecase" ? (
-                      <>
-                        <UseCaseShareButton
-                          text={text}
-                          title={documentTitle(doc)}
-                          format={doc.format}
-                          onAnnounce={setAnnouncement}
-                        />
-                        {/* From the parsed file too — the use-case exporter
-                            shares the flowchart exporter's from-model
-                            argument (its header). */}
-                        <UseCaseExportButton
-                          file={doc.file}
-                          title={documentTitle(doc)}
-                          onAnnounce={setAnnouncement}
-                        />
-                      </>
-                    ) : doc.kind === "er" ? (
-                      <>
-                        <ErShareButton
-                          text={text}
-                          title={documentTitle(doc)}
-                          format={doc.format}
-                          onAnnounce={setAnnouncement}
-                        />
-                        {/* From the parsed FILE, not a paneRef: these
-                            exporters render from the model, so they work
-                            mid-focus and with the focus dimming excluded by
-                            construction — the export renderer never had it. */}
-                        <SvgExportButton
-                          render={(theme) => renderErSvg(doc.file, theme)}
-                          title={documentTitle(doc)}
-                          noun="ER diagram"
-                          onAnnounce={setAnnouncement}
-                        />
-                      </>
-                    ) : doc.kind === "dict" ? (
-                      <>
-                        <DictShareButton
-                          text={text}
-                          title={documentTitle(doc)}
-                          onAnnounce={setAnnouncement}
-                        />
-                        <SvgExportButton
-                          render={(theme) => renderDictSvg(doc.file, theme)}
-                          title={documentTitle(doc)}
-                          noun="data dictionary"
-                          onAnnounce={setAnnouncement}
-                        />
-                      </>
-                    ) : null}
-                    {/* THE THEME, AND ONLY WHILE IMMERSIVE — the same control
-                        in the same place as the C4 shell's footer (see the note
-                        there for the whole argument). Ghost to match this
-                        strip's own buttons rather than the shell's outlined
-                        ones: the border and the card ground are what the site
-                        header needs to separate it from the nav, and this row
-                        has nothing to be separated from. */}
-                    {isImmersive ? (
-                      <ThemeToggle
-                        panelSide="up"
-                        triggerClassName="size-8 border-transparent bg-transparent backdrop-blur-none hover:border-transparent hover:bg-transparent"
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setImmersive(!isImmersive)}
-                      aria-pressed={isImmersive}
-                      aria-label={
-                        isImmersive
-                          ? "Exit immersive mode (Escape at the top level)"
-                          : "Enter immersive mode — hide the site chrome and the source rail"
-                      }
-                      title={
-                        isImmersive ? "Exit immersive mode" : "Immersive mode"
-                      }
-                      className={buttonClasses({
-                        variant: "ghost",
-                        size: "sm",
-                      })}
-                    >
+                        THEIR PANELS OPEN UPWARD, and that is a consequence of
+                        this row rather than a preference: every share button in
+                        this branch passes `panelSide="up"` and every export panel
+                        anchors `bottom-full`, the way the C4 exporter already did
+                        from its own footer. A panel that opened downward from
+                        here would open off the bottom of the pane.
+
+                        Hidden in immersive: the strip stays visible there so the
+                        exit is one click away, and a menu that opened over a
+                        fullscreen diagram would be covering the thing it exports.
+                        The reason is weaker from the bottom edge — an upward
+                        panel covers a band of the drawing rather than its middle —
+                        but weaker is not wrong, and Share's panel is tall. */}
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {isImmersive ? null : doc.kind === "sequence" ? (
+                        <>
+                          <SequenceShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            format={doc.format}
+                            onAnnounce={setAnnouncement}
+                          />
+                          <SequenceExportButton
+                            paneRef={diagramPaneRef}
+                            title={documentTitle(doc)}
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : doc.kind === "flowchart" ? (
+                        <>
+                          <FlowchartShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            format={doc.format}
+                            onAnnounce={setAnnouncement}
+                          />
+                          {/* Renders from the parsed file, not the live DOM —
+                              which is why no paneRef is passed (the flowchart
+                              exporter's header argues that side). */}
+                          <FlowchartExportButton
+                            file={doc.file}
+                            title={documentTitle(doc)}
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : doc.kind === "usecase" ? (
+                        <>
+                          <UseCaseShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            format={doc.format}
+                            onAnnounce={setAnnouncement}
+                          />
+                          {/* From the parsed file too — the use-case exporter
+                              shares the flowchart exporter's from-model
+                              argument (its header). */}
+                          <UseCaseExportButton
+                            file={doc.file}
+                            title={documentTitle(doc)}
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : doc.kind === "er" ? (
+                        <>
+                          <ErShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            format={doc.format}
+                            onAnnounce={setAnnouncement}
+                          />
+                          {/* From the parsed FILE, not a paneRef: these
+                              exporters render from the model, so they work
+                              mid-focus and with the focus dimming excluded by
+                              construction — the export renderer never had it. */}
+                          <SvgExportButton
+                            render={(theme) => renderErSvg(doc.file, theme)}
+                            title={documentTitle(doc)}
+                            noun="ER diagram"
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : doc.kind === "dict" ? (
+                        <>
+                          <DictShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            onAnnounce={setAnnouncement}
+                          />
+                          <SvgExportButton
+                            render={(theme) => renderDictSvg(doc.file, theme)}
+                            title={documentTitle(doc)}
+                            noun="data dictionary"
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : null}
+                      {/* THE THEME, AND ONLY WHILE IMMERSIVE — the same control
+                          in the same place as the C4 shell's footer, and now
+                          with the same argument passed to it (see the note
+                          there). It used to strip the border and the card ground
+                          to match this row's ghost buttons; the row is outlined
+                          now, for the reason given on the immersive toggle
+                          below, so the dial keeps the look it has everywhere
+                          else and `size-8` is the only thing this host has an
+                          opinion about. */}
                       {isImmersive ? (
-                        <Shrink aria-hidden="true" />
-                      ) : (
-                        <Expand aria-hidden="true" />
-                      )}
-                      <span className="hidden sm:inline">
-                        {isImmersive ? "Exit immersive" : "Immersive"}
-                      </span>
-                    </button>
-                  </span>
+                        <ThemeToggle panelSide="up" triggerClassName="size-8" />
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setImmersive(!isImmersive)}
+                        aria-pressed={isImmersive}
+                        aria-label={
+                          isImmersive
+                            ? "Exit immersive mode (Escape at the top level)"
+                            : "Enter immersive mode — hide the site chrome and the source rail"
+                        }
+                        title={
+                          isImmersive ? "Exit immersive mode" : "Immersive mode"
+                        }
+                        /* OUTLINE, like every control in the C4 shell's footer
+                           and like the Share and Export buttons standing beside
+                           it in this very row — those two are `outline` in both
+                           footers because they are the same components. Ghost
+                           left this button and the theme dial as the only
+                           borderless things in a row of bordered ones, which in
+                           immersive mode (where Share and Export are hidden) is
+                           the entire toolbar reading as a weaker control set
+                           than the C4 one. */
+                        className={buttonClasses({
+                          variant: "outline",
+                          size: "sm",
+                          className: "shrink-0",
+                        })}
+                      >
+                        {isImmersive ? (
+                          <Shrink aria-hidden="true" />
+                        ) : (
+                          <Expand aria-hidden="true" />
+                        )}
+                        <span className="hidden sm:inline">
+                          {isImmersive ? "Exit immersive" : "Immersive"}
+                        </span>
+                      </button>
+                    </span>
+                  </div>
                 </div>
               </section>
             )

@@ -247,6 +247,87 @@ check(
   "the cluster is mounted in both corners at once",
 );
 
+/* -------------------------------------------------------------------------- */
+/* 5. The diagram's footer strip is one strip, whatever the notation           */
+/* -------------------------------------------------------------------------- */
+
+console.log("\nBoth panes' footer strips are built to the same metrics");
+
+/* WHY THIS IS THE SAME SUBJECT as the corners above. A reader switches notation
+   by TYPING — the same pane re-renders as C4 or as a sequence diagram — so the
+   chrome around the drawing has to be the one chrome or the switch reads as
+   moving between two products. Section 1 pins that for the zoom cluster. This
+   pins it for the footer under the diagram, which is the other row a reader
+   uses on every notation, and which had drifted: the five non-C4 canvases were
+   built to the pane's TOP strip (`px-3 py-1`) while the C4 shell's footer used
+   `px-5 sm:px-8` and a taller row, so the same buttons sat in a row 8px shorter
+   with a quarter of the side padding — most visible in immersive mode, where
+   Share and Export are hidden and the toolbar is all that is left.
+
+   THE EXPECTATION IS READ FROM THE C4 SHELL, never hardcoded here: it is the
+   pane the other five were asked to match, so a deliberate change there should
+   move this check's expectation with it rather than fail it. */
+{
+  const shell = read("src/features/viewer/components/viewer-shell.tsx");
+  const playground = read(
+    "src/features/playground/components/view-playground.tsx",
+  );
+
+  /** The classes on the row inside a footer's bordered ground, as tokens. */
+  const footerRow = (source) =>
+    (/"(mx-auto flex w-full max-w-7xl[^"]*)"/.exec(source)?.[1] ?? "")
+      .split(/\s+/)
+      .filter((token) => token !== "");
+
+  /* SIZING ONLY, and what counts as sizing is read off the C4 row rather than
+     typed here: every width ceiling and horizontal pad it wears is a metric the
+     other five have to wear too, so a deliberate change there moves this
+     expectation with it instead of failing. The two rows legitimately differ in
+     LAYOUT — the C4 footer stacks a title block above its controls on a phone
+     (`flex-col gap-3`) and the other five have no title to stack — so asserting
+     the whole string would forbid a difference that is correct. */
+  const expected = footerRow(shell);
+  const actual = footerRow(playground);
+  const sizing = expected.filter((token) =>
+    /^(max-w-|px-|sm:px-|md:px-|lg:px-)/.test(token),
+  );
+  const missing = sizing.filter((token) => !actual.includes(token));
+  check(
+    "the non-C4 footer pads to the same metrics as the C4 shell's",
+    sizing.length > 0 && missing.length === 0,
+    sizing.length === 0
+      ? "the C4 footer row was not found, so nothing was compared"
+      : `the C4 footer pads with ${sizing.join(" ")}; the other five are missing ${missing.join(", ")}`,
+  );
+
+  /* THE HEIGHT PAIR, which is a two-value rule rather than one: the row is
+     shorter in immersive because the description above it is gone. Both panes
+     have to make the same trade or one notation's toolbar jumps on entering the
+     mode while the other's does not. */
+  const heightPair = (source) => /isImmersive \? "py-2" : "py-3"/.test(source);
+  check(
+    "both footers tighten by the same step in immersive mode",
+    heightPair(shell) && heightPair(playground),
+    "one pane changes its footer height on entering immersive and the other " +
+      "does not, so the row moves when the notation does",
+  );
+
+  /* NO GHOST BUTTON IN THAT ROW. Share and Export are `outline` in both footers
+     because they are literally the same components; a ghost control beside them
+     is borderless in a row of bordered ones, and in immersive — where Share and
+     Export are hidden — it is the whole toolbar reading as a weaker control set
+     than the C4 one. */
+  const footerRegion =
+    /"mx-auto flex w-full max-w-7xl[\s\S]*?<\/section>/.exec(playground)?.[0] ??
+    "";
+  check(
+    "the non-C4 footer holds no ghost control beside the outlined ones",
+    footerRegion !== "" && !/variant: "ghost"/.test(footerRegion),
+    "a borderless button in a row of bordered ones is the drift this section " +
+      "exists to catch",
+  );
+}
+
 if (failures > 0) {
   console.error(`\ncanvas-chrome-check: ${failures} problem(s).`);
   process.exit(1);
