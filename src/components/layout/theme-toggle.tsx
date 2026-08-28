@@ -61,9 +61,13 @@ const THEME_META: Record<
   midnight: { label: "Midnight", hint: "True black, for OLED", Icon: MoonStar },
   contrast: {
     label: "High contrast",
-    /* Names what it IS as well as that it is the default: "The default" alone
-       told a reader which row they would land on and nothing about why. */
-    hint: "The default · stronger outlines",
+    /* NO LONGER "The default · stronger outlines". It was the default for
+       everybody; it is now the default for a reader whose system prefers dark
+       (`lib/theme-default.ts`), and the `light` row above has the same claim on
+       the word for everybody else. A row that says "The default" to half its
+       readers is worse than a row that describes itself, which is all any of
+       these need to do. */
+    hint: "Stronger outlines",
     Icon: Contrast,
   },
 };

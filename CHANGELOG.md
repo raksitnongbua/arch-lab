@@ -88,6 +88,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- A first-time visitor now gets the theme their system asks for: **light** on a
+  machine set to light, **high contrast** on one set to dark. Before, everyone
+  landed on high contrast — so a reader who had told their machine they want
+  light surfaces met a near-black page and no reason to suspect a picker
+  existed. The preference is read once, before the first paint, and stored as an
+  ordinary theme choice: the picker shows a tick beside it, any of the seven is
+  still one click away, and a click is still remembered. A later change to the
+  OS setting does not move a diagram that is already set. The phone's browser
+  chrome follows the same split instead of painting black around a light page.
+
+- The theme picker's "High contrast" row no longer calls itself the default —
+  with the default following the system preference, neither it nor "Light" can
+  claim the word for every reader.
+
 - The site's search result and link preview say what the site is. The title
   read "beautiful C4 and sequence diagram editor" — two notations out of six,
   so a search for a flowchart, a use case, an ER diagram or a data dictionary

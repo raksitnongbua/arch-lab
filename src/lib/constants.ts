@@ -123,8 +123,18 @@ export const THEMES = [
 export type Theme = (typeof THEMES)[number];
 
 /**
- * The theme a first-time visitor gets. A product decision, not an OS preference
- * — see `enableSystem={false}` in `app/providers.tsx`.
+ * The theme a first-time visitor gets WHEN THEIR SYSTEM PREFERS DARK, and the
+ * fallback whenever the preference cannot be read at all — see
+ * `DEFAULT_THEME_BY_SCHEME` below and `lib/theme-default.ts` for how it is
+ * resolved before first paint.
+ *
+ * IT USED TO BE THE ONLY DEFAULT, unconditionally, and the argument for that is
+ * recorded here because it was a real one: the default is a decision about what
+ * a diagram should be read on, not a reflection of what the OS happens to be
+ * set to. What it got wrong is the reader it was written for — someone who has
+ * told their machine they want light surfaces, and arrived at a near-black page
+ * with no way to know a picker existed. A default is a first guess, and the
+ * best available guess about a reader is the one they have already made.
  *
  * HIGH CONTRAST, not `dark`. `contrast` separates by OUTLINE rather than by
  * fill: its ground is `oklch(0.05 0 0)` and its cards sit 0.07 above that, so
@@ -136,12 +146,36 @@ export type Theme = (typeof THEMES)[number];
  * theme whose palette is tuned — the dark-grey ground at #1c1e24, the role fills
  * lifted 0.03 with brightened borders, the wash measured against its own
  * top stop — and none of that is what a visitor now sees first. `contrast` is
- * deliberately starker than beautiful. If this moves back, move the picker's
- * "The default" hint in `theme-toggle.tsx` and the OG palette in
- * `marketing/og/card.tsx` with it: both are derived from whatever this says, by
+ * deliberately starker than beautiful. If this moves back, move the OG palette
+ * in `marketing/og/card.tsx` with it: it is derived from whatever this says, by
  * hand, and `check:og-cards` only pins the lane colours.
- */
+ *
+ * THE PICKER NO LONGER NAMES A DEFAULT. Its `contrast` row used to read "The
+ * default", and that stopped being true for half of all readers the moment the
+ * default started following `prefers-color-scheme` — a menu row cannot say
+ * which of two it is without reading the preference itself, and the row that
+ * would say it is the one the reader is already looking at. */
 export const DEFAULT_THEME: Theme = "contrast";
+
+/**
+ * The default a first-time visitor gets, per `prefers-color-scheme`.
+ *
+ * TWO NAMED THEMES, not a light/dark pair invented for the occasion: both
+ * values are members of `THEMES`, so the reader's stored preference is always a
+ * theme the picker can show a tick beside, and every argument the palettes
+ * carry (`DEFAULT_THEME` above for the dark side) applies unchanged.
+ *
+ * WHY NOT next-themes' OWN `enableSystem`. It resolves the system preference to
+ * the literal names "light" and "dark" and then maps THAT through its `value`
+ * option — so asking it for high contrast under a dark system would also
+ * repaint the `dark` theme, which is a palette a reader can explicitly choose
+ * and a preference some already have stored. The mapping has to happen before
+ * next-themes sees a name, which is what `lib/theme-default.ts` does.
+ */
+export const DEFAULT_THEME_BY_SCHEME: Record<"light" | "dark", Theme> = {
+  light: "light",
+  dark: DEFAULT_THEME,
+};
 
 /** localStorage key next-themes persists the choice under. */
 export const THEME_STORAGE_KEY = "arch-lab-theme";

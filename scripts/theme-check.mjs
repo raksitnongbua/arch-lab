@@ -290,6 +290,75 @@ for (const host of [
 }
 
 /* ----------------------------------------------------------------------- */
+/* The default a first-time visitor gets, and the chrome around it          */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nthe system-derived default");
+
+/* ORDER IS THE WHOLE MECHANISM. `lib/theme-default.ts` writes the resolved
+   theme name into storage; next-themes' own blocking script then reads it. Both
+   are pre-paint, so if the seed ever renders AFTER `<Providers>` the read
+   happens first, the seed is a write nobody consumes, and every first-time
+   visitor silently goes back to one unconditional default — with nothing on
+   screen to show it. What the script DOES is proved by
+   `src/lib/theme-default.test.ts`, which executes the string; this pins where
+   it runs, which no unit test can see. */
+{
+  const layout = readCode("src/app/layout.tsx");
+  const seed = layout.indexOf('id="theme-default"');
+  const providers = layout.indexOf("<Providers>");
+  check(
+    "the seed script renders before <Providers>, where next-themes' script is",
+    seed !== -1 && providers !== -1 && seed < providers,
+    "the seed must run before next-themes reads storage; beforeInteractive puts " +
+      "it in <head> only while it is rendered above the provider that owns the " +
+      "body script",
+  );
+}
+
+/* THE BROWSER CHROME AGREES WITH THE GROUND IT WRAPS. `viewport.themeColor` is
+   two hand-converted hex values keyed on `prefers-color-scheme` — the same
+   question the default is keyed on — and hand-converted is why this is checked:
+   the palette moves in `globals.css` and nothing else in the repo would notice
+   that the phone's title bar is still painting the old one. Measured, not
+   eyeballed, from the same oklch parser the contrast assertions use. */
+const hex = (oklch) => {
+  const parsed = parseOklch(oklch);
+  if (parsed === null) return null;
+  return `#${parsed.rgb
+    .map((channel) =>
+      Math.round(Math.min(1, Math.max(0, channel)) * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+};
+
+{
+  const layout = read("src/app/layout.tsx");
+  /* The two themes the default resolves to, in the order the media queries
+     name them: `:root` is what the `light` theme renders as (it has no block of
+     its own — see `tokensOf`), and `.contrast` is the dark side. */
+  for (const [scheme, selector] of [
+    ["light", "light"],
+    ["dark", "contrast"],
+  ]) {
+    const tokens = tokensOf(CSS, selector);
+    const expected = tokens === null ? null : hex(tokens.get("--background"));
+    const declared = new RegExp(
+      `media:\\s*"\\(prefers-color-scheme:\\s*${scheme}\\)"\\s*,\\s*color:\\s*"(#[0-9a-f]{6})"`,
+      "i",
+    ).exec(layout)?.[1];
+    check(
+      `themeColor for a ${scheme} system is the ${selector} palette's own ground`,
+      expected !== null && declared?.toLowerCase() === expected,
+      `viewport.themeColor declares ${declared ?? "nothing"} for ${scheme}; ` +
+        `the ${selector} palette's --background converts to ${expected ?? "an unparsed value"}`,
+    );
+  }
+}
+
+/* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} theme assertion(s) FAILED`);
