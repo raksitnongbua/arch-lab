@@ -53,6 +53,7 @@ export const TAG_FILL_BY_THEME: Record<Theme, { l: number; c: number }> = {
   dark: { l: 0.33, c: 0.06 },
   midnight: { l: 0.275, c: 0.06 },
   contrast: { l: 0.2, c: 0.06 },
+  blueprint: { l: 0.33, c: 0.06 },
 };
 
 /**

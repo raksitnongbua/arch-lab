@@ -9,6 +9,7 @@ import {
   Moon,
   MoonStar,
   Palette,
+  Ruler,
   Sun,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -81,6 +82,11 @@ const THEME_META: Record<
        these need to do. */
     hint: "Stronger outlines",
     Icon: Contrast,
+  },
+  blueprint: {
+    label: "Blueprint",
+    hint: "Drafting sheet, ruled grid",
+    Icon: Ruler,
   },
 };
 

@@ -42,7 +42,7 @@
  * declared instead.
  *
  * `pnpm check:themes` fails if a dark-family theme is missing from this list. */
-@custom-variant dark (&:is(.dark *, .midnight *, .contrast *));
+@custom-variant dark (&:is(.dark *, .midnight *, .contrast *, .blueprint *));
 
 /* --- Theme: light -------------------------------------------------------- */
 :root {
@@ -656,6 +656,189 @@
   --seq-lane-3: #3987e5;
   --seq-lane-4: #d55181;
   --seq-lane-5: #9085e9;
+}
+
+/* --- Theme: blueprint ---------------------------------------------------------
+ * A drafting sheet: deep cyan-navy ground, white ink, and THE GRID AT FULL
+ * STRENGTH. Dark-family, so it redefines the full token set — anything omitted
+ * falls back to the light values, which in a dark theme is white text on a
+ * white card in one place nobody looks.
+ *
+ * THE GRID IS THE INVERSION, and it is the whole point of the theme. Every
+ * other dark theme dims `--canvas-grid` to keep it out of the way: `dark` puts
+ * it 0.061 above its own well, `midnight` 0.2 on black, `contrast` 0.3. Here
+ * the grid sits at L 0.42 on a canvas at L 0.225 — ABOVE this theme's own
+ * `--border` at 0.40, so the ruling of the sheet is stronger than the edge of a
+ * panel. That is what a drafting sheet is: the grid is ruled first and the
+ * drawing is put on top of it, rather than the grid being a hint the drawing
+ * politely ignores. Measured 2.03:1 against the canvas, where `dark`'s is
+ * 1.30:1 — the field is meant to be SEEN, and the 3:1 non-text floor does not
+ * apply to it because a grid line is never the thing being read.
+ *
+ * NO MAJOR/MINOR RULE, and that is a mechanism decision rather than a taste
+ * one. `--canvas-grid` is a single token consumed by a single-colour field in
+ * every one of its five homes — React Flow's `<Background variant="dots">`
+ * takes ONE `color` prop (`editor/components/canvas.tsx`), and the marketing
+ * and hero grids are one two-gradient rule each. A ruled major line every fifth
+ * pitch would need a second `<Background>` layer and a second token in every
+ * theme, which is a new customisation surface, and `purpose.md` says a new
+ * surface owes its own `check:*` proving every variant is complete. That is a
+ * larger change than a theme, so this theme spends its one grid token on being
+ * strong instead of on being two grids.
+ *
+ * THE INK IS INVERTED, not merely lightened: `--edge`, `--node-foreground` and
+ * `--node-border` are all light-on-dark, at the ground's own hue 250 so the
+ * sheet has one tint rather than a drift. Every neutral in this block carries
+ * chroma 0.062 at hue 250 — high for a "neutral", which is the point: on a
+ * blueprint nothing is grey, everything is a value of the blue.
+ *
+ * THE ROLE FILLS ARE RE-MIXED, not inherited. Their HUES are the audited
+ * CVD-safe set and have NOT moved — 295 / 250 / 195 / 150 for the four coloured
+ * roles, 345 and 85 for the flowchart's two own shapes — but their lightness
+ * and chroma are tuned for a saturated dark ground, exactly as `dark`,
+ * `midnight` and `contrast` tune theirs. Fills sit at L≈0.34, borders at
+ * L≈0.70.
+ *
+ * Ratios below are computed from these oklch values by the same maths
+ * `scripts/lib/oklch.mjs` gives `pnpm check:themes`, and they are THIS block's
+ * own numbers rather than a copy of another block's. `check:themes`,
+ * `check:flowchart-palette` and `check:gantt-palette` re-measure them all on
+ * every run.
+ * ---------------------------------------------------------------------------- */
+
+.blueprint {
+  /* The running light rides `--accent` unmodified here — 10.27:1 on this
+     canvas, and 0.19 / 0.23 OKLab from `--edge` and `--gantt-critical`. The
+     base's deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a
+     dark one it would be the dim head that token was created to fix. */
+  --gantt-flow: var(--accent);
+  --radius: 0.625rem;
+
+  --background: oklch(0.26 0.062 250);
+  --foreground: oklch(0.97 0.012 250);
+
+  --card: oklch(0.305 0.062 250);
+  --card-foreground: oklch(0.97 0.012 250);
+
+  --popover: oklch(0.305 0.062 250);
+  --popover-foreground: oklch(0.97 0.012 250);
+
+  /* The house violet, brightened for this ground: 5.87:1 (needs 3:1). Kept
+     rather than pulled toward the sheet's blue, because a primary that shares
+     the ground's hue is a button you find by its lightness alone — and
+     `--gantt-critical` aliases this token, so the critical cap would then be a
+     paler blue on a blue bar. */
+  --primary: oklch(0.72 0.17 285);
+  --primary-foreground: oklch(0.16 0.03 285);
+
+  --secondary: oklch(0.36 0.062 250);
+  --secondary-foreground: oklch(0.95 0.012 250);
+
+  --muted: oklch(0.36 0.062 250);
+  --muted-foreground: oklch(0.78 0.03 250);
+
+  --accent: oklch(0.82 0.12 195);
+  --accent-foreground: oklch(0.18 0.03 195);
+
+  --destructive: oklch(0.68 0.2 25);
+  --destructive-foreground: oklch(0.16 0.03 25);
+
+  --success: oklch(0.74 0.16 155);
+  --success-foreground: oklch(0.16 0.03 155);
+
+  --warning: oklch(0.84 0.15 80);
+  --warning-foreground: oklch(0.2 0.04 80);
+
+  /* DELIBERATELY QUIETER THAN THE GRID — see the header. A panel edge on a
+     drafting sheet is a lesser line than the sheet's own ruling. */
+  --border: oklch(0.4 0.062 250);
+  --input: oklch(0.4 0.062 250);
+  --ring: oklch(0.72 0.17 285);
+
+  /* The diagram well, and the ruling on it. The grid is the one token in this
+     theme that is louder than its counterpart in every other theme. */
+  --canvas: oklch(0.225 0.062 250);
+  --canvas-grid: oklch(0.42 0.062 250);
+  --node: oklch(0.245 0.062 250);
+  --node-foreground: oklch(0.97 0.012 250);
+  /* ≥3:1 against --node (measured 4.13:1). */
+  --node-border: oklch(0.6 0.045 250);
+  /* Secondary text on node fills (the light block has the design notes).
+     8.70:1 on --node. */
+  --node-meta: oklch(0.8 0.025 250);
+
+  /* Per-role node colours, re-mixed for this ground (the light block carries
+     the type→role table and the co-occurrence reasoning; the header above
+     says why the hues did not move). Ratios: name is --node-foreground vs
+     fill, meta is --node-meta vs fill, border vs ITS OWN fill; wash-top is
+     the same three against the surface wash's deepest stop (14% border folded
+     into the fill — see .af-node-wash), which is the worst case for text. */
+  /* name 10.86:1, meta 6.35:1, border 4.38:1 (wash-top: 8.71 / 5.09 / 3.51) */
+  --node-person: oklch(0.345 0.075 295);
+  --node-person-border: oklch(0.71 0.15 295);
+  /* name 10.76:1, meta 6.29:1, border 4.41:1 (wash-top: 8.61 / 5.04 / 3.53) */
+  --node-internal: oklch(0.34 0.065 250);
+  --node-internal-border: oklch(0.7 0.13 250);
+  /* name 14.47:1, meta 8.46:1, border 4.01:1 (no wash — external stays matte) */
+  --node-external: oklch(0.255 0.062 250);
+  --node-external-border: oklch(0.6 0.045 250);
+  /* name 10.66:1, meta 6.23:1, border 4.43:1 (wash-top: 8.52 / 4.98 / 3.54) */
+  --node-database: oklch(0.335 0.06 195);
+  --node-database-border: oklch(0.69 0.12 195);
+  /* name 10.51:1, meta 6.15:1, border 4.51:1 (wash-top: 8.37 / 4.89 / 3.59) */
+  --node-queue: oklch(0.34 0.06 150);
+  --node-queue-border: oklch(0.7 0.12 150);
+
+  /* Flowchart shape colours (the light block carries the design notes; the
+     start/step/io/call aliases live once in :root and resolve to THIS theme's
+     role tokens on their own). */
+  /* name 11.12:1, meta 6.50:1, border 4.40:1 (wash-top: 8.93 / 5.22 / 3.53) */
+  --flow-end: oklch(0.34 0.06 345);
+  --flow-end-border: oklch(0.71 0.14 345);
+  /* name 10.83:1, meta 6.33:1, border 4.53:1 (wash-top: 8.63 / 5.05 / 3.61) */
+  --flow-decision: oklch(0.34 0.06 85);
+  --flow-decision-border: oklch(0.71 0.12 80);
+
+  /* Dark pins for the rebuilt tagColors fills (the light block explains).
+
+     0.33 RATHER THAN THIS THEME'S OWN 0.34 ROLE-FILL BAND, and the hundredth
+     is measured rather than sloppy. A `tagColors` stroke has to clear 3:1
+     against the constructed fill in EVERY theme at once — the light family
+     pins L 0.93, the dark family 0.2 to 0.33 — and that pair of demands leaves
+     one narrow lightness interval for the stroke, not a wide one. Raising the
+     dark end to 0.34 closed that interval for the greens: `#00ff88` came back
+     refused from `presentableTagColor`, which is the free picker telling an
+     author their colour cannot be shown. At 0.33 the interval is exactly the
+     one the other three dark themes already leave open, and the same input
+     resolves to `#009846`. `check:canvas-edit` sweeps the whole output space
+     and is what caught it. */
+  --tag-fill-l: 0.33;
+  --tag-fill-c: 0.06;
+
+  /* White ink on a blue sheet — 5.52:1 against the canvas. */
+  --edge: oklch(0.66 0.045 250);
+  /* The resting drift that rides ON TOP of a connector. A real token, not an
+     inline color-mix, because the animated GIF export has to resolve the exact
+     same colour from the same place — two spellings of "edge lifted toward
+     primary" would drift apart the first time either is tuned. */
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.72 0.17 285 / 0.24);
+
+  /* Dark counterparts of the sequence lane tokens (the light block carries the
+     full validation notes — order, absent yellow, relief rule). Same slots,
+     same path through the CVD-safe adjacency graph. */
+  --seq-lane-1: #199e70;
+  --seq-lane-2: #d95926;
+  --seq-lane-3: #3987e5;
+  --seq-lane-4: #d55181;
+  --seq-lane-5: #9085e9;
+
+  /* The two properties node shapes actually paint with. Each node overrides
+     them inline (node-colors.ts: role token, or the author's tagColors hex);
+     these root defaults only cover node chrome rendered outside a canvas
+     node. */
+  --node-fill: var(--node);
+  --node-stroke: var(--node-border);
 }
 
 /* --- Two more LIGHT themes ----------------------------------------------------
@@ -1378,7 +1561,8 @@
      same list as the `dark` variant above, and pinned to it by check:themes. */
   html.dark,
   html.midnight,
-  html.contrast {
+  html.contrast,
+  html.blueprint {
     color-scheme: dark;
   }
 

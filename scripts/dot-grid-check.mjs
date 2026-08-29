@@ -437,7 +437,7 @@ check("every theme in THEMES is measured here", () => {
   const darkNames = THEME_BLOCKS.filter((t) => t.dark).map((t) => t.name);
   assert.deepEqual(
     darkNames.sort(),
-    ["contrast", "dark", "midnight"],
+    ["blueprint", "contrast", "dark", "midnight"],
     `the dark family is ${darkNames.join(", ")} — if that changed, the alpha ` +
       `each theme is measured with changed too`,
   );

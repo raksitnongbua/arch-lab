@@ -125,6 +125,7 @@ export const THEMES = [
   "dark",
   "midnight",
   "contrast",
+  "blueprint",
 ] as const;
 
 export type Theme = (typeof THEMES)[number];
