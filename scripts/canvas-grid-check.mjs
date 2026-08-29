@@ -47,7 +47,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { contrast, parseOklch } from "./lib/oklch.mjs";
+import { contrast, luminance, parseOklch } from "./lib/oklch.mjs";
 import { resolveToken, tokensOf } from "./lib/theme-css.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -331,6 +331,39 @@ for (const { theme, tokens, dot, minor, major } of opted) {
 /* ----------------------------------------------------------------------- */
 /* 3. The gap: --canvas-grid itself, in every theme                         */
 /* ----------------------------------------------------------------------- */
+
+console.log("\nthe well stays at or below the chrome it is set into");
+
+/* THE RELATIONSHIP `--canvas` EXISTS FOR, and until this assertion nothing
+   measured it. `globals.css` calls the token "the diagram well, deliberately
+   below the chrome" and every theme sets it that way by hand — so the one
+   property the token is named for was enforced by nobody, and lightening a
+   ground far enough to invert it would have shipped green.
+   AT OR BELOW, not strictly below: `midnight` and `contrast` set the well to
+   their page colour exactly (a true-black OLED ground and a near-black
+   accessibility ground), which is those palettes' own argument rather than a
+   drift — a well recessed out of pure black would have to be LIGHTER than the
+   page, which is the opposite of what the token means. Equality is the floor
+   of the rule, not an exemption from it. */
+for (const theme of THEMES) {
+  const tokens = tokensOf(CSS, theme) ?? baseline;
+  const well = parseOklch(resolveToken("--canvas", tokens, baseline));
+  const chrome = parseOklch(resolveToken("--background", tokens, baseline));
+  if (well === null || chrome === null) {
+    check(`${theme}: --canvas and --background both resolve`, false);
+    continue;
+  }
+  const wellLit = luminance(well.rgb);
+  const chromeLit = luminance(chrome.rgb);
+  const step = contrast(chrome.rgb, well.rgb);
+  check(
+    `${theme}: the well is ${wellLit <= chromeLit + 1e-9 ? `${step.toFixed(3)}:1 under` : "ABOVE"} its chrome`,
+    wellLit <= chromeLit + 1e-9,
+    "the diagram well is LIGHTER than the page it is set into, which inverts " +
+      "the recess `--canvas` exists to draw — the drawing would read as " +
+      "printed on top of the chrome rather than inset into it",
+  );
+}
 
 console.log("\nevery theme's grid is visible, and quieter than its own ink");
 

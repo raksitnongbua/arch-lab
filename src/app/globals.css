@@ -341,12 +341,20 @@
        a technology line needs, and the node title at 6.7:1 under its 7:1. A
        coloured fill is legible before it is separated from the surface, so the
        fills stayed low and their borders brightened instead.
-     - THE CANVAS IS FURTHER BELOW THE CHROME than it used to be — 0.061 rather
+     - THE CANVAS IS FURTHER BELOW THE CHROME than it used to be — 0.043 rather
        than 0.025 — which follows from the above rather than being chosen. The
-       diagram well now reads as clearly inset instead of nearly flush. That is
-       the one visible consequence of the new ground, and it is the right way
-       round: a canvas that tracked the chrome all the way up would have taken
-       the node fills with it.
+       diagram well reads as inset instead of nearly flush. That is the one
+       visible consequence of the new ground, and it is the right way round: a
+       canvas that tracked the chrome all the way up would have taken the node
+       fills with it.
+       IT WAS 0.061 AND THAT WAS TOO FAR. The widening above is sound as far as
+       it goes, but it was derived from what the node fills could afford rather
+       than from what the well should look like, and the result was the deepest
+       well in the app — 1.139:1 under its own chrome, where every other theme
+       sits between 1.030 and 1.102. A reader called it a hole, which is the
+       one measurement a ramp derivation cannot make for itself. See the
+       `--canvas` declaration below for the value, the gap kept, and what the
+       lift costs the node.
      - `--node-border` and every role border rose ~0.02 to hold ≥3:1 against
        their own lifted fills.
 
@@ -358,8 +366,11 @@
    THE COLOURED FILLS DID NOT MOVE with the 10% step, and that is deliberate:
    they are content rather than ground, and every pair they are measured in got
    BETTER as the canvas dropped away beneath them. Their separation from the
-   canvas is back to 0.16, near the 0.17 the near-black ramp had — so the step
-   down recovered most of what the lighter ground had cost them.
+   canvas is 0.14 after the well was lifted (it was 0.16, and 0.17 on the
+   near-black ramp) — the fills are measured against their OWN borders and
+   against the ink, none of which the ground touches, so what the lift spends
+   is a little of the border-on-canvas headroom: the quietest of them,
+   external, is 4.20:1 there against a 3:1 floor.
 
    THE RATIOS BELOW WERE ALL RE-MEASURED for this ramp, including the wash's top
    stop, by the same oklch → linear-sRGB maths `scripts/lib/oklch.mjs` gives
@@ -368,10 +379,11 @@
    that script and this one — read them as accurate to a tenth, not to the second
    decimal. `check:themes` re-measures the pairs it owns on every run. */
 .dark {
-  /* The running light rides `--accent` unmodified here — 10.01:1 on this canvas, and
-     0.15+ OKLab from both `--edge` and `--gantt-critical`. The base's
-     deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a
-     dark one it would be the dim head the reader complained about. */
+  /* The running light rides `--accent` unmodified here — 9.69:1 on this canvas
+     (10.01:1 before the well was lifted), and 0.19 / 0.25 OKLab from `--edge`
+     and `--gantt-critical`, neither of which the ground touches. The base's
+     deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a dark one
+     it would be the dim head the reader complained about. */
   --gantt-flow: var(--accent);
   --background: oklch(0.235 0.0116 271);
   --foreground: oklch(0.96 0.005 271);
@@ -407,9 +419,27 @@
   --input: oklch(0.375 0.0116 271);
   --ring: oklch(0.68 0.19 285);
 
-  /* The diagram well, deliberately below the chrome — see the header on why the
-     gap widened rather than tracking the ground up. */
-  --canvas: oklch(0.174 0.0116 271);
+  /* The diagram well, deliberately below the chrome.
+     LIFTED FROM L 0.174 TO 0.192, because the well was reading as a hole
+     rather than as a recess. The gap to the chrome is what this token is FOR,
+     so it is narrowed rather than closed: ΔL 0.043, which measures 1.103:1
+     against `--background`.
+     THAT NUMBER IS THE ARGUMENT. Across the family the well sits 1.030:1 below
+     its chrome in `light` and `paper` and 1.102:1 in `blueprint`, the other
+     theme with a deep ground. At 0.174 this well was 1.139:1 — the deepest in
+     the app by a wide margin, and the only one a reader called too deep. 0.192
+     puts it level with `blueprint` rather than at a number picked to feel
+     better, and still a clear step deeper than the two light themes.
+     WHAT IT COSTS, measured rather than waved past: `--node` is unchanged at
+     0.219, so an untinted node now sits 1.060:1 above the well where it sat
+     1.095:1. The node is still the lighter of the two, and it is found by its
+     rule either way — `--node-border` is 4.20:1 on this ground. That is the
+     same trade `paper` records for putting its node BELOW its canvas: a
+     surface you find by its edge, not by its glare.
+     Everything drawn on this ground was re-measured for the move; the figures
+     in this block are that measurement, and `check:canvas-grid`,
+     `check:gantt-palette` and `check:flowchart-palette` recompute them. */
+  --canvas: oklch(0.192 0.0116 271);
   --canvas-grid: oklch(0.284 0.0116 271);
   --node: oklch(0.219 0.0116 271);
   --node-foreground: oklch(0.96 0.005 271);
@@ -456,8 +486,11 @@
   --tag-fill-l: 0.33;
   --tag-fill-c: 0.06;
 
-  /* Brightened with the canvas it is drawn on: 5.75:1 against --canvas, where
-     L 0.62 on the lifted well measured 4.6. */
+  /* Brightened with the canvas it is drawn on: 5.58:1 against --canvas, down
+     from 5.76:1 when the well sat at L 0.174 and still far over the 3:1 an
+     unlit connector needs. The token itself did not move — a ground rising by
+     0.018 does not buy a re-tune of the ink, it just spends a little of the
+     headroom the ink already had. */
   --edge: oklch(0.645 0.0116 271);
   --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.68 0.19 285 / 0.24);
