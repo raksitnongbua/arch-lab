@@ -18,6 +18,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   their audited hues and are re-mixed for a saturated dark ground, so a C4
   diagram, a flowchart and a Gantt read the same way here as anywhere else.
 
+- The **dark** theme's canvas is lighter. The well a diagram sits in was the
+  deepest of any theme — far enough below the page that it read as a hole
+  rather than a recess. It is still clearly set into the page, just no longer
+  the odd one out. Exported SVG and PNG carry the new ground too, so a
+  downloaded file still matches the screen.
+
 - **Every notation now has a grid behind it.** Only the C4 editor ever drew
   one: the other eight notations sat on a bare well in every theme, and so did
   the C4 viewer — the canvas a shared link opens in. All ten canvases now paint
