@@ -34,8 +34,15 @@ import {
   SEQUENCE_LINE_STYLE_ROWS,
   SEQUENCE_MESSAGE_EXAMPLE,
   SEQUENCE_MINIMAL_EXAMPLE,
+  GANTT_MINIMAL_EXAMPLE,
+  GANTT_RELATIVE_EXAMPLE,
   UNKNOWN_FIELDS_EXAMPLE,
+  TIMELINE_MINIMAL_EXAMPLE,
+  TIMELINE_REFUSALS_EXAMPLE,
+  LIFECYCLE_MINIMAL_EXAMPLE,
+  LIFECYCLE_REFUSALS_EXAMPLE,
 } from "../content/snippets";
+import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
 import { CodeBlock } from "./code-block";
 
 const SECTIONS: readonly { id: string; label: string }[] = [
@@ -47,6 +54,9 @@ const SECTIONS: readonly { id: string; label: string }[] = [
   { id: "edges", label: "Edges" },
   { id: "unknown-fields", label: "Unknown fields (! lines)" },
   { id: "sequence", label: "Sequence diagrams" },
+  { id: "gantt", label: "Gantt charts" },
+  { id: "timeline", label: "Milestone timelines" },
+  { id: "lifecycle", label: "Lifecycles" },
   { id: "errors", label: "Errors" },
   { id: "editor-support", label: "Editor support" },
   { id: "try-it", label: "Where to use it" },
@@ -519,7 +529,195 @@ export function SyntaxReference(): React.JSX.Element {
         </P>
       </Section>
 
-      {/* ---- 9. errors ---------------------------------------------------------------- */}
+      {/* ---- 9. gantt charts ------------------------------------------------------------- */}
+      <Section id="gantt" title="Gantt charts">
+        <P>
+          A third document kind, opened by <Code>archlab 1.0 gantt</Code>: a
+          plan — what the work is, how long each piece takes, and what cannot
+          start until something else is done. The body sits under a single{" "}
+          <Code>@gantt</Code> block, and every item belongs to a{" "}
+          <Code>section</Code>, which is a named band of rows.
+        </P>
+        <CodeBlock code={GANTT_MINIMAL_EXAMPLE.code} label="gantt" />
+        <P>
+          <strong>An item is one line.</strong> <Code>task</Code> takes a
+          duration in whole days and draws a bar; <Code>milestone</Code> takes
+          none and draws a diamond. The <Code>d</Code> suffix on a duration is
+          required, and it is what keeps <Code>5d</Code> (&quot;five days
+          long&quot;) from being read as <Code>at 5</Code> (&quot;starts on day
+          five&quot;). Both parts are optional after the name except the
+          duration on a task: a status word — <Code>planned</Code>,{" "}
+          <Code>active</Code>, <Code>done</Code>, <Code>at-risk</Code> — and one
+          start. <Code>planned</Code> is the default and is written back as
+          absence, so typing it is idempotent rather than sticky.
+        </P>
+        <P>
+          <strong>
+            A start is either <Code>at</Code> or <Code>after</Code>, never both
+          </strong>
+          . <Code>at 0</Code> pins an item to a day counted from the
+          document&apos;s origin; <Code>after audit, shadow</Code> says it
+          begins when every named item has finished. A file carrying both makes
+          two claims about one number, so the parser refuses it rather than
+          picking a winner and drawing a start that disagrees with a line the
+          author can still see.
+        </P>
+        <P>
+          <strong>The drawing is solved, not declared.</strong> A row&apos;s
+          vertical place is the topological order of the dependencies, its
+          horizontal place is the start that arithmetic gives it, and the{" "}
+          <em>critical path</em> — the chain with no slack in it — is computed.
+          There is deliberately no <Code>crit</Code> keyword, the one construct
+          this grammar refuses to mirror from Mermaid&apos;s <Code>gantt</Code>:
+          a hand-declared critical path can contradict the arithmetic, and when
+          it does the diagram is simply wrong.
+        </P>
+        <P>
+          The one header line the other kinds do not have is <Code>starts</Code>
+          , an ISO date with no time and no zone. It gives day 0 a calendar
+          date. <strong>It is optional</strong>, and deleting it is the entire
+          difference between a calendar axis and a relative one reading{" "}
+          <Code>W1, W2, W3</Code> — the same plan, drawn the same way:
+        </P>
+        <CodeBlock code={GANTT_RELATIVE_EXAMPLE.code} label="relative axis" />
+        <P>
+          Render either in the{" "}
+          <Link href="/live?d=gantt" className="underline">
+            gantt playground
+          </Link>
+          , which also imports pasted Mermaid <Code>gantt</Code> code one-way.
+          One-way is the whole of it: nothing writes <Code>gantt</Code> back,
+          because <Code>at-risk</Code> has no Mermaid tag and the critical path
+          this format computes would arrive there as a <Code>crit</Code>
+          decoration anyone could then contradict.
+        </P>
+      </Section>
+
+      {/* ---- 10. milestone timelines ------------------------------------------------- */}
+      <Section id="timeline" title="Milestone timelines">
+        <P>
+          A fourth document kind, opened by <Code>archlab 1.0 timeline</Code>:{" "}
+          {KIND_BLURB.timeline.charAt(0).toLowerCase()}
+          {KIND_BLURB.timeline.slice(1)}. The body sits under a single{" "}
+          <Code>@timeline</Code> block, and every <Code>event</Code> belongs to
+          a <Code>period</Code>, which is a named band of points.
+        </P>
+        <CodeBlock code={TIMELINE_MINIMAL_EXAMPLE.code} label="timeline" />
+        <P>
+          <strong>An event is one line, and it is one quoted string.</strong> No
+          id, because nothing in this grammar refers to anything; no bare
+          tokens, so this is the only <Code>.alab</Code> grammar with no quoting
+          rule to learn. A <Code>#tag</Code> may follow the label, and{" "}
+          <Code>desc</Code> nests under it exactly as it does everywhere else in
+          the format.
+        </P>
+        <P>
+          <strong>Nothing here measures.</strong> A period&apos;s label is a
+          string — <Code>&quot;2024&quot;</Code>,{" "}
+          <Code>&quot;Before the rewrite&quot;</Code> — and is never read as a
+          date, which is what stops the layout being asked where between two
+          labels a third belongs. The order is the order you wrote, and nothing
+          is sorted.
+        </P>
+        <P>
+          <strong>What it refuses, and where to go instead.</strong> There is no
+          duration, no <Code>after</Code>, no <Code>at</Code> and no status
+          word. Each is refused by name and each points at{" "}
+          <Code>archlab 1.0 gantt</Code>, because each is that notation&apos;s
+          subject: a gantt draws how long work takes and what cannot start until
+          it is done, and computes the critical path from both. A timeline is
+          what already happened.
+        </P>
+        <CodeBlock
+          code={TIMELINE_REFUSALS_EXAMPLE.code}
+          label="what it will not hold"
+        />
+        <P>
+          <strong>The drawing runs down the page</strong>, because the label is
+          the whole element and a horizontal timeline would give each one the
+          gap to its neighbour to be read in. A period&apos;s band is as tall as
+          its events need, so the bands&apos; relative sizes say how much
+          happened in each.
+        </P>
+        <P>
+          Render one in the{" "}
+          <Link href="/live?d=timeline" className="underline">
+            timeline playground
+          </Link>
+          , which also reads pasted Mermaid <Code>timeline</Code> code —{" "}
+          <strong>both ways</strong>, unlike the gantt above: a timeline has no
+          status vocabulary and computes nothing, so Mermaid holds everything it
+          says. Mermaid&apos;s <Code>section</Code>, which groups periods one
+          level further up, is refused by name rather than flattened.
+        </P>
+      </Section>
+
+      {/* ---- 11. lifecycles ----------------------------------------------------------- */}
+      <Section id="lifecycle" title="Lifecycles">
+        <P>
+          A fifth document kind, opened by <Code>archlab 1.0 lifecycle</Code>:{" "}
+          {KIND_BLURB.lifecycle.charAt(0).toLowerCase()}
+          {KIND_BLURB.lifecycle.slice(1)}. The body sits under a single{" "}
+          <Code>@lifecycle</Code> block, which opens with one{" "}
+          <Code>subject</Code> — the thing the whole document follows — and then
+          the <Code>state</Code> lines it passes through.
+        </P>
+        <CodeBlock code={LIFECYCLE_MINIMAL_EXAMPLE.code} label="lifecycle" />
+        <P>
+          <strong>
+            There is no line between two states, and that is the notation.
+          </strong>{" "}
+          The main track is the order you wrote the states in — nothing else
+          decides it, and there is no <Code>to</Code>, <Code>next</Code> or{" "}
+          <Code>then</Code> to write. A state carries an id, a quoted label,{" "}
+          <Code>#tag</Code>s and optionally <Code>ends</Code>, which says the
+          subject stops there. The id has exactly one reader:{" "}
+          <Code>rejoins</Code>.
+        </P>
+        <P>
+          <strong>A branch leaves the track; it is not a peer.</strong> An{" "}
+          <Code>exit</Code> nests under the state it departs from, takes an
+          optional <Code>when</Code> line saying what causes it, and lands in
+          one of exactly two places — it <Code>ends</Code>, or it{" "}
+          <Code>rejoins</Code> a state declared <em>earlier</em>. A forward
+          rejoin is refused: that would be a shortcut along the track. An{" "}
+          <Code>exit</Code> cannot open inside another, so branch depth is
+          always one.
+        </P>
+        <P>
+          <strong>What it refuses, and where to go instead.</strong> Every
+          construct above is refused by name and each points at{" "}
+          <Code>archlab 1.0 flowchart</Code>, because each would turn this into
+          an arbitrary graph — which is that notation&apos;s subject. A
+          flowchart draws steps, decisions and edges that can go anywhere; a
+          lifecycle draws one thing being somewhere, in order.
+        </P>
+        <CodeBlock
+          code={LIFECYCLE_REFUSALS_EXAMPLE.code}
+          label="what it will not hold"
+        />
+        <P>
+          <strong>The drawing runs down the page</strong>: states are dots on
+          one spine with their text to the right, departures hang in their own
+          lane to the left, and a returning branch travels in a reserved channel
+          back into the track. A final state and a terminal branch carry a stop{" "}
+          <em>bar</em> rather than a colour, so the distinction survives
+          greyscale and a screenshot.
+        </P>
+        <P>
+          Render one in the{" "}
+          <Link href="/live?d=lifecycle" className="underline">
+            lifecycle playground
+          </Link>
+          . There is <strong>no Mermaid dialect</strong> for this notation and
+          none was invented: <Code>stateDiagram-v2</Code> is a state machine —
+          every transition that could happen, from anywhere to anywhere — rather
+          than one subject&apos;s ordered history, and <Code>journey</Code>{" "}
+          scores satisfaction.
+        </P>
+      </Section>
+
+      {/* ---- 12. errors --------------------------------------------------------------- */}
       <Section id="errors" title="Errors">
         <P>
           Parsing is all-or-nothing: a broken file throws one error and applies
@@ -549,8 +747,7 @@ export function SyntaxReference(): React.JSX.Element {
         </ul>
       </Section>
 
-      {/* ---- 9. where to use it -------------------------------------------------------- */}
-      {/* ---- 9. editor support ------------------------------------------------- */}
+      {/* ---- 11. editor support ------------------------------------------------ */}
       <Section id="editor-support" title="Editor support">
         <P>
           Out of the box an editor sees <Code>.alab</Code> as an unknown
@@ -596,6 +793,7 @@ export function SyntaxReference(): React.JSX.Element {
         </P>
       </Section>
 
+      {/* ---- 12. where to use it ----------------------------------------------- */}
       <Section id="try-it" title="Where to use it">
         <P>
           The fastest way to learn the format is to write it live:{" "}

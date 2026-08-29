@@ -68,8 +68,8 @@ export function AliasForwardFallback({
        fragment was carried because the SHARE payload lives there; `?e=` and
        `?d=` are the other half of the same compatibility promise.
 
-       MERGED, not concatenated, because five of the six destinations carry a
-       `?d=` of their own (`/live?d=seq`) — appending a second query string
+       MERGED, not concatenated, because nearly every destination carries a
+       `?d=` of its own (`/live?d=seq`) — appending a second query string
        would produce `?d=seq?e=x`, whose `d` then reads as `seq?e=x` and
        matches no kind. The DESTINATION wins a collision: the alias's `d`
        comes from the path the reader actually asked for, so `/view/seq?d=er`

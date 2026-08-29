@@ -4,12 +4,18 @@ import {
   serializeErText,
   serializeFlowchartText,
   serializeSequenceText,
+  serializeGanttText,
+  serializeTimelineText,
+  serializeLifecycleText,
   serializeUseCaseText,
 } from "@/features/archtext";
 import { loadDictExample } from "@/features/dict/service/example-service";
 import { loadErExample } from "@/features/er/service/example-service";
 import { loadFlowchartExample } from "@/features/flowchart/service/example-service";
 import { loadSequenceExample } from "@/features/sequence/service/example-service";
+import { loadGanttExample } from "@/features/gantt/service/example-service";
+import { loadTimelineExample } from "@/features/timeline/service/example-service";
+import { loadLifecycleExample } from "@/features/lifecycle/service/example-service";
 import { loadUseCaseExample } from "@/features/usecase/service/example-service";
 import { archLabFileFrom } from "@/features/viewer/lib/model";
 import { loadViewerModel } from "@/features/viewer/service/model-service";
@@ -25,12 +31,14 @@ import { loadViewerModel } from "@/features/viewer/service/model-service";
  * and be replaced. A query param is visible to the route, which renders the
  * example in the first byte.
  *
- * ONE FLAT NAMESPACE across all SIX registries: `?e=shopflow` is a C4 model,
+ * ONE FLAT NAMESPACE across all NINE registries: `?e=shopflow` is a C4 model,
  * `?e=checkout` a sequence flow, `?e=intake` a flowchart, `?e=food-delivery` a
- * use-case diagram, `?e=shop-orders` an ER diagram and `?e=customer-api` a data
- * dictionary — and the reader does not have to know which. The ids are unique
- * across the six; `check:view-input` asserts that, because the day they
- * collide this param silently resolves the wrong one.
+ * use-case diagram, `?e=shop-orders` an ER diagram, `?e=customer-api` a data
+ * dictionary, `?e=store-migration` a gantt, `?e=platform-history` a
+ * milestone timeline and `?e=order-lifecycle` a lifecycle — and the reader
+ * does not have to know which. The ids are unique across the nine;
+ * `check:view-input` asserts that, because the day they collide this param
+ * silently resolves the wrong one.
  *
  * EVERY REGISTRY MUST BE LISTED BELOW, and forgetting one is invisible in a
  * specific way. THE BUG THIS COMMENT EXISTS FOR: the ER and dictionary
@@ -79,6 +87,18 @@ export function exampleTextFor(
   const dict = loadDictExample(id);
   if (dict.status === "ok") {
     return serializeDictText(dict.file);
+  }
+  const gantt = loadGanttExample(id);
+  if (gantt.status === "ok") {
+    return serializeGanttText(gantt.file);
+  }
+  const timeline = loadTimelineExample(id);
+  if (timeline.status === "ok") {
+    return serializeTimelineText(timeline.file);
+  }
+  const lifecycle = loadLifecycleExample(id);
+  if (lifecycle.status === "ok") {
+    return serializeLifecycleText(lifecycle.file);
   }
   return null;
 }

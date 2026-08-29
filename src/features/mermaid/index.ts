@@ -39,6 +39,28 @@
  *     become edge labels, and `desc`, `[technology]`, `#tag`s, a boundary's
  *     tint and the header beyond the title have no Mermaid equivalent.
  *
+ *   - `parseMermaidGantt(source, options?)` — Mermaid `gantt` code →
+ *     `GanttLabFile`; what it drops is named by `MERMAID_GANTT_CAVEAT`,
+ *     and `detectMermaidGantt` is exact for the same reason `detectMermaidEr`
+ *     is (Mermaid has a real `gantt` document type). THE ONE DIALECT WITH NO
+ *     `serializeMermaid*` PARTNER, deliberately: `at-risk` has no Mermaid tag
+ *     and arch-lab's critical path is computed rather than typed, so an emit
+ *     would downgrade the first and misrepresent the second. The argument is
+ *     written out in `lib/gantt-mapping.ts`; do not add `gantt-emit.ts`
+ *     without answering it.
+ *
+ *   - `parseMermaidTimeline(source, options?)` /
+ *     `serializeMermaidTimeline(file, options?)` — Mermaid `timeline` ⇄
+ *     `TimelineLabFile`. TWO-WAY, and the contrast with the gantt above is
+ *     the reason it is spelled out: a timeline has no state vocabulary and
+ *     derives nothing, so Mermaid holds everything it says and the emit
+ *     cannot misrepresent anything. `detectMermaidTimeline` is exact, like
+ *     `detectMermaidEr` and `detectMermaidGantt`. What each direction gives
+ *     up is named by `MERMAID_TIMELINE_CAVEAT` and
+ *     `MERMAID_TIMELINE_EXPORT_CAVEAT`; the one construct refused rather
+ *     than approximated is Mermaid's `section`, which groups periods a level
+ *     above the period and has no arch-lab counterpart.
+ *
  * Both the viewer and the editor consume this feature only through this
  * barrel.
  */
@@ -84,6 +106,28 @@ export {
   MERMAID_USECASE_EXPORT_CAVEAT,
 } from "./lib/usecase-emit";
 export type { SerializeMermaidUseCaseOptions } from "./lib/usecase-emit";
+export {
+  detectMermaidGantt,
+  parseMermaidGantt,
+  MERMAID_GANTT_CAVEAT,
+} from "./lib/gantt";
+export type { ParseMermaidGanttOptions } from "./lib/gantt";
+export { MERMAID_GANTT_HEADER_WORD } from "./lib/gantt-mapping";
+export {
+  detectMermaidTimeline,
+  parseMermaidTimeline,
+  MERMAID_TIMELINE_CAVEAT,
+} from "./lib/timeline";
+export type { ParseMermaidTimelineOptions } from "./lib/timeline";
+export {
+  serializeMermaidTimeline,
+  MERMAID_TIMELINE_EXPORT_CAVEAT,
+} from "./lib/timeline-emit";
+export type { SerializeMermaidTimelineOptions } from "./lib/timeline-emit";
+export {
+  MERMAID_TIMELINE_HEADER_WORD,
+  REFUSED_TIMELINE_CONSTRUCTS,
+} from "./lib/timeline-mapping";
 export { detectMermaidEr, parseMermaidEr } from "./lib/er";
 export type { ParseMermaidErOptions } from "./lib/er";
 export { serializeMermaidEr } from "./lib/er-emit";

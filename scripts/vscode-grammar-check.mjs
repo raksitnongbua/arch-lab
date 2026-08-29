@@ -18,11 +18,14 @@
  *   5. both JSON files parse, and every `include` names a real repository
  *      rule (a typo'd include silently highlights nothing).
  *
- * It then TOKENIZES a sample file with `vscode-textmate` — the same engine
- * VS Code runs — and asserts the scope at specific offsets, so "the grammar
- * looks right" is replaced by "the grammar highlights right". The sample is
- * first fed to the real `parseArchText`, so it cannot drift into something
- * that is not valid `.alab`.
+ * It then TOKENIZES three sample files with `vscode-textmate` — the same
+ * engine VS Code runs — and asserts the scope at specific offsets, so "the
+ * grammar looks right" is replaced by "the grammar highlights right". One
+ * sample per document kind that has rules of its own (C4, sequence, gantt,
+ * milestone timeline, lifecycle),
+ * each first fed to ITS real parser, so none can drift into something that is
+ * not valid `.alab`. Three files rather than one because the kinds never mix:
+ * a fused sample would be text no parser accepts.
  *
  * Exits non-zero on any failure. Run with: pnpm check:vscode-grammar
  */
@@ -74,7 +77,13 @@ const { SEQUENCE_ARROW_MATCH_ORDER } = await import(
     path.join(ROOT, "src/features/archtext/lib/sequence/keywords.ts"),
   ).href
 );
-const { parseArchText, parseSequenceText } = await import(
+const {
+  parseArchText,
+  parseSequenceText,
+  parseGanttText,
+  parseTimelineText,
+  parseLifecycleText,
+} = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
 
@@ -98,6 +107,11 @@ const HEADER_KEYWORDS = [
   "customicon",
   "generator",
   "root",
+  /* Gantt-only, but header lines are one shared rule in the grammar. It
+     earns a row here for the same reason every other word does: `starts` is
+     what turns a relative axis into a calendar one, and an unhighlit header is
+     how a reader learns to distrust the colouring. */
+  "starts",
 ];
 
 const EXT_DIR = path.join(ROOT, "editors/vscode");
@@ -454,6 +468,163 @@ const SEQUENCE_EXPECTATIONS = [
   ["api <..> web", "<..>", "keyword.operator.arrow.alab"],
 ];
 
+/**
+ * A THIRD SAMPLE, for the third grammar, and it exists for the reason the
+ * second one does: the gantt's body lines are a rule no C4 or sequence
+ * document can reach, so nothing already here would ever tokenize them. Every
+ * construct that carries meaning on an item line is asserted — the two item
+ * keywords, the duration, a state word, both start keywords and the `starts`
+ * date — because each is a place the shared `#number` and `#bare-word` rules
+ * would happily swallow the token if the gantt rule stopped matching.
+ * Validated by the GANTT parser, so it cannot drift into invalid `.alab`.
+ */
+const GANTT_SAMPLE = `archlab 1.0 gantt
+title "Gantt highlighting"
+starts 2026-09-07
+
+@gantt
+  section "Prepare"
+    task audit "Schema audit" 5d done at 0
+    task shadow "Shadow writes" 13d active after audit
+    milestone parity "Parity signed off" after shadow #gate
+`;
+
+const GANTT_EXPECTATIONS = [
+  ["starts 2026-09-07", "starts", "keyword.control.header.alab"],
+  // The date must be ONE token, not a year minus a month minus a day: that is
+  // what `#date` is ahead of `#number` for.
+  ["starts 2026-09-07", "2026-09-07", "constant.other.date.alab"],
+  ['section "Prepare"', "section", "keyword.control.gantt.alab"],
+  ["task audit", "task", "keyword.control.gantt.alab"],
+  ["task audit", "5d", "constant.numeric.duration.alab"],
+  ["task audit", "done", "constant.language.item-state.alab"],
+  ["task audit", "at", "keyword.other.start.alab"],
+  ["task shadow", "active", "constant.language.item-state.alab"],
+  ["task shadow", "after", "keyword.other.start.alab"],
+  ["milestone parity", "milestone", "keyword.control.gantt.alab"],
+  // A `#tag` on an item line is model data here too — the same claim the C4
+  // sample makes, made again where a different rule is doing the including.
+  ["milestone parity", "gate", "entity.name.tag.alab", "comment"],
+];
+
+/**
+ * A FOURTH SAMPLE, for the fourth grammar with rules of its own. It asserts
+ * less than the gantt one above because there IS less: this grammar has no
+ * bare tokens at all, so the only things on an event line are the keyword, a
+ * quoted string and any number of `#tag`s. What it is really guarding is that
+ * `period` and `event` reach `#timeline-line` rather than falling through to
+ * `#node-line`, which would read `event "…"` as a C4 node declaration and
+ * scope the keyword as an id.
+ *
+ * Validated by the TIMELINE parser, so it cannot drift into invalid `.alab`.
+ */
+const TIMELINE_SAMPLE = `archlab 1.0 timeline
+title "Timeline highlighting"
+
+@timeline
+  period "2024"
+    event "Founded the company"
+    event "First ten customers" #milestone
+`;
+
+const TIMELINE_EXPECTATIONS = [
+  ['period "2024"', "period", "keyword.control.timeline.alab"],
+  ['event "Founded', "event", "keyword.control.timeline.alab"],
+  // A `#tag` on an event line is model data here too — the same claim the C4
+  // and gantt samples make, made again where a third rule does the including.
+  ["First ten customers", "milestone", "entity.name.tag.alab", "comment"],
+  /* THE ONE THAT MATTERS, and it is a NEGATIVE: `milestone` is the gantt's
+     item keyword, and this line carries it as a tag. If `#timeline-line`
+     stopped matching, the tag would still be a tag but the LINE would fall
+     through to `#node-line` and `event` would scope as an id — so asserting
+     the keyword above and the tag here together pins both halves. */
+  ['event "First', "event", "keyword.control.timeline.alab"],
+];
+
+/**
+ * A FIFTH SAMPLE, for the fifth grammar with rules of its own, and it guards
+ * the one hazard the other four do not have: this grammar has BOTH a bare
+ * token (a state's id) and two bare MARKERS (`ends`, `rejoins`). Get the rule
+ * order wrong and `ends` colours as an id — which is exactly the confusion the
+ * parser refuses a document for, so the editor would be teaching the mistake.
+ *
+ * The second thing it guards is the fall-through: `state placed "Placed"` must
+ * reach `#lifecycle-line` rather than `#node-line`, which would read it as a
+ * C4 node declaration and scope `state` as an id.
+ *
+ * Validated by the LIFECYCLE parser, so it cannot drift into invalid `.alab`.
+ */
+const LIFECYCLE_SAMPLE = `archlab 1.0 lifecycle
+title "Lifecycle highlighting"
+
+@lifecycle
+  subject "Order"
+  state placed "Placed" #retail
+    exit "Cancelled" ends
+      when "the customer changes their mind"
+  state shipped "Shipped"
+    exit "Returned" rejoins placed
+  state delivered "Delivered" ends
+`;
+
+const LIFECYCLE_EXPECTATIONS = [
+  ['subject "Order"', "subject", "keyword.control.lifecycle.alab"],
+  ['state placed "Placed"', "state", "keyword.control.lifecycle.alab"],
+  ['exit "Cancelled"', "exit", "keyword.control.lifecycle.alab"],
+  ['when "the customer', "when", "keyword.control.lifecycle.alab"],
+  /* THE TWO THAT MATTER, and both are about the marker rule beating
+     `#bare-word`: `ends` and `rejoins` say where the subject LANDS, and a
+     document whose editor coloured either as an id would be teaching the
+     spelling the parser refuses. */
+  ['exit "Cancelled" ends', "ends", "keyword.other.lifecycle.alab"],
+  ['exit "Returned" rejoins placed', "rejoins", "keyword.other.lifecycle.alab"],
+  // A `#tag` on a state line is model data here too — the same claim the C4,
+  // gantt and timeline samples make, made again under a fourth rule.
+  [
+    'state placed "Placed" #retail',
+    "retail",
+    "entity.name.tag.alab",
+    "comment",
+  ],
+];
+
+try {
+  parseLifecycleText(LIFECYCLE_SAMPLE);
+  ok(
+    "the lifecycle highlighting sample is valid .alab (real parseLifecycleText)",
+  );
+} catch (error) {
+  tokenizeReady = false;
+  fail(
+    "the lifecycle highlighting sample is valid .alab (real parseLifecycleText)",
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+try {
+  parseTimelineText(TIMELINE_SAMPLE);
+  ok(
+    "the timeline highlighting sample is valid .alab (real parseTimelineText)",
+  );
+} catch (error) {
+  tokenizeReady = false;
+  fail(
+    "the timeline highlighting sample is valid .alab (real parseTimelineText)",
+    error.message,
+  );
+}
+
+try {
+  parseGanttText(GANTT_SAMPLE);
+  ok("the gantt highlighting sample is valid .alab (real parseGanttText)");
+} catch (error) {
+  tokenizeReady = false;
+  fail(
+    "the gantt highlighting sample is valid .alab (real parseGanttText)",
+    error.message,
+  );
+}
+
 try {
   parseSequenceText(SEQUENCE_SAMPLE);
   ok(
@@ -611,6 +782,72 @@ if (tokenizeReady) {
         }
       }
     }
+
+    /* THE GANTT AND TIMELINE SAMPLES, each tokenized on its own for the same
+       reason the sequence one is: document kinds never share a file.
+
+       ONE FUNCTION FOR BOTH rather than a third copy of the block. The gantt
+       block was copied from the sequence one, and copying it a second time is
+       the shape `dry.md` names — identical bodies with a renamed sample. The
+       sequence block above stays separate on purpose: its failure wording is
+       about arrows and its bounds assertion is making a different point. */
+    const checkSample = (sampleName, sampleText, expectations) => {
+      const sampleLines = sampleText.split("\n");
+      const sampleTokens = [];
+      let sampleStack = vsctm.INITIAL;
+      for (const line of sampleLines) {
+        const result = tmGrammar.tokenizeLine(line, sampleStack);
+        sampleTokens.push(result.tokens);
+        sampleStack = result.ruleStack;
+      }
+      for (const [
+        lineSubstring,
+        tokenSubstring,
+        requiredScope,
+        forbiddenScope,
+      ] of expectations) {
+        const label = `${requiredScope} on "${tokenSubstring}" (${sampleName})`;
+        const lineIndex = sampleLines.findIndex((line) =>
+          line.includes(lineSubstring),
+        );
+        if (lineIndex === -1) {
+          fail(label, `${sampleName} sample has no "${lineSubstring}"`);
+          continue;
+        }
+        const column = sampleLines[lineIndex].indexOf(tokenSubstring);
+        const token = sampleTokens[lineIndex].find(
+          (candidate) =>
+            column >= candidate.startIndex && column < candidate.endIndex,
+        );
+        const scopes = token?.scopes ?? [];
+        /* BOUNDS AS WELL AS SCOPE, exactly as the sequence arrows are checked:
+           `2026-09-07` scoped correctly on its first three characters and then
+           broken into three numbers would pass a scope-only assertion. */
+        if (
+          token !== undefined &&
+          scopes.includes(requiredScope) &&
+          token.startIndex === column &&
+          token.endIndex === column + tokenSubstring.length &&
+          !(
+            forbiddenScope !== undefined &&
+            scopes.some((scope) => scope.includes(forbiddenScope))
+          )
+        ) {
+          ok(label);
+        } else {
+          fail(
+            label,
+            token === undefined
+              ? "no token there"
+              : `scopes ${scopes.join(" ")} span [${token.startIndex},${token.endIndex}), expected [${column},${column + tokenSubstring.length})`,
+          );
+        }
+      }
+    };
+
+    checkSample("gantt", GANTT_SAMPLE, GANTT_EXPECTATIONS);
+    checkSample("timeline", TIMELINE_SAMPLE, TIMELINE_EXPECTATIONS);
+    checkSample("lifecycle", LIFECYCLE_SAMPLE, LIFECYCLE_EXPECTATIONS);
 
     // Whole-token check: each arrow must be a single token, not a split pair.
     for (const [lineSubstring, arrow] of [

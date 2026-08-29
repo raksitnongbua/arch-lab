@@ -4,3 +4,6 @@ export * from "./flowchart";
 export * from "./usecase";
 export * from "./er";
 export * from "./dict";
+export * from "./gantt";
+export * from "./timeline";
+export * from "./lifecycle";

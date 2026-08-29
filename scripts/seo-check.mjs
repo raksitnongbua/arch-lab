@@ -46,8 +46,9 @@
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { registerHooks } from "node:module";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { registerTsResolution } from "./lib/resolve-ts.mjs";
 
@@ -61,6 +62,38 @@ const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
    never heard of, and three checks in this repo passed for exactly that reason
    while the feature under them was broken. */
 const load = registerTsResolution(ROOT);
+
+/* TWO EXTRA RESOLUTION RULES, so the sitemap section below can EXECUTE
+   `src/app/sitemap.ts` rather than read it. Registered after
+   `registerTsResolution` so this hook sees the specifier before the alias
+   rewrite does. Neither rule changes what is measured — each one only lets
+   type stripping reach code the app reaches through a bundler:
+
+     - `@/features/viewer` is a BARREL, and a barrel re-exports `.tsx`, which
+       type stripping cannot read. It resolves here to the module the barrel
+       takes `listViewerModelIds` from, which is the same function object the
+       sitemap would have imported.
+     - a `.json` import needs `with { type: "json" }` under Node's own loader,
+       and the viewer's model registry (written for a bundler) has none. The
+       attribute is supplied here rather than added to application code for a
+       check's convenience. */
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@/features/viewer") {
+      return nextResolve(
+        pathToFileURL(
+          path.join(ROOT, "src/features/viewer/service/model-service.ts"),
+        ).href,
+        context,
+      );
+    }
+    const resolved = nextResolve(specifier, context);
+    return resolved.url.endsWith(".json")
+      ? { ...resolved, importAttributes: { type: "json" } }
+      : resolved;
+  },
+});
+
 const { CANVAS_EDITING_PASSAGE, CANVAS_EDITABLE_SUMMARY, CANVAS_EDIT_OFFERS } =
   await load("src/features/playground/input/canvas-edit.ts");
 
@@ -319,6 +352,183 @@ for (const { route, file, target } of ALIASES) {
     "the sitemap lists the one playground",
     listed.includes("/live"),
     `listed: ${listed.join(", ")}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 4b. Sitemap coverage, WRITTEN FROM THE REGISTRIES                        */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * THE DEFECT THIS EXISTS FOR, and it was a defect in this script rather than
+ * in the site. Every other sitemap assertion here reads `src/app/sitemap.ts`
+ * and derives its expectation FROM WHAT IT FINDS THERE — so an entry that is
+ * absent takes its own expectation with it, and the check passes with the
+ * same assertion count it had when the entry was present. Deleting
+ * `...ganttRoutes` from the returned array removed both crawlable gantt
+ * example pages from the sitemap and this script printed "All 131 SEO
+ * assertions passed". `deploy.md` states that "check:seo derives its coverage
+ * expectation from that array, so a route missing here fails the check"; that
+ * was an intent, not an implementation.
+ *
+ * The fix is to write the expectation from the DATA the sitemap is supposed
+ * to be derived from, and to compare it against what the function actually
+ * RETURNS:
+ *
+ *   - the registries are discovered by WALKING `src/features/*​/service`, not
+ *     by a list typed here. A hardcoded set of seven cannot notice an eighth
+ *     notation, which is the precise failure this assertion exists to
+ *     prevent — `codebase.md`, habit 4.
+ *   - each registry's ids come from CALLING it, so a registry that grows a
+ *     third example is covered the day it is registered.
+ *   - the URL each id must reach is read off the ROUTE DIRECTORY on disk
+ *     (`src/app/live/<kind>/[exampleId]` for the notations,
+ *     `src/app/live/[modelId]` for the bundled C4 models), so this does not
+ *     hardcode the URL shape either.
+ *   - and the sitemap is EXECUTED, not read, so the assertion is about the
+ *     array a crawler receives rather than about a line of source that may
+ *     never be reached.
+ *
+ * The registries are deep-imported (`.../service/example-service.ts`) rather
+ * than taken from the feature barrels, because a barrel re-exports `.tsx` and
+ * Node's type stripping cannot read one — every feature barrel in this repo
+ * carries a note saying exactly that.
+ */
+
+console.log("\nsitemap coverage (every registered example is crawlable)");
+
+/**
+ * The example registries, found on disk: `src/features/<kind>/service/` with
+ * a module exporting a zero-argument `list…Ids` function.
+ *
+ * Two kinds of registry, distinguished by the route they feed rather than by
+ * their names: the six notations publish `/live/<kind>/<id>` and the bundled
+ * C4 models publish `/live/<id>`, because the C4 canvas is the one that owns
+ * the bare route.
+ */
+async function exampleRegistries() {
+  const featuresDir = path.join(ROOT, "src/features");
+  const found = [];
+  for (const feature of readdirSync(featuresDir).sort()) {
+    const serviceDir = path.join(featuresDir, feature, "service");
+    if (!existsSync(serviceDir) || !statSync(serviceDir).isDirectory()) {
+      continue;
+    }
+    for (const file of readdirSync(serviceDir).sort()) {
+      if (!file.endsWith("-service.ts")) continue;
+      const relative = `src/features/${feature}/service/${file}`;
+      /* NOT named `module`: Next's lint forbids assigning that identifier
+         (@next/next/no-assign-module-variable), and this script is linted
+         with the app. */
+      let registry;
+      try {
+        registry = await load(relative);
+      } catch (error) {
+        found.push({ feature, relative, error: error.message });
+        continue;
+      }
+      for (const [name, value] of Object.entries(registry)) {
+        if (typeof value !== "function") continue;
+        if (!/^list[A-Za-z]*(Example|Model)Ids$/.test(name)) continue;
+        /* The route shape is read off the filesystem, not assumed: a notation
+           publishes its examples under `/live/<kind>/[exampleId]`, and the
+           bundled C4 models under the bare `/live/[modelId]`. */
+        const nested = path.join(ROOT, "src/app/live", feature, "[exampleId]");
+        const bare = path.join(ROOT, "src/app/live/[modelId]");
+        const prefix = existsSync(nested)
+          ? `/live/${feature}`
+          : existsSync(bare) && name.endsWith("ModelIds")
+            ? "/live"
+            : null;
+        found.push({ feature, relative, name, prefix, ids: value() });
+      }
+    }
+  }
+  return found;
+}
+
+{
+  const registries = await exampleRegistries();
+  const broken = registries.filter((entry) => entry.error !== undefined);
+  check(
+    "every example registry on disk loads",
+    broken.length === 0,
+    broken.map((entry) => `${entry.relative}: ${entry.error}`).join("; "),
+  );
+
+  const usable = registries.filter((entry) => entry.error === undefined);
+  /* A walk that finds nothing would make every assertion below pass by
+     saying nothing — the shape of the bug this section replaces. */
+  check(
+    `the walk found the example registries (${usable.length}: ${usable.map((entry) => entry.feature).join(", ")})`,
+    usable.length >= 7 &&
+      usable.reduce((total, entry) => total + entry.ids.length, 0) >= 15,
+    "src/features/*/service/*-service.ts found no list…Ids exports — this section would pass vacuously",
+  );
+
+  const unrouted = usable.filter((entry) => entry.prefix === null);
+  check(
+    "every registry's examples have a route to be crawled at",
+    unrouted.length === 0,
+    `${unrouted.map((entry) => `${entry.feature}.${entry.name}`).join(", ")} — a registered example with no page is a registry entry nobody can reach`,
+  );
+
+  /* THE SITEMAP AS A CRAWLER RECEIVES IT. Executed rather than read: the
+     assertion is about the returned array, so a spread left out of the
+     `return` fails here even though every line that builds it is still in
+     the file. */
+  const sitemapUrls = new Set(
+    (await load("src/app/sitemap.ts")).default().map((entry) => {
+      const url = new URL(entry.url);
+      return url.pathname === "/" ? "" : url.pathname;
+    }),
+  );
+  check(
+    "the sitemap function runs and returns URLs",
+    sitemapUrls.size > 0,
+    "sitemap() returned nothing — everything below would pass vacuously",
+  );
+
+  const missing = [];
+  for (const entry of usable) {
+    if (entry.prefix === null) continue;
+    for (const id of entry.ids) {
+      const route = `${entry.prefix}/${id}`;
+      if (!sitemapUrls.has(route)) missing.push(route);
+    }
+  }
+  check(
+    `every id every registry returns is in the sitemap (${usable.reduce((total, entry) => total + entry.ids.length, 0)} example pages)`,
+    missing.length === 0,
+    `absent from sitemap(): ${missing.join(", ")} — a crawlable example page nothing links a crawler to`,
+  );
+
+  /* And the other direction, which the sitemap-derived assertions could not
+     see either: a `/live/<kind>/<id>` URL for an example that no longer
+     exists is a 404 offered to every crawler that reads the file. */
+  const registered = new Set(
+    usable.flatMap((entry) =>
+      entry.prefix === null
+        ? []
+        : entry.ids.map((id) => `${entry.prefix}/${id}`),
+    ),
+  );
+  const staticRoutes = new Set(
+    [
+      ...(
+        /const staticRoutes = \[([\s\S]*?)\n {2}\];/.exec(
+          read("src/app/sitemap.ts"),
+        )?.[1] ?? ""
+      ).matchAll(/"([^"]*)"/g),
+    ].map((match) => match[1]),
+  );
+  const stale = [...sitemapUrls].filter(
+    (route) => !registered.has(route) && !staticRoutes.has(route),
+  );
+  check(
+    "the sitemap offers no example URL that no registry backs",
+    stale.length === 0,
+    `${stale.join(", ")} — a sitemap entry with nothing behind it is a 404 handed to every crawler`,
   );
 }
 

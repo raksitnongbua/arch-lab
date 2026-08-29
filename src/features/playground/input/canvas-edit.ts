@@ -166,7 +166,7 @@ export type CanvasEditability =
  *     an index, which is `revise`'s territory with the other inserts.
  *
  * A document can therefore refuse one and allow the other — a sequence
- * document refuses `move` while offering `revise`, and the four text-laid-out
+ * document refuses `move` while offering `revise`, and the five text-laid-out
  * notations refuse all four. That is
  * why the answers live in a TABLE below rather than in a chain of
  * `doc.kind !== …` tests: a chain states each notation's answer as the negation
@@ -189,7 +189,7 @@ export type CanvasEditAbility = "move" | "revise" | "create" | "connect";
  * The notations a `ViewDocument` can be — the key of the capability table.
  *
  * Keyed off the DOCUMENT UNION rather than off `SeedKind`, even though the two
- * hold the same six names today, because this one is the set that reaches this
+ * hold the same eight names today, because this one is the set that reaches this
  * module: a notation added to `ViewDocument` fails to compile here until it has
  * an answer for every ability. `check:canvas-edit` pins the two sets equal so a
  * notation added to the seed table is caught as well.
@@ -235,8 +235,8 @@ type CanvasEditOffer =
        *
        * Required on every offering cell, and that is the point: the site's
        * claim about which canvases can be edited is then assembled from this
-       * table, so a seventh notation that learns a gesture cannot ship with the
-       * pages still describing six. The clause must name the notation and say
+       * table, so a ninth notation that learns a gesture cannot ship with the
+       * pages still describing eight. The clause must name the notation and say
        * what lands in the text, because REORDER AND POSITION ARE DIFFERENT
        * CLAIMS and a reader arriving from a drawing tool assumes the second —
        * see the `RefusalGround` note above and the `/faq` answer that draws the
@@ -267,7 +267,7 @@ type CanvasEditOffer =
 
 /* The sentences more than one cell needs, named so that rewording one cannot
    reword four of five places. They are constants rather than a per-ability
-   default because a DEFAULT is exactly how a seventh notation would inherit an
+   default because a DEFAULT is exactly how an eighth notation would inherit an
    answer nobody wrote for it: every cell below is spelled out, and that
    repetition is the point. */
 
@@ -297,7 +297,7 @@ const NO_PLACE_IN_THE_TEXT =
  * Read a row as "what the sequence canvas can write back"; read a column as
  * "which notations answer a drag". Every cell is written out, including the
  * four that say the same thing, so that adding a notation is a compile error
- * with six blanks rather than a silent inheritance.
+ * with eight blanks rather than a silent inheritance.
  *
  * `canvasEditability` is the only reader; nothing branches on `doc.kind` for
  * this question any more. Exported because `check:canvas-edit` asserts the
@@ -344,6 +344,44 @@ export const CANVAS_EDIT_OFFERS: Record<
     },
     er: { offers: false, ground: "grammar", because: NO_POSITION_IN_THE_TEXT },
     dict: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+    },
+    /* A gantt solves its layout twice over, which is why this is the same
+       `"grammar"` refusal its neighbours give rather than a weaker one: a
+       row's VERTICAL place is the topological order of the dependency graph,
+       and its HORIZONTAL place is its computed start — `at 0` plus every
+       `after` upstream of it. Neither is a coordinate the author wrote, so a
+       drag has nowhere in the text to land and the next parse would re-derive
+       both. */
+    gantt: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+    },
+    /* `"grammar"`, and this is the cell where the ability doc's own trap is
+       easiest to fall into. Dragging an event up or down a timeline LOOKS like
+       a move and is not one: it would take a neighbour's slot rather than land
+       at a point, because an event's position IS its index in its period and a
+       period's is its index in the file. That is a reorder, which this table
+       files under `revise` — and there is no coordinate anywhere in the
+       grammar for a drag to write, so the refusal is the grammar's rather than
+       the canvas's. */
+    timeline: {
+      offers: false,
+      ground: "grammar",
+      because: NO_POSITION_IN_THE_TEXT,
+    },
+    /* `"grammar"`, and this notation makes the refusal more absolutely than
+       any of its neighbours: a state's position IS its index on the track,
+       and the track is the only thing this grammar says about order
+       (`src/types/lifecycle.ts` — the main track carries no edges at all, on
+       purpose). So there is no coordinate to write AND dragging a state up or
+       down would rewrite the history rather than move a box. That is a
+       reorder, which this table files under `revise`, and it is one no
+       gesture should make casually. */
+    lifecycle: {
       offers: false,
       ground: "grammar",
       because: NO_POSITION_IN_THE_TEXT,
@@ -464,6 +502,51 @@ export const CANVAS_EDIT_OFFERS: Record<
       ground: "surface",
       because: NO_EDITOR_ON_THIS_CANVAS,
     },
+    /* `"surface"`, and the ground is doing real work here rather than being
+       the polite default. A duration is one number on the item's own line, and
+       dragging a bar's right-hand edge is the obvious gesture that would write
+       it — the grammar holds the edit today, `5d` and all. What is missing is
+       only the handle: this canvas draws bars and reads them, and nothing on it
+       accepts a drag. So this is a refusal that MOVES the day somebody builds
+       one, exactly as the C4 revise cell above did. */
+    gantt: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    /* `"surface"`, and it is the most nearly-shippable refusal in this table.
+       Everything `revise` needs is already true: an event's whole content is
+       one quoted string on its own line, the parser reports a line range per
+       event, and a reorder is a swap of two adjacent lines within a period —
+       no renumbering, no ids to fix up, nothing else in the document to
+       disturb. What is missing is only somewhere to type: this canvas draws
+       text and reads it, and nothing on it accepts a click that opens a field.
+       So this refusal moves the day somebody builds one, exactly as the C4
+       revise cell's did. */
+    timeline: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    /* `"surface"`, and the ground is doing real work rather than being the
+       polite default: a state's whole content is an id, a quoted label and an
+       optional `ends` on one line, and an exit's is a quoted label plus one
+       of two markers — both are single lines a span-reporting parse could
+       hand back and a dock could retype. What is missing is only somewhere to
+       type: this canvas draws text and reads it, and nothing on it accepts a
+       click that opens a field. So this refusal moves the day somebody builds
+       one, exactly as the C4 revise cell's did.
+
+       THE ONE PART THAT WOULD NOT BE ORDINARY, and it is worth writing down
+       before somebody builds the dock: retyping a state's ID is not a field
+       edit, because `rejoins` points at it — the gesture would have to
+       rewrite every exit naming it, in the author's own text, or leave a
+       document the parser refuses. */
+    lifecycle: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
   },
   create: {
     c4: {
@@ -519,6 +602,45 @@ export const CANVAS_EDIT_OFFERS: Record<
     },
     er: { offers: false, ground: "grammar", because: NO_PLACE_IN_THE_TEXT },
     dict: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+    },
+    /* `"grammar"`, and for a reason the shared sentence only half covers: an
+       item cannot exist until it has an id, a duration and a SECTION, and the
+       section is the part the canvas cannot supply. A bar dropped between two
+       rows names neither the band it joined nor the band it left, because the
+       band is a `section` line in the text and the gap between two rows is not
+       one. So this refusal does not move when a handle appears; it moves only
+       if the grammar stops placing items inside sections. */
+    gantt: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+    },
+    /* `"grammar"`, for the reason the gantt's create cell gives and one step
+       more sharply: an event cannot exist until it names a PERIOD, and the gap
+       between two dots is not a period — the band is a `period` line in the
+       text, and a drop point between two events in the same band names
+       neither the band nor a place inside it. So this refusal does not move
+       when a handle appears; it moves only if the grammar stops nesting events
+       inside periods, which is the nesting that makes membership unspellable
+       any other way. */
+    timeline: {
+      offers: false,
+      ground: "grammar",
+      because: NO_PLACE_IN_THE_TEXT,
+    },
+    /* `"grammar"`, and one step sharper than the timeline's above it: a new
+       state cannot be dropped BETWEEN two others, because the gap between two
+       dots is not a position — it is a place in an ORDER, and an order is not
+       a coordinate the text can hold. Worse, dropping one there would change
+       what the document CLAIMS: it would assert the subject passed through a
+       state it has never been in. So this refusal does not move when a
+       handle appears; it moves only if the grammar starts recording
+       placements, which is the change that would stop the track being
+       declaration order. */
+    lifecycle: {
       offers: false,
       ground: "grammar",
       because: NO_PLACE_IN_THE_TEXT,
@@ -589,6 +711,57 @@ export const CANVAS_EDIT_OFFERS: Record<
       because:
         "A data dictionary declares fields, not relationships, so there is " +
         "no line between two entries to write.",
+    },
+    /* `"surface"`, NOT `"grammar"`, and the distinction is the whole point of
+       this cell. Unlike the dictionary above, a gantt's relationship IS
+       spellable: `after audit` on the item's own line is a real dependency,
+       one token, already round-tripping. A drag from one bar to another would
+       therefore write something the grammar keeps and the layout obeys — the
+       arrow would be there on the next render, not undone by it. The only
+       thing missing is a handle to drag from, so this is the refusal on this
+       notation most likely to be deleted by the next person to touch the
+       canvas. */
+    gantt: {
+      offers: false,
+      ground: "surface",
+      because: NO_EDITOR_ON_THIS_CANVAS,
+    },
+    /* `"grammar"`, like the dictionary above and unlike the gantt directly
+       above it — and the contrast is the whole content of this cell. A gantt
+       CAN be connected in principle because `after audit` is a real line its
+       grammar keeps; a timeline has no such line and must not grow one. An
+       arrow between two events would be a dependency, dependencies are what
+       the gantt is for, and adding one here is the single change that would
+       turn this notation into a worse copy of the one next door
+       (`src/types/timeline.ts` records that the overlap between them was
+       waived by name, which makes narrowing it the last thing this kind
+       should do). So no dock could ever move this refusal. */
+    timeline: {
+      offers: false,
+      ground: "grammar",
+      because:
+        "A timeline declares what happened and in what order, not what waits " +
+        "for what, so there is no line between two events to write.",
+    },
+    /* `"grammar"`, like the dictionary and the timeline, and this is the cell
+       where the refusal IS the notation rather than a consequence of it. A
+       lifecycle's main track has no edges at all: state follows state because
+       it was written next, and a drawn line between two states would be
+       exactly the arbitrary graph edge the grammar refuses by name — the one
+       change that would make this a worse flowchart
+       (`src/types/lifecycle.ts` records that the overlap was waived, which
+       makes narrowing it the last thing this kind should do). The one line
+       the grammar DOES hold, `rejoins`, is not a free connection either: it
+       may only point BACKWARD, from a departure, at a state the subject has
+       already been in. So no dock could ever move this refusal without
+       changing what the notation is. */
+    lifecycle: {
+      offers: false,
+      ground: "grammar",
+      because:
+        "A lifecycle's states follow one another because of the order they " +
+        "are written in, not because of lines between them, so there is no " +
+        "connection to draw.",
     },
   },
 };

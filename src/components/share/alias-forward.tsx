@@ -44,8 +44,8 @@ import { AliasForwardFallback } from "./alias-forward-fallback";
  * The forward, as source a browser runs during parse.
  *
  * The query is MERGED rather than appended, for the reason
- * `alias-forward-fallback.tsx` sets out: five of the six destinations carry a
- * `?d=` of their own, and `?d=seq?e=x` makes `d` read as `seq?e=x`, matching no
+ * `alias-forward-fallback.tsx` sets out: nearly every destination carries a
+ * `?d=` of its own, and `?d=seq?e=x` makes `d` read as `seq?e=x`, matching no
  * kind. The destination wins a collision, because its `d` comes from the path
  * the reader actually asked for.
  *

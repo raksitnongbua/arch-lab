@@ -36,6 +36,9 @@ import { formatSequence, validateSequence } from "./tools/sequence";
 import { formatUseCase, validateUseCase } from "./tools/usecase";
 import { formatEr, validateEr } from "./tools/er";
 import { formatDict, validateDict } from "./tools/dict";
+import { formatGantt, validateGantt } from "./tools/gantt";
+import { formatTimeline, validateTimeline } from "./tools/timeline";
+import { formatLifecycle, validateLifecycle } from "./tools/lifecycle";
 import { createShareLink } from "./tools/share";
 import { getSyntaxReference, SYNTAX_SECTION_IDS } from "./tools/syntax";
 import { validateModel } from "./tools/validate";
@@ -84,6 +87,28 @@ const DICT_SOURCE_SCHEMA = z
       "has no dictionary notation.",
   );
 
+const GANTT_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Gantt text: .alab gantt, or Mermaid gantt. Mermaid is read only — " +
+      "the import is one-way and lossy.",
+  );
+
+const TIMELINE_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Milestone timeline text: .alab timeline, or Mermaid timeline. Unlike " +
+      "gantt, this conversion runs both ways.",
+  );
+
+const LIFECYCLE_SOURCE_SCHEMA = z
+  .string()
+  .describe(
+    "Lifecycle text: .alab lifecycle. The only dialect — Mermaid has no " +
+      "lifecycle notation (stateDiagram-v2 is a state machine, not one " +
+      "subject's history), so none was invented.",
+  );
+
 /* `create_share_link` accepts EVERY document kind — see tools/share.ts. */
 const SHARE_SOURCE_SCHEMA = z
   .string()
@@ -93,7 +118,9 @@ const SHARE_SOURCE_SCHEMA = z
       ".alab flowchart or Mermaid flowchart/graph for flowcharts; " +
       ".alab usecase or Mermaid in the actor/use-case convention for " +
       "use-case diagrams; .alab er or Mermaid erDiagram for ER diagrams; " +
-      ".alab dict for data dictionaries.",
+      ".alab dict for data dictionaries; .alab gantt or Mermaid gantt " +
+      "for gantt charts; .alab timeline or Mermaid timeline for milestone " +
+      "timelines; .alab lifecycle for lifecycles.",
   );
 
 /**
@@ -270,6 +297,77 @@ export function registerArchLabMcp(server: McpServer): void {
     "format_dict",
     { ...config("format_dict"), inputSchema: { source: DICT_SOURCE_SCHEMA } },
     ({ source }) => formatDict(source),
+  );
+
+  /* ---- gantt charts ---------------------------------------------------------- */
+
+  /* A seventh pair. A gantt's summary is a duration and the chain that
+     sets it — arithmetic no other tool here performs, and nothing the author
+     can read off their own text. See tools/gantt.ts. */
+  server.registerTool(
+    "validate_gantt",
+    {
+      ...config("validate_gantt"),
+      inputSchema: { source: GANTT_SOURCE_SCHEMA },
+    },
+    ({ source }) => validateGantt(source),
+  );
+
+  server.registerTool(
+    "format_gantt",
+    {
+      ...config("format_gantt"),
+      inputSchema: { source: GANTT_SOURCE_SCHEMA },
+    },
+    ({ source }) => formatGantt(source),
+  );
+
+  /* ---- milestone timelines ------------------------------------------------ */
+
+  /* An eighth pair. A timeline's audit is the one nothing else can do: this
+     notation never reads a period label as a date, so only this tool notices
+     periods written out of sequence. See tools/timeline.ts. */
+  server.registerTool(
+    "validate_timeline",
+    {
+      ...config("validate_timeline"),
+      inputSchema: { source: TIMELINE_SOURCE_SCHEMA },
+    },
+    ({ source }) => validateTimeline(source),
+  );
+
+  server.registerTool(
+    "format_timeline",
+    {
+      ...config("format_timeline"),
+      inputSchema: { source: TIMELINE_SOURCE_SCHEMA },
+    },
+    ({ source }) => formatTimeline(source),
+  );
+
+  /* ---- lifecycles --------------------------------------------------------- */
+
+  /* A ninth pair. A lifecycle's audit is the one nothing else can do: the
+     grammar cannot tell a STATE ("Paid") from a STEP ("Take payment"), so only
+     this tool notices a flowchart written in this notation — and only it can
+     see a subject that never terminates or states stranded after a final one.
+     See tools/lifecycle.ts. */
+  server.registerTool(
+    "validate_lifecycle",
+    {
+      ...config("validate_lifecycle"),
+      inputSchema: { source: LIFECYCLE_SOURCE_SCHEMA },
+    },
+    ({ source }) => validateLifecycle(source),
+  );
+
+  server.registerTool(
+    "format_lifecycle",
+    {
+      ...config("format_lifecycle"),
+      inputSchema: { source: LIFECYCLE_SOURCE_SCHEMA },
+    },
+    ({ source }) => formatLifecycle(source),
   );
 
   /* ---- convert ----------------------------------------------------------- */

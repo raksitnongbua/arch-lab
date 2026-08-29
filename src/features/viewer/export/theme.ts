@@ -50,6 +50,18 @@ export interface ExportTheme {
   mutedForeground: string;
   /** Secondary text ON node fills — `--node-meta`, not the panel muted. */
   nodeMeta: string;
+  /**
+   * `--canvas-grid`, the hairline the canvas rules itself with. Added for the
+   * gantt exporter, which is the first export surface to draw a measured
+   * AXIS: its ticks and its section rules are the same hairline the screen
+   * draws, and approximating them with the node border would make an exported
+   * axis heavier than the one the reader saw.
+   */
+  canvasGrid: string;
+  /** The gantt's critical-path cap. Aliases `--primary` in every theme but
+   * `pastel`, where the cap's 3:1-against-four-state-fills requirement and the
+   * brand colour disagree. Resolved, never assumed to equal `primary`. */
+  criticalCap: string;
   foreground: string;
   /**
    * Per-role node fill/border (the `--node-person`… family), resolved to
@@ -75,6 +87,8 @@ const TOKEN_VARS = {
   primary: "--primary",
   mutedForeground: "--muted-foreground",
   nodeMeta: "--node-meta",
+  canvasGrid: "--canvas-grid",
+  criticalCap: "--gantt-critical",
   foreground: "--foreground",
   accent: "--accent",
   destructive: "--destructive",
@@ -187,6 +201,13 @@ export function resolveExportTheme(): ExportTheme {
     // Falls back to the plain edge ink: an export that cannot resolve the mix
     // shows the drift in the connector's own colour, never a stray literal.
     primary: resolve(TOKEN_VARS.primary, "#4f46e5"),
+    // Falls back to `--primary`, which is what it aliases in six of the seven
+    // themes — never to a literal, so a browser that cannot resolve the token
+    // still exports a cap in the brand colour rather than a stray indigo.
+    criticalCap: resolveExpression(
+      TOKEN_VARS.criticalCap,
+      resolve(TOKEN_VARS.primary, "#4f46e5"),
+    ),
     accent: resolve(TOKEN_VARS.accent, "#22b8cf"),
     destructive: resolve(TOKEN_VARS.destructive, "#e5484d"),
     destructiveForeground: resolve(TOKEN_VARS.destructiveForeground, "#ffffff"),
@@ -198,6 +219,9 @@ export function resolveExportTheme(): ExportTheme {
     // Falls back to the muted tone rather than a literal: same "degrade to
     // the pre-colour look" rule as the role fills below.
     nodeMeta: resolve(TOKEN_VARS.nodeMeta, "#6a7080"),
+    // Falls back to the node border rather than a grey literal: a browser that
+    // cannot resolve the grid token still rules the axis in a theme colour.
+    canvasGrid: resolve(TOKEN_VARS.canvasGrid, nodeBorder),
     foreground: resolve(TOKEN_VARS.foreground, "#1f2430"),
     nodeRoles: {
       person: role("person"),

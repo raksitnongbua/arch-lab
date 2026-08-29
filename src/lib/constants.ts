@@ -66,30 +66,37 @@ export const CANVAS_EDIT_ENABLED: boolean = true;
  */
 /* WHAT THIS 160 BUYS, and what it stopped buying, because the previous version
    spent 157 of them NAMING EVERY DOCUMENT KIND and had run out of room to be
-   true. It read "C4, sequence, flowchart and use-case diagrams" — four of six,
-   since ER and the data dictionary shipped after it was written — and there
-   were three characters left to fix that with, let alone to say that a diagram
-   here is now edited two ways.
+   true. It read "C4, sequence, flowchart and use-case diagrams" — four of the
+   six then shipping, since ER and the data dictionary landed after it was
+   written — and there were three characters left to fix that with, let alone to
+   say that a diagram here is now edited two ways.
 
-   SO THE ENUMERATION WENT AND THE COUNT STAYED. "six notations" is one word
-   where six names were sixty characters, and it is the half a reader can act on:
-   the names are in the `<title>` (which already leads with "beautiful C4 and
-   sequence"), in the notation cards on the home page, in the JSON-LD
-   `featureList` derived from those cards, and in `/llms.txt` — four places with
-   room, none of which is truncated at 160. What no other budgeted surface said
+   SO THE ENUMERATION WENT AND THE COUNT STAYED, and the two additions since
+   are the proof it was the right trade: the seventh notation cost this string
+   ONE character, the eighth cost it NONE and the ninth cost it NONE either,
+   where the enumeration would have wanted twelve, then nineteen, then eleven
+   more it did not have. "nine notations" is one word where nine names are a
+   hundred characters, and it is the half a reader can act on:
+   the names are in the notation cards on the home page, in the JSON-LD
+   `featureList` derived from those cards, in `/live`'s own description and in
+   `/llms.txt` — four places with room, none of which is truncated at 160. (The
+   `<title>` is NOT one of them any more; it gave its own enumeration up for the
+   same reason and for the same 60-character budget — see `app/layout.tsx`.)
+   What no other budgeted surface said
    at all was that the canvas is editable, which is why that clause got the
    space the list gave up.
 
    `check:seo` PINS THE COUNT to `CANVAS_EDIT_OFFERS`, the total grid over the
-   document kinds, so a seventh notation fails this string rather than quietly
-   making it wrong — the exact failure the enumeration suffered.
+   document kinds, so a ninth notation fails this string rather than quietly
+   making it wrong — the exact failure the enumeration suffered, and the exact
+   way the seventh and the eighth were both caught.
 
    This one string is the meta description on every route that does not set its
    own, the OG and Twitter description, the home page's JSON-LD `description`,
    and the sentence an assistant asked "what is arch-lab" is most likely to
    quote. */
 export const APP_DESCRIPTION =
-  "Beautiful architecture diagrams in six notations, written as plain text or edited on the canvas, live in your browser. An AI agent can author them over MCP.";
+  "Beautiful architecture diagrams in nine notations, written as plain text or edited on the canvas, live in your browser. An AI agent can author them over MCP.";
 
 /* -------------------------------------------------------------------------- */
 /* Theming                                                                     */

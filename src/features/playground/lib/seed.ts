@@ -17,10 +17,12 @@ export const VIEW_SEED_PARAM = "d";
 
 /** `?d=seq`/`?d=sequence` seed the sequence example, `?d=flow`/`?d=flowchart`
  * the flowchart one, `?d=uc`/`?d=usecase` the use-case one, `?d=er`/`?d=erd`
- * the ER one; anything else seeds C4. Both spellings per kind because the
- * short one is what gets minted (`/live/seq`, `/live/flow`, `/live/uc`,
- * `/live/er` forward to it) and the long one is what gets typed from
- * memory. */
+ * the ER one, `?d=dict`/`?d=dictionary` the dictionary one and
+ * `?d=gt`/`?d=gantt` the gantt one, `?d=tl`/`?d=timeline` the milestone
+ * timeline and `?d=lc`/`?d=lifecycle` the lifecycle; anything else seeds C4. Both spellings per kind because the short
+ * one is what gets minted (`/live/seq`, `/live/flow`, `/live/uc`, `/live/er`,
+ * `/live/gt`, `/live/tl`, `/live/lc` forward to it) and the long one is what gets typed
+ * from memory. */
 export function seedFromParam(value: string | string[] | undefined): SeedKind {
   const first = Array.isArray(value) ? value[0] : value;
   if (first === "seq" || first === "sequence") return "sequence";
@@ -28,5 +30,8 @@ export function seedFromParam(value: string | string[] | undefined): SeedKind {
   if (first === "uc" || first === "usecase") return "usecase";
   if (first === "er" || first === "erd") return "er";
   if (first === "dict" || first === "dictionary") return "dict";
+  if (first === "gt" || first === "gantt") return "gantt";
+  if (first === "tl" || first === "timeline") return "timeline";
+  if (first === "lc" || first === "lifecycle") return "lifecycle";
   return "c4";
 }

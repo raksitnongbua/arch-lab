@@ -6,6 +6,9 @@ import { listSequenceExampleIds } from "@/features/sequence/service/example-serv
 import { listUseCaseExampleIds } from "@/features/usecase/service/example-service";
 import { listErExampleIds } from "@/features/er/service/example-service";
 import { listDictExampleIds } from "@/features/dict/service/example-service";
+import { listGanttExampleIds } from "@/features/gantt/service/example-service";
+import { listTimelineExampleIds } from "@/features/timeline/service/example-service";
+import { listLifecycleExampleIds } from "@/features/lifecycle/service/example-service";
 import { listViewerModelIds } from "@/features/viewer";
 
 /**
@@ -31,8 +34,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     /* ONE playground URL, and `/editor` is no longer beside it. The C4 canvas
        on `/live` is editable in place, so the two were one job on two pages;
        `/editor` is a forwarding alias now, and listing a route that canonicals
-       elsewhere asks a crawler to index a trampoline. Same reason `/live/c4`
-       and `/live/seq` are absent — and the same reason the ENTIRE retired
+       elsewhere asks a crawler to index a trampoline. Same reason `/live/c4`,
+       `/live/seq`, the gantt's own pair (`/live/gt`, `/live/gantt`) and the
+       timeline's (`/live/tl`, `/live/timeline`) and the lifecycle's
+       (`/live/lc`, `/live/lifecycle`) are absent — and the same reason the ENTIRE retired
        `/view` family is, trampolines and example pages alike: this route
        family was called `/view` until the page stopped being only a viewer,
        and every old path still forwards, but a trampoline is not a page and
@@ -45,9 +50,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/faq",
   ];
 
-  // All SIX example registries, so a new example is in the sitemap the moment
+  // All NINE example registries, so a new example is in the sitemap the moment
   // it is registered — the same reason the model routes are derived rather than
-  // typed out above.
+  // typed out above. `check:seo` derives its coverage expectation from what
+  // this function returns, so a registry left out here is a page nothing
+  // crawls and nothing measures.
   const modelRoutes = listViewerModelIds().map((id) => `/live/${id}`);
   const sequenceRoutes = listSequenceExampleIds().map(
     (id) => `/live/sequence/${id}`,
@@ -60,6 +67,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const usecaseRoutes = listUseCaseExampleIds().map(
     (id) => `/live/usecase/${id}`,
   );
+  const ganttRoutes = listGanttExampleIds().map((id) => `/live/gantt/${id}`);
+  const timelineRoutes = listTimelineExampleIds().map(
+    (id) => `/live/timeline/${id}`,
+  );
+  const lifecycleRoutes = listLifecycleExampleIds().map(
+    (id) => `/live/lifecycle/${id}`,
+  );
 
   return [
     ...staticRoutes,
@@ -69,6 +83,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...usecaseRoutes,
     ...erRoutes,
     ...dictRoutes,
+    ...ganttRoutes,
+    ...timelineRoutes,
+    ...lifecycleRoutes,
   ].map((path) => ({
     url: `${origin}${path === "" ? "/" : path}`,
     // The homepage is the page search should surface first; everything else

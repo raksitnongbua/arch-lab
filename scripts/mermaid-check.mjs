@@ -38,6 +38,16 @@
  *      Mermaid → `.alab` round-trips all three edge kinds; and
  *      flowchart-flavoured constructs fail the use-case reading with a
  *      located error that names the flowchart importer as the way out.
+ *   9. The gantt dialect, which is the only ONE-WAY conversion here: there is
+ *      no emit path and none may appear (an emit would downgrade `at-risk` to
+ *      `active` and restate arch-lab's COMPUTED critical path as Mermaid's
+ *      hand-typed `crit`); every keyword in the refusal table really refuses,
+ *      by name and at a located line, walked FROM the table so a ninth entry
+ *      cannot be added without a refusal behind it; `crit` is DROPPED rather
+ *      than refused, leaving no trace in the model and named in the caveat;
+ *      an imported chart serializes to `.alab` text that parses back to the
+ *      same model, which is the join with `check:gantt`; and no dialect
+ *      steals another's document in either direction.
  *
  * Exits non-zero on any failure. Run with: pnpm check:mermaid
  */
@@ -91,6 +101,15 @@ const {
   parseMermaidEr,
   serializeMermaidEr,
   detectMermaidEr,
+  parseMermaidSequence,
+  parseMermaidGantt,
+  detectMermaidGantt,
+  MERMAID_GANTT_CAVEAT,
+  parseMermaidTimeline,
+  serializeMermaidTimeline,
+  detectMermaidTimeline,
+  MERMAID_TIMELINE_CAVEAT,
+  MERMAID_TIMELINE_EXPORT_CAVEAT,
   MermaidParseError,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/mermaid/index.ts")).href
@@ -102,9 +121,27 @@ const {
   serializeUseCaseText,
   parseErText,
   serializeErText,
+  parseGanttText,
+  serializeGanttText,
+  parseTimelineText,
+  serializeTimelineText,
+  detectAlabKind,
 } = await import(
   pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
 );
+/* The gantt dialect's tables are loaded from the REAL mapping module, so the
+   refusal walk below is driven by what the importer actually consults rather
+   than by a list typed into this script (see clause 9). */
+const { REFUSED_TIMELINE_CONSTRUCTS } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/timeline-mapping.ts"))
+    .href
+);
+
+const { DROPPED_GANTT_KEYWORDS, GANTT_CRIT_TAG, REFUSED_GANTT_KEYWORDS } =
+  await import(
+    pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/gantt-mapping.ts"))
+      .href
+  );
 const { validateArchLabFile } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/validate.ts")).href
 );
@@ -1706,6 +1743,697 @@ for (const [what, source, pattern] of [
       error instanceof MermaidParseError &&
       pattern.test(error.message),
     error === null ? "it parsed" : error.message,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Mermaid gantt -> .alab gantt                                          */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The gantt dialect is the only one here whose conversion is ONE-WAY, and
+ * that asymmetry is what this section exists to hold in place. Every other
+ * dialect has a `*-emit.ts` beside its reader; this one must not grow one,
+ * because two things a gantt says have no Mermaid spelling:
+ *
+ *   - `at-risk`. Mermaid's vocabulary is `done` / `active` / `crit`, and an
+ *     emit would write the amber bar out as `active` and tell nobody.
+ *   - THE CRITICAL PATH, which arch-lab COMPUTES from the float pass and
+ *     Mermaid DECORATES by hand. Emitting our derived chain as `crit` turns
+ *     an arithmetic result into a typed claim the next editor can falsify;
+ *     emitting nothing drops the one line of the plan that matters most.
+ *
+ * The unit layer (`src/features/mermaid/lib/gantt.test.ts`, 40 cases)
+ * already covers the mapping field by field. What is asserted HERE is what
+ * only the integration layer can see, and each clause names the failure it
+ * prevents:
+ *
+ *   1. THERE IS NO EMIT PATH — no `gantt-emit.ts` on disk, and nothing
+ *      named `serialize*`/`emit*` reachable from the gantt modules or the
+ *      feature barrel. The unit test asserts this too; it is repeated here
+ *      because the failure is not a wrong value in one function, it is a
+ *      file somebody adds six months from now to close a menu gap, and the
+ *      first thing it would ship is a silent downgrade of `at-risk` and a
+ *      misrepresented critical path.
+ *   2. THE REFUSALS ARE DRIVEN FROM THE MAPPING TABLE, not from a list typed
+ *      here. `REFUSED_GANTT_KEYWORDS` is walked, and each entry must produce
+ *      a located refusal naming its own keyword. A hardcoded list cannot
+ *      notice a keyword it has never heard of — a ninth entry added to the
+ *      table with no refusal behind it would leave this check green while
+ *      the importer silently swallowed the construct.
+ *   3. `crit` IS DROPPED, NOT REFUSED. The distinction is the whole argument
+ *      of the dialect: a chart carrying `crit` must still import (refusing it
+ *      would make the commonest real-world gantt unimportable), and the model
+ *      must carry no trace of it (honouring it would paint a path the float
+ *      pass disagrees with). Both halves are asserted, plus that the caveat
+ *      says so in words, because a drop nobody is told about is data loss.
+ *   4. THE IMPORTER LANDS ON TEXT THE `.alab` ROUND TRIP ALREADY GUARANTEES.
+ *      Import → `serializeGanttText` → `parseGanttText` must reproduce
+ *      the model exactly. This is the join between this check and
+ *      `check:gantt`: that script proves `.alab` gantt text is stable
+ *      under a round trip, and this one proves the importer produces a model
+ *      inside that guarantee rather than beside it — an id, a state or an
+ *      `at` that only the importer can spell would serialize to text that
+ *      parses back differently, and the corruption would appear on the
+ *      author's first save rather than on import.
+ *   5. THE DIALECTS DO NOT STEAL EACH OTHER'S DOCUMENTS. `gantt` is the
+ *      seventh thing a pasted diagram could be, and a detector that answers
+ *      confidently and wrongly routes the text to a parser whose error then
+ *      misleads about a document that is not malformed.
+ */
+
+console.log("\nmermaid gantt -> .alab gantt");
+
+const GANTT_SAMPLE = `gantt
+    title Order store migration
+    dateFormat YYYY-MM-DD
+    section Prepare
+      Schema audit        :done, audit, 2026-09-07, 5d
+      Shadow writes       :active, shadow, after audit, 13d
+      Historical backfill :crit, active, backfill, after audit, 12d
+      Parity signed off   :milestone, parity, after shadow, 0d
+    section Cut over
+      Freeze writes       :freeze, 2026-10-01, 2026-10-03
+      Point traffic over  :cutover, after freeze, 3d
+`;
+
+{
+  /* 1. NO EMIT PATH. Two independent readings — the filesystem and the
+     modules' own export lists — because either alone can be defeated: a file
+     could exist unexported, and an emitter could be added to `gantt.ts`
+     without a new file. */
+  check(
+    "there is no gantt-emit.ts — the file that would hold the other direction does not exist",
+    !existsSync(path.join(ROOT, "src/features/mermaid/lib/gantt-emit.ts")),
+    "an emit path would downgrade at-risk to active and restate a computed critical path as a typed one",
+  );
+
+  const ganttModule = await import(
+    pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/gantt.ts")).href
+  );
+  const ganttMapping = await import(
+    pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/gantt-mapping.ts"))
+      .href
+  );
+  const mermaidBarrel = await import(
+    pathToFileURL(path.join(ROOT, "src/features/mermaid/index.ts")).href
+  );
+  const emitters = [
+    ...Object.keys(ganttModule),
+    ...Object.keys(ganttMapping),
+  ].filter((name) => /^(serialize|emit)/i.test(name));
+  const barrelEmitters = Object.keys(mermaidBarrel).filter(
+    (name) => /^(serialize|emit)/i.test(name) && /gantt/i.test(name),
+  );
+  check(
+    "the gantt modules export no serializer and no emitter",
+    emitters.length === 0 && barrelEmitters.length === 0,
+    [...emitters, ...barrelEmitters].join(", "),
+  );
+  check(
+    "the one-way decision and BOTH of its reasons are stated in the caveat",
+    /one-way/i.test(MERMAID_GANTT_CAVEAT) &&
+      MERMAID_GANTT_CAVEAT.includes("at-risk") &&
+      /critical path/i.test(MERMAID_GANTT_CAVEAT),
+    "a converter that is one-way without saying why reads as an unfinished one",
+  );
+}
+
+{
+  /* 4. THE JOIN WITH check:gantt. */
+  const file = parseMermaidGantt(GANTT_SAMPLE);
+  check(
+    "the import is a gantt document, detected as one by the .alab sniffer",
+    file.kind === "gantt" &&
+      detectAlabKind(serializeGanttText(file)) === "gantt",
+    JSON.stringify(file.kind),
+  );
+
+  const text = serializeGanttText(file);
+  const back = parseGanttText(text);
+  check(
+    "import -> .alab text -> model reproduces the imported model exactly",
+    JSON.stringify(back) === JSON.stringify(file),
+    firstDiff(JSON.stringify(file, null, 1), JSON.stringify(back, null, 1)),
+  );
+  check(
+    "and that text is itself byte-stable — the importer lands inside the round trip check:gantt guarantees",
+    serializeGanttText(back) === text,
+    firstDiff(text, serializeGanttText(back)),
+  );
+
+  /* The calendar lands in ONE field, which is the model's rule: the earliest
+     date becomes `origin` and every other date becomes a whole-day offset.
+     An importer that left a second date anywhere would have put a calendar
+     in front of the layout, the router and the exporter. */
+  /* The BODY is where this bites: `starts` is the one calendar field the
+     model has, and `created`/`updated` are the metadata timestamps every
+     document kind carries. Every row position must be a day offset, or a
+     calendar has leaked past the boundary and the layout, the router and the
+     exporter would each have to learn what a date is. */
+  const body = text.slice(text.indexOf("@gantt"));
+  check(
+    "the earliest date becomes the origin, and no calendar date survives in the rows",
+    file.origin === "2026-09-07" && !/\d{4}-\d{2}-\d{2}/.test(body),
+    body,
+  );
+  check(
+    "a date-to-date row imports as a length and an offset, not as two dates",
+    (() => {
+      const freeze = file.sections[1].items[0];
+      return freeze.duration === 2 && freeze.at === 24;
+    })(),
+    JSON.stringify(file.sections[1].items[0]),
+  );
+  check(
+    "Mermaid's status tags map onto the states .alab can spell",
+    file.sections[0].items[0].state === "done" &&
+      file.sections[0].items[1].state === "active",
+    JSON.stringify(file.sections[0].items.map((item) => item.state)),
+  );
+  check(
+    "the milestone tag imports as an instant with no duration",
+    file.sections[0].items[3].milestone === true &&
+      file.sections[0].items[3].duration === undefined,
+    JSON.stringify(file.sections[0].items[3]),
+  );
+}
+
+{
+  /* 3. `crit` IS DROPPED, NOT REFUSED — and the row beside it keeps its own
+     state, which is the position-free tag reading Mermaid's own parser does. */
+  const file = parseMermaidGantt(GANTT_SAMPLE);
+  const backfill = file.sections[0].items[2];
+  check(
+    "a crit-tagged task imports rather than being refused",
+    backfill !== undefined && backfill.id === "backfill",
+    JSON.stringify(file.sections[0].items.map((item) => item.id)),
+  );
+  check(
+    "the imported model carries NO trace of crit, anywhere",
+    !JSON.stringify(file).includes("crit"),
+    "honouring crit would paint a critical path the float pass disagrees with",
+  );
+  check(
+    "a crit tag beside a state does not eat the state",
+    backfill.state === "active",
+    JSON.stringify(backfill),
+  );
+  check(
+    "the caveat names crit, so the drop is stated rather than discovered",
+    MERMAID_GANTT_CAVEAT.includes(GANTT_CRIT_TAG),
+    "a silent drop is data loss with a green check over it",
+  );
+
+  /* The keywords that are dropped rather than refused, walked from the table
+     for the same reason the refusals are: each is presentation or
+     interactivity, and each must import without leaving a mark. */
+  const kept = [];
+  for (const keyword of DROPPED_GANTT_KEYWORDS) {
+    const source = `gantt\n    title T\n    dateFormat YYYY-MM-DD\n    ${keyword} compact\n    section S\n      A task :a, 2026-01-01, 3d\n`;
+    try {
+      const imported = parseMermaidGantt(source);
+      if (JSON.stringify(imported).includes(keyword)) kept.push(keyword);
+    } catch (error) {
+      kept.push(`${keyword} (refused: ${error.message})`);
+    }
+  }
+  check(
+    `every dropped keyword imports and leaves no trace (${DROPPED_GANTT_KEYWORDS.size} keywords, from the table)`,
+    kept.length === 0,
+    kept.join(", "),
+  );
+}
+
+{
+  /* 2. REFUSALS, DRIVEN FROM THE TABLE. Each entry must refuse BY NAME and
+     point at the line it refused — an unnamed refusal sends the author
+     hunting through a document that is valid Mermaid. */
+  const unrefused = [];
+  const unnamed = [];
+  const unlocated = [];
+  for (const { keyword } of REFUSED_GANTT_KEYWORDS) {
+    const source = `gantt\n    title T\n    dateFormat YYYY-MM-DD\n    ${keyword} weekends\n    section S\n      A task :a, 2026-01-01, 3d\n`;
+    let error = null;
+    try {
+      parseMermaidGantt(source);
+    } catch (caught) {
+      error = caught;
+    }
+    if (error === null) {
+      unrefused.push(keyword);
+      continue;
+    }
+    if (
+      !(error instanceof MermaidParseError) ||
+      !error.message.includes(keyword)
+    ) {
+      unnamed.push(`${keyword}: ${error.message}`);
+      continue;
+    }
+    const lines = source.split("\n");
+    if (
+      !(error.line >= 1 && error.line <= lines.length) ||
+      !(
+        error.column >= 1 &&
+        error.column <= (lines[error.line - 1] ?? "").length + 1
+      )
+    ) {
+      unlocated.push(`${keyword}: line ${error.line}, column ${error.column}`);
+    }
+  }
+  check(
+    `every keyword in REFUSED_GANTT_KEYWORDS is actually refused (${REFUSED_GANTT_KEYWORDS.length} keywords, walked from the table)`,
+    unrefused.length === 0,
+    `${unrefused.join(", ")} — in the table but silently swallowed by the importer`,
+  );
+  check(
+    "every refusal names the keyword it refused",
+    unnamed.length === 0,
+    unnamed.join("; "),
+  );
+  check(
+    "every refusal points at a line and column inside the source",
+    unlocated.length === 0,
+    unlocated.join("; "),
+  );
+
+  /* Each entry carries its REASON, and the reason is what the refusal is
+     for: "not supported" tells an author nothing, while "an arch-lab
+     duration is a count of calendar days" tells them what to change. */
+  const reasonless = REFUSED_GANTT_KEYWORDS.filter(
+    (entry) => typeof entry.why !== "string" || entry.why.length < 20,
+  );
+  check(
+    "every refused keyword carries a reason, not just a name",
+    reasonless.length === 0,
+    reasonless.map((entry) => entry.keyword).join(", "),
+  );
+
+  /* The refusals the table does not hold, because they are values rather
+     than keywords — asserted by name for the same reason. */
+  for (const [what, source, pattern] of [
+    [
+      "a dateFormat this importer cannot read",
+      "gantt\n  dateFormat DD/MM/YYYY\n  section S\n    A :a, 01/02/2026, 3d\n",
+      /dateFormat|YYYY-MM-DD/,
+    ],
+    [
+      "`until`, which ties a row's end to another row",
+      "gantt\n  dateFormat YYYY-MM-DD\n  section S\n    A :a, 2026-01-01, 3d\n    B :b, 2026-01-02, until a\n",
+      /until/,
+    ],
+    [
+      "a sub-day duration, which cannot be rounded honestly",
+      "gantt\n  dateFormat YYYY-MM-DD\n  section S\n    A :a, 2026-01-01, 12h\n",
+      /12h|hour|sub-day|duration/i,
+    ],
+    [
+      "a date that matches the shape but is not a day",
+      "gantt\n  dateFormat YYYY-MM-DD\n  section S\n    A :a, 2026-02-31, 3d\n",
+      /2026-02-31|not a day|date/i,
+    ],
+  ]) {
+    let error = null;
+    try {
+      parseMermaidGantt(source);
+    } catch (caught) {
+      error = caught;
+    }
+    check(
+      `${what} is refused by name`,
+      error !== null &&
+        error instanceof MermaidParseError &&
+        pattern.test(error.message),
+      error === null ? "it parsed" : error.message,
+    );
+  }
+}
+
+{
+  /* 5. NO DIALECT STEALS ANOTHER'S DOCUMENT. Both directions, because they
+     fail differently: a gantt claimed by another reader produces an error
+     about a document that is fine, and a gantt detector claiming someone
+     else's chart routes a valid diagram into the wrong model. */
+  const OTHER_DIALECTS = [
+    ["C4", 'C4Context\n  title T\n  System(a, "A")\n', parseMermaidC4],
+    ["flowchart", "flowchart TD\n  a[A] --> b[B]\n", parseMermaidFlowchart],
+    ["sequence", "sequenceDiagram\n  A->>B: hi\n", parseMermaidSequence],
+    ["erDiagram", "erDiagram\n  A ||--o{ B : r\n", parseMermaidEr],
+    [
+      "use-case",
+      "flowchart LR\n  user((User))\n  user --- uc1([Do it])\n",
+      parseMermaidUseCase,
+    ],
+  ];
+  for (const [name, source] of OTHER_DIALECTS) {
+    check(
+      `detectMermaidGantt does not claim a ${name} document`,
+      !detectMermaidGantt(source),
+      "an exact header test should have said no",
+    );
+  }
+  check(
+    "detectMermaidGantt does claim the gantt sample — this section is not passing vacuously",
+    detectMermaidGantt(GANTT_SAMPLE),
+    "the detector says no to everything, including a real gantt",
+  );
+  check(
+    "the ER and use-case detectors do not claim a gantt",
+    !detectMermaidEr(GANTT_SAMPLE) && !detectMermaidUseCase(GANTT_SAMPLE),
+    "a gantt routed into another reader fails on a document that is not malformed",
+  );
+  const stolen = [];
+  for (const [name, , parser] of OTHER_DIALECTS) {
+    try {
+      parser(GANTT_SAMPLE);
+      stolen.push(name);
+    } catch {
+      /* refused, which is the point */
+    }
+  }
+  check(
+    "no other dialect's parser accepts a gantt",
+    stolen.length === 0,
+    `${stolen.join(", ")} half-parsed a chart it cannot draw`,
+  );
+  const ganttStole = [];
+  for (const [name, source] of OTHER_DIALECTS) {
+    try {
+      parseMermaidGantt(source);
+      ganttStole.push(name);
+    } catch {
+      /* refused, which is the point */
+    }
+  }
+  check(
+    "the gantt parser accepts none of the other five dialects",
+    ganttStole.length === 0,
+    ganttStole.join(", "),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Mermaid timeline <-> .alab timeline                                       */
+/* ----------------------------------------------------------------------- */
+
+/*
+ * The timeline dialect is the gantt's neighbour and its opposite: TWO-WAY.
+ * Every assertion below exists because that asymmetry is the thing most
+ * likely to be "tidied" into consistency by someone who has just read the
+ * gantt section above, in one direction or the other.
+ *
+ *   1. THE EMIT PATH EXISTS AND IS REACHABLE. `timeline-emit.ts` on disk and
+ *      `serializeMermaidTimeline` on the feature barrel — the mirror of the
+ *      gantt's "there is no emit path" clause, and asserted for the same
+ *      reason from the other side: a menu gap closed by deleting the emitter
+ *      would be as silent as one closed by adding one.
+ *   2. THE ROUND TRIP IS LOSSLESS OVER THE DIAGRAM. `.alab` → Mermaid →
+ *      `.alab` must reproduce every period and every event, in order. This is
+ *      the claim "two-way" makes and the only one that can be measured; what
+ *      it does NOT claim (tags and descriptions survive) is asserted as a
+ *      LOSS below, so the caveat cannot quietly become optimistic.
+ *   3. THE REFUSALS ARE DRIVEN FROM THE MAPPING TABLE, exactly as the gantt's
+ *      are. `REFUSED_TIMELINE_CONSTRUCTS` is walked, and each entry must
+ *      produce a located refusal naming its own keyword — a hardcoded list
+ *      cannot notice a construct it has never heard of.
+ *   4. THE IMPORTER LANDS INSIDE THE `.alab` ROUND-TRIP GUARANTEE, the join
+ *      with `check:timeline`: import → serialize → parse must reproduce the
+ *      model, or the corruption appears on the author's first save.
+ *   5. THE DIALECTS DO NOT STEAL EACH OTHER'S DOCUMENTS — and `timeline` is
+ *      the case with real history behind it, since the word headed the GANTT
+ *      grammar until the rename.
+ */
+
+console.log("\nmermaid timeline <-> .alab timeline");
+
+const MERMAID_TIMELINE_SAMPLE = `timeline
+    title How the platform grew
+    2016 : Two people and a prototype
+    2018 : First paying customer : Split the monolith
+         : Hired a second engineer
+    2024 : Opened the public API <br>to three customers
+`;
+
+{
+  const file = parseMermaidTimeline(MERMAID_TIMELINE_SAMPLE);
+
+  check(
+    "an emit path exists on disk and on the barrel",
+    existsSync(path.join(ROOT, "src/features/mermaid/lib/timeline-emit.ts")) &&
+      typeof serializeMermaidTimeline === "function",
+    "the timeline dialect is two-way; deleting the emitter is as silent a change as adding one to the gantt",
+  );
+
+  check(
+    "the continuation row folds into the period above it",
+    file.periods.length === 3 &&
+      file.periods[1].label === "2018" &&
+      file.periods[1].events.length === 3,
+    JSON.stringify(file.periods.map((p) => [p.label, p.events.length])),
+  );
+
+  check(
+    "`<br>` becomes a real newline, not the literal tag",
+    file.periods[2].events[0].label.includes("\n") &&
+      !file.periods[2].events[0].label.includes("<br"),
+    JSON.stringify(file.periods[2].events[0].label),
+  );
+
+  /* 2. THE ROUND TRIP, from the `.alab` side, which is the direction the
+     "two-way" claim is actually about: a document an author wrote here must
+     survive a trip through Mermaid unchanged in what the diagram shows. */
+  const ALAB = `archlab 1.0 timeline
+title "How the platform grew"
+
+@timeline
+  period "2016"
+    event "Two people and a prototype"
+  period "2018"
+    event "First paying customer"
+    event "Split the monolith into an API and a web app"
+  period "2024"
+    event "Opened the public API"
+`;
+  {
+    const original = parseTimelineText(ALAB);
+    const back = parseMermaidTimeline(serializeMermaidTimeline(original));
+    check(
+      ".alab -> Mermaid -> .alab keeps every period and event, in order",
+      JSON.stringify(back.periods) === JSON.stringify(original.periods),
+      JSON.stringify(back.periods),
+    );
+    check(
+      "the title survives the trip through Mermaid frontmatter",
+      back.metadata.title === original.metadata.title,
+      back.metadata.title,
+    );
+  }
+
+  /* And what the trip DOES lose, asserted rather than trusted: a caveat that
+     over-promises is worse than one that under-promises, because a reader
+     acts on it. */
+  {
+    const withExtras = parseTimelineText(`archlab 1.0 timeline
+title "Extras"
+
+@timeline
+  period "2024"
+    event "Something" #tagged
+      desc "A note Mermaid has nowhere to put."
+`);
+    const back = parseMermaidTimeline(serializeMermaidTimeline(withExtras));
+    const event = back.periods[0].events[0];
+    check(
+      "the export drops exactly what the caveat says it drops (tags, desc)",
+      event.tags === undefined && event.description === undefined,
+      JSON.stringify(event),
+    );
+    check(
+      "the export caveat names both losses in words",
+      /desc/i.test(MERMAID_TIMELINE_EXPORT_CAVEAT) &&
+        /tag/i.test(MERMAID_TIMELINE_EXPORT_CAVEAT),
+      MERMAID_TIMELINE_EXPORT_CAVEAT,
+    );
+  }
+
+  /* 3. Refusals, walked from the table. */
+  {
+    const SOURCE_FOR = {
+      section: "timeline\n  section 17th century\n  1750 : Steam engine\n",
+    };
+    const unrefused = [];
+    const unnamed = [];
+    const unlocated = [];
+    for (const entry of REFUSED_TIMELINE_CONSTRUCTS) {
+      const source = SOURCE_FOR[entry.keyword];
+      if (source === undefined) {
+        unrefused.push(`${entry.keyword} (no sample in this check)`);
+        continue;
+      }
+      let error = null;
+      try {
+        parseMermaidTimeline(source);
+      } catch (caught) {
+        error = caught;
+      }
+      if (error === null) {
+        unrefused.push(entry.keyword);
+        continue;
+      }
+      /* THE TABLE'S OWN SENTENCE, not merely the keyword somewhere in the
+         message. Asserting containment was tried and was too weak to fail:
+         with the refusal removed, `section 17th century` parses on as a
+         PERIOD LABEL and the resulting "lists no events" error contains the
+         word `section` too — so the assertion passed on a broken refusal.
+         The `because` text is what `failAt` is handed, so comparing against
+         it is exact and cannot be satisfied by an accident of wording. */
+      if (!error.message.includes(entry.because)) unnamed.push(entry.keyword);
+      const lines = source.split("\n");
+      if (!(
+        error.line >= 1 &&
+        error.line <= lines.length &&
+        error.column >= 1
+      )) {
+        unlocated.push(`${entry.keyword}: line ${error.line}`);
+      }
+    }
+    check(
+      `every construct in REFUSED_TIMELINE_CONSTRUCTS is actually refused (${REFUSED_TIMELINE_CONSTRUCTS.length}, walked from the table)`,
+      unrefused.length === 0,
+      `${unrefused.join(", ")} — in the table but silently swallowed`,
+    );
+    check(
+      "every refusal carries the table's own sentence, not an accidental match",
+      unnamed.length === 0,
+      unnamed.join("; "),
+    );
+    check(
+      "every refusal points at a line and column inside the source",
+      unlocated.length === 0,
+      unlocated.join("; "),
+    );
+    const reasonless = REFUSED_TIMELINE_CONSTRUCTS.filter(
+      (entry) => typeof entry.because !== "string" || entry.because.length < 20,
+    );
+    check(
+      "every refused construct carries a reason, not just a name",
+      reasonless.length === 0,
+      reasonless.map((entry) => entry.keyword).join(", "),
+    );
+  }
+
+  /* The refusal the table does not hold, because it is a SHAPE rather than a
+     keyword: a period row that lists no events. Mermaid draws it as a bare
+     heading and an arch-lab `period` must hold at least one `event`, so
+     importing it would build a model the `.alab` parser then rejects. */
+  for (const [what, source, pattern] of [
+    ["a period row with no events", "timeline\n  2002\n", /no events/i],
+    [
+      "a period row whose cells are all empty",
+      "timeline\n  2002 : :\n",
+      /no events/i,
+    ],
+    [
+      "the same period label twice",
+      "timeline\n  2002 : a\n  2002 : b\n",
+      /twice|declared/i,
+    ],
+  ]) {
+    let error = null;
+    try {
+      parseMermaidTimeline(source);
+    } catch (caught) {
+      error = caught;
+    }
+    check(
+      `${what} is refused by name`,
+      error !== null &&
+        error instanceof MermaidParseError &&
+        pattern.test(error.message),
+      error === null ? "it parsed" : error.message,
+    );
+  }
+
+  /* 4. The join with `check:timeline`. */
+  {
+    const text = serializeTimelineText(file);
+    check(
+      "an imported timeline lands inside the .alab round-trip guarantee",
+      JSON.stringify(parseTimelineText(text)) === JSON.stringify(file),
+      text,
+    );
+  }
+
+  check(
+    "the import caveat names the normalisations rather than hiding them",
+    /continuation|:/.test(MERMAID_TIMELINE_CAVEAT) &&
+      /section/.test(MERMAID_TIMELINE_CAVEAT),
+    MERMAID_TIMELINE_CAVEAT,
+  );
+}
+
+{
+  /* 5. NO DIALECT STEALS ANOTHER'S DOCUMENT, both directions. */
+  const OTHERS = [
+    ["C4", 'C4Context\n  title T\n  System(a, "A")\n', parseMermaidC4],
+    ["flowchart", "flowchart TD\n  a[A] --> b[B]\n", parseMermaidFlowchart],
+    ["sequence", "sequenceDiagram\n  A->>B: hi\n", parseMermaidSequence],
+    ["erDiagram", "erDiagram\n  A ||--o{ B : r\n", parseMermaidEr],
+    [
+      "gantt",
+      "gantt\n  dateFormat YYYY-MM-DD\n  section S\n    A :a, 2026-01-01, 3d\n",
+      parseMermaidGantt,
+    ],
+  ];
+  for (const [name, source] of OTHERS) {
+    check(
+      `detectMermaidTimeline does not claim a ${name} document`,
+      !detectMermaidTimeline(source),
+      "an exact header test should have said no",
+    );
+  }
+  check(
+    "detectMermaidTimeline does claim the timeline sample — this section is not passing vacuously",
+    detectMermaidTimeline(MERMAID_TIMELINE_SAMPLE),
+    "the detector says no to everything, including a real timeline",
+  );
+  /* THE ONE THAT MATTERS HERE, because it has history: `timeline` was the
+     GANTT's `.alab` header word until the rename, and a gantt detector that
+     still answered to the Mermaid word would route a history into a
+     scheduler. */
+  check(
+    "detectMermaidGantt does not claim a timeline",
+    !detectMermaidGantt(MERMAID_TIMELINE_SAMPLE),
+    "the gantt detector answers to `timeline`, which was its own header word before the rename",
+  );
+  const stolen = [];
+  for (const [name, , parser] of OTHERS) {
+    try {
+      parser(MERMAID_TIMELINE_SAMPLE);
+      stolen.push(name);
+    } catch {
+      /* refused, which is the point */
+    }
+  }
+  check(
+    "no other dialect's parser accepts a timeline",
+    stolen.length === 0,
+    `${stolen.join(", ")} half-parsed a history it cannot draw`,
+  );
+  const timelineStole = [];
+  for (const [name, source] of OTHERS) {
+    try {
+      parseMermaidTimeline(source);
+      timelineStole.push(name);
+    } catch {
+      /* refused, which is the point */
+    }
+  }
+  check(
+    "the timeline parser accepts none of the other five dialects",
+    timelineStole.length === 0,
+    timelineStole.join(", "),
   );
 }
 

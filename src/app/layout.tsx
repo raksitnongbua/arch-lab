@@ -30,14 +30,14 @@ const geistMono = Geist_Mono({
 
 /* THE TITLE HAS ~60 CHARACTERS BEFORE A RESULT TRUNCATES IT, and it used to
    spend them on "beautiful C4 and sequence diagram editor" — an enumeration of
-   TWO while six notations shipped. A reader who arrived for a flowchart, a use
-   case, an ER diagram or a data dictionary read a title saying this site does
-   not draw one. `APP_DESCRIPTION` gave its own enumeration up for exactly this
+   TWO while six notations shipped, and nine do now. A reader who arrived for a
+   flowchart, a use case, an ER diagram, a data dictionary or a plan read a
+   title saying this site does not draw one. `APP_DESCRIPTION` gave its own enumeration up for exactly this
    reason (see the note there); the title was the last budgeted surface still
    counting, and it was counting to two.
 
    SO THE LIST WENT AND THE PROMISE TOOK ITS PLACE. "architecture diagrams"
-   covers all six without naming any, and the space it buys goes to what the
+   covers all nine without naming any, and the space it buys goes to what the
    project is actually sold on (`.claude/rules/purpose.md`: presentation is the
    product) — the same claim the home page's H1 makes ("Architecture diagrams
    you can present"), and the reason the playground route is called `/live`.
@@ -54,7 +54,8 @@ const geistMono = Geist_Mono({
 
    THE NAMES ARE STILL SOMEWHERE WITH ROOM — the home page's notation cards, the
    JSON-LD `featureList` derived from them, `/llms.txt`, and `/live`'s own
-   description, which names all six because that is the route ranking for them.
+   description, which names all nine because that is the route ranking for
+   them.
 
    IT NO LONGER BRANCHES ON `CANVAS_EDIT_ENABLED`. That branch existed because
    "editor" is a claim about a canvas you can move things on, so the word had to
@@ -111,6 +112,30 @@ export const metadata: Metadata = {
     "present architecture diagrams",
     "architecture diagram as code",
     "diagram as code",
+    /* THE ONE NOTATION-SPECIFIC RUN IN THIS LIST, and it earns the exception.
+       Every other kind here shares a vocabulary with "architecture diagram";
+       a gantt does not — the words a reader arrives with are "Gantt" and
+       "project plan", and neither the title nor any other entry in this array
+       carries them. Without these the seventh, eighth and ninth notations are
+       reachable only by people already looking for arch-lab. */
+    "gantt chart as text",
+    "gantt chart as code",
+    "project gantt diagram",
+    /* The timeline's own three, on the same terms as the gantt's above: the
+       words a reader arrives with are "timeline" and "milestone", neither of
+       which appears in any other notation's vocabulary here. */
+    "milestone timeline as text",
+    "project timeline as code",
+    "history timeline diagram",
+    /* The lifecycle's own three, on the same terms again. "state" is the word
+       a reader arrives with and it belongs to no other notation here — but
+       "state diagram as code" is deliberately ABSENT, because that phrase
+       means `stateDiagram-v2` to everyone who types it and this notation is
+       not one (`features/lifecycle/input/parse.ts` says why). Ranking for it
+       would bring readers to a page that refuses what they came for. */
+    "order lifecycle diagram",
+    "entity lifecycle as text",
+    "status flow diagram",
     "software architecture diagram",
     ".alab",
     "C4 editor",

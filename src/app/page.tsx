@@ -1,11 +1,14 @@
 import {
   ArrowRight,
   Bot,
+  ChartGantt,
+  Milestone,
   FileText,
   GitBranch,
   Layers,
   MessagesSquare,
   MousePointerClick,
+  Repeat2,
   Table2,
   TableProperties,
   Users,
@@ -40,6 +43,11 @@ import {
   CANVAS_EDITING_PASSAGE,
   CANVAS_EDIT_OFFERS,
 } from "@/features/playground/input/canvas-edit";
+/* The gantt, timeline and lifecycle cards' one-line jobs, at the same pure
+   module `/demo` reads them
+   from. Deep-imported past the barrel for the reason directly above: the
+   barrel's export is a client component. */
+import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
 import {
   APP_DESCRIPTION,
   APP_NAME,
@@ -68,7 +76,7 @@ export const metadata: Metadata = {
  *      deliberately: the chooser asks a question ("C4 or sequence?") that a
  *      newcomer has no basis to answer, while the sequence playground opens
  *      seeded with a working flow they can click immediately.
- *   2. WHAT IT DRAWS and WHO CAN WRITE IT — the six notations, one link
+ *   2. WHAT IT DRAWS and WHO CAN WRITE IT — the nine notations, one link
  *      each into the playground and a label saying whether that kind answers a
  *      canvas gesture, then the MCP server that lets an agent author any of
  *      them. Both sections end in a link that does the thing.
@@ -76,8 +84,8 @@ export const metadata: Metadata = {
  *      This used to be a PRESENTATION section instead of the notations one: a
  *      half-page animated sequence preview with three gesture rows (click,
  *      double-click, immersive). It went because the argument was already made
- *      twice above it — the headline says "present" and the hero animates four
- *      real diagrams, one of them drilling — while the page never once said in
+ *      twice above it — the headline says "present" and the hero animates a
+ *      real miniature of every notation, one of them drilling — while the page never once said in
  *      prose which kinds it draws. Presentation is still the product's selling
  *      point; it is just not something this page has to argue three times.
  *   3. WHAT DO I DO WITH IT — three steps, then the format and the footer.
@@ -137,7 +145,7 @@ type Notation = keyof typeof CANVAS_EDIT_OFFERS.move;
  * Two words, not a sentence: the cards are a grid a reader scans to answer "can
  * I drag this one", and `CANVAS_EDITING_PASSAGE` — in "How you actually use it",
  * below — has already said what a canvas gesture writes. A card that repeated it
- * six times would bury the difference it exists to show.
+ * nine times would bury the difference it exists to show.
  */
 function editedHow(notation: Notation): { label: string; onCanvas: boolean } {
   const onCanvas = Object.values(CANVAS_EDIT_OFFERS).some(
@@ -147,14 +155,14 @@ function editedHow(notation: Notation): { label: string; onCanvas: boolean } {
 }
 
 /**
- * The six notations, in the order the docs and the playground list them.
+ * The nine notations, in the order the docs and the playground list them.
  *
  * A FOUR-CARD GRID OF DIAGRAM KINDS USED TO BE THE FIRST THING ON THIS PAGE
  * and was deliberately cut — read the note above before restoring it by
  * reflex, because the reason it was cut no longer holds and that matters. It
  * was cut because two of the four were "coming soon": a newcomer cannot act on
  * a roadmap, and two dashed placeholder cards were a third of the fold. All
- * six are now shipped, in real use, and each one opens in the playground from
+ * nine are now shipped, in real use, and each one opens in the playground from
  * here. A card that opens a working diagram is not the card that got cut.
  *
  * It is also the page's answer to a question no other section asks for it. A
@@ -166,7 +174,20 @@ function editedHow(notation: Notation): { label: string; onCanvas: boolean } {
  * vocabulary (lifelines, guards, «include») for the same reason: those are the
  * words somebody searches with.
  *
- * `href` seeds the ONE playground rather than pointing at five routes. The
+ * THE GANTT, TIMELINE AND LIFECYCLE ROWS' `body` IS NOT WRITTEN HERE, and they
+ * are the only three that are not. Their sentences are `KIND_BLURB.gantt`,
+ * `KIND_BLURB.timeline` and `KIND_BLURB.lifecycle` — the same strings
+ * `/demo`'s heading, the playground's starter row, `/faq` and `/llms.txt` all
+ * serve — because those three are the kinds a reader is most likely to arrive
+ * at from somewhere else's vocabulary ("Gantt", "project plan",
+ * "dependencies"; "timeline", "history", "milestones"; "lifecycle", "state",
+ * "status"), so they are the ones most likely to be QUOTED rather than read.
+ * An assistant quotes a passage, not a page, and five wordings of "what is a
+ * lifecycle for" would be five chances to be quoted wrongly. The other six
+ * predate that rule and keep their own copy; unifying them is a separate
+ * change with its own argument to make, and doing it here would bury this one.
+ *
+ * `href` seeds the ONE playground rather than pointing at nine routes. The
  * `?d=` values are the short aliases `playground/lib/seed.ts` accepts.
  */
 const KINDS: readonly {
@@ -232,6 +253,30 @@ const KINDS: readonly {
     body: "Every field with what it means, where its value comes from, which values are legal, and whether it is personal data.",
     href: "/live?d=dict",
   },
+  {
+    icon: ChartGantt,
+    name: "Gantt chart",
+    notation: "gantt",
+    feature: "Gantt charts",
+    body: KIND_BLURB.gantt,
+    href: "/live?d=gt",
+  },
+  {
+    icon: Milestone,
+    name: "Milestone timeline",
+    notation: "timeline",
+    feature: "Milestone timelines",
+    body: KIND_BLURB.timeline,
+    href: "/live?d=tl",
+  },
+  {
+    icon: Repeat2,
+    name: "Lifecycle",
+    notation: "lifecycle",
+    feature: "Lifecycles",
+    body: KIND_BLURB.lifecycle,
+    href: "/live?d=lc",
+  },
 ];
 
 /** The Claude Code recipe, read from the same catalogue `/mcp` renders, so the
@@ -268,7 +313,7 @@ function homeJsonLd(): string {
         applicationCategory: "DeveloperApplication",
         operatingSystem: "Web browser",
         /* DERIVED FROM KINDS, never typed out beside it. This is the machine
-           half of the section that names the six notations, and the failure
+           half of the section that names the nine notations, and the failure
            mode of a hand-written copy is the worst kind: a fifth kind ships,
            the page shows it, the structured data keeps claiming four, and an
            assistant answering "what can arch-lab draw" reads the stale half. */
@@ -380,7 +425,8 @@ export default function Home() {
             {/* WHAT THE HERO KEEPS: a DEFINITION and one short claim, in that
                 order, and no enumeration.
 
-                The paragraph above used to name all six notations with a clause
+                The paragraph above used to name every notation then shipping
+                with a clause
                 each — "a beautiful, zoomable C4 model you can drill into level
                 by level, a sequence flow you can click through message by
                 message, …" — plus the MCP line. That was ~70 words, and with
@@ -391,7 +437,8 @@ export default function Home() {
                 the "is a browser-based editor" form to survive, because an
                 assistant asked "what is arch-lab" extracts "X is a Y that Z"
                 and paraphrases the rest — cutting that costs the site the one
-                sentence it is quoted by. The six names were the removable half:
+                sentence it is quoted by. The notation names were the removable
+                half:
                 the notation cards below name every one of them in prose, in the
                 notation's own vocabulary, which is what a search for "sequence
                 diagram as text" actually matches. MCP keeps its own section.
@@ -413,7 +460,7 @@ export default function Home() {
                 four chances to be quoted wrongly. `CANVAS_EDITABLE_SUMMARY` is
                 derived from the same capability grid, so it names whichever
                 notations offer a canvas gesture and cannot drift from the
-                passage below or go stale when a seventh notation lands.
+                passage below or go stale when an eighth notation lands.
 
                 Sourced from the flag, so while the canvas is not shipped the
                 claim is ABSENT rather than written in a hopeful present tense
@@ -494,13 +541,13 @@ export default function Home() {
       {/* MINIMAL BY REQUEST, and this is what replaced the section that was
           here: "A diagram you can talk through", a half-page figure with an
           animated sequence preview and three gesture rows. It sold presentation
-          well and it sold it TWICE — the hero above already animates four real
-          diagrams and the headline already says "present" — so what it actually
+          well and it sold it TWICE — the hero above already animates a real
+          miniature of every notation and the headline already says "present" — so what it actually
           cost was the first screen after the fold, on a page whose own doc
           comment says a newcomer should reach "what do I do with it" fast.
 
           What the page did NOT have anywhere was the plain sentence "it draws
-          these six kinds". That is the thing a search result and an assistant
+          these nine kinds". That is the thing a search result and an assistant
           summary both need, so the space went to saying it once, in prose, with
           a link per kind. */}
       <section
@@ -508,18 +555,18 @@ export default function Home() {
         className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
       >
         <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-          Six notations
+          Nine notations
         </p>
         <h2
           id="kinds-heading"
           className="mt-2 text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
         >
-          One text format, six kinds of document
+          One text format, nine kinds of document
         </h2>
         <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
           The same editor, viewer, share link and export for all of them — and
-          Mermaid pastes into five of the six — it has no dictionary notation.
-          Each card says how that kind is edited.
+          Mermaid pastes into seven of the nine — it has no data dictionary and
+          no lifecycle notation. Each card says how that kind is edited.
         </p>
 
         {/* Three columns at `lg`, not five: five cards across put each one
@@ -540,10 +587,10 @@ export default function Home() {
                     <Icon aria-hidden="true" className="size-5" />
                   </span>
                   {/* THE EDIT LABEL RIDES THE NAME ROW, right-aligned, which is
-                      what turns six cards into the grid a reader came for: four
-                      say "text", two say "text or canvas", and "can I drag this
-                      one" is answered without opening any of them. Six labels
-                      pinned to the card's right edge read as a column.
+                      what turns nine cards into the grid a reader came for:
+                      seven say "text", two say "text or canvas", and "can I
+                      drag this one" is answered without opening any of them.
+                      Nine labels pinned to the card's right edge read as a column.
 
                       IT SITS AFTER THE NAME rather than up on the icon row, and
                       that is an accessibility decision, not a visual one: the
