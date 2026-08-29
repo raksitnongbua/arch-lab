@@ -60,15 +60,16 @@ export function McpFlow({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* Faint grid, matching the hero card and the editor surface, so the two
-          illustrations on this page read as the same product. Static: nothing
-          here is worth a repaint. */}
+      {/* The canvas ground, from the canvas's own declaration. This claimed in a
+          comment to match "the hero card and the editor surface" and ruled at
+          22px against the hero's 28 and the canvas's 16 — three illustrations of
+          one product, each with its own grid, none of them pinned. All three now
+          paint `.af-canvas-sheet`, so the claim is true by construction rather
+          than by assertion. Under the five themes with no sheet this layer paints
+          nothing, which is also what the canvas does. */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.35] dark:opacity-50"
+        className="af-canvas-sheet pointer-events-none absolute inset-0 opacity-[0.35] dark:opacity-50"
         style={{
-          backgroundImage:
-            "linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px)",
-          backgroundSize: "22px 22px",
           maskImage:
             "radial-gradient(ellipse 100% 80% at 30% 0%, black 20%, transparent 90%)",
           WebkitMaskImage:

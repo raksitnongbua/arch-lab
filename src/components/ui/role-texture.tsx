@@ -18,7 +18,7 @@
  * It is the reason an author's `tagColors` node still wears its role's texture —
  * a colour the author chose does not cost them the role marker.
  *
- * Ids are FIXED, not `useId` — the `CanvasField` rule, for the same reason:
+ * Ids are FIXED, not `useId` — the `af-gantt-hatch` rule, for the same reason:
  * these render server-side on the bundled example pages, and a generated id
  * differs between the server pass and the client pass. Fixed ids also mean two
  * diagrams on one page share one definition, which is what `<defs>` is for.

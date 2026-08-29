@@ -201,14 +201,24 @@ export function HeroDiagram({ className }: { className?: string }) {
         style={delay(BEAT.card)}
         className="af-hero-card relative w-96 overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-primary/5"
       >
-        {/* Faint canvas grid, matching the editor surface. Drifting by exactly
-            one cell keeps the loop seamless — the pattern repeats onto itself. */}
+        {/* THE CANVAS GROUND, AND THE REAL ONE. This layer used to hand-draw a
+            28px line grid in `--canvas-grid` and drift it by exactly one cell,
+            under a comment claiming it matched "the editor surface" — which it
+            never did numerically (the canvas ruled at 16px, in dots) and which
+            nothing enforced. It now paints `.af-canvas-sheet`, the same
+            declaration the diagram well itself paints, so this miniature shows
+            the reader the ground they will actually land on: the laid weave
+            under `paper`, the ruling under `blueprint`, the speckle under
+            `eink`, the sheen under `glass`, and NOTHING under the five themes
+            whose canvas is bare — `globals.css` carries that table.
+            THE DRIFT IS GONE WITH IT. A sheet that slides is the thing the
+            ground was just fixed to stop being, and a miniature that drifts
+            while the real canvas holds still is the disagreement in miniature.
+            The mask and the opacity stay: this is a card-sized crop of a sheet,
+            so it fades at the edges rather than running under the border. */}
         <div
-          className="af-hero-grid absolute inset-0 opacity-[0.4] dark:opacity-[0.55]"
+          className="af-canvas-sheet absolute inset-0 opacity-[0.4] dark:opacity-[0.55]"
           style={{
-            backgroundImage:
-              "linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px)",
-            backgroundSize: "28px 28px",
             maskImage:
               "radial-gradient(ellipse 90% 90% at 50% 30%, black 30%, transparent 95%)",
             WebkitMaskImage:

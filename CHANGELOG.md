@@ -365,6 +365,36 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The ground behind a diagram is now the sheet: it no longer scales when you
+  zoom, and no longer slides when you pan.** It used to be drawn inside the
+  drawing, in the drawing's own units, so zooming out shrank the ground along
+  with the diagram — the grid was part of the picture rather than the paper it
+  sat on. It is now painted on the pane, at a fixed size, in all nine
+  notations. Ruling printed on paper does not grow when you scale the drawing
+  up, and the paper on a desk does not slide when the pencil moves.
+
+  **Four themes now carry a real material, and five deliberately carry
+  nothing.** `paper` gets a laid weave — fine wire lines with a heavier chain
+  line every fifth; `blueprint` keeps its minor/major ruling, moved onto the
+  sheet; `eink` gets a fine dither speckle, because an e-ink panel is a
+  particle field; `glass` gets a single soft diagonal sheen, because glass has
+  a highlight and not a grain. `light`, `pastel`, `dark`, `midnight` and
+  `contrast` have no texture at all, each for a reason recorded beside its
+  palette — and with the sheet replacing the old dot field, those five now show
+  a diagram on a plain, quiet ground.
+
+  **The home page's two illustrations show the real thing.** The hero card and
+  the MCP diagram each drew their own grid at their own pitch under a comment
+  claiming it matched the editor; all three now paint the same declaration, so
+  the miniature shows the ground you actually land on. The hero grid no longer
+  drifts: a sheet that slides is what this change exists to stop.
+
+  Downloaded SVG, PNG and GIF files are unaffected — the sheet is where a
+  drawing is being read, not what it means, so it stays out of exports, as the
+  grid did. One thing that changes there: exported **sequence** diagrams used
+  to carry the on-screen grid by accident, because that exporter clones the
+  live drawing. They no longer do.
+
 - The **paper** theme is warm all the way through, not a cream background with
   cool ink. Every connector in every notation was drawn in the blue-grey the
   default light theme uses, so a page that had been given warm stock and

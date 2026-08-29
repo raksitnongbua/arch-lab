@@ -23,16 +23,41 @@
  *
  * `check:canvas-chrome` pins that, over the kind table in
  * `playground/lib/kind-copy.ts` rather than over a list typed into the script.
+ *
+ * THE WELL NOW OWNS THE GROUND'S TEXTURE TOO, not just its colour, and that
+ * REVERSES the arrangement the field shipped with. The field used to be painted
+ * inside each drawing — an SVG `<pattern>` in the diagram's own user units for
+ * the seven plain-SVG kinds, React Flow `<Background>` layers for the two C4
+ * hosts — on the argument that a ground fixed to the pane "detaches" when the
+ * drawing pans. The cost was that the ground SCALED WITH THE ZOOM: zoom out and
+ * the ground shrank with the drawing, which is what readers reported.
+ *
+ * The old argument holds for a ground pretending to be part of the drawing. It
+ * does not hold for a SHEET. Ruling printed on paper does not grow when you
+ * scale the drawing up, and the paper on a desk does not slide when the pencil
+ * moves. So the ground is fixed to the PANE — unaffected by zoom and by pan —
+ * and the pane is this. `globals.css` carries `.af-canvas-sheet` and the
+ * per-theme textures; `check:canvas-grid` computes the on-screen tile pitch at
+ * two zoom levels and fails if they differ.
  */
 
 import { cn } from "@/lib/utils";
 
 /**
- * The well's ground. A class rather than a component wherever the host already
- * has a wrapper of its own to hang it on — see `view-playground.tsx` and
- * `viewer-shell.tsx`, which both have panes with layout to keep.
+ * The well's ground — its colour AND its sheet, which is one class pair rather
+ * than two decisions because a host that remembers one and forgets the other is
+ * exactly the drift this file exists to stop. A class rather than a component
+ * wherever the host already has a wrapper of its own to hang it on — see
+ * `view-playground.tsx` and `viewer-shell.tsx`, which both have panes with
+ * layout to keep.
+ *
+ * IT MUST GO ON THE ELEMENT THE CAMERA HANGS UNDER, never on one inside it. The
+ * zoom lives on a descendant in every host (the `<svg>`'s transform, React
+ * Flow's viewport `<div>`), so nothing between this background and the screen is
+ * scaled or translated — which is the whole mechanism by which the sheet stays
+ * put.
  */
-export const DIAGRAM_WELL_CLASSES = "bg-canvas";
+export const DIAGRAM_WELL_CLASSES = "bg-canvas af-canvas-sheet";
 
 /**
  * The pane an example page hands its whole remaining height to.

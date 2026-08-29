@@ -25,7 +25,6 @@
  * one a search engine cannot quote.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import type { DictLabFile } from "@/types";
 
 import { BADGE, COLUMN_LABEL, DICT, layoutDict } from "../lib/layout";
@@ -255,11 +254,6 @@ export function DictDiagram({
           drawing rather than sitting still while the drawing moves over it
           — components/ui/canvas-field.tsx carries the measurement that
           rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-dict"
-        width={layout.width}
-        height={layout.height}
-      />
       {layout.title !== null ? (
         <text
           className="af-dict-title"

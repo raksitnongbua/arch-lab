@@ -389,13 +389,24 @@ const wellToken = /DIAGRAM_WELL_CLASSES =\s*"([^"]+)"/.exec(
   readCode("src/components/ui/diagram-well.tsx"),
 )?.[1];
 
+/* GROUND = COLOUR + SHEET, and both travel together or neither does. The class
+   list was `bg-canvas` alone until the ground stopped living in the drawing's
+   coordinates; `af-canvas-sheet` is the texture half, and it is asserted HERE
+   rather than only in `check:canvas-grid` because this is the file that knows
+   who mounts the well — a host that got the colour and not the texture would be
+   the same nine-way drift in a new register. Checked as a SET so the order and
+   the spacing are free, and so a third class arriving has to be argued for. */
+const wellClasses = new Set((wellToken ?? "").split(/\s+/).filter(Boolean));
 check(
-  "the well is the CANVAS token, not the chrome one",
-  wellToken === "bg-canvas",
+  "the well is the CANVAS token and its sheet, not the chrome one",
+  wellClasses.size === 2 &&
+    wellClasses.has("bg-canvas") &&
+    wellClasses.has("af-canvas-sheet"),
   `the shared well resolves to \`${wellToken ?? "nothing"}\` — the palette ` +
     "puts `--canvas` below `--background` on purpose, so grounding the " +
     "diagram on the chrome colour flattens the recess in all six themes at " +
-    "once instead of in six notations one at a time",
+    "once instead of in six notations one at a time; and dropping " +
+    "`af-canvas-sheet` leaves every pane with a colour and no ground",
 );
 
 /* THE EIGHT NON-C4 NOTATIONS. Each ships a `<kind>-viewer.tsx` mounted by the

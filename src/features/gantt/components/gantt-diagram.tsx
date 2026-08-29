@@ -65,7 +65,6 @@
  * wait for a script to write a variable.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { textureFill } from "@/lib/role-texture";
 import type { GanttLabFile } from "@/types";
@@ -145,11 +144,6 @@ export function GanttDiagram({
           drawing rather than sitting still while the drawing moves over it
           — components/ui/canvas-field.tsx carries the measurement that
           rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-gantt"
-        width={layout.width}
-        height={layout.height}
-      />
       {/* The role textures, once for the whole plot — beside the duration
           hatch below, which is a different pattern answering a different
           question ("does this span have duration?" against "which kind of

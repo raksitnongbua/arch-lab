@@ -31,13 +31,13 @@
  * Do not switch this on for a theme that already separates by hue. Two
  * differentiators for one meaning is how a reader stops being able to read
  * either — the argument `gantt-motion.css` makes about stroke weight, and the
- * same reason `contrast` refuses the canvas ruling.
+ * same reason `contrast` refuses a textured sheet.
  *
  * THE FOUR RENDITIONS, which must never drift apart:
  *
  *   1. `<RoleTextureDefs>` (`components/ui/role-texture.tsx`) — the shared
- *      `<pattern>` set in a diagram's own `<svg>`, the mechanism `CanvasField`
- *      established and `af-gantt-hatch` used before it;
+ *      `<pattern>` set in a diagram's own `<svg>`, the mechanism
+ *      `af-gantt-hatch` established;
  *   2. the `--tex-*` tokens in `globals.css`, layered into `.af-node-wash`'s own
  *      `background-image` — the CSS rendition, for C4's live view, whose nodes
  *      are HTML boxes an SVG `<pattern>` cannot reach. It rides IN the wash's

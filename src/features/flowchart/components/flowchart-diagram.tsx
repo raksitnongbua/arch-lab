@@ -60,7 +60,6 @@ import { useId } from "react";
 
 // Cross-feature on purpose (the sequence renderer's precedent): the tag-fill
 // rebuild is the ONE definition of "a hue at our validated card lightness".
-import { CanvasField } from "@/components/ui/canvas-field";
 import { resolveTagColor, tagFillCss } from "@/features/editor/lib/node-colors";
 import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { WashGradient } from "@/components/ui/wash-gradient";
@@ -189,11 +188,6 @@ export function FlowchartDiagram({
           drawing rather than sitting still while the drawing moves over it
           — components/ui/canvas-field.tsx carries the measurement that
           rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-flowchart"
-        width={layout.width}
-        height={layout.height}
-      />
       {/* The role textures, defined once for every node on this canvas. Six
           shapes reference seven patterns, so a per-node copy would be pure DOM
           weight; and the ink is one token by design, which is exactly what

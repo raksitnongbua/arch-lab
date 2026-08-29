@@ -23,8 +23,6 @@ import {
   type DragEvent as ReactDragEvent,
 } from "react";
 import {
-  Background,
-  BackgroundVariant,
   ConnectionMode,
   Panel,
   ReactFlow,
@@ -68,10 +66,6 @@ import {
 } from "../hooks/use-keyboard-shortcuts";
 import {
   ALIGNMENT_THRESHOLD,
-  CANVAS_FIELD_GAP,
-  CANVAS_RULE_MAJOR_STEP,
-  CANVAS_RULE_MAJOR_WIDTH,
-  CANVAS_RULE_WIDTH,
   CONNECT_SNAP_RADIUS,
   DEFAULT_NODE_SIZE,
   FIT_VIEW_PADDING_PX,
@@ -1050,36 +1044,6 @@ function CanvasInner(): React.JSX.Element {
         {activeDiagram !== undefined ? (
           <FrameLayer diagram={activeDiagram} onFocus={clearCanvasSelection} />
         ) : null}
-        {/* THE WELL'S FIELD — three stacked layers, two of them silent unless
-            the active theme opts in. `lib/canvas-constants.ts` carries the
-            argument for the arrangement and for why all three are always
-            mounted; `globals.css` carries the argument for which themes are
-            allowed to rule their ground and which deliberately are not.
-            Unique `id` on each: React Flow keys its `<pattern>` off it, and
-            two layers sharing one id make both paint whichever mounted
-            first. Minor rule BEFORE major so the heavy line lies on top of
-            the light one at every intersection it shares. */}
-        <Background
-          id="canvas-dots"
-          variant={BackgroundVariant.Dots}
-          gap={CANVAS_FIELD_GAP}
-          size={1.5}
-          color="var(--canvas-dot)"
-        />
-        <Background
-          id="canvas-rule-minor"
-          variant={BackgroundVariant.Lines}
-          gap={CANVAS_FIELD_GAP}
-          lineWidth={CANVAS_RULE_WIDTH}
-          color="var(--canvas-rule)"
-        />
-        <Background
-          id="canvas-rule-major"
-          variant={BackgroundVariant.Lines}
-          gap={CANVAS_FIELD_GAP * CANVAS_RULE_MAJOR_STEP}
-          lineWidth={CANVAS_RULE_MAJOR_WIDTH}
-          color="var(--canvas-rule-major)"
-        />
         <AlignmentGuides />
         <ConnectHint />
         <ShortcutHint />

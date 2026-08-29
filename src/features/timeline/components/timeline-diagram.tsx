@@ -47,7 +47,6 @@
  * animation cannot wait for a script to write a variable.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import type { TimelineLabFile } from "@/types";
 
 import { TIMELINE, layoutTimeline } from "../lib/layout";
@@ -117,11 +116,6 @@ export function TimelineDiagram({
           drawing rather than sitting still while the drawing moves over it
           — components/ui/canvas-field.tsx carries the measurement that
           rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-timeline"
-        width={layout.width}
-        height={layout.height}
-      />
       {layout.periods.map((period) => (
         <g key={`period-${period.label}-${period.y}`}>
           <text
