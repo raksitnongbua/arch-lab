@@ -21,6 +21,53 @@ export function snapToGrid(value: number): number {
   return Math.round(value / GRID_SIZE) * GRID_SIZE;
 }
 
+/**
+ * THE CANVAS WELL'S FIELD, and the one seam a theme can rule its own sheet with.
+ *
+ * The well is drawn by THREE stacked `<Background>` layers, which is React
+ * Flow's own documented arrangement for a major/minor grid (its `<Background>`
+ * doc block shows exactly this, two `Lines` layers at different gaps with
+ * different colours; each layer needs a unique `id`). Stacking is why this is a
+ * seam at all — a single layer takes one `color` prop and can only ever be one
+ * strength.
+ *
+ * The three layers paint three TOKENS, and the tokens are what make it opt-in:
+ * `--canvas-dot` defaults to `var(--canvas-grid)` and the two rule tokens
+ * default to `transparent`, so a theme that says nothing gets exactly the dot
+ * field it has always had and the two rule layers draw literally nothing. Only
+ * `blueprint` opts in. See the tokens in `globals.css` for WHY it is opt-in
+ * rather than a set every theme completes.
+ *
+ * THE LAYERS ARE ALWAYS MOUNTED, even when two of them are transparent, and
+ * that is deliberate rather than lazy. Rendering them conditionally would mean
+ * JavaScript reading the active theme, and this app decides theme-dependent
+ * presentation in CSS precisely so it is right on the very first frame with no
+ * post-hydration swap (`layout/theme-toggle.tsx` makes the same argument for
+ * its trigger icon). The cost is two extra `<svg>` elements per canvas that
+ * paint nothing; the alternative costs a frame of wrong grid on every load.
+ */
+
+/** Pitch of the minor field — dots, and the minor rule where one is used. */
+export const CANVAS_FIELD_GAP = GRID_SIZE * 2;
+
+/**
+ * How many minor pitches to a major rule. FIVE, the drafting convention, and an
+ * INTEGER on purpose: a major gap that is not a whole multiple of the minor one
+ * puts heavy lines between light ones instead of on top of them, which reads as
+ * moire rather than as ruling. `check:canvas-grid` asserts the multiple.
+ */
+export const CANVAS_RULE_MAJOR_STEP = 5;
+
+/**
+ * Stroke weights. The major rule is heavier as well as brighter, because a
+ * ruled sheet separates its two rules by WEIGHT first — colour alone would make
+ * the major line merely a lighter minor line. Weight is a constant rather than
+ * a token: a theme that does not opt in paints both rules transparent, so the
+ * weight of a line nobody can see costs nothing.
+ */
+export const CANVAS_RULE_WIDTH = 1;
+export const CANVAS_RULE_MAJOR_WIDTH = 1.5;
+
 /** Distance (flow units) at which alignment guides appear and snap. */
 export const ALIGNMENT_THRESHOLD = 6;
 
