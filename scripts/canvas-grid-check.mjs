@@ -43,7 +43,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:canvas-grid
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,66 +77,164 @@ const THEMES = [
 const baseline = tokensOf(CSS, "light");
 
 /* ----------------------------------------------------------------------- */
-/* 0. The renderer actually mounts the three layers the tokens describe     */
+/* 0. The field is MOUNTED — for every kind, on the page the reader opens    */
 /* ----------------------------------------------------------------------- */
 
-console.log("the well is drawn by three stacked layers");
+/* THIS IS THE SECTION WHOSE ABSENCE SHIPPED THE BUG. The first version of this
+   script measured token VALUES and the one renderer it knew about, and passed
+   with 70 green assertions while eight of the nine notations drew no field at
+   all — `<Background>` existed in exactly one file, the C4 editor, and nothing
+   asserted that any other canvas painted anything. A palette check that never
+   asks "is this on the page?" cannot notice a grid nobody can see.
+
+   DERIVED FROM THE KIND TABLE, never a hand-listed nine — the same source
+   `check:canvas-chrome` uses for the well's colour, and for the same reason:
+   `KIND_BLURB` is a total `Record<SeedKind, string>`, so a tenth notation
+   cannot compile without a row in it. A tenth kind therefore fails HERE, on
+   the day it is declared, rather than shipping fieldless. */
+
+console.log("every notation actually paints the field");
 
 /* COMMENTS STRIPPED, the `theme-check.mjs` precaution: each pattern below is
    also described in prose beside the code it pins, so a scan over raw source
    would match the sentence and pass with the code deleted. */
-const canvas = read("src/features/editor/components/canvas.tsx")
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .replace(/^\s*\/\/.*$/gm, "");
+const readCode = (rel) =>
+  readFileSync(path.join(ROOT, rel), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
 
-for (const [token, id] of [
+const KINDS = [
+  ...readCode("src/features/playground/lib/kind-copy.ts").matchAll(
+    /^ {2}([a-z][a-z0-9]*):\s*$|^ {2}([a-z][a-z0-9]*): "/gm,
+  ),
+]
+  .map((match) => match[1] ?? match[2])
+  .filter((kind) => kind !== undefined);
+
+check(
+  `the kind table still yields every notation (${KINDS.length})`,
+  KINDS.length >= 9,
+  `only ${KINDS.length} kind(s) parsed out of \`kind-copy.ts\` — every ` +
+    "assertion below would be passing vacuously over a short list",
+);
+
+/* THE THREE LAYERS, AND THE TOKEN EACH ONE PAINTS. Both mechanisms are held to
+   the same table: React Flow's `<Background>` for the two C4 hosts, and the
+   in-SVG `<CanvasField>` for the other eight. */
+const LAYERS = [
   ["--canvas-dot", "canvas-dots"],
   ["--canvas-rule", "canvas-rule-minor"],
   ["--canvas-rule-major", "canvas-rule-major"],
-]) {
-  check(
-    `a <Background id="${id}" paints var(${token})`,
-    new RegExp(
-      `id="${id}"[\\s\\S]{0,300}?color="var\\(${token}\\)"`,
-      "m",
-    ).test(canvas),
-    `the token is declared in globals.css but nothing paints it — a theme ` +
-      `could set it and see no change`,
-  );
-}
+];
 
-{
-  /* Unique ids: React Flow keys its <pattern> off `id`, so two layers sharing
-     one make both paint whichever mounted first. */
-  const ids = [...canvas.matchAll(/<Background[\s\S]{0,80}?id="([a-z-]+)"/g)].map(
+/* C4 IS BOTH REACT FLOW HOSTS, and it is two rather than one because the
+   VIEWER had no field for its entire life — the editor's grid made the gap
+   invisible to anyone developing with a model open. A kind is not covered
+   until every surface that draws it is. */
+const C4_HOSTS = [
+  "src/features/editor/components/canvas.tsx",
+  "src/features/viewer/components/viewer-canvas.tsx",
+];
+
+for (const host of C4_HOSTS) {
+  const code = readCode(host);
+  const missing = LAYERS.filter(
+    ([token, id]) =>
+      !new RegExp(`id="${id}"[\\s\\S]{0,300}?color="var\\(${token}\\)"`).test(
+        code,
+      ),
+  ).map(([, id]) => id);
+  check(
+    `c4: ${host.split("/").pop()} mounts all three <Background> layers`,
+    missing.length === 0,
+    `missing ${missing.join(", ")} — this React Flow canvas draws no field, ` +
+      "which is exactly the state the C4 viewer shipped in",
+  );
+  const ids = [...code.matchAll(/<Background[\s\S]{0,80}?id="([a-z-]+)"/g)].map(
     (m) => m[1],
   );
   check(
-    `every <Background> carries a distinct id (${ids.length} layers)`,
+    `c4: ${host.split("/").pop()} gives every layer a distinct id`,
     ids.length === 3 && new Set(ids).size === 3,
     `ids: ${ids.join(", ") || "none"} — React Flow keys its <pattern> off the ` +
-      `id, so a duplicate makes both layers paint one colour`,
+      "id, so a duplicate makes both layers paint one colour",
   );
 }
 
+/* THE OTHER EIGHT draw plain SVG and carry the field inside their own `<svg>`,
+   in the drawing's coordinates. The file name is derived from the kind, the
+   same convention `check:canvas-chrome` relies on. */
+for (const kind of KINDS.filter((kind) => kind !== "c4")) {
+  const diagram = `src/features/${kind}/components/${kind}-diagram.tsx`;
+  if (!existsSync(path.join(ROOT, diagram))) {
+    check(
+      `${kind}: its diagram component is where the convention says`,
+      false,
+      `expected ${diagram} — this notation is in the kind table but its ` +
+        "drawing surface is not where every other kind's is",
+    );
+    continue;
+  }
+  const code = readCode(diagram);
+  check(
+    `${kind}: its <svg> mounts the shared field`,
+    /<CanvasField\b/.test(code),
+    "this diagram paints no field, so its well is bare in every theme — the " +
+      "defect this section exists for. The field belongs INSIDE the <svg>: a " +
+      "ground on the pane detaches, because this canvas pans, scrolls or zooms",
+  );
+}
+
+/* AND THE FIELD IS NOT IN ANY EXPORT. Screen chrome, not diagram content: it
+   says where a drawing is being read, not what it means, and a diagram dropped
+   into a deck should arrive as the drawing. It holds today by CONSTRUCTION —
+   every exporter is a separate string builder that imports layout only — and
+   this assertion is what stops the two renderers quietly converging. */
+for (const kind of KINDS.filter((kind) => kind !== "c4")) {
+  const exporter = `src/features/${kind}/export/render-svg.ts`;
+  if (!existsSync(path.join(ROOT, exporter))) continue;
+  const code = readCode(exporter);
+  check(
+    `${kind}: its exporter carries no field`,
+    !/CanvasField|--canvas-rule|--canvas-dot/.test(code),
+    "the downloaded file would carry the screen's grid — decide that " +
+      "deliberately and rewrite this assertion, do not let it drift in",
+  );
+}
+
+console.log("\nthe field's geometry is one definition");
+
 {
-  const constants = read("src/features/editor/lib/canvas-constants.ts");
+  const constants = readCode("src/features/editor/lib/canvas-constants.ts");
   const step = /CANVAS_RULE_MAJOR_STEP = (\d+(?:\.\d+)?)/.exec(constants)?.[1];
   check(
     `the major rule falls on a whole multiple of the minor pitch (every ${step})`,
     step !== undefined && Number.isInteger(Number(step)) && Number(step) > 1,
     `CANVAS_RULE_MAJOR_STEP is ${step ?? "absent"} — a fractional step puts ` +
-      `heavy lines BETWEEN light ones rather than on them, which reads as moire`,
+      "heavy lines BETWEEN light ones rather than on them, which reads as moire",
   );
-  const minor = Number(/CANVAS_RULE_WIDTH = (\d+(?:\.\d+)?)/.exec(constants)?.[1]);
+  const minor = Number(
+    /CANVAS_RULE_WIDTH = (\d+(?:\.\d+)?)/.exec(constants)?.[1],
+  );
   const major = Number(
     /CANVAS_RULE_MAJOR_WIDTH = (\d+(?:\.\d+)?)/.exec(constants)?.[1],
   );
   check(
     `the major rule is drawn heavier than the minor (${major} vs ${minor})`,
     Number.isFinite(minor) && Number.isFinite(major) && major > minor,
-    `a ruled sheet separates its two rules by WEIGHT first; colour alone makes ` +
-      `the major line merely a lighter minor line`,
+    "a ruled sheet separates its two rules by WEIGHT first; colour alone makes " +
+      "the major line merely a lighter minor line",
+  );
+  /* ONE PITCH FOR BOTH MECHANISMS. The in-SVG field and React Flow's layers
+     must tile identically or a reader changing notation sees the grid change
+     size, so both read these constants rather than typing a number. */
+  check(
+    "the shared in-SVG field reads the same constants React Flow does",
+    /CANVAS_FIELD_GAP|CANVAS_RULE_MAJOR_STEP/.test(
+      readCode("src/components/ui/canvas-field.tsx"),
+    ),
+    "components/ui/canvas-field.tsx hardcodes its geometry — the eight SVG " +
+      "notations would rule at a different pitch from the two C4 canvases",
   );
 }
 

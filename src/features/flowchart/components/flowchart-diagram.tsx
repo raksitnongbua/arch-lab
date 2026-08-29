@@ -60,6 +60,7 @@ import { useId } from "react";
 
 // Cross-feature on purpose (the sequence renderer's precedent): the tag-fill
 // rebuild is the ONE definition of "a hue at our validated card lightness".
+import { CanvasField } from "@/components/ui/canvas-field";
 import { resolveTagColor, tagFillCss } from "@/features/editor/lib/node-colors";
 import { WashGradient } from "@/components/ui/wash-gradient";
 import { TINT_WASH_OPACITY } from "@/lib/tint";
@@ -180,6 +181,16 @@ export function FlowchartDiagram({
       aria-label={`Flowchart: ${title}. ${layout.nodes.length} nodes, ${layout.edges.length} arrows. Nodes and arrows are buttons — Tab reaches them.`}
       className="af-flow-svg block"
     >
+      {/* THE WELL'S FIELD, under everything the diagram draws. In the
+          diagram's OWN coordinates, so it pans, scrolls and zooms with the
+          drawing rather than sitting still while the drawing moves over it
+          — components/ui/canvas-field.tsx carries the measurement that
+          rules out a ground painted on the pane. */}
+      <CanvasField
+        id="af-field-flowchart"
+        width={layout.width}
+        height={layout.height}
+      />
       {/* ---- group frames: context first, everything sits on them ---- */}
       {layout.groups.map((group, index) => (
         <g
