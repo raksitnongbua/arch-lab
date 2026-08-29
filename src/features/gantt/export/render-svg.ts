@@ -44,8 +44,15 @@ import type { GanttLabFile } from "@/types";
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
+import { TextureRegistry } from "@/features/viewer/export/texture-registry";
+
 import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
-import { GANTT, hatchTilePaths, layoutGantt } from "../lib/layout";
+import {
+  GANTT,
+  TEXTURE_BY_STATE,
+  hatchTilePaths,
+  layoutGantt,
+} from "../lib/layout";
 import type { LaidGanttItem } from "../lib/layout";
 
 /**
@@ -154,6 +161,23 @@ export function renderGanttSvg(
     `<rect x="0" y="0" width="${width}" height="${height}" fill="${theme.canvas}"/>`,
   );
 
+  /* THE ROLE TEXTURES the bars actually wear, collected before the `<defs>` is
+     written so only the used tiles are emitted. Under every theme but `eink`
+     the registry declines every request and this contributes nothing — not an
+     empty `<defs>`, not an invisible overlay — which is what keeps the other
+     eight themes' exported bytes identical to what they were.
+
+     THE ROLE TEXTURE IS CONTENT HERE, unlike the well's grid, which this file
+     deliberately omits: a gantt's four state fills ARE role tokens, so in a
+     hue-free theme this lattice is the only thing saying which state a bar is
+     in. Dropping it would export a plan whose bars all report the same thing. */
+  const textures = new TextureRegistry(theme);
+  const barTextures = new Map<LaidGanttItem, string | null>();
+  for (const item of layout.items) {
+    if (item.milestone) continue;
+    barTextures.set(item, textures.ref(TEXTURE_BY_STATE[item.state]));
+  }
+
   /* The hatch tile, once, exactly as the canvas defines it minus the marching
      group. `edgeDrift` and the opacity are the stylesheet's own token and
      number; keeping them in step with `--gantt-hatch-opacity` is what
@@ -168,7 +192,9 @@ export function renderGanttSvg(
             `stroke-width="${GANTT.hatchStroke}" stroke-opacity="${HATCH_OPACITY}" stroke-linecap="butt"/>`,
         )
         .join("") +
-      `</pattern></defs>`,
+      `</pattern>` +
+      textures.markup() +
+      `</defs>`,
   );
   push(`<g transform="translate(${EXPORT_PADDING} ${EXPORT_PADDING})">`);
 
@@ -244,6 +270,20 @@ export function renderGanttSvg(
       `<rect x="${item.x0}" y="${item.barY}" width="${width}" height="${GANTT.barHeight}" rx="4" ` +
         `fill="${paint.fill}" stroke="${paint.border}" stroke-width="1.25"/>`,
     );
+    /* THE ROLE TEXTURE FIRST, THEN THE DURATION HATCH — the canvas's own order,
+       and the order is the meaning: the state is a property of the bar and the
+       hatch is a wash over whatever the bar is. Neither may rule at the other's
+       angle, which is why no state a gantt can paint is assigned 45°;
+       `check:eink` derives both the hatch's angle and the state→role map rather
+       than trusting this comment. `null` under every non-texturing theme, and
+       then no element is written at all. */
+    const barTexture = barTextures.get(item) ?? null;
+    if (barTexture !== null) {
+      push(
+        `<rect x="${item.x0}" y="${item.barY}" width="${width}" height="${GANTT.barHeight}" rx="4" ` +
+          `fill="${barTexture}"/>`,
+      );
+    }
     /* Over the fill, UNDER the cap — the same paint order the canvas uses, and
        for the same reason: the cap is the only per-bar criticality signal and
        nothing translucent may lie on it. */

@@ -54,6 +54,14 @@ export const TAG_FILL_BY_THEME: Record<Theme, { l: number; c: number }> = {
   midnight: { l: 0.275, c: 0.06 },
   contrast: { l: 0.2, c: 0.06 },
   blueprint: { l: 0.33, c: 0.06 },
+  /* The LIGHT family's own pin, taken verbatim. `eink` is a greyscale palette
+     but this entry is not about the theme's colours — it is the band an
+     AUTHOR'S `tagColors` fill is rebuilt at, and every entry here narrows one
+     interval shared by all nine themes. Reusing a pin four themes already hold
+     narrows it by nothing; inventing a greyscale one would repeat blueprint's
+     regression, where a new band closed the interval for the greens and the
+     free picker started refusing `#00ff88`. */
+  eink: { l: 0.93, c: 0.055 },
 };
 
 /**

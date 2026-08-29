@@ -116,6 +116,96 @@
   --canvas-rule: transparent;
   --canvas-rule-major: transparent;
 
+  /* ROLE TEXTURE — the SECOND channel node identity can travel on, and the
+     same shape of opt-in seam as the three rule tokens above.
+
+     WHY IT IS A SEAM AND NOT A FEATURE. Every theme here separates the node
+     roles by HUE: `light`'s person and internal fills are ΔE 0.027 and
+     1.010:1 apart, which reads perfectly because the whole separation is hue.
+     A palette with no hue cannot borrow that, and — the part that made this
+     dangerous — the ΔE floors in `check:themes`, `check:flowchart-palette` and
+     `check:gantt-palette` are calibrated on hue-separated pairs, so a greyscale
+     palette meets all of them with two greys 1.078:1 apart and the suite says
+     green over a diagram whose six flowchart shapes are one colour. Texture is
+     what a hue-free theme carries identity in instead;
+     `lib/role-texture.ts` holds the vocabulary and `check:eink` measures it.
+
+     OFF BY DEFAULT, AND MEANT TO STAY OFF FOR EIGHT OF THE NINE. `opacity: 0`
+     means every theme paints the overlays and none of them shows one, so the
+     eight existing palettes render exactly what they rendered before and their
+     exports are byte-identical (an exporter skips the overlay entirely at zero).
+     A theme that ALREADY separates by hue must not switch this on: two
+     differentiators for one meaning is how a reader stops being able to read
+     either, which is the argument `gantt-motion.css` makes about stroke weight
+     and the reason `contrast` refuses the canvas ruling above.
+
+     THE INK IS ONE COLOUR ON PURPOSE. Identity is the GEOMETRY — seven tile
+     patterns — never the texture's colour. That is what keeps the marker
+     working on a photocopy, on an e-reader, and for a reader who cannot use
+     hue at all, and it is why a node wearing an author's `tagColors` still
+     wears its role's texture. */
+  --role-texture-ink: var(--node-border);
+  --role-texture-opacity: 0;
+
+  /* The CSS rendition of the same seven tiles, for C4's live view — whose
+     nodes are HTML boxes an SVG `<pattern>` cannot reach. The geometry is
+     duplicated from `lib/role-texture.ts` because CSS cannot import it, in
+     exactly the manner `.af-node-wash` duplicates `lib/wash.ts`'s four stops;
+     `check:eink` pins every pitch, weight and angle here to that module's
+     constants so the two renditions cannot drift.
+
+     The ink folds the opacity in rather than the layer carrying it, because
+     these are BACKGROUND LAYERS on a node that already paints a wash — an
+     `opacity` on the element would fade the card, not the texture. */
+  --tex-ink: color-mix(
+    in srgb,
+    var(--role-texture-ink) calc(var(--role-texture-opacity) * 100%),
+    transparent
+  );
+  --tex-dots: radial-gradient(
+    circle at 50% 50%,
+    var(--tex-ink) 0 0.85px,
+    transparent 0.85px
+  );
+  --tex-vertical: repeating-linear-gradient(
+    90deg,
+    var(--tex-ink) 0 0.9px,
+    transparent 0.9px 8px
+  );
+  --tex-horizontal: repeating-linear-gradient(
+    0deg,
+    var(--tex-ink) 0 0.9px,
+    transparent 0.9px 8px
+  );
+  /* 135deg, NOT 45. An SVG y-axis points DOWN while a CSS gradient angle runs
+     clockwise from up, so the two conventions are mirrored in y: the SVG tile's
+     `M0,8 L8,0` rises left-to-right, and the CSS gradient that draws the SAME
+     stripe is `180 - 45`. Spelling both as 45 renders the two renditions as
+     mirror images of each other — a C4 node and a flowchart node wearing
+     opposite slants for one role, each half self-consistent. `check:eink`
+     applies the conversion rather than comparing the numbers. */
+  --tex-hatch-forward: repeating-linear-gradient(
+    135deg,
+    var(--tex-ink) 0 0.9px,
+    transparent 0.9px 8px
+  );
+  --tex-hatch-back: repeating-linear-gradient(
+    45deg,
+    var(--tex-ink) 0 0.9px,
+    transparent 0.9px 8px
+  );
+  --tex-cross:
+    repeating-linear-gradient(
+      90deg,
+      var(--tex-ink) 0 0.9px,
+      transparent 0.9px 8px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      var(--tex-ink) 0 0.9px,
+      transparent 0.9px 8px
+    );
+
   --node: oklch(1 0 0);
   --node-foreground: oklch(0.21 0.02 265);
   /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
@@ -1479,6 +1569,203 @@
   --node-stroke: var(--node-border);
 }
 
+/* --- Theme: eink --------------------------------------------------------------
+ * CHROMA ZERO IN EVERY TOKEN. Not "muted", not "low-saturation" — every colour
+ * in this block is `oklch(L 0 0)` or a grey hex, so the palette survives a
+ * photocopier, an e-reader, a monochrome projector, and a reader who cannot use
+ * hue at all. LIGHT FAMILY, because an e-ink panel is a light ground: it
+ * reflects, it does not emit, and a dark greyscale theme would be describing a
+ * screen this theme exists to stop pretending it is on.
+ *
+ * IT WAS REFUSED TWICE, AND THE REASON IT WAS REFUSED IS THE REASON IT NOW
+ * SHIPS DIFFERENTLY. A pure-grey palette clears every numeric floor in the
+ * suite — every one of the ratios annotated below passes, comfortably. But the
+ * ΔE floors those checks apply are HUE-CALIBRATED: `light`'s person and
+ * internal fills sit at ΔE 0.027 and 1.010:1 because they are separated purely
+ * by hue, and that reads. Meet the same 0.02 floor with grey and you get two
+ * patches 1.078:1 apart, which is one colour with two names. The suite would
+ * have handed a green tick to an `eink` whose six flowchart shapes were
+ * indistinguishable. That is not a theory; it is the measured number.
+ *
+ * SO THE LADDER IS NOT WHAT CARRIES IDENTITY HERE. The seven role fills below
+ * do descend in a deliberate order — external lightest ("not ours", and the
+ * gantt's `planned`: nothing has happened yet), down through queue, person,
+ * internal, database, decision, to `end` darkest, a full stop — and that gives
+ * a reader ORDER at a glance. But adjacent rungs are 1.07:1, and the reason the
+ * ladder cannot simply be widened until they separate is arithmetic, not taste:
+ * seven rungs far enough apart to read as seven greys put `--node-meta` under
+ * 4.5:1 on the bottom rung. A technology line that cannot be read is a worse
+ * failure than two fills that look alike.
+ *
+ * WHAT CARRIES IDENTITY IS TEXTURE. Seven tile geometries, one ink, switched on
+ * by `--role-texture-opacity` below — the seam `:root` describes and the only
+ * theme that takes it. A database is ruled horizontally and a queue is
+ * back-slanted at any colour depth on any medium. `check:eink` derives the role
+ * set from the data (never a hand-listed five, which cannot notice a sixth) and
+ * measures the PAINTED result — fill plus texture — for every pair.
+ *
+ * THE ONE PLACE TWO TEXTURES MEET is a gantt bar, whose state fills ARE four of
+ * these role tokens and which already carries `af-gantt-hatch` at 45° meaning
+ * "this span has duration". No role a gantt can paint rules at 45°: `planned`
+ * is plain, `done` back-slants, `active` rules vertically, `at-risk`
+ * cross-hatches. 45° belongs to the flowchart's `end`, which is never a gantt
+ * state. `check:eink` asserts it against the gantt's own tile paths.
+ *
+ * THE RUNNING LIGHT RUNS DARK, and that is a real answer to a real question
+ * rather than a floor lowered to fit. `--gantt-flow` must stay ΔE ≥0.1 from
+ * both `--edge` and `--gantt-critical`, which with no chroma leaves only
+ * lightness — and the band above `--edge` cannot also clear 3:1 against the bar
+ * fills it passes. So the comet is INK, not light: L 0.30 against a 0.52 wire,
+ * ΔE 0.220 from it and 0.120 from the critical colour, 11.61:1 on the canvas
+ * and never worse than 8.08:1 on a bar. On a reflective ground a travelling
+ * mark is a darkening, not a glow; every other theme's comet is a light because
+ * every other theme is a screen.
+ *
+ * RATIOS ARE MEASURED, by the same oklch → linear-sRGB maths `check:themes`
+ * uses: name is `--node-foreground` vs fill, meta is `--node-meta` vs fill,
+ * border vs ITS OWN fill; wash-top repeats the three against the surface wash's
+ * deepest stop (14% border folded into the fill), the worst case for text.
+ * `--node-meta` sits at 0.355 rather than the light block's 0.45 for exactly
+ * one reason: at 0.37 the bottom rung's wash-top meta measured 4.46:1.
+ * ---------------------------------------------------------------------------- */
+.eink {
+  --radius: 0.625rem;
+
+  /* THE TEXTURE CHANNEL, ON. The only theme that opts in, and `:root` says why
+     no theme that separates by hue should join it. 0.14 is where the texture is
+     legible on the lightest fill without the ruling starting to read as a fill
+     of its own — `check:eink` holds both ends of that. */
+  --role-texture-opacity: 0.14;
+  --role-texture-ink: oklch(0.42 0 0);
+
+  --background: oklch(0.965 0 0);
+  --foreground: oklch(0.2 0 0);
+
+  /* A panel genuinely floats above the page, so it is brighter than the sheet —
+     the distinction `paper` draws between `--card` and `--node`, kept here for
+     the same reason: a dialog is not printed on the page, a node is. */
+  --card: oklch(0.995 0 0);
+  --card-foreground: oklch(0.2 0 0);
+
+  --popover: oklch(0.995 0 0);
+  --popover-foreground: oklch(0.2 0 0);
+
+  /* 7.64:1 on the ground (needs 3:1). The house violet cannot survive here —
+     it is the one mark this theme is defined by being unable to make — so the
+     accent is weight instead of hue, and `--gantt-critical` aliases it. */
+  --primary: oklch(0.42 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.925 0 0);
+  --secondary-foreground: oklch(0.28 0 0);
+
+  --muted: oklch(0.925 0 0);
+  --muted-foreground: oklch(0.46 0 0);
+
+  --accent: oklch(0.55 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+
+  /* Status colours lose their hue and therefore their instant reading. They
+     keep their WEIGHT ordering — destructive darkest, warning lightest — so a
+     status still ranks even where it no longer signals, and every one of them
+     is paired with an icon and a word elsewhere in the app. */
+  --destructive: oklch(0.38 0 0);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --success: oklch(0.5 0 0);
+  --success-foreground: oklch(0.985 0 0);
+
+  --warning: oklch(0.62 0 0);
+  --warning-foreground: oklch(0.16 0 0);
+
+  --border: oklch(0.87 0 0);
+  --input: oklch(0.87 0 0);
+  --ring: oklch(0.42 0 0);
+
+  /* The well, and its field. `eink` does NOT opt into the canvas ruling: this
+     theme already spends its texture budget on the ROLES, and a ruled ground
+     under a hatched node is two lattices arguing. The dot field stays, in this
+     theme's own grid colour — 1.303:1 on the canvas, under the ceiling
+     `check:canvas-grid` sets from `--edge` (4.69:1 → 2.81 allowed). */
+  --canvas: oklch(0.945 0 0);
+  --canvas-grid: oklch(0.86 0 0);
+
+  --node: oklch(0.985 0 0);
+  --node-foreground: oklch(0.2 0 0);
+  /* ≥3:1 against --node (measured 3.78:1). */
+  --node-border: oklch(0.6 0 0);
+  /* Secondary text on node fills (the light block has the design notes).
+     10.62:1 on --node, and 4.57:1 on the worst wash-top in the set. */
+  --node-meta: oklch(0.355 0 0);
+
+  /* The seven-rung ladder. Fills descend 0.955 → 0.805 in steps of 0.025 and
+     borders 0.62 → 0.26 in steps of 0.06 — the border step is the wider one
+     because `check:flowchart-palette` holds borders to ΔE 0.05 where fills only
+     owe 0.02, and because a heavier outline further down the ladder is a THIRD
+     reading of the same order. `start` and `end` sit at opposite ends of both
+     ladders: that pair owes ΔE 0.06 on fills and 0.15 on borders, and it is the
+     pair a real chart is most likely to be built from. */
+  /* name 15.88:1, meta 9.44:1, border 3.19:1 (no wash — external stays matte) */
+  --node-external: oklch(0.955 0 0);
+  --node-external-border: oklch(0.62 0 0);
+  /* name 14.73:1, meta 8.75:1, border 3.79:1 (wash-top: 12.64 / 7.51 / 3.25) */
+  --node-queue: oklch(0.93 0 0);
+  --node-queue-border: oklch(0.56 0 0);
+  /* name 13.64:1, meta 8.11:1, border 4.52:1 (wash-top: 11.51 / 6.84 / 3.81) */
+  --node-person: oklch(0.905 0 0);
+  --node-person-border: oklch(0.5 0 0);
+  /* name 12.61:1, meta 7.49:1, border 5.41:1 (wash-top: 10.45 / 6.21 / 4.48) */
+  --node-internal: oklch(0.88 0 0);
+  --node-internal-border: oklch(0.44 0 0);
+  /* name 11.64:1, meta 6.92:1, border 6.44:1 (wash-top: 9.47 / 5.63 / 5.24) */
+  --node-database: oklch(0.855 0 0);
+  --node-database-border: oklch(0.38 0 0);
+  /* name 10.72:1, meta 6.37:1, border 7.51:1 (wash-top: 8.57 / 5.09 / 6.01) */
+  --flow-decision: oklch(0.83 0 0);
+  --flow-decision-border: oklch(0.32 0 0);
+  /* name 9.86:1, meta 5.86:1, border 8.46:1 (wash-top: 7.74 / 4.57 / 6.64) */
+  --flow-end: oklch(0.805 0 0);
+  --flow-end-border: oklch(0.26 0 0);
+
+  /* Ink, not light — the header carries the argument. ΔE 0.220 from `--edge`
+     and 0.120 from `--gantt-critical`, both over the 0.1 floor
+     `check:gantt-palette` holds; 11.61:1 on the canvas and ≥8.08:1 on every
+     bar fill it passes. */
+  --gantt-flow: oklch(0.3 0 0);
+
+  /* The light family's own pin, deliberately UNCHANGED. A `tagColors` stroke
+     has to clear 3:1 against the constructed fill in EVERY theme at once, so
+     each entry NARROWS one shared interval — `blueprint` closed it for the
+     greens by inventing its own band and `presentableTagColor` began refusing
+     `#00ff88` outright. Taking the light pin narrows nothing. The chroma cap
+     stays 0.055 rather than dropping to zero for the same reason and one more:
+     an author's explicit colour is their data, and a theme that confiscated it
+     would be telling them their colour cannot be shown. The role marker
+     survives the recolour anyway — it is the texture, not the fill. */
+  --tag-fill-l: 0.93;
+  --tag-fill-c: 0.055;
+
+  /* 4.69:1 on the canvas. */
+  --edge: oklch(0.52 0 0);
+  --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
+  --selection: oklch(0.42 0 0 / 0.18);
+
+  /* Five lanes as five greys, 0.28 → 0.68 in steps of 0.10 — a wider step than
+     the role ladder can afford because a lifeline is a LINE on the canvas, not
+     a fill under text, so nothing is measured through it. Lane 5 is 2.45:1,
+     under the 3:1 a mark would normally owe, and allowed under the same relief
+     rule the light block records: a participant's NAME is always rendered
+     inside its header, so lane identity is never colour-alone. */
+  --seq-lane-1: #292929;
+  --seq-lane-2: #424242;
+  --seq-lane-3: #5d5d5d;
+  --seq-lane-4: #7a7a7a;
+  --seq-lane-5: #989898;
+
+  --node-fill: var(--node);
+  --node-stroke: var(--node-border);
+}
+
 /* The pastel theme's ground is the only gradient in the app.
  *
  * On `html`, not `body`: `html` is what carries `background-color` for the
@@ -2366,14 +2653,23 @@
  * `check:flowchart-palette` pins each one to that module's constants.
  * External cards take NO wash anywhere — matte is their meaning. */
 
+/* THE TEXTURE RIDES IN THE WASH'S OWN DECLARATION, as the layer above it. An
+   element has one `background-image`, so a second class setting one would not
+   stack with this — it would REPLACE it, and a washed node would lose its wash
+   in whichever rule happened to win. `--node-texture` defaults to `none`, which
+   is a legal background layer that paints nothing, so every theme but `eink`
+   resolves this to exactly the single gradient it has always been. */
 .af-node-wash {
-  background-image: linear-gradient(
-    to bottom,
-    color-mix(in oklab, var(--node-stroke) 14%, var(--node-fill)),
-    var(--node-fill) 55%,
-    var(--node-fill) 82%,
-    color-mix(in oklab, var(--node-stroke) 7%, var(--node-fill))
-  );
+  background-image:
+    var(--node-texture, none),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--node-stroke) 14%, var(--node-fill)),
+      var(--node-fill) 55%,
+      var(--node-fill) 82%,
+      color-mix(in oklab, var(--node-stroke) 7%, var(--node-fill))
+    );
+  background-size: var(--node-texture-size, auto), auto;
 }
 
 .af-node-wash-fill {

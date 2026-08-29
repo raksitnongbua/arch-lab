@@ -95,6 +95,7 @@
     "check:canvas-grid": "node scripts/canvas-grid-check.mjs",
     "check:hero": "node scripts/hero-check.mjs",
     "check:themes": "node scripts/theme-check.mjs",
+    "check:eink": "node scripts/eink-check.mjs",
     "check:og-cards": "node scripts/og-cards-check.mjs",
     "build:skill": "node scripts/build-skill.mjs",
     "check:skill": "node scripts/skill-check.mjs"

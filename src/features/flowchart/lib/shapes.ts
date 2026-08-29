@@ -9,7 +9,9 @@
  * that imports it through Node's type stripping.
  */
 
+import { TEXTURE_BY_ROLE } from "@/features/editor/lib/node-colors";
 import { arrowheadPathAt } from "@/lib/arrowhead";
+import type { RoleTexture } from "@/lib/role-texture";
 import { fmt } from "@/lib/svg-markup";
 import type { FlowchartNodeShape } from "@/types";
 
@@ -55,6 +57,37 @@ export const FLOW_SHAPE_TOKENS: Record<
   decision: { fill: "--flow-decision", border: "--flow-decision-border" },
   io: { fill: "--flow-io", border: "--flow-io-border" },
   call: { fill: "--flow-call", border: "--flow-call-border" },
+};
+
+/**
+ * The tile geometry each shape wears when a theme textures its roles.
+ *
+ * FOUR OF THE SIX READ THROUGH THE ROLE TABLE, exactly as their COLOURS do —
+ * `--flow-start` is a `var()` alias of `--node-queue` and this is the same
+ * aliasing in the texture channel, so a flowchart and a C4 diagram cannot
+ * disagree about what a queue looks like. Only the two hues no role holds
+ * assign themselves:
+ *
+ *   - `decision` is CROSS-HATCHED. The heaviest mark in the vocabulary for the
+ *     shape that stops the reader and asks a question — and, as `at-risk`, the
+ *     gantt state that most wants to be found by eye.
+ *   - `end` is FORWARD-SLANTED (45°), the one geometry no role may take. It is
+ *     free to have it precisely because `end` is the one shape here that is
+ *     never a gantt state, so it can never meet the duration hatch.
+ *
+ * `start` and `end` therefore differ in BOTH channels — back-slant against
+ * forward-slant, and the widest fill separation in the ladder. That pair is the
+ * one `check:flowchart-palette` already holds to a higher floor than the rest,
+ * because a six-node chart rendering monotone terminators is the bug that
+ * bought that check.
+ */
+export const TEXTURE_BY_SHAPE: Record<FlowchartNodeShape, RoleTexture> = {
+  start: TEXTURE_BY_ROLE.queue,
+  step: TEXTURE_BY_ROLE.internal,
+  io: TEXTURE_BY_ROLE.database,
+  call: TEXTURE_BY_ROLE.person,
+  decision: "cross",
+  end: "hatch-forward",
 };
 
 /** Corner radius of a `step`/`call` box. */

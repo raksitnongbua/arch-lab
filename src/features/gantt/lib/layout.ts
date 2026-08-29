@@ -54,6 +54,9 @@
  * stripping: keep the syntax erasable and type-only imports as `import type`.
  */
 
+import { TEXTURE_BY_ROLE } from "@/features/editor/lib/node-colors";
+import { TEXTURE_BY_SHAPE } from "@/features/flowchart/lib/shapes";
+import type { RoleTexture } from "@/lib/role-texture";
 import type { GanttItem, GanttItemState, GanttLabFile } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -141,6 +144,40 @@ export function hatchTilePaths(): readonly string[] {
     `M${-GANTT.hatchTile},${GANTT.hatchTile}L0,0`,
   ];
 }
+
+/**
+ * Which role texture each reporting state wears.
+ *
+ * THE VALUES ARE NEVER TYPED HERE — every one is read out of the role tables,
+ * because a gantt's four state fills ARE those role tokens (`gantt-motion.css`
+ * aliases `planned` to `--node-external`, `done` to `--node-queue`, `active`
+ * to `--node-internal`, `at-risk` to `--flow-decision`). A hand-written
+ * geometry here could pair `done`'s queue colour with `internal`'s ruling, and
+ * a reader comparing a bar to the C4 diagram beside it would decode the wrong
+ * role from a picture that is internally consistent. Deriving means that
+ * cannot happen: change a role's texture once and the plan follows.
+ *
+ * THE STATE → ROLE PAIRING ITSELF IS THE ONE HAND-MAINTAINED HALF, duplicated
+ * from `styles/gantt-motion.css` because CSS cannot be imported. `check:eink`
+ * is what pins the two together — it derives the pairing from the stylesheet's
+ * own `fill:` declarations and asserts this table matches, the arrangement
+ * `check:sequence-motion` uses for its duration pair. If that check is not
+ * running, this table is unverified.
+ *
+ * `at-risk` reaches through the FLOWCHART's table rather than the role one for
+ * the same reason its colour does: `--flow-decision` is the hue no C4 role
+ * holds, and its cross-hatch is the heaviest mark in the vocabulary — the
+ * state that most wants to be found by eye. It also keeps every gantt state
+ * off 45°, which is not decoration: the bar already carries `af-gantt-hatch`
+ * at 45° meaning "this span has duration", and a role ruled at the same angle
+ * would superpose into one texture and cost the reader both meanings.
+ */
+export const TEXTURE_BY_STATE: Record<GanttItemState, RoleTexture> = {
+  planned: TEXTURE_BY_ROLE.external,
+  done: TEXTURE_BY_ROLE.queue,
+  active: TEXTURE_BY_ROLE.internal,
+  "at-risk": TEXTURE_BY_SHAPE.decision,
+};
 
 /* -------------------------------------------------------------------------- */
 /* Laid-out shapes                                                             */

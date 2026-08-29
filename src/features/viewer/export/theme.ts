@@ -75,6 +75,23 @@ export interface ExportTheme {
    * counterpart of `nodeRoles`.
    */
   flowShapes: Record<FlowchartNodeShape, { fill: string; border: string }>;
+  /**
+   * THE ROLE TEXTURE, resolved to a concrete ink and a number — the channel
+   * that carries "which kind of thing is this?" when the palette has no hue
+   * (`lib/role-texture.ts` has the argument).
+   *
+   * IT IS CONTENT, NOT CHROME, and that is the whole reason it is here. The
+   * canvas field is deliberately kept OUT of exports because a diagram dropped
+   * into a deck should arrive as the drawing; a role texture is the opposite
+   * case — under `eink` it is the ONLY thing telling a database from a queue,
+   * so an export that dropped it would be a diagram that lost its meaning
+   * rather than a diagram that lost its background.
+   *
+   * `opacity: 0` in all eight other themes, and every exporter is required to
+   * emit NOTHING at zero rather than an invisible overlay — that is what keeps
+   * their exported bytes identical to what they were before this existed.
+   */
+  roleTexture: { ink: string; opacity: number };
 }
 
 const TOKEN_VARS = {
@@ -93,6 +110,7 @@ const TOKEN_VARS = {
   accent: "--accent",
   destructive: "--destructive",
   destructiveForeground: "--destructive-foreground",
+  roleTextureInk: "--role-texture-ink",
 } as const;
 
 const ROLE_TOKEN_VARS: Record<NodeColorRole, { fill: string; border: string }> =
@@ -192,7 +210,21 @@ export function resolveExportTheme(): ExportTheme {
     border: resolve(FLOW_SHAPE_TOKENS[key].border, nodeBorder),
   });
 
+  /* The ink is an INDIRECTION (`var(--node-border)` in the baseline), so it
+     needs the probe path rather than the raw property — the same reason
+     `--edge-drift` does. The opacity is a bare number and parses directly; a
+     value that does not parse degrades to 0, i.e. to no texture, which is the
+     safe direction: a missing texture is a plainer diagram, where a texture at
+     an unintended opacity is a diagram with a lattice over it. */
+  const roleTextureOpacity = Number.parseFloat(
+    styles.getPropertyValue("--role-texture-opacity"),
+  );
+
   return {
+    roleTexture: {
+      ink: resolveExpression(TOKEN_VARS.roleTextureInk, nodeBorder),
+      opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,
+    },
     canvas: resolve(TOKEN_VARS.canvas, "#ffffff"),
     node,
     nodeForeground: resolve(TOKEN_VARS.nodeForeground, "#1f2430"),
