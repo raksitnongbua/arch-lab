@@ -355,7 +355,7 @@ check(
  * neither. The failure this guards is the one `purpose.md` cares most about: a
  * head that renders with no paint at all is an invisible arrowhead, and a head
  * painted with a literal colour is an arrowhead that is wrong in five of the
- * six themes — neither is something a type can catch, and neither throws.
+ * eight themes — neither is something a type can catch, and neither throws.
  *
  * The two facts are asserted RELATIONALLY rather than by naming colours: the
  * classes come from the SHAPE TABLE (so a sixth head style is covered the day

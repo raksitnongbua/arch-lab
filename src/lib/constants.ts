@@ -103,7 +103,7 @@ export const APP_DESCRIPTION =
 /* -------------------------------------------------------------------------- */
 
 /**
- * Every theme the app knows about. Adding one takes three edits, and
+ * Every theme the app knows about. Adding one takes four edits, and
  * `pnpm check:themes` fails on each of them being forgotten:
  *
  *   1. this list;
@@ -114,6 +114,24 @@ export const APP_DESCRIPTION =
  *      `Record<Theme, …>`, so the compiler asks for it rather than the menu
  *      rendering a bare slug — and, for a DARK-FAMILY theme, its name in the
  *      `dark` variant and the `color-scheme` rule in `globals.css`.
+ *
+ *   4. an entry in `TAG_FILL_BY_THEME` in `editor/lib/free-color.ts` — also a
+ *      `Record<Theme, …>`, so again the compiler asks. It is NOT a copy of the
+ *      block's `--tag-fill-l` / `--tag-fill-c` for convenience: the free colour
+ *      picker solves for a stroke that clears 3:1 against the constructed fill
+ *      in EVERY theme AT ONCE, so each entry NARROWS the interval every other
+ *      theme has to share. `blueprint` was written with its own role-fill band
+ *      (0.34) here and closed that interval for the greens — `presentableTagColor`
+ *      began refusing `#00ff88` outright, which is the picker telling an author
+ *      their colour cannot be shown. `check:canvas-edit` sweeps the whole output
+ *      space and is what catches it; the fix is to pick a pin an existing theme
+ *      already holds rather than a new one.
+ *
+ * AND ONE EDIT NO COMPILER AND NO THEME CHECK MAKES, for a DARK-FAMILY theme:
+ * `scripts/dot-grid-check.mjs` asserts the dark family against a HAND-TYPED
+ * sorted list. It is the only place the family is spelled out by name rather
+ * than derived from the palette. It fails loudly, which is what makes it
+ * tolerable — but it will not remind you before you run it.
  *
  * The provider and the picker both read this list, so nothing else changes.
  */
