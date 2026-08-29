@@ -66,11 +66,18 @@
  */
 
 import { CanvasField } from "@/components/ui/canvas-field";
+import { RoleTextureDefs } from "@/components/ui/role-texture";
+import { textureFill } from "@/lib/role-texture";
 import type { GanttLabFile } from "@/types";
 
 import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
 import type { LaidGanttItem, GanttLayout } from "../lib/layout";
-import { GANTT, hatchTilePaths, layoutGantt } from "../lib/layout";
+import {
+  GANTT,
+  hatchTilePaths,
+  layoutGantt,
+  TEXTURE_BY_STATE,
+} from "../lib/layout";
 
 export interface GanttDiagramProps {
   file: GanttLabFile;
@@ -143,6 +150,13 @@ export function GanttDiagram({
         width={layout.width}
         height={layout.height}
       />
+      {/* The role textures, once for the whole plot — beside the duration
+          hatch below, which is a different pattern answering a different
+          question ("does this span have duration?" against "which kind of
+          work is this?"). Their tile pitches are deliberately coprime-ish
+          (8 against 10, and 28 for the well's field) so three lattices on one
+          bar do not beat against each other. */}
+      <RoleTextureDefs />
       {/* ONE pattern for the whole canvas, referenced by every bar. One
           definition rather than a clip and a stripe set per bar: the ids would
           multiply, and a hundred `<line>` elements per plan is DOM weight for
@@ -401,6 +415,24 @@ function Row({
             height={GANTT.barHeight}
             rx={4}
           />
+          {/* THE ROLE TEXTURE, between the fill and the duration hatch. Under
+              the hatch on purpose: the hatch is the louder mark and the one
+              that answers the question a plan is read for, so it must not be
+              the thing lying under a second ruling. Same box as the fill, `rx`
+              included — the hatch's argument for why no `clipPath` is needed
+              applies unchanged. Never on a milestone: it never reaches this
+              branch, and a diamond has no role fill to qualify. */}
+          {TEXTURE_BY_STATE[item.state] !== "plain" ? (
+            <rect
+              x={item.x0}
+              y={item.barY}
+              width={width}
+              height={GANTT.barHeight}
+              rx={4}
+              fill={textureFill(TEXTURE_BY_STATE[item.state])}
+              pointerEvents="none"
+            />
+          ) : null}
           {/* The hatch, over the fill and UNDER the cap. Same box as the
               fill, `rx` included, so it cannot bleed past a rounded corner —
               no `clipPath` needed. Painted before the cap on purpose: the cap

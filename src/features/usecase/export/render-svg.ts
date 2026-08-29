@@ -41,7 +41,11 @@ import type { UseCaseLabFile } from "@/types";
 // Cross-feature on purpose, the imports every exporter leans on: one
 // definition of the author-colour precedence and of "resolve a theme token
 // to a concrete colour".
-import { resolveTagColor } from "@/features/editor/lib/node-colors";
+import {
+  resolveTagColor,
+  TEXTURE_BY_ROLE,
+} from "@/features/editor/lib/node-colors";
+import { TextureRegistry } from "@/features/viewer/export/texture-registry";
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import { resolveTagPaint } from "@/features/viewer/export/theme";
 
@@ -156,6 +160,10 @@ export function renderUseCaseSvg(
    * Buffered so the wash <defs> can be emitted BEFORE first use — the C4
    * exporter's ordering, which strict rasterisers prefer. */
   const wash = new WashRegistry();
+  // Same buffering reason, one channel over: the role patterns are only known
+  // once every element has asked for one, and both registries share the one
+  // <defs>.
+  const textures = new TextureRegistry(theme);
   const elementParts: string[] = [];
   for (const element of layout.elements) {
     const paint = elementExportPaint(element, file.metadata.tagColors, theme);
@@ -164,9 +172,25 @@ export function renderUseCaseSvg(
     );
     if (element.kind === "usecase") {
       const washFill = wash.ref(paint.fill, paint.stroke);
-      elementParts.push(
-        `<ellipse cx="${fmt(element.cx)}" cy="${fmt(element.cy)}" rx="${fmt(element.rx)}" ry="${fmt(element.ry)}" fill="${washFill}" stroke="${paint.stroke}" stroke-width="1.5"/>`,
+      /* The overlay REPEATS the ellipse rather than clipping a tile field to
+         it — no second def per element, and nothing for a rasteriser to get
+         wrong at the curve. The geometry is written once and used twice so the
+         two cannot drift apart. The texture is keyed off the KIND's role, the
+         same table the fill is read through, so an author's `tagColors` recolour
+         keeps the role marker; `null` means this theme does not texture (every
+         theme but `eink`) and then no element is emitted at all. */
+      const oval = `cx="${fmt(element.cx)}" cy="${fmt(element.cy)}" rx="${fmt(element.rx)}" ry="${fmt(element.ry)}"`;
+      const textureFillRef = textures.ref(
+        TEXTURE_BY_ROLE[USECASE_ROLE_BY_KIND[element.kind]],
       );
+      elementParts.push(
+        `<ellipse ${oval} fill="${washFill}" stroke="${paint.stroke}" stroke-width="1.5"/>`,
+      );
+      if (textureFillRef !== null) {
+        elementParts.push(
+          `<ellipse ${oval} fill="${textureFillRef}" stroke="none"/>`,
+        );
+      }
       const textTop = element.cy - element.labelBox.height / 2;
       element.lines.forEach((line, index) => {
         elementParts.push(
@@ -211,7 +235,7 @@ export function renderUseCaseSvg(
     }
     elementParts.push(`</g>`);
   }
-  push(`<defs>${wash.markup()}</defs>`);
+  push(`<defs>${wash.markup()}${textures.markup()}</defs>`);
   for (const part of elementParts) push(part);
 
   /* ---- heading ------------------------------------------------------------ */

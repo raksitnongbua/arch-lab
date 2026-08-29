@@ -45,6 +45,7 @@ import {
   COLOR_ROLE_BY_TYPE,
   EXTERNAL_NODE_OPACITY,
   resolveTagColor,
+  TEXTURE_BY_ROLE,
 } from "@/features/editor/lib/node-colors";
 import {
   placeFrames,
@@ -57,6 +58,7 @@ import {
   shapeAddsInformation,
 } from "../lib/labels";
 import { embeddedIconSvg } from "./icon-markup";
+import { TextureRegistry } from "./texture-registry";
 import type { ExportTheme } from "./theme";
 import { EDGE_BASE_DASH } from "../lib/canvas-constants";
 
@@ -222,6 +224,7 @@ function nodeShape(
   theme: ExportTheme,
   paint: { fill: string; stroke: string },
   wash: WashRegistry,
+  textures: TextureRegistry,
 ): ShapeResult {
   const { x, y } = node.position;
   const { width: w, height: h } = node.size;
@@ -237,33 +240,58 @@ function nodeShape(
   // paint the wash TOP flat — mirrors `.af-node-wash-fill`.
   const washTop = washed ? washTopColor(paint.fill, paint.stroke) : paint.fill;
 
+  /* THE TEXTURE IS KEYED OFF THE ROLE, never off the type — the rule
+     `nodeColorStyle` states for the screen, and the reason `washed` above is
+     NOT the thing to copy. `washed` is a type test because the wash rides the
+     per-type class list; identity is a role, so a tag-external person wears the
+     `external` texture (which is `plain`, hence nothing) exactly as it wears
+     the `external` fill. Re-deriving that from `node.type` here would put the
+     role table in a second place and get the tag case wrong. */
+  const texture = textures.ref(TEXTURE_BY_ROLE[colorRoleForNode(node)]);
+  /* The overlay REPEATS the silhouette this node actually draws — a cylinder's
+     body and rim, a pipe's body and cap, otherwise the one box — rather than
+     clipping a tile field to a bounding rect, which would rule the corners a
+     rounded shape does not occupy. Each geometry is written once and used
+     twice; a hand-typed second copy drifts the day a radius is retuned.
+     `null` is every theme but `eink`, and then not one byte is added. */
+  const overlay = (element: string): string =>
+    texture === null ? "" : `<${element} fill="${texture}" stroke="none"/>`;
+
   switch (node.type) {
-    case "person":
+    case "person": {
+      const outline = `path d="${roundedRectPath(x, y, w, h, 28, 28, 12, 12)}"`;
       return {
-        markup: `<path d="${roundedRectPath(x, y, w, h, 28, 28, 12, 12)}" ${fill} ${stroke} stroke-width="1.5"/>`,
+        markup: `<${outline} ${fill} ${stroke} stroke-width="1.5"/>${overlay(outline)}`,
         contentTopInset: 0,
         contentSideInset: 0,
       };
-    case "softwareSystem":
+    }
+    case "softwareSystem": {
+      const box = `rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8"`;
       return {
-        markup: `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8" ${fill} ${stroke} stroke-width="2"/>`,
+        markup: `<${box} ${fill} ${stroke} stroke-width="2"/>${overlay(box)}`,
         contentTopInset: 0,
         contentSideInset: 0,
       };
-    case "externalSystem":
+    }
+    case "externalSystem": {
       // Dashed border as ever; the receding grey now comes from the
       // `external` role's fill rather than a hardcoded --muted read.
+      const box = `rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8"`;
       return {
-        markup: `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8" ${fill} ${stroke} stroke-width="1.5" stroke-dasharray="6 4"/>`,
+        markup: `<${box} ${fill} ${stroke} stroke-width="1.5" stroke-dasharray="6 4"/>${overlay(box)}`,
         contentTopInset: 0,
         contentSideInset: 0,
       };
-    case "container":
+    }
+    case "container": {
+      const box = `rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8"`;
       return {
-        markup: `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8" ${fill} ${stroke} stroke-width="1.5"/>`,
+        markup: `<${box} ${fill} ${stroke} stroke-width="1.5"/>${overlay(box)}`,
         contentTopInset: 0,
         contentSideInset: 0,
       };
+    }
     case "component": {
       // Box + the UML component glyph in the top-left corner.
       const gx = x + 6;
@@ -275,20 +303,26 @@ function nodeShape(
         `<rect x="${fmt(gx + 1)}" y="${fmt(gy + 3.5)}" width="6" height="2.6" fill="${washTop}"/>` +
         `<rect x="${fmt(gx + 1)}" y="${fmt(gy + 7.9)}" width="6" height="2.6" fill="${washTop}"/>` +
         `</g>`;
+      // The glyph rides ON TOP of the texture: it is a 1.2-weight line drawing
+      // in the node's own stroke, and a lattice over it would read as noise.
+      const box = `rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="6"`;
       return {
         markup:
-          `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="6" ${fill} ${stroke} stroke-width="1.5"/>` +
+          `<${box} ${fill} ${stroke} stroke-width="1.5"/>` +
+          overlay(box) +
           glyph,
         contentTopInset: 0,
         contentSideInset: 0,
       };
     }
-    case "codeElement":
+    case "codeElement": {
+      const box = `rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="2"`;
       return {
-        markup: `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="2" ${fill} ${stroke} stroke-width="1.5"/>`,
+        markup: `<${box} ${fill} ${stroke} stroke-width="1.5"/>${overlay(box)}`,
         contentTopInset: 0,
         contentSideInset: 0,
       };
+    }
     case "database": {
       // Cylinder: rim ellipse over a body with a matching bottom bulge.
       const rim = clamp(h * 0.114, 6, 14);
@@ -300,11 +334,17 @@ function nodeShape(
         `M ${fmt(left)} ${fmt(y + rim)} L ${fmt(left)} ${fmt(y + h - rim)} ` +
         `A ${fmt(rx)} ${fmt(rim)} 0 0 0 ${fmt(right)} ${fmt(y + h - rim)} ` +
         `L ${fmt(right)} ${fmt(y + rim)}`;
+      // The rim is painted OVER the body, so it takes its own overlay — one
+      // texture each, never a body texture showing through a lit face.
+      const outline = `path d="${body}"`;
+      const rimOutline = `ellipse cx="${fmt(x + w / 2)}" cy="${fmt(y + rim)}" rx="${fmt(rx)}" ry="${fmt(rim)}"`;
       return {
         markup:
-          `<path d="${body}" ${fill} ${stroke} stroke-width="1.5"/>` +
+          `<${outline} ${fill} ${stroke} stroke-width="1.5"/>` +
+          overlay(outline) +
           // Flat wash-top rim: the lit face of the cylinder (node-shapes).
-          `<ellipse cx="${fmt(x + w / 2)}" cy="${fmt(y + rim)}" rx="${fmt(rx)}" ry="${fmt(rim)}" fill="${washTop}" ${stroke} stroke-width="1.5"/>`,
+          `<${rimOutline} fill="${washTop}" ${stroke} stroke-width="1.5"/>` +
+          overlay(rimOutline),
         contentTopInset: rim,
         contentSideInset: 0,
       };
@@ -319,10 +359,14 @@ function nodeShape(
         `M ${fmt(x + cap)} ${fmt(top)} L ${fmt(x + w - cap)} ${fmt(top)} ` +
         `A ${fmt(cap)} ${fmt(ry)} 0 0 1 ${fmt(x + w - cap)} ${fmt(bottom)} ` +
         `L ${fmt(x + cap)} ${fmt(bottom)}`;
+      const outline = `path d="${body}"`;
+      const capOutline = `ellipse cx="${fmt(x + cap)}" cy="${fmt(y + h / 2)}" rx="${fmt(cap)}" ry="${fmt(ry)}"`;
       return {
         markup:
-          `<path d="${body}" ${fill} ${stroke} stroke-width="1.5"/>` +
-          `<ellipse cx="${fmt(x + cap)}" cy="${fmt(y + h / 2)}" rx="${fmt(cap)}" ry="${fmt(ry)}" ${fill} ${stroke} stroke-width="1.5"/>`,
+          `<${outline} ${fill} ${stroke} stroke-width="1.5"/>` +
+          overlay(outline) +
+          `<${capOutline} ${fill} ${stroke} stroke-width="1.5"/>` +
+          overlay(capOutline),
         contentTopInset: 0,
         contentSideInset: cap,
       };
@@ -947,6 +991,10 @@ export function renderDiagramSvg(
   // Populated as a side effect of rendering the nodes below, then emitted
   // into <defs> — one gradient per distinct paint pair, not per node.
   const wash = new WashRegistry();
+  // The role patterns, collected the same way and emitted into the same <defs>.
+  // Nothing is added at all under a theme that does not texture, which is what
+  // keeps every other theme's exported bytes identical to what they were.
+  const textures = new TextureRegistry(theme);
 
   // Outermost first (placeFrames guarantees the order), and before the edge
   // layer: a frame is scenery, so nothing it encloses should be dimmed by it.
@@ -993,7 +1041,7 @@ export function renderDiagramSvg(
         paintForTagColor ??
           (() => ({ fill: theme.node, stroke: theme.nodeBorder })),
       );
-      const shape = nodeShape(node, theme, paint, wash);
+      const shape = nodeShape(node, theme, paint, wash, textures);
       // Same dim ladder as the renderers, from the same constants: a
       // placeholder recedes furthest; an external-ROLE element (type or
       // Mermaid-residue tag) recedes a step.
@@ -1026,6 +1074,7 @@ export function renderDiagramSvg(
         `</marker>`
       : "") +
     wash.markup() +
+    textures.markup() +
     `</defs>` +
     `<rect width="${width}" height="${height}" fill="${theme.canvas}"/>` +
     `<text x="${PADDING}" y="${PADDING - 22}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +

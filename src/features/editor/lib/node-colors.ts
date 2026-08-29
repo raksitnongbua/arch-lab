@@ -68,6 +68,11 @@
 
 import type { CSSProperties } from "react";
 
+import {
+  type RoleTexture,
+  textureCssImage,
+  textureCssSize,
+} from "@/lib/role-texture";
 import type { C4Node, C4NodeType } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -129,6 +134,46 @@ export const ROLE_COLOR_VARS: Record<
     fill: "var(--node-queue)",
     stroke: "var(--node-queue-border)",
   },
+};
+
+/**
+ * The tile geometry each role wears when a theme textures its roles — the
+ * SECOND channel identity travels on, and in `eink` the only one (`lib/
+ * role-texture.ts` carries the argument for why a hue-free palette needs it).
+ *
+ * Beside `ROLE_COLOR_VARS` rather than in the texture module, because this is
+ * the role table and the role table lives in one file. The flowchart's two
+ * extra shapes assign themselves the same way, next to `FLOW_SHAPE_TOKENS`.
+ *
+ * THE ASSIGNMENTS ARE NOT ARBITRARY, and each one is the reason it can be
+ * remembered rather than looked up:
+ *
+ *   - `external` is PLAIN. It is the one role that means something ("not
+ *     ours"), and it is already the quiet one everywhere else — a near-neutral
+ *     fill, no wash, matte by decision. Leaving it untextured is that same
+ *     decision in the texture channel, not an omission.
+ *   - `database` is HORIZONTAL — data at rest, ruled like the strata a
+ *     cylinder's rim already draws.
+ *   - `queue` is BACK-SLANTED — data in flight; a diagonal is the mark that
+ *     reads as movement, and `database`/`queue` stay one family separated by
+ *     one property, exactly as their teal/green hues are.
+ *   - `person` is STIPPLED. The softest mark in the set for the only role that
+ *     is not a machine.
+ *   - `internal` is VERTICAL — the plainest ruling for the default working
+ *     shape, the one a reader sees most often and should notice least.
+ *
+ * `hatch-forward` (45°) is DELIBERATELY UNUSED HERE and belongs to the
+ * flowchart's `end`. A gantt's four state fills are four of these role tokens,
+ * and a gantt bar already carries a 45° duration hatch; a role that ruled at
+ * 45° would superpose into it and both meanings would be lost. `check:eink`
+ * asserts that, derived from the gantt's own tile paths.
+ */
+export const TEXTURE_BY_ROLE: Record<NodeColorRole, RoleTexture> = {
+  person: "dots",
+  internal: "vertical",
+  external: "plain",
+  database: "horizontal",
+  queue: "hatch-back",
 };
 
 /**
@@ -260,10 +305,18 @@ export function nodeColorStyle(
     tagColor !== null
       ? { fill: tagFillCss(tagColor), stroke: tagColor }
       : ROLE_COLOR_VARS[colorRoleForNode(node)];
+  /* THE TEXTURE IS KEYED OFF THE ROLE, NEVER OFF `tagColors`. An author who
+     colours a node has said what it should LOOK like, not what it IS — so the
+     role marker survives the recolour, which is the whole point of carrying
+     identity in a channel the palette does not own. It resolves to `none` in
+     every theme but `eink` by way of `--role-texture-opacity`. */
+  const texture = TEXTURE_BY_ROLE[colorRoleForNode(node)];
   // Custom properties are legal inline-style keys at runtime; csstype only
   // admits them through a cast.
   return {
     "--node-fill": vars.fill,
     "--node-stroke": vars.stroke,
+    "--node-texture": textureCssImage(texture),
+    "--node-texture-size": textureCssSize(texture),
   } as CSSProperties;
 }

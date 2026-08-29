@@ -58,8 +58,14 @@ import { useId } from "react";
 // precedent): the tag-fill rebuild is the ONE definition of "a hue at our
 // validated card lightness".
 import { CanvasField } from "@/components/ui/canvas-field";
-import { resolveTagColor, tagFillCss } from "@/features/editor/lib/node-colors";
+import {
+  resolveTagColor,
+  tagFillCss,
+  TEXTURE_BY_ROLE,
+} from "@/features/editor/lib/node-colors";
+import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { WashGradient } from "@/components/ui/wash-gradient";
+import { textureFill } from "@/lib/role-texture";
 import { TINT_WASH_OPACITY } from "@/lib/tint";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +90,7 @@ import {
   UC_HIT_STROKE,
   UC_STROKE,
   USECASE_KIND_TOKENS,
+  USECASE_ROLE_BY_KIND,
 } from "../lib/shapes";
 
 /* -------------------------------------------------------------------------- */
@@ -201,6 +208,9 @@ export function UseCaseDiagram({
         width={layout.width}
         height={layout.height}
       />
+      {/* The role textures, once for the whole canvas — the shared-def rule in
+          components/ui/role-texture.tsx. Inert under every theme but `eink`. */}
+      <RoleTextureDefs />
       {/* ---- boundaries: context first, everything sits on them ---- */}
       {layout.boundaries.map((boundary, index) => (
         <g
@@ -445,7 +455,18 @@ function Actor({
     >
       <g className="af-uc-body">
         {/* Head filled with the kind's fill so the figure carries the same
-            colour identity as every other element, limbs in the border ink. */}
+            colour identity as every other element, limbs in the border ink.
+
+            DELIBERATELY UNTEXTURED, and it is the one element on this canvas
+            that is. The texture channel exists to carry identity where hue
+            cannot — and an actor is already the most strongly differentiated
+            GEOMETRY in the drawing: nothing else here is a stick figure. The
+            only fillable part is an 18px head, which a `person` stipple at an
+            8px pitch would cross about twice, putting two dots on a face; and
+            the head is oversized precisely because it is the figure's
+            "friendly" cue (see `actorFigure`), which speckling undoes. Adding
+            a second differentiator to a meaning that already has one is the
+            failure `lib/role-texture.ts` warns about. */}
         <circle
           cx={figure.head.cx}
           cy={figure.head.cy}
@@ -537,6 +558,10 @@ function UseCaseNode({
   // stamped on the group, so tagColors overrides recolour the wash for free.
   // useId's delimiters are not valid inside url(#…) — the house sanitising.
   const washId = `af-uc-wash-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  // Read through the kind→role table the exporter already resolves colours
+  // with, never typed here: the geometry channel and the colour channel must
+  // name the same role or a use case reads as one thing and paints as another.
+  const texture = TEXTURE_BY_ROLE[USECASE_ROLE_BY_KIND[element.kind]];
   const strokeColor = focused ? "var(--primary)" : paint.stroke;
   const textTop = element.cy - element.labelBox.height / 2;
   const ariaLabel =
@@ -566,6 +591,23 @@ function UseCaseNode({
           stroke={strokeColor}
           strokeWidth={focused ? UC_FOCUS_STROKE : UC_STROKE}
         />
+        {/* THE ROLE TEXTURE, over the wash and under the label — the gantt
+            hatch's arrangement. The texture is read through the SAME kind→role
+            table the exporter resolves its colours with, so the ellipse cannot
+            wear `internal`'s blue and some other role's geometry. A second
+            ellipse on the identical cx/cy/rx/ry rather than a `clipPath`: one
+            geometry, and no clip to keep in step when the layout resizes a
+            node. Inert to the pointer — `HitRect` below owns the input. */}
+        {texture !== "plain" ? (
+          <ellipse
+            cx={element.cx}
+            cy={element.cy}
+            rx={element.rx}
+            ry={element.ry}
+            fill={textureFill(texture)}
+            pointerEvents="none"
+          />
+        ) : null}
         <text
           x={element.cx}
           textAnchor="middle"

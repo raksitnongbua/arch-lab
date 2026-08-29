@@ -19,8 +19,11 @@
 
 import { useId } from "react";
 
+import { RoleTexturePattern } from "@/components/ui/role-texture";
 import { WashGradient } from "@/components/ui/wash-gradient";
 import type { C4NodeType } from "@/types";
+
+import { TEXTURE_BY_ROLE } from "../../lib/node-colors";
 
 /** Wrapper classes per type. Empty ⇒ the silhouette is drawn by the SVG layer. */
 export const SHAPE_WRAPPER_CLASSES: Record<C4NodeType, string> = {
@@ -66,7 +69,16 @@ export function NodeShapeLayer({
 }: NodeShapeLayerProps): React.JSX.Element | null {
   // useId's delimiters are not valid inside url(#…) — same sanitising rule
   // as the viewer's outline gradient.
-  const gradientId = `af-node-wash-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const instance = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const gradientId = `af-node-wash-${instance}`;
+  /* PER-INSTANCE, like the wash beside it, and NOT the shared `textureId()`
+     the diagram canvases use. These silhouettes are separate inline `<svg>`
+     documents — one per node, no shared root — so a `<pattern>` mounted on a
+     diagram's `<defs>` is simply not reachable from here, and a fixed id would
+     put the same id on every node on the board. The other C4 types need none
+     of this: their box is HTML, textured by `--node-texture` in
+     `nodeColorStyle`, and only these two have no CSS box to carry it. */
+  const texturePatternId = `af-node-tex-${instance}`;
 
   if (type === "database") {
     // Cylinder: top ellipse rim + body. ViewBox matches the 176×88 default.
@@ -78,12 +90,32 @@ export function NodeShapeLayer({
         preserveAspectRatio="none"
       >
         <WashGradient id={gradientId} />
+        <defs>
+          <RoleTexturePattern
+            texture={TEXTURE_BY_ROLE.database}
+            id={texturePatternId}
+          />
+        </defs>
         <path
           d="M4 12v64c0 6.6 37.6 10 84 10s84-3.4 84-10V12"
           fill={`url(#${gradientId})`}
           className="stroke-(--node-stroke)"
           strokeWidth={1.5}
           vectorEffect="non-scaling-stroke"
+        />
+        {/* The role texture on the cylinder's BODY only, repeating the same
+            path over the wash and under the rim. The rim is the lit top face
+            (see the note below) — ruling it would flatten the one cue that
+            makes this read as a cylinder rather than a stadium. No stroke: the
+            outline is already drawn once above, and a second one would double
+            its weight. Note the tile is stretched by `preserveAspectRatio
+            ="none"` exactly as the silhouette is, so a very wide node rules
+            slightly wider than 8 units — the same distortion the border avoids
+            only because `non-scaling-stroke` exempts it. */}
+        <path
+          d="M4 12v64c0 6.6 37.6 10 84 10s84-3.4 84-10V12"
+          fill={`url(#${texturePatternId})`}
+          pointerEvents="none"
         />
         {/* The rim takes the wash TOP flat — it IS the lit face of the
             cylinder, and running the gradient again inside a 20px-tall
@@ -111,12 +143,26 @@ export function NodeShapeLayer({
         preserveAspectRatio="none"
       >
         <WashGradient id={gradientId} />
+        <defs>
+          <RoleTexturePattern
+            texture={TEXTURE_BY_ROLE.queue}
+            id={texturePatternId}
+          />
+        </defs>
         <path
           d="M14 4h146c7.2 0 13 17.9 13 40s-5.8 40-13 40H14"
           fill={`url(#${gradientId})`}
           className="stroke-(--node-stroke)"
           strokeWidth={1.5}
           vectorEffect="non-scaling-stroke"
+        />
+        {/* The pipe's body, ruled. Drawn before the open rim so the rim's own
+            fill covers it — the rim is the mouth of the pipe and a texture
+            running across it would close the pipe. */}
+        <path
+          d="M14 4h146c7.2 0 13 17.9 13 40s-5.8 40-13 40H14"
+          fill={`url(#${texturePatternId})`}
+          pointerEvents="none"
         />
         <ellipse
           cx="14"

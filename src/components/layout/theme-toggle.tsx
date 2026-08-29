@@ -8,6 +8,7 @@ import {
   Monitor,
   Moon,
   MoonStar,
+  Newspaper,
   Palette,
   Ruler,
   Sun,
@@ -87,6 +88,15 @@ const THEME_META: Record<
     label: "Blueprint",
     hint: "Drafting sheet, ruled grid",
     Icon: Ruler,
+  },
+  /* The hint names the TEXTURE, not the absence of colour. "Greyscale" says
+     what this theme lacks; a reader choosing it wants to know that the roles
+     are still told apart, which is the only reason a hue-free palette is
+     allowed to exist here. */
+  eink: {
+    label: "E-ink",
+    hint: "No colour, roles by texture",
+    Icon: Newspaper,
   },
 };
 

@@ -9,6 +9,27 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **An `eink` theme — a ninth palette, with no colour in it at all.** Every
+  token is a grey, so a diagram survives a photocopier, an e-reader, a
+  monochrome projector, and a reader who cannot use hue. It is a light theme,
+  because an e-ink panel reflects rather than emits.
+
+  **The roles are told apart by texture, not by shade.** Everywhere else, a
+  person, a database and a queue are three hues. Here they are three tile
+  patterns — stippled, ruled horizontally, back-slanted — drawn in one ink, so
+  the marker survives being printed, faxed or photographed. Shade still carries
+  the ordering, from the near-white of an external system down to the darkest
+  fill on a flowchart's terminator, but nothing depends on it.
+
+  **The textures are in the exported SVG and PNG too.** Unlike the canvas grid,
+  which stays on screen because it is background, a role texture is the
+  drawing: without it the download would be a diagram whose roles are one
+  colour. The Gantt is the one place two textures meet — its bars already carry
+  a diagonal hatch meaning "this span has a duration" — so no state a Gantt can
+  paint rules on that diagonal.
+
+  The eight existing themes are untouched, on screen and in their exports.
+
 - **A `blueprint` theme — an eighth palette.** Deep cyan-navy ground, white
   ink, and a canvas that is properly **ruled**: a fine minor rule, with a
   heavier major line every fifth square. The major rule is stronger than the

@@ -49,6 +49,7 @@ import type { FlowchartLabFile } from "@/types";
 // definition of the author-colour precedence and of "resolve a theme token
 // to a concrete colour".
 import { resolveTagColor } from "@/features/editor/lib/node-colors";
+import { TextureRegistry } from "@/features/viewer/export/texture-registry";
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import { resolveTagPaint } from "@/features/viewer/export/theme";
 
@@ -58,6 +59,7 @@ import {
   arrowHeadPath,
   roundedPolylinePath,
   shapeGeometry,
+  TEXTURE_BY_SHAPE,
 } from "../lib/shapes";
 
 const FONT_SANS =
@@ -152,6 +154,9 @@ export function renderFlowchartSvg(
   // rasterisers are happiest with defs preceding first use — the C4
   // exporter's ordering.
   const wash = new WashRegistry();
+  // Same buffering reason, one channel over: the role patterns are only known
+  // once every node has asked for one, and both registries share the one <defs>.
+  const textures = new TextureRegistry(theme);
   const nodeParts: string[] = [];
   for (const node of layout.nodes) {
     nodeParts.push(
@@ -163,15 +168,32 @@ export function renderFlowchartSvg(
     // the "the file matches the screen" contract.
     const washFill = wash.ref(paint.fill, paint.stroke);
     const geometry = shapeGeometry(node);
+    /* The overlay REPEATS the silhouette's own geometry rather than clipping a
+       tile field to it: a `clipPath` per node is a second def per node and, on
+       a diamond, one more thing a rasteriser can get wrong at the tips. The
+       attribute strings are built once and used twice for the same reason the
+       gantt's hatch rect restates the bar's — two hand-typed copies of one
+       rect drift the day someone retunes a radius. Null means "this theme does
+       not texture, or this shape's role is `plain`": no element at all. */
+    const textureFillRef = textures.ref(TEXTURE_BY_SHAPE[node.shape]);
     if (geometry.rect !== undefined) {
+      const box = `x="${fmt(node.x)}" y="${fmt(node.y)}" width="${fmt(node.width)}" height="${fmt(node.height)}" rx="${fmt(geometry.rect.rx)}"`;
       nodeParts.push(
-        `<rect x="${fmt(node.x)}" y="${fmt(node.y)}" width="${fmt(node.width)}" height="${fmt(node.height)}" rx="${fmt(geometry.rect.rx)}" fill="${washFill}" stroke="${paint.stroke}" stroke-width="1.5"/>`,
+        `<rect ${box} fill="${washFill}" stroke="${paint.stroke}" stroke-width="1.5"/>`,
       );
+      if (textureFillRef !== null) {
+        nodeParts.push(`<rect ${box} fill="${textureFillRef}" stroke="none"/>`);
+      }
     }
     if (geometry.path !== undefined) {
       nodeParts.push(
         `<path d="${geometry.path}" fill="${washFill}" stroke="${paint.stroke}" stroke-width="1.5" stroke-linejoin="round"/>`,
       );
+      if (textureFillRef !== null) {
+        nodeParts.push(
+          `<path d="${geometry.path}" fill="${textureFillRef}" stroke="none"/>`,
+        );
+      }
     }
     if (geometry.rails !== undefined) {
       for (const rail of geometry.rails) {
@@ -195,7 +217,7 @@ export function renderFlowchartSvg(
     }
     nodeParts.push(`</g>`);
   }
-  push(`<defs>${wash.markup()}</defs>`);
+  push(`<defs>${wash.markup()}${textures.markup()}</defs>`);
   for (const part of nodeParts) push(part);
 
   /* ---- heading ------------------------------------------------------------ */

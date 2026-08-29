@@ -62,7 +62,9 @@ import { useId } from "react";
 // rebuild is the ONE definition of "a hue at our validated card lightness".
 import { CanvasField } from "@/components/ui/canvas-field";
 import { resolveTagColor, tagFillCss } from "@/features/editor/lib/node-colors";
+import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { WashGradient } from "@/components/ui/wash-gradient";
+import { textureFill } from "@/lib/role-texture";
 import { TINT_WASH_OPACITY } from "@/lib/tint";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +81,7 @@ import {
   FLOW_SHAPE_TOKENS,
   roundedPolylinePath,
   shapeGeometry,
+  TEXTURE_BY_SHAPE,
 } from "../lib/shapes";
 
 /* -------------------------------------------------------------------------- */
@@ -191,6 +194,13 @@ export function FlowchartDiagram({
         width={layout.width}
         height={layout.height}
       />
+      {/* The role textures, defined once for every node on this canvas. Six
+          shapes reference seven patterns, so a per-node copy would be pure DOM
+          weight; and the ink is one token by design, which is exactly what
+          makes one shared def correct here (lib/role-texture.ts argues it).
+          Inert under every theme but `eink`, where `--role-texture-opacity`
+          is the only thing that makes them visible. */}
+      <RoleTextureDefs />
       {/* ---- group frames: context first, everything sits on them ---- */}
       {layout.groups.map((group, index) => (
         <g
@@ -330,6 +340,11 @@ function Node({
   const fill = tagColor !== null ? tagFillCss(tagColor) : `var(${tokens.fill})`;
   const stroke = tagColor ?? `var(${tokens.border})`;
   const geometry = shapeGeometry(node);
+  /* The role texture for this shape — the identity channel that survives a
+     palette with no hue to spend. `plain` (the `external` role's deliberate
+     quiet) emits NO element at all rather than a `fill="none"` rect, so a
+     six-node chart does not carry six invisible shapes nobody can hit. */
+  const texture = TEXTURE_BY_SHAPE[node.shape];
   // The surface wash (the C4 canvas's polish layer): a per-instance gradient
   // because a CSS background cannot follow a rhombus — same mechanism as the
   // cylinder/pipe silhouettes. It reads --node-fill/--node-stroke, stamped
@@ -391,6 +406,34 @@ function Node({
             stroke={strokeColor}
             strokeWidth={strokeWidth}
             strokeLinejoin="round"
+          />
+        ) : null}
+        {/* THE TEXTURE, over the wash and under every stroke this node draws
+            — the gantt hatch's arrangement, and the same reason: the border
+            and the `call` rails are what a reader measures the shape by, and
+            nothing translucent may sit on top of them. It repeats the
+            silhouette exactly rather than clipping to it, so a diamond's
+            points stay sharp and the rounded corners cannot leak; a
+            `clipPath` here would be a second geometry to keep in step with
+            `shapeGeometry` for no gain. Inert to the pointer: the hit target
+            is the one rect below, and a second stacked shape would steal
+            hovers from it. */}
+        {texture !== "plain" && geometry.rect !== undefined ? (
+          <rect
+            x={node.x}
+            y={node.y}
+            width={node.width}
+            height={node.height}
+            rx={geometry.rect.rx}
+            fill={textureFill(texture)}
+            pointerEvents="none"
+          />
+        ) : null}
+        {texture !== "plain" && geometry.path !== undefined ? (
+          <path
+            d={geometry.path}
+            fill={textureFill(texture)}
+            pointerEvents="none"
           />
         ) : null}
         {geometry.rails !== undefined

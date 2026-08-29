@@ -127,6 +127,20 @@ export const APP_DESCRIPTION =
  *      space and is what catches it; the fix is to pick a pin an existing theme
  *      already holds rather than a new one.
  *
+ * AND ONE THING THAT IS NOT AN EDIT BUT DECIDES WHETHER THE THEME MAY SHIP AT
+ * ALL, for a LOW-CHROMA theme: the ΔE floors in `check:themes`,
+ * `check:flowchart-palette` and `check:gantt-palette` are HUE-CALIBRATED. They
+ * were written against palettes whose roles differ by hue, and OKLab ΔE does
+ * not care which axis carries the distance — so a greyscale palette meets every
+ * one of them with two fills 1.078:1 apart and the whole suite returns green
+ * over a diagram whose roles are one colour. `check:eink` is the guard: it
+ * measures each role pair on the chroma plane, on luminance, and on texture,
+ * and passes a pair on any one of the three. A hue-free theme therefore has to
+ * opt into `--role-texture-opacity` (see `lib/role-texture.ts`) and give every
+ * role its own geometry, or it cannot pass. `eink` is the only theme that
+ * does; a theme that already separates by hue must NOT, because two
+ * differentiators for one meaning is how a reader stops reading either.
+ *
  * AND ONE EDIT NO COMPILER AND NO THEME CHECK MAKES, for a DARK-FAMILY theme:
  * `scripts/dot-grid-check.mjs` asserts the dark family against a HAND-TYPED
  * sorted list. It is the only place the family is spelled out by name rather
@@ -144,6 +158,7 @@ export const THEMES = [
   "midnight",
   "contrast",
   "blueprint",
+  "eink",
 ] as const;
 
 export type Theme = (typeof THEMES)[number];
