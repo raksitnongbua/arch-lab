@@ -8,7 +8,7 @@
  * edge counts, C4 review advisories. A sequence document has none of those —
  * it has participants, ordered messages, fragments and notes, and no levels at
  * all. Widening `CheckOk` into a union would push a discriminant through the
- * `/validate` page and all eight existing tools to serve a document kind that
+ * `/validate` page and every existing tool to serve a document kind that
  * genuinely is a different shape. Two document kinds, two tools, each with an
  * honest summary.
  *

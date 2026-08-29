@@ -9,6 +9,189 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Lifecycles — a ninth notation.** `archlab 1.0 lifecycle` draws one named
+  thing moving: what it went through, and where it can end up. States are dots
+  on a spine in the order they were written; branches leave that track to the
+  side and either stop or come back.
+
+  **It overlaps the flowchart, and that was accepted rather than argued away.**
+  The rule this project holds a new notation to is that it must answer a
+  question the existing ones cannot, and this one does not: every picture it
+  draws is a flowchart a flowchart could draw, and the flowchart could draw
+  more of them. It ships because it was asked for explicitly and reaffirmed
+  after the overlap was shown. What is genuinely different is a
+  SUBTRACTION — the grammar cannot express an arbitrary graph — and what that
+  buys is presentational: the picture is guaranteed to read as elapsed time
+  down one spine, where a flowchart of the same content is laid out by rank
+  and says nothing about the order things happened in. The full argument is in
+  `src/types/lifecycle.ts`, so the next reader finds the trade recorded rather
+  than assuming it was missed. **This is the second and last such waiver**: a
+  tenth notation has to clear the bar.
+
+  - **Draws** a vertical spine with a dot per state, its label and note to the
+    right, and its departures in their own lane to the left at a smaller size.
+    A final state and a terminal branch carry a stop BAR rather than a colour,
+    and a returning branch travels in a reserved channel back into the track,
+    re-entering in the gap above the state it rejoins — so it crosses no state
+    it does not touch. This kind has **no palette**: every distinction it
+    draws is structural, so a shape says it in greyscale and in a screenshot,
+    and no per-theme colour audit is owed.
+  - **Refuses**, by name, everything that would make it an arbitrary graph.
+    There is no line between two states at all — the track IS the order they
+    are written in — so `to`, `next`, `then`, `goes` and `after` on a state or
+    an exit line are refused; a `rejoins` naming a state declared LATER is
+    refused as a shortcut along the track; an `exit` inside another `exit` is
+    refused, so branch depth is always one; and a second `subject` is refused,
+    because a lifecycle follows ONE thing. Each refusal names
+    `archlab 1.0 flowchart` and says to write one instead.
+  - **Has no Mermaid dialect, and none was invented.** `stateDiagram-v2` is a
+    state MACHINE — every transition that could happen, from anywhere to
+    anywhere — which is exactly the arbitrary graph this notation exists
+    without, and `journey` scores satisfaction against tasks. Importing one
+    would mean inventing a main track its author never wrote; exporting one
+    would present a subtraction as a superset. So the converter was skipped
+    rather than approximated, and every surface that lists dialects says so.
+  - **Lays out** from the text, never a grid. Every state's height is the
+    greater of its two columns — its own wrapped label and note, and the stack
+    of its branches — so a state with three annotated exits is much taller
+    than one with none.
+  - **Moves** four ways, each answering something a still frame cannot: states
+    arrive in track order, each WITH its own departures ("at this point, these
+    are the ways out"); the spine draws and then the returns draw along it; a
+    wash travels down the spine once the reader has been still, because a line
+    of identical dots cannot say which way time runs; and a selected state
+    breathes while a lit returning branch gets a travelling dash showing which
+    way the subject goes back — the one connector motion here, and the only
+    mark on the canvas whose direction is its whole content. All of it holds
+    still for reduced motion AND for the app-wide idle toggle, focus motion
+    included, which is stricter than any other canvas here.
+  - **Exports** SVG and PNG, and shares by link, like every other kind. An
+    unreachable state is faded in the exported file as it is on screen — that
+    fade is a fact about the document, not a state of the canvas.
+  - **Is authorable by an agent.** `validate_lifecycle` and `format_lifecycle`
+    join the MCP surface. Validate reports what a parse cannot see: a subject
+    that never terminates, states stranded after a state marked `ends`,
+    branches with no `when` condition on them, states named as ACTIONS rather
+    than conditions — which is a flowchart written in this notation, and the
+    only place in the product that will say so — and a document with no
+    branches at all, which is a milestone timeline.
+
+  No existing document, share link or route changed. The eight existing
+  grammars refuse a lifecycle by name and the lifecycle parser refuses theirs,
+  so a file that opened before opens unchanged.
+
+- **Milestone timelines — an eighth notation.** `archlab 1.0 timeline` draws a
+  history: what happened when, and which period it happened in. Events are
+  points on a spine, grouped into named periods.
+
+  **It overlaps the gantt, and that was accepted rather than argued away.**
+  The rule this project holds a new notation to is that it must answer a
+  question the existing ones cannot, and this one does not: a gantt made
+  entirely of milestones draws the same content, and a list of dated events
+  reads nearly as well as prose. It ships because it was asked for
+  explicitly. What is genuinely different is a subtraction — no duration, no
+  dependency, no participant — and what that buys is presentational: a page of
+  long event labels with nothing else competing for the width. The full
+  argument is in `src/types/timeline.ts`, so the next reader finds the trade
+  recorded rather than assuming it was missed.
+
+  - **Draws** a vertical spine with a dot per event, its label beside it and
+    an optional note under that, in bands headed by the period. Vertical
+    because the label is the whole element: across the page each one would get
+    the gap to its neighbour to be read in, which is about eight characters.
+  - **Refuses**, by name, everything that would make it a worse gantt: a
+    duration, an `after`, an `at`, a status word and an id. Each refusal names
+    `archlab 1.0 gantt` and says to write one instead. Nothing in a timeline
+    measures — a period label is a string, never read as a date.
+  - **Converts** to and from Mermaid `timeline`, **both ways**, unlike the
+    gantt next door: a timeline computes nothing and has no status vocabulary,
+    so Mermaid holds everything it says. `<br>` becomes a real newline and a
+    continuation row (a line beginning `:`) folds into the period above it.
+    Mermaid's `section`, which groups periods one level further up, is
+    **refused by name** rather than flattened, and so is a period row listing
+    no events. Export drops an event's description and its `#tag`s, which
+    Mermaid has nowhere to put.
+  - **Lays out** from the text, never a grid. Every event's height is solved
+    from its own wrapped label and note, and every period's from its events' —
+    so a band with more in it is taller, and the bands' relative sizes say how
+    much happened in each.
+  - **Moves** three ways, each answering something a still frame cannot:
+    events appear in the order they happened, a wash travels down the spine
+    once the reader has been still (a line of identical dots cannot say which
+    way time runs), and the selected event breathes while the rest dim. All of
+    it holds still for reduced motion and for the app-wide idle toggle. There
+    are no connectors on this canvas and none were invented to have something
+    to animate.
+  - **Exports** SVG and PNG, and shares by link, like every other kind.
+  - **Is authorable by an agent.** `validate_timeline` and `format_timeline`
+    join the MCP surface. Validate reports what a parse cannot see: periods
+    written out of sequence — nothing else in the product reads a period label
+    at all, so the diagram draws the wrong order confidently — and events
+    carrying a duration or a dependency in their label, which is the document
+    asking to be a gantt.
+
+  No existing document, share link or route changed. The seven existing
+  grammars refuse a timeline by name and the timeline parser refuses theirs, so
+  a file that opened before opens unchanged. A file headed
+  `archlab 1.0 timeline` from before the gantt was renamed now reaches this
+  parser and is refused with a message naming the gantt and the header to
+  change it to, rather than a syntax error about its body.
+
+- **Gantt charts — a seventh notation.** `archlab 1.0 gantt` draws a Gantt
+  chart: how long each piece takes, and what can't start until it's done. It is
+  the only kind here that puts duration on a measured axis — sequence owns
+  order and flowchart owns dependency, and neither can say "thirteen days".
+
+  - **Draws** tasks as bars, zero-duration milestones as diamonds, and named
+    sections as bands. Four reporting states — planned, in flight, done, at
+    risk — coloured from the palette the other kinds already use, so the set is
+    complete and contrast-measured in all seven themes on the day it ships.
+  - **Schedules.** Durations and `after` dependencies are solved into earliest
+    starts, float, and the **critical path** — the chain that decides the end
+    date. It is computed, never declared: there is no `crit` keyword, because a
+    typed critical path can contradict the arithmetic and then the picture is
+    simply wrong.
+  - **Converts** from Mermaid `gantt`, **one way only**. `section`, tasks,
+    `after`, `:milestone`, `done`/`active` and `dateFormat` all carry over.
+    Mermaid's `crit` is **dropped** — theirs is a decoration the author types,
+    ours is derived. `excludes`, `weekend`, `todayMarker`, `axisFormat`,
+    `tickInterval`, `inclusiveEndDates`, `until`, sub-day durations and
+    non-ISO date formats are **refused by name**, never approximated. There is
+    no export to Mermaid at all: the at-risk state and the derived critical
+    path have no equivalent there, and an emit would discard the first and
+    misrepresent the second.
+  - **Lays out** from the dependency graph, never a grid. Rows are sorted
+    topologically inside their section with declaration order breaking ties, so
+    no connector ever points upward, and each dependency picks a routing
+    channel that crosses no bar it does not touch.
+  - **Moves** three ways, each answering something a still frame cannot: rows
+    rise in dependency order, the critical chain retraces itself once the
+    reader has been still, and selecting any item runs a current along its
+    chain in both directions. All of it holds still for reduced motion and for
+    the app-wide idle toggle.
+  - **Exports** SVG and PNG, and shares by link, like every other kind.
+  - **Reads and writes dates, or neither.** One optional `starts 2026-09-07`
+    header line turns the axis from `W1, W2, W3` into calendar dates. Nothing
+    else in the document changes, because every position is stored as a day
+    offset and only the axis knows what a calendar is. A duration is a count of
+    calendar days, not working days.
+  - **Is authorable by an agent.** `validate_gantt` and `format_gantt`
+    join the MCP surface. Validate reports what a parse cannot see: dependency
+    cycles, `after` entries that constrain nothing, sections holding only
+    milestones — and the critical path itself, which nobody can read off their
+    own text.
+
+  No existing document, share link or route changed. The six existing grammars
+  refuse a gantt by name and the gantt parser refuses theirs, so a file
+  that opened before opens unchanged.
+
+  The kind was written under the working name `timeline` and is called `gantt`
+  everywhere it ships. Renaming a grammar header word is normally a breaking
+  change; this one is not, because it happened before the notation was
+  released — no `.alab` file, share link or route has ever carried the old
+  word — and it leaves `timeline` free for the milestone-style notation that
+  will want it.
+
 - The theme picker opens with a **System** row, above the seven palettes. It is
   where a reader starts, it says what it currently resolves to ("Follows your
   system · light right now"), and it is the way back after picking a palette —
@@ -17,7 +200,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   row's own hint rather than by a second tick further down the list.
 
 - The theme picker is reachable in immersive mode, in the strip under the
-  diagram, on all six notations. Immersive covers the site header — and with it
+  diagram, on all eight notations. Immersive covers the site header — and with it
   the only theme control — so choosing a lighter ground for a bright room or a
   darker one for a projector meant leaving the mode you had just entered to
   present. It appears only while immersive, since the header carries it
@@ -70,8 +253,6 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   connectors are clickable and never changed once read; the corner now stays
   empty until a selection puts a card there.
 
-### Removed
-
 - The "View mode · read-only" tag beside the model title is gone. It claimed
   read-only whatever the lock was doing, so unlocking a C4 canvas to edit it put
   "Editable" in the strip above the diagram and "read-only" in the strip below
@@ -79,6 +260,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   state is spelled out.
 
 ### Fixed
+
+- An agent asking arch-lab for an example is shown all nine notations. The MCP
+  `list_example_models` and `get_example_model` read only the C4 registry, so
+  the nineteen bundled sequence, flowchart, use-case, ER, dictionary, gantt,
+  timeline and lifecycle documents were invisible to the surface that cannot
+  browse `/demo` to find them. The listing is now grouped by notation, with
+  what each kind is for and counts taken from the parsed document, and a fetch
+  by id resolves across every registry and says which notation it found.
 
 - The toolbar under a sequence, flowchart, use-case, ER or data-dictionary
   diagram is now built to the same metrics as the one under a C4 diagram. It
@@ -90,6 +279,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   notation by typing, so the chrome around the drawing no longer moves when they
   do.
 
+- The theme menu now opens where there is room for it. It was placed above its
+  button unconditionally, so on a short window — or with the button low in an
+  immersive pane — the list ran past the top edge and the rows past it were
+  simply not there, with no scrollbar to say anything was missing. It now
+  measures the space on both sides when you open it, keeps its usual side
+  whenever a usable amount of the list fits there, and caps its height to the
+  room actually available so it scrolls instead of spilling.
 - The theme menu no longer gets cut off when it opens from an immersive diagram
   on a short screen. Eight rows opening upward could run past the top of the
   pane, which clips them with no scrollbar to say anything was missing.

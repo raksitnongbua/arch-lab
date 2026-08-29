@@ -3,9 +3,9 @@
  * Home page hero check.
  *
  * THE HAZARD THIS EXISTS FOR is a class whose entire body is one
- * `animation-delay`. The hero shows all four document kinds by running ONE
- * keyframe on every panel and offsetting each by a quarter of the cycle, so
- * `.af-hero-kind-2/-3/-4` are single declarations — and a single declaration is
+ * `animation-delay`. The hero shows every document kind by running ONE
+ * keyframe on every panel and offsetting each by its own share of the cycle, so
+ * `.af-hero-kind-2` … `-9` are single declarations — and a single declaration is
  * beaten by an inline style. The moment an element carrying a phase class is
  * also given a staged entrance with `style={delay(...)}`, it snaps back into
  * phase with the FIRST kind and two diagrams print on top of each other. That
@@ -14,19 +14,19 @@
  *
  * So this asserts the WIRING, not the stylesheet:
  *
- *   1. The offsets are the cycle's own quarters, read out of the duration
- *      rather than trusted as literals — changing 26s in one place cannot
- *      silently leave three delays describing a different cycle.
- *   2. A panel is only lit for its own quarter, and the fade windows do not
+ *   1. The offsets are the cycle's own equal shares, read out of the duration
+ *      rather than trusted as literals — changing the cycle length in one place
+ *      cannot silently leave the delays describing a different cycle.
+ *   2. A panel is only lit for its own share, and the fade windows do not
  *      overlap.
  *   3. Every kind is present four times over — panel, header subtitle, dot,
  *      name — because a kind that has a dot and no panel is a lit dot over
  *      somebody else's diagram.
  *   4. No element that carries a phase class carries an inline style. This is
  *      the one that catches the bug above.
- *   5. Reduced motion parks on exactly ONE complete diagram, not on four
- *      stacked ones.
- *   6. Both new panels' artwork is inside the 350×336 box they share. Off-box
+ *   5. Reduced motion parks on exactly ONE complete diagram, not on the whole
+ *      stack at once.
+ *   6. The panels' artwork is inside the 350×336 box they share. Off-box
  *      coordinates are invisible rather than wrong-looking, which is how a
  *      whole illustration once shipped scaled off-screen.
  *
@@ -52,6 +52,9 @@ const KINDS = [
   { name: "Use case", phase: "af-hero-kind-4" },
   { name: "ER", phase: "af-hero-kind-5" },
   { name: "Dictionary", phase: "af-hero-kind-6" },
+  { name: "Gantt", phase: "af-hero-kind-7" },
+  { name: "Timeline", phase: "af-hero-kind-8" },
+  { name: "Lifecycle", phase: "af-hero-kind-9" },
 ];
 
 let assertions = 0;
@@ -75,7 +78,7 @@ function ruleBody(source, selector) {
   return match === null ? null : match[1];
 }
 
-/* ---- 1. the offsets are the cycle's quarters ------------------------------ */
+/* ---- 1. the offsets are the cycle's equal shares -------------------------- */
 
 const cycleMatch = ruleBody(globals, ".af-hero-kind")?.match(
   /animation: af-hero-swap ([\d.]+)s/,
@@ -88,9 +91,9 @@ check("the swap cycle declares a duration", () => {
 const cycleSeconds = cycleMatch === null ? 0 : Number(cycleMatch[1]);
 
 check(
-  `every phase class is a negative quarter of the ${cycleSeconds}s cycle`,
+  `every phase class is a negative ${KINDS.length}th of the ${cycleSeconds}s cycle`,
   () => {
-    const quarter = cycleSeconds / KINDS.length;
+    const share = cycleSeconds / KINDS.length;
     for (const [index, kind] of KINDS.entries()) {
       if (kind.phase === null) continue;
       const body = ruleBody(globals, `.${kind.phase}`);
@@ -98,9 +101,9 @@ check(
       const delay = Number(body.match(/animation-delay: (-?[\d.]+)s/)?.[1]);
       assert.equal(
         delay,
-        -(index * quarter),
+        -(index * share),
         `.${kind.phase} is offset ${delay}s, but kind ${index + 1} of ` +
-          `${KINDS.length} sits at ${-(index * quarter)}s`,
+          `${KINDS.length} sits at ${-(index * share)}s`,
       );
     }
   },
@@ -121,9 +124,9 @@ check("a phase class sets NOTHING but its delay", () => {
   }
 });
 
-/* ---- 2. one quarter lit, and no overlap ---------------------------------- */
+/* ---- 2. one share lit, and no overlap ------------------------------------ */
 
-check("a panel is lit for its own quarter and no more", () => {
+check("a panel is lit for its own share of the cycle and no more", () => {
   const frame = globals.match(/@keyframes af-hero-swap \{([\s\S]*?)\n\}/)?.[1];
   assert.notEqual(frame, undefined, "no af-hero-swap keyframe");
 
@@ -134,22 +137,22 @@ check("a panel is lit for its own quarter and no more", () => {
   const stops = [...frame.matchAll(/([\d.]+)%/g)].map((m) => Number(m[1]));
   // Lit from 0, plateau ends, hidden, the next fade-in starts, restart.
   const [, litUntil, hiddenFrom, hiddenUntil] = stops;
-  const quarter = 100 / KINDS.length;
+  const share = 100 / KINDS.length;
 
   assert.ok(
-    litUntil < quarter && hiddenFrom <= quarter,
-    `the lit window runs to ${hiddenFrom}%, past this kind's ${quarter}% ` +
+    litUntil < share && hiddenFrom <= share,
+    `the lit window runs to ${hiddenFrom}%, past this kind's ${share}% ` +
       `slot — two diagrams would be on screen at once`,
   );
   assert.ok(
-    hiddenUntil > 100 - quarter,
+    hiddenUntil > 100 - share,
     `the fade back in starts at ${hiddenUntil}%, more than one slot before ` +
       `the cycle restarts`,
   );
   assert.ok(
     frame.includes("visibility: hidden"),
     "the off frames stay `visible` — an invisible diagram would be " +
-      "composited for three quarters of every cycle",
+      "composited for every slot but its own",
   );
 });
 
@@ -181,8 +184,22 @@ check("every kind has a panel, a subtitle, a dot and a name", () => {
   }
 });
 
-check("all four panel components are rendered", () => {
-  for (const component of ["SequencePanel", "FlowchartPanel", "UseCasePanel"]) {
+check("every SVG panel component is rendered", () => {
+  /* THE C4 PANEL IS ABSENT ON PURPOSE: it is HTML boxes written inline in the
+     card, not a component, so there is nothing to name here. Every other kind
+     draws through a function, and a panel that is defined and never mounted is
+     a lit dot over somebody else's diagram — the same failure item 3 catches
+     from the other end. */
+  for (const component of [
+    "SequencePanel",
+    "FlowchartPanel",
+    "UseCasePanel",
+    "ErPanel",
+    "DictPanel",
+    "GanttPanel",
+    "TimelinePanel",
+    "LifecyclePanel",
+  ]) {
     assert.ok(
       hero.includes(`<${component} />`),
       `<${component} /> is defined but never rendered`,

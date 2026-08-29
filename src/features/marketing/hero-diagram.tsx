@@ -15,9 +15,10 @@ const PostgresqlIcon = ICONS["postgresql"].byStyle.mono;
 const RedisIcon = ICONS["redis"].byStyle.mono;
 
 /**
- * Decorative hero visual: one card that CYCLES THROUGH ALL FOUR document kinds
+ * Decorative hero visual: one card that CYCLES THROUGH EVERY document kind
  * this product reads — a Container-level C4 diagram drawn with the editor's real
- * stack icons, a sequence flow, a flowchart, and a use-case diagram — stacked
+ * stack icons, a sequence flow, a flowchart, a use-case diagram, an ER schema,
+ * a data dictionary and a gantt — stacked
  * over two ghost "sheets" that hint at the levels beneath (the Context→Container
  * drill-down). The kind strip in its header says which is showing, and the
  * header's LEFT side swaps with it: a level breadcrumb over the C4 panel, each
@@ -26,22 +27,21 @@ const RedisIcon = ICONS["redis"].byStyle.mono;
  * something that format cannot express.
  *
  * WHY IT CYCLES rather than showing one: the banner is the first thing a reader
- * sees, and a single C4 diagram made the other three viewers look like footnotes
+ * sees, and a single C4 diagram made the other viewers look like footnotes
  * to a C4 product. Naming the kinds in the header without ever showing them
  * would be worse — a switch that never switches. It began as two kinds for
- * exactly this reason, and grew to four as the flowchart and use-case types
- * shipped; a kind that exists in the product and not here is the same bug
- * again.
+ * exactly this reason and has grown one panel per notation ever since; a kind
+ * that exists in the product and not here is the same bug again.
  *
- * The swap is pure CSS: all four panels occupy the same fixed 350×336 box,
+ * The swap is pure CSS: every panel occupies the same fixed 350×336 box,
  * absolutely positioned, cycling on one shared keyframe with each panel after
- * the first offset by whole quarter-cycles (`af-hero-kind` plus
- * `af-hero-kind-2/-3/-4` in globals.css). No timer, no client state, so this
+ * the first offset by a whole share of the cycle (`af-hero-kind` plus
+ * `af-hero-kind-2` … `-7` in globals.css). No timer, no client state, so this
  * stays a SERVER component.
  *
  * Each panel assembles itself on load — sheets settle, boxes land one at a
  * time, connectors draw toward their arrowheads — and then keeps something
- * moving: the C4 panel runs a slow current along its edges, the other three a
+ * moving: the C4 panel runs a slow current along its edges, the others a
  * travelling band along theirs, so the arrows read as traffic rather than
  * decoration. Every panel keeps moving because a still one beside a live one
  * looks like a screenshot of the product rather than the product. The motion is pure CSS (see the "Hero diagram motion" block
@@ -57,9 +57,9 @@ const RedisIcon = ICONS["redis"].byStyle.mono;
  * disk) is stated in the page copy — so the whole thing is `aria-hidden`.
  *
  * FIXED-SIZE, AND THAT IS NOT AN OVERSIGHT: a 24rem card over a 350×336
- * coordinate space with hand-placed nodes. The three SVG panels would scale on
+ * coordinate space with hand-placed nodes. The SVG panels would scale on
  * their own, but the C4 panel is HTML boxes at absolute pixel offsets, so making
- * this fluid means rebuilding the one panel the other three were drawn to match.
+ * this fluid means rebuilding the one panel every other was drawn to match.
  *
  * It is no longer `lg:`-only, though. Hiding it below `lg` left every phone with
  * a headline and a button on an empty ground, so the landing page now renders it
@@ -110,8 +110,8 @@ function riseAt(ms: number): CSSProperties {
 }
 
 /**
- * The six kinds, in cycle order, each paired with the phase class that puts it
- * at its own quarter of the swap. THE FIRST HAS NO CLASS on purpose: it runs the
+ * The nine kinds, in cycle order, each paired with the phase class that puts
+ * it at its own share of the swap. THE FIRST HAS NO CLASS on purpose: it runs the
  * bare `af-hero-kind` clock at zero offset, and inventing an `af-hero-kind-1`
  * that sets `animation-delay: 0s` would be a class whose only job is to restate
  * the default — and one more place for the set to fall out of step with
@@ -129,10 +129,13 @@ const KINDS: readonly { name: string; phase: string }[] = [
   { name: "Use case", phase: "af-hero-kind-4" },
   { name: "ER", phase: "af-hero-kind-5" },
   { name: "Dictionary", phase: "af-hero-kind-6" },
+  { name: "Gantt", phase: "af-hero-kind-7" },
+  { name: "Timeline", phase: "af-hero-kind-8" },
+  { name: "Lifecycle", phase: "af-hero-kind-9" },
 ];
 
 /**
- * What the header says on its left for the three kinds that have no C4 levels:
+ * What the header says on its left for the eight kinds that have no C4 levels:
  * the document's own name, and the one count that tells you its size. The C4
  * breadcrumb is written out in the markup instead of living here, because it is
  * not a name and a count — it is two altitudes and a separator, and flattening it
@@ -145,6 +148,31 @@ const SUBTITLES: readonly { name: string; meta: string; phase: string }[] = [
   { name: "Food delivery", meta: "2 actors", phase: "af-hero-kind-4" },
   { name: "Shop orders", meta: "3 tables", phase: "af-hero-kind-5" },
   { name: "Customer API", meta: "4 fields", phase: "af-hero-kind-6" },
+  /* The one subtitle whose `meta` is a DURATION rather than a count, because
+     that is the fact this notation has where the other six have a size: "6
+     rows" says nothing a reader could not see, and "4 weeks" is the answer the
+     diagram exists to give. */
+  { name: "Store migration", meta: "4 weeks", phase: "af-hero-kind-7" },
+  /* Two counts, not one, and it is the one subtitle that needs both: "11
+     events" alone says nothing about the grouping, which is the whole of what
+     this notation adds over a list, and "4 periods" alone says nothing about
+     the size. The gantt above it is the opposite case for the same reason —
+     one number, because a duration is the fact it has. */
+  {
+    name: "Platform history",
+    meta: "4 periods · 11 events",
+    phase: "af-hero-kind-8",
+  },
+  /* Two counts again, and for a different reason from the timeline's above:
+     "5 states" is the size, and "2 ways out" is the thing this notation has
+     that no other kind here does — the branches are the whole difference
+     between this and the ordered list next door, so a subtitle that named
+     only the states would describe a timeline. */
+  {
+    name: "Order lifecycle",
+    meta: "5 states · 2 ways out",
+    phase: "af-hero-kind-9",
+  },
 ];
 
 export function HeroDiagram({ className }: { className?: string }) {
@@ -225,14 +253,14 @@ export function HeroDiagram({ className }: { className?: string }) {
                 L2 Container
               </span>
             </p>
-            {/* The other three name the DOCUMENT, because that is what they
+            {/* The other six name the DOCUMENT, because that is what they
                 have where a C4 model has a level: a sequence flow's title, a
-                flowchart's name, a use-case system's boundary. Each is the one
-                thing the real viewer stamps above that kind of diagram. */}
+                flowchart's name, a use-case system's boundary, a plan's own
+                name and how long it runs. Each is the one thing the real
+                viewer stamps above that kind of diagram. */}
             {/* NO INLINE `delay()` ON THESE ELEMENTS, and that is load-bearing:
-                `af-hero-kind-2/-3/-4` are nothing but an `animation-delay`,
-                the quarter-cycle offset that puts each one at its own point in
-                the cycle. An inline `animationDelay` wins over the class, so a
+                `af-hero-kind-2` … `-7` are nothing but an `animation-delay`,
+                the offset that puts each one at its own point in the cycle. An inline `animationDelay` wins over the class, so a
                 staged entrance here silently put two halves on the same phase
                 and printed the C4 breadcrumb and the flow title over each
                 other. That shipped once. The children carry the entrance
@@ -268,18 +296,18 @@ export function HeroDiagram({ className }: { className?: string }) {
             ))}
           </div>
           {/* The document KINDS, and which one is on screen. Not decoration and
-              not a control: the card cycles through four diagrams, and this says
-              how many there are and where in the set you are.
+              not a control: the card cycles through every notation, and this
+              says how many there are and where in the set you are.
 
-              IT WAS FOUR NAMED PILLS, one per kind, greyed until its turn —
-              which is the honest design and does not fit. Four names in a
-              10px mono strip is ~206px, and the breadcrumb beside it wants
-              ~160px inside a 384px card: the two collided. Widening the card
-              to fit a legend would be letting the label set the size of the
-              artwork.
+              IT WAS A NAMED PILL PER KIND, greyed until its turn — which is
+              the honest design and does not fit. Four names in a 10px mono
+              strip was already ~206px, and the breadcrumb beside it wants
+              ~160px inside a 384px card: the two collided at four, and there
+              are seven now. Widening the card to fit a legend would be letting
+              the label set the size of the artwork.
 
-              So the SET became dots and the NAME became singular. Four dots
-              answers "how many kinds" in 28px, the lit one answers "which",
+              So the SET became dots and the NAME became singular. A row of
+              dots answers "how many kinds", the lit one answers "which",
               and the name spells that one out. Every lit element runs the same
               swap keyframe as its own panel, so dot, name and diagram cannot
               disagree — there are no colour keyframes and nothing to
@@ -376,7 +404,7 @@ export function HeroDiagram({ className }: { className?: string }) {
             />
           </div>
 
-          {/* The other four kinds, same box, each offset a whole fifth. */}
+          {/* The other seven kinds, same box, each offset a whole eighth. */}
           <div className="af-hero-kind af-hero-kind-2 absolute inset-0">
             <SequencePanel />
           </div>
@@ -391,6 +419,15 @@ export function HeroDiagram({ className }: { className?: string }) {
           </div>
           <div className="af-hero-kind af-hero-kind-6 absolute inset-0">
             <DictPanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-7 absolute inset-0">
+            <GanttPanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-8 absolute inset-0">
+            <TimelinePanel />
+          </div>
+          <div className="af-hero-kind af-hero-kind-9 absolute inset-0">
+            <LifecyclePanel />
           </div>
         </div>
       </div>
@@ -1033,7 +1070,7 @@ function MiniActor({
  *     draws the real `one` bar and the real `zero-or-more` foot, mirrored,
  *     exactly as `er-diagram.tsx` composes them from a bar, a ring and a fan.
  *
- * Hand-drawn at fixed coordinates like its four siblings, not driven through
+ * Hand-drawn at fixed coordinates like every sibling panel, not driven through
  * `layoutEr`: the panel is 320px wide and the real layout solves for a canvas
  * that scrolls, so feeding it a document would produce a correct diagram at
  * the wrong scale. The tradeoff is the one the other panels already accept —
@@ -1053,7 +1090,7 @@ function MiniActor({
  * outlined exactly as the real canvas outlines them — including the one solid
  * `pii`, which is the only mark on that canvas allowed to shout.
  *
- * Hand-drawn at fixed coordinates like its five siblings rather than driven
+ * Hand-drawn at fixed coordinates like every sibling panel rather than driven
  * through `layoutDict`: the panel is 320px wide and the real layout solves for
  * a 940px page, so feeding it a document would produce a correct table at the
  * wrong scale.
@@ -1200,6 +1237,643 @@ function DictPanel() {
             >
               {row.meaning}
             </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The gantt panel                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The card's seventh face: a miniature Gantt in the same fixed 350×336 box.
+ *
+ * WHAT IT HAS TO SHOW, and why a row of bars would not have been enough. Every
+ * plan tool draws durations; the three things a reader cannot get from a bar
+ * chart are the three drawn here, and each is the reason a row exists:
+ *
+ *   - A MEASURED AXIS. x is `day * PX_PER_DAY` and nothing else, so a bar's
+ *     length IS its duration. That is the one axis in this whole hero that
+ *     means a quantity rather than a position, which is what separates a
+ *     gantt from the other six miniatures (`gantt/lib/layout.ts` opens
+ *     on the same distinction).
+ *   - A DEPENDENCY ELBOW. "What can't start until this is done" is the half of
+ *     the notation a reader arrives without, so the connectors are derived
+ *     from the bars they join rather than drawn beside them — the arrangement
+ *     `ErPanel` had to be rewritten into after its hand-typed paths detached
+ *     from its hand-typed tables.
+ *   - A MILESTONE DIAMOND. A zero-duration item is a different SHAPE, not a
+ *     very short bar, because a bar of width zero says "this takes no time"
+ *     where a diamond says "this is a date".
+ *
+ * The critical chain is tinted with `--gantt-critical` — cap, connector and
+ * arrowhead — exactly as `gantt-motion.css` paints the real canvas, and the
+ * ambient band retraces that chain and no other line. Same choice the
+ * flowchart panel's trace makes: the resting motion follows the route the
+ * diagram is ABOUT. A band down the float branch would say the slack matters
+ * as much as the path that sets the end date, which is the one thing a Gantt
+ * exists to deny.
+ *
+ * Hand-set geometry rather than a call into `layoutGantt`, for the reason
+ * every panel here states: the real layout solves for a 1020px canvas with a
+ * 196px rail, and feeding it a document would draw a correct plan at four
+ * times this panel's scale.
+ */
+
+/** The plot's own geometry. `PX_PER_DAY` is derived, never typed: it is the
+ *  whole claim the panel makes, and a hand-rounded copy could contradict the
+ *  axis drawn from the same two edges. */
+const GANTT_PLOT = { x0: 104, x1: 330, days: 28, tickStep: 7 } as const;
+const GANTT_PX_PER_DAY = (GANTT_PLOT.x1 - GANTT_PLOT.x0) / GANTT_PLOT.days;
+const ganttX = (day: number) => GANTT_PLOT.x0 + day * GANTT_PX_PER_DAY;
+
+/** Row and band metrics, in the same shape (and the same spirit) as `GANTT`. */
+const GANTT_METRIC = {
+  axisRule: 28,
+  rowHeight: 36,
+  barHeight: 18,
+  /** Bar top, measured from the row's top — `GANTT.barOffsetY` at this scale. */
+  barOffsetY: 6,
+  sectionHead: 20,
+  milestoneRadius: 8,
+  /** The primary-coloured cap on a critical bar's leading edge. */
+  capWidth: 3,
+} as const;
+
+/**
+ * The plan, as data. Sections in order, each with its rows; `y` is solved
+ * below rather than written down, so a row inserted anywhere moves the ones
+ * under it instead of overlapping them.
+ *
+ * `state` names the four the grammar has, spelled as `gantt-motion.css`
+ * spells them, so the fills below are lookups rather than choices. All four
+ * appear, and `planned` appears as an absent state exactly as a real document
+ * writes it.
+ */
+const GANTT_SECTIONS: readonly {
+  name: string;
+  rows: readonly {
+    id: string;
+    label: string;
+    /** Day offsets. A milestone has `to` equal to `from`. */
+    from: number;
+    to: number;
+    state?: "done" | "active" | "at-risk";
+    milestone?: true;
+    /** On the chain that decides the end date. */
+    critical?: true;
+    /** The row this one cannot start until — drawn as an elbow. */
+    after?: string;
+  }[];
+}[] = [
+  {
+    name: "Audit",
+    rows: [
+      {
+        id: "inventory",
+        label: "Rack audit",
+        from: 0,
+        to: 6,
+        state: "done",
+        critical: true,
+      },
+      /* THE FLOAT BRANCH, and the one row with no `after`. Fast work sitting
+         beside slow procurement is what slack actually looks like on a plan,
+         and a miniature where every bar is on the critical path would make the
+         tint below say nothing. */
+      { id: "netplan", label: "Move plan", from: 9, to: 14, state: "done" },
+    ],
+  },
+  {
+    name: "Move",
+    rows: [
+      {
+        id: "crossconnect",
+        label: "Cross-connects",
+        from: 7,
+        to: 18,
+        state: "active",
+        critical: true,
+        after: "inventory",
+      },
+      {
+        id: "ship",
+        label: "Ship and rack",
+        from: 19,
+        to: 23,
+        critical: true,
+        after: "crossconnect",
+      },
+    ],
+  },
+  {
+    name: "Live",
+    rows: [
+      {
+        id: "recable",
+        label: "Re-cable",
+        from: 24,
+        to: 26,
+        state: "at-risk",
+        critical: true,
+        after: "ship",
+      },
+      {
+        id: "cutover",
+        label: "Cutover",
+        from: 28,
+        to: 28,
+        milestone: true,
+        critical: true,
+        after: "recable",
+      },
+    ],
+  },
+];
+
+/** Fill and border per reporting state, the same pairs `gantt-motion.css`
+ *  paints the real bars with — a `planned` bar carries no state at all, which
+ *  is why the default sits on the key rather than beside it. */
+const GANTT_STATE_TOKEN = {
+  planned: "external",
+  done: "queue",
+  active: "internal",
+  "at-risk": "decision",
+} as const;
+
+/** Beats for the gantt panel, mirroring `FLOW_BEAT`'s shape. */
+const GANTT_BEAT = {
+  axis: 380,
+  sections: 460,
+  rows: 540,
+  rowGap: 90,
+  edges: 760,
+  edgeGap: 90,
+  trace: 2000,
+  traceGap: 170,
+} as const;
+
+/**
+ * SOLVED, NOT TYPED. Every y comes from the two metrics above, so the bars, the
+ * rail names, the section headings and the connector elbows all read one
+ * arrangement — the property `ErPanel` lost when its paths and its tables were
+ * placed by two separate hand-written sets.
+ *
+ * AT MODULE SCOPE, not inside the component. `GANTT_SECTIONS` and `GANTT_METRIC` are
+ * both constants, so this arrangement is the same on every render and there is
+ * nothing here for a render to decide. Running it in the component body also
+ * meant carrying a `cursor` that each row reassigned, which is a mutation after
+ * render completes and what `react-hooks/immutability` refuses.
+ */
+const GANTT_PLACED = (() => {
+  let cursor = GANTT_METRIC.axisRule + 12;
+  return GANTT_SECTIONS.map((section) => {
+    const headY = cursor + GANTT_METRIC.sectionHead / 2;
+    cursor += GANTT_METRIC.sectionHead;
+    const rows = section.rows.map((row) => {
+      const top = cursor;
+      cursor += GANTT_METRIC.rowHeight;
+      return {
+        ...row,
+        top,
+        midY: top + GANTT_METRIC.barOffsetY + GANTT_METRIC.barHeight / 2,
+      };
+    });
+    return { name: section.name, headY, rows };
+  });
+})();
+
+const GANTT_ROWS = GANTT_PLACED.flatMap((section) => section.rows);
+const GANTT_ROW_BY_ID = new Map(GANTT_ROWS.map((row) => [row.id, row]));
+
+function GanttPanel() {
+  const placed = GANTT_PLACED;
+  const rows = GANTT_ROWS;
+  const rowById = GANTT_ROW_BY_ID;
+
+  /** Out of the predecessor's right edge, down its own channel, into the
+   *  dependant's left edge — the out-across-in route the real router falls
+   *  back to, with the channel sitting in the gutter the two bars leave. */
+  const elbows = rows.flatMap((row) => {
+    const from = row.after === undefined ? undefined : rowById.get(row.after);
+    if (from === undefined) return [];
+    const startX = ganttX(from.to);
+    /* A milestone is entered at its LEFT VERTEX, not at its centre — an
+       arrowhead landing in the middle of the diamond would be drawn over by
+       it. */
+    const endX =
+      row.milestone === true
+        ? ganttX(row.from) - GANTT_METRIC.milestoneRadius
+        : ganttX(row.from);
+    const channel = (startX + endX) / 2;
+    return [
+      {
+        id: `${from.id}-${row.id}`,
+        critical: row.critical === true && from.critical === true,
+        endX,
+        endY: row.midY,
+        d: `M ${startX} ${from.midY} H ${channel} V ${row.midY} H ${endX}`,
+      },
+    ];
+  });
+
+  return (
+    <svg
+      viewBox="0 0 350 336"
+      fill="none"
+      className="absolute inset-0 h-full w-full"
+    >
+      {/* The measured axis: a tick every week, the label above it, and the
+          baseline the bars hang from. Drawn first so nothing crosses a bar. */}
+      <g className="af-hero-fade" style={delay(GANTT_BEAT.axis)}>
+        {Array.from(
+          { length: GANTT_PLOT.days / GANTT_PLOT.tickStep + 1 },
+          (_, index) => index * GANTT_PLOT.tickStep,
+        ).map((day) => (
+          <g key={day}>
+            <path
+              d={`M ${ganttX(day)} ${GANTT_METRIC.axisRule} V 306`}
+              stroke="var(--canvas-grid)"
+              strokeWidth={1}
+            />
+            <text
+              x={ganttX(day)}
+              y={16}
+              textAnchor={
+                day === 0 ? "start" : day === GANTT_PLOT.days ? "end" : "middle"
+              }
+              dominantBaseline="central"
+              fontSize={8.5}
+              className="font-mono"
+              fill="var(--muted-foreground)"
+            >
+              {`${2 + day} Mar`}
+            </text>
+          </g>
+        ))}
+        <path
+          d={`M ${GANTT_PLOT.x0} ${GANTT_METRIC.axisRule} H ${GANTT_PLOT.x1}`}
+          stroke="var(--edge)"
+          strokeWidth={1.2}
+        />
+      </g>
+
+      {/* The connectors, UNDER the bars: a line that stops a hair inside a
+          bar's outline is hidden by it rather than crossing into the label. */}
+      {elbows.map((elbow, index) => (
+        <g key={elbow.id}>
+          <path
+            className="af-hero-edge"
+            style={delay(GANTT_BEAT.edges + index * GANTT_BEAT.edgeGap)}
+            d={elbow.d}
+            pathLength={1}
+            stroke={elbow.critical ? "var(--gantt-critical)" : "var(--edge)"}
+            strokeWidth={elbow.critical ? 1.9 : 1.3}
+            strokeLinecap="round"
+          />
+          <path
+            className="af-hero-fade"
+            style={delay(
+              GANTT_BEAT.edges + index * GANTT_BEAT.edgeGap + BEAT.drawMs,
+            )}
+            d={`M ${elbow.endX} ${elbow.endY} l -6 -4 v 8 Z`}
+            fill={elbow.critical ? "var(--gantt-critical)" : "var(--edge)"}
+          />
+        </g>
+      ))}
+
+      {/* The ambient band, over the finished chain and along it only. Same
+          `pathLength=100` trick the flowchart panel uses, so one keyframe fits
+          every span however the route bends. */}
+      {elbows
+        .filter((elbow) => elbow.critical)
+        .map((elbow, index) => (
+          <path
+            key={elbow.id}
+            className="af-hero-trace"
+            style={delay(GANTT_BEAT.trace + index * GANTT_BEAT.traceGap)}
+            d={elbow.d}
+            pathLength={100}
+            stroke="var(--gantt-critical)"
+            strokeWidth={2.4}
+            strokeLinecap="round"
+          />
+        ))}
+
+      {placed.map((section, sectionIndex) => (
+        <text
+          key={section.name}
+          className="af-hero-fade font-mono"
+          style={delay(GANTT_BEAT.sections + sectionIndex * 110)}
+          x={4}
+          y={section.headY}
+          dominantBaseline="central"
+          fontSize={8.5}
+          letterSpacing={0.6}
+          fill="var(--muted-foreground)"
+        >
+          {section.name.toUpperCase()}
+        </text>
+      ))}
+
+      {rows.map((row, index) => {
+        const delayMs = GANTT_BEAT.rows + index * GANTT_BEAT.rowGap;
+        const token = GANTT_STATE_TOKEN[row.state ?? "planned"];
+        /* `--flow-decision` rather than a `--node-*` pair for `at-risk`: the
+           amber that means "a decision" on a flowchart means "watch this" on a
+           plan, and it is the pair the real canvas already reuses. */
+        const fill =
+          token === "decision"
+            ? "var(--flow-decision)"
+            : `var(--node-${token})`;
+        const stroke =
+          token === "decision"
+            ? "var(--flow-decision-border)"
+            : `var(--node-${token}-border)`;
+        return (
+          <g key={row.id}>
+            {/* The rail name, right-aligned against the plot's left edge, so
+                the labels form the column the real canvas gives them. */}
+            <text
+              className="af-hero-fade"
+              style={delay(delayMs + 110)}
+              x={GANTT_PLOT.x0 - 10}
+              y={row.midY}
+              textAnchor="end"
+              dominantBaseline="central"
+              fontSize={9.5}
+              fill="var(--node-foreground)"
+            >
+              {row.label}
+            </text>
+
+            {row.milestone === true ? (
+              /* A DIAMOND, NOT A ONE-DAY BAR. A zero-duration item is a date
+                 rather than a short piece of work, and drawing it as a sliver
+                 would say the opposite. */
+              <path
+                className="af-hero-node"
+                style={riseAt(delayMs)}
+                d={`M ${ganttX(row.from)} ${row.midY - GANTT_METRIC.milestoneRadius} L ${ganttX(row.from) + GANTT_METRIC.milestoneRadius} ${row.midY} L ${ganttX(row.from)} ${row.midY + GANTT_METRIC.milestoneRadius} L ${ganttX(row.from) - GANTT_METRIC.milestoneRadius} ${row.midY} Z`}
+                fill="var(--node)"
+                stroke="var(--gantt-critical)"
+                strokeWidth={2}
+              />
+            ) : (
+              <>
+                <rect
+                  className="af-hero-node"
+                  style={riseAt(delayMs)}
+                  x={ganttX(row.from)}
+                  y={row.top + GANTT_METRIC.barOffsetY}
+                  width={ganttX(row.to) - ganttX(row.from)}
+                  height={GANTT_METRIC.barHeight}
+                  rx={4}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth={1.25}
+                />
+                {row.critical === true ? (
+                  /* The cap on the leading edge, in the critical tint — the
+                     one mark that says "this bar sets the end date" without
+                     recolouring the state the bar is reporting. */
+                  <rect
+                    className="af-hero-node"
+                    style={riseAt(delayMs + 60)}
+                    x={ganttX(row.from)}
+                    y={row.top + GANTT_METRIC.barOffsetY}
+                    width={GANTT_METRIC.capWidth}
+                    height={GANTT_METRIC.barHeight}
+                    fill="var(--gantt-critical)"
+                  />
+                ) : null}
+              </>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The milestone timeline panel                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The card's eighth face: a miniature milestone timeline in the same fixed
+ * 350×336 box.
+ *
+ * WHAT IT HAS TO SHOW, and why it must not look like the gantt one panel
+ * earlier. The two notations are neighbours and their overlap was WAIVED
+ * rather than argued away (`src/types/timeline.ts`), so this miniature's job
+ * is partly to make the difference visible in the two seconds it is on screen:
+ *
+ *   - IT RUNS DOWN, not across. That alone separates it from every bar the
+ *     gantt panel draws, and it is the real canvas's own choice for the real
+ *     reason — the label is the whole element, so it gets the width.
+ *   - THERE IS NO AXIS AND NOTHING IS MEASURED. The gantt panel's one boast is
+ *     that x means a quantity; here the spine carries ticks nowhere, the gaps
+ *     between dots are the heights of sentences, and a reader who tries to
+ *     read a duration off it finds none. That is the notation.
+ *   - THE BANDS ARE DIFFERENT SIZES, solved from their event counts, so the
+ *     picture says more happened later. A miniature with three equal bands
+ *     would be the grid `purpose.md` forbids, drawn at the one scale where
+ *     nobody would notice.
+ *
+ * Hand-set geometry rather than a call into `layoutTimeline`, for the reason
+ * every panel here states: the real layout solves for a 1020-unit canvas whose
+ * label measure alone is 620, and feeding it a document would draw a correct
+ * timeline at three times this panel's width.
+ *
+ * The ambient band retraces the SPINE, and nothing else — the same choice the
+ * gantt panel makes for its critical chain and the flowchart panel for its
+ * route: the resting motion follows the thing the diagram is about. On this
+ * canvas that is the passage of time, which is exactly what the real
+ * `timeline-motion.css` sweep says and the only thing here a still frame
+ * cannot.
+ */
+
+/** Where the spine runs, and the two columns either side of it. */
+const TL_METRIC = {
+  spineX: 96,
+  railRight: 84,
+  labelX: 112,
+  top: 22,
+  dotRadius: 5,
+  periodHead: 20,
+  eventGap: 8,
+  lineHeight: 13,
+} as const;
+
+/**
+ * The history, as data — periods in order, each with its events. An event's
+ * `lines` is how many lines its label takes at this scale, which is what the
+ * real layout SOLVES and this panel has to be told: it is the field that makes
+ * the bands different heights, so it is the field a reader is actually seeing.
+ */
+const TL_PERIODS: readonly {
+  name: string;
+  events: readonly { label: readonly string[] }[];
+}[] = [
+  { name: "2016", events: [{ label: ["Two people and a prototype"] }] },
+  {
+    name: "2018",
+    events: [
+      { label: ["First paying customer"] },
+      { label: ["Split the monolith into", "an API and a web app"] },
+    ],
+  },
+  {
+    name: "2021",
+    events: [
+      { label: ["Order store off the", "shared database"] },
+      { label: ["First platform engineer"] },
+      { label: ["The Friday freeze ended"] },
+    ],
+  },
+  {
+    name: "2024",
+    events: [
+      { label: ["Opened the public API"] },
+      { label: ["First region outside Europe"] },
+      { label: ["Ten million orders in a month"] },
+    ],
+  },
+];
+
+/** Beats for the timeline panel, mirroring `GANTT_BEAT`'s shape. */
+const TL_BEAT = {
+  spine: 380,
+  periods: 460,
+  events: 560,
+  eventGap: 80,
+  trace: 2000,
+} as const;
+
+/**
+ * SOLVED, NOT TYPED, and at module scope for the reason `GANTT_PLACED` gives:
+ * every y comes from the metrics above and the line counts in the data, so a
+ * longer label pushes what is under it instead of overlapping it — which is
+ * the same property `check:timeline-layout` asserts of the real canvas, made
+ * unspellable here rather than merely correct today.
+ */
+const TL_PLACED = (() => {
+  let cursor = TL_METRIC.top;
+  return TL_PERIODS.map((period) => {
+    const headY = cursor + TL_METRIC.periodHead / 2;
+    cursor += TL_METRIC.periodHead;
+    const events = period.events.map((event) => {
+      const dotY = cursor + 5;
+      const height = event.label.length * TL_METRIC.lineHeight;
+      cursor += height + TL_METRIC.eventGap;
+      return {
+        ...event,
+        dotY,
+        firstLineY: cursor - height - TL_METRIC.eventGap + 8,
+      };
+    });
+    return { name: period.name, headY, events, ruleY: headY + 8 };
+  });
+})();
+
+const TL_EVENTS = TL_PLACED.flatMap((period) => period.events);
+const TL_SPINE_TOP = TL_EVENTS[0].dotY;
+const TL_SPINE_BOTTOM = TL_EVENTS[TL_EVENTS.length - 1].dotY;
+
+function TimelinePanel() {
+  return (
+    <svg
+      viewBox="0 0 350 336"
+      fill="none"
+      className="absolute inset-0 h-full w-full"
+    >
+      {/* The spine, drawn first so nothing crosses a dot. It is CLIPPED TO THE
+          DOTS, exactly as the real canvas clips it: a line running the full
+          height would imply time either side of the document, which this
+          notation has no way to claim. */}
+      <path
+        className="af-hero-edge"
+        style={delay(TL_BEAT.spine)}
+        d={`M ${TL_METRIC.spineX} ${TL_SPINE_TOP} V ${TL_SPINE_BOTTOM}`}
+        pathLength={1}
+        stroke="var(--canvas-grid)"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+
+      {/* The ambient band, down the spine and along nothing else. */}
+      <path
+        className="af-hero-trace"
+        style={delay(TL_BEAT.trace)}
+        d={`M ${TL_METRIC.spineX} ${TL_SPINE_TOP} V ${TL_SPINE_BOTTOM}`}
+        pathLength={100}
+        stroke="var(--edge-drift)"
+        strokeWidth={3}
+        strokeLinecap="round"
+      />
+
+      {TL_PLACED.map((period, periodIndex) => (
+        <g key={period.name}>
+          <text
+            className="af-hero-fade font-mono"
+            style={delay(TL_BEAT.periods + periodIndex * 110)}
+            x={TL_METRIC.railRight}
+            y={period.headY}
+            textAnchor="end"
+            dominantBaseline="central"
+            fontSize={8.5}
+            letterSpacing={0.6}
+            fill="var(--muted-foreground)"
+          >
+            {period.name}
+          </text>
+          <path
+            className="af-hero-fade"
+            style={delay(TL_BEAT.periods + periodIndex * 110)}
+            d={`M 4 ${period.ruleY} H 342`}
+            stroke="var(--canvas-grid)"
+            strokeWidth={1}
+            opacity={0.55}
+          />
+        </g>
+      ))}
+
+      {TL_EVENTS.map((event, index) => {
+        const delayMs = TL_BEAT.events + index * TL_BEAT.eventGap;
+        return (
+          <g key={`${event.dotY}`}>
+            {/* ONE APPEARANCE FOR EVERY DOT, which is the notation and not an
+                unfinished palette: this kind assigns no meaning to colour, so
+                a second fill here would be a distinction the grammar cannot
+                express. */}
+            <circle
+              className="af-hero-node"
+              style={riseAt(delayMs)}
+              cx={TL_METRIC.spineX}
+              cy={event.dotY}
+              r={TL_METRIC.dotRadius}
+              fill="var(--node)"
+              stroke="var(--primary)"
+              strokeWidth={2}
+            />
+            {event.label.map((line, lineIndex) => (
+              <text
+                key={line}
+                className="af-hero-fade"
+                style={delay(delayMs + 90)}
+                x={TL_METRIC.labelX}
+                y={event.firstLineY + lineIndex * TL_METRIC.lineHeight}
+                dominantBaseline="central"
+                fontSize={9.5}
+                fill="var(--node-foreground)"
+              >
+                {line}
+              </text>
+            ))}
           </g>
         );
       })}
@@ -1651,7 +2325,7 @@ function Edges(props: SVGProps<SVGSVGElement>) {
         </linearGradient>
 
         {/* One marker per edge rather than one shared def: marker content is
-            cloned per use and every clone runs the same animation timeline, so
+            cloned per use and every clone runs the same animation gantt, so
             a single shared marker would pop all four arrowheads in at once
             instead of each as its own line arrives. */}
         {EDGES.map((edge, index) => (
@@ -1716,6 +2390,337 @@ function Edges(props: SVGProps<SVGSVGElement>) {
           ))}
         </g>
       ))}
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The lifecycle panel                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ONE THING MOVING THROUGH STATES, AND THE WAYS IT CAN LEAVE.
+ *
+ * THE MINIATURE'S JOB IS TO NOT LOOK LIKE THE FLOWCHART PANEL, six slots
+ * earlier in the same cycle. A reader sees both within a minute, and if they
+ * read as the same picture this notation has failed in the one place it is
+ * most exposed (`src/types/lifecycle.ts` records that the overlap with the
+ * flowchart was waived rather than argued away). Three things separate them,
+ * and all three are the real canvas's own:
+ *
+ *   - THE STATES ARE ON A LINE, IN ONE COLUMN, WITH NO ARROWS BETWEEN THEM.
+ *     The flowchart panel draws boxes joined by arrowheads; here the order is
+ *     the geometry and there is nothing between one state and the next to
+ *     draw. That absence is the strongest signal available at this size.
+ *   - THE BRANCHES LEAVE SIDEWAYS, INTO THEIR OWN LANE, at a smaller size.
+ *     Everything right of the spine is where the subject goes; everything
+ *     left of it is where it stops going.
+ *   - THE ONE ARROWHEAD ON THE PANEL points INTO the spine, at the end of the
+ *     return. On the flowchart panel every edge has one; here exactly one mark
+ *     does, so it means one thing.
+ *
+ * Hand-set geometry rather than a call into `layoutLifecycle`, for the reason
+ * every panel here states: the real layout solves for a 1040-unit canvas whose
+ * state measure alone is 500, and feeding it a document would draw a correct
+ * lifecycle at three times this panel's width.
+ *
+ * The ambient band retraces the SPINE and nothing else — the same choice the
+ * timeline panel makes, and for the same reason: the resting motion follows
+ * the thing the diagram is about, which here is one subject's passage down the
+ * track. It is exactly what the real `lifecycle-motion.css` sweep says and the
+ * only thing here a still frame cannot.
+ */
+
+/** Where the spine runs, the branch lane to its left, and the return's channel. */
+const LC_METRIC = {
+  spineX: 150,
+  branchRight: 132,
+  branchDot: 140,
+  labelX: 166,
+  channelX: 14,
+  subjectY: 26,
+  top: 52,
+  dotRadius: 5,
+  exitDotRadius: 3.5,
+  lineHeight: 13,
+  stateGap: 26,
+  exitTop: 20,
+  exitGap: 14,
+  whenGap: 13,
+  stopHalf: 6,
+} as const;
+
+/**
+ * The lifecycle, as data — states in order, each with its departures. An
+ * exit's `rejoins` is the id of an EARLIER state, exactly as the grammar
+ * demands, so the return drawn below can only ever point back up the track.
+ */
+const LC_STATES: readonly {
+  id: string;
+  label: string;
+  final?: boolean;
+  exits?: readonly { label: string; when: string; rejoins: string | null }[];
+}[] = [
+  {
+    id: "placed",
+    label: "Placed",
+    exits: [{ label: "Cancelled", when: "before payment", rejoins: null }],
+  },
+  { id: "paid", label: "Paid" },
+  { id: "packed", label: "Packed" },
+  {
+    id: "shipped",
+    label: "Shipped",
+    exits: [
+      { label: "Returned", when: "refused at the door", rejoins: "packed" },
+    ],
+  },
+  { id: "delivered", label: "Delivered", final: true },
+];
+
+/** Beats for the lifecycle panel, mirroring `TL_BEAT`'s shape. */
+const LC_BEAT = {
+  spine: 380,
+  states: 500,
+  stateGap: 90,
+  returns: 980,
+  trace: 2000,
+} as const;
+
+/**
+ * SOLVED, NOT TYPED, and at module scope for the reason `TL_PLACED` gives:
+ * every y comes from the metrics above and the exits in the data, so a state
+ * with a branch pushes what is under it instead of overlapping it — the same
+ * property `check:lifecycle-layout` asserts of the real canvas, made
+ * unspellable here rather than merely correct today.
+ *
+ * THE RETURN'S ROUTE IS SOLVED HERE TOO, and its two corner rules are the real
+ * layout's: it leaves BELOW its own text (running left from the dot would
+ * cross the label right-aligned in the lane it has to travel through) and it
+ * meets the spine IN THE GAP above its target, never at the dot — so it
+ * crosses no state it does not touch, at this scale as at full size.
+ */
+const LC_PLACED = (() => {
+  let cursor = LC_METRIC.top;
+  const rows = LC_STATES.map((state) => {
+    const dotY = cursor + 5;
+    let leftCursor = dotY + LC_METRIC.exitTop;
+    let leftBottom = dotY;
+    const exits = (state.exits ?? []).map((exit) => {
+      const exitDotY = leftCursor;
+      const whenY = exitDotY + LC_METRIC.whenGap;
+      leftCursor = whenY + LC_METRIC.exitGap;
+      leftBottom = whenY;
+      return { ...exit, dotY: exitDotY, whenY, bottom: whenY };
+    });
+    const top = cursor;
+    cursor = Math.max(dotY, leftBottom) + LC_METRIC.stateGap;
+    return { ...state, top, dotY, exits, bottom: Math.max(dotY, leftBottom) };
+  });
+
+  /* The gap a return re-enters through: between the previous row's bottom and
+     this one's top, which is air by construction. */
+  const returns = rows.flatMap((row) =>
+    row.exits
+      .filter((exit) => exit.rejoins !== null)
+      .map((exit) => {
+        const targetIndex = rows.findIndex((r) => r.id === exit.rejoins);
+        const gapTop =
+          targetIndex <= 0
+            ? LC_METRIC.subjectY + 8
+            : rows[targetIndex - 1].bottom;
+        const gapBottom = rows[targetIndex].top;
+        return {
+          key: `${row.id}-${exit.label}`,
+          fromY: exit.dotY,
+          departY: exit.bottom + LC_METRIC.exitGap / 2,
+          joinY: (gapTop + gapBottom) / 2,
+        };
+      }),
+  );
+
+  return { rows, returns };
+})();
+
+const LC_SPINE_TOP = LC_PLACED.rows[0].dotY;
+const LC_SPINE_BOTTOM = LC_PLACED.rows[LC_PLACED.rows.length - 1].dotY;
+
+function LifecyclePanel() {
+  return (
+    <svg
+      viewBox="0 0 350 336"
+      fill="none"
+      className="absolute inset-0 h-full w-full"
+    >
+      {/* The subject, above the track. It is what the states are states OF,
+          so it is not on the line and carries no dot — a first box here would
+          read as a start node, which is a flowchart's element. */}
+      <text
+        className="af-hero-fade"
+        style={delay(LC_BEAT.spine)}
+        x={LC_METRIC.labelX}
+        y={LC_METRIC.subjectY}
+        dominantBaseline="central"
+        fontSize={13}
+        fontWeight={600}
+        fill="var(--foreground)"
+      >
+        Order
+      </text>
+
+      {/* The spine, drawn first so nothing crosses a dot. CLIPPED TO THE DOTS,
+          exactly as the real canvas clips it: a line running past the outermost
+          state would say the subject was somewhere before it began or goes on
+          after it stops. */}
+      <path
+        className="af-hero-edge"
+        style={delay(LC_BEAT.spine)}
+        d={`M ${LC_METRIC.spineX} ${LC_SPINE_TOP} V ${LC_SPINE_BOTTOM}`}
+        pathLength={1}
+        stroke="var(--canvas-grid)"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+
+      {/* The ambient band, down the spine and along nothing else. */}
+      <path
+        className="af-hero-trace"
+        style={delay(LC_BEAT.trace)}
+        d={`M ${LC_METRIC.spineX} ${LC_SPINE_TOP} V ${LC_SPINE_BOTTOM}`}
+        pathLength={100}
+        stroke="var(--edge-drift)"
+        strokeWidth={3}
+        strokeLinecap="round"
+      />
+
+      {/* The returns, under the states so a dot is never crossed. Each is
+          drawn FROM its departure TO the spine, which is the direction the
+          subject travels — the same orientation the real canvas's `d` uses so
+          its travelling dash runs the right way. */}
+      {LC_PLACED.returns.map((route) => (
+        <g key={route.key}>
+          <path
+            className="af-hero-edge"
+            style={delay(LC_BEAT.returns)}
+            d={`M ${LC_METRIC.branchDot} ${route.fromY} V ${route.departY} H ${LC_METRIC.channelX} V ${route.joinY} H ${LC_METRIC.spineX}`}
+            pathLength={1}
+            stroke="var(--edge)"
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+          />
+          {/* The panel's ONE arrowhead. There are none between states, because
+              the track has no edges — so this mark means exactly one thing
+              wherever a reader meets it: the subject comes back in here. */}
+          <path
+            className="af-hero-fade"
+            style={delay(LC_BEAT.returns + 220)}
+            d={`M ${LC_METRIC.spineX} ${route.joinY} l -6 -3 l 0 6 z`}
+            fill="var(--edge)"
+          />
+        </g>
+      ))}
+
+      {LC_PLACED.rows.map((row, index) => {
+        const delayMs = LC_BEAT.states + index * LC_BEAT.stateGap;
+        return (
+          <g key={row.id}>
+            {row.exits.map((exit) => (
+              <g key={exit.label}>
+                <path
+                  className="af-hero-edge"
+                  style={delay(delayMs + 60)}
+                  d={`M ${LC_METRIC.spineX} ${row.dotY} V ${exit.dotY} H ${LC_METRIC.branchDot}`}
+                  pathLength={1}
+                  stroke="var(--edge)"
+                  strokeWidth={1.5}
+                  strokeLinejoin="round"
+                />
+                <circle
+                  className="af-hero-node"
+                  style={riseAt(delayMs + 90)}
+                  cx={LC_METRIC.branchDot}
+                  cy={exit.dotY}
+                  r={LC_METRIC.exitDotRadius}
+                  fill="var(--canvas)"
+                  stroke="var(--edge)"
+                  strokeWidth={1.5}
+                />
+                {/* A terminal branch stops at a bar — the same mark a final
+                    state carries. SHAPE, NOT HUE: it survives greyscale and a
+                    screenshot, which a second colour would not. */}
+                {exit.rejoins === null ? (
+                  <path
+                    className="af-hero-fade"
+                    style={delay(delayMs + 120)}
+                    d={`M 130 ${exit.dotY - LC_METRIC.stopHalf} V ${exit.dotY + LC_METRIC.stopHalf}`}
+                    stroke="var(--primary)"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                  />
+                ) : null}
+                <text
+                  className="af-hero-fade"
+                  style={delay(delayMs + 120)}
+                  x={LC_METRIC.branchRight - 10}
+                  y={exit.dotY}
+                  textAnchor="end"
+                  dominantBaseline="central"
+                  fontSize={9}
+                  fontWeight={600}
+                  fill="var(--node-foreground)"
+                >
+                  {exit.label}
+                </text>
+                <text
+                  className="af-hero-fade"
+                  style={delay(delayMs + 150)}
+                  x={LC_METRIC.branchRight - 10}
+                  y={exit.whenY}
+                  textAnchor="end"
+                  dominantBaseline="central"
+                  fontSize={7.5}
+                  fill="var(--node-meta)"
+                >
+                  {exit.when}
+                </text>
+              </g>
+            ))}
+
+            <circle
+              className="af-hero-node"
+              style={riseAt(delayMs)}
+              cx={LC_METRIC.spineX}
+              cy={row.dotY}
+              r={LC_METRIC.dotRadius}
+              fill="var(--node)"
+              stroke="var(--primary)"
+              strokeWidth={2}
+            />
+            {row.final === true ? (
+              <path
+                className="af-hero-fade"
+                style={delay(delayMs + 60)}
+                d={`M ${LC_METRIC.spineX - LC_METRIC.stopHalf} ${row.dotY + 11} H ${LC_METRIC.spineX + LC_METRIC.stopHalf}`}
+                stroke="var(--primary)"
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            ) : null}
+            <text
+              className="af-hero-fade"
+              style={delay(delayMs + 90)}
+              x={LC_METRIC.labelX}
+              y={row.dotY}
+              dominantBaseline="central"
+              fontSize={10.5}
+              fontWeight={600}
+              fill="var(--node-foreground)"
+            >
+              {row.label}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }

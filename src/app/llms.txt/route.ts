@@ -5,6 +5,16 @@ import {
 } from "@/features/mcp/catalog";
 import { publicOrigin } from "@/features/mcp/lib/origin";
 import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
+/* The gantt's, the timeline's and the lifecycle's one-line jobs, at the constant the home page,
+   `/demo`, `/faq`, the MCP catalogue and the playground's starter row all read.
+   An assistant quotes a passage rather than a page, so every surface that
+   answers "what is a gantt for", "what is a timeline for" or "what is a
+   lifecycle for" says it in one
+   wording — the same argument the editing passage above won. */
+import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
+import { listGanttExampleIds } from "@/features/gantt/service/example-service";
+import { listTimelineExampleIds } from "@/features/timeline/service/example-service";
+import { listLifecycleExampleIds } from "@/features/lifecycle/service/example-service";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
 /**
@@ -46,14 +56,86 @@ export function GET(): Response {
 
 > ${APP_DESCRIPTION}
 
-${APP_NAME} reads and writes six kinds of architecture document as plain text:
-C4 models, UML-style sequence diagrams, flowcharts, use-case diagrams,
-entity-relationship diagrams and data dictionaries. The text format is \`.alab\`; arch-lab JSON and
+${APP_NAME} reads and writes nine kinds of architecture document as plain
+text: C4 models, UML-style sequence diagrams, flowcharts, use-case diagrams,
+entity-relationship diagrams, data dictionaries, gantt charts, milestone
+timelines and lifecycles. The text format is \`.alab\`; arch-lab JSON and
 Mermaid (\`C4Context\`, \`sequenceDiagram\`, \`flowchart\`/\`graph\`,
-\`erDiagram\`) are also accepted and converted. The ER conversion is the only
-one that is two-way and total over the diagram — Mermaid has a real
-\`erDiagram\`, so nothing the picture shows is lost in either direction.
+\`erDiagram\`, \`gantt\`, \`timeline\`) are also accepted and converted. The ER
+and timeline conversions are the two that run BOTH WAYS and are total over the
+diagram — Mermaid has a real \`erDiagram\` and a real \`timeline\`, so nothing
+either picture shows is lost in either direction; \`gantt\` is a one-way
+import, since Mermaid has no way to record a computed critical path. The
+lifecycle has NO Mermaid dialect in either direction and none was invented:
+\`stateDiagram-v2\` is a state machine — every transition that could happen —
+rather than one subject's ordered history.
 Everything runs in the browser — there is no account, and nothing is uploaded.
+
+## Gantt charts
+
+${KIND_BLURB.gantt}
+
+The seventh document kind, headed \`archlab 1.0 gantt\`, and the only one
+whose x axis is a MEASURED quantity — a bar's length is its duration in days.
+It draws tasks, zero-duration milestones, sections, and \`after\`
+dependencies; the critical path and every item's float are COMPUTED from the
+graph rather than declared, so the picture cannot contradict the arithmetic.
+Write one at ${origin}/live?d=gt (\`?d=gantt\` works too). Finished ones:
+${listGanttExampleIds()
+  .map((id) => `${origin}/live/gantt/${id}`)
+  .join("\n")}
+
+\`validate_gantt\` reports the critical path, dependency cycles, and
+\`after\` entries that constrain nothing; \`format_gantt\` rewrites the text
+canonically.
+
+## Milestone timelines
+
+${KIND_BLURB.timeline}
+
+The eighth document kind, headed \`archlab 1.0 timeline\`: events as points on
+a spine, grouped into named periods. It is the notation next to the gantt and
+the two must not be confused — a timeline has NO duration, NO dependency and
+NO status, and each of those is refused by name with a message pointing at
+\`archlab 1.0 gantt\`. Nothing here measures: a period's label is a string and
+is never read as a date. The drawing runs down the page, because an event's
+label is the whole element and every band is as tall as its events need.
+Write one at ${origin}/live?d=tl (\`?d=timeline\` works too). Finished ones:
+${listTimelineExampleIds()
+  .map((id) => `${origin}/live/timeline/${id}`)
+  .join("\n")}
+
+\`validate_timeline\` reports the two things a parse cannot see: periods
+written out of sequence (nothing else here reads a period label at all), and
+events carrying a duration or a dependency in their label, which is the
+document asking to be a gantt. \`format_timeline\` rewrites the text
+canonically, and converts pasted Mermaid \`timeline\` both ways.
+
+## Lifecycles
+
+${KIND_BLURB.lifecycle}
+
+The ninth document kind, headed \`archlab 1.0 lifecycle\`: ONE named subject,
+the ordered states it passes through, and the branches that leave that track.
+It is the notation next to the flowchart and the two must not be confused — a
+lifecycle cannot express an arbitrary graph, and every construct that would is
+refused by name with a message pointing at \`archlab 1.0 flowchart\`. The main
+track is DECLARATION ORDER and carries no edges at all (no \`to\`, no
+\`next\`); a branch belongs to exactly one state and either \`ends\` or
+\`rejoins\` a state declared EARLIER, never a later one. The drawing runs
+down the page: states on a spine with their text to the right, departures in
+their own lane to the left, and a returning branch travelling in a reserved
+channel back into the track.
+Write one at ${origin}/live?d=lc (\`?d=lifecycle\` works too). Finished ones:
+${listLifecycleExampleIds()
+  .map((id) => `${origin}/live/lifecycle/${id}`)
+  .join("\n")}
+
+\`validate_lifecycle\` reports what a parse cannot see: a subject that never
+terminates, states stranded after a final one, branches with no \`when\`
+condition, states named as ACTIONS rather than conditions (a flowchart written
+in this notation), and a document with no branches at all, which is a
+milestone timeline. \`format_lifecycle\` rewrites the text canonically.
 
 ## Editing a diagram: as text, or on the canvas
 
@@ -68,7 +150,7 @@ ${CANVAS_EDITING_PASSAGE}
 
 Use the server for the two things a file editor cannot do alone: get the exact
 grammar, and get the real parser's verdict on something you wrote — there is a
-validate and a format tool for each of the six document kinds. There is no
+validate and a format tool for each of the nine document kinds. There is no
 mutation API — you edit \`.alab\` files yourself.
 
 ## Full reference
@@ -79,13 +161,15 @@ mutation API — you edit \`.alab\` files yourself.
 ## Pages
 
 - ${origin}/ — what this is, in one screen
-- ${origin}/live — the playground: paste or write any of the six kinds and see
-  it rendered live, and the one page where a canvas gesture is available.
-  \`?d=seq\` starts from a sequence example and \`?d=er\` from an ER one,
+- ${origin}/live — the playground: paste or write any of the nine kinds and
+  see it rendered live, and the one page where a canvas gesture is available.
+  \`?d=seq\` starts from a sequence example, \`?d=er\` from an ER one,
+  \`?d=gt\` from a gantt, \`?d=tl\` from a milestone timeline and \`?d=lc\`
+  from a lifecycle,
   \`?e=<id>\` opens a bundled one (ids are listed on /demo)
 - ${origin}/syntax — the \`.alab\` grammar, every example parser-verified
 - ${origin}/validate — paste a document, get a located verdict
-- ${origin}/demo — finished examples of all six kinds
+- ${origin}/demo — finished examples of all nine kinds
 - ${origin}/faq — what this is, what it exports, what leaves the browser, and
   what an agent may do over MCP, as short self-contained answers
 `;

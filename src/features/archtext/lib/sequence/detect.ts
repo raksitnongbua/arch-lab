@@ -1,5 +1,5 @@
 /**
- * Document-type sniffing for `.alab` text — which of the six grammars a
+ * Document-type sniffing for `.alab` text — which of the nine grammars a
  * source belongs to, decided from the FIRST MEANINGFUL LINE only, because
  * that is all `src/features/validate/lib/check.ts` and
  * `src/features/viewer/input/detect.ts` ever look at:
@@ -10,6 +10,9 @@
  *   archlab <maj>.<min> usecase    → "usecase"
  *   archlab <maj>.<min> er         → "er"
  *   archlab <maj>.<min> dict       → "dict"
+ *   archlab <maj>.<min> gantt      → "gantt"
+ *   archlab <maj>.<min> timeline   → "timeline"
+ *   archlab <maj>.<min> lifecycle  → "lifecycle"
  *
  * One regex family here, imported by the check scripts and the input
  * detectors, rather than each sniffer re-spelling the header shape.
@@ -23,10 +26,21 @@ import { DICT_HEADER_WORD } from "../dict/keywords";
 import { ER_HEADER_WORD } from "../er/keywords";
 import { FLOWCHART_HEADER_WORD } from "../flowchart/keywords";
 import { USECASE_HEADER_WORD } from "../usecase/keywords";
+import { GANTT_HEADER_WORD } from "../gantt/keywords";
+import { LIFECYCLE_HEADER_WORD } from "../lifecycle/keywords";
+import { TIMELINE_HEADER_WORD } from "../timeline/keywords";
 import { SEQUENCE_HEADER_WORD } from "./keywords";
 
 export type AlabDocumentKind =
-  "c4" | "sequence" | "flowchart" | "usecase" | "er" | "dict";
+  | "c4"
+  | "sequence"
+  | "flowchart"
+  | "usecase"
+  | "er"
+  | "dict"
+  | "gantt"
+  | "timeline"
+  | "lifecycle";
 
 /* Anchored to the whole line: `archlab 1.0 sequenced` or a trailing token
    must NOT detect — a wrong-but-confident answer routes the text to the
@@ -52,6 +66,18 @@ const DICT_HEADER_RE = new RegExp(
   `^archlab\\s+\\d+\\.\\d+\\s+${DICT_HEADER_WORD}$`,
 );
 
+const GANTT_HEADER_RE = new RegExp(
+  `^archlab\\s+\\d+\\.\\d+\\s+${GANTT_HEADER_WORD}$`,
+);
+
+const TIMELINE_HEADER_RE = new RegExp(
+  `^archlab\\s+\\d+\\.\\d+\\s+${TIMELINE_HEADER_WORD}$`,
+);
+
+const LIFECYCLE_HEADER_RE = new RegExp(
+  `^archlab\\s+\\d+\\.\\d+\\s+${LIFECYCLE_HEADER_WORD}$`,
+);
+
 /**
  * Which `.alab` grammar the text belongs to, or `null` when its first
  * meaningful line is not an `archlab` header at all. Skips blank lines and
@@ -66,6 +92,9 @@ export function detectAlabKind(source: string): AlabDocumentKind | null {
     if (USECASE_HEADER_RE.test(line)) return "usecase";
     if (ER_HEADER_RE.test(line)) return "er";
     if (DICT_HEADER_RE.test(line)) return "dict";
+    if (GANTT_HEADER_RE.test(line)) return "gantt";
+    if (TIMELINE_HEADER_RE.test(line)) return "timeline";
+    if (LIFECYCLE_HEADER_RE.test(line)) return "lifecycle";
     if (C4_HEADER_RE.test(line)) return "c4";
     return null;
   }

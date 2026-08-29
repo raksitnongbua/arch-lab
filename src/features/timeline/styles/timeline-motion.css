@@ -1,0 +1,302 @@
+/* ---------------------------------------------------------------------------
+ * Milestone-timeline canvas motion.
+ *
+ * THIS CANVAS HAS NO CONNECTORS. `new-diagram-type.md`'s connector rule is
+ * therefore satisfied VACUOUSLY, in the way the data dictionary satisfies it,
+ * and the rule's own remedy applies: do not invent a connector in order to
+ * have something to animate. The rule that governs here is the test the file
+ * now states instead — "would removing this motion lose information?" — and
+ * the three motions below are the ones that pass it. There is no fourth.
+ *
+ *   1. ENTRANCE — events appear IN CHRONOLOGICAL ORDER, staggered by their
+ *      position in the document. This is the motion the notation exists for.
+ *      A timeline's whole claim is that these things happened in this order,
+ *      and a still frame states the order only as a spatial convention the
+ *      reader has to know to read top-down. Watching them arrive is the claim
+ *      being made rather than assumed, and it is the one entrance in this repo
+ *      whose order IS the document rather than a rendering of it.
+ *
+ *   2. SPINE SWEEP — at rest, a wash travels down the spine and loops.
+ *      Answers "which way does time run", which a vertical line of identical
+ *      dots genuinely cannot say standing still: nothing about a dot at the
+ *      top distinguishes it from a dot at the bottom, and the reader is left
+ *      inferring direction from a convention. The same argument the gantt's
+ *      axis sweep makes for its ruler, and it is the reason the sweep runs
+ *      ALONG the spine and nowhere else.
+ *
+ *      WHAT IT IS NOT: a today marker. arch-lab draws none anywhere on
+ *      purpose — a share link carries its document but not the day it was
+ *      minted, so a playhead would tell every reader after the first
+ *      something different and wrong. The sweep never leaves the spine's own
+ *      x, and `check:timeline-motion` asserts that geometry from the
+ *      COMPONENT rather than from this prose about it.
+ *
+ *   3. FOCUS — the selected event's dot breathes while everything else dims.
+ *      Answers "which one am I looking at" on a canvas where every element is
+ *      drawn identically by design, so there is no shape or colour difference
+ *      for the eye to hold on to while it moves between the rail, the dot and
+ *      the sentence.
+ *
+ * Remove any of the three and a specific question stops being answerable.
+ *
+ * OPT OUT TWICE, both of which must hold (`check:timeline-motion` asserts it):
+ *   - Every `animation` sits inside `prefers-reduced-motion: no-preference`.
+ *     The RESTING state — everything visible, nothing moving — is declared
+ *     outside the query, which is what a no-JS reader, the server-rendered
+ *     example pages and the SVG export all get.
+ *   - The ambient sweep gates on `[data-af-idle="on"]`, the attribute every
+ *     other viewer in this app stamps. NOT `data-idle-motion`: the ER
+ *     stylesheet gates on that spelling, nothing stamps it, and ER's ambient
+ *     pulse has therefore never been switchable. Its own check passes because
+ *     it only asserts such a rule EXISTS. Do not copy that mistake here.
+ *
+ * THE STANDING RULES, each of which has already shipped as a bug somewhere in
+ * this repo:
+ *
+ *   - NO SVG `filter`, anywhere. A percentage filter region is in
+ *     `objectBoundingBox` units, and the spine is a vertical line — a
+ *     zero-extent box in one axis — so the region collapses and the paint
+ *     lands somewhere else entirely. That cost three commits on the ER canvas.
+ *     Want a soft edge? Draw a wider path.
+ *   - NEGATIVE animation delays for the staggered infinite animations. A
+ *     positive delay is invisible until an ancestor class changes; then the
+ *     animation restarts and replays its silent head, and the reader sees the
+ *     whole canvas blink off and back on. There is exactly one infinite
+ *     staggered animation here (the focus breathe), and it carries one.
+ *   - FOCUS DIMS AND ANIMATES, IT DOES NOT REPAINT. No stroke, fill, width or
+ *     radius changes in either direction — a focused dot that recolours is a
+ *     new mark appearing where one already was. `:focus-visible` is the one
+ *     exception, because a keyboard user has no hover to fall back on.
+ *   - THE SWEEP RIDES A SEPARATE LINE. Never a dasharray on the spine itself:
+ *     the spine is the continuous mark a reader follows, and a travelling
+ *     dash over it would break the line it is describing.
+ *
+ * COLOUR. This canvas has NO PALETTE — every event is drawn identically,
+ * because an event carries no type (`src/types/timeline.ts` says why, and says
+ * that adding one is the change that would earn this kind a
+ * `check:timeline-palette` it deliberately does not have). Everything below
+ * paints from the SHARED node and canvas tokens, so it is complete in all
+ * seven themes by construction rather than by a per-kind audit, and
+ * `check:themes` already covers every token named here.
+ *
+ * TIMINGS. The tunables below are the source of truth for the reveal budget;
+ * `check:timeline-motion` computes the worst case FROM THESE PROPERTIES and
+ * fails over 1.5s, so changing one here changes what the check enforces rather
+ * than drifting from it. The stagger cap is duplicated in `lib/layout.ts`
+ * (`TIMELINE.waveCap`) because CSS cannot import TypeScript; the same check
+ * pins the pair.
+ * ------------------------------------------------------------------------- */
+
+.af-timeline-canvas {
+  /* SIZING, the one non-motion concern in this file, and it lives here because
+     it is the canvas root's own declaration block — a second stylesheet
+     holding four lines would be a file nobody remembers to look in. The
+     component gives the SVG its NATURAL width and height; these turn that into
+     a responsive, centred drawing. */
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+  height: auto;
+
+  --tl-event-rise: 300ms;
+  --tl-event-beat: 46ms;
+  --tl-event-cap: 8;
+
+  --tl-spine-draw: 420ms;
+
+  /* The sweep. Slow, because it is a wash over a line rather than a pulse
+     along a wire: a short head here reads as a dot lighting up, which on this
+     canvas is an event. */
+  --tl-sweep: 3.8s;
+  --tl-sweep-head: 90;
+
+  --tl-breathe: 1.6s;
+  --tl-breathe-step: 120ms;
+}
+
+/* ---------------------------------------------------------------------------
+ * Resting state — outside the media query on purpose.
+ * ------------------------------------------------------------------------- */
+
+.af-timeline-event {
+  opacity: 1;
+}
+
+.af-timeline-spine {
+  stroke: var(--canvas-grid);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.af-timeline-rule {
+  stroke: var(--canvas-grid);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+/* The dot. ONE APPEARANCE FOR EVERY EVENT, which is the notation rather than a
+   palette waiting to be filled in: this kind assigns no meaning to colour, so
+   a second fill here would be a distinction the grammar cannot express. */
+.af-timeline-dot {
+  fill: var(--node);
+  stroke: var(--primary);
+  stroke-width: 2.25;
+}
+
+.af-timeline-label {
+  fill: var(--node-foreground);
+}
+.af-timeline-desc {
+  fill: var(--node-meta);
+}
+.af-timeline-period {
+  fill: var(--muted-foreground);
+  letter-spacing: 0.13em;
+}
+
+/* The sweep's own line, sitting exactly on the spine. Inert at rest by
+   carrying a ZERO-LENGTH dash rather than `opacity: 0` — every `opacity: 0` on
+   this canvas is reserved for the entrance, and `check:timeline-motion` fails
+   any other rule outside the media query that hides something. The butt cap is
+   load-bearing: a round cap paints a dot at a zero-length dash, which on this
+   canvas would be a permanent extra event at the top of the spine. */
+.af-timeline-sweep {
+  fill: none;
+  /* `--edge-drift` is this app's designated travelling-mark token, and it is
+     near-neutral in every theme — which is what a wash over a structural line
+     has to be. The gantt grew its own `--gantt-flow` because its comet had to
+     stay distinct from two CONNECTOR colours that already carried meaning;
+     nothing on this canvas carries meaning in a stroke, so there is nothing
+     for the sweep to be confused with and no new token is owed. */
+  stroke: var(--edge-drift);
+  stroke-width: 4;
+  stroke-linecap: butt;
+  stroke-dasharray: 0 var(--tl-spine-len);
+}
+
+.af-timeline-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+/* The one place focus is allowed to paint: a keyboard user has no hover. */
+.af-timeline-hit:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus — dim the unrelated, light the selection. No repaint.
+ * ------------------------------------------------------------------------- */
+
+.af-timeline-canvas.af-timeline-has-focus .af-timeline-event {
+  opacity: 0.24;
+}
+.af-timeline-canvas.af-timeline-has-focus .af-timeline-event[data-lit="1"] {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion proper.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-timeline-canvas.af-timeline-has-focus .af-timeline-event {
+    transition: opacity 160ms ease;
+  }
+
+  /* 1. Entrance. `--tl-wave` is the event's position in the whole document,
+     stamped server-side by the component, so the events arrive in the order
+     they happened. This is the motion this notation exists for — see the
+     header. */
+  .af-timeline-canvas[data-reveal="1"] .af-timeline-event {
+    opacity: 0;
+    animation: af-timeline-rise var(--tl-event-rise)
+      cubic-bezier(0.22, 0.68, 0.3, 1) forwards;
+    animation-delay: calc(var(--tl-wave, 0) * var(--tl-event-beat));
+  }
+  /* The spine draws itself first, so the events land ON a line rather than
+     beside one that appears afterwards. Its own length is stamped by the
+     component from the solved geometry. */
+  .af-timeline-canvas[data-reveal="1"] .af-timeline-spine {
+    stroke-dasharray: var(--tl-spine-len);
+    stroke-dashoffset: var(--tl-spine-len);
+    animation: af-timeline-draw var(--tl-spine-draw)
+      cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* 2. The sweep. Gated on the app-wide toggle AND on at-rest, like every
+     other ambient in this app: an ambient that never stops competes with the
+     person reading and stops meaning anything, which is precisely how ER's
+     pulse ended up needing a second visual language to survive. It yields to
+     focus too, or it would travel through the one dot the reader just lit. */
+  .af-timeline-canvas[data-af-idle="on"][data-idle="1"]:not(
+      .af-timeline-has-focus
+    )
+    .af-timeline-sweep {
+    stroke-dasharray: var(--tl-sweep-head)
+      calc(var(--tl-spine-len) - var(--tl-sweep-head));
+    animation: af-timeline-sweep var(--tl-sweep) linear infinite;
+  }
+
+  /* 3. Focus. Opacity only — no stroke, fill or radius moves, so this stays an
+     animation rather than a repaint.
+
+     THE DELAY IS NEGATIVE. Selecting an event is an ancestor class change, so
+     a positive delay would replay a silent head on every focus and the dot
+     would blink off before it began — the failure that shipped on the ER
+     canvas. The stagger itself is by wave, so a chain of lit dots pulses down
+     the page in the order it happened rather than all at once. */
+  .af-timeline-canvas.af-timeline-has-focus
+    .af-timeline-event[data-lit="1"]
+    .af-timeline-dot {
+    animation: af-timeline-breathe var(--tl-breathe) ease-in-out infinite;
+    animation-delay: calc(var(--tl-wave, 0) * var(--tl-breathe-step) * -1);
+  }
+}
+
+@keyframes af-timeline-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes af-timeline-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The wash fades up off the top end and back down into the bottom one. A hard
+   cut at either end would read as an object arriving and leaving — a thing at
+   a moment — where a fade reads as the line itself catching light. Peak
+   opacity is deliberately modest: this is the only thing moving once the
+   canvas is at rest, so it must not become the loudest mark on the page. */
+@keyframes af-timeline-sweep {
+  0% {
+    stroke-dashoffset: var(--tl-spine-len);
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 0.55;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes af-timeline-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}

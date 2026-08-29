@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -20,6 +21,10 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import {
+  placePanel,
+  type PanelPlacement,
+} from "@/components/ui/panel-placement";
 import { THEMES, type Theme } from "@/lib/constants";
 import { themeForScheme } from "@/lib/theme-default";
 import {
@@ -111,6 +116,36 @@ const THEME_META: Record<
  * than an eighth entry in `THEMES`. Only one row is ever ticked: a followed
  * palette is named in the System row's hint, never by a second tick.
  *
+ * ITS PANEL IS MEASURED, not placed by a class, and that is a deliberate
+ * exception to the convention `ui/tooltip.tsx` states ("no positioning library,
+ * no portal — callers place it where overflow allows"). That convention holds
+ * for a control with one home. This one has two, at opposite ends of the
+ * viewport, and the reader can be on a window shorter than the panel is tall —
+ * so "where overflow allows" is not a property of the class list, it is a
+ * property of the moment the menu opens. A static `bottom-full` places the
+ * panel above the trigger whether or not there is room above the trigger; when
+ * there is not, the rows above the fold are simply not there, with no scrollbar
+ * to say so. `panelSide` stays as the PREFERENCE and the measurement overrides
+ * it only when the preferred side cannot hold a useful amount of the list.
+ *
+ * No library and no portal even so: `position: fixed` off the trigger's own
+ * rect, which escapes an `overflow-hidden` ancestor — and the five-notation
+ * pane is `overflow-hidden` — because nothing between this control and the
+ * viewport captures a fixed descendant.
+ *
+ * THAT LAST CLAUSE IS MAINTAINED BY HAND, and it is the assumption the whole
+ * placement rests on: a `transform`, `filter`, `backdrop-filter`, `will-change`
+ * or `contain` on any ancestor makes THAT element the containing block for a
+ * fixed descendant, and the panel would be clipped to the pane again. The
+ * ancestors are `viewer-shell.tsx`'s root, the two pane `<section>`s in
+ * `view-playground.tsx`, and `ui/split-workbench.tsx`; none carries one today.
+ * It is not pinned by a check because the utilities in question also appear
+ * legitimately on LEAF elements in those same files (a chevron's
+ * `transition-transform`), and a scan that cannot tell an ancestor from a leaf
+ * would either miss the case or cry wolf — a check that does neither would have
+ * to parse the JSX tree, which is more machinery than this one assumption is
+ * worth. If a pane ever needs a blur, place the panel from a portal instead.
+ *
  * IT HAS TWO HOMES. The site header is one; the other is the strip under an
  * immersive diagram, where the header is behind a fixed canvas and the theme
  * would otherwise be unreachable in the one mode meant for presenting — the
@@ -143,8 +178,44 @@ export function ThemeToggle({
   const follows = useFollowSystem();
   const prefersDark = usePrefersDark();
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<PanelPlacement | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+
+  /* MEASURED ON THE GESTURE, not in an effect. The click is the moment the
+     trigger's position is known and the panel does not exist yet, so placing it
+     here means the first frame the panel is painted in is already the right one
+     — no hidden pass, no cascading render (which is also what
+     `react-hooks/set-state-in-effect` asks for; measuring in a layout effect
+     trips it). A keyboard Enter or Space arrives as a click too, so this covers
+     both ways in. */
+  const measure = useCallback(() => {
+    const trigger = wrapperRef.current;
+    if (trigger === null) return;
+    const rect = trigger.getBoundingClientRect();
+    setPlacement(
+      placePanel({
+        trigger: { top: rect.top, bottom: rect.bottom, right: rect.right },
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        preferred: panelSide,
+      }),
+    );
+  }, [panelSide]);
+
+  /* RE-MEASURED WHILE OPEN, because the trigger moves under both of these and a
+     panel left at last frame's coordinates is worse than one that never opened.
+     Scroll is captured, so a scroll in any container between the trigger and
+     the document is heard — the immersive footer does not scroll, the header's
+     page does. */
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open, measure]);
 
   useEffect(() => {
     if (!open) return;
@@ -191,7 +262,10 @@ export function ThemeToggle({
     <div ref={wrapperRef} className={cn("relative", className)}>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (!open) measure();
+          setOpen((value) => !value);
+        }}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
@@ -236,17 +310,18 @@ export function ThemeToggle({
           id={menuId}
           role="menu"
           aria-label="Theme"
-          /* CAPPED AND SCROLLABLE, which the header's copy never needed and the
-             immersive one does. Eight rows come to ~380px, and this menu opens
-             UPWARD from a footer strip inside a section that is `overflow-hidden`
-             while immersive — so on a short viewport the top rows are simply cut
-             off, with no scrollbar to say anything is missing. `min(32rem,70svh)`
-             clears all eight wherever there is room and scrolls only where there
-             is not. Same guard, same reasoning as the sequence viewer's gesture
-             panel, which opens upward over its diagram for the same reason. */
+          /* `fixed`, and every coordinate comes from `placement` — see the note
+             on the module. `max-height` is the room actually available on the
+             chosen side, so the list scrolls exactly when it does not fit and
+             never spills past an edge. */
+          style={placement?.style}
           className={cn(
-            "af-glass absolute right-0 z-50 max-h-[min(32rem,70svh)] min-w-52 overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg",
-            panelSide === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
+            "af-glass fixed z-50 min-w-52 overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg",
+            /* HIDDEN FOR THE UNMEASURED FRAME rather than absent: the rows have
+               to be in the DOM for the layout effect to have something to place,
+               and `invisible` keeps them out of sight without taking them out of
+               the tab order for the one frame nobody can interact with anyway. */
+            placement === null && "invisible",
           )}
         >
           {/* FIRST, AND SEPARATED, because it is a different KIND of answer:

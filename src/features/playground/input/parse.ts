@@ -1,10 +1,11 @@
 /**
  * One reader for the merged playground: any supported text in, one rendered
- * document out. The nine shapes the pane accepts — C4 `.alab`, sequence
- * `.alab`, flowchart `.alab`, use-case `.alab`, arch-lab JSON, Mermaid C4,
- * Mermaid `sequenceDiagram`, Mermaid `flowchart`/`graph`, and a Mermaid
- * flowchart that reads as a USE-CASE diagram — are all AUTO-DETECTED; the
- * playground renders whichever canvas the text asks for.
+ * document out. The ten shapes the pane accepts — C4 `.alab`, sequence
+ * `.alab`, flowchart `.alab`, use-case `.alab`, gantt `.alab`, timeline
+ * `.alab`, arch-lab
+ * JSON, Mermaid C4, Mermaid `sequenceDiagram`, Mermaid `flowchart`/`graph`,
+ * and a Mermaid flowchart that reads as a USE-CASE diagram — are all
+ * AUTO-DETECTED; the playground renders whichever canvas the text asks for.
  *
  * Nothing here parses anything itself. Every branch delegates to a reader a
  * playground already trusted — `parseSequenceInput` (sequence `.alab` and
@@ -41,6 +42,9 @@ import type {
   ErLabFile,
   FlowchartLabFile,
   SequenceLabFile,
+  GanttLabFile,
+  TimelineLabFile,
+  LifecycleLabFile,
   UseCaseLabFile,
 } from "@/types";
 
@@ -51,6 +55,9 @@ import {
   serializeUseCaseText,
   serializeErText,
   serializeDictText,
+  serializeGanttText,
+  serializeTimelineText,
+  serializeLifecycleText,
 } from "@/features/archtext";
 import {
   detectMermaidUseCase,
@@ -59,6 +66,7 @@ import {
   serializeMermaidSequence,
   serializeMermaidUseCase,
   serializeMermaidEr,
+  serializeMermaidTimeline,
 } from "@/features/mermaid";
 /* PAST THE BARRELS, DELIBERATELY, and the same exception `dry.md` already
    tolerates for `validate/lib/check.ts`: both feature barrels export React
@@ -103,6 +111,27 @@ import {
   type DictSourceFormat,
 } from "@/features/dict/input/parse";
 import { DICT_EXAMPLE } from "@/features/dict/input/example";
+import {
+  parseGanttInput,
+  GANTT_FORMAT_LABEL,
+  type GanttParseErrorDetail,
+  type GanttSourceFormat,
+} from "@/features/gantt/input/parse";
+import { GANTT_EXAMPLE } from "@/features/gantt/input/example";
+import {
+  parseTimelineInput,
+  TIMELINE_FORMAT_LABEL,
+  type TimelineParseErrorDetail,
+  type TimelineSourceFormat,
+} from "@/features/timeline/input/parse";
+import { TIMELINE_EXAMPLE } from "@/features/timeline/input/example";
+import {
+  LIFECYCLE_FORMAT_LABEL,
+  parseLifecycleInput,
+  type LifecycleParseErrorDetail,
+  type LifecycleSourceFormat,
+} from "@/features/lifecycle/input/parse";
+import { LIFECYCLE_EXAMPLE } from "@/features/lifecycle/input/example";
 import { detectFormat } from "@/features/viewer/input/detect";
 import {
   importMermaid,
@@ -120,7 +149,15 @@ import {
 
 /** Which example seeds the pane — the ONLY thing `?d=` varies. */
 export type SeedKind =
-  "c4" | "sequence" | "flowchart" | "usecase" | "er" | "dict";
+  | "c4"
+  | "sequence"
+  | "flowchart"
+  | "usecase"
+  | "er"
+  | "dict"
+  | "gantt"
+  | "timeline"
+  | "lifecycle";
 
 /** The languages a C4 document can sit in the pane as. */
 export type C4SourceFormat = "alab" | "json" | "mermaid";
@@ -131,7 +168,7 @@ export const C4_FORMAT_LABEL: Record<C4SourceFormat, string> = {
   mermaid: "Mermaid C4",
 };
 
-/** The last GOOD parse — everything any of the four canvases needs. */
+/** The last GOOD parse — everything any of the nine canvases needs. */
 export type ViewDocument =
   | { kind: "c4"; format: C4SourceFormat; synced: SyncedModel }
   | { kind: "sequence"; format: SequenceSourceFormat; file: SequenceLabFile }
@@ -142,7 +179,18 @@ export type ViewDocument =
     }
   | { kind: "usecase"; format: UseCaseSourceFormat; file: UseCaseLabFile }
   | { kind: "er"; format: ErSourceFormat; file: ErLabFile }
-  | { kind: "dict"; format: DictSourceFormat; file: DictLabFile };
+  | { kind: "dict"; format: DictSourceFormat; file: DictLabFile }
+  | { kind: "gantt"; format: GanttSourceFormat; file: GanttLabFile }
+  | {
+      kind: "timeline";
+      format: TimelineSourceFormat;
+      file: TimelineLabFile;
+    }
+  | {
+      kind: "lifecycle";
+      format: LifecycleSourceFormat;
+      file: LifecycleLabFile;
+    };
 
 /**
  * Every way the pane's text can fail, each in its native reader's shape.
@@ -161,6 +209,9 @@ export type ViewSourceError =
   | UseCaseParseErrorDetail
   | ErParseErrorDetail
   | DictParseErrorDetail
+  | GanttParseErrorDetail
+  | TimelineParseErrorDetail
+  | LifecycleParseErrorDetail
   | { kind: "unknown-format"; message: string };
 
 export type ViewParseResult =
@@ -188,6 +239,73 @@ export function parseViewSource(text: string): ViewParseResult {
   /* The dictionary reader runs beside the ER one and for the same reason:
      `archlab 1.0 dict` is an exact header no other reader here claims, so the
      test is one string comparison and cannot steal a document. */
+  /* The gantt reader runs beside those two and for the third time for the
+     same reason: both its headers — `archlab 1.0 gantt` and Mermaid's bare
+     `gantt` — are exact words no other reader here claims, so the test is two
+     string comparisons and cannot steal a document. Mermaid has a real Gantt
+     document type, so unlike the flowchart verdict below there is no
+     convention to infer and no second canvas hiding inside this one. */
+  /* The timeline reader runs beside those two for the fourth time on the same
+     terms: both its headers — `archlab 1.0 timeline` and Mermaid's bare
+     `timeline` — are exact words no other reader here claims, so the test is
+     two string comparisons and cannot steal a document. It runs BEFORE the
+     gantt one for a reason that is historical rather than structural:
+     `timeline` was the gantt's header word until the rename, so a stale
+     document carrying it must reach the timeline parser — whose refusal names
+     the gantt and says how to convert — rather than any reader that would
+     half-recognise it. */
+  /* The lifecycle reader runs beside those for the fifth time on the same
+     terms, and it is the cheapest of the lot: it has ONE header —
+     `archlab 1.0 lifecycle` — an exact word no other reader here claims, so
+     the test is a single string comparison and cannot steal a document. There
+     is no Mermaid half to sniff because Mermaid has no lifecycle notation;
+     `features/lifecycle/input/parse.ts` argues why `stateDiagram-v2` is not
+     one. */
+  const lifecycle = parseLifecycleInput(text);
+  if (lifecycle.status === "ok") {
+    return {
+      status: "ok",
+      value: {
+        kind: "lifecycle",
+        format: lifecycle.value.format,
+        file: lifecycle.value.file,
+      },
+    };
+  }
+  if (lifecycle.error.kind === "parse") {
+    return { status: "error", error: lifecycle.error };
+  }
+
+  const timeline = parseTimelineInput(text);
+  if (timeline.status === "ok") {
+    return {
+      status: "ok",
+      value: {
+        kind: "timeline",
+        format: timeline.value.format,
+        file: timeline.value.file,
+      },
+    };
+  }
+  if (timeline.error.kind === "parse") {
+    return { status: "error", error: timeline.error };
+  }
+
+  const gantt = parseGanttInput(text);
+  if (gantt.status === "ok") {
+    return {
+      status: "ok",
+      value: {
+        kind: "gantt",
+        format: gantt.value.format,
+        file: gantt.value.file,
+      },
+    };
+  }
+  if (gantt.error.kind === "parse") {
+    return { status: "error", error: gantt.error };
+  }
+
   const dict = parseDictInput(text);
   if (dict.status === "ok") {
     return {
@@ -362,8 +480,8 @@ export function parseViewSource(text: string): ViewParseResult {
       // of first lines that would have worked.
       message:
         text.trim() === ""
-          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er` or `archlab 1.0 dict`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, a flowchart, or an erDiagram)."
-          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart`, `graph` or `erDiagram`.",
+          ? "Nothing to render yet — write .alab text (`archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `archlab 1.0 gantt`, `archlab 1.0 timeline` or `archlab 1.0 lifecycle`), paste arch-lab JSON, or paste Mermaid (C4, a sequenceDiagram, a flowchart, an erDiagram, a gantt, or a timeline)."
+          : "Could not detect the format: the first line is not `archlab 1.0`, `archlab 1.0 sequence`, `archlab 1.0 flowchart`, `archlab 1.0 usecase`, `archlab 1.0 er`, `archlab 1.0 dict`, `archlab 1.0 gantt`, `archlab 1.0 timeline`, `archlab 1.0 lifecycle`, `{` (arch-lab JSON), a Mermaid C4 header, `sequenceDiagram`, `flowchart`, `graph`, `erDiagram`, `gantt` or `timeline`.",
     },
   };
 }
@@ -402,6 +520,37 @@ export function sourceTextFor(doc: ViewDocument): string {
   }
   /* One dialect, so no format fork — Mermaid has no dictionary notation. */
   if (doc.kind === "dict") return serializeDictText(doc.file);
+  /* TWO DIALECTS IN, ONE OUT, and this is the one place in the file where
+     that asymmetry is visible. A pasted Mermaid `gantt` parses (the pane's
+     `format` really is `"mermaid"`), but nothing emits one: `at-risk` has no
+     Mermaid tag and the critical path here is computed rather than typed, so
+     writing `gantt` back would downgrade the first and misrepresent the
+     second — `MERMAID_GANTT_CAVEAT` in `mermaid/lib/gantt.ts` is the
+     argument in full.
+
+     So this is the one kind where Format DOES flip the pane's language, which
+     the contract above otherwise forbids. It is the honest choice rather than
+     an oversight: the alternative is a Format button that silently does
+     nothing on the only document it could not rewrite. The reader is not
+     surprised by it either — the Mermaid half of the format toggle is
+     disabled for a gantt, with that same fact as its title, so the pane
+     has already said the conversion runs one way. */
+  if (doc.kind === "gantt") return serializeGanttText(doc.file);
+  /* TWO DIALECTS IN AND TWO OUT, which is why this reads like the sequence
+     branch above and not like the gantt branch below it. A timeline has no
+     state vocabulary and derives nothing, so Mermaid holds everything it says
+     and the emit cannot misrepresent anything — the argument is on
+     `mermaid/lib/timeline-mapping.ts`. */
+  if (doc.kind === "timeline") {
+    return doc.format === "mermaid"
+      ? serializeMermaidTimeline(doc.file)
+      : serializeTimelineText(doc.file);
+  }
+  /* One dialect, so no format fork — Mermaid has no lifecycle notation, and
+     `stateDiagram-v2` is a state machine rather than one subject's history
+     (`features/lifecycle/input/parse.ts`). Same shape as the dictionary
+     branch above. */
+  if (doc.kind === "lifecycle") return serializeLifecycleText(doc.file);
   switch (doc.format) {
     case "alab":
       return doc.synced.aftText;
@@ -440,6 +589,23 @@ export function convertedSourceText(
       : serializeErText(doc.file);
   }
   if (doc.kind === "dict") return serializeDictText(doc.file);
+  /* `to` is ignored for the same reason `sourceTextFor` has no fork: there is
+     no Mermaid `gantt` emitter, so `.alab` is the only text this kind can be
+     converted INTO. The toggle that would ask for the other direction is
+     disabled on this kind, so `to === "mermaid"` never reaches here from the
+     UI — returning the `.alab` anyway is the safe answer for a caller that
+     asks regardless. */
+  if (doc.kind === "gantt") return serializeGanttText(doc.file);
+  if (doc.kind === "timeline") {
+    return to === "mermaid"
+      ? serializeMermaidTimeline(doc.file)
+      : serializeTimelineText(doc.file);
+  }
+  /* `to` is ignored, as it is for the gantt and the dictionary above: Mermaid
+     has no lifecycle notation, so `.alab` is the only text this kind can be
+     converted INTO (`features/lifecycle/input/parse.ts` argues why
+     `stateDiagram-v2` is not one). */
+  if (doc.kind === "lifecycle") return serializeLifecycleText(doc.file);
   return to === "mermaid"
     ? serializeMermaidC4(doc.synced.file)
     : doc.synced.aftText;
@@ -472,6 +638,12 @@ export function describeDocument(doc: ViewDocument): string {
       return `an ER diagram (${ER_FORMAT_LABEL[doc.format]})`;
     case "dict":
       return `a data dictionary (${DICT_FORMAT_LABEL[doc.format]})`;
+    case "gantt":
+      return `a gantt (${GANTT_FORMAT_LABEL[doc.format]})`;
+    case "timeline":
+      return `a timeline (${TIMELINE_FORMAT_LABEL[doc.format]})`;
+    case "lifecycle":
+      return `a lifecycle (${LIFECYCLE_FORMAT_LABEL[doc.format]})`;
   }
 }
 
@@ -576,6 +748,70 @@ title "Your fields"
       source "where the value comes from"
     field email string required pii
 `,
+  /* No `starts` line, unlike the seed. The axis then reads W1, W2, W3 — which
+     is the honest opening for a plan whose dates nobody has agreed yet, and it
+     leaves the one line that switches to a calendar to be ADDED rather than
+     corrected. */
+  gantt: `archlab 1.0 gantt
+title "Your plan"
+
+@gantt
+  section "Shape it"
+    task discovery "Interview five users" 4d done at 0
+    task spec "Write the spec" 3d done after discovery
+    milestone agreed "Scope agreed" after spec
+  section "Build it"
+    task api "Ship the API" 9d active after spec
+    task ui "Build the screens" 7d active after spec
+    task copy "Write the copy" 4d after spec
+    task integrate "Wire them together" 3d at-risk after api, ui
+  section "Land it"
+    task beta "Beta with ten teams" 6d after integrate
+    milestone launch "Launch" after beta
+    task docs "Write the docs" 5d after integrate
+`,
+  /* THREE PERIODS AND SIX EVENTS, and no `desc` on any of them. The starter is
+     the smallest thing that parses and still shows where the walls are, so it
+     spends its lines on the one structure this grammar has — a band holding
+     points — rather than on the optional slot. The periods are named as
+     phrases rather than years on purpose: a year invites the next author to
+     look for the field that turns it into a date, and there is none. */
+  timeline: `archlab 1.0 timeline
+title "How it happened"
+
+@timeline
+  period "Before"
+    event "What things were like"
+    event "What went wrong"
+  period "The change"
+    event "What was decided"
+    event "What was actually done"
+  period "After"
+    event "What is different now"
+    event "What is still open"
+`,
+  /* FOUR STATES, ONE TERMINAL BRANCH AND ONE RETURNING ONE — the smallest
+     document that shows the picture's whole grammar, which is the contrast
+     between the two kinds of departure. A starter without a `rejoins` line
+     would look exactly like a milestone timeline, and the next author would
+     have no reason to believe this notation is different from the one next
+     door. The states are named as CONDITIONS ("Approved"), never as actions
+     ("Approve it"), for the reason the parser's refusal gives: actions are
+     steps, and steps are what a flowchart draws. */
+  lifecycle: `archlab 1.0 lifecycle
+title "How it moves"
+
+@lifecycle
+  subject "The thing"
+  state draft "Draft"
+    exit "Abandoned" ends
+      when "nobody picks it up"
+  state review "In review"
+    exit "Sent back" rejoins draft
+      when "it needs more work"
+  state approved "Approved"
+  state live "Live" ends
+`,
 };
 
 export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
@@ -585,6 +821,9 @@ export const VIEW_SEED_TEXT: Record<SeedKind, string> = {
   usecase: USECASE_EXAMPLE,
   er: ER_EXAMPLE,
   dict: DICT_EXAMPLE,
+  gantt: GANTT_EXAMPLE,
+  timeline: TIMELINE_EXAMPLE,
+  lifecycle: LIFECYCLE_EXAMPLE,
 };
 
 function mustParse(text: string): ViewDocument {
@@ -606,4 +845,7 @@ export const VIEW_SEED_DOCUMENT: Record<SeedKind, ViewDocument> = {
   usecase: mustParse(USECASE_EXAMPLE),
   er: mustParse(ER_EXAMPLE),
   dict: mustParse(DICT_EXAMPLE),
+  gantt: mustParse(GANTT_EXAMPLE),
+  timeline: mustParse(TIMELINE_EXAMPLE),
+  lifecycle: mustParse(LIFECYCLE_EXAMPLE),
 };

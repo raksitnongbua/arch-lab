@@ -110,6 +110,9 @@ import {
   serializeUseCaseText,
   serializeErText,
   serializeDictText,
+  serializeGanttText,
+  serializeTimelineText,
+  serializeLifecycleText,
 } from "@/features/archtext";
 import {
   MERMAID_FLOWCHART_EXPORT_CAVEAT,
@@ -130,6 +133,21 @@ import {
 } from "@/features/usecase";
 import { ErShareButton, ErViewer, renderErSvg } from "@/features/er";
 import { DictShareButton, DictViewer, renderDictSvg } from "@/features/dict";
+import {
+  renderGanttSvg,
+  GanttShareButton,
+  GanttViewer,
+} from "@/features/gantt";
+import {
+  renderTimelineSvg,
+  TimelineShareButton,
+  TimelineViewer,
+} from "@/features/timeline";
+import {
+  renderLifecycleSvg,
+  LifecycleShareButton,
+  LifecycleViewer,
+} from "@/features/lifecycle";
 import {
   MERMAID_SEQUENCE_CAVEAT,
   SEQUENCE_MOUSE_GESTURES,
@@ -267,6 +285,9 @@ const STARTER_NOUN: Record<SeedKind, string> = {
   usecase: "use-case",
   er: "ER",
   dict: "data dictionary",
+  gantt: "gantt",
+  timeline: "timeline",
+  lifecycle: "lifecycle",
 };
 
 /** The starter buttons' faces, in the order the row renders them. */
@@ -277,6 +298,9 @@ const STARTER_BUTTON_LABEL: Record<SeedKind, string> = {
   usecase: "Use case",
   er: "ER",
   dict: "Dictionary",
+  gantt: "Gantt",
+  timeline: "Timeline",
+  lifecycle: "Lifecycle",
 };
 
 export function ViewPlayground({
@@ -789,7 +813,13 @@ export function ViewPlayground({
                   ? serializeUseCaseText(doc.file)
                   : doc.kind === "er"
                     ? serializeErText(doc.file)
-                    : serializeDictText(doc.file),
+                    : doc.kind === "dict"
+                      ? serializeDictText(doc.file)
+                      : doc.kind === "gantt"
+                        ? serializeGanttText(doc.file)
+                        : doc.kind === "timeline"
+                          ? serializeTimelineText(doc.file)
+                          : serializeLifecycleText(doc.file),
           doc.kind === "c4" &&
             currentDiagramRef.current !== doc.synced.model.rootDiagramId
             ? currentDiagramRef.current
@@ -1326,14 +1356,34 @@ export function ViewPlayground({
                     >
                       {(["alab", "mermaid"] as const).map((format) => {
                         const current = doc.format === format;
-                        /* MERMAID HAS NO DICTIONARY NOTATION, so the option
-                           cannot act on this document — clicking it had
-                           nothing to convert to. Disabled and titled with the
-                           reason rather than hidden: a control that vanishes
-                           for one kind reads as a bug in the page, where a
-                           disabled one that says why reads as an answer. */
+                        /* TWO KINDS CANNOT BE WRITTEN AS MERMAID, so for
+                           them that half of the toggle has nothing to convert
+                           to. Disabled and titled with the reason rather than
+                           hidden: a control that vanishes for one kind reads
+                           as a bug in the page, where a disabled one that says
+                           why reads as an answer.
+
+                           The two are unwritable for DIFFERENT reasons and the
+                           title says which, because they mean different things
+                           to a reader: Mermaid has no data-dictionary notation
+                           at all, while its `gantt` exists and is READ here —
+                           the import is deliberately one-way, since `at-risk`
+                           has no Mermaid tag and this format computes the
+                           critical path rather than taking it dictated
+                           (`MERMAID_GANTT_CAVEAT`).
+
+                           HENCE `!current`, which is not defensive padding: a
+                           pasted gantt sits in the pane AS Mermaid, and
+                           disabling the option that describes the text already
+                           on screen would tell the reader their document is
+                           not the thing they are looking at. Selected is
+                           allowed; selecting is not. (For a dictionary the
+                           Mermaid side is never current, so this reads as the
+                           flat refusal it always was.) */
                         const unsupported =
-                          format === "mermaid" && doc.kind === "dict";
+                          format === "mermaid" &&
+                          !current &&
+                          (doc.kind === "dict" || doc.kind === "gantt");
                         return (
                           <button
                             key={format}
@@ -1345,7 +1395,9 @@ export function ViewPlayground({
                             onClick={() => convertPane(format)}
                             title={
                               unsupported
-                                ? "Mermaid has no data-dictionary notation, so there is nothing to convert to"
+                                ? doc.kind === "gantt"
+                                  ? "arch-lab reads Mermaid gantt but never writes it back, so there is nothing to convert to"
+                                  : "Mermaid has no data-dictionary notation, so there is nothing to convert to"
                                 : current
                                   ? `The pane is ${format === "alab" ? ".alab" : "Mermaid"}`
                                   : `Rewrite the pane as ${format === "alab" ? ".alab" : "Mermaid"}`
@@ -1588,6 +1640,8 @@ export function ViewPlayground({
                         "usecase",
                         "er",
                         "dict",
+                        "gantt",
+                        "timeline",
                       ] as const
                     ).map((kind) => {
                       const isCurrent = doc.kind === kind;
@@ -1618,7 +1672,6 @@ export function ViewPlayground({
                           <span className="flex min-w-0 flex-col">
                             <span className="text-xs font-medium text-foreground">
                               {STARTER_BUTTON_LABEL[kind]}
-                              {isCurrent ? " — open now" : ""}
                             </span>
                             {/* The job each diagram does. In a MENU it costs
                                   nothing: a reader who opened this list is
@@ -1644,8 +1697,19 @@ export function ViewPlayground({
                 <kbd className="font-mono">Esc</kbd> then{" "}
                 <kbd className="font-mono">Tab</kbd> leaves the editor ·{" "}
                 <Link
+                  /* Deep-linked for the two kinds `/syntax` documents
+                     separately; everything else lands at the top, where the
+                     C4 grammar it opens with is the one they need. */
                   href={
-                    doc.kind === "sequence" ? "/syntax#sequence" : "/syntax"
+                    doc.kind === "sequence"
+                      ? "/syntax#sequence"
+                      : doc.kind === "gantt"
+                        ? "/syntax#gantt"
+                        : doc.kind === "timeline"
+                          ? "/syntax#timeline"
+                          : doc.kind === "lifecycle"
+                            ? "/syntax#lifecycle"
+                            : "/syntax"
                   }
                   className="text-primary hover:underline"
                 >
@@ -1865,8 +1929,29 @@ export function ViewPlayground({
                   <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />
                 ) : doc.kind === "er" ? (
                   <ErViewer file={doc.file} onAnnounce={setAnnouncement} />
-                ) : (
+                ) : doc.kind === "dict" ? (
                   <DictViewer file={doc.file} onAnnounce={setAnnouncement} />
+                ) : doc.kind === "gantt" ? (
+                  /* No `onAnnounce`: this canvas has nothing to announce.
+                     Its hover and pin states change what is EMPHASISED, never
+                     what the document says, and narrating a highlight would
+                     be a live region firing on mouse movement. */
+                  <GanttViewer file={doc.file} />
+                ) : doc.kind === "timeline" ? (
+                  /* Nor this one, and for the same reason plus one more: an
+                     event's description is DRAWN rather than revealed, so
+                     focusing one uncovers nothing a reader could be told
+                     about. */
+                  <TimelineViewer file={doc.file} />
+                ) : (
+                  /* Nor this one, on the same terms: focusing a state lights
+                     it and its own departures, all of which are already
+                     drawn, so there is no revealed content for a live region
+                     to announce. Every row already carries an `aria-label`
+                     naming the state, whether it ends, and each way out with
+                     its condition — which is more than an announcement could
+                     say and is available to a keyboard user on tab. */
+                  <LifecycleViewer file={doc.file} />
                 )}
                 {/* THE DIAGRAM'S OWN STRIP, UNDER the diagram, where the C4
                     shell has always put its equivalent: the drawing is what the
@@ -1892,7 +1977,24 @@ export function ViewPlayground({
                     do. `max-w-7xl` and the `py` pair come from
                     `viewer-shell.tsx`'s own footer; keep them in step by hand,
                     the way the two panes' top strips already are. */}
-                <div className="shrink-0 border-t border-border/60 bg-background">
+                {/* `mt-auto` PINS IT TO THE BOTTOM of the pane, whatever the
+                    canvas above it does. This row is the pane's footer, and it
+                    was being positioned by the DRAWING'S height instead: a
+                    ten-row gantt left the toolbar floating a third of the
+                    way down with a wall of empty ground beneath it.
+
+                    A guarantee rather than a repair, and it belongs on the row
+                    all nine notations share rather than being a height forced
+                    onto whichever canvas last under-filled. Six of the
+                    viewers root at `h-full`, and the gantt's, the timeline's
+                    and the lifecycle's root at `flex-1`, so all nine claim the
+                    pane on their own and this margin resolves to zero for every one of
+                    them today — an
+                    auto margin only ever spends FREE space, and there is none.
+                    It costs nothing and it means the next canvas to arrive
+                    cannot reintroduce the floating toolbar by forgetting to
+                    stretch. */}
+                <div className="mt-auto shrink-0 border-t border-border/60 bg-background">
                   <div
                     className={cn(
                       "mx-auto flex w-full max-w-7xl items-center justify-end gap-2 px-5 sm:px-8",
@@ -2000,6 +2102,52 @@ export function ViewPlayground({
                             render={(theme) => renderDictSvg(doc.file, theme)}
                             title={documentTitle(doc)}
                             noun="data dictionary"
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : doc.kind === "gantt" ? (
+                        <>
+                          <GanttShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            onAnnounce={setAnnouncement}
+                          />
+                          <SvgExportButton
+                            render={(theme) => renderGanttSvg(doc.file, theme)}
+                            title={documentTitle(doc)}
+                            noun="gantt"
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : doc.kind === "timeline" ? (
+                        <>
+                          <TimelineShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            onAnnounce={setAnnouncement}
+                          />
+                          <SvgExportButton
+                            render={(theme) =>
+                              renderTimelineSvg(doc.file, theme)
+                            }
+                            title={documentTitle(doc)}
+                            noun="timeline"
+                            onAnnounce={setAnnouncement}
+                          />
+                        </>
+                      ) : doc.kind === "lifecycle" ? (
+                        <>
+                          <LifecycleShareButton
+                            text={text}
+                            title={documentTitle(doc)}
+                            onAnnounce={setAnnouncement}
+                          />
+                          <SvgExportButton
+                            render={(theme) =>
+                              renderLifecycleSvg(doc.file, theme)
+                            }
+                            title={documentTitle(doc)}
+                            noun="lifecycle"
                             onAnnounce={setAnnouncement}
                           />
                         </>

@@ -37,11 +37,17 @@ import {
   serializeUseCaseText,
   serializeErText,
   serializeDictText,
+  serializeGanttText,
+  serializeTimelineText,
+  serializeLifecycleText,
 } from "@/features/archtext";
 import { MERMAID_FLOWCHART_CAVEAT } from "@/features/flowchart/input/parse";
 import { MERMAID_USECASE_CAVEAT } from "@/features/usecase/input/parse";
 import { MERMAID_ER_CAVEAT } from "@/features/er/input/parse";
 import { MERMAID_SEQUENCE_CAVEAT } from "@/features/sequence/input/parse";
+import { MERMAID_GANTT_CAVEAT } from "@/features/gantt/input/parse";
+import { MERMAID_TIMELINE_CAVEAT } from "@/features/timeline/input/parse";
+import { readLifecycle } from "./lifecycle";
 import type { CheckChoice } from "@/features/validate/lib/check";
 import {
   canEncodeShare,
@@ -68,6 +74,8 @@ import { readUseCase } from "./usecase";
 import { readEr } from "./er";
 import { readDict } from "./dict";
 import { readSequence } from "./sequence";
+import { readGantt } from "./gantt";
+import { readTimeline } from "./timeline";
 
 /**
  * The caveat handed out with links in the middle tier, and with scoped links
@@ -499,6 +507,86 @@ export async function createShareLink(
     );
   }
   if (dict.kind === "parse") return errorResult(dict.message);
+
+  // Gantt charts, on the same terms: `archlab 1.0 gantt` is exact, so a text
+  // that reads as one can never be a C4 reading.
+  const gantt = readGantt(source);
+  if (gantt.status === "ok") {
+    return singleDocumentShareLink(
+      {
+        payload: serializeGanttText(gantt.file),
+        title: gantt.file.metadata.title,
+        sourceFormat: gantt.format,
+        noun: "a gantt",
+        formatTool: "format_gantt",
+        indivisibleBecause:
+          "A gantt is one plan on one axis, with no sub-diagrams to scope " +
+          "a smaller link to.",
+        opensIn: "Opens in the gantt playground.",
+        mermaidCaveat: MERMAID_GANTT_CAVEAT,
+      },
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (gantt.kind === "parse") return errorResult(gantt.message);
+
+  /* Milestone timelines, on the same terms — and read BEFORE the gantt would
+     have been if the two could ever be confused, which they cannot: both
+     headers are exact words. The `mermaidCaveat` is the import note rather
+     than a one-way warning, because this is the kind whose Mermaid conversion
+     runs both ways. */
+  const timeline = readTimeline(source);
+  if (timeline.status === "ok") {
+    return singleDocumentShareLink(
+      {
+        payload: serializeTimelineText(timeline.file),
+        title: timeline.file.metadata.title,
+        sourceFormat: timeline.format,
+        noun: "a milestone timeline",
+        formatTool: "format_timeline",
+        indivisibleBecause:
+          "A timeline is one history on one spine, with no sub-diagrams to " +
+          "scope a smaller link to.",
+        opensIn: "Opens in the timeline playground.",
+        mermaidCaveat: MERMAID_TIMELINE_CAVEAT,
+      },
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (timeline.kind === "parse") return errorResult(timeline.message);
+
+  /* Lifecycles, on the same terms, and the one entry here with NO
+     `mermaidCaveat`: there is no Mermaid lifecycle to have come in as, so
+     there is nothing about the reading to warn about
+     (`features/lifecycle/input/parse.ts` argues why `stateDiagram-v2` is not
+     one). */
+  const lifecycle = readLifecycle(source);
+  if (lifecycle.status === "ok") {
+    return singleDocumentShareLink(
+      {
+        payload: serializeLifecycleText(lifecycle.file),
+        title: lifecycle.file.metadata.title,
+        sourceFormat: lifecycle.format,
+        noun: "a lifecycle",
+        formatTool: "format_lifecycle",
+        indivisibleBecause:
+          "A lifecycle is one subject on one track, with no sub-diagrams to " +
+          "scope a smaller link to.",
+        opensIn: "Opens in the lifecycle playground.",
+        /* Empty, exactly as the dictionary's is and for the same reason: this
+           caveat is only ever emitted when `sourceFormat === "mermaid"`, and
+           that is unreachable for a kind with one dialect. Written out rather
+           than made optional so the shape stays total — a default here is how
+           a tenth kind would inherit a warning nobody wrote for it. */
+        mermaidCaveat: "",
+      },
+      diagramId,
+      ttlDays,
+    );
+  }
+  if (lifecycle.kind === "parse") return errorResult(lifecycle.message);
 
   const read = readSource(source, format);
   if (read.status === "error") return errorResult(read.message);

@@ -1,0 +1,429 @@
+/* ---------------------------------------------------------------------------
+ * Lifecycle canvas motion.
+ *
+ * THIS CANVAS HAS CONNECTORS — the stubs from a state to its departures, and
+ * the returning branches — so unlike the milestone timeline next door it does
+ * not satisfy `new-diagram-type.md`'s connector rule vacuously. The rule's own
+ * test applies instead: **would removing this motion lose information?** Four
+ * motions pass it. There is no fifth, and the pressure to add one comes from
+ * a rule rather than from a reader — which is exactly the chain that cost the
+ * ER canvas three commits.
+ *
+ *   1. ENTRANCE — states arrive IN TRACK ORDER, each WITH its own departures,
+ *      staggered by position. This is the motion this notation exists for. A
+ *      lifecycle's whole claim is that one thing passed through these states
+ *      in this order, and a still frame states the order only as a spatial
+ *      convention the reader has to know to read top-down. Watching the
+ *      subject advance state by state IS the claim, made rather than assumed.
+ *      Each state arriving together with its exits is the second half of the
+ *      information: "at this point, these are the ways out".
+ *
+ *   2. THE TRACK DRAWS, THEN THE RETURNS DRAW. The spine draws first so the
+ *      states land ON a line; the rejoin paths draw AFTER it, from their exit
+ *      back to the spine. The order is the content: a return cannot precede
+ *      the track it returns to, and drawing them together would say the two
+ *      are the same kind of thing. They are not — one is where the subject
+ *      goes, the other is where it goes back to.
+ *
+ *   3. SPINE SWEEP — at rest, a wash travels down the spine and loops.
+ *      Answers "which way does time run", which a vertical line of identical
+ *      dots genuinely cannot say standing still. The same argument the
+ *      timeline's sweep makes, and it runs ALONG the spine and nowhere else
+ *      for the same reason.
+ *
+ *      WHAT IT IS NOT: a today marker or a playhead. arch-lab draws neither
+ *      anywhere on purpose — a share link carries its document but not the
+ *      day it was minted — and here a playhead would be worse still, because
+ *      it would claim to say where THIS subject currently is, which no
+ *      lifecycle document records. `check:lifecycle-motion` asserts the
+ *      sweep's confinement to the spine's own x FROM THE COMPONENT rather
+ *      than from this prose about it.
+ *
+ *   4. FOCUS — the selected state's dot breathes, its own departures stay lit
+ *      while everything else dims, and A LIT REJOIN PATH GETS A TRAVELLING
+ *      DASH. That last one is the only connector motion here, and it is not
+ *      decoration: a returning branch is the one mark on this canvas whose
+ *      DIRECTION is its whole content ("the subject comes back HERE"), the
+ *      path is long and turns three times, and an 8-unit arrowhead at the far
+ *      end of it states that direction weakly. The dash travels the way the
+ *      subject travels. Remove it and a reader looking at a focused branch
+ *      cannot tell, without tracing the line by eye, whether the picture says
+ *      "returned goes back to packed" or "packed leads to returned" — which
+ *      are opposite claims.
+ *
+ *      IT IS ON FOCUS ONLY, deliberately. Running it at rest would put a
+ *      second travelling mark on the canvas beside the sweep, and two things
+ *      moving at once is how an ambient stops meaning anything.
+ *
+ * Remove any of the four and a specific question stops being answerable.
+ *
+ * OPT OUT TWICE, both of which must hold (`check:lifecycle-motion` asserts it):
+ *   - Every `animation` sits inside `prefers-reduced-motion: no-preference`.
+ *     The RESTING state — everything visible, nothing moving — is declared
+ *     outside the query, which is what a no-JS reader, the server-rendered
+ *     example pages and the SVG export all get.
+ *   - Every INFINITE animation gates on `[data-af-idle="on"]`, the attribute
+ *     every other viewer in this app stamps. NOT `data-idle-motion`: the ER
+ *     stylesheet gates on that spelling, nothing stamps it, and ER's ambient
+ *     pulse has therefore never been switchable. Its own check passes because
+ *     it only asserts such a rule EXISTS. Do not copy that mistake here.
+ *
+ *     THE FOCUS MOTIONS GATE ON IT TOO, which is stricter than the timeline's
+ *     and stricter than `src/lib/idle-motion.ts` requires ("motion the reader
+ *     ASKED for is not idle motion"). The travelling dash is the reason: it is
+ *     an infinite animation on a CONNECTOR, which is the class of motion this
+ *     repo has the worst history with, so it answers the app-wide toggle as
+ *     well as the media query. A reader who has turned motion down gets a
+ *     static lit path with its arrowhead, which still says the direction —
+ *     less well, which is the honest cost.
+ *
+ * THE STANDING RULES, each of which has already shipped as a bug somewhere in
+ * this repo:
+ *
+ *   - NO SVG `filter`, anywhere. A percentage filter region is in
+ *     `objectBoundingBox` units, and both the spine and every segment of a
+ *     rejoin path are axis-aligned lines — a zero-extent box in one axis — so
+ *     the region collapses and the paint lands somewhere else entirely. That
+ *     cost three commits on the ER canvas. Want a soft edge? Draw a wider
+ *     path.
+ *   - NEGATIVE animation delays for the staggered infinite animations. A
+ *     positive delay is invisible until an ancestor class changes; then the
+ *     animation restarts and replays its silent head, and the reader sees the
+ *     whole canvas blink off and back on. Both staggered infinite animations
+ *     here (the focus breathe and the travelling dash) carry one.
+ *   - FOCUS DIMS AND ANIMATES, IT DOES NOT REPAINT. No stroke, fill, width or
+ *     radius changes in either direction — a focused dot that recolours is a
+ *     new mark appearing where one already was. `:focus-visible` is the one
+ *     exception, because a keyboard user has no hover to fall back on.
+ *   - THE SWEEP RIDES A SEPARATE LINE. Never a dasharray on the spine itself:
+ *     the spine is the continuous mark a reader follows, and a travelling
+ *     dash over it would break the line it is describing. The travelling dash
+ *     on a rejoin is the opposite case and is allowed to ride the path
+ *     itself — that path is not a continuous reference mark, it is one
+ *     journey, and the dash is that journey.
+ *
+ * COLOUR. This canvas has NO PALETTE, and the decision is worth stating
+ * because it would have been easy to make the other way. Terminal, rejoining
+ * and ordinary marks are told apart by SHAPE and by GEOMETRY — a stop bar
+ * across a dot, a path that goes back to the spine versus one that does not,
+ * a lane on the left versus a column on the right — never by hue. Two reasons:
+ * the distinctions are structural, so a shape says them in a screenshot and
+ * in greyscale where a colour does not; and a per-type colour here would owe
+ * a `check:lifecycle-palette` measured across all seven themes, which is a
+ * real cost to buy a weaker signal. Everything below paints from the SHARED
+ * node, edge and canvas tokens, so it is complete in all seven themes by
+ * construction rather than by a per-kind audit, and `check:themes` already
+ * covers every token named here.
+ *
+ * THE ONE NON-COLOUR PER-TYPE DIFFERENCE is `[data-reachable="0"]`, which
+ * fades a state the subject can no longer arrive at (everything after a state
+ * marked `ends`). It is opacity from the shared ground, not a second hue, and
+ * it is drawn at rest rather than animated — an unreachable state is a fact
+ * about the document, not a state of the canvas.
+ *
+ * TIMINGS. The tunables below are the source of truth for the reveal budget;
+ * `check:lifecycle-motion` computes the worst case FROM THESE PROPERTIES and
+ * fails over 1.5s, so changing one here changes what the check enforces rather
+ * than drifting from it. The stagger cap is duplicated in `lib/layout.ts`
+ * (`LIFECYCLE.waveCap`) because CSS cannot import TypeScript; the same check
+ * pins the pair.
+ * ------------------------------------------------------------------------- */
+
+.af-lc-canvas {
+  /* SIZING, the one non-motion concern in this file, and it lives here
+     because it is the canvas root's own declaration block — a second
+     stylesheet holding four lines would be a file nobody remembers to look
+     in. The component gives the SVG its NATURAL width and height; these turn
+     that into a responsive, centred drawing. */
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+  height: auto;
+
+  --lc-row-rise: 300ms;
+  --lc-row-beat: 46ms;
+  --lc-row-cap: 8;
+
+  --lc-spine-draw: 420ms;
+  --lc-return-draw: 460ms;
+
+  /* The sweep. Slow, because it is a wash over a line rather than a pulse
+     along a wire: a short head here reads as a dot lighting up, which on this
+     canvas is a state. */
+  --lc-sweep: 3.8s;
+  --lc-sweep-head: 90;
+
+  /* The travelling dash on a lit return. Faster than the sweep: it is a
+     journey rather than a wash, and it only ever runs on one path at a
+     time. */
+  --lc-travel: 1.5s;
+  --lc-travel-dash: 10;
+  --lc-travel-gap: 14;
+
+  --lc-breathe: 1.6s;
+  --lc-breathe-step: 120ms;
+}
+
+/* ---------------------------------------------------------------------------
+ * Resting state — outside the media query on purpose.
+ * ------------------------------------------------------------------------- */
+
+.af-lc-row {
+  opacity: 1;
+}
+
+/* A state the subject can no longer reach. Not a colour and not motion: a
+   fact about the document, drawn as one. */
+.af-lc-row[data-reachable="0"] {
+  opacity: 0.42;
+}
+
+.af-lc-spine {
+  stroke: var(--canvas-grid);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* The dot. ONE APPEARANCE FOR EVERY STATE — this kind assigns no meaning to
+   colour, so a second fill here would be a distinction the grammar cannot
+   express. What a terminal state gets instead is the bar below. */
+.af-lc-dot {
+  fill: var(--node);
+  stroke: var(--primary);
+  stroke-width: 2.25;
+}
+
+/* The stop bar across a final state's dot, and across the end of a terminal
+   branch. SHAPE, NOT HUE: it survives greyscale, a screenshot and a reader
+   who cannot distinguish the two colours it would otherwise have needed. */
+.af-lc-stop {
+  stroke: var(--primary);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+}
+
+.af-lc-exit-dot {
+  fill: var(--canvas);
+  stroke: var(--edge);
+  stroke-width: 1.75;
+}
+
+/* The stub from a state's dot out to its departure, and the returning path.
+   Both paint from `--edge`, the shared connector token: on this canvas the
+   difference between them is WHERE THEY GO, which is the one thing a colour
+   could not have said any better. */
+.af-lc-stub,
+.af-lc-return {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.af-lc-arrow {
+  fill: var(--edge);
+}
+
+.af-lc-subject {
+  fill: var(--foreground);
+}
+.af-lc-subject-desc {
+  fill: var(--muted-foreground);
+}
+.af-lc-label {
+  fill: var(--node-foreground);
+}
+.af-lc-desc {
+  fill: var(--node-meta);
+}
+.af-lc-exit-label {
+  fill: var(--node-foreground);
+}
+.af-lc-when {
+  fill: var(--node-meta);
+}
+
+/* The sweep's own line, sitting exactly on the spine. Inert at rest by
+   carrying a ZERO-LENGTH dash rather than `opacity: 0` — every `opacity: 0` on
+   this canvas is reserved for the entrance, and `check:lifecycle-motion` fails
+   any other rule outside the media query that hides something. The butt cap is
+   load-bearing: a round cap paints a dot at a zero-length dash, which on this
+   canvas would be a permanent extra state at the top of the spine. */
+.af-lc-sweep {
+  fill: none;
+  /* `--edge-drift` is this app's designated travelling-mark token, and it is
+     near-neutral in every theme — which is what a wash over a structural line
+     has to be. Nothing on this canvas carries meaning in a stroke colour, so
+     there is nothing for the sweep to be confused with and no new token is
+     owed. */
+  stroke: var(--edge-drift);
+  stroke-width: 4;
+  stroke-linecap: butt;
+  stroke-dasharray: 0 var(--lc-spine-len);
+}
+
+.af-lc-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+/* The one place focus is allowed to paint: a keyboard user has no hover. */
+.af-lc-hit:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus — dim the unrelated, light the selection. No repaint.
+ * ------------------------------------------------------------------------- */
+
+.af-lc-canvas.af-lc-has-focus .af-lc-row {
+  opacity: 0.24;
+}
+.af-lc-canvas.af-lc-has-focus .af-lc-row[data-lit="1"] {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion proper.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-lc-canvas.af-lc-has-focus .af-lc-row {
+    transition: opacity 160ms ease;
+  }
+
+  /* 1. Entrance. `--lc-wave` is the state's position on the track, stamped
+     server-side by the component and shared by the state and its own exits,
+     so the subject advances one state at a time and each state arrives with
+     its ways out. This is the motion this notation exists for. */
+  .af-lc-canvas[data-reveal="1"] .af-lc-row {
+    opacity: 0;
+    animation: af-lc-rise var(--lc-row-rise) cubic-bezier(0.22, 0.68, 0.3, 1)
+      forwards;
+    animation-delay: calc(var(--lc-wave, 0) * var(--lc-row-beat));
+  }
+
+  /* 2. The track draws, then the returns draw along it. Both read their own
+     length from a property the component stamps off the SOLVED geometry, so
+     neither can drift from the line it is drawing. */
+  .af-lc-canvas[data-reveal="1"] .af-lc-spine {
+    stroke-dasharray: var(--lc-spine-len);
+    stroke-dashoffset: var(--lc-spine-len);
+    animation: af-lc-draw var(--lc-spine-draw) cubic-bezier(0.4, 0, 0.2, 1)
+      forwards;
+  }
+  .af-lc-canvas[data-reveal="1"] .af-lc-return {
+    stroke-dasharray: var(--lc-path-len);
+    stroke-dashoffset: var(--lc-path-len);
+    animation: af-lc-draw var(--lc-return-draw) cubic-bezier(0.4, 0, 0.2, 1)
+      forwards;
+    /* AFTER the spine, never with it: a return cannot precede the track it
+       returns to. Positive on purpose and safe on purpose — this is a
+       `forwards` one-shot, not an infinite animation, so the restart hazard
+       the negative-delay rule exists for cannot arise here. */
+    animation-delay: var(--lc-spine-draw);
+  }
+
+  /* 3. The sweep. Gated on the app-wide toggle AND on at-rest, like every
+     other ambient in this app: an ambient that never stops competes with the
+     person reading and stops meaning anything, which is precisely how ER's
+     pulse ended up needing a second visual language to survive. It yields to
+     focus too, or it would travel through the one state the reader just
+     lit. */
+  .af-lc-canvas[data-af-idle="on"][data-idle="1"]:not(.af-lc-has-focus)
+    .af-lc-sweep {
+    stroke-dasharray: var(--lc-sweep-head)
+      calc(var(--lc-spine-len) - var(--lc-sweep-head));
+    animation: af-lc-sweep var(--lc-sweep) linear infinite;
+  }
+
+  /* 4a. Focus, the dot. Opacity only — no stroke, fill or radius moves, so
+     this stays an animation rather than a repaint.
+
+     THE DELAY IS NEGATIVE. Selecting a state is an ancestor class change, so
+     a positive delay would replay a silent head on every focus and the dot
+     would blink off before it began — the failure that shipped on the ER
+     canvas. */
+  .af-lc-canvas[data-af-idle="on"].af-lc-has-focus
+    .af-lc-row[data-lit="1"]
+    .af-lc-dot {
+    animation: af-lc-breathe var(--lc-breathe) ease-in-out infinite;
+    animation-delay: calc(var(--lc-wave, 0) * var(--lc-breathe-step) * -1);
+  }
+
+  /* 4b. Focus, the returning path: the dash travels the way the SUBJECT
+     travels — from the departure back to the state it re-enters. See the
+     header on why this is information rather than decoration.
+
+     IT RIDES THE PATH ITSELF, unlike the spine sweep. A rejoin is one
+     journey, not a continuous reference mark, so a dash on it does not break
+     a line a reader was using. Its dash pattern is a fixed length rather than
+     a fraction of the path, so a long return and a short one travel at the
+     same visual speed. */
+  .af-lc-canvas[data-af-idle="on"].af-lc-has-focus
+    .af-lc-row[data-lit="1"]
+    .af-lc-return {
+    stroke-dasharray: var(--lc-travel-dash) var(--lc-travel-gap);
+    animation: af-lc-travel var(--lc-travel) linear infinite;
+    animation-delay: calc(var(--lc-wave, 0) * var(--lc-breathe-step) * -1);
+  }
+}
+
+@keyframes af-lc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes af-lc-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The wash fades up off the top end and back down into the bottom one. A hard
+   cut at either end would read as an object arriving and leaving — a thing at
+   a moment — where a fade reads as the line itself catching light. Peak
+   opacity is deliberately modest: this is the only thing moving once the
+   canvas is at rest, so it must not become the loudest mark on the page. */
+@keyframes af-lc-sweep {
+  0% {
+    stroke-dashoffset: var(--lc-spine-len);
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 0.55;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+/* One dash-and-gap of travel per cycle, so the marks appear to move
+   continuously rather than restarting. The offset counts DOWN, which on an
+   SVG path moves the dashes forward along the path's own direction — and the
+   component draws every return from its exit TO the spine, so forward is the
+   direction the subject goes. */
+@keyframes af-lc-travel {
+  to {
+    stroke-dashoffset: calc(
+      (var(--lc-travel-dash) + var(--lc-travel-gap)) * -1
+    );
+  }
+}
+
+@keyframes af-lc-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}

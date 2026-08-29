@@ -11,27 +11,38 @@ import { listSequenceExamples } from "@/features/sequence/service/example-servic
 import { listUseCaseExamples } from "@/features/usecase/service/example-service";
 import { listErExamples } from "@/features/er/service/example-service";
 import { listDictExamples } from "@/features/dict/service/example-service";
+import { listGanttExamples } from "@/features/gantt/service/example-service";
+import { listTimelineExamples } from "@/features/timeline/service/example-service";
+import { listLifecycleExamples } from "@/features/lifecycle/service/example-service";
 import { listViewerModels } from "@/features/viewer";
 
 export const metadata: Metadata = {
-  /* NAMES THE COUNT, NOT FOUR OF THE SIX. The title listed four notations in 63
-     characters — three over what a result shows, and two notations out of date
-     the day ER and the data dictionary shipped, with no room to add them. The
-     sections on this page name all six in prose, which is where a crawler reads
-     them. 48 characters. */
-  title: "Examples — finished diagrams in six notations",
+  /* NAMES THE COUNT, NOT FOUR OF THE SEVEN. The title listed four notations in
+     63 characters — three over what a result shows, and two notations out of
+     date the day ER and the data dictionary shipped, with no room to add them.
+     The sections on this page name all nine in prose, which is where a crawler
+     reads them. 50 characters. */
+  title: "Examples — finished diagrams in nine notations",
+  /* Measured at 156. The kind list survives here where the site description
+     gave its own up, because this route's whole job is "which kinds are there,
+     with worked documents" — and it is the enumeration that ranks for
+     "flowchart example", then "gantt example", then "timeline" and now
+     "lifecycle". "data dictionary" lost its qualifier to buy "gantt" its room,
+     "use case" lost its to buy the timeline's, and "Bundled example documents"
+     became "Bundled examples" to buy the lifecycle's — the noun was the only
+     thing left that said nothing a reader could not see from the page. */
   description:
-    "Bundled example documents of all six kinds — C4, sequence, flowchart, use case, ER, data dictionary — each parsed by the real reader. Open one and edit it.",
+    "Bundled examples of all nine kinds — C4, sequence, flowchart, use case, ER, dictionary, gantt, timeline and lifecycle — parsed by the real reader. Open one.",
   alternates: { canonical: "/demo" },
 };
 
 /**
- * The example index: six kinds, two showcased documents each.
+ * The example index: nine kinds, two showcased documents each.
  *
  * IT WAS A LANDING PAGE and did not need to be. Each card carried a gradient
  * hover wash, an icon tile, a "View-only" badge, four count statistics, a row
  * of level badges and its own call-to-action link — for a page whose entire
- * job is "here are eight documents, pick one".
+ * job is "here are nine documents, pick one".
  *
  * THEN IT BECAME HARD TO CLICK AND HARD TO READ, which is the failure this
  * revision is about, and both halves came from the same root: the page knew
@@ -73,7 +84,16 @@ const SHOWCASES_PER_KIND = 2;
 /** The heading, the intro and the jump bar take the first three cascade slots. */
 const ROWS_BEFORE_SECTIONS = 3;
 
-type Kind = "c4" | "sequence" | "flowchart" | "usecase" | "er" | "dict";
+type Kind =
+  | "c4"
+  | "sequence"
+  | "flowchart"
+  | "usecase"
+  | "er"
+  | "dict"
+  | "gantt"
+  | "timeline"
+  | "lifecycle";
 
 /**
  * One showcased document, already resolved out of its kind's listing type.
@@ -145,6 +165,33 @@ const KIND_CHROME: Record<
     accent: "var(--node-queue-border)",
     Glyph: DictGlyph,
   },
+  /* `--gantt-critical` rather than a state fill: the critical path is what the
+     gantt canvas tints, so the section rule and the jump-bar mark wear the
+     same colour a reader will meet inside the diagram. */
+  gantt: {
+    short: "Gantt charts",
+    accent: "var(--gantt-critical)",
+    Glyph: GanttGlyph,
+  },
+  /* `--primary` because that is what the timeline canvas rings every dot
+     with, and it is the only accent that canvas has: this kind assigns no
+     meaning to colour, so there is no state fill or role tint to borrow. */
+  timeline: {
+    short: "Milestone timelines",
+    accent: "var(--primary)",
+    Glyph: TimelineGlyph,
+  },
+  /* `--edge` rather than `--primary`, which the timeline above already takes:
+     these two are the pair a reader is most likely to confuse (both are one
+     ordered spine), so their marks must not also share a colour. And the
+     lifecycle canvas's own second mark IS the connector — the returning
+     branch is what it has that a timeline does not — so `--edge` is the token
+     it actually wears rather than a colour picked to be different. */
+  lifecycle: {
+    short: "Lifecycles",
+    accent: "var(--edge)",
+    Glyph: LifecycleGlyph,
+  },
 };
 
 /** The order the sections render and the jump bar lists them in. */
@@ -155,6 +202,9 @@ const KIND_ORDER: readonly Kind[] = [
   "usecase",
   "er",
   "dict",
+  "gantt",
+  "timeline",
+  "lifecycle",
 ] as const;
 
 export default function DemoPage(): React.JSX.Element {
@@ -277,6 +327,75 @@ export default function DemoPage(): React.JSX.Element {
         },
   );
 
+  const gantt: ExampleRow[] = listGanttExamples().map((listing) =>
+    listing.status === "invalid"
+      ? listing
+      : {
+          status: "ok",
+          id: listing.summary.id,
+          title: listing.summary.title,
+          description: listing.summary.description,
+          meta: [
+            `${listing.summary.taskCount} tasks`,
+            listing.summary.milestoneCount === 1
+              ? "1 milestone"
+              : `${listing.summary.milestoneCount} milestones`,
+            /* DURATION, where every other kind's third fact is a count. It is
+               the number a gantt exists to produce — and it comes from the
+               same forward pass the canvas draws from, never counted here. */
+            `${listing.summary.dayCount} days`,
+          ],
+          readOnlyHref: `/live/gantt/${listing.summary.id}`,
+        },
+  );
+
+  const timeline: ExampleRow[] = listTimelineExamples().map((listing) =>
+    listing.status === "invalid"
+      ? listing
+      : {
+          status: "ok",
+          id: listing.summary.id,
+          title: listing.summary.title,
+          description: listing.summary.description,
+          meta: [
+            `${listing.summary.periodCount} periods`,
+            `${listing.summary.eventCount} events`,
+            /* HOW MUCH IS ANNOTATED, where the gantt's third fact is a
+               duration and every other kind's is a count. There is no
+               duration to give — nothing in this notation measures — and the
+               honest second fact about a history is how much of it is
+               explained. */
+            `${listing.summary.annotatedCount} explained`,
+          ],
+          readOnlyHref: `/live/timeline/${listing.summary.id}`,
+        },
+  );
+
+  const lifecycle: ExampleRow[] = listLifecycleExamples().map((listing) =>
+    listing.status === "invalid"
+      ? listing
+      : {
+          status: "ok",
+          id: listing.summary.id,
+          title: listing.summary.title,
+          description: listing.summary.description,
+          meta: [
+            /* THE SUBJECT FIRST, where every other kind leads with a count.
+               It is the one fact this notation has that none of the others
+               do — a lifecycle is about ONE named thing — and a card that led
+               with "6 states" would describe a milestone timeline. */
+            listing.summary.subject,
+            `${listing.summary.stateCount} states`,
+            /* THE TWO KINDS OF DEPARTURE, split rather than totalled: where
+               the subject can stop, and where it goes back to, are the two
+               different things the branches say, and the split is exactly the
+               distinction the canvas draws by shape. */
+            `${listing.summary.terminalCount} end · ${listing.summary.returningCount} return`,
+          ],
+          readOnlyHref: `/live/lifecycle/${listing.summary.id}`,
+        },
+  );
+
   const byKind: Record<Kind, ExampleRow[]> = {
     c4,
     sequence,
@@ -284,6 +403,9 @@ export default function DemoPage(): React.JSX.Element {
     usecase,
     er,
     dict,
+    gantt,
+    timeline,
+    lifecycle,
   };
 
   /*
@@ -332,9 +454,9 @@ export default function DemoPage(): React.JSX.Element {
         className="af-demo-row mt-3 max-w-2xl text-muted-foreground"
         style={{ "--row": 1 } as React.CSSProperties}
       >
-        Real documents of all six kinds, parsed by the same reader the app uses.
-        Click a row to open it in the playground, where its text is yours to
-        edit — or take the read-only page beside it, which is the one to send
+        Real documents of all nine kinds, parsed by the same reader the app
+        uses. Click a row to open it in the playground, where its text is yours
+        to edit — or take the read-only page beside it, which is the one to send
         someone who only wants to look.
       </p>
 
@@ -500,6 +622,79 @@ function DictGlyph(): React.JSX.Element {
       strokeLinecap="round"
     >
       <path d="M2 3.5h12M2 6.6h5M9.6 6.6h4.4M2 9.5h5M9.6 9.5h4.4M2 12.4h5M9.6 12.4h4.4" />
+    </svg>
+  );
+}
+
+/** A gantt: two bars on a measured rail, the second starting where the
+ * first ends, and the elbow that says it could not start sooner. The offset
+ * pair is the whole tell — a single bar is a progress meter. */
+function GanttGlyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    >
+      <path d="M1.4 3.2h13.2" strokeDasharray="0.1 3.3" />
+      <rect x="1.4" y="5.4" width="6.6" height="2.8" rx="1" />
+      <path d="M8 6.8h1v4.6h1" />
+      <rect x="10" y="10" width="4.6" height="2.8" rx="1" />
+    </svg>
+  );
+}
+
+/** A milestone timeline: a vertical spine with three dots on it and a label
+ * beside each. Vertical is the whole tell — every other glyph here runs
+ * across, and so does the gantt's, which is the one this must not be mistaken
+ * for. The dots are evenly spaced but the labels are not the same length,
+ * because the bands are sized by their content. */
+function TimelineGlyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    >
+      <path d="M4 2.4v11.2" />
+      <circle cx="4" cy="4" r="1.5" />
+      <circle cx="4" cy="8" r="1.5" />
+      <circle cx="4" cy="12" r="1.5" />
+      <path d="M7.4 4h7.2M7.4 8h4.4M7.4 12h6" />
+    </svg>
+  );
+}
+
+/** A lifecycle: a vertical spine of three dots with ONE branch leaving it and
+ * curving back. The branch is the whole tell — it is what separates this from
+ * the timeline glyph directly above, which is the same spine without one, and
+ * it is drawn returning rather than ending so the mark says "goes back" at
+ * 16px. */
+function LifecycleGlyph(): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 2.6v10.8" />
+      <circle cx="11" cy="4" r="1.4" />
+      <circle cx="11" cy="8" r="1.4" />
+      <circle cx="11" cy="12" r="1.4" />
+      <path d="M11 12H4.2V6H11" />
     </svg>
   );
 }

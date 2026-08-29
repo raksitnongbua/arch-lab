@@ -9,6 +9,9 @@
     { "include": "#diagram-line" },
     { "include": "#desc-line" },
     { "include": "#view-line" },
+    { "include": "#gantt-line" },
+    { "include": "#timeline-line" },
+    { "include": "#lifecycle-line" },
     { "include": "#edge-line" },
     { "include": "#node-line" },
     { "include": "#stray-tab" }
@@ -29,8 +32,8 @@
     },
 
     "header-line": {
-      "comment": "Indent 0 header lines. `archlab` must be line 1.",
-      "begin": "^(archlab|schema|title|description|owner|tags|created|updated|reviewed|tagcolor|customicon|generator|root)(?=\\s|$)",
+      "comment": "Indent 0 header lines. `archlab` must be line 1. `starts` belongs to the gantt grammar alone, but header lines are shared machinery and a per-kind header rule would be a second place to keep the list.",
+      "begin": "^(archlab|schema|title|description|owner|tags|created|updated|reviewed|tagcolor|customicon|generator|root|starts)(?=\\s|$)",
       "beginCaptures": {
         "1": { "name": "keyword.control.header.alab" }
       },
@@ -38,6 +41,7 @@
       "patterns": [
         { "include": "#comment" },
         { "include": "#timestamp" },
+        { "include": "#date" },
         { "include": "#tag" },
         { "include": "#string" },
         { "include": "#number" },
@@ -134,6 +138,79 @@
         { "include": "#geometry" },
         { "include": "#string" }
       ]
+    },
+
+    "gantt-line": {
+      "comment": "The gantt grammar's three body lines — `section \"Prepare\"`, `task <id> \"Name\" 5d done at 0` and `milestone <id> \"Name\" after a, b`. ONE rule for all three, the way `edge-line` is one rule for two grammars: after the opening word they share a tail (a quoted name, an optional start, tags), and the word itself is what the capture names. Nothing here can be reached by a C4 or sequence line — none of the three words opens a construct in either grammar (`section` is also the dictionary's opener, and means the same thing), and no arrow or `<id>:<type>` pair appears on them.",
+      "begin": "^\\s+(section|task|milestone)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.gantt.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#duration" },
+        { "include": "#item-state" },
+        { "include": "#start-keyword" },
+        { "include": "#tag" },
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#bare-word" }
+      ]
+    },
+
+    "timeline-line": {
+      "comment": "The timeline grammar's two body lines — `period \"2024\"` and `event \"Founded the company\"`. ONE rule for both, like #gantt-line above, and much simpler for a structural reason rather than an accidental one: this grammar has NO bare tokens at all, so after the opening word there is exactly a quoted string and any number of `#tag`s — no duration, no state word, no id. Neither word opens a construct in any other grammar here (checked against C4, sequence, flowchart, use case, ER, dictionary and gantt), and no arrow or `<id>:<type>` pair appears on these lines. It sits AFTER #gantt-line because the two cannot both match: their opening words are disjoint.",
+      "begin": "^\\s+(period|event)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.timeline.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#tag" },
+        { "include": "#string" }
+      ]
+    },
+
+    "lifecycle-line": {
+      "comment": "The lifecycle grammar's four body lines — `subject \"Order\"`, `state <id> \"Name\" ends`, `exit \"Cancelled\" rejoins <id>` and the nested `when \"…\"`. ONE rule for all four, the way #gantt-line and #timeline-line are one rule each: after the opening word they share a tail (an optional bare id, a quoted string, `#tag`s and at most one of two markers), and the word itself is what the capture names. None of the four words opens a construct in any other grammar here (checked against C4, sequence, flowchart, use case, ER, dictionary, gantt and milestone timeline), and no arrow or `<id>:<type>` pair appears on them. It sits AFTER #timeline-line and BEFORE #node-line: the first because the two rules' opening words are disjoint so their order is free, the second because it is not — `state placed \"Placed\"` would otherwise reach #node-line and scope `state` as an id.",
+      "begin": "^\\s+(subject|state|exit|when)(?=\\s|$)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.lifecycle.alab" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#lifecycle-marker" },
+        { "include": "#tag" },
+        { "include": "#string" },
+        { "include": "#bare-word" }
+      ]
+    },
+
+    "lifecycle-marker": {
+      "comment": "`ends` and `rejoins` — where the subject LANDS, which is the one thing an exit line must say. Ahead of #bare-word in the rule above, or `ends` colours as a state id; that is the same ordering hazard `#duration` has against `#number`, and it matters more here because a bare id spelled `ends` is exactly what the parser refuses.",
+      "match": "\\b(ends|rejoins)\\b",
+      "name": "keyword.other.lifecycle.alab"
+    },
+
+    "duration": {
+      "comment": "`5d` — whole days. Ahead of #number in the item line, or the digits colour as a bare number and the `d` as an id.",
+      "match": "\\b(?:0|[1-9]\\d*)d\\b",
+      "name": "constant.numeric.duration.alab"
+    },
+
+    "item-state": {
+      "comment": "The closed reporting vocabulary. These words are deliberately NOT reserved by the parser — `task done \"…\" 3d` is legal, `done` being in the id slot — so an item id spelled as a state colours as one here. Accepted: the alternative is a grammar rule that has to know which slot it is in, and the mis-colouring costs a reader nothing they cannot see from the line.",
+      "match": "\\b(planned|active|done|at-risk)\\b",
+      "name": "constant.language.item-state.alab"
+    },
+
+    "start-keyword": {
+      "comment": "`at <day>` and `after <id>, <id>` — mutually exclusive in the grammar, which is a parser error rather than something highlighting can show.",
+      "match": "\\b(at|after)\\b",
+      "name": "keyword.other.start.alab"
     },
 
     "edge-line": {
@@ -313,6 +390,12 @@
           "name": "invalid.illegal.unrecognized-string-escape.alab"
         }
       ]
+    },
+
+    "date": {
+      "comment": "`starts 2026-09-07` — an ISO calendar date, no time and no zone. Needed as its own rule ahead of #number, which would otherwise colour the year, month and day as three separate numbers.",
+      "match": "\\b\\d{4}-\\d{2}-\\d{2}\\b",
+      "name": "constant.other.date.alab"
     },
 
     "timestamp": {

@@ -8,7 +8,9 @@
  *
  *   1. parses every valid snippet (full examples and each table row's
  *      example, wrapped into a complete file by the module's own helpers)
- *      through the real `parseArchText`, asserting success;
+ *      through the real `parseArchText`, asserting success — and the sequence
+ *      gantt and timeline snippets through THEIR parsers, each first asserted to be
+ *      detected as the kind it claims to be;
  *   2. parses every deliberately-invalid snippet in the errors section,
  *      asserting it FAILS with an `ArchTextParseError` whose line, column
  *      and full message equal what the page displays, verbatim.
@@ -54,11 +56,25 @@ registerHooks({
   },
 });
 
-const { parseArchText, parseSequenceText, detectAlabKind, ArchTextParseError } =
-  await import(
-    pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
-  );
-const { checkedSources, INVALID_SNIPPETS, SEQUENCE_SNIPPETS } = await import(
+const {
+  parseArchText,
+  parseSequenceText,
+  parseGanttText,
+  parseTimelineText,
+  parseLifecycleText,
+  detectAlabKind,
+  ArchTextParseError,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/archtext/index.ts")).href
+);
+const {
+  checkedSources,
+  INVALID_SNIPPETS,
+  SEQUENCE_SNIPPETS,
+  GANTT_SNIPPETS,
+  TIMELINE_SNIPPETS,
+  LIFECYCLE_SNIPPETS,
+} = await import(
   pathToFileURL(path.join(ROOT, "src/features/syntax-docs/content/snippets.ts"))
     .href
 );
@@ -123,6 +139,100 @@ for (const snippet of SEQUENCE_SNIPPETS) {
   }
   try {
     parseSequenceText(snippet.code);
+    ok(snippet.id);
+  } catch (error) {
+    fail(
+      snippet.id,
+      `did not parse: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+}
+
+/* ---- 1c. every GANTT snippet parses, with the right parser ----------- */
+
+/*
+ * A third grammar and therefore a third parser, asserted the same two ways as
+ * the sequence block above and for the same reason: `detectAlabKind` must
+ * actually call it a gantt, because the app routes on the detected kind
+ * while this script hands the source straight to `parseGanttText`. Without
+ * the detect assertion a snippet whose header was mistyped would pass here and
+ * fail at line 1 for every reader who copied it.
+ */
+console.log("gantt snippets (must parse as gantt documents)");
+
+for (const snippet of GANTT_SNIPPETS) {
+  const kind = detectAlabKind(snippet.code);
+  if (kind !== "gantt") {
+    fail(snippet.id, `detected as ${kind ?? "nothing"}, not a gantt document`);
+    continue;
+  }
+  try {
+    parseGanttText(snippet.code);
+    ok(snippet.id);
+  } catch (error) {
+    fail(
+      snippet.id,
+      `did not parse: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+}
+
+/* ---- 1d. every TIMELINE snippet parses, with the right parser ----------- */
+
+/*
+ * A fourth grammar and therefore a fourth parser, asserted the same two ways
+ * as the two blocks above and for the same reason. It matters slightly more
+ * here: `timeline` was the GANTT's header word until the rename, so a snippet
+ * whose header slipped back would be handed to `parseTimelineText` by this
+ * script and to the timeline canvas by the app — both of which would refuse
+ * it, but only after a reader had copied it.
+ */
+console.log("timeline snippets (must parse as timeline documents)");
+
+for (const snippet of TIMELINE_SNIPPETS) {
+  const kind = detectAlabKind(snippet.code);
+  if (kind !== "timeline") {
+    fail(
+      snippet.id,
+      `detected as ${kind ?? "nothing"}, not a timeline document`,
+    );
+    continue;
+  }
+  try {
+    parseTimelineText(snippet.code);
+    ok(snippet.id);
+  } catch (error) {
+    fail(
+      snippet.id,
+      `did not parse: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+}
+
+/* ---- 1e. every LIFECYCLE snippet parses, with the right parser ---------- */
+
+/*
+ * A fifth grammar and therefore a fifth parser, asserted the same two ways as
+ * the blocks above. It matters most here for a reason peculiar to this
+ * notation: its refusal snippet is a REAL document whose refused forms are
+ * written as `//` comments, so a snippet that accidentally uncommented one
+ * would stop parsing — and the page would be showing a reader an example that
+ * the product rejects, in the one section whose whole subject is what the
+ * product rejects.
+ */
+console.log("lifecycle snippets (must parse as lifecycle documents)");
+
+for (const snippet of LIFECYCLE_SNIPPETS) {
+  const kind = detectAlabKind(snippet.code);
+  if (kind !== "lifecycle") {
+    fail(
+      snippet.id,
+      `detected as ${kind ?? "nothing"}, not a lifecycle document`,
+    );
+    continue;
+  }
+  try {
+    parseLifecycleText(snippet.code);
     ok(snippet.id);
   } catch (error) {
     fail(

@@ -207,11 +207,14 @@ title "Layout rules"
 /* -------------------------------------------------------------------------- */
 
 /**
- * `.alab` document kinds do not mix: a C4 model (`archlab 1.0`), a sequence
- * diagram (`archlab 1.0 sequence`), a flowchart (`archlab 1.0 flowchart`)
- * and a use-case diagram (`archlab 1.0 usecase`) — the last two not yet
- * documented on this page. The header decides which parser reads the file,
- * and `detectAlabKind` is what picks.
+ * `.alab` document kinds do not mix. There are nine — a C4 model
+ * (`archlab 1.0`), a sequence diagram (`archlab 1.0 sequence`), a flowchart,
+ * a use-case diagram, an ER diagram, a data dictionary, a gantt, a milestone
+ * timeline and a lifecycle — and this page documents five of them: the C4
+ * model above, the sequence diagram here, and the gantt, the timeline and the
+ * lifecycle below. The
+ * header decides which parser reads the file, and `detectAlabKind` is what
+ * picks.
  *
  * These snippets are kept separate from `FULL_SNIPPETS` because the check
  * script must push them through `parseSequenceText`, not `parseArchText` —
@@ -378,6 +381,249 @@ export const SEQUENCE_SNIPPETS: readonly DocSnippet[] = [
   SEQUENCE_MESSAGE_EXAMPLE,
   SEQUENCE_CURL_EXAMPLE,
   SEQUENCE_FRAGMENT_EXAMPLE,
+];
+
+/* -------------------------------------------------------------------------- */
+/* Gantt documents (a THIRD grammar, checked by a third parser)             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `archlab 1.0 gantt` — a plan: what the work is, how long each piece takes
+ * and what cannot start until something else is done.
+ *
+ * WHY THIS PAGE DOCUMENTS IT AND NOT THE FOUR KINDS BETWEEN, which is the
+ * question a reader arriving from `detectAlabKind` will ask. The flowchart,
+ * use-case, ER and dictionary grammars are read by the playground and by the
+ * MCP server, and neither needs prose here to be usable — their constructs are
+ * arrows and named rows a reader can infer from one example on `/demo`. A
+ * gantt is the first kind since the sequence diagram whose LINE ORDER means
+ * nothing and whose drawing is SOLVED: the bar's position is arithmetic over
+ * `at` and `after`, and the critical path is arithmetic the author cannot
+ * write down. That is not inferable from an example, so it is written here.
+ *
+ * These snippets are kept out of `FULL_SNIPPETS` and `SEQUENCE_SNIPPETS` alike,
+ * for the reason the sequence block gives: the check script must push them
+ * through `parseGanttText`. Handing a gantt to either of the other two
+ * parsers fails at line 1, and a check that "proved" that would prove nothing.
+ */
+
+/** A complete gantt, on a calendar axis, exercising both item keywords,
+ *  both start forms and the state vocabulary. */
+export const GANTT_MINIMAL_EXAMPLE: DocSnippet = {
+  id: "gantt-minimal",
+  code: `archlab 1.0 gantt
+title "Order store migration"
+starts 2026-09-07
+
+@gantt
+  section "Prepare"
+    task audit "Schema audit" 5d done at 0
+      desc "Read every column, write down what actually moves."
+    task shadow "Shadow writes" 13d active after audit
+    task verify "Verify parity" 6d at-risk after shadow
+    milestone parity "Parity signed off" after verify
+  section "Cut over"
+    task cutover "Point traffic over" 3d after parity
+`,
+};
+
+/**
+ * THE SAME PLAN WITH `starts` DELETED, and that is the whole point of showing
+ * it twice: one optional header line is the entire difference between a
+ * calendar axis and a relative one (`W1, W2, W3`). Nothing else about the
+ * document changes, which is a claim worth being able to check by eye rather
+ * than take on trust.
+ */
+export const GANTT_RELATIVE_EXAMPLE: DocSnippet = {
+  id: "gantt-relative-axis",
+  code: `archlab 1.0 gantt
+title "Order store migration"
+
+@gantt
+  section "Prepare"
+    task audit "Schema audit" 5d done at 0
+    task shadow "Shadow writes" 13d active after audit
+    task backfill "Historical backfill" 12d after audit
+    milestone parity "Parity signed off" after shadow, backfill
+`,
+};
+
+export const GANTT_SNIPPETS: readonly DocSnippet[] = [
+  GANTT_MINIMAL_EXAMPLE,
+  GANTT_RELATIVE_EXAMPLE,
+];
+
+/* -------------------------------------------------------------------------- */
+/* Timeline documents (a FOURTH grammar, checked by a fourth parser)           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `archlab 1.0 timeline` — a milestone timeline: what happened when, and
+ * which period it happened in.
+ *
+ * WHY THIS PAGE DOCUMENTS IT, when it does not document the flowchart, the
+ * use-case diagram, the ER diagram or the dictionary. Those four are inferable
+ * from one example: their constructs are arrows and named rows. This one is
+ * documented for the opposite reason to the gantt above — not because it is
+ * hard to infer, but because what a reader needs to know is what is NOT here.
+ * The grammar is two keywords and they are obvious; the four things it refuses
+ * are not, and every one of them is a thing a reader arriving from a plan tool
+ * will reach for first. So the second snippet is a REFUSAL LIST, which no
+ * other kind on this page needs.
+ *
+ * These snippets are kept out of `FULL_SNIPPETS`, `SEQUENCE_SNIPPETS` and
+ * `GANTT_SNIPPETS` alike, for the reason those blocks give: the check script
+ * must push them through `parseTimelineText`.
+ */
+
+/** A complete timeline, exercising both keywords, a `#tag` and the one nested
+ *  prose slot — which is the whole grammar. */
+export const TIMELINE_MINIMAL_EXAMPLE: DocSnippet = {
+  id: "timeline-minimal",
+  code: `archlab 1.0 timeline
+title "How the platform grew"
+
+@timeline
+  period "2016"
+    event "Two people and a prototype"
+      desc "One Rails app on one box, deployed by hand on Friday afternoons."
+  period "2018"
+    event "First paying customer"
+    event "Split the monolith into an API and a web app"
+  period "2024"
+    event "Opened the public API" #platform
+    event "First region outside Europe"
+`,
+};
+
+/**
+ * THE SAME DOCUMENT WITH EVERY REFUSAL WRITTEN OUT AS A COMMENT, which is the
+ * one snippet on this page that teaches by what it cannot say.
+ *
+ * A reader arriving from a plan tool will try `5d`, `after`, `at` and a state
+ * word within their first five minutes, because those are the four things
+ * every other timeline product has. Each is refused BY NAME with a message
+ * pointing at the gantt, and the page is where that is cheapest to learn — an
+ * error message is read once, in a hurry, by someone who has already lost
+ * their place.
+ *
+ * It is a real document (the check script parses it), so the `//` lines are
+ * the grammar's own comment syntax and not prose about it.
+ */
+export const TIMELINE_REFUSALS_EXAMPLE: DocSnippet = {
+  id: "timeline-refusals",
+  code: `archlab 1.0 timeline
+title "What a timeline will not hold"
+
+@timeline
+  period "Any label — a year, a quarter, a phrase"
+    // An event is a POINT. It carries its label and "#tag"s, nothing else.
+    event "What happened"
+      desc "The one nested slot: a note, drawn under the label."
+    // Each of these is refused by name, and each points at the gantt:
+    //   event "Migration" 5d          — no duration; a point has no length
+    //   event "Cutover" after freeze  — no dependency; nothing waits here
+    //   event "Rewrite" at 12         — no start; nothing is measured
+    //   event "Rollout" active        — no state; this is what already happened
+    // If the work has lengths and prerequisites, write "archlab 1.0 gantt".
+    event "What happened next"
+`,
+};
+
+export const TIMELINE_SNIPPETS: readonly DocSnippet[] = [
+  TIMELINE_MINIMAL_EXAMPLE,
+  TIMELINE_REFUSALS_EXAMPLE,
+];
+
+/* -------------------------------------------------------------------------- */
+/* Lifecycle documents (a FIFTH grammar, checked by a fifth parser)            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `archlab 1.0 lifecycle` — one thing, the states it went through, and where
+ * it can end up.
+ *
+ * WHY THIS PAGE DOCUMENTS IT, when it does not document the flowchart, the
+ * use-case diagram, the ER diagram or the dictionary. For the timeline's
+ * reason, one degree stronger: what a reader needs is what is NOT here. This
+ * notation overlaps the flowchart on purpose and is deliberately the smaller
+ * of the two (`src/types/lifecycle.ts` records that the overlap was waived
+ * rather than argued away), so the thing that has to be learned first is that
+ * there is NO LINE BETWEEN TWO STATES — which is invisible in a working
+ * example, because an absence always is. So the second snippet is a REFUSAL
+ * LIST, the same shape the timeline's is, and for the same reason: an error
+ * message is read once, in a hurry, by someone who has already lost their
+ * place.
+ *
+ * These snippets are kept out of `FULL_SNIPPETS`, `SEQUENCE_SNIPPETS`,
+ * `GANTT_SNIPPETS` and `TIMELINE_SNIPPETS` alike, for the reason those blocks
+ * give: the check script must push them through `parseLifecycleText`.
+ */
+
+/** A complete lifecycle, exercising every keyword the grammar has — the
+ *  subject, a state, a terminal exit, a returning one and `ends`. */
+export const LIFECYCLE_MINIMAL_EXAMPLE: DocSnippet = {
+  id: "lifecycle-minimal",
+  code: `archlab 1.0 lifecycle
+title "An order, from checkout to the doormat"
+
+@lifecycle
+  subject "Order"
+    desc "One customer order, followed from checkout until it stops."
+  state placed "Placed"
+    exit "Cancelled" ends
+      when "the customer changes their mind before paying"
+  state paid "Paid"
+  state packed "Packed"
+  state shipped "Shipped"
+    exit "Returned" rejoins packed
+      when "the parcel comes back unopened"
+  state delivered "Delivered" ends
+`,
+};
+
+/**
+ * THE SAME DOCUMENT WITH EVERY REFUSAL WRITTEN OUT AS A COMMENT, which is the
+ * snippet that teaches this notation by what it cannot say.
+ *
+ * A reader arriving from a flowchart will try to join two states within their
+ * first five minutes, because that is what every other state-shaped notation
+ * lets them do. Each attempt is refused BY NAME with a message pointing at
+ * `archlab 1.0 flowchart`, and the page is where that is cheapest to learn.
+ *
+ * It is a real document (the check script parses it), so the `//` lines are
+ * the grammar's own comment syntax and not prose about it.
+ */
+export const LIFECYCLE_REFUSALS_EXAMPLE: DocSnippet = {
+  id: "lifecycle-refusals",
+  code: `archlab 1.0 lifecycle
+title "What a lifecycle will not hold"
+
+@lifecycle
+  subject "The thing"
+  state first "First"
+    // A branch belongs to the state it leaves, and lands in one of two
+    // places: it "ends", or it "rejoins" a state declared EARLIER.
+    exit "Gave up" ends
+      when "nothing happens for a week"
+  state second "Second"
+    // Each of these is refused by name, and each points at the flowchart:
+    //   state third "Third" to second   — no edge; the track IS the order
+    //   exit "Skip" rejoins last        — no forward rejoin; that is a shortcut
+    //   exit "Sent back" rejoins first  — this one is FINE: first comes earlier
+    //     exit "And then"               — no branch off a branch; depth is one
+    //   subject "Something else"        — one subject; two would be a graph
+    // If the picture is really steps that can go anywhere, write
+    // "archlab 1.0 flowchart".
+    exit "Sent back" rejoins first
+      when "it needs redoing"
+  state last "Last" ends
+`,
+};
+
+export const LIFECYCLE_SNIPPETS: readonly DocSnippet[] = [
+  LIFECYCLE_MINIMAL_EXAMPLE,
+  LIFECYCLE_REFUSALS_EXAMPLE,
 ];
 
 export const FULL_SNIPPETS: readonly DocSnippet[] = [

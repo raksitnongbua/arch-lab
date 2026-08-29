@@ -160,6 +160,15 @@ const MERMAID_USECASE = `flowchart TD
     order -.->|include| pay
 `;
 
+/* Mermaid's own timeline, exact header word and one period row per line. The
+   continuation spelling (a row beginning `:`) is exercised by
+   `check:mermaid`; here the question is only which canvas claims it. */
+const MERMAID_TIMELINE = `timeline
+  title How the platform grew
+  2016 : Two people and a prototype
+  2018 : First paying customer : Split the monolith
+`;
+
 /* Derived, never hand-written: the JSON case has to be the JSON this app
    actually emits, or the test proves something about a document nobody
    produces. */
@@ -185,6 +194,19 @@ for (const [label, text, kind] of [
   ["Mermaid flowchart", MERMAID_FLOWCHART, "flowchart"],
   ["Mermaid graph (the old spelling)", MERMAID_GRAPH, "flowchart"],
   ["Mermaid flowchart in the use-case convention", MERMAID_USECASE, "usecase"],
+  /* The eighth kind's two dialects. The `.alab` row is the one that matters
+     most on this branch: `timeline` was the GANTT's header word until the
+     rename, so "which canvas does `archlab 1.0 timeline` open" is a question
+     with two plausible answers in this repo's own history, and only one right
+     one. */
+  ["timeline .alab", VIEW_SEED_TEXT.timeline, "timeline"],
+  ["Mermaid timeline", MERMAID_TIMELINE, "timeline"],
+  /* The ninth kind, and the only one with a single dialect. There is no
+     Mermaid row to pair with it because Mermaid has no lifecycle notation —
+     `stateDiagram-v2` is a state machine, not one subject's history — and
+     inventing a row here would be asserting a conversion the product
+     deliberately does not offer. */
+  ["lifecycle .alab", VIEW_SEED_TEXT.lifecycle, "lifecycle"],
 ]) {
   const result = parseViewSource(text);
   check(
@@ -209,7 +231,13 @@ for (const [label, text, kind] of [
 
 console.log("\nthe seeds the ?d= values open with");
 
-for (const seed of ["c4", "sequence", "flowchart", "usecase"]) {
+/* DERIVED FROM THE SEED TABLE, not a hand-listed four. `VIEW_SEED_TEXT` is a
+   total `Record<SeedKind, string>`, so reading its keys covers every `?d=`
+   value that exists — the same move the registry sweep below had to make
+   after two registries were added and its hand-written list was not
+   (`codebase.md`, habit 4: a hardcoded list cannot notice the thing it has
+   never heard of). Four of the eight seeds went unchecked here until this. */
+for (const seed of Object.keys(VIEW_SEED_TEXT)) {
   const result = parseViewSource(VIEW_SEED_TEXT[seed]);
   check(
     `the "${seed}" seed parses — the page never opens on an error`,
@@ -421,7 +449,14 @@ for (const [label, text] of [
       : "a registry parsed zero ids — has one moved?",
   );
 
-  const resolver = read("src/features/playground/lib/example-param.ts");
+  /* THE UNION, not the `?e=` resolver that used to hold it. `exampleTextFor`
+     asked all nine registries by hand until they were collected into
+     `example-registry.ts`, which the MCP example tools read too — so this is
+     now the ONE file where forgetting a registry hides a whole notation from
+     both the playground and every agent. The assertion is unchanged in
+     substance: every registry on disk must be named by the file that claims
+     to ask all of them. */
+  const resolver = read("src/features/playground/lib/example-registry.ts");
 
   /* DERIVED FROM THE FILESYSTEM, not a list of four names. THE BUG THIS
      REPLACES A WEAKER ASSERTION FOR: the ER and dictionary registries were
@@ -449,23 +484,23 @@ for (const [label, text] of [
     ({ loader }) => loader === undefined || !resolver.includes(loader),
   );
   check(
-    `the resolver asks every example registry that exists (${registries.length} found)`,
+    `the registry union asks every example registry that exists (${registries.length} found)`,
     registries.length >= 4 && unasked.length === 0,
     unasked.length === 0
       ? `only ${registries.length} registries found — has a service moved?`
-      : `never asked: ${unasked.map((r) => r.feature).join(", ")} — a registry the resolver never asks is a set of demo cards whose ?e= links all open the default seed, silently`,
+      : `never asked: ${unasked.map((r) => r.feature).join(", ")} — a registry the union never asks is a set of demo cards whose ?e= links all open the default seed, and a notation no agent can see through list_example_models`,
   );
   /* The C4 registry has no `load*Example` export (its service predates that
      convention), so it is named directly — but named HERE, beside the derived
      check, rather than being one of four names that hid the gap. */
   check(
-    "the resolver asks the C4 model registry too",
+    "the registry union asks the C4 model registry too",
     resolver.includes("loadViewerModel"),
     "C4 models are the one registry without a load*Example export",
   );
   check(
     "an unknown ?e= falls back rather than throwing",
-    /return null;/.test(resolver),
+    /return null;/.test(read("src/features/playground/lib/example-param.ts")),
     "a stale link should still open a working playground",
   );
   check(

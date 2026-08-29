@@ -28,11 +28,22 @@ export const metadata: Metadata = {
   /* DERIVED TAIL. `CANVAS_EDITABLE_SUMMARY` is built from the capability grid,
      so the two notations named here are the two the page actually lets you
      edit — a hand-typed "C4 and sequence" is the shape that went stale five
-     times on this branch. The head keeps all six notation names because this is
-     the route that ranks for them; "arch-lab JSON" lost its qualifier and
+     times on this branch. The head keeps all nine notation names because this
+     is the route that ranks for them; "arch-lab JSON" lost its qualifier and
      "detected automatically" went, to buy the tail its 53 characters inside the
-     160. Measured at 152. */
-  description: `C4, sequence, flowchart, use case, ER or data dictionary in .alab, JSON or Mermaid, rendered live. ${CANVAS_EDITABLE_SUMMARY}`,
+     160, and "data dictionary" lost its qualifier to make room for "gantt"
+     and then for "timeline".
+
+     THE NINTH NOTATION COST THE JSON FORMAT ITS SLOT, and that was the right
+     side to cut from rather than dropping a notation name: this is the route
+     that ranks for the names, and nobody arrives at a diagram playground by
+     searching "arch-lab JSON" — that form is named on `/syntax`, in `/faq` and
+     in both `llms*.txt`, where a reader who needs it is actually looking.
+     Measured at 154 again, which is the same six characters of headroom this
+     line has had since the seventh notation and no more: a TENTH cannot be
+     added by cutting a format, because there is one left. When that day comes,
+     drop the list and name the count, as `APP_DESCRIPTION` did. */
+  description: `C4, sequence, flowchart, use case, ER, dictionary, gantt, timeline or lifecycle in .alab or Mermaid. ${CANVAS_EDITABLE_SUMMARY}`,
   // Self-canonical now. `/live/c4` and `/live/seq` used to be the real pages
   // and this one canonicalised INTO them; they are forwarding aliases now, so
   // the arrow points the other way and only one URL claims the content.

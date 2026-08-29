@@ -25,8 +25,8 @@ import { APP_NAME } from "@/lib/constants";
  *
  * WHAT THAT LOSS COST, AND THE HALF OF IT THAT WAS FIXABLE. The copy admitted
  * the card cannot know the kind; the ARTWORK did not — it drew a three-node C4
- * stack, and the eyebrow named two kinds of four. So a shared flowchart or
- * use-case diagram previewed as an advert for C4, which is precisely the bug
+ * stack, and the eyebrow named two kinds of four. So a shared flowchart,
+ * use-case, gantt, timeline or lifecycle diagram previewed as an advert for C4, which is precisely the bug
  * the per-kind cards were built to end, arriving back through the one route
  * that inherited all of them. It now draws `OgKindMix`: "more than one kind of
  * diagram lives here" is a claim one image CAN make truthfully, where "this is
@@ -34,7 +34,9 @@ import { APP_NAME } from "@/lib/constants";
  *
  * THE EYEBROW STOPPED LISTING KINDS, for the reason argued at length on the
  * root card: it read "C4 · SEQUENCE · FLOWCHART · USE CASE" long after ER and
- * the data dictionary shipped, and six names do not fit an eyebrow. It names the
+ * the data dictionary shipped, and nine names do not fit an eyebrow — the
+ * count is the half that stays true as notations land, which is the whole
+ * argument `APP_DESCRIPTION` made for giving its own list up. It names the
  * two ways IN instead, which is what this page of all pages is for — the
  * headline below already says "as text" and said nothing at all about the
  * canvas, on the one route where a canvas gesture is available.
@@ -49,7 +51,7 @@ export const contentType = OG_CONTENT_TYPE;
 export default function OpenGraphImage() {
   return new ImageResponse(
     <OgCard
-      eyebrow="SIX NOTATIONS · TEXT OR CANVAS"
+      eyebrow="NINE NOTATIONS · TEXT OR CANVAS"
       headline="Write the diagram"
       headlineTail="as text."
       footer=".alab, JSON or Mermaid · never uploaded"

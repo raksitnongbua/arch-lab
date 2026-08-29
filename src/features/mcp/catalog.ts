@@ -24,8 +24,25 @@
 // reason the section ids are — so `list_icons`'s argument documentation is
 // generated from the categories that actually exist. (The icon REGISTRY
 // itself is not importable here: it carries the artwork, which is React
-// components.)
+// components.) The gantt refusal tables are imported for the third time on
+// the same terms: `format_gantt` must name what the importer refuses, and
+// a hand-typed list would be a second source of truth for a set the parser
+// already holds — the exact drift `dry.md` forbids in agent-facing prose. The
+// tables are pure data with one type-only import; the mermaid BARREL is not
+// importable here, because it carries the parsers and would put a Mermaid
+// reader in the `/mcp` page's bundle.
 import { ICON_CATEGORY_ORDER } from "@/features/editor/lib/icons/categories";
+/* Deep-imported for the same reason `ICON_CATEGORY_ORDER` above is: this file
+   must stay pure data, and the playground barrel pulls in the editor. The
+   module is server-safe by its own contract — its header says so — so nothing
+   client-side rides along. */
+import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
+import {
+  GANTT_DATE_FORMAT,
+  REFUSED_GANTT_DURATION_UNITS,
+  REFUSED_GANTT_KEYWORDS,
+} from "@/features/mermaid/lib/gantt-mapping";
+import { REFUSED_TIMELINE_CONSTRUCTS } from "@/features/mermaid/lib/timeline-mapping";
 
 import { SYNTAX_SECTION_IDS } from "./content/syntax-sections";
 import { MAX_SOURCE_CHARS } from "./lib/limits";
@@ -40,6 +57,16 @@ import { MAX_SOURCE_CHARS } from "./lib/limits";
  * told off with.
  */
 const MAX_SOURCE_CHARS_TEXT = `max ${MAX_SOURCE_CHARS.toLocaleString("en-US")} characters`;
+
+/**
+ * How many notations the product draws, for the prose below.
+ *
+ * COUNTED FROM `KIND_BLURB`, which is total over the document kinds, rather
+ * than typed out: "four notations" survived in five places on this site long
+ * after there were six, and a tool description is the one place a stale count
+ * is read by something that cannot look around and notice.
+ */
+const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
 
 /** Where the server lives, relative to the site root. */
 export const MCP_ENDPOINT_PATH = "/api/mcp";
@@ -175,6 +202,84 @@ const DICT_SOURCE_ARG: McpArgDoc = {
 };
 
 /**
+ * The gantt tools' source argument.
+ *
+ * IT NAMES THE DIRECTION, not just the dialects. Mermaid `gantt` reads here
+ * and never comes back out, which is a fact about the tool an agent cannot
+ * discover by calling it — a caller that pastes gantt, gets `.alab` and plans
+ * to convert back later is holding a plan it will not be able to return.
+ */
+const GANTT_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The gantt text: `.alab` gantt (first line `archlab 1.0 gantt`) " +
+    `or Mermaid \`gantt\` code (${MAX_SOURCE_CHARS_TEXT}). The format is ` +
+    "detected from the first meaningful line — both dialects have a real " +
+    "header, so nothing here is guessed. Mermaid is READ ONLY: the import is " +
+    "one-way and lossy, and arch-lab never writes `gantt` back.",
+};
+
+/** The gantt keywords the importer refuses by name, derived from the table the
+ * parser refuses them with — see the import block at the top of this file. */
+const REFUSED_GANTT_TEXT = REFUSED_GANTT_KEYWORDS.map(
+  (entry) => `\`${entry.keyword}\``,
+).join(", ");
+
+/** The sub-day units, same derivation, same reason. */
+const REFUSED_GANTT_UNITS_TEXT = [...REFUSED_GANTT_DURATION_UNITS]
+  .map((unit) => `\`${unit}\``)
+  .join(", ");
+
+/**
+ * The timeline tools' source argument.
+ *
+ * IT NAMES THE DIRECTION TOO, and here the direction is the interesting fact:
+ * this is the kind next door to the gantt whose Mermaid conversion runs BOTH
+ * ways, so a caller who has read the gantt argument does not assume the same
+ * restriction applies.
+ */
+const TIMELINE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The timeline text: `.alab` timeline (first line " +
+    "`archlab 1.0 timeline`) or Mermaid `timeline` code " +
+    `(${MAX_SOURCE_CHARS_TEXT}). The format is detected from the first ` +
+    "meaningful line — both dialects have a real header, so nothing here is " +
+    "guessed. Unlike `gantt`, this conversion is TWO-WAY: arch-lab writes " +
+    "Mermaid `timeline` back.",
+};
+
+/** The Mermaid timeline constructs the importer refuses by name, derived from
+ * the table the parser refuses them with — the same derivation
+ * `REFUSED_GANTT_TEXT` uses, so a construct added there names itself here. */
+const REFUSED_TIMELINE_TEXT = REFUSED_TIMELINE_CONSTRUCTS.map(
+  (entry) => `\`${entry.keyword}\``,
+).join(", ");
+
+/**
+ * The lifecycle tools' source argument.
+ *
+ * IT NAMES THE ABSENCE, which is the interesting fact here: this is the only
+ * kind in the catalogue with ONE input language, and a caller who has just
+ * read the timeline's "TWO-WAY" note would otherwise assume a Mermaid dialect
+ * exists and go looking for it.
+ */
+const LIFECYCLE_SOURCE_ARG: McpArgDoc = {
+  name: "source",
+  required: true,
+  description:
+    "The lifecycle text: `.alab` lifecycle (first line " +
+    `\`archlab 1.0 lifecycle\`) — the only dialect (${MAX_SOURCE_CHARS_TEXT}). ` +
+    "There is NO Mermaid equivalent and none was invented: " +
+    "`stateDiagram-v2` is a state MACHINE (every transition that could " +
+    "happen, from anywhere to anywhere), not one subject's ordered history " +
+    "with a main track, and `journey` scores satisfaction. Importing either " +
+    "would mean inventing a track its author never wrote.",
+};
+
+/**
  * `create_share_link` reads EVERY document kind — the codec packs arbitrary
  * text and nothing in a link says which grammar wrote it, so its source
  * argument must advertise all five input languages where SOURCE_ARG,
@@ -193,7 +298,12 @@ const SHARE_SOURCE_ARG: McpArgDoc = {
     "`archlab 1.0 usecase`) or Mermaid in the actor/use-case convention. " +
     "ER diagrams: `.alab` er (first line `archlab 1.0 er`) or Mermaid " +
     "`erDiagram`. Data dictionaries: `.alab` dict (first line " +
-    "`archlab 1.0 dict`). The kind is detected from the first meaningful line.",
+    "`archlab 1.0 dict`). Gantt charts: `.alab` gantt (first line " +
+    "`archlab 1.0 gantt`) or Mermaid `gantt`. Milestone timelines: `.alab` " +
+    "timeline (first line `archlab 1.0 timeline`) or Mermaid `timeline`. " +
+    "Lifecycles: `.alab` lifecycle (first line `archlab 1.0 lifecycle`) — " +
+    "no Mermaid dialect exists for that one. " +
+    "The kind is detected from the first meaningful line.",
 };
 
 const FORMAT_ARG: McpArgDoc = {
@@ -384,6 +494,149 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     args: [DICT_SOURCE_ARG],
   },
   {
+    name: "validate_gantt",
+    title: "Validate a gantt",
+    description:
+      "Parse a GANTT CHART and report what a planner would: how long " +
+      "the plan runs, the calendar dates it spans when it has a `starts` " +
+      "line, and — the number nobody can read off their own text — the " +
+      "CRITICAL PATH, the chain of items that decides the end date. Then the " +
+      "audit a parse cannot do: dependency CYCLES (a waits on b waits on a), " +
+      "which the parser deliberately does not look for and which make the " +
+      "schedule meaningless; `after` entries that constrain nothing because a " +
+      "sibling already waits for them; sections holding only milestones, so " +
+      "the band draws no bar at all; and, as information rather than a fault, " +
+      "items whose float exceeds their own duration. Reads `.alab` gantt " +
+      "documents (first line `archlab 1.0 gantt`) and pasted Mermaid " +
+      "`gantt` code, naming on success what that one-way import dropped. " +
+      /* The one-line job, INTERPOLATED rather than retyped. An assistant
+         quotes one passage, not a page, so this sentence has to be
+         word-identical with the home page, `/demo`, `/syntax` and both
+         `llms*.txt` — and the way to guarantee that is to have one copy.
+         A near-miss paraphrase ("how long work takes and what blocks what")
+         stood here first and is exactly the drift this prevents. */
+      `${KIND_BLURB.gantt}. Use ` +
+      "`validate_flowchart` for the " +
+      "order of steps with no duration, and `validate_sequence` for messages " +
+      "over time.",
+    args: [GANTT_SOURCE_ARG],
+  },
+  {
+    name: "format_gantt",
+    title: "Format a gantt canonically",
+    description:
+      "Rewrite gantt text as canonical `.alab` gantt — the exact bytes " +
+      "arch-lab would write, so diffs stay minimal. Also the way to turn " +
+      "pasted Mermaid `gantt` code into an `.alab` gantt, which is a " +
+      "ONE-WAY AND LOSSY import: the response names in full what it dropped, " +
+      "and arch-lab never emits `gantt` in return, because `at-risk` has no " +
+      "Mermaid tag and arch-lab's critical path is computed from the float " +
+      "pass rather than typed — an emit would silently downgrade the first " +
+      "and restate the second as a hand-written claim. Mermaid's `crit` tag " +
+      "is DROPPED on import rather than honoured, for the same reason: " +
+      "theirs is a decoration the author types, ours is derived from " +
+      "durations and dependencies, so honouring it would paint a path the " +
+      "arithmetic disagrees with. Refused BY NAME rather than approximated, " +
+      "each because it would make the chart mean something else: " +
+      `${REFUSED_GANTT_TEXT} (a working week, an axis granularity or an ` +
+      "end-date meaning arch-lab derives or fixes itself), `until` (an item " +
+      "here has a length, not an end tied to another task), sub-day " +
+      `durations (${REFUSED_GANTT_UNITS_TEXT}), and a \`dateFormat\` other ` +
+      `than \`${GANTT_DATE_FORMAT}\`. Gantt charts travel as \`.alab\` text or ` +
+      "as a share link.",
+    args: [GANTT_SOURCE_ARG],
+  },
+  {
+    name: "validate_timeline",
+    title: "Validate a milestone timeline",
+    description:
+      "Parse a MILESTONE TIMELINE — events as points, grouped into named " +
+      "periods — and report the audit a parse cannot do. Two of its findings " +
+      "exist nowhere else in arch-lab. PERIODS OUT OF ORDER: this notation " +
+      "never reads a period label as a date, so nothing else notices that " +
+      "`2024, 2019, 2025` is written out of sequence, and the diagram draws " +
+      "declaration order confidently. EVENTS CARRYING A DURATION OR A " +
+      'DEPENDENCY in their label ("three weeks", "after the freeze") — ' +
+      "these parse perfectly and are the sign the document wants to be a " +
+      "gantt. Then: the same event label twice inside one period, labels that " +
+      "wrap past three lines when drawn, and — as information rather than a " +
+      "fault — periods holding a single event. Reads `.alab` timeline (first " +
+      "line `archlab 1.0 timeline`) and pasted Mermaid `timeline` code. " +
+      /* The one-line job, INTERPOLATED rather than retyped, for the reason
+         the gantt entry gives: an assistant quotes one passage, not a page,
+         so this sentence must be word-identical with the home page, `/demo`,
+         `/syntax`, `/faq` and both `llms*.txt`. */
+      `${KIND_BLURB.timeline}. Use ` +
+      "`validate_gantt` when the work has lengths and prerequisites, and " +
+      "`validate_sequence` for messages between participants over time.",
+    args: [TIMELINE_SOURCE_ARG],
+  },
+  {
+    name: "format_timeline",
+    title: "Format a milestone timeline canonically",
+    description:
+      "Rewrite timeline text as canonical `.alab` timeline — the exact bytes " +
+      "arch-lab would write, so diffs stay minimal. Also the way to turn " +
+      "pasted Mermaid `timeline` code into an `.alab` timeline. THAT " +
+      "CONVERSION RUNS BOTH WAYS, unlike `gantt` next door: a timeline has no " +
+      "state vocabulary and derives nothing, so Mermaid holds everything it " +
+      "says. Import normalises two spellings rather than losing them — a " +
+      "continuation row (a line beginning `:`) folds into the period above " +
+      "it, and `<br>` becomes a real newline — and refuses BY NAME " +
+      `${REFUSED_TIMELINE_TEXT} (Mermaid groups periods one level above the ` +
+      "period; arch-lab has only the period itself, so flattening would " +
+      "either strand the period labels or merge bands you separated) and a " +
+      "period row listing no events. Export drops what `timeline` has " +
+      "nowhere to put: an event's `desc` and its `#tag`s. Timelines travel " +
+      "as `.alab` text, as Mermaid, or as a share link.",
+    args: [TIMELINE_SOURCE_ARG],
+  },
+  {
+    name: "validate_lifecycle",
+    title: "Validate a lifecycle",
+    description:
+      "Parse a LIFECYCLE — one named subject, the ordered states it passes " +
+      "through, and the branches that leave that track — and report the " +
+      "audit a parse cannot do. Every finding describes a document that " +
+      "parses and is still wrong. THE SUBJECT NEVER TERMINATES: nothing " +
+      "carries `ends`, so the document says the subject reaches the last " +
+      "state and stays there. UNREACHABLE STATES: `ends` means the subject " +
+      "stops, so anything declared after a final state is stranded — each " +
+      "line is valid alone and only the pair is wrong. BRANCHES NOBODY KNOWS " +
+      "HOW TO TAKE: an `exit` with no `when` draws a departure and refuses " +
+      "to say what causes it. STATES THAT READ AS STEPS: a state is a place " +
+      'the subject can BE ("Paid"), not something somebody does ("Take ' +
+      'payment") — a document of imperatives is a flowchart written in this ' +
+      "notation, and this is the only place that will say so. And, when " +
+      "there are no branches at all, that the document is a milestone " +
+      "timeline. Reads `.alab` lifecycle only. " +
+      /* The one-line job, INTERPOLATED rather than retyped, for the reason
+         the gantt and timeline entries give: an assistant quotes one passage,
+         not a page, so this sentence must be word-identical with the home
+         page, `/demo`, `/syntax`, `/faq` and both `llms*.txt`. */
+      `${KIND_BLURB.lifecycle}. Use ` +
+      "`validate_flowchart` when the picture is steps and decisions rather " +
+      "than one thing moving, and `validate_timeline` when nothing branches.",
+    args: [LIFECYCLE_SOURCE_ARG],
+  },
+  {
+    name: "format_lifecycle",
+    title: "Format a lifecycle canonically",
+    description:
+      "Rewrite lifecycle text as canonical `.alab` lifecycle — the exact " +
+      "bytes arch-lab would write, so diffs stay minimal. ONE DIALECT IN AND " +
+      "ONE OUT: there is no Mermaid lifecycle to convert from or to, for the " +
+      "reason `validate_lifecycle` gives. What the grammar refuses BY NAME, " +
+      "each because accepting it would make this an arbitrary graph — which " +
+      "is the flowchart: an edge between two states (`to`, `next`, `then`, " +
+      "`goes`, `after` — the track IS the order the states are written in), " +
+      "a `rejoins` naming a state declared LATER (a forward shortcut along " +
+      "the track), an `exit` nested inside another (branch depth is one), " +
+      "and a second `subject`. Lifecycles travel as `.alab` text or as a " +
+      "share link.",
+    args: [LIFECYCLE_SOURCE_ARG],
+  },
+  {
     name: "convert_model",
     title: "Convert between formats",
     description:
@@ -498,29 +751,44 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
   },
   {
     name: "list_example_models",
-    title: "List example models",
+    title: "List example documents",
     description:
-      "List the complete, real C4 models arch-lab ships, with their sizes. " +
-      "Use one as a pattern for idiomatic structure rather than inventing a " +
-      "shape.",
+      "Every complete, real document arch-lab ships, grouped by notation — " +
+      `all ${DOCUMENT_KIND_COUNT} of them, not just C4 — each with what it ` +
+      "holds, counted from the parsed document. Read it BEFORE choosing a " +
+      "notation as well as before writing one: the grouping says what each " +
+      "kind is for, so an agent that only knows arch-lab draws C4 finds the " +
+      "gantt, the ER schema or the lifecycle it actually wanted. Ids are " +
+      "unique across every notation, so an id alone names a document.",
     args: [],
   },
   {
     name: "get_example_model",
-    title: "Get an example model",
+    title: "Get an example document",
     description:
-      "Fetch one bundled example model in full, as .alab or arch-lab JSON.",
+      "Fetch one bundled example in full, in any notation — the tool " +
+      "resolves the id across every registry and says which notation it " +
+      "found, so use one as a pattern for idiomatic structure rather than " +
+      "inventing a shape.",
     args: [
       {
         name: "id",
         required: true,
         description:
-          'The example\'s id, from list_example_models (e.g. "shopflow").',
+          'The example\'s id, from list_example_models (e.g. "shopflow", a ' +
+          'C4 model, or "store-migration", a gantt). One flat namespace: no ' +
+          "notation argument is needed or accepted.",
       },
       {
         name: "format",
         required: false,
-        description: 'Either "alab" (default) or "json".',
+        description:
+          '"alab" (default) — the .alab text, in the notation\'s own ' +
+          "grammar, which is what to edit and what every writer tool reads. " +
+          '"json" — the parsed document. For a C4 model that is ' +
+          "arch-lab JSON, a file format the readers accept; for the other " +
+          "kinds it is the parser's own shape, good for inspecting and NOT " +
+          "an input format, which the response says on every such fetch.",
       },
     ],
   },
@@ -673,6 +941,40 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
       "value comes from — plus the number no other tool here reports: how " +
       "many of your fields are actually documented.",
     tools: toolsNamed("validate_dict", "format_dict"),
+  },
+  {
+    id: "gantt",
+    title: "Gantt charts",
+    blurb:
+      "The same check-and-format loop for how long work takes and what " +
+      "blocks what — plus the two answers only arithmetic can give: the " +
+      "critical path, and the dependency cycles that would make it a " +
+      "fiction. Mermaid `gantt` comes in here and never goes back out.",
+    tools: toolsNamed("validate_gantt", "format_gantt"),
+  },
+  {
+    id: "timeline",
+    title: "Milestone timelines",
+    blurb:
+      "The same check-and-format loop for what happened and in what order — " +
+      "plus the two findings only this tool can make: periods written out of " +
+      "sequence, which nothing else here reads a period label closely enough " +
+      "to notice, and events carrying a duration or a dependency in their " +
+      "label, which is the document asking to be a gantt. Mermaid " +
+      "`timeline` goes both ways.",
+    tools: toolsNamed("validate_timeline", "format_timeline"),
+  },
+  {
+    id: "lifecycle",
+    title: "Lifecycles",
+    blurb:
+      "The same check-and-format loop for one thing moving through states — " +
+      "plus the findings only this tool can make: a subject that never " +
+      "terminates, states stranded after a final one, branches with no " +
+      "condition on them, and states named as ACTIONS, which is a flowchart " +
+      "written in the wrong notation. No Mermaid dialect exists for this " +
+      "one, and none was invented.",
+    tools: toolsNamed("validate_lifecycle", "format_lifecycle"),
   },
   {
     id: "inspect",

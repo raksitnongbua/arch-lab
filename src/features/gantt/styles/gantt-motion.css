@@ -1,0 +1,751 @@
+/* ---------------------------------------------------------------------------
+ * Gantt canvas motion.
+ *
+ * FIVE MOTIONS, and each one has to answer a question a still frame cannot,
+ * which is the test `.claude/rules/new-diagram-type.md` sets in place of the
+ * old absolute "every connector is animated" rule:
+ *
+ *   1. ENTRANCE — rows rise in dependency rank, then connectors draw along the
+ *      critical chain first. Answers "what order does this plan run in".
+ *   2. AMBIENT — at rest, a current runs EVERY connector, staggered by
+ *      dependency rank so it sweeps down the plan in the order the plan runs.
+ *      Answers "which way does time go through this graph", which a still
+ *      frame genuinely cannot say: a Gantt's arrows are drawn, not directed by
+ *      anything the eye picks up at a glance, and a reader tracing "what
+ *      happens after what" is reading arrowheads one at a time.
+ *
+ *      THIS IS A REVERSAL, and the rule it reverses was wrong rather than
+ *      merely narrow. The current used to be scoped to `[data-critical="1"]`
+ *      and was justified as carrying "this is the chain that decides the end
+ *      date". But criticality is ALREADY PAINTED — a critical connector has a
+ *      heavier stroke in `--gantt-critical`, a critical bar has its leading cap —
+ *      and both survive a still export and reduced motion, which the motion
+ *      never did. So the motion was a second, weaker carrier of a meaning that
+ *      was already fully carried, and it was spending the canvas's only
+ *      travelling mark to do it. Widening it costs nothing that was load
+ *      -bearing and buys the one thing the picture was missing: direction.
+ *   3. FOCUS — the same current runs whichever chain the reader selected.
+ *      Answers "what is this one item tangled with".
+ *   4. AXIS SWEEP — a wash loops along the axis rule, and nowhere else.
+ *      Answers "which of these two axes is time", which a Gantt's ruler cannot
+ *      say standing still: a row of ticks over a row of bars is a scale, and
+ *      only the direction something travels says which way the scale runs.
+ *   5. BAR HATCH — every bar is textured with one shared 45° hatch, and at
+ *      rest that hatch MARCHES. A bar IS a span of time, and every other
+ *      channel on it is already spent: fill and border carry the reporting
+ *      state, the leading cap carries criticality, position carries when. The
+ *      only property left to carry DURATION is width, and width at differing
+ *      offsets is the comparison the eye is worst at. A texture crawling
+ *      across all of them at one speed turns the plot into a single moving
+ *      surface, and a bar's width becomes how much of that surface it holds —
+ *      which is a comparison the eye is good at. Remove it and the diagram
+ *      still SHOWS the durations; it stops making a span feel like one.
+ *
+ *      It replaced a single head sweeping each bar. Two reasons, and the first
+ *      is not taste: one mark per bar meant one animation per bar, a stagger,
+ *      and a narrow-bar case where the head was wider than the bar and pulsed
+ *      in place instead of travelling. A tiled texture has no degenerate case
+ *      — a six-unit bar simply shows less of it — and one pattern means one
+ *      animation for the whole canvas.
+ *
+ * Remove any of the five and a specific question stops being answerable. That
+ * is the bar; a decorative sixth would not clear it.
+ *
+ * WHAT (4) IS NOT, because the shape it is one step away from is banned: it is
+ * NOT a today marker. This canvas has none on purpose — a share link carries
+ * its document but not the day it was minted, so a playhead would tell every
+ * later reader something different and wrong. The sweep therefore never leaves
+ * the axis band; `check:gantt-motion` asserts the geometry, not the intent.
+ *
+ * OPT OUT TWICE, both of which must hold (`check:gantt-motion` asserts it):
+ *   - Every `animation` sits inside `prefers-reduced-motion: no-preference`.
+ *     The RESTING state — everything visible, nothing moving — is declared
+ *     outside the query, which is what a no-JS reader and the server-rendered
+ *     example pages get.
+ *   - The app-wide idle toggle gates on `[data-af-idle="on"]`, the attribute
+ *     every other viewer in this app stamps. NOT `data-idle-motion`: the ER
+ *     stylesheet gates on that spelling, nothing stamps it, and ER's ambient
+ *     pulse has therefore never been switchable. Its own check passes because
+ *     it only asserts such a rule EXISTS. Do not copy that mistake here.
+ *
+ * FOUR STANDING RULES, each of which has already shipped as a bug somewhere in
+ * this repo:
+ *
+ *   - NO SVG `filter` ON A CONNECTOR, ever. A percentage filter region is in
+ *     `objectBoundingBox` units, and a horizontal or vertical line has a
+ *     zero-extent box in one axis — the region collapses and the paint lands
+ *     somewhere else entirely. A Gantt is mostly horizontal and vertical runs,
+ *     so this canvas is the worst possible place to forget it. Want a soft
+ *     edge? Draw a wider path.
+ *   - NEGATIVE animation delays for the staggered infinite animations. A
+ *     positive delay is invisible until an ancestor class changes; then the
+ *     animation restarts and replays its silent head, and the reader sees every
+ *     connector blink off and back on.
+ *   - FOCUS DIMS AND ANIMATES, IT DOES NOT REPAINT. No stroke, fill, width or
+ *     arrowhead changes in either direction — a focused line that recolours is
+ *     a new border appearing where one already was. `:focus-visible` is the one
+ *     exception, because a keyboard user has no hover to fall back on.
+ *   - THE CURRENT RIDES A SEPARATE PATH. Never a dasharray on the base line:
+ *     the base stroke carries critical-vs-slack meaning, and a dash pattern
+ *     laid over it would overwrite exactly the distinction the reader needs.
+ *
+ * CRITICAL-PATH EMPHASIS IS NOT FOCUS, and the difference is why it is allowed
+ * to be painted at all. Criticality is a property of the model — true wherever
+ * the pointer is — in the same category as ER's solid-versus-dashed line. It
+ * is carried by a heavier `--primary` connector and a cap on the bar's leading
+ * edge, both of which survive a still export and reduced motion. Focus is the
+ * transient thing, and focus never repaints.
+ *
+ * TIMINGS. The tunables below are the source of truth for the reveal budget;
+ * `check:gantt-motion` computes the worst case FROM THESE PROPERTIES and
+ * fails over 1.5s, so changing one here changes what the check enforces rather
+ * than drifting from it. Stagger caps are duplicated in `lib/layout.ts` (`GANTT.waveCap`,
+ * `GANTT.edgeWaveCap`) because CSS cannot import TypeScript; the same check pins
+ * the pair.
+ * ------------------------------------------------------------------------- */
+
+.af-gantt-canvas {
+  /* SIZING, the one non-motion concern in this file, and it lives here because
+     it is the canvas root's own declaration block — a second stylesheet holding
+     four lines would be a file nobody remembers to look in.
+
+     The component gives the SVG its NATURAL width and height. These three
+     declarations are what turn that into a responsive, centred drawing: the cap
+     shrinks it on a narrow pane (the viewBox does the fitting, so nothing
+     distorts), `height: auto` keeps the ratio while it shrinks, and the auto
+     inline margins leave equal air either side on a wide one. Before this the
+     SVG was `width="100%"` and the rail sat hard against the left edge with the
+     last tick against the right. */
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+  height: auto;
+
+  --gantt-row-rise: 260ms;
+  --gantt-row-beat: 38ms;
+  --gantt-row-cap: 6;
+
+  --gantt-edge-draw: 280ms;
+  --gantt-edge-beat: 30ms;
+  --gantt-edge-cap: 6;
+  --gantt-edge-lead: 320ms;
+
+  --gantt-current: 2s;
+  --gantt-focus-current: 1.2s;
+
+  /* HOW FAR APART TWO ADJACENT RANKS START. The stagger is what turns a
+     current on every connector from "everything twitching at once" into a
+     front travelling down the plan, so the spread across the capped range
+     (`cap * step`) has to stay comfortably UNDER one cycle. Let it reach a
+     full cycle and the last rank laps back into phase with the first, so the
+     front appears to wrap and the direction it was drawn to show is exactly
+     what stops reading. `check:gantt-motion` computes `cap * step` against
+     the cycle from these properties and `GANTT.edgeWaveCap`, so retuning either
+     duration is caught here rather than by eye. */
+  --gantt-current-step: 220ms;
+  --gantt-focus-current-step: 150ms;
+  --gantt-breathe: 1.5s;
+
+  /* The axis sweep. Slower than the ambient current on purpose: it runs
+     whether or not the reader has gone quiet, so it has to sit further into
+     the background than the mark that only appears at rest. The head is long
+     because it is a wash over a ruler rather than a pulse along a wire — a
+     short head here reads as a tick lighting up, which is a date. */
+  --gantt-axis-sweep: 3.6s;
+  --gantt-axis-head: 120;
+
+  /* THE HATCH. One tile per `--gantt-hatch-march`, and the translate is exactly
+     one tile — see the keyframes for why any other distance stutters.
+
+     The opacity is the number that protects the notation. The hatch lies on
+     the fill that carries planned/active/done/at-risk, so the wash it applies
+     is `stripe share of the tile * this`, and `check:gantt-motion` computes
+     that product from `GANTT` and fails if the texture starts flattening the four
+     states toward one another. It is the same reason the stripe colour is a
+     token and never a literal: a hard-coded grey is right in one theme. */
+  --gantt-hatch-march: 1.1s;
+  --gantt-hatch-opacity: 0.18;
+}
+
+/* ---------------------------------------------------------------------------
+ * Resting state — outside the media query on purpose.
+ * ------------------------------------------------------------------------- */
+
+.af-gantt-row,
+.af-gantt-edge {
+  opacity: 1;
+}
+
+.af-gantt-bar-fill {
+  fill: var(--node-external);
+  stroke: var(--node-external-border);
+  stroke-width: 1.25;
+}
+.af-gantt-row[data-state="done"] .af-gantt-bar-fill {
+  fill: var(--node-queue);
+  stroke: var(--node-queue-border);
+}
+.af-gantt-row[data-state="active"] .af-gantt-bar-fill {
+  fill: var(--node-internal);
+  stroke: var(--node-internal-border);
+}
+.af-gantt-row[data-state="at-risk"] .af-gantt-bar-fill {
+  fill: var(--flow-decision);
+  stroke: var(--flow-decision-border);
+}
+
+.af-gantt-cap {
+  fill: var(--gantt-critical);
+}
+.af-gantt-milestone {
+  fill: var(--node);
+  stroke: var(--gantt-critical);
+  stroke-width: 2;
+}
+
+/* ONE WEIGHT PER CONNECTOR, read by both the base line and the current that
+   rides it. It was two hard-coded numbers until the current went onto every
+   connector, and that widening is what exposed the problem: the current was a
+   flat 2.1 while a slack line is 1.4, so every slack connector THICKENED to
+   critical weight for as long as the head was on it. Stroke weight is one half
+   of how criticality is painted, and an ambient motion that erases it while it
+   passes is the motion taking payment from the notation.
+
+   Deriving both from one property is the smallest fix that works, and
+   deliberately not a second visual language: the current is simply as heavy as
+   whatever it is travelling along, so the weight distinction survives the
+   motion instead of being flattened by it. Nothing here is keyed to focus or
+   to hover — `data-critical` is a property of the model, true wherever the
+   pointer is, so this still paints in a still export and under reduced motion.
+   The alternative — giving the current its own accent so it could stay
+   distinct at a shared weight — is the exact move that grew ER's pulse a glow,
+   then a filter, then two bands across the diagram. */
+.af-gantt-edge {
+  --gantt-edge-weight: 1.4;
+}
+.af-gantt-edge[data-critical="1"] {
+  --gantt-edge-weight: 2.1;
+}
+
+.af-gantt-edge-line {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: var(--gantt-edge-weight);
+  stroke-linecap: round;
+}
+.af-gantt-edge[data-critical="1"] .af-gantt-edge-line {
+  stroke: var(--gantt-critical);
+}
+.af-gantt-arrow {
+  fill: var(--edge);
+}
+.af-gantt-edge[data-critical="1"] .af-gantt-arrow {
+  fill: var(--gantt-critical);
+}
+
+/* ---------------------------------------------------------------------------
+ * The running light: three bands over the untouched line.
+ *
+ * THIS IS THE SEQUENCE CANVAS'S COMET, and it is here because a reader looked
+ * at the real page and could not see what we had. One band, `--edge-drift`, at
+ * exactly the line's own weight, peaking at 0.9 opacity for a 26-unit slice —
+ * on screen that is a slightly different grey sliding along a grey line. What
+ * makes sequence's read at viewing distance is not a brighter colour, it is
+ * LAYERS: a wide soft halo, a mid tail and a sharp full-strength head, their
+ * leading edges aligned on one clock so the three are seen as one object.
+ *
+ * PERCENTAGES, NOT DISTANCES. Every dasharray here sums to 100 and every band
+ * carries `pathLength="100"`, so the head is 9% of whatever connector it rides.
+ * Our fixed 26-unit head was 43% of a short hop and 6% of a long span — a smear
+ * on one and invisible on the other, which is most of why the old one failed.
+ * The three duties (30/70, 22/78, 9/91) are sequence's own numbers, and
+ * `check:gantt-motion` reads them out of `sequence-motion.css` rather than
+ * trusting this sentence, the way `check:sequence-motion` reads them out of the
+ * C4 canvas. Lengthen them and the old bug — a doubled, fuzzy line instead of a
+ * highlight passing over one — comes back.
+ *
+ * TWO THINGS OF SEQUENCE'S WE DID NOT TAKE, both deliberate:
+ *
+ *   1. NO `filter: blur()` ON THE GLOW. Sequence blurs its halo. This canvas
+ *      may not: a percentage filter region is in `objectBoundingBox` units and
+ *      a Gantt connector is orthogonal, so its box is zero-extent in one axis,
+ *      the region collapses and the paint lands somewhere else. That cost this
+ *      repo three commits on the ER canvas. The rule's own remedy is used
+ *      instead — "if a soft edge is wanted, draw a wider path" — so the halo is
+ *      a wide band at low opacity rather than a blurred one.
+ *   2. NOT THE LINE'S OWN COLOUR. Sequence paints its comet in the message's
+ *      own ramp. Here the line's colour IS the critical-versus-slack signal, so
+ *      a comet wearing it would make the light say what the line already says
+ *      and leave the light itself unreadable on the dim half. `--edge-drift` is
+ *      this app's designated travelling-mark token; the light is one thing on
+ *      every connector, and the line underneath keeps carrying criticality.
+ *
+ * WEIGHTS. The two OPAQUE bands are exactly `--gantt-edge-weight`, the weight of
+ * the line they ride, so the light can never thicken a slack connector to
+ * critical weight — the defect found when the current was widened off the
+ * critical chain. The halo is wider, and that is the one place a stroke on this
+ * canvas exceeds its line: at 0.22 opacity it reads as light around the line
+ * rather than as the line's weight, which is what carrying meaning in a stroke
+ * requires. If that turns out to be wrong on screen, this is the single number
+ * to change and nothing else depends on it.
+ *
+ * DISPLAY-GATED, not merely animation-gated, which is sequence's rule and it is
+ * load-bearing: these bands have static opacities rather than an opacity ramp
+ * in their keyframes, so a comet frozen by reduced motion or by the idle toggle
+ * would be three bright stripes parked on every connector. `display: none` here
+ * is the resting state, and it is also what the server renders and what the SVG
+ * export ships.
+ * ------------------------------------------------------------------------- */
+
+.af-gantt-flow-glow,
+.af-gantt-flow-tail,
+.af-gantt-flow-head {
+  display: none;
+  fill: none;
+  /* ALL THREE LAYERS FROM ONE TOKEN, so a theme override moves the whole
+     comet and the halo can never drift onto a second colour. See
+     `--gantt-flow` in `globals.css` for why the light has its own token rather
+     than sharing `--edge-drift` with the other kinds, and
+     `check:gantt-palette` for the measurement that holds it there. */
+  stroke: var(--gantt-flow);
+  stroke-linecap: round;
+}
+
+.af-gantt-flow-glow {
+  stroke-width: calc(var(--gantt-edge-weight) * 2.6);
+  opacity: 0.22;
+  stroke-dasharray: 30 70;
+}
+
+.af-gantt-flow-tail {
+  stroke-width: var(--gantt-edge-weight);
+  opacity: 0.45;
+  stroke-dasharray: 22 78;
+}
+
+.af-gantt-flow-head {
+  stroke-width: var(--gantt-edge-weight);
+  stroke-dasharray: 9 91;
+}
+
+/* The axis sweep's own line, sitting exactly on the rule. Inert at rest by
+   carrying a ZERO-LENGTH dash rather than `opacity: 0` — every `opacity: 0` on
+   this canvas is reserved for the entrance, and `check:gantt-motion` fails
+   any other rule outside the media query that hides something. The butt cap is
+   load-bearing: a round cap paints a dot at a zero-length dash, which would put
+   a permanent mark on the axis at day zero. */
+.af-gantt-axis-sweep {
+  fill: none;
+  /* THE SAME TOKEN AS THE CONNECTOR LIGHT, deliberately: both are travelling
+     marks over the canvas ground, and one canvas should have one answer to
+     "what colour is motion here". Its quietness is carried by its OPACITY —
+     it peaks at 0.5 where the head runs at full strength — rather than by a
+     duller colour, because a mark that is both dimmer AND a different hue is
+     two mechanisms doing one job, and the dimmer one would have inherited the
+     dark-theme fault this token exists to fix. */
+  stroke: var(--gantt-flow);
+  stroke-width: 3;
+  stroke-linecap: butt;
+  stroke-dasharray: 0 var(--gantt-axis-len);
+}
+
+/* THE HATCH AT REST IS VISIBLE, AND STILL. That is a decision, not an
+   oversight, and it is the reason this mechanism is safe to ship without a
+   browser to check it in.
+
+   Visible, because the alternative is worse: a texture that materialises only
+   once the reader goes quiet is the bar changing its appearance, which is the
+   repaint the focus rules forbid everywhere else on this canvas. A hatch that
+   is simply part of what a span looks like adds no state a reader must track.
+
+   And still-but-present is exactly what an engine that declines to repaint a
+   `<pattern>`'s animated contents would produce, so the WORST CASE of the
+   march is the resting frame — correct, just not moving. That bounded failure
+   is why a CSS transform on a group inside the pattern was chosen over the
+   alternatives; it is also what the SVG export ships, since a still file is
+   the resting frame by definition.
+
+   `pointer-events: none` because the overlay lies over the bar and the row's
+   own hit target must keep receiving the pointer. */
+.af-gantt-hatch-overlay {
+  pointer-events: none;
+}
+.af-gantt-hatch-line {
+  fill: none;
+  /* THE HATCH DOES NOT FOLLOW `--gantt-flow`, and that is the one place this
+     canvas keeps two answers. The running light and the axis sweep TRAVEL
+     OVER the canvas ground; the hatch LIES ON the fill that carries
+     planned/active/done/at-risk. Its job is to be seen without being a
+     colour. `--gantt-flow` is a saturated cyan, and even at this coverage (4.1%
+     of each bar, computed in `check:gantt-motion`) a saturated hue tints
+     all four state fills toward itself — and `check:gantt-palette`
+     measures the TOKENS, so it would not catch the shift. `--edge-drift` is
+     near-neutral, which is what a texture over a signal has to be. */
+  stroke: var(--edge-drift);
+  stroke-width: var(--gantt-hatch-stroke);
+  stroke-opacity: var(--gantt-hatch-opacity);
+  stroke-linecap: butt;
+}
+
+.af-gantt-rail-name {
+  fill: var(--node-foreground);
+}
+.af-gantt-rail-section {
+  fill: var(--muted-foreground);
+  letter-spacing: 0.13em;
+}
+.af-gantt-axis-label {
+  fill: var(--muted-foreground);
+}
+.af-gantt-duration {
+  fill: var(--node-meta);
+}
+.af-gantt-grid,
+.af-gantt-rule {
+  stroke: var(--canvas-grid);
+}
+
+.af-gantt-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+/* The one place focus is allowed to paint: a keyboard user has no hover. */
+.af-gantt-hit:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus — dim the unrelated, light the chain. No repaint.
+ * ------------------------------------------------------------------------- */
+
+.af-gantt-canvas.af-gantt-has-focus .af-gantt-row,
+.af-gantt-canvas.af-gantt-has-focus .af-gantt-edge {
+  opacity: 0.22;
+}
+.af-gantt-canvas.af-gantt-has-focus .af-gantt-row[data-lit="1"],
+.af-gantt-canvas.af-gantt-has-focus .af-gantt-edge[data-lit="1"] {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion proper.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .af-gantt-canvas.af-gantt-has-focus .af-gantt-row,
+  .af-gantt-canvas.af-gantt-has-focus .af-gantt-edge {
+    transition: opacity 160ms ease;
+  }
+
+  /* 1. Entrance. `--gantt-wave` is the item's dependency RANK, stamped
+     server-side by the component: rows lift in the order the plan runs, and
+     two independent items in different sections lift together because they
+     can start together. */
+  .af-gantt-canvas[data-reveal="1"] .af-gantt-row {
+    opacity: 0;
+    animation: af-gantt-rise var(--gantt-row-rise)
+      cubic-bezier(0.22, 0.68, 0.3, 1) forwards;
+    animation-delay: calc(var(--gantt-wave, 0) * var(--gantt-row-beat));
+  }
+  .af-gantt-canvas[data-reveal="1"] .af-gantt-edge {
+    opacity: 0;
+    animation: af-gantt-appear 200ms linear forwards;
+    animation-delay: calc(
+      var(--gantt-edge-lead) + var(--gantt-edge-wave, 0) *
+        var(--gantt-edge-beat)
+    );
+  }
+  .af-gantt-canvas[data-reveal="1"] .af-gantt-edge-line {
+    stroke-dasharray: var(--gantt-len);
+    stroke-dashoffset: var(--gantt-len);
+    animation: af-gantt-draw var(--gantt-edge-draw) cubic-bezier(0.4, 0, 0.2, 1)
+      forwards;
+    animation-delay: calc(
+      var(--gantt-edge-lead) + var(--gantt-edge-wave, 0) *
+        var(--gantt-edge-beat)
+    );
+  }
+
+  /* 2. Ambient — at rest, on EVERY connector, in dependency order. See the
+     header for why this stopped being the critical chain's alone.
+
+     THE STAGGER IS THE POINT, not a softening of it. `--gantt-edge-wave` is the
+     connector's topological rank, stamped per edge by the layout from the same
+     graph the entrance staggers on, so the heads leave the earliest tasks
+     first and their successors follow: what a reader sees is time running
+     forward through the plan, which is the one thing a static arrow cannot
+     say. Fire them together instead and the same motion reads as the whole
+     diagram twitching.
+
+     THE DELAY IS NEGATIVE, and this is finally the case that rule exists for.
+     With one current it protected nothing; with a current on every connector a
+     positive delay means each arrow replays its silent head the moment an
+     ancestor class changes — every focus, every idle transition — and the
+     reader watches the entire diagram blink off and back on. That shipped on
+     the ER canvas. The sign lives here rather than inside `--gantt-current-step`
+     so it is visible at the site that depends on it.
+
+     Yields to focus, so the two currents never run at once and the reader is
+     never asked to track two travelling gradients. */
+  /* ONE RULE PER BAND, WITH THE ANIMATION NAMED LITERALLY. This was briefly a
+     single grouped rule taking its name from a custom property
+     (`animation-name: var(--gantt-flow-anim)`), which is shorter and was a latent
+     defect. A declaration containing `var()` is re-resolved on EVERY custom
+     -property invalidation on the element — and a theme switch here is a class
+     swap on `<html>` that re-resolves every inherited property on every node in
+     the SVG. An `animation-name` that fails to resolve computes to `none`,
+     which CANCELS the animation while `display: inline` from the same rule
+     stays applied: three bright stripes parked on every connector, which is
+     precisely the failure the resting-state note above is written to prevent,
+     and it would not recover until the gate toggled.
+
+     Naming each animation literally removes the class of failure rather than
+     making it less likely, at the cost of two more rules. `check:gantt
+     -motion` now refuses `animation-name: var(...)` anywhere in this file. */
+  .af-gantt-canvas[data-af-idle="on"][data-idle="1"]:not(.af-gantt-has-focus)
+    .af-gantt-flow-glow {
+    display: inline;
+    animation: af-gantt-flow-glow var(--gantt-current) linear infinite;
+    animation-delay: calc(
+      var(--gantt-edge-wave, 0) * var(--gantt-current-step) * -1
+    );
+  }
+  .af-gantt-canvas[data-af-idle="on"][data-idle="1"]:not(.af-gantt-has-focus)
+    .af-gantt-flow-tail {
+    display: inline;
+    animation: af-gantt-flow-tail var(--gantt-current) linear infinite;
+    animation-delay: calc(
+      var(--gantt-edge-wave, 0) * var(--gantt-current-step) * -1
+    );
+  }
+  .af-gantt-canvas[data-af-idle="on"][data-idle="1"]:not(.af-gantt-has-focus)
+    .af-gantt-flow-head {
+    display: inline;
+    animation: af-gantt-flow-head var(--gantt-current) linear infinite;
+    animation-delay: calc(
+      var(--gantt-edge-wave, 0) * var(--gantt-current-step) * -1
+    );
+  }
+
+  /* 3. Focus — the same light runs the selected chain, whichever it is, on a
+     shorter clock because it is being read rather than glanced at. */
+  .af-gantt-canvas.af-gantt-has-focus
+    .af-gantt-edge[data-lit="1"]
+    .af-gantt-flow-glow {
+    display: inline;
+    animation: af-gantt-flow-glow var(--gantt-focus-current) linear infinite;
+    animation-delay: calc(
+      var(--gantt-edge-wave, 0) * var(--gantt-focus-current-step) * -1
+    );
+  }
+  .af-gantt-canvas.af-gantt-has-focus
+    .af-gantt-edge[data-lit="1"]
+    .af-gantt-flow-tail {
+    display: inline;
+    animation: af-gantt-flow-tail var(--gantt-focus-current) linear infinite;
+    animation-delay: calc(
+      var(--gantt-edge-wave, 0) * var(--gantt-focus-current-step) * -1
+    );
+  }
+  .af-gantt-canvas.af-gantt-has-focus
+    .af-gantt-edge[data-lit="1"]
+    .af-gantt-flow-head {
+    display: inline;
+    animation: af-gantt-flow-head var(--gantt-focus-current) linear infinite;
+    animation-delay: calc(
+      var(--gantt-edge-wave, 0) * var(--gantt-focus-current-step) * -1
+    );
+  }
+
+  /* 4. The axis is alive. A wash travels the axis rule left to right and
+     loops, CONFINED TO THE AXIS STRIP.
+
+     That confinement is the whole design, not a detail of it. A full-height
+     mark sweeping the bars would be a today line, and arch-lab has none on
+     purpose: a share link carries its document but not the day it was made, so
+     a playhead would say something different — and wrong — to every reader
+     after the first. Along the rule it says only "this axis is time", which is
+     the one thing a ruler cannot say standing still, and it is why the
+     component pins both of the sweep's ends to the rule's own y and the check
+     asserts it.
+
+     GATED ON AT REST TOO, which it was NOT until the settle landed. The
+     exemption was argued on cost: the ambient gate used to open 3.2 seconds
+     after load, and "three seconds of stillness before the time axis moves"
+     would have hidden this from most readers, so it was let run regardless.
+     That cost has since been refunded — the gate now opens as soon as the
+     entrance finishes, under a second in — and an exemption whose price has
+     gone to nothing has stopped buying anything.
+
+     Two things argue for spending the refund on consistency rather than
+     pocketing it. The bug this fix answers WAS a lone motion: the axis swept
+     by itself while the other two waited, and a reader saw one thing moving in
+     a still picture and read it as a glitch. Leaving the exemption keeps a
+     smaller copy of exactly that — move the pointer and two motions stand down
+     while one carries on. And "ambient means it yields to the reader" is one
+     rule a reader can learn from watching the canvas once; "ambient, except
+     the axis" is a rule nobody can see.
+
+     What it costs, stated plainly rather than buried: a reader who never lets
+     the pointer settle now never sees the axis move. That was already true of
+     the hatch and the current, and one honest rule beats three motions with
+     two behaviours. */
+  .af-gantt-canvas[data-af-idle="on"][data-idle="1"]:not(.af-gantt-has-focus)
+    .af-gantt-axis-sweep {
+    stroke-dasharray: var(--gantt-axis-head)
+      calc(var(--gantt-axis-len) - var(--gantt-axis-head));
+    animation: af-gantt-axis-sweep var(--gantt-axis-sweep) linear infinite;
+  }
+
+  /* 5. The hatch marches. ONE animation for the whole canvas — the group
+     being moved lives inside the single shared `<pattern>`, and every bar is
+     a window onto it — which is why there is no stagger here and no
+     `animation-delay` at all. The negative-delay rule has nothing to protect
+     for once: a stagger needs many animations, and staggering this one would
+     be impossible anyway, since the bars are all showing the SAME tile. That
+     is the effect wanted: the plot reads as one moving surface, not as twenty
+     rectangles each doing their own thing.
+
+     GATED ON AT REST as well as on the app-wide toggle, like the connector
+     current and unlike the axis sweep: this runs THROUGH the bars, which are
+     the thing being read. And it yields to focus, or it would crawl underneath
+     `af-gantt-breathe` on the very bars focus has just lit.
+
+     WHAT MOVES, AND WHY IT IS THIS. `patternTransform` is an SVG attribute and
+     not a CSS property, so it cannot be animated from a stylesheet — and only
+     a stylesheet can put motion behind `prefers-reduced-motion`. SMIL
+     `<animateTransform>` can animate it, but SMIL obeys neither the media
+     query nor `[data-af-idle]`, which is disqualifying on a canvas that must
+     opt out twice. A `clipPath` per bar with its own stripe set would work and
+     costs an id and a hundred elements per plan. A CSS transform on a group
+     inside the pattern is the one option that is both stylesheet-driven and
+     cheap. Its risk is that an engine may not repaint a pattern whose contents
+     animate; the resting rules above are written so that the failure is a
+     still hatch rather than a broken one. */
+  .af-gantt-canvas[data-af-idle="on"][data-idle="1"]:not(.af-gantt-has-focus)
+    .af-gantt-hatch-march {
+    animation: af-gantt-hatch-march var(--gantt-hatch-march) linear infinite;
+  }
+
+  /* A chain of one — an item with no dependencies — has no connector to carry
+     the current, and would otherwise read as the only thing that failed to
+     dim rather than as the thing selected. Opacity only. */
+  .af-gantt-canvas.af-gantt-has-focus
+    .af-gantt-row[data-lit="1"]
+    .af-gantt-bar-fill,
+  .af-gantt-canvas.af-gantt-has-focus
+    .af-gantt-row[data-lit="1"]
+    .af-gantt-milestone {
+    animation: af-gantt-breathe var(--gantt-breathe) ease-in-out infinite;
+  }
+}
+
+@keyframes af-gantt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes af-gantt-appear {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes af-gantt-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Each band starts at its own dash length and travels one whole path, which is
+   what aligns the three leading edges on one clock — sequence's trick, taken
+   from C4 before it, and the reason three layers read as one light rather than
+   as three chasing bands. No opacity ramp: the bands carry static opacities and
+   are gated by `display`, so there is nothing to fade and a frozen frame shows
+   nothing rather than three parked stripes. */
+@keyframes af-gantt-flow-glow {
+  from {
+    stroke-dashoffset: 30;
+  }
+  to {
+    stroke-dashoffset: -70;
+  }
+}
+
+@keyframes af-gantt-flow-tail {
+  from {
+    stroke-dashoffset: 22;
+  }
+  to {
+    stroke-dashoffset: -78;
+  }
+}
+
+@keyframes af-gantt-flow-head {
+  from {
+    stroke-dashoffset: 9;
+  }
+  to {
+    stroke-dashoffset: -91;
+  }
+}
+
+/* The wash fades up off the left end and back down into the right one. A hard
+   cut at either end would read as an object arriving and leaving — which is a
+   thing at a date — where a fade reads as the rule itself catching light. Peak
+   opacity is deliberately below the connector current's 0.9: this runs whether
+   or not the reader is idle, so it must never be the brightest moving thing on
+   the canvas. */
+@keyframes af-gantt-axis-sweep {
+  0% {
+    stroke-dashoffset: var(--gantt-axis-len);
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 0.5;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+/* EXACTLY ONE TILE, and the number is not tunable. The stripes are the family
+   `x + y = k * tile`; translating by one tile maps that family onto itself, so
+   the frame at 100% is pixel-identical to the frame at 0% and the loop has no
+   seam. Any other distance — half a tile, a round 12px — leaves the two frames
+   different and the reader sees a jump at every cycle, which on an ambient
+   texture reads as the page stuttering. `check:gantt-motion` pins this to
+   `GANTT.hatchTile` through the custom property the component stamps, so the tile
+   and the travel cannot drift apart.
+
+   No opacity ramp, unlike the other travelling marks: those are marks, which
+   have to arrive and leave, and this is a surface, which is simply there. */
+@keyframes af-gantt-hatch-march {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(var(--gantt-hatch-tile) * 1px));
+  }
+}
+
+/* Opacity only — no stroke, fill or width moves, so this stays an animation
+   rather than a repaint. */
+@keyframes af-gantt-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.84;
+  }
+}

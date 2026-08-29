@@ -6,6 +6,14 @@ import {
 import { syntaxReferenceMarkdown } from "@/features/mcp/content/syntax-sections";
 import { publicOrigin } from "@/features/mcp/lib/origin";
 import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
+/* Both derived, for the reason this whole file is: the one-line job is the
+   passage an assistant quotes and it is served in these exact words by the
+   home page, `/demo`, the playground and `/llms.txt`; the example ids are the
+   registry's, so a bundled plan renamed there cannot leave a dead URL here. */
+import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
+import { listGanttExampleIds } from "@/features/gantt/service/example-service";
+import { listTimelineExampleIds } from "@/features/timeline/service/example-service";
+import { listLifecycleExampleIds } from "@/features/lifecycle/service/example-service";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
 /**
@@ -70,9 +78,10 @@ Source: ${origin} · Index: ${origin}/llms.txt
 ## What ${APP_NAME} is
 
 ${APP_NAME} is a browser-based tool for writing software architecture diagrams
-as plain text. It reads six kinds of document — C4 models (context, container,
+as plain text. It reads nine kinds of document — C4 models (context, container,
 component and code levels), UML-style sequence diagrams, flowcharts, use-case
-diagrams, entity-relationship diagrams and data dictionaries — and renders every
+diagrams, entity-relationship diagrams, data dictionaries, gantt charts,
+milestone timelines and lifecycles — and renders every
 one of them live. Nothing is uploaded and no account is required: a document is
 a file you keep, and git is the collaboration layer.
 
@@ -94,15 +103,119 @@ notation.
 - \`.archlab.json\` — the same C4 model as JSON, for tools that would rather not
   implement a grammar. Converts losslessly to and from \`.alab\`.
 - Mermaid \`C4Context\`/\`C4Container\`/\`C4Component\`, \`sequenceDiagram\`,
-  \`erDiagram\`, and \`flowchart\`/\`graph\` (which also carries the
-  actor-and-use-case convention) — imported, and exported back. Import and export are each lossy in their own
+  \`erDiagram\`, \`gantt\`, \`timeline\`, and \`flowchart\`/\`graph\` (which also
+  carries the actor-and-use-case convention) — imported, and exported back.
+  Import and export are each lossy in their own
   direction, and the app states exactly what each drops. A Mermaid shape with no
-  arch-lab counterpart is refused by name rather than approximated.
+  arch-lab counterpart is refused by name rather than approximated. \`gantt\` is
+  IMPORT ONLY: a gantt's critical path and float are computed, and Mermaid
+  has nowhere to record either, so an export would hand back a plan missing the
+  answers the document was drawn for. \`timeline\` is the opposite case and
+  runs BOTH WAYS: a milestone timeline computes nothing and has no status
+  vocabulary, so Mermaid holds everything it says — what an export drops is an
+  event's description and its tags, which are notes around the diagram rather
+  than claims it makes. Mermaid's \`section\`, which groups periods a level
+  above the period, is refused by name rather than flattened. The LIFECYCLE
+  has no Mermaid dialect at all, in either direction, and none was invented:
+  \`stateDiagram-v2\` draws a state MACHINE — every transition that could
+  happen, from anywhere to anywhere — which is the arbitrary graph a lifecycle
+  exists without, and \`journey\` scores satisfaction against tasks. Importing
+  one would mean inventing a main track its author never wrote; exporting one
+  would present a subtraction as a superset.
 
 Paste any of them into ${origin}/live and the format is detected for you — one
-page for all six document kinds, and the one page a canvas gesture is available
+page for all nine document kinds, and the one page a canvas gesture is
+available
 on. \`?d=\` chooses which example it starts from (\`c4\`, \`seq\`, \`flow\`, \`uc\`,
-\`er\`, \`dict\`), and \`?e=<id>\` opens a bundled one.
+\`er\`, \`dict\`, \`gt\`, \`tl\`, \`lc\`), and \`?e=<id>\` opens a bundled one.
+
+## Gantt charts, the seventh kind
+
+${KIND_BLURB.gantt}
+
+A gantt is the only document here whose x axis is a MEASURED quantity: a
+bar's length is its duration in days, so a two-day plan and a two-year plan
+read the same way and an exported PNG cannot disagree with the app about where
+a bar ends. It holds tasks with a duration, zero-duration MILESTONES drawn as
+diamonds, sections that band the rail, and \`after\` dependencies drawn as
+connectors. There is deliberately no \`crit\` keyword: the CRITICAL PATH and
+every item's FLOAT are computed by a forward and a backward pass over the
+dependency graph, because a declared critical path can contradict the
+arithmetic and then the picture is simply wrong. The header line is
+\`archlab 1.0 gantt\`; \`starts <date>\` is optional and only decides whether
+the axis reads as dates or as \`W1, W2, W3\`.
+
+Finished ones, server-rendered and crawlable:
+
+${listGanttExampleIds()
+  .map((id) => `- ${origin}/live/gantt/${id}`)
+  .join("\n")}
+
+## Milestone timelines, the eighth kind
+
+${KIND_BLURB.timeline}
+
+A timeline is the notation NEXT TO the gantt, and the whole of the difference
+is what it refuses. There is no duration, no dependency, no start and no
+status word: an event is a POINT carrying a label, any number of \`#tag\`s and
+one optional \`desc\`. Each of those four is refused BY NAME, with a message
+pointing at \`archlab 1.0 gantt\` — which is where a document with lengths and
+prerequisites belongs. Nothing here measures: a \`period\` label is an opaque
+string (\`"2024"\`, \`"Before the rewrite"\`), never parsed as a date, so the
+layout can never be asked where between two labels a third belongs.
+
+The drawing runs DOWN THE PAGE rather than across, and that is decided by the
+content: an event's label is the whole element, so it gets the full width and
+the diagram pays in height. Every event's height is solved from its own
+wrapped text and every period's from its events', so the bands' relative sizes
+say how much happened in each — a fixed row pitch would say the opposite. The
+header line is \`archlab 1.0 timeline\`; there is no optional header line,
+because there is no axis to configure.
+
+Finished ones, server-rendered and crawlable:
+
+${listTimelineExampleIds()
+  .map((id) => `- ${origin}/live/timeline/${id}`)
+  .join("\n")}
+
+## Lifecycles, the ninth kind
+
+${KIND_BLURB.lifecycle}
+
+A lifecycle is the notation NEXT TO the flowchart, and the whole of the
+difference is what it refuses. It cannot express an arbitrary graph, and every
+construct that would is refused BY NAME with a message pointing at
+\`archlab 1.0 flowchart\`:
+
+- There is ONE \`subject\`, declared once, before any state. A lifecycle
+  follows one thing; two would be a graph of two things.
+- The main track is DECLARATION ORDER and carries no edges. There is no
+  \`to\`, no \`next\`, no \`then\` — one edge keyword and an author could skip
+  a state, and a set of arbitrary state-to-state edges IS a flowchart.
+- A branch is an \`exit\` nested under exactly one state, with an optional
+  \`when\` condition, and it either \`ends\` or \`rejoins\` a state declared
+  EARLIER. A forward rejoin is refused: that is a shortcut along the track,
+  the same arbitrary edge under another keyword. An \`exit\` cannot open
+  inside another \`exit\`, so branch depth is always one.
+- A state is a place the subject can BE ("Paid"), not something somebody does
+  ("Take payment"). The grammar cannot enforce that, so \`validate_lifecycle\`
+  reports it.
+
+The drawing runs DOWN THE PAGE: states are dots on one spine with their label
+and description to the right, departures hang in their own lane to the left at
+a smaller size, and a returning branch travels in a reserved channel and
+re-enters the track in the gap above the state it rejoins — so it crosses no
+state it does not touch. A final state and a terminal branch carry a stop BAR
+rather than a colour, which is why this kind has no palette: every distinction
+it draws is structural, so a shape says it in greyscale and in a screenshot.
+The header line is \`archlab 1.0 lifecycle\`; there is no optional header
+line, because there is no axis to configure.
+
+Finished ones, server-rendered and crawlable:
+
+${listLifecycleExampleIds()
+  .map((id) => `- ${origin}/live/lifecycle/${id}`)
+  .join("\n")}
 
 ## Using it from an AI agent (MCP)
 

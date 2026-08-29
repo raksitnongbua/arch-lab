@@ -2697,8 +2697,8 @@ function ViewerCanvasInner({
               "how do I move around this canvas" cluster. The camera controls
               have since moved to the right corner to join the map they answer
               with, and the mode did NOT follow: it governs what a PRESS does,
-              not where the camera is, and it exists on exactly one of the seven
-              canvases that wear the zoom cluster. Grouping a one-canvas editing
+              not where the camera is, and it exists on exactly one of the
+              nine canvases that wear the zoom cluster. Grouping a one-canvas editing
               mode into shared camera chrome is how that chrome starts differing
               per canvas. Presence-gated like every edit affordance — a
               read-only or locked canvas always pans, so it shows NO control,

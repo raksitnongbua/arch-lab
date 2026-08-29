@@ -357,34 +357,56 @@ await check(
 await check(
   "every minting site mints the same route, and it carries no seed",
   async () => {
-    const wrapper = readSource("src/features/sequence/share/share-button.tsx");
-    const flowWrapper = readSource(
-      "src/features/flowchart/share/share-button.tsx",
-    );
-    const ucWrapper = readSource("src/features/usecase/share/share-button.tsx");
+    /* DERIVED FROM THE FILESYSTEM, never a hand-listed three. This assertion
+       named the sequence, flowchart and use-case wrappers by hand while four
+       more shipped beside them — ER, the dictionary, the gantt, the milestone
+       timeline and the lifecycle — so more than half the minting sites in the app
+       were unchecked, and a wrapper minting `/live/flow` would have passed.
+       `codebase.md` names the shape: a hardcoded list cannot notice the thing
+       it has never heard of, and three checks in this repo passed for exactly
+       that reason while the feature under them was broken.
+
+       The `viewer` one is excluded because it is the SHARED control rather
+       than a per-kind wrapper: it takes its route as a prop, and the callers
+       that pass one are exactly the wrappers below. */
+    const wrappers = readdirSync(path.join(ROOT, "src/features"))
+      .map((feature) => ({
+        feature,
+        file: `src/features/${feature}/share/share-button.tsx`,
+      }))
+      .filter(
+        ({ feature, file }) =>
+          feature !== "viewer" && existsSync(path.join(ROOT, file)),
+      );
     const mcp = readSource("src/features/mcp/tools/share.ts");
+
+    assert.ok(
+      wrappers.length >= 8,
+      `only ${wrappers.length} Share wrapper(s) found — this assertion would be passing vacuously`,
+    );
+
     /* Bare `/live`. The seeded paths were three routes mounting one
        component; the seed is `?d=` now and a share link needs none of it,
        because it carries the document and the reader detects the kind.
-       Minting sites that can drift, will, so they are asserted together. */
-    assert.ok(
-      wrapper.includes('SHARE_ROUTE = "/live"'),
-      "the sequence Share wrapper must mint bare /live",
-    );
-    /* The flowchart wrapper must NOT mint `/live/flow`: that route is an
-       AliasForward trampoline, and minting against a trampoline is the exact
-       mistake the "REAL page" check below records — a client-side bounce on
-       the most common arrival, previewing with whatever card the alias has. */
-    assert.ok(
-      flowWrapper.includes('SHARE_ROUTE = "/live"'),
-      "the flowchart Share wrapper must mint bare /live",
-    );
-    /* `/live/uc` is an AliasForward trampoline like `/live/flow` — minting
-       against it would put a client-side bounce on every use-case link. */
-    assert.ok(
-      ucWrapper.includes('SHARE_ROUTE = "/live"'),
-      "the use-case Share wrapper must mint bare /live",
-    );
+
+       AND NEVER AN ALIAS: `/live/flow`, `/live/uc`, `/live/gt`, `/live/tl`
+       and `/live/lc` are AliasForward trampolines, and minting against one is the
+       exact mistake the "REAL page" check below records — a client-side
+       bounce on the most common arrival, previewing with whatever card the
+       alias happens to carry. */
+    for (const { feature, file } of wrappers) {
+      const source = readSource(file);
+      assert.ok(
+        source.includes('SHARE_ROUTE = "/live"'),
+        `the ${feature} Share wrapper must mint bare /live`,
+      );
+      for (const { route } of ALIASES) {
+        assert.ok(
+          !source.includes(`SHARE_ROUTE = "${route}"`),
+          `the ${feature} Share wrapper mints ${route}, which only forwards`,
+        );
+      }
+    }
     assert.ok(
       mcp.includes("/live#${fragment}"),
       "create_share_link must mint bare /live",
@@ -481,7 +503,7 @@ await check(
        the 7 seeded `/live` aliases, and `/editor` = 16. Raise it when a
        genuinely new alias ships; never lower it to make a deletion pass. */
     assert.ok(
-      ALIASES.length >= 16,
+      ALIASES.length >= 18,
       `expected the known aliases and more, found ${ALIASES.length} — a broken walk makes this vacuous`,
     );
     for (const { route, to } of ALIASES) {

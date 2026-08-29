@@ -5,6 +5,9 @@
 @import "../features/usecase/styles/usecase-motion.css";
 @import "../features/er/styles/er-motion.css";
 @import "../features/dict/styles/dict-motion.css";
+@import "../features/gantt/styles/gantt-motion.css";
+@import "../features/timeline/styles/timeline-motion.css";
+@import "../features/lifecycle/styles/lifecycle-motion.css";
 @import "../features/mcp/styles/mcp-motion.css";
 
 /* ---------------------------------------------------------------------------
@@ -157,6 +160,51 @@
   /* name 14.41:1, meta 6.05:1, border 4.53:1 (wash-top: 12.14 / 5.10 / 3.82) */
   --flow-decision: oklch(0.93 0.06 85);
   --flow-decision-border: oklch(0.52 0.095 80);
+  /* The critical-path cap on a gantt bar, and the weight on a critical
+     connector.
+     ALIASES `--primary` EVERYWHERE IT CAN, and is a token of its own because it
+     carries a constraint `--primary` does not: the cap is drawn ON TOP OF a
+     state fill, so it must clear 3:1 against all four of them, where `--primary`
+     elsewhere is only ever measured against a background. `pastel` is the one
+     palette where the two requirements disagree — see its override.
+     Pinned by `check:gantt-palette`, which measures this token against every
+     state fill in every theme rather than trusting the alias. */
+  --gantt-critical: var(--primary);
+
+  /* The gantt's RUNNING LIGHT — the three comet bands that travel every
+     connector, and the axis sweep.
+
+     ITS OWN TOKEN, AND A LITERAL RATHER THAN A MIX. It used to paint
+     `--edge-drift`, which is `color-mix(in oklch, var(--edge) 40%, --primary)`
+     — a mix built for a connector drifting on a LIGHT ground, and a mix tuned
+     for a light ground is not a light on a dark one. Measured, the failure is
+     not the one it looks like: the drift's CONTRAST against the dark canvases
+     is fine (6.1:1, 6.5:1, 11.2:1). Its lightness is within 0.02 of `--edge`
+     in every single theme, so it differed from the wire it rode almost purely
+     in chroma — and chroma alone does not carry on a near-black ground, where
+     the eye is reading luminance. On white the same head still read, which is
+     exactly why the complaint came from the dark themes only.
+
+     `--edge-drift` was left alone rather than retuned: it is shared with the
+     other kinds and moving it would drag all of them into a re-audit — the
+     same reasoning `--gantt-critical`'s pastel override gives for not touching
+     `--primary`.
+
+     THE ACCENT HUE, which is not a new colour on this canvas: the C4 comet
+     already runs `--primary → --accent`, so a travelling mark in the accent is
+     the app's existing answer. `--accent` itself is a light cyan and measures
+     1.8-2.1:1 on the light grounds, under the 3:1 non-text minimum, so the
+     base is that hue deepened until it clears; the three dark themes alias
+     `--accent` directly, where it measures 10:1 and better.
+
+     Pinned by `check:gantt-palette`, which holds it to 3:1 against the
+     canvas AND against all four bar fills (a connector passes beside them),
+     and to an OKLab floor against both `--edge` and `--gantt-critical` — the
+     second because the complaint was never "too dark", it was "not different
+     enough from the line underneath", and a contrast-only check would bless a
+     head that is merely a brighter grey. */
+  --gantt-flow: oklch(0.5 0.15 195);
+
   --flow-start: var(--node-queue);
   --flow-start-border: var(--node-queue-border);
   --flow-step: var(--node-internal);
@@ -289,6 +337,11 @@
    that script and this one — read them as accurate to a tenth, not to the second
    decimal. `check:themes` re-measures the pairs it owns on every run. */
 .dark {
+  /* The running light rides `--accent` unmodified here — 10.01:1 on this canvas, and
+     0.15+ OKLab from both `--edge` and `--gantt-critical`. The base's
+     deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a
+     dark one it would be the dim head the reader complained about. */
+  --gantt-flow: var(--accent);
   --background: oklch(0.235 0.0116 271);
   --foreground: oklch(0.96 0.005 271);
 
@@ -409,6 +462,11 @@
  * ---------------------------------------------------------------------------- */
 
 .midnight {
+  /* The running light rides `--accent` unmodified here — 11.05:1 on this canvas, and
+     0.15+ OKLab from both `--edge` and `--gantt-critical`. The base's
+     deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a
+     dark one it would be the dim head the reader complained about. */
+  --gantt-flow: var(--accent);
   --background: oklch(0 0 0);
   --foreground: oklch(0.96 0.006 275);
 
@@ -502,6 +560,11 @@
 }
 
 .contrast {
+  /* The running light rides `--accent` unmodified here — 15.31:1 on this canvas, and
+     0.15+ OKLab from both `--edge` and `--gantt-critical`. The base's
+     deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a
+     dark one it would be the dim head the reader complained about. */
+  --gantt-flow: var(--accent);
   --background: oklch(0.05 0 0);
   --foreground: oklch(1 0 0);
 
@@ -613,6 +676,14 @@
  * ---------------------------------------------------------------------------- */
 
 .paper {
+  /* The same deepened accent as the baseline — this theme's ground is
+     the light family's and its `--accent` is the same cyan, so the
+     measurement lands in the same place (4.34:1 on the canvas). Spelled
+     out rather than inherited because `check:themes` requires every theme
+     to carry every CONCRETE colour: a literal left to fall through is a
+     theme silently painting the light palette's value. See `:root` for
+     why this token exists at all. */
+  --gantt-flow: oklch(0.5 0.15 195);
   /* Tighter than every other theme: paper has cut edges, not rounded ones, and
      a 10px corner on a "document" reads as a card pretending to be a page. */
   --radius: 0.25rem;
@@ -770,6 +841,14 @@
 }
 
 .glass {
+  /* The same deepened accent as the baseline — this theme's ground is
+     the light family's and its `--accent` is the same cyan, so the
+     measurement lands in the same place (4.34:1 on the canvas). Spelled
+     out rather than inherited because `check:themes` requires every theme
+     to carry every CONCRETE colour: a literal left to fall through is a
+     theme silently painting the light palette's value. See `:root` for
+     why this token exists at all. */
+  --gantt-flow: oklch(0.5 0.15 195);
   --radius: 0.625rem;
 
   --background: oklch(0.955 0.012 255);
@@ -972,6 +1051,20 @@
   --popover: oklch(0.905 0.021 302);
   --popover-foreground: oklch(0.275 0.03 302);
   --primary: oklch(0.58 0.224 280);
+  /* The cap measures 2.98:1 on `--node-internal` and `--flow-decision`, both
+     oklch L 0.855 — under the 3:1 non-text minimum, and the cap is the ONLY
+     per-bar signal of criticality (the border already carries state). Darkened
+     to L 0.55, which measures 3.39:1 on the worst pair. Pastel's own
+     `--primary` is untouched: this is a gantt constraint, not a brand one,
+     and moving the brand colour would drag every button and ring in the theme
+     into a re-audit. */
+  --gantt-critical: oklch(0.55 0.224 280);
+  /* Pastel's `--accent` is a pink (h 342) rather than the cyan the other six
+     themes carry, and the running light follows the THEME rather than the
+     token: a cyan head would be a third hue in a violet-and-pink palette. The
+     base cyan does pass here (3.41:1), so this override is identity rather
+     than legibility — and it happens to measure better anyway (4.38:1). */
+  --gantt-flow: oklch(0.5 0.15 342);
   --primary-foreground: oklch(0.9 0.021 297);
   --secondary: oklch(0.855 0.032 302);
   --secondary-foreground: oklch(0.295 0.029 302);
@@ -1762,33 +1855,40 @@
  * the name beside them says which.
  *
  * ONE keyframe drives everything, and every panel plus every header label runs
- * it; the only thing separating the four is a NEGATIVE DELAY of one, two or
- * three quarter-cycles. That is the whole reason there is one keyframe rather
- * than four: four hand-tuned animations drift, and four panels drifting means
- * two diagrams on screen at once. `visibility` is in the keyframes alongside
+ * it; the only thing separating the nine is a NEGATIVE DELAY of one to eight
+ * ninth-cycles. That is the whole reason there is one keyframe rather than
+ * nine: nine hand-tuned animations drift, and two panels drifting means two
+ * diagrams on screen at once. `visibility` is in the keyframes alongside
  * opacity because it animates discretely — an off panel becomes `hidden` for
- * its whole three-quarters rather than being composited invisibly forever.
+ * its whole seven-eighths rather than being composited invisibly forever.
  *
- * THE SLOT IS A FIFTH, and the 6.5s slot is chosen from the other end: a panel
- * needs about 2s to assemble itself, so 6.5s leaves ~4.5s of settled diagram to
- * actually read. THE SLOT IS FIXED AND THE CYCLE GREW — 26s to 39s as ER and the dictionary
- * became the fifth kind — rather than the reverse: shortening each slot to keep
- * the cycle at 26s would have taken every panel below the time it needs to be
- * read, which trades all five kinds for one. The cost is that the fifth kind
- * arrives 26s after load, and it is accepted because the alternative makes the
- * other four worse.
+ * THE SLOT IS A NINTH, and the 6.5s slot is chosen from the other end: a
+ * panel needs about 2s to assemble itself, so 6.5s leaves ~4.5s of settled
+ * diagram to actually read. THE SLOT IS FIXED AND THE CYCLE GREW — 26s, then
+ * 39s as ER and the dictionary landed, then 45.5s for the gantt, 52s for the
+ * milestone timeline and 58.5s for the lifecycle — rather than the reverse:
+ * shortening each slot to keep the cycle where it was would have taken every
+ * panel below the time it needs to be read, which trades all nine kinds for
+ * one. The cost is that the last kind arrives 52s after load, and it is
+ * accepted because the alternative makes the other eight worse.
+ *
+ * THE STOPS BELOW ARE THE SLOT'S OWN SHARE and are recomputed whenever a kind
+ * lands: `check:hero` derives the share from the kind COUNT and fails if the
+ * lit window runs past it, so adding a notation without retuning these four
+ * percentages breaks the build rather than putting two diagrams on screen at
+ * once.
  *
  * Fully out before the next comes in — the fade windows do not overlap — since
  * two diagrams half-visible at once reads as a rendering fault rather than a
  * transition. */
 @keyframes af-hero-swap {
   0%,
-  14.4% {
+  9.6% {
     opacity: 1;
     visibility: visible;
   }
-  16.66%,
-  97.8% {
+  11.1%,
+  98.3% {
     opacity: 0;
     visibility: hidden;
   }
@@ -1799,12 +1899,19 @@
 }
 
 .af-hero-kind {
-  animation: af-hero-swap 39s ease-in-out infinite;
+  animation: af-hero-swap 58.5s ease-in-out infinite;
 }
 
-/* The sixth-cycle offsets. Negative, so kinds two to six are already mid-cycle
-   on the first frame instead of the card sitting on a blank panel until its turn
-   comes round.
+/* The ninth-cycle offsets. Negative, so kinds two to nine are already
+   mid-cycle on the first frame instead of the card sitting on a blank panel
+   until its turn comes round.
+
+   THE CYCLE GREW RATHER THAN THE SLOTS SHRINKING when the gantt landed, and it
+   grew again for the timeline and for the lifecycle: 6.5s per kind is the
+   dwell that was chosen against how long a panel takes to assemble, so a ninth
+   notation costs 6.5 more seconds of cycle, not a ninth off everybody's turn. `check:hero` reads the duration out of the rule
+   above and requires each delay below to be that cycle's own share, so the two
+   cannot describe different cycles.
    EACH CLASS IS ONE DECLARATION, which makes them fragile in a specific way
    worth naming: an inline `animation-delay` on the same element overrides it,
    and the element then runs in PHASE with the first kind instead of after it —
@@ -1832,6 +1939,18 @@
   animation-delay: -32.5s;
 }
 
+.af-hero-kind-7 {
+  animation-delay: -39s;
+}
+
+.af-hero-kind-8 {
+  animation-delay: -45.5s;
+}
+
+.af-hero-kind-9 {
+  animation-delay: -52s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* The global backstop already collapses the entrances onto their natural
      frame. The ambient loops need saying explicitly: parked, not sped up. */
@@ -1846,9 +1965,9 @@
     opacity: 0;
   }
 
-  /* The swap PARKS on the C4 panel rather than cycling. The other five need
+  /* The swap PARKS on the C4 panel rather than cycling. The other eight need
      stating separately: without the second rule they keep their from-frame and
-     all six diagrams stack on top of each other. Parking on one real,
+     all nine diagrams stack on top of each other. Parking on one real,
      complete diagram is the meaningful frame here — which is the whole
      reduced-motion rule in this codebase, not merely "slower". */
   .af-hero-kind {
@@ -1861,7 +1980,10 @@
   .af-hero-kind-3,
   .af-hero-kind-4,
   .af-hero-kind-5,
-  .af-hero-kind-6 {
+  .af-hero-kind-6,
+  .af-hero-kind-7,
+  .af-hero-kind-8,
+  .af-hero-kind-9 {
     animation: none;
     opacity: 0;
     visibility: hidden;

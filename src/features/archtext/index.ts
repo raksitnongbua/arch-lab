@@ -32,7 +32,7 @@
  */
 
 /*
- * The feature carries ALL SIX `.alab` document types — the C4 grammar,
+ * The feature carries ALL NINE `.alab` document types — the C4 grammar,
  * the sequence grammar (`./lib/sequence/`), the flowchart grammar
  * (`./lib/flowchart/`), the use-case grammar (`./lib/usecase/`) and the ER
  * grammar (`./lib/er/`). They share the header line, the `!` escape, the
@@ -58,11 +58,24 @@
  *     same lossless and error contract.
  *   - `parseDictText` / `serializeDictText` — `.alab` dictionary text ⇄
  *     `DictLabFile`, same lossless and error contract.
+ *   - `parseGanttText` / `serializeGanttText` — `.alab` gantt text ⇄
+ *     `GanttLabFile`, same lossless and error contract.
+ *   - `parseTimelineText` / `serializeTimelineText` — `.alab` timeline text ⇄
+ *     `TimelineLabFile`, same lossless and error contract.
+ *   - `parseLifecycleText` / `serializeLifecycleText` — `.alab` lifecycle text
+ *     ⇄ `LifecycleLabFile`, same lossless and error contract. It has NO
+ *     Mermaid counterpart, deliberately: `stateDiagram-v2` is a state MACHINE
+ *     (every transition that COULD happen) rather than one subject's ordered
+ *     history, and `journey` scores satisfaction — so there is no dialect to
+ *     convert to and none was invented (`new-diagram-type.md`).
  *   - `detectAlabKind` — which grammar a source belongs to, from its first
  *     meaningful line ("archlab 1.0" = C4, "archlab 1.0 sequence" =
  *     sequence, "archlab 1.0 flowchart" = flowchart, "archlab 1.0 usecase"
  *     = use-case, "archlab 1.0 er" = ER,
- *     "archlab 1.0 dict" = data dictionary).
+ *     "archlab 1.0 dict" = data dictionary,
+ *     "archlab 1.0 gantt" = gantt,
+ *     "archlab 1.0 timeline" = milestone timeline,
+ *     "archlab 1.0 lifecycle" = lifecycle).
  */
 
 export { parseArchText, parseArchTextWithSpans, spanKey } from "./lib/parse";
@@ -131,3 +144,24 @@ export {
 export { parseDictText } from "./lib/dict/parse";
 export { serializeDictText } from "./lib/dict/serialize";
 export { DICT_HEADER_WORD, FIELD_FLAGS } from "./lib/dict/keywords";
+export { parseGanttText } from "./lib/gantt/parse";
+export { serializeGanttText } from "./lib/gantt/serialize";
+export { ITEM_STATES, GANTT_HEADER_WORD } from "./lib/gantt/keywords";
+export { parseTimelineText } from "./lib/timeline/parse";
+export { serializeTimelineText } from "./lib/timeline/serialize";
+export {
+  EVENT_KEYWORD,
+  PERIOD_KEYWORD,
+  TIMELINE_HEADER_WORD,
+} from "./lib/timeline/keywords";
+export { parseLifecycleText } from "./lib/lifecycle/parse";
+export { serializeLifecycleText } from "./lib/lifecycle/serialize";
+export {
+  ENDS_KEYWORD,
+  EXIT_KEYWORD,
+  LIFECYCLE_HEADER_WORD,
+  REJOINS_KEYWORD,
+  STATE_KEYWORD,
+  SUBJECT_KEYWORD,
+  WHEN_KEYWORD,
+} from "./lib/lifecycle/keywords";
