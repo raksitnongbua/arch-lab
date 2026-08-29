@@ -270,6 +270,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- The ground behind a diagram no longer changes shade depending on which
+  notation is open. Sequence, flowchart and use-case diagrams sat in the
+  slightly recessed well the palette defines for them, while ER, data
+  dictionary, gantt, timeline and lifecycle diagrams sat on the page's own
+  chrome colour — visible in every theme, and most in immersive mode, where the
+  ground is the whole screen. The pane now paints that well once for every
+  notation, so a tenth cannot arrive on the wrong colour.
+
 - An agent asking arch-lab for an example is shown all nine notations. The MCP
   `list_example_models` and `get_example_model` read only the C4 registry, so
   the nineteen bundled sequence, flowchart, use-case, ER, dictionary, gantt,

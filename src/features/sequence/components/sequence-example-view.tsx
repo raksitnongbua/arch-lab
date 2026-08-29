@@ -8,8 +8,9 @@
  * `SequenceViewer`, and this adds only the two things a viewer cannot own. It
  * holds the single polite LIVE REGION (the viewer deliberately owns none, so
  * that two regions updated near each other can never race and swallow each
- * other's announcements — the playground makes the same arrangement), and it
- * gives the diagram the page's full remaining height.
+ * other's announcements — the playground makes the same arrangement), and it hands the diagram to the shared
+ * `DiagramWell`, which gives it the page's full remaining height on the ground
+ * every notation's diagram shares.
  *
  * A client component because the live region is state, not because the example
  * is: the document arrives already parsed from the server registry, so nothing
@@ -19,6 +20,8 @@
 import { useState } from "react";
 
 import type { SequenceLabFile } from "@/types";
+
+import { DiagramWell } from "@/components/ui/diagram-well";
 
 import { SequenceViewer } from "./sequence-viewer";
 
@@ -30,11 +33,11 @@ export function SequenceExampleView({
   const [announcement, setAnnouncement] = useState("");
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <DiagramWell>
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
       <SequenceViewer file={file} onAnnounce={setAnnouncement} />
-    </div>
+    </DiagramWell>
   );
 }

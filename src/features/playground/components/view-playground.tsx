@@ -89,6 +89,7 @@ import {
 } from "./canvas-lock-button";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
+import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberedTextarea } from "@/components/ui/numbered-textarea";
 import {
@@ -1835,7 +1836,14 @@ export function ViewPlayground({
                      unprefixed form cancelled `max-lg:h-[70svh]`. Immersive is
                      unaffected either way — `fixed inset-0` takes it out of
                      the flow, where flex sizing no longer applies. */
-                  "flex min-h-0 min-w-0 flex-col overflow-hidden bg-background lg:flex-1",
+                  /* THE WELL, painted ONCE for all eight non-C4 notations
+                     rather than by each viewer — see
+                     `components/ui/diagram-well.tsx` for the drift that bought
+                     this. It was `bg-background`, so the five canvases that
+                     painted no ground of their own showed page chrome where the
+                     other three showed a well. */
+                  DIAGRAM_WELL_CLASSES,
+                  "flex min-h-0 min-w-0 flex-col overflow-hidden lg:flex-1",
                   isImmersive
                     ? // Immersive: cover the viewport. Site chrome and the
                       // source rail are BEHIND the fixed section, untouched —

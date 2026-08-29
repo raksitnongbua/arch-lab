@@ -1039,7 +1039,10 @@ function CanvasInner(): React.JSX.Element {
         multiSelectionKeyCode="Shift"
         deleteKeyCode={null}
         nodeDragThreshold={1}
-        className="bg-canvas [&_.react-flow__pane]:cursor-default [&_.react-flow__selection]:rounded-sm [&_.react-flow__selection]:border [&_.react-flow__selection]:border-ring/60 [&_.react-flow__selection]:bg-selection"
+        /* NO GROUND OF ITS OWN — the well is `editor-shell.tsx`'s, the way
+           every other notation's is its host's. See
+           `components/ui/diagram-well.tsx`. */
+        className="[&_.react-flow__pane]:cursor-default [&_.react-flow__selection]:rounded-sm [&_.react-flow__selection]:border [&_.react-flow__selection]:border-ring/60 [&_.react-flow__selection]:bg-selection"
       >
         {activeDiagram !== undefined ? (
           <FrameLayer diagram={activeDiagram} onFocus={clearCanvasSelection} />

@@ -4,8 +4,9 @@
  * Thin on purpose, in the way `TimelineExampleView` and `GanttExampleView`
  * are: the whole interactive story — hover, the pin that outlives the
  * pointer, Escape to release — already lives in `LifecycleViewer`, and this
- * adds only what a viewer cannot own, which here is the page's full remaining
- * height.
+ * adds only what a viewer cannot own, which here is the shared
+ * `DiagramWell` — the page's full remaining height, on the ground every
+ * notation's diagram shares.
  *
  * NO LIVE REGION, like the timeline's and unlike ER's, and it is the honest
  * situation rather than an omission: ER pushes an announcement out through an
@@ -27,6 +28,8 @@
 
 import type { LifecycleLabFile } from "@/types";
 
+import { DiagramWell } from "@/components/ui/diagram-well";
+
 import { LifecycleViewer } from "./lifecycle-viewer";
 
 export function LifecycleExampleView({
@@ -35,8 +38,8 @@ export function LifecycleExampleView({
   file: LifecycleLabFile;
 }): React.JSX.Element {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <DiagramWell>
       <LifecycleViewer file={file} />
-    </div>
+    </DiagramWell>
   );
 }
