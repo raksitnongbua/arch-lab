@@ -48,6 +48,9 @@ import {
 import type { LifecycleLabFile } from "@/types";
 
 import { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } from "../lib/motion";
+import { layoutLifecycle } from "../lib/layout";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
+
 import { LifecycleDiagram } from "./lifecycle-diagram";
 
 export interface LifecycleViewerProps {
@@ -96,6 +99,24 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /* THE GROUND'S CAMERA, ON A CANVAS WITH NO CAMERA.
+     This notation has no pan-and-zoom; the `<svg>` is drawn at its natural size
+     and shrunk by `max-width: 100%` when the pane is narrower. That shrink is
+     still a scale, and the ground's adaptive ladder is a question about SCREEN
+     pixels — so a drawing squeezed into a narrow pane has its ground squeezed
+     with it, and the ladder must be told or it selects a level that lands below
+     the readable band. Never magnified: the CSS cap only ever shrinks. */
+  const groundRef = useRef<HTMLDivElement>(null);
+  const naturalWidth = useMemo(() => layoutLifecycle(file).width, [file]);
+  const measureGroundScale = useCallback((): number => {
+    const box = groundRef.current;
+    if (box === null || naturalWidth <= 0) return 1;
+    return box.clientWidth <= 0
+      ? 1
+      : Math.min(1, box.clientWidth / naturalWidth);
+  }, [naturalWidth]);
+  const groundScale = useMeasuredScale(groundRef, measureGroundScale);
+
   return (
     <div
       /* THE SCROLL BOX AND THE GUTTERS. `min-h-0 flex-1` claims the height the
@@ -116,17 +137,20 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
          the whole reason a reader can move the pointer away and keep looking. */
       onPointerLeave={() => setHovered(null)}
     >
-      <LifecycleDiagram
-        file={file}
-        litKeys={litKeys}
-        reveal
-        idleMotion={idleState}
-        atRest={atRest}
-        onFocusState={(key) =>
-          setPinned((current) => (current === key ? null : key))
-        }
-        onHoverState={setHovered}
-      />
+      <div ref={groundRef}>
+        <LifecycleDiagram
+          file={file}
+          scale={groundScale}
+          litKeys={litKeys}
+          reveal
+          idleMotion={idleState}
+          atRest={atRest}
+          onFocusState={(key) =>
+            setPinned((current) => (current === key ? null : key))
+          }
+          onHoverState={setHovered}
+        />
+      </div>
     </div>
   );
 }

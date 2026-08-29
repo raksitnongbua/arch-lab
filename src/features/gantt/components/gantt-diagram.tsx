@@ -101,6 +101,12 @@ export interface GanttDiagramProps {
    * `onFocusItem` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
   onHoverItem?: (id: string | null) => void;
+  /**
+   * Drawing units → screen pixels, from the host's camera. The ground's
+   * adaptive ladder needs it to decide which pitches are readable right now;
+   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
+   */
+  scale: number;
 }
 
 export function GanttDiagram({
@@ -111,6 +117,7 @@ export function GanttDiagram({
   atRest = false,
   onFocusItem,
   onHoverItem,
+  scale,
 }: GanttDiagramProps) {
   const layout = layoutGantt(file);
   const hasFocus = litIds !== undefined && litIds.size > 0;
@@ -147,6 +154,7 @@ export function GanttDiagram({
           rules out a ground painted on the pane. */}
       <CanvasField
         id="af-field-gantt"
+        scale={scale}
         width={layout.width}
         height={layout.height}
       />

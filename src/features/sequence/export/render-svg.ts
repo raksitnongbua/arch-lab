@@ -31,6 +31,8 @@
  *     motion removes them rather than parking them.
  */
 
+import { CANVAS_FIELD_CLASS } from "@/lib/canvas-ground";
+
 import { SEQUENCE_CHROME_SELECTOR } from "../lib/chrome";
 
 /** What `viewer/export/download.ts` rasterises. */
@@ -85,7 +87,14 @@ const CARRIED = [
  * list contained the names it already knew. `../lib/chrome.ts` states the
  * convention and `check:sequence-export` proves the feature obeys it.
  */
-const DROPPED_ALWAYS = SEQUENCE_CHROME_SELECTOR;
+/* AND THE GROUND, which the prefix rule above cannot reach. The canvas field
+   is drawn by a SHARED component used by all eight SVG notations, so it cannot
+   wear a `af-seq-chrome-` class without that component knowing about this
+   feature. It is chrome by this file's own test — a reader holding a still
+   image loses nothing by its absence — and under the previous ground model it
+   went into every exported sequence diagram, because this is the one exporter
+   that clones rather than builds. `check:canvas-grid` asserts this line. */
+const DROPPED_ALWAYS = `${SEQUENCE_CHROME_SELECTOR}, .${CANVAS_FIELD_CLASS}`;
 
 /**
  * The idle comet bands. Dropped from a STILL — frozen, they are three bright

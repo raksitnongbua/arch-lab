@@ -64,6 +64,7 @@ import {
   writeIdleMotion,
 } from "@/lib/idle-motion";
 import { useModKey } from "@/lib/mod-key";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 import { cn } from "@/lib/utils";
 
 import type { LaidUseCaseEdge } from "../lib/layout";
@@ -232,6 +233,14 @@ export function UseCaseViewer({
     if (width <= 0 || height <= 0) return 1;
     return Math.min(width / layout.width, height / layout.height);
   }, [layout]);
+
+  /* THE GROUND'S CAMERA. `zoom` is a MODE as often as it is a number, and the
+     adaptive ladder needs the number — `screenPitch = worldPitch × scale`. Fit
+     is therefore measured, and re-measured on resize, because the pane changes
+     size when the source rail collapses and when immersive mode opens. This is
+     the SAME camera the diagram is drawn at, resolved; not a second one. */
+  const fitScale = useMeasuredScale(paneRef, measureFitScale);
+  const groundScale = zoom === "fit" ? fitScale : zoom;
 
   /** Scroll anchor kept across a zoom — fractions of the scrollable
    * content, the both-modes-safe quantity the sequence viewer derives. */
@@ -547,6 +556,7 @@ export function UseCaseViewer({
               tagColors={file.metadata.tagColors}
               focus={focus}
               zoom={zoom}
+              scale={groundScale}
               onFocusElement={handleFocusElement}
               onFocusEdge={handleFocusEdge}
             />

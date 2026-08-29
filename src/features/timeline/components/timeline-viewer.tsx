@@ -43,6 +43,9 @@ import {
 import type { TimelineLabFile } from "@/types";
 
 import { IDLE_AFTER_MS, TIMELINE_SETTLE_MS } from "../lib/motion";
+import { layoutTimeline } from "../lib/layout";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
+
 import { TimelineDiagram } from "./timeline-diagram";
 
 export interface TimelineViewerProps {
@@ -91,6 +94,24 @@ export function TimelineViewer({ file }: TimelineViewerProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /* THE GROUND'S CAMERA, ON A CANVAS WITH NO CAMERA.
+     This notation has no pan-and-zoom; the `<svg>` is drawn at its natural size
+     and shrunk by `max-width: 100%` when the pane is narrower. That shrink is
+     still a scale, and the ground's adaptive ladder is a question about SCREEN
+     pixels — so a drawing squeezed into a narrow pane has its ground squeezed
+     with it, and the ladder must be told or it selects a level that lands below
+     the readable band. Never magnified: the CSS cap only ever shrinks. */
+  const groundRef = useRef<HTMLDivElement>(null);
+  const naturalWidth = useMemo(() => layoutTimeline(file).width, [file]);
+  const measureGroundScale = useCallback((): number => {
+    const box = groundRef.current;
+    if (box === null || naturalWidth <= 0) return 1;
+    return box.clientWidth <= 0
+      ? 1
+      : Math.min(1, box.clientWidth / naturalWidth);
+  }, [naturalWidth]);
+  const groundScale = useMeasuredScale(groundRef, measureGroundScale);
+
   return (
     <div
       /* THE SCROLL BOX AND THE GUTTERS. `min-h-0 flex-1` claims the height the
@@ -111,17 +132,20 @@ export function TimelineViewer({ file }: TimelineViewerProps) {
          the whole reason a reader can move the pointer away and keep looking. */
       onPointerLeave={() => setHovered(null)}
     >
-      <TimelineDiagram
-        file={file}
-        litKeys={litKeys}
-        reveal
-        idleMotion={idleState}
-        atRest={atRest}
-        onFocusEvent={(key) =>
-          setPinned((current) => (current === key ? null : key))
-        }
-        onHoverEvent={setHovered}
-      />
+      <div ref={groundRef}>
+        <TimelineDiagram
+          file={file}
+          scale={groundScale}
+          litKeys={litKeys}
+          reveal
+          idleMotion={idleState}
+          atRest={atRest}
+          onFocusEvent={(key) =>
+            setPinned((current) => (current === key ? null : key))
+          }
+          onHoverEvent={setHovered}
+        />
+      </div>
     </div>
   );
 }

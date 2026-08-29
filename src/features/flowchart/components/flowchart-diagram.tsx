@@ -138,6 +138,12 @@ export interface FlowchartDiagramProps {
   zoom: number | "fit";
   onFocusNode: (id: string) => void;
   onFocusEdge: (index: number) => void;
+  /**
+   * Drawing units → screen pixels, from the host's camera. The ground's
+   * adaptive ladder needs it to decide which pitches are readable right now;
+   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
+   */
+  scale: number;
 }
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
@@ -153,6 +159,7 @@ export function FlowchartDiagram({
   zoom,
   onFocusNode,
   onFocusEdge,
+  scale,
 }: FlowchartDiagramProps): React.JSX.Element {
   const focusSet = resolveFlowFocus(layout, focus);
   const nodeDimmed = (id: string): boolean =>
@@ -191,6 +198,7 @@ export function FlowchartDiagram({
           rules out a ground painted on the pane. */}
       <CanvasField
         id="af-field-flowchart"
+        scale={scale}
         width={layout.width}
         height={layout.height}
       />

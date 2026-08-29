@@ -498,6 +498,12 @@ export interface ErDiagramProps {
    * server-rendered diagram. */
   focus?: ErFocus;
   onFocus?: (focus: ErFocus) => void;
+  /**
+   * Drawing units → screen pixels, from the host's camera. The ground's
+   * adaptive ladder needs it to decide which pitches are readable right now;
+   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
+   */
+  scale: number;
 }
 
 export function ErDiagram({
@@ -505,6 +511,7 @@ export function ErDiagram({
   className,
   focus = null,
   onFocus,
+  scale,
 }: ErDiagramProps): React.JSX.Element {
   const layout = layoutEr(file);
   const focusId = focus?.kind === "entity" ? focus.id : null;
@@ -554,6 +561,7 @@ export function ErDiagram({
           rules out a ground painted on the pane. */}
       <CanvasField
         id="af-field-er"
+        scale={scale}
         width={layout.width}
         height={layout.height}
       />

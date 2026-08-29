@@ -295,6 +295,12 @@ export interface SequenceDiagramProps {
    * pane level instead; every interactive element in here stops propagation,
    * which is what makes that safe.
    */
+  /**
+   * Drawing units → screen pixels, from the host's camera. The ground's
+   * adaptive ladder needs it to decide which pitches are readable right now;
+   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
+   */
+  scale: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -316,6 +322,7 @@ export function SequenceDiagram({
   onToggleCollapse,
   pick = null,
   reorder = null,
+  scale,
 }: SequenceDiagramProps): React.JSX.Element {
   /* ---- drag to reorder ------------------------------------------------------
    * THE PROBLEM THIS SOLVES IS NOT THE MOVE, IT IS THE OTHER TWO GESTURES ON
@@ -640,6 +647,7 @@ export function SequenceDiagram({
           rules out a ground painted on the pane. */}
       <CanvasField
         id="af-field-sequence"
+        scale={scale}
         x={layout.minX}
         width={layout.width}
         height={layout.height}

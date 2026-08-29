@@ -1,67 +1,55 @@
 /**
- * THE WELL'S FIELD, for every canvas that is not React Flow.
+ * THE WELL'S RULE LAYER, for every canvas that is not React Flow.
  *
- * `--canvas-dot`, `--canvas-rule` and `--canvas-rule-major` are the well's
- * three field layers (see `globals.css` for the tokens and the opt-in policy,
- * and `editor/lib/canvas-constants.ts` for the pitch and weights). On the two
- * C4 canvases React Flow paints them natively with three stacked
- * `<Background>` layers. THIS is the same three layers for the other eight
- * notations, which draw plain SVG and have never had a field at all.
+ * `lib/canvas-ground.ts` owns the model — an adaptive ladder of world-space
+ * pitches, of which only the levels whose ON-SCREEN pitch lands inside a
+ * readable band are painted. THIS is that ladder drawn in SVG, for the eight
+ * notations that draw plain SVG; the two C4 canvases get the identical levels
+ * through React Flow's `<Background>` in `canvas-ground-layers.tsx`. Both read
+ * `groundLevels()`, so the two mechanisms cannot rule at different pitches.
  *
  * IT IS DRAWN INSIDE THE DIAGRAM'S OWN `<svg>`, IN THE DIAGRAM'S OWN
- * COORDINATES, and that is the whole design. The obvious alternative — a CSS
- * `background-image` on the well, one edit on `DiagramWell` — is WRONG here,
- * and measurably so: not one of the nine canvases is static. Six carry a real
- * zoom camera (both C4 hosts, sequence, flowchart, use-case through a scaled
- * `<svg>`; ER and the dictionary through a box sized from `camera.scale`) and
- * the other three scroll their content inside `overflow-auto`. A ground painted
- * on the pane stays still while the drawing slides and scales over it, which
- * tells the reader the paper is not under the drawing — worse than no field.
- * A `<pattern>` in `userSpaceOnUse` units is in the drawing's coordinate space
- * by construction, so it pans, scrolls and zooms with the drawing in all three
- * of those arrangements without a line of camera maths.
+ * COORDINATES, and that is what makes it a rule rather than a sheet. A ground
+ * painted on the pane stays still while the drawing slides over it, which tells
+ * the reader the paper is not under the drawing — that model shipped once and
+ * was rejected on sight. A `<pattern>` in `userSpaceOnUse` units is in the
+ * drawing's coordinate space by construction, so it pans, scrolls and zooms
+ * with the drawing without a line of camera maths.
  *
- * IT MARKS THE SHEET, NOT THE PANE, and that is deliberate rather than a
- * limitation. The rect is the diagram's own box, so on a pane wider than the
- * drawing the field ends where the drawing ends. C4's field is infinite because
- * a C4 canvas is an infinite surface you pan around; these eight are finite
- * drawings, and a finite drawing on a ruled sheet is what a sheet of paper is.
- * The two readings differ because the two things differ.
+ * WHAT THE CAMERA IS FOR, then, since the pattern does not need it to move.
+ * The ladder needs to know which levels are currently READABLE, and that is a
+ * question about screen pixels: `screenPitch = worldPitch × scale`. So `scale`
+ * selects the levels and sizes the marks, and the drawing's own transform
+ * places them. It is the host's existing camera — never a second measurement
+ * of the same thing.
  *
- * IT IS NOT IN ANY EXPORT, by construction rather than by a flag. Every
- * notation's exporter is a separate string-building renderer under
- * `features/<kind>/export/render-svg.ts` that imports layout and nothing from
- * these components, so a field added here cannot reach a downloaded file. That
- * is also the decision: the field is screen chrome — it says where the drawing
- * is being read, not what the drawing means — and a diagram dropped into a deck
- * should arrive as the drawing. `check:canvas-grid` pins it so the two renderers
- * cannot quietly converge.
+ * THE MARKS ARE SIZED IN SCREEN PIXELS, DIVIDED BACK OUT. A stroke of
+ * `lineWidthPx / scale` user units renders as `lineWidthPx` on screen once the
+ * drawing's transform is applied. Under the previous model the weight scaled
+ * with the camera too, so at 400% the grid was drawn in 4px lines and at 10% it
+ * was invisible. Engraving on a ruler does not get thicker when you lean in.
  *
- * WHAT HAPPENS TO THE PITCH WHEN A CANVAS ZOOMS, stated because "the grid
- * stopped matching the drawing" is the complaint this replaces. The pattern is
- * measured in the diagram's user units, so the field scales exactly as the
- * drawing does and a cell is always the same number of diagram units — which is
- * what React Flow's layers do on the C4 canvases, so the two mechanisms agree.
- * On the three canvases with no camera (gantt, timeline, lifecycle) the `<svg>`
- * is drawn at natural size and shrunk by `max-width: 100%`, so the field shrinks
- * with it on a narrow pane. That is the same rule, not an exception: the field
- * belongs to the drawing, so whatever resizes the drawing resizes the field.
+ * IT MARKS THE SHEET, NOT THE PANE, and that is deliberate. The rect is the
+ * diagram's own box, so on a pane wider than the drawing the field ends where
+ * the drawing ends. C4's field is infinite because a C4 canvas is an infinite
+ * surface you pan around; these eight are finite drawings, and a finite drawing
+ * on a ruled sheet is what a sheet of paper is.
  *
- * A FIXED id PER KIND, not the per-instance one `<WashGradient>` uses, and the
- * difference is real rather than sloppy. A wash gradient is built from the
- * node's OWN fill, so two nodes sharing an id paint each other's colour. The
- * field is the same three tokens on every canvas of every kind, so two diagrams
- * sharing it resolve to the identical pattern — and a fixed id also keeps this
- * usable from the server-rendered example views, which cannot call `useId`.
- * `af-gantt-hatch` is the same call for the same reason.
+ * IT IS NOT IN ANY EXPORT AS A LADDER. An export has no camera, so there is no
+ * `scale` to select a level with — see `check:canvas-grid`, which pins the
+ * exporters, and note that `sequence/export/render-svg.ts` CLONES the live
+ * `<svg>` rather than building a string, so for that one exporter the absence
+ * has to be arranged rather than assumed.
+ *
+ * A FIXED id PER KIND, not the per-instance one `<WashGradient>` uses. A wash
+ * gradient is built from the node's OWN fill, so two nodes sharing an id paint
+ * each other's colour. The field is the same tokens on every canvas of every
+ * kind, so two diagrams sharing it resolve identically — and a fixed id also
+ * keeps this usable from the server-rendered example views, which cannot call
+ * `useId`. `af-gantt-hatch` is the same call for the same reason.
  */
 
-import {
-  CANVAS_FIELD_GAP,
-  CANVAS_RULE_MAJOR_STEP,
-  CANVAS_RULE_MAJOR_WIDTH,
-  CANVAS_RULE_WIDTH,
-} from "@/features/editor/lib/canvas-constants";
+import { CANVAS_FIELD_CLASS, groundLevels } from "@/lib/canvas-ground";
 
 /** The diagram's own box, in its own user units — normally its viewBox. */
 export interface CanvasFieldBox {
@@ -77,8 +65,16 @@ export function CanvasField({
   y = 0,
   width,
   height,
-}: CanvasFieldBox & { id: string }): React.JSX.Element {
-  const major = CANVAS_FIELD_GAP * CANVAS_RULE_MAJOR_STEP;
+  scale,
+}: CanvasFieldBox & {
+  id: string;
+  /**
+   * Drawing units → screen pixels, from the host's camera. `1` is the right
+   * answer for a canvas drawn at natural size, not a placeholder.
+   */
+  scale: number;
+}): React.JSX.Element {
+  const levels = groundLevels(scale);
   /* The patterns are ANCHORED TO THE BOX, not to the user-space origin: a
      sequence diagram's viewBox starts at a negative x, and a lattice anchored
      at 0 would put its first rule at a different place inside the drawing than
@@ -87,73 +83,76 @@ export function CanvasField({
   return (
     <>
       <defs>
-        <pattern
-          id={`${id}-dots`}
-          patternUnits="userSpaceOnUse"
-          width={CANVAS_FIELD_GAP}
-          height={CANVAS_FIELD_GAP}
-          {...anchor}
-        >
-          {/* r 0.75 — the 1.5 diameter React Flow's dot layer uses, so the two
-              mechanisms draw the same field at the same pitch. */}
-          <circle cx={0} cy={0} r={0.75} fill="var(--canvas-dot)" />
-        </pattern>
-        <pattern
-          id={`${id}-minor`}
-          patternUnits="userSpaceOnUse"
-          width={CANVAS_FIELD_GAP}
-          height={CANVAS_FIELD_GAP}
-          {...anchor}
-        >
-          <path
-            d={`M ${CANVAS_FIELD_GAP} 0 L 0 0 L 0 ${CANVAS_FIELD_GAP}`}
-            fill="none"
-            stroke="var(--canvas-rule)"
-            strokeWidth={CANVAS_RULE_WIDTH}
-          />
-        </pattern>
-        <pattern
-          id={`${id}-major`}
-          patternUnits="userSpaceOnUse"
-          width={major}
-          height={major}
-          {...anchor}
-        >
-          <path
-            d={`M ${major} 0 L 0 0 L 0 ${major}`}
-            fill="none"
-            stroke="var(--canvas-rule-major)"
-            strokeWidth={CANVAS_RULE_MAJOR_WIDTH}
-          />
-        </pattern>
+        {levels.map((level) => {
+          const dotRadius = level.dotSizePx / 2 / scale;
+          const lineWidth = level.lineWidthPx / scale;
+          return (
+            <g key={level.index}>
+              <pattern
+                id={`${id}-dots-${level.index}`}
+                patternUnits="userSpaceOnUse"
+                width={level.worldPitch}
+                height={level.worldPitch}
+                {...anchor}
+              >
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={dotRadius}
+                  fill="var(--canvas-rule-dot)"
+                />
+              </pattern>
+              <pattern
+                id={`${id}-lines-${level.index}`}
+                patternUnits="userSpaceOnUse"
+                width={level.worldPitch}
+                height={level.worldPitch}
+                {...anchor}
+              >
+                <path
+                  d={`M ${level.worldPitch} 0 L 0 0 L 0 ${level.worldPitch}`}
+                  fill="none"
+                  stroke="var(--canvas-rule-line)"
+                  strokeWidth={lineWidth}
+                />
+              </pattern>
+            </g>
+          );
+        })}
       </defs>
-      {/* Three rects rather than one with three fills: SVG has no fill
-          stacking. Minor before major so the heavy line lies ON the light one
-          at every intersection they share, which is the order the React Flow
-          layers are mounted in. `pointer-events: none` throughout — the field
-          lies under the drawing and must never take a click meant for it. */}
-      <g aria-hidden="true" className="pointer-events-none">
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          fill={`url(#${id}-dots)`}
-        />
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          fill={`url(#${id}-minor)`}
-        />
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          fill={`url(#${id}-major)`}
-        />
+      {/* A rect per pattern rather than one with several fills: SVG has no fill
+          stacking. Finest first, so a coarser level's heavier line lies ON the
+          finer one at every intersection they share.
+          BOTH SHAPES ARE ALWAYS MOUNTED and one of them is transparent, which
+          is the same call `role-texture.tsx` makes: whether a theme rules in
+          dots or in lines is a THEME decision, and this app resolves those in
+          CSS so they are right on the very first frame with no post-hydration
+          swap. The cost is a rect that paints nothing; the alternative is a
+          frame of the wrong ground on every load.
+          `pointer-events: none` throughout — the field lies under the drawing
+          and must never take a click meant for it. */}
+      <g
+        aria-hidden="true"
+        className={`${CANVAS_FIELD_CLASS} pointer-events-none`}
+      >
+        {levels.map((level) => (
+          <g key={level.index} opacity={level.opacity}>
+            <rect
+              x={x}
+              y={y}
+              width={width}
+              height={height}
+              fill={`url(#${id}-dots-${level.index})`}
+            />
+            <rect
+              x={x}
+              y={y}
+              width={width}
+              height={height}
+              fill={`url(#${id}-lines-${level.index})`}
+            />
+          </g>
+        ))}
       </g>
     </>
   );

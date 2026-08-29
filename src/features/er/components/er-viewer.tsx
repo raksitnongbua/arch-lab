@@ -185,6 +185,9 @@ export function ErViewer({
           }}
         >
           <ErDiagram
+            /* The camera's resolved multiplier — the adaptive ground reads the
+               SAME scale this wrapper is sized from, never a second one. */
+            scale={camera.scale}
             file={file}
             focus={focus}
             onFocus={setRawFocus}

@@ -70,6 +70,7 @@ import {
   ZOOM_STEP,
 } from "@/components/ui/zoom-pill";
 import { useModKey } from "@/lib/mod-key";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 import { cn } from "@/lib/utils";
 
 import type { LaidFlowEdge } from "../lib/layout";
@@ -278,6 +279,14 @@ export function FlowchartViewer({
     if (width <= 0 || height <= 0) return 1;
     return Math.min(width / layout.width, height / layout.height);
   }, [layout]);
+
+  /* THE GROUND'S CAMERA. `zoom` is a MODE as often as it is a number, and the
+     adaptive ladder needs the number — `screenPitch = worldPitch × scale`. Fit
+     is therefore measured, and re-measured on resize, because the pane changes
+     size when the source rail collapses and when immersive mode opens. This is
+     the SAME camera the diagram is drawn at, resolved; not a second one. */
+  const fitScale = useMeasuredScale(paneRef, measureFitScale);
+  const groundScale = zoom === "fit" ? fitScale : zoom;
 
   /** Scroll anchor kept across a zoom — fractions of the scrollable content,
    * the same both-modes-safe quantity the sequence viewer derives. */
@@ -589,6 +598,7 @@ export function FlowchartViewer({
               tagColors={file.metadata.tagColors}
               focus={focus}
               zoom={zoom}
+              scale={groundScale}
               onFocusNode={handleFocusNode}
               onFocusEdge={handleFocusEdge}
             />

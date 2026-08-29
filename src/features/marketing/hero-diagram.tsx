@@ -2,6 +2,7 @@ import { ICONS } from "@/features/editor/lib/icons/registry";
 
 import type { CSSProperties, SVGProps } from "react";
 
+import { groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
 
 /* The hero borrows the registry's own artwork rather than importing icon
@@ -73,6 +74,9 @@ const RedisIcon = ICONS["redis"].byStyle.mono;
  */
 
 /** One beat of the assembly, in ms — everything below is expressed in these. */
+/** The ladder at rest — one evaluation shared by every render of the card. */
+const HERO_GROUND = groundFieldCss(1);
+
 const BEAT = {
   sheets: 0,
   card: 80,
@@ -201,14 +205,21 @@ export function HeroDiagram({ className }: { className?: string }) {
         style={delay(BEAT.card)}
         className="af-hero-card relative w-96 overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-primary/5"
       >
-        {/* Faint canvas grid, matching the editor surface. Drifting by exactly
-            one cell keeps the loop seamless — the pattern repeats onto itself. */}
+        {/* THE CANVAS GROUND, and this time the claim is true by construction.
+            It used to be a hand-typed 28px line grid in `--canvas-grid` under a
+            comment saying it matched "the editor surface"; the editor surface
+            painted 16px dots in a different token, and the MCP box below
+            painted 22px lines. `groundFieldCss` is the real ladder, at the
+            scale a reader sees on opening a document, so the picture of the
+            product and the product cannot disagree.
+            The drift is ONE CELL, which is what keeps the loop seamless — so
+            the distance is read from the ladder rather than typed beside it. */}
         <div
-          className="af-hero-grid absolute inset-0 opacity-[0.4] dark:opacity-[0.55]"
+          className="af-hero-grid absolute inset-0"
           style={{
-            backgroundImage:
-              "linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px)",
-            backgroundSize: "28px 28px",
+            backgroundImage: HERO_GROUND.backgroundImage,
+            backgroundSize: HERO_GROUND.backgroundSize,
+            ["--af-hero-grid-pitch" as string]: `${HERO_GROUND.pitchPx}px`,
             maskImage:
               "radial-gradient(ellipse 90% 90% at 50% 30%, black 30%, transparent 95%)",
             WebkitMaskImage:

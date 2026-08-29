@@ -7,6 +7,37 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **The canvas ground is now two layers, and one of them adapts to the zoom.**
+  A **rule** — the grid or dot field — belongs to the drawing: it pans and zooms
+  with it, and it now _subdivides_. There is a ladder of pitches, each five
+  times the last, and only the levels that land at a comfortable on-screen size
+  are drawn, fading in and out at the edges. Zoom in and a finer grid appears;
+  zoom out and the finest fades while a coarser one takes over, so the ground
+  never becomes a grey wash at 10% or four lines on a page at 400%. A
+  **material** — paper fibre, e-ink particles, a glass sheen — is the sheet, and
+  is fixed: it does not zoom, and it does not pan.
+- **`paper`, `eink` and `glass` now have a real ground texture.** `paper` gets
+  laid fibre, `eink` a field of discrete particles, `glass` a single diagonal
+  sheen. All three are fractal grain rather than a printed lattice, so there is
+  no pattern for the eye to lock onto.
+- **The dot field is back where it belongs, and gone where it does not.**
+  `light`, `pastel`, `dark`, `midnight` and `glass` show dots; `blueprint` shows
+  its minor/major ruling; `paper` and `eink` show their material and no dots,
+  because a dot grid on fibre is two grounds competing; `contrast` shows
+  nothing at all, as before.
+- The ground is quieter. Both strengths were lowered.
+- **The home page's hero card and MCP illustration now paint the real canvas
+  ground** rather than a hand-typed grid of their own, so the picture of the
+  product and the product agree.
+
+### Fixed
+
+- Exported sequence diagrams no longer carry the screen's grid. That exporter
+  copies the live canvas, so the ground went into every downloaded SVG, PNG and
+  GIF frame.
+
 ### Added
 
 - **An `eink` theme — a ninth palette, with no colour in it at all.** Every

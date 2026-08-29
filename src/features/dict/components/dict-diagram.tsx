@@ -225,12 +225,19 @@ export interface DictDiagramProps {
   /** How much width the table may use. Omitted for a static render, which
    * takes the fixed page width. */
   availableWidth?: number;
+  /**
+   * Drawing units → screen pixels, from the host's camera. The ground's
+   * adaptive ladder needs it to decide which pitches are readable right now;
+   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
+   */
+  scale: number;
 }
 
 export function DictDiagram({
   file,
   className,
   availableWidth,
+  scale,
 }: DictDiagramProps): React.JSX.Element {
   const layout = layoutDict(file, { availableWidth });
   const right = layout.columnX.source + layout.columnWidth.source;
@@ -257,6 +264,7 @@ export function DictDiagram({
           rules out a ground painted on the pane. */}
       <CanvasField
         id="af-field-dict"
+        scale={scale}
         width={layout.width}
         height={layout.height}
       />

@@ -100,6 +100,9 @@ export function DictViewer({
           }}
         >
           <DictDiagram
+            /* The camera's resolved multiplier — the adaptive ground reads the
+               SAME scale this wrapper is sized from, never a second one. */
+            scale={camera.scale}
             file={file}
             availableWidth={paneWidth - 32}
             className="block"

@@ -122,6 +122,7 @@ import {
 } from "@/components/ui/zoom-pill";
 import { orAbsent } from "@/lib/absent";
 import { useModKey } from "@/lib/mod-key";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
@@ -778,6 +779,14 @@ export function SequenceViewer({
     if (width <= 0 || height <= 0) return 1;
     return Math.min(width / layout.width, height / layout.height);
   }, [layout]);
+
+  /* THE GROUND'S CAMERA. `zoom` is a MODE as often as it is a number, and the
+     adaptive ladder needs the number — `screenPitch = worldPitch × scale`. Fit
+     is therefore measured, and re-measured on resize, because the pane changes
+     size when the source rail collapses and when immersive mode opens. This is
+     the SAME camera the diagram is drawn at, resolved; not a second one. */
+  const fitScale = useMeasuredScale(diagramRegionRef, measureFitScale);
+  const groundScale = zoom === "fit" ? fitScale : zoom;
 
   /**
    * WHAT THE VIEW WAS CENTRED ON when a zoom started, as a fraction of the
@@ -1776,6 +1785,7 @@ export function SequenceViewer({
               focus={focus}
               focusNonce={rawFocus?.nonce ?? 0}
               zoom={zoom}
+              scale={groundScale}
               onFocusMessage={handleFocusMessage}
               onFocusParticipant={handleFocusParticipant}
               onFocusFragment={handleFocusFragment}
