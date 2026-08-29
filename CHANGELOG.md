@@ -305,6 +305,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- The **paper** theme is warm all the way through, not a cream background with
+  cool ink. Every connector in every notation was drawn in the blue-grey the
+  default light theme uses, so a page that had been given warm stock and
+  brown-black text was still wired together in a colour from another palette —
+  and at 3.46:1 the line was faint on top of being wrong. The ink is warm and
+  darker now (5.29:1), boxes are printed on the sheet instead of floating
+  above it as white stickers, the role and shape fills are mixed for cream
+  rather than borrowed from the cool page they were mixed for, the corners are
+  cut tighter, and the accent — buttons, focus rings, selection, the gantt's
+  critical path — is a deep sienna, because violet is the one mark that cannot
+  be made on paper.
+
 - The theme follows your system unless you tell it otherwise: **light** on a
   machine set to light, **high contrast** on one set to dark. Before, everyone
   landed on high contrast — so a reader who had told their machine they want
