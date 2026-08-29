@@ -668,6 +668,36 @@
  * L 0.985; this is warmer (hue 85) and a step darker, which is what a page
  * looks like when you are reading it for an hour rather than glancing at it.
  *
+ * IT USED TO BE A CREAM FILTER OVER THE COOL DEFAULT RATHER THAN A REDESIGN,
+ * and the three faults were each a number in this file:
+ *
+ *   1. THE INK WAS BLUE-GREY. The ground was hue 88 and the text hue 55 — warm,
+ *      deliberate — while `--edge`, which EVERY connector in EVERY notation is
+ *      drawn with, was hue 265, inherited unchanged from `light`. It also
+ *      measured only 3.46:1 on the ground. It is hue 65 now, and 5.29:1.
+ *   2. EVERY BOX WAS A STICKER. `--node` was oklch(0.995 0.004 85) — white, on
+ *      a 0.955 cream ground, so each card floated above the sheet instead of
+ *      being printed on it. ON PAPER NOTHING IS BRIGHTER THAN THE PAPER: the
+ *      node surface now sits a shade BELOW the page (0.965 on a 0.955 canvas,
+ *      1.06:1 — a surface you find by its rule, not by its glare). The panel
+ *      tokens (`--card`, `--popover`) are deliberately NOT part of this: a
+ *      dialog genuinely floats above the page, where a node is printed on it.
+ *   3. THE ROLE FILLS WERE BYTE-IDENTICAL TO `light`'S. They were mixed for a
+ *      near-white blue-grey ground and read as pastel plastic on cream. Their
+ *      HUES are CVD-safe and audited and have NOT moved; their lightness and
+ *      chroma are re-tuned against THIS ground — L 0.93 → 0.90, chroma −15%
+ *      across the set — exactly as the dark themes re-tune theirs. Worst
+ *      adjacent fill separation after the cut is ΔE 0.023 (person↔internal),
+ *      still over the 0.02 floor `check:flowchart-palette` holds.
+ *
+ * IT IS ALSO THE FIRST THEME TO CARRY ITS OWN `--primary`, and that is the
+ * deliberate part: violet is the one mark that cannot be made on paper. See the
+ * token below — `--gantt-critical` aliases `--primary`, so the gantt's critical
+ * cap moved with it and the pair was re-measured.
+ *
+ * No grain was added in this pass beyond the laid-paper weave the theme already
+ * carries (see the `.paper` background-image rule below the theme blocks).
+ *
  * `glass` is the one theme whose surfaces are TRANSLUCENT — see the `.af-glass`
  * rule below, which is the other half of it. Its cards carry an alpha channel,
  * so what a reader actually sees is the card composited over the page behind
@@ -685,8 +715,10 @@
      why this token exists at all. */
   --gantt-flow: oklch(0.5 0.15 195);
   /* Tighter than every other theme: paper has cut edges, not rounded ones, and
-     a 10px corner on a "document" reads as a card pretending to be a page. */
-  --radius: 0.25rem;
+     a 10px corner on a "document" reads as a card pretending to be a page. 4px
+     was still half a card; 2px is a guillotine cut, which is the edge a sheet
+     of stock actually has. */
+  --radius: 0.125rem;
 
   /* Cream stock rather than warm white — a shade further from the screen and
      closer to the paper it is named after. */
@@ -701,8 +733,18 @@
   --popover: oklch(0.982 0.008 88);
   --popover-foreground: oklch(0.245 0.024 55);
 
-  --primary: oklch(0.58 0.2 280);
-  --primary-foreground: oklch(0.985 0.005 280);
+  /* THE ONE TOKEN THIS THEME TAKES OFF THE HOUSE PALETTE, and the first theme
+     to do so: every other light theme carries the baseline violet. Violet is
+     the mark no press leaves on stock — it is a screen colour — and a violet
+     button on cream was the last cool thing left after the ink was warmed. A
+     deep sienna at hue 40 is the same gesture in something paper can hold.
+     5.64:1 on the ground (needs 3:1); --primary-foreground on it, 6.14:1.
+     `--gantt-critical` ALIASES this token (see :root), so the critical cap on
+     a gantt bar moved with it — re-measured at 4.76:1 on the worst state fill
+     and 5.80:1 on a milestone, both up from 3.72:1 and 4.52:1 under the
+     violet, because the sienna is a step darker as well as warmer. */
+  --primary: oklch(0.5 0.15 40);
+  --primary-foreground: oklch(0.985 0.005 40);
 
   --secondary: oklch(0.93 0.012 82);
   --secondary-foreground: oklch(0.28 0.02 60);
@@ -726,18 +768,23 @@
      on a document a line is drawn deliberately rather than implied by a shadow. */
   --border: oklch(0.845 0.016 80);
   --input: oklch(0.845 0.016 80);
-  --ring: oklch(0.58 0.2 280);
+  --ring: oklch(0.5 0.15 40);
 
   /* Canvas-specific tokens the future editor will consume. */
   --canvas: oklch(0.945 0.015 88);
   --canvas-grid: oklch(0.885 0.016 84);
-  --node: oklch(0.995 0.004 85);
+  /* BELOW the canvas, not above it — the header's fault 2. A node is ink and
+     stock, so it takes the page's own hue at a shade under the page's
+     lightness (1.06:1 on --canvas): found by its rule rather than by glare. */
+  --node: oklch(0.965 0.012 86);
   --node-foreground: oklch(0.26 0.021 60);
-  /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
-  --node-border: oklch(0.6 0.016 70);
+  /* ≥3:1 against --node (measured 4.40:1) and against --canvas (4.15:1). The
+     rule does more work here than in any other theme, because the surface it
+     bounds no longer separates itself by brightness. */
+  --node-border: oklch(0.55 0.022 70);
   /* Secondary text ON node fills (the [Type] line + description). Split off
-     --muted-foreground because the vivid fills below sit ~ΔL 0.04 deeper
-     than the old near-white cards; the shared muted tone slid under 4.5:1
+     --muted-foreground because the vivid fills below sit ~ΔL 0.065 deeper
+     than the node surface; the shared muted tone slid under 4.5:1
      there, and darkening --muted-foreground app-wide to fix a node problem
      would have punished every panel. Measured per fill below. */
   --node-meta: oklch(0.45 0.022 70);
@@ -749,8 +796,11 @@
      teal, queue on its green neighbour (data-at-rest / data-in-flight, one
      family) — plus a receding near-neutral grey for external, the only
      colour that MEANS something ("not ours") and therefore the only one
-     kept deliberately quiet. Fills carry real chroma at L≈0.93; text on
-     them switches to --node-meta above for the secondary lines.
+     kept deliberately quiet. RE-TUNED FOR THIS GROUND rather than inherited:
+     the hues are the audited CVD-safe set and have not moved, but the fills
+     sit at L≈0.90 with 15% less chroma than the light theme's, because a fill
+     mixed for a near-white blue-grey page reads as pastel plastic on cream.
+     Text on them switches to --node-meta above for the secondary lines.
      Ratios below are computed (oklch → sRGB → WCAG relative luminance) by
      the audit script kept with the palette job, and re-annotated whenever a
      value moves: name is --node-foreground vs fill, meta is --node-meta vs
@@ -761,31 +811,32 @@
      flat-fill and wash-top rows on every pair, so wash-top stays the worst
      case). Thresholds: text ≥4.5:1, border and the border-tinted icon
      ≥3:1. */
-  /* name 14.36:1, meta 6.05:1, border 4.56:1 (wash-top: 11.95 / 5.04 / 3.79) */
-  --node-person: oklch(0.93 0.036 295);
+  /* name 11.49:1, meta 5.50:1, border 4.16:1 (wash-top: 9.71 / 4.65 / 3.52) */
+  --node-person: oklch(0.9 0.031 295);
   --node-person-border: oklch(0.53 0.16 295);
-  /* name 14.44:1, meta 6.09:1, border 4.46:1 (wash-top: 12.10 / 5.10 / 3.74) */
-  --node-internal: oklch(0.93 0.034 250);
+  /* name 11.60:1, meta 5.55:1, border 4.09:1 (wash-top: 9.79 / 4.69 / 3.45) */
+  --node-internal: oklch(0.9 0.029 250);
   --node-internal-border: oklch(0.52 0.13 250);
-  /* name 15.57:1, meta 6.56:1, border 3.20:1 (no wash — external stays matte) */
-  --node-external: oklch(0.945 0.01 82);
-  --node-external-border: oklch(0.6 0.016 70);
-  /* name 14.72:1, meta 6.21:1, border 4.76:1 (wash-top: 12.24 / 5.16 / 3.96) */
-  --node-database: oklch(0.93 0.055 195);
+  /* name 12.50:1, meta 5.98:1, border 3.90:1 (no wash — external stays matte) */
+  --node-external: oklch(0.925 0.014 84);
+  --node-external-border: oklch(0.55 0.022 70);
+  /* name 11.77:1, meta 5.64:1, border 4.34:1 (wash-top: 9.88 / 4.73 / 3.65) */
+  --node-database: oklch(0.9 0.047 195);
   --node-database-border: oklch(0.5 0.084 195);
-  /* name 14.98:1, meta 6.31:1, border 4.43:1 (wash-top: 12.54 / 5.29 / 3.71) */
-  --node-queue: oklch(0.935 0.055 150);
+  /* name 11.95:1, meta 5.72:1, border 4.01:1 (wash-top: 10.15 / 4.86 / 3.41) */
+  --node-queue: oklch(0.905 0.047 150);
   --node-queue-border: oklch(0.52 0.11 150);
 
   /* Flowchart shape colours (the light block carries the design notes; the
      start/step/io/call aliases live once in :root and resolve to THIS
-     theme's role tokens on their own). Same values as light — measured
-     against paper's warmer canvas and foreground by the same check. */
-  /* name 12.50:1, meta 5.98:1, border 4.60:1 (wash-top: 10.41 / 4.99 / 3.83) */
-  --flow-end: oklch(0.93 0.04 345);
+     theme's role tokens on their own). Re-tuned onto the same L 0.90 band as
+     the role fills above and by the same −15% chroma, so a flowchart and a C4
+     diagram are printed on one stock; the two hues are unmoved. */
+  /* name 11.42:1, meta 5.46:1, border 4.20:1 (wash-top: 9.58 / 4.59 / 3.53) */
+  --flow-end: oklch(0.9 0.034 345);
   --flow-end-border: oklch(0.53 0.15 345);
-  /* name 12.68:1, meta 6.07:1, border 4.53:1 (wash-top: 10.68 / 5.11 / 3.82) */
-  --flow-decision: oklch(0.93 0.06 85);
+  /* name 11.56:1, meta 5.53:1, border 4.13:1 (wash-top: 9.81 / 4.70 / 3.51) */
+  --flow-decision: oklch(0.9 0.051 85);
   --flow-decision-border: oklch(0.52 0.095 80);
 
   /* tagColors fills are REBUILT from the author's colour rather than mixed:
@@ -793,17 +844,33 @@
      author's hue at OUR lightness (node-colors.ts: tagFillCss has the full
      rationale). These two pins are what guarantee a tag fill lands on the
      same measured lightness band as the role fills above, whatever hex the
-     author typed. */
+     author typed.
+     THESE TWO DID NOT FOLLOW THE ROLE FILLS DOWN TO L 0.90, and that is
+     measured rather than an oversight: a tag fill is built under an AUTHORED
+     hex — the curated `NODE_TAG_PALETTE` strokes are five fixed colours shared
+     by all seven themes, so unlike a role border they cannot be re-tuned per
+     ground. At L 0.90 the constructed fill takes four of the five under the
+     3:1 stroke minimum (amber 2.85:1, plum 2.89:1, rose 2.90:1, orange 2.91:1;
+     `check:canvas-edit` measures every one). 0.93 is still a shade under this
+     theme's own canvas, so a tagged node is printed on the sheet like every
+     other node — it simply sits at the top of the band rather than with the
+     role fills. */
   --tag-fill-l: 0.93;
   --tag-fill-c: 0.055;
 
-  --edge: oklch(0.6 0.02 265);
+  /* THE INK. Hue 65, not the 265 this theme inherited from `light` for its
+     first six months — every connector in every notation is drawn with this
+     token, so a blue-grey edge made the whole warm palette a filter over a
+     cool one (the header's fault 1). Deepened at the same time: 3.46:1 on the
+     ground was under the 3:1 line for anything smaller than a hairline and is
+     5.29:1 now, 5.14:1 on the canvas and 5.45:1 on a node. */
+  --edge: oklch(0.5 0.026 65);
   /* The resting drift that rides ON TOP of a connector. A real token, not an
      inline color-mix, because the animated GIF export has to resolve the exact
      same colour from the same place — two spellings of "edge lifted toward
      primary" would drift apart the first time either is tuned. */
   --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
-  --selection: oklch(0.58 0.2 280 / 0.18);
+  --selection: oklch(0.5 0.15 40 / 0.18);
 
   /* Sequence-diagram LANE tokens — one accent per participant column, keyed
      by document order and cycled past five (layout.ts assigns the slot).
@@ -1013,8 +1080,9 @@
  * rule at the bottom of this file — adding it to either would flip a few hundred
  * utilities under a theme whose text is nearly black.
  *
- * Derived from `.paper` by transform rather than hand-typed, so that no token
- * could be forgotten: surfaces dropped toward the dusk ground and pulled toward
+ * Derived from `.paper` — as `.paper` stood at the time; it has since been
+ * re-tuned onto its own cream ground and pastel keeps the values measured here
+ * — by transform rather than hand-typed, so that no token could be forgotten: surfaces dropped toward the dusk ground and pulled toward
  * the lavender hue, accents given more chroma than any other light theme
  * carries, text left dark. Two pairs came back under their minimum from that
  * transform and were corrected by hand — `--muted-foreground` (4.10:1 on the
@@ -1170,9 +1238,9 @@
  * the page's ground, and a texture that belongs to the viewport rather than
  * sliding under the text as the page scrolls.
  *
- * The tokens do the rest of the work — cream stock, ink-brown text, drawn rules
- * and a 4px radius — because a document is mostly about what colour the paper is
- * and how deliberately its lines are drawn, not about texture.
+ * The tokens do the rest of the work — cream stock, ink-brown text, drawn rules,
+ * warm ink and a 2px cut corner — because a document is mostly about what colour
+ * the paper is and how deliberately its lines are drawn, not about texture.
  */
 .paper {
   background-image:
