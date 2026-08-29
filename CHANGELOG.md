@@ -10,13 +10,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **A `blueprint` theme — an eighth palette.** Deep cyan-navy ground, white
-  ink, and the canvas grid at full strength: here the ruling of the sheet is
-  stronger than the edge of a panel, so a diagram sits on a drafting surface
-  that was ruled before anything was drawn on it. Every other dark theme dims
-  its grid to keep it out of the way; this one is the inversion. The role
-  colours keep their audited hues and are re-mixed for a saturated dark
-  ground, so a C4 diagram, a flowchart and a Gantt read the same way here as
-  they do anywhere else.
+  ink, and a canvas that is properly **ruled**: a fine minor rule, with a
+  heavier major line every fifth square. The major rule is stronger than the
+  edge of a panel, so a diagram sits on a drafting surface that was ruled
+  before anything was drawn on it — every other dark theme dims its grid to
+  keep it out of the way, and this one is the inversion. The role colours keep
+  their audited hues and are re-mixed for a saturated dark ground, so a C4
+  diagram, a flowchart and a Gantt read the same way here as anywhere else.
+
+- **A theme can now rule the canvas behind a diagram**, with its own minor and
+  major lines, instead of the single-strength grid every theme shared. It is
+  opt-in and only `blueprint` takes it up: the other themes paint exactly the
+  grid they painted before, and the ones that claim to be no material at all
+  — `light`, `dark`, `pastel`, and especially the high-contrast theme — are
+  deliberately left plain, because a texture behind a drawing competes with it.
 
 - **Lifecycles — a ninth notation.** `archlab 1.0 lifecycle` draws one named
   thing moving: what it went through, and where it can end up. States are dots
