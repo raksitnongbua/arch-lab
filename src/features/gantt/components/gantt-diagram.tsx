@@ -65,6 +65,7 @@
  * wait for a script to write a variable.
  */
 
+import { CanvasField } from "@/components/ui/canvas-field";
 import type { GanttLabFile } from "@/types";
 
 import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
@@ -132,6 +133,16 @@ export function GanttDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
+      {/* THE WELL'S FIELD, under everything the diagram draws. In the
+          diagram's OWN coordinates, so it pans, scrolls and zooms with the
+          drawing rather than sitting still while the drawing moves over it
+          — components/ui/canvas-field.tsx carries the measurement that
+          rules out a ground painted on the pane. */}
+      <CanvasField
+        id="af-field-gantt"
+        width={layout.width}
+        height={layout.height}
+      />
       {/* ONE pattern for the whole canvas, referenced by every bar. One
           definition rather than a clip and a stripe set per bar: the ids would
           multiply, and a hundred `<line>` elements per plan is DOM weight for

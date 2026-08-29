@@ -10,13 +10,35 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **A `blueprint` theme — an eighth palette.** Deep cyan-navy ground, white
-  ink, and the canvas grid at full strength: here the ruling of the sheet is
-  stronger than the edge of a panel, so a diagram sits on a drafting surface
-  that was ruled before anything was drawn on it. Every other dark theme dims
-  its grid to keep it out of the way; this one is the inversion. The role
-  colours keep their audited hues and are re-mixed for a saturated dark
-  ground, so a C4 diagram, a flowchart and a Gantt read the same way here as
-  they do anywhere else.
+  ink, and a canvas that is properly **ruled**: a fine minor rule, with a
+  heavier major line every fifth square. The major rule is stronger than the
+  edge of a panel, so a diagram sits on a drafting surface that was ruled
+  before anything was drawn on it — every other dark theme dims its grid to
+  keep it out of the way, and this one is the inversion. The role colours keep
+  their audited hues and are re-mixed for a saturated dark ground, so a C4
+  diagram, a flowchart and a Gantt read the same way here as anywhere else.
+
+- The **dark** theme's canvas is lighter. The well a diagram sits in was the
+  deepest of any theme — far enough below the page that it read as a hole
+  rather than a recess. It is still clearly set into the page, just no longer
+  the odd one out. Exported SVG and PNG carry the new ground too, so a
+  downloaded file still matches the screen.
+
+- **Every notation now has a grid behind it.** Only the C4 editor ever drew
+  one: the other eight notations sat on a bare well in every theme, and so did
+  the C4 viewer — the canvas a shared link opens in. All ten canvases now paint
+  the same field at the same pitch, and it stays locked to the drawing when you
+  pan, scroll or zoom.
+
+- **A theme can now rule that canvas**, with its own minor and major lines,
+  instead of the single-strength grid every theme shared. It is opt-in and only
+  `blueprint` takes it up: the other themes paint exactly the grid they painted
+  before, and the ones that claim to be no material at all — `light`, `dark`,
+  `pastel`, and especially the high-contrast theme — are deliberately left
+  plain, because a texture behind a drawing competes with it.
+
+  The grid is screen chrome and stays **out of exported SVG and PNG**: a
+  diagram dropped into a deck arrives as the drawing.
 
 - **Lifecycles — a ninth notation.** `archlab 1.0 lifecycle` draws one named
   thing moving: what it went through, and where it can end up. States are dots

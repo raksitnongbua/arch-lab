@@ -85,6 +85,37 @@
   /* Canvas-specific tokens the future editor will consume. */
   --canvas: oklch(0.975 0.003 265);
   --canvas-grid: oklch(0.88 0.008 265);
+
+  /* THE WELL'S FIELD — three layers, and an OPT-IN SEAM rather than a set every
+     theme is expected to complete.
+     `editor/lib/canvas-constants.ts` carries the mechanism (three stacked
+     React Flow `<Background>` layers, which is that component's own documented
+     arrangement for a major/minor grid). What lives HERE is the decision about
+     who may use it.
+     THE DEFAULTS REPRODUCE TODAY EXACTLY. `--canvas-dot` is an alias of
+     `--canvas-grid`, so a theme that says nothing paints the dot field it has
+     always painted, in its own grid colour; both rule tokens are `transparent`,
+     so the two rule layers draw literally nothing. That is also why
+     `check:themes` does not demand these of every theme — it requires a theme to
+     redefine every CONCRETE colour the baseline declares, and an alias and a
+     keyword are neither. A theme opts in by overriding them or it is untouched.
+     ONLY `blueprint` OPTS IN, AND THE SET IS NOT MEANT TO BE COMPLETED. A
+     ground texture is something a theme is allowed only when the texture is what
+     the theme IS: `glass` refracts because it is glass, `paper` carries a laid
+     weave because it is paper, and `blueprint` is ruled because a drafting sheet
+     is ruled before anything is drawn on it. `light`, `dark`, `pastel` and
+     `midnight` claim to be no material at all — a texture behind the drawing
+     there is decoration competing with the diagram, which `purpose.md` calls a
+     losing trade. And `contrast` is the one place it does active HARM: that
+     theme exists for a reader who needs maximum legibility and separates by
+     outline rather than fill, so ruling its ground would put a second set of
+     lines behind the only lines that carry meaning.
+     Do not complete this set out of symmetry. A fourth theme wanting a ruled
+     ground needs the same kind of argument these three have, written down. */
+  --canvas-dot: var(--canvas-grid);
+  --canvas-rule: transparent;
+  --canvas-rule-major: transparent;
+
   --node: oklch(1 0 0);
   --node-foreground: oklch(0.21 0.02 265);
   /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
@@ -310,12 +341,20 @@
        a technology line needs, and the node title at 6.7:1 under its 7:1. A
        coloured fill is legible before it is separated from the surface, so the
        fills stayed low and their borders brightened instead.
-     - THE CANVAS IS FURTHER BELOW THE CHROME than it used to be — 0.061 rather
+     - THE CANVAS IS FURTHER BELOW THE CHROME than it used to be — 0.043 rather
        than 0.025 — which follows from the above rather than being chosen. The
-       diagram well now reads as clearly inset instead of nearly flush. That is
-       the one visible consequence of the new ground, and it is the right way
-       round: a canvas that tracked the chrome all the way up would have taken
-       the node fills with it.
+       diagram well reads as inset instead of nearly flush. That is the one
+       visible consequence of the new ground, and it is the right way round: a
+       canvas that tracked the chrome all the way up would have taken the node
+       fills with it.
+       IT WAS 0.061 AND THAT WAS TOO FAR. The widening above is sound as far as
+       it goes, but it was derived from what the node fills could afford rather
+       than from what the well should look like, and the result was the deepest
+       well in the app — 1.139:1 under its own chrome, where every other theme
+       sits between 1.030 and 1.102. A reader called it a hole, which is the
+       one measurement a ramp derivation cannot make for itself. See the
+       `--canvas` declaration below for the value, the gap kept, and what the
+       lift costs the node.
      - `--node-border` and every role border rose ~0.02 to hold ≥3:1 against
        their own lifted fills.
 
@@ -327,8 +366,11 @@
    THE COLOURED FILLS DID NOT MOVE with the 10% step, and that is deliberate:
    they are content rather than ground, and every pair they are measured in got
    BETTER as the canvas dropped away beneath them. Their separation from the
-   canvas is back to 0.16, near the 0.17 the near-black ramp had — so the step
-   down recovered most of what the lighter ground had cost them.
+   canvas is 0.14 after the well was lifted (it was 0.16, and 0.17 on the
+   near-black ramp) — the fills are measured against their OWN borders and
+   against the ink, none of which the ground touches, so what the lift spends
+   is a little of the border-on-canvas headroom: the quietest of them,
+   external, is 4.20:1 there against a 3:1 floor.
 
    THE RATIOS BELOW WERE ALL RE-MEASURED for this ramp, including the wash's top
    stop, by the same oklch → linear-sRGB maths `scripts/lib/oklch.mjs` gives
@@ -337,10 +379,11 @@
    that script and this one — read them as accurate to a tenth, not to the second
    decimal. `check:themes` re-measures the pairs it owns on every run. */
 .dark {
-  /* The running light rides `--accent` unmodified here — 10.01:1 on this canvas, and
-     0.15+ OKLab from both `--edge` and `--gantt-critical`. The base's
-     deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a
-     dark one it would be the dim head the reader complained about. */
+  /* The running light rides `--accent` unmodified here — 9.69:1 on this canvas
+     (10.01:1 before the well was lifted), and 0.19 / 0.25 OKLab from `--edge`
+     and `--gantt-critical`, neither of which the ground touches. The base's
+     deepened cyan exists only to clear 3:1 on the LIGHT grounds; on a dark one
+     it would be the dim head the reader complained about. */
   --gantt-flow: var(--accent);
   --background: oklch(0.235 0.0116 271);
   --foreground: oklch(0.96 0.005 271);
@@ -376,9 +419,27 @@
   --input: oklch(0.375 0.0116 271);
   --ring: oklch(0.68 0.19 285);
 
-  /* The diagram well, deliberately below the chrome — see the header on why the
-     gap widened rather than tracking the ground up. */
-  --canvas: oklch(0.174 0.0116 271);
+  /* The diagram well, deliberately below the chrome.
+     LIFTED FROM L 0.174 TO 0.192, because the well was reading as a hole
+     rather than as a recess. The gap to the chrome is what this token is FOR,
+     so it is narrowed rather than closed: ΔL 0.043, which measures 1.103:1
+     against `--background`.
+     THAT NUMBER IS THE ARGUMENT. Across the family the well sits 1.030:1 below
+     its chrome in `light` and `paper` and 1.102:1 in `blueprint`, the other
+     theme with a deep ground. At 0.174 this well was 1.139:1 — the deepest in
+     the app by a wide margin, and the only one a reader called too deep. 0.192
+     puts it level with `blueprint` rather than at a number picked to feel
+     better, and still a clear step deeper than the two light themes.
+     WHAT IT COSTS, measured rather than waved past: `--node` is unchanged at
+     0.219, so an untinted node now sits 1.060:1 above the well where it sat
+     1.095:1. The node is still the lighter of the two, and it is found by its
+     rule either way — `--node-border` is 4.20:1 on this ground. That is the
+     same trade `paper` records for putting its node BELOW its canvas: a
+     surface you find by its edge, not by its glare.
+     Everything drawn on this ground was re-measured for the move; the figures
+     in this block are that measurement, and `check:canvas-grid`,
+     `check:gantt-palette` and `check:flowchart-palette` recompute them. */
+  --canvas: oklch(0.192 0.0116 271);
   --canvas-grid: oklch(0.284 0.0116 271);
   --node: oklch(0.219 0.0116 271);
   --node-foreground: oklch(0.96 0.005 271);
@@ -425,8 +486,11 @@
   --tag-fill-l: 0.33;
   --tag-fill-c: 0.06;
 
-  /* Brightened with the canvas it is drawn on: 5.75:1 against --canvas, where
-     L 0.62 on the lifted well measured 4.6. */
+  /* Brightened with the canvas it is drawn on: 5.58:1 against --canvas, down
+     from 5.76:1 when the well sat at L 0.174 and still far over the 3:1 an
+     unlit connector needs. The token itself did not move — a ground rising by
+     0.018 does not buy a re-tune of the ink, it just spends a little of the
+     headroom the ink already had. */
   --edge: oklch(0.645 0.0116 271);
   --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
   --selection: oklch(0.68 0.19 285 / 0.24);
@@ -665,26 +729,32 @@
  * white card in one place nobody looks.
  *
  * THE GRID IS THE INVERSION, and it is the whole point of the theme. Every
- * other dark theme dims `--canvas-grid` to keep it out of the way: `dark` puts
- * it 0.061 above its own well, `midnight` 0.2 on black, `contrast` 0.3. Here
- * the grid sits at L 0.42 on a canvas at L 0.225 — ABOVE this theme's own
- * `--border` at 0.40, so the ruling of the sheet is stronger than the edge of a
- * panel. That is what a drafting sheet is: the grid is ruled first and the
- * drawing is put on top of it, rather than the grid being a hint the drawing
- * politely ignores. Measured 2.03:1 against the canvas, where `dark`'s is
- * 1.30:1 — the field is meant to be SEEN, and the 3:1 non-text floor does not
- * apply to it because a grid line is never the thing being read.
+ * other dark theme dims its well's field to keep it out of the way: `dark` puts
+ * its grid 0.061 above its own well, `midnight` 0.2 on black, `contrast` 0.3.
+ * Here the sheet is RULED — a fine minor rule at 1.326:1 on the canvas and a
+ * heavier major rule every fifth pitch at 2.411:1, where `dark`'s single field
+ * measures 1.319:1. The major rule is louder than this theme's own `--border`
+ * (1.86:1 on the same ground), which is the inversion stated as a number: the
+ * ruling of the sheet is stronger than the edge of a panel. That is what a
+ * drafting sheet is — ruled first, drawn on afterwards, rather than carrying a
+ * hint the drawing politely ignores. The 3:1 non-text floor does not apply to
+ * any of it, because a grid line is never the thing being read; what DOES apply
+ * is a ceiling, and `check:canvas-grid` holds every grid line below the
+ * connector ink of its own theme.
  *
- * NO MAJOR/MINOR RULE, and that is a mechanism decision rather than a taste
- * one. `--canvas-grid` is a single token consumed by a single-colour field in
- * every one of its five homes — React Flow's `<Background variant="dots">`
- * takes ONE `color` prop (`editor/components/canvas.tsx`), and the marketing
- * and hero grids are one two-gradient rule each. A ruled major line every fifth
- * pitch would need a second `<Background>` layer and a second token in every
- * theme, which is a new customisation surface, and `purpose.md` says a new
- * surface owes its own `check:*` proving every variant is complete. That is a
- * larger change than a theme, so this theme spends its one grid token on being
- * strong instead of on being two grids.
+ * THE RULING IS AN OPT-IN SEAM, NOT A NEW MANDATE. Three stacked React Flow
+ * `<Background>` layers — the arrangement that component's own documentation
+ * gives for a major/minor grid — behind three tokens whose defaults reproduce
+ * the single-strength dot field exactly. This is the only theme that overrides
+ * them. `:root` carries the argument for who may rule their ground and why the
+ * set is deliberately left incomplete; `check:canvas-grid` proves both halves.
+ *
+ * AN EARLIER PASS OF THIS THEME REJECTED THE RULING, on the grounds that
+ * `<Background>` takes one `color` prop and so could only ever be one strength.
+ * That was wrong about the mechanism: the prop is per-layer and the component is
+ * built to be stacked, unique `id` and all. The reasoning was only ever right
+ * about SCOPE — a ruled ground must not be forced on every theme — and that part
+ * survives, as the opt-in default rather than as a refusal.
  *
  * THE INK IS INVERTED, not merely lightened: `--edge`, `--node-foreground` and
  * `--node-border` are all light-on-dark, at the ground's own hue 250 so the
@@ -759,6 +829,26 @@
      theme that is louder than its counterpart in every other theme. */
   --canvas: oklch(0.225 0.062 250);
   --canvas-grid: oklch(0.42 0.062 250);
+  /* THE SHEET IS RULED, NOT DOTTED — the one theme that opts into the well's
+     rule layers (`:root` says who may, and why the set stops here).
+     The dot field is switched OFF rather than left to sit on the ruling: dots
+     at the minor pitch land exactly on the rule intersections, and at this
+     theme's grid colour they would be brighter than the minor rule they sit on
+     — beads on a string rather than a ruled sheet.
+     `--canvas-grid` itself stays at 0.42 because it is NOT only the well's
+     field: the gantt's time ticks and the lifecycle's rail read it too, and
+     those are still a grid rather than a ruling.
+     Minor 1.326:1 on the canvas — a fine ruling, the same order as `light`'s
+     grid at 1.336:1. Major 2.411:1, heavier in weight as well as in value, and
+     1.817:1 against the minor rule so the two never read as one line. The major
+     rule is louder than this theme's own `--border` (1.86:1 on the same
+     ground), which is the whole inversion: the ruling of the sheet is stronger
+     than the edge of a panel. Both stay well under the ink drawn on them —
+     `--edge` is 5.52:1, and `check:canvas-grid` holds every grid line to a
+     ceiling below its own theme's connector. */
+  --canvas-dot: transparent;
+  --canvas-rule: oklch(0.315 0.062 250);
+  --canvas-rule-major: oklch(0.46 0.062 250);
   --node: oklch(0.245 0.062 250);
   --node-foreground: oklch(0.97 0.012 250);
   /* ≥3:1 against --node (measured 4.13:1). */

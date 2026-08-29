@@ -45,6 +45,7 @@ import { useId, useRef, useState } from "react";
 // Cross-feature on purpose: the tag-fill rebuild is the ONE definition of
 // "a hue at our validated card lightness" (node-colors.ts carries the full
 // rationale), and re-typing the expression here would let the two drift.
+import { CanvasField } from "@/components/ui/canvas-field";
 import { ICONS } from "@/features/editor/lib/icons/registry";
 import { useIconStyle } from "@/lib/icon-style";
 import { tagFillCss } from "@/features/editor/lib/node-colors";
@@ -632,6 +633,17 @@ export function SequenceDiagram({
       aria-label={`Sequence diagram: ${title}. ${layout.participants.length} participants, ${layout.stepCount} messages. A text listing of every step follows the diagram.`}
       className="af-seq-svg block"
     >
+      {/* THE WELL'S FIELD, under everything the diagram draws. In the
+          diagram's OWN coordinates, so it pans, scrolls and zooms with the
+          drawing rather than sitting still while the drawing moves over it
+          — components/ui/canvas-field.tsx carries the measurement that
+          rules out a ground painted on the pane. */}
+      <CanvasField
+        id="af-field-sequence"
+        x={layout.minX}
+        width={layout.width}
+        height={layout.height}
+      />
       <defs>
         {/* CARD GRADIENTS — a vertical lift on each participant card, in that
             card's own lane hue. Both stops are built from `tagFillCss`, the
