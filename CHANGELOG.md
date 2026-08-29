@@ -253,8 +253,6 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   connectors are clickable and never changed once read; the corner now stays
   empty until a selection puts a card there.
 
-### Removed
-
 - The "View mode · read-only" tag beside the model title is gone. It claimed
   read-only whatever the lock was doing, so unlocking a C4 canvas to edit it put
   "Editable" in the strip above the diagram and "read-only" in the strip below
@@ -288,6 +286,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   measures the space on both sides when you open it, keeps its usual side
   whenever a usable amount of the list fits there, and caps its height to the
   room actually available so it scrolls instead of spilling.
+- The theme menu no longer gets cut off when it opens from an immersive diagram
+  on a short screen. Eight rows opening upward could run past the top of the
+  pane, which clips them with no scrollbar to say anything was missing.
 
 - Clicking an element on an editable C4 canvas works again. The change that
   made a bare drag draw a selection box claimed any press that landed
