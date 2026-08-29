@@ -55,6 +55,7 @@ import { useBrowserCapability } from "@/lib/browser-capability";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
 import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -392,7 +393,16 @@ export function ViewerShell({
           a collapsed canvas, and is deliberately modest: the shell is also
           embedded in the playground inside a clamped-height section, where a
           tall floor would push itself past the bottom of its own frame. */}
-      <div className="relative min-h-56 flex-1 sm:min-h-80">
+      <div
+        className={cn(
+          "relative min-h-56 flex-1 sm:min-h-80",
+          /* THE WELL for a C4 document, stated by the shell that owns the pane
+             rather than left to React Flow's own class on the canvas inside —
+             the same rule the other eight notations follow. See
+             `components/ui/diagram-well.tsx`. */
+          DIAGRAM_WELL_CLASSES,
+        )}
+      >
         <ViewerCanvas
           model={frozenModel}
           initialDiagramId={initialDiagramId}

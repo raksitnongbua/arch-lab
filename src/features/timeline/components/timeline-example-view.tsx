@@ -4,7 +4,9 @@
  * Thin on purpose, in the way `GanttExampleView` and `ErExampleView` are: the
  * whole interactive story — hover, the pin that outlives the pointer, Escape
  * to release — already lives in `TimelineViewer`, and this adds only what a
- * viewer cannot own, which here is the page's full remaining height.
+ * viewer cannot own, which here is the shared
+ * `DiagramWell` — the page's full remaining height, on the ground every
+ * notation's diagram shares.
  *
  * NO LIVE REGION, like the gantt's and unlike ER's, and it is the honest
  * situation rather than an omission: ER pushes an announcement out through an
@@ -25,6 +27,8 @@
 
 import type { TimelineLabFile } from "@/types";
 
+import { DiagramWell } from "@/components/ui/diagram-well";
+
 import { TimelineViewer } from "./timeline-viewer";
 
 export function TimelineExampleView({
@@ -33,8 +37,8 @@ export function TimelineExampleView({
   file: TimelineLabFile;
 }): React.JSX.Element {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <DiagramWell>
       <TimelineViewer file={file} />
-    </div>
+    </DiagramWell>
   );
 }

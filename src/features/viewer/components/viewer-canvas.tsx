@@ -2582,7 +2582,9 @@ function ViewerCanvasInner({
              space merges two class names into one nonsense name, every rule
              targeting it silently stops applying, and CSS reports nothing. */
           className={[
-            "bg-canvas",
+            /* NO GROUND OF ITS OWN — the well is the shell's, the way every
+               other notation's is its host's. See
+               `components/ui/diagram-well.tsx`. */
             /* THE PANE CURSOR IS THE MODE. Read-only, a bare drag pans, so
                the pane wears grab/grabbing as it always has. Editable, the
                toggle decides: crosshair while a drag draws the lasso (the

@@ -16,6 +16,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Code2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
 import { cn } from "@/lib/utils";
 
 import { ModelTextPane } from "../text-pane";
@@ -112,13 +113,13 @@ export function EditorShell(): React.JSX.Element {
             textPaneOpen ? "hidden xl:flex" : "flex",
           )}
         >
-          <div className="relative min-h-96 flex-1 bg-canvas">
+          <div className={cn("relative min-h-96 flex-1", DIAGRAM_WELL_CLASSES)}>
             {mounted ? (
               <Canvas />
             ) : (
               <div
                 aria-hidden="true"
-                className="size-full animate-pulse bg-canvas"
+                className={cn("size-full animate-pulse", DIAGRAM_WELL_CLASSES)}
               />
             )}
           </div>

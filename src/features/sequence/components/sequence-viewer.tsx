@@ -1698,7 +1698,12 @@ export function SequenceViewer({
         <div
           ref={diagramRegionRef}
           className={cn(
-            "h-full overflow-auto bg-canvas p-3",
+            /* NO GROUND OF ITS OWN: the well is painted by the host that owns
+               the pane — see `components/ui/diagram-well.tsx`. This box wore
+               `bg-canvas` while five sibling notations wore nothing, which is
+               how the ground behind a diagram came to change shade with the
+               notation. */
+            "h-full overflow-auto p-3",
             // Flex ONLY at a numeric scale, so the wrapper's `m-auto` can
             // centre the drawing on both axes when it is smaller than the
             // pane. Fit mode is left as plain block layout: its child already
