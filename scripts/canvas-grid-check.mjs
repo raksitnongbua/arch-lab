@@ -372,7 +372,9 @@ for (const theme of THEMES) {
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
-  console.error(`\n${failures} of ${assertions} canvas-grid assertion(s) FAILED`);
+  console.error(
+    `\n${failures} of ${assertions} canvas-grid assertion(s) FAILED`,
+  );
   process.exit(1);
 }
 console.log(`\nAll ${assertions} canvas-grid assertions passed.`);

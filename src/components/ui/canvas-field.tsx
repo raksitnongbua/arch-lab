@@ -37,6 +37,16 @@
  * should arrive as the drawing. `check:canvas-grid` pins it so the two renderers
  * cannot quietly converge.
  *
+ * WHAT HAPPENS TO THE PITCH WHEN A CANVAS ZOOMS, stated because "the grid
+ * stopped matching the drawing" is the complaint this replaces. The pattern is
+ * measured in the diagram's user units, so the field scales exactly as the
+ * drawing does and a cell is always the same number of diagram units — which is
+ * what React Flow's layers do on the C4 canvases, so the two mechanisms agree.
+ * On the three canvases with no camera (gantt, timeline, lifecycle) the `<svg>`
+ * is drawn at natural size and shrunk by `max-width: 100%`, so the field shrinks
+ * with it on a narrow pane. That is the same rule, not an exception: the field
+ * belongs to the drawing, so whatever resizes the drawing resizes the field.
+ *
  * A FIXED id PER KIND, not the per-instance one `<WashGradient>` uses, and the
  * difference is real rather than sloppy. A wash gradient is built from the
  * node's OWN fill, so two nodes sharing an id paint each other's colour. The
