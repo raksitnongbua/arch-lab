@@ -295,7 +295,7 @@ export function DictDiagram({
           {/* THE TABLE'S OWN SURFACE, drawn before the headings so everything
               sits on it. `--node` on `--canvas` is the pair every other canvas
               here uses for a shape against its background, so it is already
-              measured in all six themes — which is why the panel is that pair
+              measured in all eight themes — which is why the panel is that pair
               rather than a hand-picked tint of the canvas colour, and why it
               lifts the table without the high-contrast theme losing the
               distinction.

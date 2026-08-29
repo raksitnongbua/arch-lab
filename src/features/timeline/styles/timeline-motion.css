@@ -76,7 +76,7 @@
  * that adding one is the change that would earn this kind a
  * `check:timeline-palette` it deliberately does not have). Everything below
  * paints from the SHARED node and canvas tokens, so it is complete in all
- * seven themes by construction rather than by a per-kind audit, and
+ * eight themes by construction rather than by a per-kind audit, and
  * `check:themes` already covers every token named here.
  *
  * TIMINGS. The tunables below are the source of truth for the reveal budget;

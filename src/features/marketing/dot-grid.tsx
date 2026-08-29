@@ -12,7 +12,7 @@
  *
  *  1. COLOUR COMES FROM A CSS CUSTOM PROPERTY, not a hex prop. The upstream
  *     component takes `baseColor="#5227FF"` and parses it with a hex regex. This
- *     app has seven themes, every colour is an oklch token, and `check:themes`
+ *     app has eight themes, every colour is an oklch token, and `check:themes`
  *     measures them — a hardcoded hex would be the one thing on the page that
  *     ignores the theme picker. Tokens are resolved through the canvas itself
  *     (see `resolveToRgb`), which is what lets an oklch token become the rgb

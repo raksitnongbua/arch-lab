@@ -109,9 +109,9 @@
  * a lane on the left versus a column on the right — never by hue. Two reasons:
  * the distinctions are structural, so a shape says them in a screenshot and
  * in greyscale where a colour does not; and a per-type colour here would owe
- * a `check:lifecycle-palette` measured across all seven themes, which is a
+ * a `check:lifecycle-palette` measured across all eight themes, which is a
  * real cost to buy a weaker signal. Everything below paints from the SHARED
- * node, edge and canvas tokens, so it is complete in all seven themes by
+ * node, edge and canvas tokens, so it is complete in all eight themes by
  * construction rather than by a per-kind audit, and `check:themes` already
  * covers every token named here.
  *

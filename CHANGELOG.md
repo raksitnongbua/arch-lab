@@ -9,6 +9,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A `blueprint` theme — an eighth palette.** Deep cyan-navy ground, white
+  ink, and the canvas grid at full strength: here the ruling of the sheet is
+  stronger than the edge of a panel, so a diagram sits on a drafting surface
+  that was ruled before anything was drawn on it. Every other dark theme dims
+  its grid to keep it out of the way; this one is the inversion. The role
+  colours keep their audited hues and are re-mixed for a saturated dark
+  ground, so a C4 diagram, a flowchart and a Gantt read the same way here as
+  they do anywhere else.
+
 - **Lifecycles — a ninth notation.** `archlab 1.0 lifecycle` draws one named
   thing moving: what it went through, and where it can end up. States are dots
   on a spine in the order they were written; branches leave that track to the

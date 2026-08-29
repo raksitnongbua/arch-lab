@@ -100,7 +100,7 @@ export const DOT_GRID_DEFAULTS: DotGridConfig = {
  *
  * The upstream component this is adapted from takes a hex, and its own
  * customiser offers a colour picker. That would be the wrong control HERE: a hex
- * is a colour one theme's worth of, and this app has seven. Every option below
+ * is a colour one theme's worth of, and this app has eight. Every option below
  * is a token that every theme defines, so a choice made while looking at one
  * theme still means something in the other six.
  *

@@ -12,7 +12,7 @@
  * keeps the invisible-node outcome impossible. The decision, of the three
  * that were on the table, is CLAMP RATHER THAN WARN OR PREVIEW-ONLY — a
  * warning must be read and can be ignored, a per-theme preview asks the
- * author to audit seven themes by eye, but a construction cannot be skipped.
+ * author to audit eight themes by eye, but a construction cannot be skipped.
  * The trade (the exact hex may shift) is disclosed in the form the moment it
  * happens, and the author's HUE — the part of a colour choice that carries
  * its identity — is never changed.
@@ -53,6 +53,7 @@ export const TAG_FILL_BY_THEME: Record<Theme, { l: number; c: number }> = {
   dark: { l: 0.33, c: 0.06 },
   midnight: { l: 0.275, c: 0.06 },
   contrast: { l: 0.2, c: 0.06 },
+  blueprint: { l: 0.33, c: 0.06 },
 };
 
 /**

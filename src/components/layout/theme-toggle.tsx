@@ -9,6 +9,7 @@ import {
   Moon,
   MoonStar,
   Palette,
+  Ruler,
   Sun,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -82,6 +83,11 @@ const THEME_META: Record<
     hint: "Stronger outlines",
     Icon: Contrast,
   },
+  blueprint: {
+    label: "Blueprint",
+    hint: "Drafting sheet, ruled grid",
+    Icon: Ruler,
+  },
 };
 
 /**
@@ -110,7 +116,7 @@ const THEME_META: Record<
  * control sit inside immersive mode without arming a trap: one press shuts the
  * menu, the next reaches the viewer's own Escape ladder and leaves the mode.
  *
- * IT OFFERS EIGHT ROWS FOR SEVEN THEMES. The first hands the decision back to
+ * IT OFFERS NINE ROWS FOR EIGHT THEMES. The first hands the decision back to
  * the machine (`System`) and the rest name a palette; `lib/theme-default.ts`
  * owns that preference and explains why it is a flag beside the theme rather
  * than an eighth entry in `THEMES`. Only one row is ever ticked: a followed
