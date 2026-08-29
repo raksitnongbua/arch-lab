@@ -23,7 +23,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire, registerHooks } from "node:module";
 import path from "node:path";
@@ -1256,6 +1256,92 @@ check("list_example_models lists the bundled models, none broken", () => {
   );
 });
 
+/**
+ * The listing's coverage, DERIVED FROM THE FILESYSTEM rather than from a list
+ * of notations written here.
+ *
+ * THE BUG THIS EXISTS FOR: both example tools read the C4 registry and only
+ * the C4 registry, for four notations and then eight. Nothing failed — the
+ * tools worked perfectly on the three models they knew — so the only symptom
+ * was an agent being told arch-lab draws C4 models, while nineteen worked
+ * documents in eight other notations sat unreachable. That is the same shape
+ * as the `?e=` resolver bug (`check:view-input`), the sitemap's coverage and
+ * the share-capacity wrappers: a hardcoded list cannot notice the thing it
+ * has never heard of.
+ *
+ * So the expectation is read off disk — the C4 registry plus every
+ * `service/example-service.ts` under `src/features` — and every id literal in
+ * each of them must appear in the listing text. A tenth notation with a
+ * registry fails here the moment it is added and not listed, which is the only
+ * way this stays true without anyone remembering to come back.
+ */
+const EXAMPLE_REGISTRY_FILES = [
+  "src/features/viewer/service/model-service.ts",
+  ...readdirSync(path.join(ROOT, "src/features"))
+    .filter((feature) =>
+      existsSync(
+        path.join(ROOT, "src/features", feature, "service/example-service.ts"),
+      ),
+    )
+    .map((feature) => `src/features/${feature}/service/example-service.ts`),
+];
+
+check("list_example_models covers every registry that exists", () => {
+  const text = expectOk(listExampleModels());
+
+  /* Read as SOURCE, the way `check:view-input` reads them: the ids are
+     literals, so this is exact, and it does not depend on the very module
+     under test to say which registries there are. */
+  const missing = [];
+  for (const file of EXAMPLE_REGISTRY_FILES) {
+    const ids = [
+      ...readFileSync(path.join(ROOT, file), "utf8").matchAll(
+        /^\s*(?:\{\s*)?id: "([a-z0-9-]+)"/gm,
+      ),
+    ].map((match) => match[1]);
+    assert.ok(
+      ids.length > 0,
+      `no example ids found in ${file} — has it moved?`,
+    );
+    for (const id of ids) {
+      if (!text.includes(id)) missing.push(`${file} → ${id}`);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    `bundled examples an agent cannot see:\n  ${missing.join("\n  ")}`,
+  );
+
+  /* One SECTION per registry, not merely one id somewhere in the text: a
+     notation whose examples were listed under someone else's heading would
+     pass the id sweep above and still mislead every reader of it. */
+  const headings = [...text.matchAll(/^[A-Z][^\n]* \(kind: [a-z0-9]+\) — /gm)];
+  assert.equal(
+    headings.length,
+    EXAMPLE_REGISTRY_FILES.length,
+    `${EXAMPLE_REGISTRY_FILES.length} registries on disk, ` +
+      `${headings.length} notation headings in the listing`,
+  );
+});
+
+check(
+  "list_example_models says what each example holds, in counted facts",
+  () => {
+    const text = expectOk(listExampleModels());
+    /* The gantt line's numbers come from the same forward pass the canvas
+     draws — a row with no facts at all means a summary stopped reporting
+     `…Count` fields and the listing quietly became a list of bare ids. */
+    assert.match(text, /store-migration — "[^"]+": \d+ sections, \d+ tasks/);
+    assert.match(text, /order-lifecycle — "[^"]+": \d+ states/);
+    assert.doesNotMatch(
+      text,
+      /^ {2}[a-z0-9-]+ — "[^"]*":\s*$/m,
+      "an example listed with no counted facts",
+    );
+  },
+);
+
 check("get_example_model serves shopflow as .alab and as JSON", () => {
   const alab = expectOk(getExampleModel("shopflow", "alab"));
   assert.match(alab, /archlab 1\.0/);
@@ -1263,10 +1349,30 @@ check("get_example_model serves shopflow as .alab and as JSON", () => {
   assert.match(json, /"version"/);
 });
 
+check("get_example_model resolves a non-C4 id and names its notation", () => {
+  /* The id namespace is flat across all nine registries, so the caller never
+     says which kind it wants — which makes "what did I just get" the tool's
+     job. An agent that is not told this is a gantt reaches for
+     `validate_model` next and gets a refusal it cannot explain. */
+  const alab = expectOk(getExampleModel("store-migration", "alab"));
+  assert.match(alab, /Example gantt chart `store-migration`/);
+  assert.match(alab, /archlab 1\.0 gantt/);
+
+  const json = expectOk(getExampleModel("store-migration", "json"));
+  assert.match(json, /"kind": "gantt"/);
+  /* JSON is served for every kind, but only C4's is a format arch-lab reads
+     back. Saying so is what stops an agent saving a .json it can never
+     reopen. */
+  assert.match(json, /no JSON input dialect/);
+});
+
 check("get_example_model names the alternatives for an unknown id", () => {
   const text = expectError(getExampleModel("nope", "alab"));
-  assert.match(text, /No example model `nope`/);
+  assert.match(text, /No bundled example `nope`/);
   assert.match(text, /shopflow/);
+  /* The alternatives must span the notations, not just the C4 registry the
+     tool used to know about. */
+  assert.match(text, /peer-review/);
 });
 
 /* ----------------------------------------------------------------------- */

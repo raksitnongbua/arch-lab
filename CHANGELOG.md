@@ -263,6 +263,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- An agent asking arch-lab for an example is shown all nine notations. The MCP
+  `list_example_models` and `get_example_model` read only the C4 registry, so
+  the nineteen bundled sequence, flowchart, use-case, ER, dictionary, gantt,
+  timeline and lifecycle documents were invisible to the surface that cannot
+  browse `/demo` to find them. The listing is now grouped by notation, with
+  what each kind is for and counts taken from the parsed document, and a fetch
+  by id resolves across every registry and says which notation it found.
+
 - The toolbar under a sequence, flowchart, use-case, ER or data-dictionary
   diagram is now built to the same metrics as the one under a C4 diagram. It
   had the pane's top-strip padding instead of the C4 footer's, so the same

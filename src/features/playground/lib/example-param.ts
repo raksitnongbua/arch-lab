@@ -1,24 +1,4 @@
-import {
-  serializeArchText,
-  serializeDictText,
-  serializeErText,
-  serializeFlowchartText,
-  serializeSequenceText,
-  serializeGanttText,
-  serializeTimelineText,
-  serializeLifecycleText,
-  serializeUseCaseText,
-} from "@/features/archtext";
-import { loadDictExample } from "@/features/dict/service/example-service";
-import { loadErExample } from "@/features/er/service/example-service";
-import { loadFlowchartExample } from "@/features/flowchart/service/example-service";
-import { loadSequenceExample } from "@/features/sequence/service/example-service";
-import { loadGanttExample } from "@/features/gantt/service/example-service";
-import { loadTimelineExample } from "@/features/timeline/service/example-service";
-import { loadLifecycleExample } from "@/features/lifecycle/service/example-service";
-import { loadUseCaseExample } from "@/features/usecase/service/example-service";
-import { archLabFileFrom } from "@/features/viewer/lib/model";
-import { loadViewerModel } from "@/features/viewer/service/model-service";
+import { loadBundledExample } from "./example-registry";
 
 /**
  * `?e=` — open a BUNDLED EXAMPLE in the playground, by id.
@@ -40,15 +20,17 @@ import { loadViewerModel } from "@/features/viewer/service/model-service";
  * `check:view-input` asserts that, because the day they collide this param
  * silently resolves the wrong one.
  *
- * EVERY REGISTRY MUST BE LISTED BELOW, and forgetting one is invisible in a
- * specific way. THE BUG THIS COMMENT EXISTS FOR: the ER and dictionary
- * registries were added and this function was not, so every "Open in the
- * playground" link from a `/demo` ER or dictionary card returned `null` here —
- * and `null` is the same answer an unknown id gives, which is the deliberate
- * fall-back-to-the-seed path. So the playground opened on the C4 seed and
- * nothing anywhere reported a problem: no error, no 404, just the wrong
- * document. `check:view-input` now asserts every registered example id
- * resolves, in both directions.
+ * WHICH REGISTRIES EXIST IS NO LONGER THIS MODULE'S PROBLEM. It used to ask
+ * all nine by hand, and forgetting one was invisible in a specific way: the ER
+ * and dictionary registries were added and this function was not, so every
+ * "Open in the playground" link from a `/demo` card of either kind returned
+ * `null` here — and `null` is the same answer an unknown id gives, which is
+ * the deliberate fall-back-to-the-seed path. So the playground opened on the
+ * C4 seed and nothing anywhere reported a problem: no error, no 404, just the
+ * wrong document. The list now lives once, in `./example-registry`, which the
+ * MCP example tools read too; `check:view-input` asserts it names every
+ * registry on disk, and `check:mcp` asserts every id in one reaches an
+ * agent.
  *
  * An UNKNOWN id falls back to the ordinary seed rather than erroring: the
  * param names content, not a route, and a link with a stale id should still
@@ -63,42 +45,6 @@ export function exampleTextFor(
 ): string | null {
   const id = Array.isArray(value) ? value[0] : value;
   if (id === undefined || id === "") return null;
-
-  const model = loadViewerModel(id);
-  if (model.status === "ok") {
-    return serializeArchText(archLabFileFrom(model.model));
-  }
-  const sequence = loadSequenceExample(id);
-  if (sequence.status === "ok") {
-    return serializeSequenceText(sequence.file);
-  }
-  const flowchart = loadFlowchartExample(id);
-  if (flowchart.status === "ok") {
-    return serializeFlowchartText(flowchart.file);
-  }
-  const usecase = loadUseCaseExample(id);
-  if (usecase.status === "ok") {
-    return serializeUseCaseText(usecase.file);
-  }
-  const er = loadErExample(id);
-  if (er.status === "ok") {
-    return serializeErText(er.file);
-  }
-  const dict = loadDictExample(id);
-  if (dict.status === "ok") {
-    return serializeDictText(dict.file);
-  }
-  const gantt = loadGanttExample(id);
-  if (gantt.status === "ok") {
-    return serializeGanttText(gantt.file);
-  }
-  const timeline = loadTimelineExample(id);
-  if (timeline.status === "ok") {
-    return serializeTimelineText(timeline.file);
-  }
-  const lifecycle = loadLifecycleExample(id);
-  if (lifecycle.status === "ok") {
-    return serializeLifecycleText(lifecycle.file);
-  }
-  return null;
+  const result = loadBundledExample(id);
+  return result.status === "ok" ? result.document.alabText : null;
 }

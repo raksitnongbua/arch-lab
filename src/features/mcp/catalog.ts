@@ -58,6 +58,16 @@ import { MAX_SOURCE_CHARS } from "./lib/limits";
  */
 const MAX_SOURCE_CHARS_TEXT = `max ${MAX_SOURCE_CHARS.toLocaleString("en-US")} characters`;
 
+/**
+ * How many notations the product draws, for the prose below.
+ *
+ * COUNTED FROM `KIND_BLURB`, which is total over the document kinds, rather
+ * than typed out: "four notations" survived in five places on this site long
+ * after there were six, and a tool description is the one place a stale count
+ * is read by something that cannot look around and notice.
+ */
+const DOCUMENT_KIND_COUNT = Object.keys(KIND_BLURB).length;
+
 /** Where the server lives, relative to the site root. */
 export const MCP_ENDPOINT_PATH = "/api/mcp";
 
@@ -741,29 +751,44 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
   },
   {
     name: "list_example_models",
-    title: "List example models",
+    title: "List example documents",
     description:
-      "List the complete, real C4 models arch-lab ships, with their sizes. " +
-      "Use one as a pattern for idiomatic structure rather than inventing a " +
-      "shape.",
+      "Every complete, real document arch-lab ships, grouped by notation — " +
+      `all ${DOCUMENT_KIND_COUNT} of them, not just C4 — each with what it ` +
+      "holds, counted from the parsed document. Read it BEFORE choosing a " +
+      "notation as well as before writing one: the grouping says what each " +
+      "kind is for, so an agent that only knows arch-lab draws C4 finds the " +
+      "gantt, the ER schema or the lifecycle it actually wanted. Ids are " +
+      "unique across every notation, so an id alone names a document.",
     args: [],
   },
   {
     name: "get_example_model",
-    title: "Get an example model",
+    title: "Get an example document",
     description:
-      "Fetch one bundled example model in full, as .alab or arch-lab JSON.",
+      "Fetch one bundled example in full, in any notation — the tool " +
+      "resolves the id across every registry and says which notation it " +
+      "found, so use one as a pattern for idiomatic structure rather than " +
+      "inventing a shape.",
     args: [
       {
         name: "id",
         required: true,
         description:
-          'The example\'s id, from list_example_models (e.g. "shopflow").',
+          'The example\'s id, from list_example_models (e.g. "shopflow", a ' +
+          'C4 model, or "store-migration", a gantt). One flat namespace: no ' +
+          "notation argument is needed or accepted.",
       },
       {
         name: "format",
         required: false,
-        description: 'Either "alab" (default) or "json".',
+        description:
+          '"alab" (default) — the .alab text, in the notation\'s own ' +
+          "grammar, which is what to edit and what every writer tool reads. " +
+          '"json" — the parsed document. For a C4 model that is ' +
+          "arch-lab JSON, a file format the readers accept; for the other " +
+          "kinds it is the parser's own shape, good for inspecting and NOT " +
+          "an input format, which the response says on every such fetch.",
       },
     ],
   },
