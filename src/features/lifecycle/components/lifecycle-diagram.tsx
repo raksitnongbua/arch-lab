@@ -52,7 +52,6 @@
  * write a variable.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import type { LifecycleLabFile } from "@/types";
 
 import { LIFECYCLE, layoutLifecycle } from "../lib/layout";
@@ -86,12 +85,6 @@ export interface LifecycleDiagramProps {
    * `onFocusState` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
   onHoverState?: (key: string | null) => void;
-  /**
-   * Drawing units → screen pixels, from the host's camera. The ground's
-   * adaptive ladder needs it to decide which pitches are readable right now;
-   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
-   */
-  scale: number;
 }
 
 /** The key a state is focused by. States and exits share one key space so the
@@ -106,7 +99,6 @@ export function LifecycleDiagram({
   atRest = false,
   onFocusState,
   onHoverState,
-  scale,
 }: LifecycleDiagramProps) {
   const layout = layoutLifecycle(file);
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
@@ -135,17 +127,6 @@ export function LifecycleDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-lifecycle"
-        scale={scale}
-        width={layout.width}
-        height={layout.height}
-      />
       {/* The subject: the head of the diagram, above the track. */}
       {layout.subject.labelLines.map((line, index) => (
         <text

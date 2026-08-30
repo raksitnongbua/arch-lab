@@ -30,6 +30,8 @@ import {
   ZOOM_PILL_CLASSES,
 } from "@/components/ui/zoom-pill";
 import { useCanvasZoom, ZOOM_MAX } from "@/components/ui/use-canvas-zoom";
+import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
+import { cn } from "@/lib/utils";
 import { layoutDict } from "../lib/layout";
 import { DictDiagram } from "./dict-diagram";
 
@@ -90,7 +92,13 @@ export function DictViewer({
           wrapper is sized in pixels on both axes. */}
       <div
         ref={paneRef}
-        className="flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4"
+        /* THE GROUND, filling the pane rather than the drawing — the reversal
+           is recorded at `.af-canvas-rule` in globals.css. */
+        className={cn(
+          "flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4",
+          CANVAS_RULE_CLASS,
+        )}
+        style={groundFieldCss(camera.scale)}
       >
         <div
           className="shrink-0"
@@ -100,9 +108,6 @@ export function DictViewer({
           }}
         >
           <DictDiagram
-            /* The camera's resolved multiplier — the adaptive ground reads the
-               SAME scale this wrapper is sized from, never a second one. */
-            scale={camera.scale}
             file={file}
             availableWidth={paneWidth - 32}
             className="block"

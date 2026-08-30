@@ -25,7 +25,6 @@
  * one a search engine cannot quote.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import type { DictLabFile } from "@/types";
 
 import { BADGE, COLUMN_LABEL, DICT, layoutDict } from "../lib/layout";
@@ -225,19 +224,12 @@ export interface DictDiagramProps {
   /** How much width the table may use. Omitted for a static render, which
    * takes the fixed page width. */
   availableWidth?: number;
-  /**
-   * Drawing units → screen pixels, from the host's camera. The ground's
-   * adaptive ladder needs it to decide which pitches are readable right now;
-   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
-   */
-  scale: number;
 }
 
 export function DictDiagram({
   file,
   className,
   availableWidth,
-  scale,
 }: DictDiagramProps): React.JSX.Element {
   const layout = layoutDict(file, { availableWidth });
   const right = layout.columnX.source + layout.columnWidth.source;
@@ -257,17 +249,6 @@ export function DictDiagram({
       role="img"
       aria-label={`Data dictionary: ${file.metadata?.title ?? "untitled"}, ${layout.sections.length} sections`}
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-dict"
-        scale={scale}
-        width={layout.width}
-        height={layout.height}
-      />
       {layout.title !== null ? (
         <text
           className="af-dict-title"

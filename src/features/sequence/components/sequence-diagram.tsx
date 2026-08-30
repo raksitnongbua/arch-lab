@@ -45,7 +45,6 @@ import { useId, useRef, useState } from "react";
 // Cross-feature on purpose: the tag-fill rebuild is the ONE definition of
 // "a hue at our validated card lightness" (node-colors.ts carries the full
 // rationale), and re-typing the expression here would let the two drift.
-import { CanvasField } from "@/components/ui/canvas-field";
 import { ICONS } from "@/features/editor/lib/icons/registry";
 import { useIconStyle } from "@/lib/icon-style";
 import { tagFillCss } from "@/features/editor/lib/node-colors";
@@ -295,12 +294,6 @@ export interface SequenceDiagramProps {
    * pane level instead; every interactive element in here stops propagation,
    * which is what makes that safe.
    */
-  /**
-   * Drawing units → screen pixels, from the host's camera. The ground's
-   * adaptive ladder needs it to decide which pitches are readable right now;
-   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
-   */
-  scale: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -322,7 +315,6 @@ export function SequenceDiagram({
   onToggleCollapse,
   pick = null,
   reorder = null,
-  scale,
 }: SequenceDiagramProps): React.JSX.Element {
   /* ---- drag to reorder ------------------------------------------------------
    * THE PROBLEM THIS SOLVES IS NOT THE MOVE, IT IS THE OTHER TWO GESTURES ON
@@ -640,18 +632,6 @@ export function SequenceDiagram({
       aria-label={`Sequence diagram: ${title}. ${layout.participants.length} participants, ${layout.stepCount} messages. A text listing of every step follows the diagram.`}
       className="af-seq-svg block"
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-sequence"
-        scale={scale}
-        x={layout.minX}
-        width={layout.width}
-        height={layout.height}
-      />
       <defs>
         {/* CARD GRADIENTS — a vertical lift on each participant card, in that
             card's own lane hue. Both stops are built from `tagFillCss`, the

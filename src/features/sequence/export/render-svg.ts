@@ -31,7 +31,7 @@
  *     motion removes them rather than parking them.
  */
 
-import { CANVAS_FIELD_CLASS } from "@/lib/canvas-ground";
+import { resolveExportGround } from "@/features/viewer/export/ground";
 
 import { SEQUENCE_CHROME_SELECTOR } from "../lib/chrome";
 
@@ -87,14 +87,7 @@ const CARRIED = [
  * list contained the names it already knew. `../lib/chrome.ts` states the
  * convention and `check:sequence-export` proves the feature obeys it.
  */
-/* AND THE GROUND, which the prefix rule above cannot reach. The canvas field
-   is drawn by a SHARED component used by all eight SVG notations, so it cannot
-   wear a `af-seq-chrome-` class without that component knowing about this
-   feature. It is chrome by this file's own test — a reader holding a still
-   image loses nothing by its absence — and under the previous ground model it
-   went into every exported sequence diagram, because this is the one exporter
-   that clones rather than builds. `check:canvas-grid` asserts this line. */
-const DROPPED_ALWAYS = `${SEQUENCE_CHROME_SELECTOR}, .${CANVAS_FIELD_CLASS}`;
+const DROPPED_ALWAYS = SEQUENCE_CHROME_SELECTOR;
 
 /**
  * The idle comet bands. Dropped from a STILL — frozen, they are three bright
@@ -193,6 +186,27 @@ export function renderSequenceSvg(
       window.getComputedStyle(document.body).backgroundColor,
   );
   clone.insertBefore(backdrop, clone.firstChild);
+  /* THE GROUND, AND THIS EXPORTER IS THE ONE THAT HAS TO BE TOLD.
+     The other eight build their own `<svg>` from layout, so adding the ground
+     there is a line of markup. This one CLONES the live canvas — and the live
+     canvas no longer carries the ground at all, because the ground moved onto
+     the scroll pane (`.af-canvas-rule` in globals.css) where it can fill the
+     whole well. So a clone arrives with no ground and it has to be put back.
+     That is the same defect as before from the other direction: this path used
+     to carry the ground when nobody wanted it, and would now silently drop it
+     when everybody does. `check:canvas-grid` asserts this branch by name. */
+  const ground = resolveExportGround();
+  if (ground.defs !== "") {
+    const layer = clone.ownerDocument.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "g",
+    );
+    layer.setAttribute("aria-hidden", "true");
+    layer.innerHTML =
+      `<defs>${ground.defs}</defs>` +
+      ground.layers(viewBox.x, viewBox.y, width, height);
+    clone.insertBefore(layer, backdrop.nextSibling);
+  }
 
   return {
     svg: new XMLSerializer().serializeToString(clone),

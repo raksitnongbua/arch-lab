@@ -57,7 +57,6 @@ import { useId } from "react";
 // Cross-feature on purpose (the sequence and flowchart renderers'
 // precedent): the tag-fill rebuild is the ONE definition of "a hue at our
 // validated card lightness".
-import { CanvasField } from "@/components/ui/canvas-field";
 import {
   resolveTagColor,
   tagFillCss,
@@ -152,12 +151,6 @@ export interface UseCaseDiagramProps {
   zoom: number | "fit";
   onFocusElement: (id: string) => void;
   onFocusEdge: (index: number) => void;
-  /**
-   * Drawing units → screen pixels, from the host's camera. The ground's
-   * adaptive ladder needs it to decide which pitches are readable right now;
-   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
-   */
-  scale: number;
 }
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
@@ -173,7 +166,6 @@ export function UseCaseDiagram({
   zoom,
   onFocusElement,
   onFocusEdge,
-  scale,
 }: UseCaseDiagramProps): React.JSX.Element {
   const focusSet = resolveUseCaseFocus(layout, focus);
   const elementDimmed = (id: string): boolean =>
@@ -205,17 +197,6 @@ export function UseCaseDiagram({
       aria-label={`Use-case diagram: ${title}. ${layout.elements.length} elements, ${layout.edges.length} relationships. Elements and lines are buttons — Tab reaches them.`}
       className="af-uc-svg block"
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-usecase"
-        scale={scale}
-        width={layout.width}
-        height={layout.height}
-      />
       {/* The role textures, once for the whole canvas — the shared-def rule in
           components/ui/role-texture.tsx. Inert under every theme but `eink`. */}
       <RoleTextureDefs />

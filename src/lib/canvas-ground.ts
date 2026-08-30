@@ -62,18 +62,14 @@
 export const GROUND_BASE = 8;
 
 /**
- * Class on the group every SVG canvas draws its ladder into.
+ * Class the eight non-C4 viewers put on their SCROLL PANE to paint the ladder.
  *
- * IT EXISTS FOR ONE EXPORTER. Eight of the nine `render-svg.ts` files are
- * string builders that import layout and nothing else, so they cannot carry a
- * field they never write. `sequence/export/render-svg.ts` CLONES THE LIVE
- * `<svg>`, which means everything on screen is in the downloaded file unless
- * something takes it out — and under the previous model nothing did, so the
- * screen's grid went into every exported sequence diagram while a grep-based
- * assertion passed green. That exporter drops this class by name, and
- * `check:canvas-grid` asserts it still does.
+ * The geometry is an inline style from {@link groundFieldCss}; what the class
+ * carries is `background-attachment: local`, which is the entire panning
+ * mechanism. `.af-canvas-rule` in `globals.css` records why the ground moved
+ * out of the drawing and onto the pane, and what changed the decision.
  */
-export const CANVAS_FIELD_CLASS = "af-canvas-field";
+export const CANVAS_RULE_CLASS = "af-canvas-rule";
 
 /**
  * Ladder step. FIVE, the drafting convention, and the reason the band can be
@@ -110,6 +106,25 @@ export const GROUND_BAND_MAX_PX = 90;
  */
 export const GROUND_MINOR_OPACITY = 0.16;
 export const GROUND_MAJOR_OPACITY = 0.26;
+
+/**
+ * THE GLASS SHEEN — the one place a number is written twice.
+ *
+ * `globals.css` spells these into a CSS gradient for the screen and
+ * `viewer/export/ground.ts` builds an SVG `<linearGradient>` from them for a
+ * file, because CSS cannot read TypeScript and an SVG gradient is not a CSS
+ * one. `dry.md` requires a `check:*` on exactly this shape of pair, and
+ * `check:canvas-grid` is it: the CSS value is parsed and compared to these.
+ *
+ * The grain has NO such pair — the exporter decodes the theme's own data URI —
+ * so do not add one by restating turbulence parameters here.
+ */
+export const GROUND_SHEEN = {
+  angleDeg: 115,
+  from: 0.26,
+  to: 0.74,
+  peak: 0.1,
+} as const;
 
 /** Mark weights, in screen pixels, at the minor and major strengths. */
 export const GROUND_LINE_WIDTH_PX = [1, 1.5] as const;

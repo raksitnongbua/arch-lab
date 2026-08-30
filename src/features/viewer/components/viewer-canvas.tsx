@@ -85,8 +85,7 @@ import {
   getDiagram,
   type ViewerModel,
 } from "../lib/model";
-import {
-} from "@/features/editor/lib/canvas-constants";
+import {} from "@/features/editor/lib/canvas-constants";
 import {
   EDGE_BASE_DASH_PERIOD,
   EDIT_GRID,

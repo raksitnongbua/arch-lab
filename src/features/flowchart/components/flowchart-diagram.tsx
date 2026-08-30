@@ -60,7 +60,6 @@ import { useId } from "react";
 
 // Cross-feature on purpose (the sequence renderer's precedent): the tag-fill
 // rebuild is the ONE definition of "a hue at our validated card lightness".
-import { CanvasField } from "@/components/ui/canvas-field";
 import { resolveTagColor, tagFillCss } from "@/features/editor/lib/node-colors";
 import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { WashGradient } from "@/components/ui/wash-gradient";
@@ -138,12 +137,6 @@ export interface FlowchartDiagramProps {
   zoom: number | "fit";
   onFocusNode: (id: string) => void;
   onFocusEdge: (index: number) => void;
-  /**
-   * Drawing units → screen pixels, from the host's camera. The ground's
-   * adaptive ladder needs it to decide which pitches are readable right now;
-   * see `lib/canvas-ground.ts`. `1` means "drawn at natural size".
-   */
-  scale: number;
 }
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
@@ -159,7 +152,6 @@ export function FlowchartDiagram({
   zoom,
   onFocusNode,
   onFocusEdge,
-  scale,
 }: FlowchartDiagramProps): React.JSX.Element {
   const focusSet = resolveFlowFocus(layout, focus);
   const nodeDimmed = (id: string): boolean =>
@@ -191,17 +183,6 @@ export function FlowchartDiagram({
       aria-label={`Flowchart: ${title}. ${layout.nodes.length} nodes, ${layout.edges.length} arrows. Nodes and arrows are buttons — Tab reaches them.`}
       className="af-flow-svg block"
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-flowchart"
-        scale={scale}
-        width={layout.width}
-        height={layout.height}
-      />
       {/* The role textures, defined once for every node on this canvas. Six
           shapes reference seven patterns, so a per-node copy would be pure DOM
           weight; and the ink is one token by design, which is exactly what

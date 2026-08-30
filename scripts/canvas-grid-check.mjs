@@ -318,78 +318,231 @@ check(
     "the first frame",
 );
 
-const field = readCode("src/components/ui/canvas-field.tsx");
-check(
-  "the in-SVG field reads the same ladder the React Flow layers do",
-  /groundLevels\(/.test(field),
-  "components/ui/canvas-field.tsx invents its own geometry — the eight SVG " +
-    "notations would rule at a different pitch from the two C4 canvases",
-);
-check(
-  "the in-SVG field tiles in the DRAWING's units",
-  /patternUnits="userSpaceOnUse"/.test(field) && /worldPitch/.test(field),
-  "a pattern measured in anything else is painted on the PANE, which is model " +
-    "two: the ground stops moving with the drawing",
-);
-/* THE MARKS ARE SIZED IN SCREEN PIXELS, which inside a scaled `<svg>` means
-   dividing by the camera. Without this the weight scales too — 4px lines at
-   400%, invisible at 10% — and that half of model one was never measured. */
-check(
-  "the in-SVG marks are divided back out of the camera",
-  /lineWidthPx \/ scale/.test(field) && /dotSizePx \/ 2 \/ scale/.test(field),
-  "the stroke weight and dot radius are in user units, so they scale with the " +
-    "drawing — engraving on a ruler does not get thicker when you lean in",
-);
+/* THE OTHER EIGHT PAINT THE PANE, NOT THE DRAWING — and that REVERSES a
+   decision this branch recorded, so it is asserted in both directions.
 
+   The ladder used to be a `<rect>` sized to the diagram's own box, inside its
+   `<svg>`, on the argument that a finite drawing on a ruled sheet is what a
+   sheet of paper is. That argument is about the DOCUMENT; the ground is the
+   SHEET, and a sheet does not stop where the drawing stops. A pane half ruled
+   and half bare reads as a rendering fault, and it made changing notation
+   change whether the paper reached the edges — while C4, the canvas most people
+   open first, always filled its pane. So: the ground fills the well in all
+   nine, and no drawing carries one. */
+const paneGround = [];
 for (const kind of KINDS.filter((kind) => kind !== "c4")) {
+  const viewer = `src/features/${kind}/components/${kind}-viewer.tsx`;
   const diagram = `src/features/${kind}/components/${kind}-diagram.tsx`;
-  if (!existsSync(path.join(ROOT, diagram))) {
+  if (
+    !existsSync(path.join(ROOT, viewer)) ||
+    !existsSync(path.join(ROOT, diagram))
+  ) {
     check(
-      `${kind}: its diagram component is where the convention says`,
+      `${kind}: its viewer and diagram are where the convention says`,
       false,
-      `expected ${diagram}`,
     );
     continue;
   }
-  const code = readCode(diagram);
+  /* IMPORT LINES STRIPPED. A constant that is imported and never used reads
+     identically to one that is used, and deleting the usage is the one-line
+     way this regresses — it was the mutation that first passed here. */
+  const viewerCode = readCode(viewer).replace(/^import[\s\S]*?;$/gm, "");
+  paneGround.push(kind);
   check(
-    `${kind}: its <svg> mounts the shared field, and is given a camera`,
-    /<CanvasField\b/.test(code) && /scale=\{scale\}/.test(code),
-    "this diagram paints no ground, or paints one with no idea what scale it " +
-      "is being read at — which is a ladder that cannot adapt",
+    `${kind}: its PANE paints the ladder, at its own camera's scale`,
+    /CANVAS_RULE_CLASS/.test(viewerCode) &&
+      /groundFieldCss\([A-Za-z.]+\)/.test(viewerCode),
+    "this viewer paints no ground, or paints one with no idea what scale it " +
+      "is read at — a ladder that cannot adapt. The ground belongs on the " +
+      "SCROLL PANE: on the drawing it stops at the drawing's edge, and on a " +
+      "non-scrolling ancestor it stops moving with the drawing",
+  );
+  check(
+    `${kind}: its DRAWING carries no ground of its own`,
+    !/CanvasField|canvas-rule-dot|canvas-rule-line/.test(readCode(diagram)),
+    "a ground inside the `<svg>` is clipped to the drawing's box, which is the " +
+      "half-ruled pane this reversal exists to end — and on the sequence " +
+      "canvas it would also be cloned into every exported file twice over",
+  );
+}
+check(
+  `all eight non-C4 notations ground their pane (${paneGround.length})`,
+  paneGround.length === 8,
+  `only ${paneGround.join(", ")} — a notation missing here is measured by ` +
+    "nothing above",
+);
+
+/* THE DIAGRAM GETS A BACKGROUND; THE GROUND DOES NOT GET A HOLE.
+   A ground that fills the pane runs under every drawing, and one notation needs
+   to sit ON something rather than in a clearing cut out of the sheet: a gantt's
+   own time ticks and section rules are a LATTICE, and two lattices at unrelated
+   pitches beat. The fix is a surface on the drawing, never a hole in the
+   ground — `dict` set that precedent long before this branch. Asserted in both
+   places, because a screen surface with no exported twin is a download that
+   does not look like the screen. */
+{
+  const surface =
+    /rx=\{12\}[\s\S]{0,120}fill="var\(--node\)"[\s\S]{0,120}stroke="var\(--node-border\)"/;
+  check(
+    "gantt: its plan is drawn on its own surface, not in a hole in the ground",
+    surface.test(readCode("src/features/gantt/components/gantt-diagram.tsx")),
+    "the gantt draws straight onto the sheet, so the ladder's rules and the " +
+      "plan's own ticks are two lattices at unrelated pitches",
+  );
+  check(
+    "gantt: the exported file carries the same surface",
+    /rx="12" fill="\$\{theme\.node\}"[\s\S]{0,40}stroke="\$\{theme\.nodeBorder\}"/.test(
+      readCode("src/features/gantt/export/render-svg.ts"),
+    ),
+    "the download drops the surface the screen shows, so the exported plan " +
+      "sits on bare ruling",
+  );
+  /* AND NO KIND CUTS A HOLE. `--canvas` painted over the ground inside a
+     drawing is a clearing, which puts a hard edge on the sheet exactly where
+     the drawing's edge already is. */
+  for (const kind of KINDS.filter((kind) => kind !== "c4")) {
+    const diagram = `src/features/${kind}/components/${kind}-diagram.tsx`;
+    if (!existsSync(path.join(ROOT, diagram))) continue;
+    const code = readCode(diagram);
+    const knockout =
+      /<rect[^>]*width=\{layout\.width\}[^>]*fill="var\(--canvas\)"/.test(code);
+    check(
+      `${kind}: it does not cut a hole in the ground`,
+      !knockout,
+      "a full-bleed `--canvas` rect inside the drawing hides the sheet under " +
+        "it — the ground apologising for existing. Give the drawing a surface " +
+        "instead, the way gantt and dict do",
+    );
+  }
+}
+
+/* THE PANNING MECHANISM, and it is one CSS keyword. `local` means "this
+   background is part of the scrolled content", which is exactly what a rule is
+   and exactly what the material below must never be. `scroll` (the initial
+   value) would pin the ground to the pane while the drawing slides over it —
+   which is the second rejected model, reintroduced by deleting one line. */
+{
+  const rule = /\.af-canvas-rule \{([\s\S]*?)\n\}/.exec(CSS)?.[1] ?? "";
+  check(
+    "the rule layer scrolls WITH the drawing",
+    /background-attachment:\s*local/.test(rule),
+    "`.af-canvas-rule` does not claim `local` attachment, so the ground is " +
+      "pinned to the pane and panning slides the drawing across it",
+  );
+  check(
+    "the rule layer tiles rather than stretching",
+    /background-repeat:\s*repeat/.test(rule),
+    "a ground that does not repeat covers one tile of the pane",
   );
 }
 
-/* ----- and the ground is NOT in an export ------------------------------- */
+/* The shared renderer emits BOTH shapes for every level, so a theme decides in
+   CSS and the first frame is right with no post-hydration swap. */
+{
+  const renderer = readCode("src/lib/canvas-ground.ts");
+  check(
+    "the pane renderer emits both shapes, from the shared ladder",
+    /groundLevels\(scale\)/.test(renderer) &&
+      /--canvas-rule-dot/.test(renderer) &&
+      /--canvas-rule-line/.test(renderer),
+    "`groundFieldCss` invents its own pitches, or paints only one shape so a " +
+      "theme that rules in the other gets a bare well",
+  );
+  check(
+    "the pane renderer sizes its tile in SCREEN pixels",
+    /screenPitch\}px/.test(renderer),
+    "a tile sized in world units does not track the camera, so the ladder's " +
+      "whole point — a readable on-screen pitch — is lost",
+  );
+}
 
-/* AN EXPORT HAS NO CAMERA, so there is no scale to select a rung with. The
-   ladder is screen chrome — it says where a drawing is being read, not what it
-   means. Eight exporters are string builders that import layout only, so the
-   absence is structural; the ninth CLONES THE LIVE `<svg>` and therefore needs
-   the absence ARRANGED. A previous version of this check grepped all nine
-   identically and passed green while every exported sequence diagram carried
-   the screen's grid. */
-for (const kind of KINDS.filter((kind) => kind !== "c4")) {
+/* ----- and the ground IS in every export ------------------------------- */
+
+/* THIS REVERSES THE OTHER DECISION THIS BRANCH RECORDED. The ground used to be
+   kept OUT of every exported file, on the argument that it is screen chrome —
+   "an export is the drawing lifted off the sheet". A `blueprint` that exports
+   without its ruling is not a blueprint and a `paper` export without its grain
+   is not paper; the sheet is part of how the diagram reads, which is what the
+   theme work is for. The old argument also proved too much: `--canvas` has
+   always been written into every file by reasoning that would have excluded it.
+
+   The assertion therefore FLIPS, and the branch that made the old one wrong is
+   still the branch that matters. Eight exporters build their own `<svg>` from
+   layout and must be told to emit the ground; the ninth CLONES THE LIVE `<svg>`,
+   which no longer carries a ground at all now that it lives on the pane — so
+   that one must put it back. Same defect as before, from the other direction:
+   the path that used to carry the ground when nobody wanted it is the path that
+   would now silently drop it. */
+const exporters = [];
+for (const kind of [...KINDS.filter((kind) => kind !== "c4"), "viewer"]) {
   const exporter = `src/features/${kind}/export/render-svg.ts`;
   if (!existsSync(path.join(ROOT, exporter))) continue;
+  exporters.push(kind);
   const code = readCode(exporter);
   const clones = /cloneNode\(/.test(code);
-  if (clones) {
-    check(
-      `${kind}: it CLONES the live <svg>, so it strips the ground by name`,
-      /DROPPED_ALWAYS[^;]*CANVAS_FIELD_CLASS/.test(code),
-      "this exporter copies whatever is on screen — the ground included — " +
-        "unless it removes it. A grep for `CanvasField` cannot see that, " +
-        "which is how this shipped broken once",
-    );
-    continue;
-  }
   check(
-    `${kind}: it builds its own <svg> and carries no ground`,
-    !/CanvasField|canvas-rule-dot|canvas-rule-line|canvas-sheet/.test(code),
-    "the downloaded file would carry the screen's ground — decide that " +
-      "deliberately and rewrite this assertion, do not let it drift in",
+    `${kind}: its export carries the ground it was read on` +
+      (clones ? " (clone path — it has to be put back)" : ""),
+    /resolveExportGround\(\)/.test(code) &&
+      (clones ? /ground\.layers\(/.test(code) : /ground\.defs/.test(code)),
+    clones
+      ? "this exporter copies what is on screen, and the screen's ground is on " +
+          "the PANE — outside the clone. A file from this path silently loses " +
+          "the sheet while the other eight keep it"
+      : "this exporter writes its own `<svg>` and never mentions the ground, " +
+          "so a blueprint downloads without its ruling and paper without grain",
   );
+}
+check(
+  `every notation's exporter was measured (${exporters.length})`,
+  exporters.length >= 9,
+  `only ${exporters.join(", ")} — an exporter this loop cannot find is an ` +
+    "exporter nothing above has an opinion about",
+);
+
+/* AN EXPORT HAS NO CAMERA, so the rule layer must be evaluated once at the
+   document's own scale rather than swept. `groundLevels(1)` is that evaluation,
+   and it must yield exactly the rungs the band puts there — not zero (a file
+   with no ground) and not a cross-fade (two half-faded lattices in a still
+   image, which is a smudge rather than a ruling). */
+{
+  const atRest = ground.groundLevels(1);
+  check(
+    `an export takes the rung its own scale selects (${atRest.length}: ` +
+      `${atRest.map((l) => `${l.screenPitch}px`).join(", ") || "none"})`,
+    atRest.length >= 1 &&
+      atRest.every(
+        (level) => level.opacity > 0.5 * ground.GROUND_MINOR_OPACITY,
+      ),
+    "at scale 1 the ladder paints nothing, or paints only levels caught " +
+      "mid-fade — an export has no zoom to resolve them",
+  );
+  const exportGround = readCode("src/features/viewer/export/ground.ts");
+  check(
+    "the export ground reads the ladder at the document's scale, not the screen's",
+    /groundLevels\(1\)/.test(exportGround),
+    "the exporter sweeps or guesses a zoom that an exported file does not have",
+  );
+  /* THE GRAIN IS NOT RESTATED IN TYPESCRIPT. The exporter decodes the theme's
+     own data URI, so `globals.css` stays the single definition — the contract
+     being that the chain's last primitive is named `result='grain'`. */
+  check(
+    "the export lifts its grain from the theme's own definition",
+    /decodeURIComponent/.test(exportGround) &&
+      !/feTurbulence/.test(exportGround),
+    "the exporter restates the turbulence parameters, which is a second copy " +
+      "of the texture that will drift from the one on screen",
+  );
+  for (const [, uri] of CSS.matchAll(
+    /--canvas-sheet-grain:\s*url\("([^"]*)"\)/g,
+  )) {
+    check(
+      "that grain names its output, so an export can composite onto it",
+      /result='grain'/.test(uri),
+      'the exporter\'s `feComposite in2="grain"` would dangle, and a dangling ' +
+        "`in2` paints black over the whole drawing",
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */
@@ -714,6 +867,36 @@ for (const theme of THEMES) {
     failed.length === 0,
     failed.join("; "),
   );
+  /* THE ONE TYPESCRIPT/CSS PAIR THIS FEATURE HAS. CSS cannot read TypeScript
+     and an SVG `<linearGradient>` is not a CSS gradient, so `GROUND_SHEEN`
+     drives the export and `globals.css` spells the same four numbers for the
+     screen. `dry.md` requires a `check:*` on exactly this shape, and this is
+     it — a screen sheen at one angle and a file sheen at another is the kind of
+     drift nobody notices until the two are held side by side. */
+  if (hasBand) {
+    const sheen = ground.GROUND_SHEEN;
+    const flat = band.replace(/\s+/g, " ");
+    const angle = Number(
+      /^linear-gradient\( ?(-?\d+(?:\.\d+)?)deg/.exec(flat)?.[1],
+    );
+    const stops = [...flat.matchAll(/(\d+(?:\.\d+)?)%/g)].map((m) =>
+      Number(m[1]),
+    );
+    /* Four percentages, in source order: the first stop, the ink strength
+       inside the `color-mix`, the peak stop's position, and the last stop. */
+    const [from, peak, mid, to] = stops;
+    check(
+      `${theme}: its CSS sheen matches GROUND_SHEEN (${angle}deg, ${from}% → ${to}%, peak ${peak}% at ${mid}%)`,
+      angle === sheen.angleDeg &&
+        from === sheen.from * 100 &&
+        to === sheen.to * 100 &&
+        peak === sheen.peak * 100 &&
+        mid === 50,
+      `the stylesheet says ${angle}deg ${from}/${peak}/${to} and TypeScript ` +
+        `says ${sheen.angleDeg}deg ${sheen.from * 100}/${sheen.peak * 100}/` +
+        `${sheen.to * 100} — the screen and the exported file would disagree`,
+    );
+  }
   /* A BAND IS NOT A TILE. `glass` gets both layers only because its sheen is a
      single band with the working grid's slot left free; a band that repeated
      would be a second field and the argument for allowing both collapses. */

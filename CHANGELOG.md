@@ -28,15 +28,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   because a dot grid on fibre is two grounds competing; `contrast` shows
   nothing at all, as before.
 - The ground is quieter. Both strengths were lowered.
+- **The ground fills the pane in every notation.** It used to stop at the
+  drawing's edge on the eight non-C4 canvases, so a wide pane was half ruled and
+  half bare and switching notation changed whether the paper reached the edges.
+  A sheet does not stop where the drawing stops.
+- **A Gantt plan is now drawn on its own surface.** It is the one notation whose
+  own marks are a lattice — time ticks and section rules — and two lattices on
+  one canvas beat against each other. The surface is the same `--node` panel the
+  data dictionary has always used for its table.
 - **The home page's hero card and MCP illustration now paint the real canvas
   ground** rather than a hand-typed grid of their own, so the picture of the
   product and the product agree.
-
-### Fixed
-
-- Exported sequence diagrams no longer carry the screen's grid. That exporter
-  copies the live canvas, so the ground went into every downloaded SVG, PNG and
-  GIF frame.
+- **Exports carry the ground.** An SVG or PNG downloaded from `blueprint` now
+  arrives with its ruling and one from `paper` with its grain, in all nine
+  notations. An exported file has no zoom, so the grid is drawn at the single
+  pitch the document's own scale selects.
 
 ### Added
 

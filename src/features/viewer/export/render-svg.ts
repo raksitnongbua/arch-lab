@@ -57,6 +57,7 @@ import {
   SHAPE_LABEL,
   shapeAddsInformation,
 } from "../lib/labels";
+import { resolveExportGround } from "./ground";
 import { embeddedIconSvg } from "./icon-markup";
 import { TextureRegistry } from "./texture-registry";
 import type { ExportTheme } from "./theme";
@@ -1059,6 +1060,7 @@ export function renderDiagramSvg(
       ? `<text x="${fmt(minX + 160)}" y="${fmt(minY + 64)}" text-anchor="middle" font-family="${FONT_SANS}" font-size="13" fill="${theme.mutedForeground}">This diagram has no elements.</text>`
       : "";
 
+  const ground = resolveExportGround();
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="af-title">` +
     `<title id="af-title">${escapeXml(`${heading} (${LEVEL_LABEL[diagram.level]} view)`)}</title>` +
@@ -1075,8 +1077,15 @@ export function renderDiagramSvg(
       : "") +
     wash.markup() +
     textures.markup() +
+    ground.defs +
     `</defs>` +
     `<rect width="${width}" height="${height}" fill="${theme.canvas}"/>` +
+    /* THE GROUND THE DRAWING WAS READ ON. Directly after the backdrop and
+       before the heading, so it is under everything including the title block;
+       full-bleed over `PADDING`, because a sheet does not stop where the
+       drawing stops. `export/ground.ts` records why this reverses an earlier
+       decision to keep the ground out of every file. */
+    ground.layers(0, 0, width, height) +
     `<text x="${PADDING}" y="${PADDING - 22}" font-family="${FONT_SANS}" font-size="16" font-weight="600" fill="${theme.foreground}">${escapeXml(heading)}</text>` +
     `<text x="${PADDING}" y="${PADDING - 2}" font-family="${FONT_SANS}" font-size="11" fill="${theme.mutedForeground}">${escapeXml(subtitle)}</text>` +
     `<g transform="translate(${fmt(translateX)} ${fmt(translateY)})">` +

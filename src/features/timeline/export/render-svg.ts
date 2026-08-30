@@ -25,6 +25,7 @@
 import type { TimelineLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
+import { resolveExportGround } from "@/features/viewer/export/ground";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 import { TIMELINE, layoutTimeline } from "../lib/layout";
@@ -87,6 +88,12 @@ export function renderTimelineSvg(
   const width = layout.width + EXPORT_PADDING * 2;
   const height = layout.height + EXPORT_PADDING * 2;
 
+  /* THE GROUND THE DRAWING WAS READ ON — the sheet, carried into the file.
+     `viewer/export/ground.ts` records why this reverses an earlier decision to
+     keep it out. Directly after the backdrop and before any of the drawing, so
+     it is under everything; full-bleed, including any export padding, because
+     a sheet does not stop where the drawing stops. */
+  const ground = resolveExportGround();
   push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
       `viewBox="0 0 ${width} ${height}" font-family="${FONT_SANS}">`,
@@ -94,6 +101,8 @@ export function renderTimelineSvg(
   push(
     `<rect x="0" y="0" width="${width}" height="${height}" fill="${theme.canvas}"/>`,
   );
+  push(`<defs>${ground.defs}</defs>`);
+  push(ground.layers(0, 0, width, height));
   push(`<g transform="translate(${EXPORT_PADDING} ${EXPORT_PADDING})">`);
 
   /* Period rules first, so nothing is ruled across — the paint order the

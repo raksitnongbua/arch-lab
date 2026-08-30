@@ -1198,7 +1198,7 @@
      Mean alpha lands at 1.114:1 on this canvas (fractal noise averages half
      its range), peaking at 1.234:1. */
   --canvas-rule-dot: transparent;
-  --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
+  --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0' result='grain'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
   --canvas-sheet-opacity: 0.22;
   /* BELOW the canvas, not above it — the header's fault 2. A node is ink and
      stock, so it takes the page's own hue at a shade under the page's
@@ -1731,7 +1731,7 @@
      that octaves would otherwise have to.
      Lit particles measure 1.303:1 on this canvas at 0.30. */
   --canvas-rule-dot: transparent;
-  --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='3' stitchTiles='stitch' seed='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0 0 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
+  --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='3' stitchTiles='stitch' seed='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0 0 1'/%3E%3C/feComponentTransfer%3E%3CfeColorMatrix type='matrix' values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0' result='grain'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
   --canvas-sheet-opacity: 0.3;
 
   --background: oklch(0.965 0 0);
@@ -2802,6 +2802,47 @@
   box-shadow:
     0 1px 3px 0 color-mix(in oklab, var(--node-stroke) 22%, transparent),
     0 14px 30px -10px color-mix(in oklab, var(--node-stroke) 45%, transparent);
+}
+
+/* ---- the well's RULE layer, off the C4 canvases -------------------------
+ * The adaptive ladder, painted by the SCROLL PANE rather than inside the
+ * drawing's `<svg>`.
+ *
+ * THIS REVERSES A DECISION THIS BRANCH RECORDED, and the reversal is written
+ * down rather than edited in quietly. The field used to be a `<rect>` sized to
+ * the diagram's own box, on the argument that "C4's ground is infinite because
+ * a C4 canvas is an infinite surface you pan around; these eight are finite
+ * drawings, and a finite drawing on a ruled sheet is what a sheet of paper is."
+ *
+ * WHAT CHANGED MY MIND: that argument is about the DOCUMENT, and the ground is
+ * not a property of the document. It is the sheet the document sits on, and a
+ * sheet does not stop where the drawing stops. A pane half ruled and half bare
+ * reads as a rendering fault rather than as a finite drawing — and it meant
+ * changing notation changed whether the paper reached the edges, which is the
+ * exact inconsistency `components/ui/diagram-well.tsx` exists to end. The
+ * ground now fills the pane in all nine notations, the way C4's always did.
+ *
+ * IT ALSO REMOVES WORK. There is no per-diagram `<rect>`, no `<pattern>` set
+ * inside nine `<svg>`s re-rasterised on every zoom frame, and no shared
+ * component: one declaration on the pane, and the compositor tiles it.
+ *
+ * `background-attachment: local` IS THE WHOLE MECHANISM, and it is the exact
+ * opposite of what the material layer below must never use. `local` means
+ * "this background is part of the scrolled content" — which is *literally*
+ * what a rule is. So it pans with the drawing for free on all eight of these
+ * canvases, because every one of them pans by scrolling. The zoom half is the
+ * tile size, written from `groundLevels()` by the viewer that owns the camera.
+ *
+ * IT IS ANCHORED TO THE SCROLL CONTENT, not to the drawing's own origin, and
+ * that is a real difference from the `<rect>` it replaces: a centred drawing's
+ * first rule no longer falls on its first coordinate. It is also exactly what
+ * React Flow's `<Background>` does on the two C4 canvases, whose origin is the
+ * flow's rather than any drawing's bounding box — so the nine now agree, where
+ * before eight of them disagreed with the two most people open first. */
+
+.af-canvas-rule {
+  background-attachment: local;
+  background-repeat: repeat;
 }
 
 /* ---- the well's MATERIAL layer -------------------------------------------

@@ -140,9 +140,7 @@ export interface UseCaseGeneralization {
 }
 
 export type UseCaseEdge =
-  | UseCaseAssociation
-  | UseCaseDependency
-  | UseCaseGeneralization;
+  UseCaseAssociation | UseCaseDependency | UseCaseGeneralization;
 
 /* -------------------------------------------------------------------------- */
 /* Boundaries                                                                  */

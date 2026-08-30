@@ -44,7 +44,13 @@ import { registerHooks } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { contrast, flatten, oklchDeltaE, parseOklch, washMixLinear } from "./lib/oklch.mjs";
+import {
+  contrast,
+  flatten,
+  oklchDeltaE,
+  parseOklch,
+  washMixLinear,
+} from "./lib/oklch.mjs";
 import { resolveToken, tokensOf } from "./lib/theme-css.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");

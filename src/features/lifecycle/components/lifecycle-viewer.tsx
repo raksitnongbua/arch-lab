@@ -47,6 +47,8 @@ import {
 } from "@/lib/idle-motion";
 import type { LifecycleLabFile } from "@/types";
 
+import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
+import { cn } from "@/lib/utils";
 import { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } from "../lib/motion";
 import { layoutLifecycle } from "../lib/layout";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
@@ -128,7 +130,13 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
          taller than its pane, so this is load-bearing rather than defensive.
          There is no pan-and-zoom camera, so ordinary block flow plus the
          canvas's own `margin-inline: auto` centres it with less to go wrong. */
-      className="min-h-0 w-full flex-1 overflow-auto px-5 py-6 sm:px-8"
+      /* THE GROUND, filling the pane rather than the drawing — the reversal
+         is recorded at `.af-canvas-rule` in globals.css. */
+      className={cn(
+        "min-h-0 w-full flex-1 overflow-auto px-5 py-6 sm:px-8",
+        CANVAS_RULE_CLASS,
+      )}
+      style={groundFieldCss(groundScale)}
       onPointerMove={stir}
       onPointerDown={stir}
       onKeyDown={stir}
@@ -140,7 +148,6 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
       <div ref={groundRef}>
         <LifecycleDiagram
           file={file}
-          scale={groundScale}
           litKeys={litKeys}
           reveal
           idleMotion={idleState}
