@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 
+import { groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,6 +42,8 @@ interface Exchange {
  * That arc is the product's argument in four lines — the failure in the middle is
  * the point, not a blemish.
  */
+const MCP_GROUND = groundFieldCss(1);
+
 const EXCHANGES: readonly Exchange[] = [
   { tool: "get_syntax_reference", reply: "sequence grammar", ok: true },
   { tool: "validate_sequence", reply: "line 7, column 12", ok: false },
@@ -60,15 +63,14 @@ export function McpFlow({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* Faint grid, matching the hero card and the editor surface, so the two
-          illustrations on this page read as the same product. Static: nothing
-          here is worth a repaint. */}
+      {/* The same ground declaration the hero card and the real canvas use, so
+          the two illustrations on this page read as one product rather than
+          merely claiming to. Static: nothing here is worth a repaint. */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.35] dark:opacity-50"
+        className="pointer-events-none absolute inset-0"
         style={{
-          backgroundImage:
-            "linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px)",
-          backgroundSize: "22px 22px",
+          backgroundImage: MCP_GROUND.backgroundImage,
+          backgroundSize: MCP_GROUND.backgroundSize,
           maskImage:
             "radial-gradient(ellipse 100% 80% at 30% 0%, black 20%, transparent 90%)",
           WebkitMaskImage:

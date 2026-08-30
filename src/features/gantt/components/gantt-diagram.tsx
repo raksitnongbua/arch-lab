@@ -65,7 +65,6 @@
  * wait for a script to write a variable.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { textureFill } from "@/lib/role-texture";
 import type { GanttLabFile } from "@/types";
@@ -149,20 +148,34 @@ export function GanttDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. IT COVERS THE SHEET, not the
-          drawing: a field on the unpadded box would rule up to the section
-          headings and leave the margin bare, which reads as the plan being
-          printed past the trim rather than as a page with air around it. */}
-      <CanvasField
-        id="af-field-gantt"
-        x={-GANTT_FRAME_PAD}
-        y={-GANTT_FRAME_PAD}
-        width={sheetWidth}
-        height={sheetHeight}
+      {/* THE PLAN'S OWN SURFACE, and the reason it exists is a consequence of
+          the ground filling the pane.
+          THE DIAGRAM GETS A BACKGROUND; THE GROUND DOES NOT GET A HOLE. That
+          is the rule, and `dict` set the precedent — it has drawn its table on
+          a `--node` panel since it shipped. Clipping the ground so a drawing
+          could sit in a clearing would be the ground apologising for existing,
+          and it would put a hard edge on the sheet exactly where the drawing's
+          own edge already is.
+          WHY THIS KIND AND NOT THE OTHERS. A gantt is the one notation whose
+          own marks are a LATTICE: its time ticks and section rules are thin
+          lines in `--canvas-grid`, at no fixed relationship to the ladder's
+          pitch. Two lattices at unrelated pitches beat against each other,
+          which is the exact failure `gantt-diagram.tsx` already argues about
+          its three tile pitches a few lines below. Every other notation either
+          fills its shapes (c4, flowchart, use-case, ER, dict) or draws a single
+          rail rather than a field (timeline, lifecycle).
+          `--node` on `--node-border` is the pair every canvas here already uses
+          for a shape against its ground, so it is measured in all nine themes
+          and needs no new token. */}
+      <rect
+        x={0}
+        y={0}
+        width={layout.width}
+        height={layout.height}
+        rx={12}
+        fill="var(--node)"
+        stroke="var(--node-border)"
+        strokeWidth={1}
       />
       {/* The role textures, once for the whole plot — beside the duration
           hatch below, which is a different pattern answering a different

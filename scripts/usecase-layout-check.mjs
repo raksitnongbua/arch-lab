@@ -898,8 +898,11 @@ const VAR_TO_KEY = Object.fromEntries(
     );
     check(
       "both drift tracks carry pathLength=1 — without it the dash fractions are user units, a sliver on a long association and a blanket on a short one",
-      (diagramSrc.match(/af-uc-drift-(?:out|back) pointer-events-none"\s*\n?\s*d=\{d\}\s*\n?\s*pathLength=\{1\}/g) ?? [])
-        .length === 2,
+      (
+        diagramSrc.match(
+          /af-uc-drift-(?:out|back) pointer-events-none"\s*\n?\s*d=\{d\}\s*\n?\s*pathLength=\{1\}/g,
+        ) ?? []
+      ).length === 2,
     );
     check(
       "the diagram STAMPS --uc-breath-phase from usecaseBreathPhase — the CSS fallback is 0ms, so a missing stamp silently flattens the scatter into every association swelling in unison, with every CSS assertion still green (the flowchart shipped exactly this)",
@@ -940,7 +943,9 @@ const VAR_TO_KEY = Object.fromEntries(
     check(
       "no source file reaches for Math.random() — the breath scatter is a hash so a re-render cannot reshuffle a resting diagram and the exporter stays deterministic",
       !/Math\.random\(/.test(
-        diagramSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""),
+        diagramSrc
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, ""),
       ),
     );
   }
@@ -1039,7 +1044,8 @@ const VAR_TO_KEY = Object.fromEntries(
         const gated = motionCss.match(
           /\[data-af-idle="on"\] \.af-uc-edge \.af-uc-breath\s*\{([^}]*)\}/,
         );
-        const op = gated === null ? null : gated[1].match(/opacity:\s*([\d.]+)/);
+        const op =
+          gated === null ? null : gated[1].match(/opacity:\s*([\d.]+)/);
         return op !== null && Number(op[1]) >= 0.4;
       })(),
     );
@@ -1116,14 +1122,16 @@ for (const [kind, tokens] of Object.entries(USECASE_KIND_TOKENS)) {
      like a fix. The sequence canvas's rule is the precedent. */
   check(
     "a real CSS rule kills the native outline on PLAIN :focus, not only :focus-visible — clicking an SVG element with a tabindex gives it :focus alone, and Chrome still paints outline: auto for that, which is the rounded box that survived the first two attempts at this fix",
-    new RegExp("\\." + "af-uc-hit" + ":focus[,\\s][^{]*\\{[^}]*outline:\\s*none").test(
-      globals,
-    ),
+    new RegExp(
+      "\\." + "af-uc-hit" + ":focus[,\\s][^{]*\\{[^}]*outline:\\s*none",
+    ).test(globals),
   );
   check(
     "every interactive element also carries outline-none in the markup — belt and braces, and it documents the intent at the call site",
-    (focusSrc.match(/af-uc-hit cursor-pointer focus-visible:outline-none/g) ?? [])
-      .length >= 2,
+    (
+      focusSrc.match(/af-uc-hit cursor-pointer focus-visible:outline-none/g) ??
+      []
+    ).length >= 2,
   );
   check(
     "a shaped .af-uc-ring is emitted for BOTH a node/element and an edge — an edge's ring must follow its path, since a diagonal line's bounding box is a rectangle across half the diagram",
@@ -1139,7 +1147,6 @@ for (const [kind, tokens] of Object.entries(USECASE_KIND_TOKENS)) {
     /\.af-uc-ring[\s\S]{0,200}stroke:\s*var\(--ring\)/.test(globals),
   );
 }
-
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

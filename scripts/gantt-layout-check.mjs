@@ -750,11 +750,16 @@ console.log("the exported file has air around it");
 
   /* THE SCREEN IS FRAMED THE SAME WAY, and nothing else was checking it. The
      header above used to reason that the screen needed no margin of its own
-     because the viewer's CSS supplied it — true until the well grew a field,
-     which is drawn INSIDE the canvas's `<svg>` and therefore ends exactly where
-     the section headings start. The screen now frames the drawing with
-     `GANTT_FRAME_PAD`, and these two assertions are what stop the file and the
-     canvas framing one plan two different ways. */
+     because the viewer's CSS supplied it. That was never quite true: a gantt is
+     the only one of the nine kinds that draws TEXT at x=0 — the axis caption
+     and every section heading — and CSS padding sits outside the `<svg>`, so it
+     cannot put air between a heading and the drawing's own edge.
+
+     A field drawn inside the `<svg>` briefly made the crop obvious, and the
+     assertion below was originally written against it. That field now lives on
+     the pane, so the field clause is gone; the pad is not, because the reason
+     for it never depended on the field. These two assertions stop the file and
+     the canvas from framing one plan two different ways. */
   check(
     `the screen frames the sheet with the same pad the file does (${GANTT_FRAME_PAD} / ${pad})`,
     GANTT_FRAME_PAD === pad,
@@ -776,12 +781,11 @@ console.log("the exported file has air around it");
       ) &&
       /viewBox=\{`\$\{-GANTT_FRAME_PAD\} \$\{-GANTT_FRAME_PAD\} \$\{sheetWidth\} \$\{sheetHeight\}`\}/.test(
         diagram,
-      ) &&
-      /x=\{-GANTT_FRAME_PAD\}[\s\S]{0,80}?width=\{sheetWidth\}/.test(diagram),
-    "the sheet is the drawing plus its margin, the viewBox starts at the " +
-      "margin, and <CanvasField> covers the padded box — a field left on the " +
-      "unpadded box would rule the drawing and leave the margin bare, which " +
-      "is the crop this pad exists to remove",
+      ),
+    "the sheet is the drawing plus its margin and the viewBox starts at the " +
+      "margin — without both, the section headings and the axis caption, " +
+      "which are the only text in the nine kinds drawn at x=0, sit hard " +
+      "against the edge",
   );
 }
 

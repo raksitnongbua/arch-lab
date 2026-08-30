@@ -31,8 +31,20 @@ import { cn } from "@/lib/utils";
  * The well's ground. A class rather than a component wherever the host already
  * has a wrapper of its own to hang it on — see `view-playground.tsx` and
  * `viewer-shell.tsx`, which both have panes with layout to keep.
+ *
+ * TWO CLASSES, AND THEY TRAVEL TOGETHER. `bg-canvas` is the well's COLOUR;
+ * `af-canvas-sheet` is its MATERIAL — the paper fibre, the e-ink particles, the
+ * glass sheen — which is fixed to the sheet and therefore belongs on this
+ * element rather than inside any camera. A host that painted one and forgot the
+ * other would show a theme's paper as a flat cream rectangle, so
+ * `check:canvas-chrome` asserts the pair rather than the colour alone.
+ *
+ * The ground's other half, the adaptive RULE ladder, is deliberately NOT here:
+ * it lives in the drawing's coordinate space, so it is drawn by the canvas
+ * (`components/ui/canvas-field.tsx`, `canvas-ground-layers.tsx`). The two-layer
+ * split is argued at the tokens in `globals.css`.
  */
-export const DIAGRAM_WELL_CLASSES = "bg-canvas";
+export const DIAGRAM_WELL_CLASSES = "bg-canvas af-canvas-sheet";
 
 /**
  * The pane an example page hands its whole remaining height to.

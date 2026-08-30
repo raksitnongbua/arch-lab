@@ -39,6 +39,8 @@ import {
   ZOOM_PILL_CLASSES,
 } from "@/components/ui/zoom-pill";
 import { useCanvasZoom, ZOOM_MAX } from "@/components/ui/use-canvas-zoom";
+import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
+import { cn } from "@/lib/utils";
 import { layoutEr } from "../lib/layout";
 import { ErDiagram } from "./er-diagram";
 import type { ErFocus } from "./er-diagram";
@@ -158,7 +160,13 @@ export function ErViewer({
           viewer's own top-level convention. */}
       <div
         ref={paneRef}
-        className="flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4"
+        /* THE GROUND, filling the pane rather than the drawing — the reversal
+           is recorded at `.af-canvas-rule` in globals.css. */
+        className={cn(
+          "flex h-full w-full cursor-grab [align-items:safe_center] [justify-content:safe_center] overflow-auto p-4",
+          CANVAS_RULE_CLASS,
+        )}
+        style={groundFieldCss(camera.scale)}
         onKeyDown={(event) => {
           if (event.key === "Escape" && focusId !== null) setRawFocus(null);
         }}

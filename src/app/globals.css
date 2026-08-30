@@ -86,35 +86,79 @@
   --canvas: oklch(0.975 0.003 265);
   --canvas-grid: oklch(0.88 0.008 265);
 
-  /* THE WELL'S FIELD — three layers, and an OPT-IN SEAM rather than a set every
-     theme is expected to complete.
-     `editor/lib/canvas-constants.ts` carries the mechanism (three stacked
-     React Flow `<Background>` layers, which is that component's own documented
-     arrangement for a major/minor grid). What lives HERE is the decision about
-     who may use it.
-     THE DEFAULTS REPRODUCE TODAY EXACTLY. `--canvas-dot` is an alias of
-     `--canvas-grid`, so a theme that says nothing paints the dot field it has
-     always painted, in its own grid colour; both rule tokens are `transparent`,
-     so the two rule layers draw literally nothing. That is also why
-     `check:themes` does not demand these of every theme — it requires a theme to
-     redefine every CONCRETE colour the baseline declares, and an alias and a
-     keyword are neither. A theme opts in by overriding them or it is untouched.
-     ONLY `blueprint` OPTS IN, AND THE SET IS NOT MEANT TO BE COMPLETED. A
-     ground texture is something a theme is allowed only when the texture is what
-     the theme IS: `glass` refracts because it is glass, `paper` carries a laid
-     weave because it is paper, and `blueprint` is ruled because a drafting sheet
-     is ruled before anything is drawn on it. `light`, `dark`, `pastel` and
-     `midnight` claim to be no material at all — a texture behind the drawing
-     there is decoration competing with the diagram, which `purpose.md` calls a
-     losing trade. And `contrast` is the one place it does active HARM: that
-     theme exists for a reader who needs maximum legibility and separates by
-     outline rather than fill, so ruling its ground would put a second set of
-     lines behind the only lines that carry meaning.
-     Do not complete this set out of symmetry. A fourth theme wanting a ruled
-     ground needs the same kind of argument these three have, written down. */
-  --canvas-dot: var(--canvas-grid);
-  --canvas-rule: transparent;
-  --canvas-rule-major: transparent;
+  /* THE GROUND UNDER A DIAGRAM — TWO LAYERS WITH DIFFERENT JOBS, and the
+     distinction is the whole design rather than an implementation detail.
+
+     A RULE IS MEASUREMENT. It describes the drawing's space, so it lives in
+     that space: it pans and zooms with the drawing, and it SUBDIVIDES as the
+     reader looks closer, which is what a ruler does. `lib/canvas-ground.ts`
+     owns that — an adaptive ladder of pitches, each 5× the last, of which only
+     the levels whose on-screen pitch lands in a readable band are painted.
+     What lives HERE is the INK it is painted in, and which themes get one.
+
+     A MATERIAL IS THE SHEET. Paper fibre does not get finer when you lean in,
+     and a weave that subdivided would be claiming the paper is made of paper.
+     So the material layer is fixed in SHEET space — it neither zooms nor pans,
+     it is a CSS mask on the well itself, and no code in `src/` knows it exists.
+     `.af-canvas-sheet` below paints it.
+
+     Two earlier models each collapsed this distinction in one direction. The
+     first put everything in world space, so the "material" scaled with the
+     camera and the rule scaled without limit — a grey wash at 10%, cells the
+     size of a node at 400%. The second put everything on the pane, which fixed
+     the material and DETACHED the rule, so panning slid the drawing across a
+     stationary field. Neither half is wrong; applying either to both layers is.
+
+     THE RULE LAYER IS TWO TOKENS, and a theme picks at most one. Both are
+     painted at every level of the ladder, one of them transparent, because the
+     shape a theme rules its ground in is a THEME decision and this app resolves
+     theme-dependent presentation in CSS precisely so it is right on the very
+     first frame with no post-hydration swap. Alpha comes from the ladder, never
+     from here: the tokens are full-strength inks.
+
+     `check:themes` does not demand these of every theme — it requires a theme
+     to redefine every CONCRETE colour the baseline declares, and an alias or a
+     keyword is neither.
+
+     WHO GETS WHAT, and the three calls that are not obvious:
+
+       light, pastel, dark, midnight  dots        (the baseline, inherited)
+       glass                          dots + a sheen band
+       blueprint                      minor/major ruling
+       paper, eink                    material only — NO dot field
+       contrast                       nothing at all
+
+     `paper` AND `eink` GET NO DOT FIELD. Their material already covers the
+     whole ground; a dot grid on top of it is two grounds competing for the
+     same job, and plain paper has no dots printed on it. Do not "complete the
+     set" by adding one.
+     `glass` GETS BOTH, and that is not an inconsistency with the line above.
+     Its sheen is a SINGLE diagonal band, not a field, so the working grid's
+     slot is still free. A band and a field do not collide the way two fields
+     do.
+     `contrast` GETS NOTHING. It exists for a reader who needs maximum
+     legibility and separates by outline rather than fill, so anything behind
+     the only marks carrying meaning does active harm. Do not weaken this to a
+     faint dot field. */
+  --canvas-rule-dot: var(--edge);
+  --canvas-rule-line: transparent;
+
+  /* THE MATERIAL LAYER. Silent unless a theme names a grain: `none` masks
+     nothing, so the `::before` paints nothing and costs nothing.
+     THE INK IS A TOKEN AND THE GRAIN IS NOT. The grain is a mask, so it is
+     colourless by construction and all nine themes tint one definition through
+     `--canvas-sheet-ink` — which is why there is no per-theme data URI here and
+     must not become one. */
+  --canvas-sheet-ink: var(--foreground);
+  --canvas-sheet-grain: none;
+  --canvas-sheet-opacity: 0;
+  /* Grain tile edge, px. The turbulence is rasterised ONCE at this size and
+     tiled; filtering a pane-sized rect instead would re-run on every resize.
+     `check:canvas-grid` pins this against the tile baked into the data URIs. */
+  --canvas-sheet-tile: 120px;
+  /* A single band, not a tile — `glass` only. Separate from the grain because
+     it is `no-repeat` and sized to the pane. */
+  --canvas-sheet-band: none;
 
   /* ROLE TEXTURE — the SECOND channel node identity can travel on, and the
      same shape of opt-in seam as the three rule tokens above.
@@ -755,6 +799,12 @@
 
   --canvas: oklch(0.05 0 0);
   --canvas-grid: oklch(0.3 0 0);
+  /* NOTHING BEHIND THE DRAWING — no ladder, no material. This theme exists for
+     a reader who needs maximum legibility and separates by outline rather than
+     fill, so a second set of marks behind the only marks that carry meaning
+     does active harm. It is the one theme that opts out of BOTH layers, and it
+     is not to be softened into "a faint dot field would be fine". */
+  --canvas-rule-dot: transparent;
   --node: oklch(0.13 0 0);
   --node-foreground: oklch(1 0 0);
   /* ≥3:1 against --node (measured 3.61:1; was L 0.33 at 1.43:1). */
@@ -919,26 +969,23 @@
      theme that is louder than its counterpart in every other theme. */
   --canvas: oklch(0.225 0.062 250);
   --canvas-grid: oklch(0.42 0.062 250);
-  /* THE SHEET IS RULED, NOT DOTTED — the one theme that opts into the well's
-     rule layers (`:root` says who may, and why the set stops here).
+  /* THE SHEET IS RULED, NOT DOTTED — the one theme whose rule layer draws
+     lines (`:root` says who gets what, and why).
      The dot field is switched OFF rather than left to sit on the ruling: dots
-     at the minor pitch land exactly on the rule intersections, and at this
-     theme's grid colour they would be brighter than the minor rule they sit on
-     — beads on a string rather than a ruled sheet.
-     `--canvas-grid` itself stays at 0.42 because it is NOT only the well's
-     field: the gantt's time ticks and the lifecycle's rail read it too, and
-     those are still a grid rather than a ruling.
-     Minor 1.326:1 on the canvas — a fine ruling, the same order as `light`'s
-     grid at 1.336:1. Major 2.411:1, heavier in weight as well as in value, and
-     1.817:1 against the minor rule so the two never read as one line. The major
-     rule is louder than this theme's own `--border` (1.86:1 on the same
-     ground), which is the whole inversion: the ruling of the sheet is stronger
-     than the edge of a panel. Both stay well under the ink drawn on them —
-     `--edge` is 5.52:1, and `check:canvas-grid` holds every grid line to a
-     ceiling below its own theme's connector. */
-  --canvas-dot: transparent;
-  --canvas-rule: oklch(0.315 0.062 250);
-  --canvas-rule-major: oklch(0.46 0.062 250);
+     at a ladder level's pitch land exactly on that level's rule intersections
+     and read as beads on a string rather than as a ruled sheet.
+     `--canvas-grid` itself stays at 0.42 because it is NOT the well's field any
+     more and never was only that: the gantt's time ticks and the lifecycle's
+     rail read it too, and those are a grid rather than a ruling.
+     THE RULING IS THE DRAWING'S OWN INK, faintly. `--edge` here is white on the
+     blue sheet, which is what a blueprint's lines actually are, and at the
+     ladder's two strengths it measures 1.723:1 (minor) and 2.176:1 (major) on
+     the canvas — within a whisker of the two hand-picked blues this replaced
+     (1.326 / 2.411), and now derived rather than chosen. Both stay well under
+     the ink drawn on them: `--edge` is 5.521:1 and `check:canvas-grid` holds
+     every ladder level under 60% of its own theme's connector. */
+  --canvas-rule-dot: transparent;
+  --canvas-rule-line: var(--edge);
   --node: oklch(0.245 0.062 250);
   --node-foreground: oklch(0.97 0.012 250);
   /* ≥3:1 against --node (measured 4.13:1). */
@@ -1148,6 +1195,23 @@
      exported from this theme carries the lighter stock too. */
   --canvas: oklch(0.95 0.015 88);
   --canvas-grid: oklch(0.885 0.016 84);
+  /* THE SHEET IS THE MATERIAL, so it takes the material layer and NO dot field.
+     A dot grid printed on top of fibre is two grounds arguing about which one
+     is the page, and plain paper has no dots on it.
+     FRACTAL NOISE, NOT A LATTICE, and that is the third texture tried here. A
+     repeating gradient of wire and chain lines was tried at 5×6 and at 22×7:
+     fine, it collapses into a flat grey wash; coarse, it stops being fibre and
+     starts being ruling — which is the OTHER layer's job. Real fibre has no
+     period for the eye to lock onto, and `feTurbulence` is the only thing that
+     gives that.
+     `stitchTiles="stitch"` IS LOAD-BEARING. Without it the noise does not join
+     across the tile edge and the reader sees a 120px grid — precisely the
+     artefact this texture exists to avoid. `check:canvas-grid` asserts it.
+     Mean alpha lands at 1.114:1 on this canvas (fractal noise averages half
+     its range), peaking at 1.234:1. */
+  --canvas-rule-dot: transparent;
+  --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0' result='grain'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
+  --canvas-sheet-opacity: 0.22;
   /* BELOW the canvas, not above it — the header's fault 2. A node is ink and
      stock, so it takes the page's own hue at a shade under the page's
      lightness (1.045:1 on --canvas): found by its rule rather than by glare. */
@@ -1330,6 +1394,20 @@
   /* Canvas-specific tokens the future editor will consume. */
   --canvas: oklch(0.945 0.014 255);
   --canvas-grid: oklch(0.87 0.016 255);
+  /* THE ONE THEME THAT TAKES BOTH LAYERS, and `:root` carries the argument:
+     the sheen is a SINGLE diagonal band rather than a field, so it does not
+     compete for the working grid's slot the way `paper`'s and `eink`'s grains
+     do. The dot field is therefore inherited, not overridden.
+     No grain — glass has no fibre. `no-repeat` and pane-sized, which is what
+     makes it a band; `check:canvas-grid` refuses a band that tiles.
+     1.103:1 at the peak of the band, its faintest point being the canvas
+     itself. */
+  --canvas-sheet-band: linear-gradient(
+    115deg,
+    transparent 26%,
+    color-mix(in oklab, var(--canvas-sheet-ink) 10%, transparent) 50%,
+    transparent 74%
+  );
   --node: oklch(1 0 0 / 0.62);
   --node-foreground: oklch(0.21 0.02 265);
   /* ≥3:1 against --node (measured 3.64:1; was L 0.86 at 1.53:1). */
@@ -1649,6 +1727,24 @@
      of its own — `check:eink` holds both ends of that. */
   --role-texture-opacity: 0.14;
   --role-texture-ink: oklch(0.42 0 0);
+
+  /* THE PANEL IS THE MATERIAL — grain, and no dot field, for `paper`'s reason.
+     This overrides a refusal this file used to carry: `eink` was denied a
+     ground texture because "a ruled ground under a hatched node is two lattices
+     arguing". That is right about RULING and is why there is none here. It does
+     not carry to a grain: the role hatches carry meaning in DIRECTION, and
+     fractal noise has no direction to compete on. It also cannot beat against
+     them — a moire needs two periods, and turbulence has none.
+     THE STEP FUNCTION IS WHAT MAKES IT E-INK. `feFuncA type="discrete"` with
+     `0 0 0 1` quantises smooth grain into discrete particles: one pixel in four
+     is lit and the rest are bare. That is the difference between paper fibre
+     and an electrophoretic panel, and it is the reason the frequency is higher
+     and the octave count lower than `paper`'s — the step supplies the structure
+     that octaves would otherwise have to.
+     Lit particles measure 1.303:1 on this canvas at 0.30. */
+  --canvas-rule-dot: transparent;
+  --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='3' stitchTiles='stitch' seed='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0 0 1'/%3E%3C/feComponentTransfer%3E%3CfeColorMatrix type='matrix' values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0' result='grain'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
+  --canvas-sheet-opacity: 0.3;
 
   --background: oklch(0.965 0 0);
   --foreground: oklch(0.2 0 0);
@@ -2278,9 +2374,14 @@
   }
 }
 
+/* ONE CELL, so the pattern repeats onto itself and the loop is seamless. The
+   distance is NOT typed here: `hero-diagram.tsx` writes `--af-hero-grid-pitch`
+   from the same `groundFieldCss` call that draws the field, because the ladder
+   chooses the pitch and a hardcoded 28px stopped being a whole cell the moment
+   it did. `check:canvas-grid` asserts the property is the only source. */
 @keyframes af-hero-grid-drift {
   to {
-    background-position: 28px 28px;
+    background-position: var(--af-hero-grid-pitch) var(--af-hero-grid-pitch);
   }
 }
 
@@ -2713,6 +2814,115 @@
   box-shadow:
     0 1px 3px 0 color-mix(in oklab, var(--node-stroke) 22%, transparent),
     0 14px 30px -10px color-mix(in oklab, var(--node-stroke) 45%, transparent);
+}
+
+/* ---- the well's RULE layer, off the C4 canvases -------------------------
+ * The adaptive ladder, painted by the SCROLL PANE rather than inside the
+ * drawing's `<svg>`.
+ *
+ * THIS REVERSES A DECISION THIS BRANCH RECORDED, and the reversal is written
+ * down rather than edited in quietly. The field used to be a `<rect>` sized to
+ * the diagram's own box, on the argument that "C4's ground is infinite because
+ * a C4 canvas is an infinite surface you pan around; these eight are finite
+ * drawings, and a finite drawing on a ruled sheet is what a sheet of paper is."
+ *
+ * WHAT CHANGED MY MIND: that argument is about the DOCUMENT, and the ground is
+ * not a property of the document. It is the sheet the document sits on, and a
+ * sheet does not stop where the drawing stops. A pane half ruled and half bare
+ * reads as a rendering fault rather than as a finite drawing — and it meant
+ * changing notation changed whether the paper reached the edges, which is the
+ * exact inconsistency `components/ui/diagram-well.tsx` exists to end. The
+ * ground now fills the pane in all nine notations, the way C4's always did.
+ *
+ * IT ALSO REMOVES WORK. There is no per-diagram `<rect>`, no `<pattern>` set
+ * inside nine `<svg>`s re-rasterised on every zoom frame, and no shared
+ * component: one declaration on the pane, and the compositor tiles it.
+ *
+ * `background-attachment: local` IS THE WHOLE MECHANISM, and it is the exact
+ * opposite of what the material layer below must never use. `local` means
+ * "this background is part of the scrolled content" — which is *literally*
+ * what a rule is. So it pans with the drawing for free on all eight of these
+ * canvases, because every one of them pans by scrolling. The zoom half is the
+ * tile size, written from `groundLevels()` by the viewer that owns the camera.
+ *
+ * IT IS ANCHORED TO THE SCROLL CONTENT, not to the drawing's own origin, and
+ * that is a real difference from the `<rect>` it replaces: a centred drawing's
+ * first rule no longer falls on its first coordinate. It is also exactly what
+ * React Flow's `<Background>` does on the two C4 canvases, whose origin is the
+ * flow's rather than any drawing's bounding box — so the nine now agree, where
+ * before eight of them disagreed with the two most people open first. */
+
+.af-canvas-rule {
+  background-attachment: local;
+  background-repeat: repeat;
+}
+
+/* ---- the well's MATERIAL layer -------------------------------------------
+ * The sheet a diagram is drawn on: fibre for `paper`, particles for `eink`, a
+ * sheen band for `glass`, and nothing at all for the other six.
+ *
+ * IT IS FIXED IN SHEET SPACE — it does not zoom and it does not pan. That is
+ * the half of this the ladder does NOT get, and the distinction is argued at
+ * the tokens in `:root`: a rule is measurement and belongs in the drawing's
+ * space; a material is the sheet, and paper fibre does not get finer when you
+ * lean in. The invariance is structural rather than arithmetic — the camera
+ * lives on a DESCENDANT of this element in every host (React Flow's viewport
+ * div, the scaled `<svg>`, the scroll pane), so nothing between this layer and
+ * the screen is transformed.
+ *
+ * A MASK, NOT AN IMAGE, so nine themes tint ONE definition. The grain data URI
+ * is colourless; the colour comes from `--canvas-sheet-ink` under it. A
+ * per-theme data URI would be nine copies of one texture and is the thing this
+ * shape exists to prevent.
+ *
+ * THE TURBULENCE IS RASTERISED ONCE, at `--canvas-sheet-tile`, and tiled by the
+ * mask. Filtering a pane-sized rect instead would re-run the filter on every
+ * resize of a pane that is resized by the source rail, the window and immersive
+ * mode.
+ *
+ * AND NO, THIS DOES NOT BREAK THE "never filter a connector" RULE. That rule
+ * exists because an orthogonal connector has a ZERO-EXTENT bounding box in one
+ * axis, so a percentage filter region collapses to nothing and the paint lands
+ * somewhere else on the diagram — it cost three commits. The filter here is on
+ * a 120×120 `<rect>` with a real extent in both axes, inside its own document,
+ * and it never touches a path. The rule is about degenerate bounding boxes, not
+ * about filters.
+ *
+ * `z-index: -1` inside an isolated stacking context: above the well's own
+ * `--canvas` fill, below every child. `isolation` keeps the negative index from
+ * escaping into the host's layout. */
+
+.af-canvas-sheet {
+  position: relative;
+  isolation: isolate;
+}
+
+.af-canvas-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--canvas-sheet-ink);
+  background-image: var(--canvas-sheet-band);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  opacity: var(--canvas-sheet-opacity);
+  -webkit-mask-image: var(--canvas-sheet-grain);
+  mask-image: var(--canvas-sheet-grain);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  -webkit-mask-size: var(--canvas-sheet-tile) var(--canvas-sheet-tile);
+  mask-size: var(--canvas-sheet-tile) var(--canvas-sheet-tile);
+}
+
+/* The band is the exception to the mask: `glass` names no grain, so the mask
+   passes everything and the ink rect would paint a flat wash. It carries the
+   band in the band's OWN alpha instead, at full layer opacity, with the ink
+   rect switched off. */
+.glass .af-canvas-sheet::before {
+  background-color: transparent;
+  opacity: 1;
 }
 
 /* ---- canvas stacking order (editor + viewer) ------------------------------

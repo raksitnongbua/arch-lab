@@ -39,6 +39,7 @@ export function resolveToken(token, themeTokens, baseline, depth = 8) {
   const raw = themeTokens.get(token) ?? baseline.get(token);
   if (raw === undefined) return null;
   const ref = /^var\((--[a-z0-9-]+)\)$/.exec(raw.trim());
-  if (ref !== null) return resolveToken(ref[1], themeTokens, baseline, depth - 1);
+  if (ref !== null)
+    return resolveToken(ref[1], themeTokens, baseline, depth - 1);
   return raw.trim();
 }

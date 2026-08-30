@@ -70,6 +70,8 @@ import {
   ZOOM_STEP,
 } from "@/components/ui/zoom-pill";
 import { useModKey } from "@/lib/mod-key";
+import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 import { cn } from "@/lib/utils";
 
 import type { LaidFlowEdge } from "../lib/layout";
@@ -278,6 +280,14 @@ export function FlowchartViewer({
     if (width <= 0 || height <= 0) return 1;
     return Math.min(width / layout.width, height / layout.height);
   }, [layout]);
+
+  /* THE GROUND'S CAMERA. `zoom` is a MODE as often as it is a number, and the
+     adaptive ladder needs the number — `screenPitch = worldPitch × scale`. Fit
+     is therefore measured, and re-measured on resize, because the pane changes
+     size when the source rail collapses and when immersive mode opens. This is
+     the SAME camera the diagram is drawn at, resolved; not a second one. */
+  const fitScale = useMeasuredScale(paneRef, measureFitScale);
+  const groundScale = zoom === "fit" ? fitScale : zoom;
 
   /** Scroll anchor kept across a zoom — fractions of the scrollable content,
    * the same both-modes-safe quantity the sequence viewer derives. */
@@ -562,10 +572,15 @@ export function FlowchartViewer({
                how the ground behind a diagram came to change shade with the
                notation. */
             "h-full overflow-auto p-3",
+            /* THE GROUND, filling the pane rather than the drawing.
+               `.af-canvas-rule` in globals.css carries the reversal and the
+               reason `local` attachment is the whole panning mechanism. */
+            CANVAS_RULE_CLASS,
             zoom !== "fit" && "flex",
             zoom !== "fit" && "cursor-grab",
             panning && "cursor-grabbing",
           )}
+          style={groundFieldCss(groundScale)}
           onClick={handleBackdropClick}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}

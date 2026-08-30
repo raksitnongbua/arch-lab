@@ -389,13 +389,22 @@ const wellToken = /DIAGRAM_WELL_CLASSES =\s*"([^"]+)"/.exec(
   readCode("src/components/ui/diagram-well.tsx"),
 )?.[1];
 
+/* COLOUR AND MATERIAL TRAVEL TOGETHER, which is why this is a SET rather than
+   one name. `bg-canvas` is the well's colour; `af-canvas-sheet` is its material
+   — the paper fibre, the e-ink particles, the glass sheen — which is fixed to
+   the sheet and therefore belongs on this element rather than inside a camera
+   (`lib/canvas-ground.ts` argues the split). A host given one and not the other
+   shows a theme's paper as a flat cream rectangle, and nothing else would say
+   so. Exactly these two, in this order: an extra class here reaches every well
+   in the app at once. */
 check(
-  "the well is the CANVAS token, not the chrome one",
-  wellToken === "bg-canvas",
+  "the well is the CANVAS token and its material, and nothing else",
+  wellToken === "bg-canvas af-canvas-sheet",
   `the shared well resolves to \`${wellToken ?? "nothing"}\` — the palette ` +
     "puts `--canvas` below `--background` on purpose, so grounding the " +
     "diagram on the chrome colour flattens the recess in all six themes at " +
-    "once instead of in six notations one at a time",
+    "once instead of in six notations one at a time; and dropping " +
+    "`af-canvas-sheet` silently removes the material layer from all nine",
 );
 
 /* THE EIGHT NON-C4 NOTATIONS. Each ships a `<kind>-viewer.tsx` mounted by the

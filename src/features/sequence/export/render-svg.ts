@@ -31,6 +31,8 @@
  *     motion removes them rather than parking them.
  */
 
+import { resolveExportGround } from "@/features/viewer/export/ground";
+
 import { SEQUENCE_CHROME_SELECTOR } from "../lib/chrome";
 
 /** What `viewer/export/download.ts` rasterises. */
@@ -184,6 +186,27 @@ export function renderSequenceSvg(
       window.getComputedStyle(document.body).backgroundColor,
   );
   clone.insertBefore(backdrop, clone.firstChild);
+  /* THE GROUND, AND THIS EXPORTER IS THE ONE THAT HAS TO BE TOLD.
+     The other eight build their own `<svg>` from layout, so adding the ground
+     there is a line of markup. This one CLONES the live canvas — and the live
+     canvas no longer carries the ground at all, because the ground moved onto
+     the scroll pane (`.af-canvas-rule` in globals.css) where it can fill the
+     whole well. So a clone arrives with no ground and it has to be put back.
+     That is the same defect as before from the other direction: this path used
+     to carry the ground when nobody wanted it, and would now silently drop it
+     when everybody does. `check:canvas-grid` asserts this branch by name. */
+  const ground = resolveExportGround();
+  if (ground.defs !== "") {
+    const layer = clone.ownerDocument.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "g",
+    );
+    layer.setAttribute("aria-hidden", "true");
+    layer.innerHTML =
+      `<defs>${ground.defs}</defs>` +
+      ground.layers(viewBox.x, viewBox.y, width, height);
+    clone.insertBefore(layer, backdrop.nextSibling);
+  }
 
   return {
     svg: new XMLSerializer().serializeToString(clone),

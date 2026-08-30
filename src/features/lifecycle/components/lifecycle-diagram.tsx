@@ -52,7 +52,6 @@
  * write a variable.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import type { LifecycleLabFile } from "@/types";
 
 import { LIFECYCLE, layoutLifecycle } from "../lib/layout";
@@ -128,16 +127,6 @@ export function LifecycleDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-lifecycle"
-        width={layout.width}
-        height={layout.height}
-      />
       {/* The subject: the head of the diagram, above the track. */}
       {layout.subject.labelLines.map((line, index) => (
         <text

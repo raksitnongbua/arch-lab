@@ -909,14 +909,17 @@ check(
      like a fix. The sequence canvas's rule is the precedent. */
   check(
     "a real CSS rule kills the native outline on PLAIN :focus, not only :focus-visible — clicking an SVG element with a tabindex gives it :focus alone, and Chrome still paints outline: auto for that, which is the rounded box that survived the first two attempts at this fix",
-    new RegExp("\\." + "af-flow-hit" + ":focus[,\\s][^{]*\\{[^}]*outline:\\s*none").test(
-      globals,
-    ),
+    new RegExp(
+      "\\." + "af-flow-hit" + ":focus[,\\s][^{]*\\{[^}]*outline:\\s*none",
+    ).test(globals),
   );
   check(
     "every interactive element also carries outline-none in the markup — belt and braces, and it documents the intent at the call site",
-    (focusSrc.match(/af-flow-hit cursor-pointer focus-visible:outline-none/g) ?? [])
-      .length >= 2,
+    (
+      focusSrc.match(
+        /af-flow-hit cursor-pointer focus-visible:outline-none/g,
+      ) ?? []
+    ).length >= 2,
   );
   check(
     "a shaped .af-flow-ring is emitted for BOTH a node/element and an edge — an edge's ring must follow its path, since a diagonal line's bounding box is a rectangle across half the diagram",
@@ -925,14 +928,15 @@ check(
   check(
     "the ring is revealed by a :focus-visible SIBLING rule and rests at opacity 0 — absent rather than transparent, so it can never take a click or a hit test",
     /\.af-flow-ring[^{]*\{[^}]*opacity:\s*0/.test(globals) &&
-      new RegExp("\\.af-flow-hit:focus-visible ~ \\.af-flow-ring").test(globals),
+      new RegExp("\\.af-flow-hit:focus-visible ~ \\.af-flow-ring").test(
+        globals,
+      ),
   );
   check(
     "the ring paints --ring, the app's focus colour, never a role token — focus is a state, so a focused diagram element must match a focused button",
     /\.af-flow-ring[\s\S]{0,200}stroke:\s*var\(--ring\)/.test(globals),
   );
 }
-
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

@@ -48,8 +48,12 @@ import {
 } from "@/lib/idle-motion";
 import type { GanttLabFile } from "@/types";
 
+import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
+import { cn } from "@/lib/utils";
 import { layoutGantt } from "../lib/layout";
 import { IDLE_AFTER_MS, GANTT_SETTLE_MS } from "../lib/motion";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
+
 import { GanttDiagram } from "./gantt-diagram";
 
 export interface GanttViewerProps {
@@ -133,6 +137,24 @@ export function GanttViewer({ file }: GanttViewerProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /* THE GROUND'S CAMERA, ON A CANVAS WITH NO CAMERA.
+     This notation has no pan-and-zoom; the `<svg>` is drawn at its natural size
+     and shrunk by `max-width: 100%` when the pane is narrower. That shrink is
+     still a scale, and the ground's adaptive ladder is a question about SCREEN
+     pixels — so a drawing squeezed into a narrow pane has its ground squeezed
+     with it, and the ladder must be told or it selects a level that lands below
+     the readable band. Never magnified: the CSS cap only ever shrinks. */
+  const groundRef = useRef<HTMLDivElement>(null);
+  const naturalWidth = useMemo(() => layoutGantt(file).width, [file]);
+  const measureGroundScale = useCallback((): number => {
+    const box = groundRef.current;
+    if (box === null || naturalWidth <= 0) return 1;
+    return box.clientWidth <= 0
+      ? 1
+      : Math.min(1, box.clientWidth / naturalWidth);
+  }, [naturalWidth]);
+  const groundScale = useMeasuredScale(groundRef, measureGroundScale);
+
   return (
     <div
       /* THE SCROLL BOX AND THE GUTTERS. `min-h-0 flex-1` claims the height the
@@ -146,7 +168,13 @@ export function GanttViewer({ file }: GanttViewerProps) {
          plus the canvas's own `margin-inline: auto` centres it with less to go
          wrong. The padding is the air either side: without it the label rail
          and the last tick sit on the container's edges. */
-      className="min-h-0 w-full flex-1 overflow-auto px-5 py-6 sm:px-8"
+      /* THE GROUND, filling the pane rather than the drawing — the reversal
+         is recorded at `.af-canvas-rule` in globals.css. */
+      className={cn(
+        "min-h-0 w-full flex-1 overflow-auto px-5 py-6 sm:px-8",
+        CANVAS_RULE_CLASS,
+      )}
+      style={groundFieldCss(groundScale)}
       onPointerMove={stir}
       onPointerDown={stir}
       onKeyDown={stir}
@@ -155,17 +183,19 @@ export function GanttViewer({ file }: GanttViewerProps) {
          the whole reason a reader can move the pointer away and keep looking. */
       onPointerLeave={() => setHovered(null)}
     >
-      <GanttDiagram
-        file={file}
-        litIds={litIds}
-        reveal
-        idleMotion={idleState}
-        atRest={atRest}
-        onFocusItem={(id) =>
-          setPinned((current) => (current === id ? null : id))
-        }
-        onHoverItem={setHovered}
-      />
+      <div ref={groundRef}>
+        <GanttDiagram
+          file={file}
+          litIds={litIds}
+          reveal
+          idleMotion={idleState}
+          atRest={atRest}
+          onFocusItem={(id) =>
+            setPinned((current) => (current === id ? null : id))
+          }
+          onHoverItem={setHovered}
+        />
+      </div>
     </div>
   );
 }

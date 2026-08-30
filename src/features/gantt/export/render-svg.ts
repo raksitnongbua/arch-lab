@@ -42,6 +42,7 @@
 import type { GanttLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
+import { resolveExportGround } from "@/features/viewer/export/ground";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 import { TextureRegistry } from "@/features/viewer/export/texture-registry";
@@ -162,12 +163,28 @@ export function renderGanttSvg(
   const width = layout.width + EXPORT_PADDING * 2;
   const height = layout.height + EXPORT_PADDING * 2;
 
+  /* THE GROUND THE DRAWING WAS READ ON — the sheet, carried into the file.
+     `viewer/export/ground.ts` records why this reverses an earlier decision to
+     keep it out. Directly after the backdrop and before any of the drawing, so
+     it is under everything; full-bleed, including any export padding, because
+     a sheet does not stop where the drawing stops. */
+  const ground = resolveExportGround();
   push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
       `viewBox="0 0 ${width} ${height}" font-family="${FONT_SANS}">`,
   );
   push(
     `<rect x="0" y="0" width="${width}" height="${height}" fill="${theme.canvas}"/>`,
+  );
+  push(`<defs>${ground.defs}</defs>`);
+  push(ground.layers(0, 0, width, height));
+  /* The plan's own surface — see `gantt-diagram.tsx` for why this kind has one
+     and the other seven do not. Inside the export padding, so the sheet still
+     shows as a margin around it. */
+  push(
+    `<rect x="${EXPORT_PADDING}" y="${EXPORT_PADDING}" width="${layout.width}" ` +
+      `height="${layout.height}" rx="12" fill="${theme.node}" ` +
+      `stroke="${theme.nodeBorder}" stroke-width="1"/>`,
   );
 
   /* THE ROLE TEXTURES the bars actually wear, collected before the `<defs>` is

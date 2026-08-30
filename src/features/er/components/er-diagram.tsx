@@ -53,7 +53,6 @@ import {
   labelPlateWidth,
   layoutEr,
 } from "../lib/layout";
-import { CanvasField } from "@/components/ui/canvas-field";
 import type { ErLabFile } from "@/types";
 
 /**
@@ -547,16 +546,6 @@ export function ErDiagram({
       aria-label={`Entity-relationship diagram: ${file.metadata?.title ?? "untitled"}, ${layout.entities.length} entities`}
       style={{ "--er-wave-cap": WAVE_CAP } as React.CSSProperties}
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-er"
-        width={layout.width}
-        height={layout.height}
-      />
       <defs>
         {/* A soft lift, not a drop shadow — the boxes should read as sitting
             ON the canvas, which is what separates a diagram meant to be
