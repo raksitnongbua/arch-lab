@@ -215,6 +215,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   to it, so there was no way to start a lifecycle document from `/live`. The
   menu is now derived from the one running order of the notations, and leaving a
   notation out of that order no longer compiles.
+- **The source pane wraps its long lines.** A `desc` sentence or a pasted
+  Mermaid line used to run off to the right of a rail perhaps a third of the
+  page wide, and reading the end of it meant dragging sideways and losing your
+  place in the document. Lines now wrap, and the line numbers stay level with
+  them — a wrapped line keeps one number, and the rows below it do not drift.
+  Both editable panes get it: `/live` and `/validate`, where a parse error's
+  "line 12" is only useful against rows you can still count.
 
 ### Changed
 
