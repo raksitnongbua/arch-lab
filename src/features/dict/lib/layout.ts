@@ -77,6 +77,21 @@ export const DICT = {
   marginBottom: 56,
   /** Cell padding, left and right. */
   padX: 12,
+  /**
+   * Air inside the table panel, BELOW the last field's row.
+   *
+   * The panel's height is the section's, and a section ended exactly at its
+   * last row — so the rounded box closed 6 units under the final rule
+   * (`padX * 0.5`, the same nudge that opens it at the top) and the table read
+   * as clipped rather than finished. Every other notation tapers out; this one
+   * ends on a full-width rule, which is the widest possible thing to cut.
+   *
+   * It is added to the SECTION's height rather than to the drawn rect, so the
+   * panel, the next section's position and the canvas height all pick it up
+   * from one number and the exporter cannot frame the table differently from
+   * the screen.
+   */
+  tablePadBottom: 16,
   /** Font sizes. */
   labelSize: 15,
   headerSize: 10.5,
@@ -401,7 +416,7 @@ export function layoutDict(
         : {}),
       ...(section.tags !== undefined ? { tags: section.tags } : {}),
       y: top,
-      height: y - top,
+      height: y - top + DICT.tablePadBottom,
       headerY,
       fields,
       index,
