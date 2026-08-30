@@ -27,6 +27,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The pastel theme is genuinely pastel now.** It used to be a hot violet-and-pink
+  pair; the whole palette is retuned onto a softer, wider wheel — mint, sky,
+  periwinkle, lilac, blush, peach and butter — with the wash running sky to
+  peach instead of blue to pink, the accent moving from magenta-pink to peach,
+  the destructive red becoming an actual red, and every contrast floor still
+  measured and met. A diagram saved under the old pastel reopens in the new one.
+
 - **Selecting a gantt bar opens a details panel, and selects less.** Clicking a
   bar used to light its whole dependency chain in both directions, which on a
   sequenced plan is most of the chart; it now lights the bar and the items it
