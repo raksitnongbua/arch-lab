@@ -1025,16 +1025,28 @@
      the two pinned refusals). It is the one whose ground is a full-strength
      ruling AND whose `--border` is deliberately quieter than that ruling, two
      tokens above — the frame cannot win, so the area needs a ground of its own.
-     0.25 of `--canvas-grid` over this canvas measures 1.257:1, clearing the
-     1.1:1 floor a ground must clear to be seen at all and staying well under
-     the ruling's own 2.030:1: the wash remains a LESSER mark than the sheet's
+     0.4 of `--canvas-grid` over this canvas measures 1.412:1, clearing the
+     1.1:1 floor a ground must clear to be seen at all and staying under the
+     ruling's own 2.030:1: the wash remains a LESSER mark than the sheet's
      lines, which is the difference between toning the sheet and piercing it.
-     The drawing's ink still reads on it — `--edge` 4.39:1 (needs 3:1) and
-     `--foreground` 12.49:1 (needs 4.5:1). `--node-border` was tried at the
-     same alpha and landed on exactly 3.00:1 for the connectors, with no
-     margin; `--edge` and `--foreground` swallow the drawing's own ink at
-     2.59:1 and 1.18:1. `check:canvas-grid` re-measures all four every run. */
-  --diagram-surface-opacity: 0.25;
+     The drawing's ink still reads on it — `--edge` 3.91:1 (needs 3:1) and
+     `--foreground` 11.12:1 (needs 4.5:1).
+     THE STRENGTH IS THE USER'S CALL, THE FOUR FIGURES ARE NOT. This shipped at
+     0.25 (1.257:1 / 4.39:1 / 12.49:1) and was asked up to 0.4 after being
+     looked at. All four were re-derived before the number moved, and the
+     ceiling in `check:canvas-grid` was raised to exactly 0.4 rather than
+     opened wide — a band with slack in it is a band that stops being a limit.
+     What is not negotiable is the wash staying under the ruling: that is the
+     invariant separating a toned sheet from a panel, and it is the one a
+     larger number puts at risk first.
+     AT THIS STRENGTH `--canvas-grid` IS THE ONLY INK LEFT, which is the other
+     thing the re-measurement showed. The alternatives had headroom at 0.25 and
+     have none at 0.4: `--node-border` now reads 2.341:1 — LOUDER than the
+     ruling — and drops the connectors to 2.36:1, `--edge` and `--foreground`
+     fail worse, and `--node` is invisible at 1.022:1. So the ink is not a
+     preference here any more, it is the only survivor, and moving the strength
+     again without re-running the check would very likely break something. */
+  --diagram-surface-opacity: 0.4;
   --node: oklch(0.245 0.062 250);
   --node-foreground: oklch(0.97 0.012 250);
   /* ≥3:1 against --node (measured 4.13:1). */
