@@ -81,6 +81,7 @@ import {
   layoutGantt,
   TEXTURE_BY_STATE,
 } from "../lib/layout";
+import { keyActivate } from "@/lib/key-activate";
 
 export interface GanttDiagramProps {
   file: GanttLabFile;
@@ -103,7 +104,7 @@ export interface GanttDiagramProps {
   /** Pointer entered a row, or left every row (`null`). Separate from
    * `onFocusItem` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
-  onHoverItem?: (id: string | null) => void;
+  onKeyFocusItem?: (id: string | null) => void;
 }
 
 export function GanttDiagram({
@@ -113,7 +114,7 @@ export function GanttDiagram({
   idleMotion = "on",
   atRest = false,
   onFocusItem,
-  onHoverItem,
+  onKeyFocusItem,
 }: GanttDiagramProps) {
   const layout = layoutGantt(file);
   /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
@@ -297,7 +298,7 @@ export function GanttDiagram({
           item={item}
           lit={lit(item.id)}
           onFocusItem={onFocusItem}
-          onHoverItem={onHoverItem}
+          onKeyFocusItem={onKeyFocusItem}
         />
       ))}
 
@@ -369,12 +370,12 @@ function Row({
   item,
   lit,
   onFocusItem,
-  onHoverItem,
+  onKeyFocusItem,
 }: {
   item: LaidGanttItem;
   lit?: "1";
   onFocusItem?: (id: string) => void;
-  onHoverItem?: (id: string | null) => void;
+  onKeyFocusItem?: (id: string | null) => void;
 }) {
   const width = Math.max(item.x1 - item.x0, GANTT.minBarWidth);
   return (
@@ -500,9 +501,16 @@ function Row({
             : undefined
         }
         onClick={onFocusItem ? () => onFocusItem(item.id) : undefined}
-        onPointerEnter={onHoverItem ? () => onHoverItem(item.id) : undefined}
-        onFocus={onHoverItem ? () => onHoverItem(item.id) : undefined}
-        onBlur={onHoverItem ? () => onHoverItem(null) : undefined}
+        /* THE KEYBOARD HALF OF THE CLICK. `role="button"` promises a
+           reader that Enter and Space do what a press does, and nothing in
+           the platform honours that on an SVG shape. It mattered less while
+           a hover could light a row; now that a press is the ONLY way to
+           select one, a canvas without this is a canvas for mice. */
+        onKeyDown={
+          onFocusItem ? keyActivate(() => onFocusItem(item.id)) : undefined
+        }
+        onFocus={onKeyFocusItem ? () => onKeyFocusItem(item.id) : undefined}
+        onBlur={onKeyFocusItem ? () => onKeyFocusItem(null) : undefined}
       />
     </g>
   );

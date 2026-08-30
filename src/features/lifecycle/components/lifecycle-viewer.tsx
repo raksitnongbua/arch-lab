@@ -64,7 +64,19 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
   const idleMotion = useIdleMotion();
   const idleState = idleMotionState(reduced, idleMotion);
 
-  const [hovered, setHovered] = useState<string | null>(null);
+  /* KEYBOARD FOCUS, NOT HOVER. Pointing at a row used to select it; it now
+     takes a press, because a selection that follows the pointer fires on the
+     way to somewhere else and a reader crossing the canvas sets and clears it
+     a dozen times without meaning to.
+
+     THE CHANNEL SURVIVES THE HOVER, and that is why this stays a second piece
+     of state rather than collapsing into `pinned`. Tabbing to a row lights it
+     WITHOUT committing to it — the same transient look the pointer used to
+     give — and Enter or Space then pins it, through the same handler a click
+     goes through. Deleting this along with the hover would have left a
+     keyboard reader unable to look before choosing, which is the one thing the
+     pointer could always do. */
+  const [keyFocused, setKeyFocused] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [atRest, setAtRest] = useState(false);
   /* THE ENTRANCE IS A PHASE, AND IT HAS TO END. It used to be stamped as a
@@ -87,7 +99,7 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
   const [revealed, setRevealed] = useState(true);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const selected = pinned ?? hovered;
+  const selected = pinned ?? keyFocused;
   const litKeys = useMemo(
     () => (selected === null ? undefined : new Set([selected])),
     [selected],
@@ -164,7 +176,6 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
       onWheel={stir}
       /* Pointer leaving the canvas clears a hover but never a pin — the pin is
          the whole reason a reader can move the pointer away and keep looking. */
-      onPointerLeave={() => setHovered(null)}
     >
       <div
         ref={groundRef}
@@ -182,7 +193,7 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
           onFocusState={(key) =>
             setPinned((current) => (current === key ? null : key))
           }
-          onHoverState={setHovered}
+          onKeyFocusState={setKeyFocused}
         />
       </div>
     </div>

@@ -789,6 +789,78 @@ for (const kind of ["c4", "sequence", "flowchart", "usecase"]) {
   );
 }
 
+console.log(
+  "\nselecting a row is a press, and a press is reachable by keyboard",
+);
+
+/* THE THREE CANVASES THAT LET A READER SELECT A ROW — the gantt, the timeline
+   and the lifecycle — used to do it on HOVER as well as on click, and the
+   hover was withdrawn: a selection that follows the pointer fires on the way
+   to somewhere else, so crossing the canvas set and cleared it repeatedly
+   without the reader meaning any of it.
+
+   WHAT THAT COSTS IF IT IS DONE CARELESSLY, and what these assertions exist to
+   stop: those rows are `<rect>`s carrying `role="button"` and `tabIndex={0}`,
+   and NOTHING IN THE PLATFORM makes Enter or Space activate a non-native
+   element. While a hover could light a row that was survivable — a keyboard
+   reader could at least tab and look. With the press as the only way to
+   select, a canvas missing the key handler is a canvas only a mouse can use,
+   and no existing check had an opinion about it.
+
+   DERIVED FROM THE FILESYSTEM, never from a list of three kind names.
+   `codebase.md` records three checks in this repo that passed while the
+   feature under them was broken, every one because a hardcoded list cannot
+   notice what it has never heard of. The set here is "every diagram component
+   that makes a shape a button", which a fourth canvas joins by writing the
+   role rather than by being remembered. */
+{
+  const components = readdirSync(path.join(ROOT, "src/features"))
+    .flatMap((feature) => {
+      const rel = `src/features/${feature}/components/${feature}-diagram.tsx`;
+      return existsSync(path.join(ROOT, rel))
+        ? [[feature, rel, read(rel)]]
+        : [];
+    })
+    .filter(([, , code]) => /role=\{[^}]*"button"|role="button"/.test(code));
+
+  check(
+    `every canvas that makes a shape a button was found (${components.map(([f]) => f).join(", ")})`,
+    components.length >= 3,
+    `only ${components.length} — the marker stopped matching, so the sweep below proves nothing`,
+  );
+
+  for (const [feature, rel, code] of components) {
+    check(
+      `${feature}: a shape that is a button answers Enter and Space`,
+      /onKeyDown=/.test(code),
+      `${rel} gives a shape role="button" and tabIndex but no key handler — a control only a mouse can reach`,
+    );
+    /* AND IT USES THE SHARED HELPER. Six copies of this four-line body existed
+       across the canvases before one of them was extracted, which is `dry.md`'s
+       own example of real duplication; a seventh written inline would be the
+       helper re-implemented one import away from where it lives. */
+    check(
+      `${feature}: and does it through the one shared keyActivate`,
+      /keyActivate/.test(code),
+      `${rel} spells the Enter/Space dance out again instead of importing @/lib/key-activate`,
+    );
+  }
+
+  /* NO POINTER-HOVER SELECTION ANYWHERE IN THAT FAMILY. Asserted as the
+     ABSENCE of the mechanism rather than as the presence of a click, because
+     the defect being prevented is a re-addition: the obvious way to "make the
+     canvas feel responsive" later is to put the hover back, and it would look
+     like an improvement in the diff. */
+  const hovering = components.filter(([, , code]) =>
+    /onPointerEnter=/.test(code),
+  );
+  check(
+    "no canvas selects a row on hover",
+    hovering.length === 0,
+    `${hovering.map(([f]) => f).join(", ")} — a selection that follows the pointer fires on the way to somewhere else`,
+  );
+}
+
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);
   process.exit(1);

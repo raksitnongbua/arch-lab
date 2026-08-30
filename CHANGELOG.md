@@ -27,6 +27,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Selecting a row on a gantt, a timeline or a lifecycle now takes a click.**
+  Pointing at one used to select it, which meant crossing the diagram lit and
+  cleared rows the reader never meant to touch. Tabbing to a row still lights
+  it without committing, and Enter or Space now selects it — those shapes have
+  always announced themselves as buttons and have never answered a key press.
+  Click the same row again, or press Escape, to clear.
+
 - **A lifecycle's idle animation is now dashes marching down the track**, in
   place of a single lit wash travelling down it once per loop. The track itself
   stays solid and still; the dashes drift over it, sparser and about half the

@@ -59,6 +59,7 @@ import {
 } from "../lib/layout";
 import { sweepHead } from "../lib/sweep-head";
 import type { LaidTimelineEvent, TimelineLayout } from "../lib/layout";
+import { keyActivate } from "@/lib/key-activate";
 
 export interface TimelineDiagramProps {
   file: TimelineLabFile;
@@ -81,7 +82,7 @@ export interface TimelineDiagramProps {
   /** Pointer entered an event, or left every event (`null`). Separate from
    * `onFocusEvent` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
-  onHoverEvent?: (key: string | null) => void;
+  onKeyFocusEvent?: (key: string | null) => void;
 }
 
 export function TimelineDiagram({
@@ -91,7 +92,7 @@ export function TimelineDiagram({
   idleMotion = "on",
   atRest = false,
   onFocusEvent,
-  onHoverEvent,
+  onKeyFocusEvent,
 }: TimelineDiagramProps) {
   const layout = layoutTimeline(file);
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
@@ -207,7 +208,7 @@ export function TimelineDiagram({
           spineX={layout.spineX}
           lit={litKeys?.has(event.key) ? "1" : undefined}
           onFocusEvent={onFocusEvent}
-          onHoverEvent={onHoverEvent}
+          onKeyFocusEvent={onKeyFocusEvent}
         />
       ))}
     </svg>
@@ -219,13 +220,13 @@ function Event({
   spineX,
   lit,
   onFocusEvent,
-  onHoverEvent,
+  onKeyFocusEvent,
 }: {
   event: LaidTimelineEvent;
   spineX: number;
   lit?: "1";
   onFocusEvent?: (key: string) => void;
-  onHoverEvent?: (key: string | null) => void;
+  onKeyFocusEvent?: (key: string | null) => void;
 }) {
   return (
     <g
@@ -278,11 +279,16 @@ function Event({
           onFocusEvent ? `${event.period}: ${event.label}` : undefined
         }
         onClick={onFocusEvent ? () => onFocusEvent(event.key) : undefined}
-        onPointerEnter={
-          onHoverEvent ? () => onHoverEvent(event.key) : undefined
+        /* THE KEYBOARD HALF OF THE CLICK. `role="button"` promises a
+           reader that Enter and Space do what a press does, and nothing in
+           the platform honours that on an SVG shape. It mattered less while
+           a hover could light a row; now that a press is the ONLY way to
+           select one, a canvas without this is a canvas for mice. */
+        onKeyDown={
+          onFocusEvent ? keyActivate(() => onFocusEvent(event.key)) : undefined
         }
-        onFocus={onHoverEvent ? () => onHoverEvent(event.key) : undefined}
-        onBlur={onHoverEvent ? () => onHoverEvent(null) : undefined}
+        onFocus={onKeyFocusEvent ? () => onKeyFocusEvent(event.key) : undefined}
+        onBlur={onKeyFocusEvent ? () => onKeyFocusEvent(null) : undefined}
       />
     </g>
   );

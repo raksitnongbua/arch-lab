@@ -68,6 +68,7 @@ import type {
   LifecycleLayout,
   RejoinPath,
 } from "../lib/layout";
+import { keyActivate } from "@/lib/key-activate";
 
 export interface LifecycleDiagramProps {
   file: LifecycleLabFile;
@@ -91,7 +92,7 @@ export interface LifecycleDiagramProps {
   /** Pointer entered a row, or left every row (`null`). Separate from
    * `onFocusState` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
-  onHoverState?: (key: string | null) => void;
+  onKeyFocusState?: (key: string | null) => void;
 }
 
 /** The key a state is focused by. States and exits share one key space so the
@@ -105,7 +106,7 @@ export function LifecycleDiagram({
   idleMotion = "on",
   atRest = false,
   onFocusState,
-  onHoverState,
+  onKeyFocusState,
 }: LifecycleDiagramProps) {
   const layout = layoutLifecycle(file);
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
@@ -223,7 +224,7 @@ export function LifecycleDiagram({
           spineX={layout.spineX}
           lit={litKeys?.has(stateKey(index)) ? "1" : undefined}
           onFocusState={onFocusState}
-          onHoverState={onHoverState}
+          onKeyFocusState={onKeyFocusState}
         />
       ))}
     </svg>
@@ -247,7 +248,7 @@ function StateRow({
   spineX,
   lit,
   onFocusState,
-  onHoverState,
+  onKeyFocusState,
 }: {
   state: LaidLifecycleState;
   index: number;
@@ -255,7 +256,7 @@ function StateRow({
   spineX: number;
   lit?: "1";
   onFocusState?: (key: string) => void;
-  onHoverState?: (key: string | null) => void;
+  onKeyFocusState?: (key: string | null) => void;
 }) {
   const key = stateKey(index);
   return (
@@ -325,9 +326,16 @@ function StateRow({
         role={onFocusState ? "button" : undefined}
         aria-label={onFocusState ? describeState(state, exits) : undefined}
         onClick={onFocusState ? () => onFocusState(key) : undefined}
-        onPointerEnter={onHoverState ? () => onHoverState(key) : undefined}
-        onFocus={onHoverState ? () => onHoverState(key) : undefined}
-        onBlur={onHoverState ? () => onHoverState(null) : undefined}
+        /* THE KEYBOARD HALF OF THE CLICK. `role="button"` promises a
+           reader that Enter and Space do what a press does, and nothing in
+           the platform honours that on an SVG shape. It mattered less while
+           a hover could light a row; now that a press is the ONLY way to
+           select one, a canvas without this is a canvas for mice. */
+        onKeyDown={
+          onFocusState ? keyActivate(() => onFocusState(key)) : undefined
+        }
+        onFocus={onKeyFocusState ? () => onKeyFocusState(key) : undefined}
+        onBlur={onKeyFocusState ? () => onKeyFocusState(null) : undefined}
       />
     </g>
   );
