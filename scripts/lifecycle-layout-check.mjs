@@ -57,6 +57,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:lifecycle-layout
  */
 
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -66,7 +67,7 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 
 const { parseLifecycleText } = await load("src/features/archtext/index.ts");
-const { layoutLifecycle, LIFECYCLE } = await load(
+const { layoutLifecycle, LIFECYCLE, LIFECYCLE_FRAME_PAD } = await load(
   "src/features/lifecycle/lib/layout.ts",
 );
 const { LIFECYCLE_EXAMPLE } = await load(
@@ -77,6 +78,7 @@ const { listLifecycleExampleIds, loadLifecycleExample } = await load(
 );
 const { lifecycleReachableThrough } = await load("src/types/lifecycle.ts");
 const { CHAR_WIDTH_RATIO } = await load("src/lib/text-metrics.ts");
+const { DIAGRAM_SURFACE_PAD } = await load("src/lib/diagram-surface.ts");
 
 let failures = 0;
 let assertions = 0;
@@ -728,6 +730,63 @@ console.log("the layout is total (the canvas draws whatever parsed)");
     "a single one-character state still gets a box the focus ring fits in",
     oneChar.states[0].y1 - oneChar.states[0].dotY >= LIFECYCLE.ringRadius,
     `${(oneChar.states[0].y1 - oneChar.states[0].dotY).toFixed(1)} < ${LIFECYCLE.ringRadius}`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* The sheet                                                               */
+/* ----------------------------------------------------------------------- */
+
+/* THE SURFACE MUST NOT SIT ON THE DRAWING'S OWN EDGE. This canvas gained a
+   `--node` panel when the three kinds that draw on a ruled ground were made to
+   look like one product rather than one exception and two drawings on the wall.
+
+   The gantt got there first and got it wrong first: its panel was drawn at the
+   drawing's own bounds, which put a hard stroked edge exactly where its section
+   headings sit, on screen and in every exported file. The branch text and the returning channels run just as
+   close to this drawing's edge, so the same mistake is available here — and it
+   is invisible to every geometry assertion above, all of which measure the
+   drawing and not the box around it.
+
+   So the relation is what gets asserted: the panel contains the drawing with
+   air on every side, and the leftover stays outside so the panel's stroke is
+   not half-clipped by the viewBox. Screen/file parity needs no assertion — both
+   take the box from `diagramSurfaceBox` — but that they still go THROUGH it
+   does. */
+{
+  const canvas = readFileSync(
+    path.join(ROOT, "src/features/lifecycle/components/lifecycle-diagram.tsx"),
+    "utf8",
+  );
+  const exportSrc = readFileSync(
+    path.join(ROOT, "src/features/lifecycle/export/render-svg.ts"),
+    "utf8",
+  );
+  check(
+    `the surface holds the drawing with air on every side (${DIAGRAM_SURFACE_PAD} in, ${LIFECYCLE_FRAME_PAD - DIAGRAM_SURFACE_PAD} out)`,
+    DIAGRAM_SURFACE_PAD > 0 && DIAGRAM_SURFACE_PAD < LIFECYCLE_FRAME_PAD,
+    "the surface is drawn at the drawing's own bounds, or runs to the trim — " +
+      "either way a stroked edge lands on the drawing's own text",
+  );
+  check(
+    "the canvas draws the shared surface around the drawing",
+    canvas.includes(
+      "<DiagramSurface width={layout.width} height={layout.height} />",
+    ),
+    "this canvas paints no sheet, or paints a rect of its own — a drawing " +
+      "straight on the well's ground beside two that sit on paper",
+  );
+  check(
+    "the canvas frames the sheet so the surface is not on the trim",
+    canvas.includes("${-LIFECYCLE_FRAME_PAD} ${-LIFECYCLE_FRAME_PAD}"),
+    "the viewBox still starts at the drawing's origin — the surface then " +
+      "hangs outside the box and its stroke is clipped",
+  );
+  check(
+    "the file paints its surface from the shared geometry",
+    exportSrc.includes("diagramSurfaceMarkup("),
+    "the exporter emits no panel, or one of its own — a downloaded diagram " +
+      "is framed differently from the one on screen",
   );
 }
 

@@ -79,6 +79,10 @@
  * Node and non-deterministic across font fallbacks.
  */
 
+import {
+  layoutDiagramHeading,
+  type DiagramHeadingMetrics,
+} from "@/lib/diagram-heading";
 import { CHAR_WIDTH_RATIO, wrapText } from "@/lib/text-metrics";
 import type { UseCaseEdgeKind, UseCaseElement, UseCaseLabFile } from "@/types";
 
@@ -185,6 +189,17 @@ export const UC = {
   titleMinWrapWidth: 320,
   descriptionMaxLines: 3,
 } as const;
+
+/** This notation's type scale for the shared heading block. */
+const UC_HEADING: DiagramHeadingMetrics = {
+  titleFontSize: UC.titleFontSize,
+  titleLineHeight: UC.titleLineHeight,
+  descriptionFontSize: UC.descriptionFontSize,
+  descriptionLineHeight: UC.descriptionLineHeight,
+  descriptionMaxLines: UC.descriptionMaxLines,
+  titleDescriptionGap: UC.titleDescriptionGap,
+  headingGap: UC.headingGap,
+};
 
 function estimateWidth(text: string, fontSize: number): number {
   return Math.ceil(text.length * fontSize * UC.charWidthRatio);
@@ -1270,31 +1285,10 @@ function layoutHeading(
   file: UseCaseLabFile,
   contentSpan: number,
 ): UseCaseLayout["heading"] {
-  const wrapWidth = Math.max(UC.titleMinWrapWidth, contentSpan);
-  const titleLines = wrapText(file.metadata.title, wrapWidth, UC.titleFontSize);
-  const description = file.metadata.description;
-  let descriptionLines: string[] = [];
-  if (description !== undefined && description.trim() !== "") {
-    const all = wrapText(description, wrapWidth, UC.descriptionFontSize);
-    descriptionLines = all.slice(0, UC.descriptionMaxLines);
-    if (all.length > descriptionLines.length) {
-      const last = descriptionLines.length - 1;
-      descriptionLines[last] = `${descriptionLines[last]}…`;
-    }
-  }
-  const height =
-    titleLines.length * UC.titleLineHeight +
-    (descriptionLines.length === 0
-      ? 0
-      : UC.titleDescriptionGap +
-        descriptionLines.length * UC.descriptionLineHeight) +
-    UC.headingGap;
-  const width = Math.max(
-    0,
-    ...titleLines.map((line) => estimateWidth(line, UC.titleFontSize)),
-    ...descriptionLines.map((line) =>
-      estimateWidth(line, UC.descriptionFontSize),
-    ),
-  );
-  return { titleLines, descriptionLines, height, width };
+  return layoutDiagramHeading({
+    title: file.metadata.title,
+    description: file.metadata.description,
+    wrapWidth: Math.max(UC.titleMinWrapWidth, contentSpan),
+    metrics: UC_HEADING,
+  });
 }

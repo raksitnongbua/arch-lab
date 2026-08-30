@@ -47,9 +47,16 @@
  * animation cannot wait for a script to write a variable.
  */
 
+import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
+import { DiagramSurface } from "@/components/ui/diagram-surface";
 import type { TimelineLabFile } from "@/types";
 
-import { TIMELINE, layoutTimeline } from "../lib/layout";
+import {
+  TIMELINE_FRAME_PAD,
+  TIMELINE_HEADING_METRICS,
+  TIMELINE,
+  layoutTimeline,
+} from "../lib/layout";
 import type { LaidTimelineEvent, TimelineLayout } from "../lib/layout";
 
 export interface TimelineDiagramProps {
@@ -88,12 +95,19 @@ export function TimelineDiagram({
   const layout = layoutTimeline(file);
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
 
+  /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
+     coordinate it had; the box around it grows, and the origin moves out to
+     meet it — so the surface below has room to sit around the drawing without
+     its stroke landing on the viewBox edge. */
+  const sheetWidth = layout.width + TIMELINE_FRAME_PAD * 2;
+  const sheetHeight = layout.height + TIMELINE_FRAME_PAD * 2;
+
   return (
     <svg
       className={["af-timeline-canvas", hasFocus ? "af-timeline-has-focus" : ""]
         .filter(Boolean)
         .join(" ")}
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      viewBox={`${-TIMELINE_FRAME_PAD} ${-TIMELINE_FRAME_PAD} ${sheetWidth} ${sheetHeight}`}
       /* ITS NATURAL SIZE, not `width="100%"`. Stretching a 1020-unit drawing
          across a wide pane puts the rail against one edge and upscales
          everything to get there. The stylesheet caps this with
@@ -102,8 +116,8 @@ export function TimelineDiagram({
          do the fitting, undistorted. The geometry is untouched, which is what
          keeps the SVG export identical: it builds its own `<svg>` from the
          same `layoutTimeline` figures. */
-      width={layout.width}
-      height={layout.height}
+      width={sheetWidth}
+      height={sheetHeight}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={describeTimeline(file, layout)}
@@ -111,6 +125,18 @@ export function TimelineDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
+      {/* THE DIAGRAM'S SHEET, the same panel the gantt and the dictionary
+          draw on. See `@/lib/diagram-surface` for what a surface is for, and
+          for why it can never be drawn at the drawing's own bounds. */}
+      <DiagramSurface width={layout.width} height={layout.height} />
+      {/* THE DOCUMENT'S TITLE, inside the drawing so it travels with exports —
+          an exported timeline with no title belongs to nothing. */}
+      <DiagramHeadingText
+        heading={layout.heading}
+        x={TIMELINE.railWidth - 100}
+        top={0}
+        metrics={TIMELINE_HEADING_METRICS}
+      />
       {layout.periods.map((period) => (
         <g key={`period-${period.label}-${period.y}`}>
           <text

@@ -52,9 +52,16 @@
  * write a variable.
  */
 
+import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
+import { DiagramSurface } from "@/components/ui/diagram-surface";
 import type { LifecycleLabFile } from "@/types";
 
-import { LIFECYCLE, layoutLifecycle } from "../lib/layout";
+import {
+  LIFECYCLE_FRAME_PAD,
+  LIFECYCLE_HEADING_METRICS,
+  LIFECYCLE,
+  layoutLifecycle,
+} from "../lib/layout";
 import type {
   LaidLifecycleExit,
   LaidLifecycleState,
@@ -104,12 +111,19 @@ export function LifecycleDiagram({
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
   const spineLength = Math.max(1, layout.spineY1 - layout.spineY0);
 
+  /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
+     coordinate it had; the box around it grows, and the origin moves out to
+     meet it — so the surface below has room to sit around the drawing without
+     its stroke landing on the viewBox edge. */
+  const sheetWidth = layout.width + LIFECYCLE_FRAME_PAD * 2;
+  const sheetHeight = layout.height + LIFECYCLE_FRAME_PAD * 2;
+
   return (
     <svg
       className={["af-lc-canvas", hasFocus ? "af-lc-has-focus" : ""]
         .filter(Boolean)
         .join(" ")}
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      viewBox={`${-LIFECYCLE_FRAME_PAD} ${-LIFECYCLE_FRAME_PAD} ${sheetWidth} ${sheetHeight}`}
       /* ITS NATURAL SIZE, not `width="100%"`. Stretching a 1040-unit drawing
          across a wide pane puts the branch lane against one edge and upscales
          everything to get there. The stylesheet caps this with
@@ -118,8 +132,8 @@ export function LifecycleDiagram({
          do the fitting, undistorted. The geometry is untouched, which is what
          keeps the SVG export identical: it builds its own `<svg>` from the
          same `layoutLifecycle` figures. */
-      width={layout.width}
-      height={layout.height}
+      width={sheetWidth}
+      height={sheetHeight}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={describeLifecycle(file, layout)}
@@ -127,6 +141,18 @@ export function LifecycleDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
+      {/* THE DIAGRAM'S SHEET, the same panel the gantt and the dictionary
+          draw on. See `@/lib/diagram-surface` for what a surface is for, and
+          for why it can never be drawn at the drawing's own bounds. */}
+      <DiagramSurface width={layout.width} height={layout.height} />
+      {/* THE DOCUMENT'S TITLE, inside the drawing so it travels with exports —
+          an exported lifecycle with no title belongs to nothing. */}
+      <DiagramHeadingText
+        heading={layout.heading}
+        x={LIFECYCLE.channelX0}
+        top={0}
+        metrics={LIFECYCLE_HEADING_METRICS}
+      />
       {/* The subject: the head of the diagram, above the track. */}
       {layout.subject.labelLines.map((line, index) => (
         <text

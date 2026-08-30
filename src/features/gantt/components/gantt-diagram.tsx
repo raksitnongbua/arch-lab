@@ -67,6 +67,8 @@
 
 import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { textureFill } from "@/lib/role-texture";
+import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
+import { DiagramSurface } from "@/components/ui/diagram-surface";
 import type { GanttLabFile } from "@/types";
 
 import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
@@ -74,6 +76,7 @@ import type { LaidGanttItem, GanttLayout } from "../lib/layout";
 import {
   GANTT,
   GANTT_FRAME_PAD,
+  GANTT_HEADING_METRICS,
   hatchTilePaths,
   layoutGantt,
   TEXTURE_BY_STATE,
@@ -148,34 +151,17 @@ export function GanttDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
-      {/* THE PLAN'S OWN SURFACE, and the reason it exists is a consequence of
-          the ground filling the pane.
-          THE DIAGRAM GETS A BACKGROUND; THE GROUND DOES NOT GET A HOLE. That
-          is the rule, and `dict` set the precedent — it has drawn its table on
-          a `--node` panel since it shipped. Clipping the ground so a drawing
-          could sit in a clearing would be the ground apologising for existing,
-          and it would put a hard edge on the sheet exactly where the drawing's
-          own edge already is.
-          WHY THIS KIND AND NOT THE OTHERS. A gantt is the one notation whose
-          own marks are a LATTICE: its time ticks and section rules are thin
-          lines in `--canvas-grid`, at no fixed relationship to the ladder's
-          pitch. Two lattices at unrelated pitches beat against each other,
-          which is the exact failure `gantt-diagram.tsx` already argues about
-          its three tile pitches a few lines below. Every other notation either
-          fills its shapes (c4, flowchart, use-case, ER, dict) or draws a single
-          rail rather than a field (timeline, lifecycle).
-          `--node` on `--node-border` is the pair every canvas here already uses
-          for a shape against its ground, so it is measured in all nine themes
-          and needs no new token. */}
-      <rect
+      {/* THE PLAN'S SHEET. Shared with the timeline and the lifecycle — see
+          `@/lib/diagram-surface` for what a surface is for, and for why it can
+          never be drawn at the drawing's own bounds. */}
+      <DiagramSurface width={layout.width} height={layout.height} />
+      {/* THE DOCUMENT'S TITLE, inside the drawing so it travels with exports —
+          an exported gantt with no title belongs to nothing. */}
+      <DiagramHeadingText
+        heading={layout.heading}
         x={0}
-        y={0}
-        width={layout.width}
-        height={layout.height}
-        rx={12}
-        fill="var(--node)"
-        stroke="var(--node-border)"
-        strokeWidth={1}
+        top={0}
+        metrics={GANTT_HEADING_METRICS}
       />
       {/* The role textures, once for the whole plot — beside the duration
           hatch below, which is a different pattern answering a different
@@ -227,7 +213,7 @@ export function GanttDiagram({
             className="af-gantt-grid"
             x1={tick.x}
             x2={tick.x}
-            y1={GANTT.axisHeight - 8}
+            y1={layout.plotTop - 8}
             y2={layout.height - 12}
             opacity={0.55}
           />
@@ -236,8 +222,8 @@ export function GanttDiagram({
           className="af-gantt-rule"
           x1={GANTT.plotX0}
           x2={GANTT.plotX1}
-          y1={GANTT.axisHeight - 8}
-          y2={GANTT.axisHeight - 8}
+          y1={layout.plotTop - 8}
+          y2={layout.plotTop - 8}
         />
         {/* The looping axis sweep. It rides its OWN line over the rule for the
             reason the connector current rides its own path: a dasharray laid
@@ -254,8 +240,8 @@ export function GanttDiagram({
           className="af-gantt-axis-sweep"
           x1={GANTT.plotX0}
           x2={GANTT.plotX1}
-          y1={GANTT.axisHeight - 8}
-          y2={GANTT.axisHeight - 8}
+          y1={layout.plotTop - 8}
+          y2={layout.plotTop - 8}
           style={
             {
               "--gantt-axis-len": GANTT.plotX1 - GANTT.plotX0,
@@ -267,7 +253,7 @@ export function GanttDiagram({
             key={`tick-${tick.day}`}
             className="af-gantt-axis-label"
             x={tick.x + 4}
-            y={GANTT.axisHeight - 14}
+            y={layout.plotTop - 14}
             fontSize={10}
           >
             {axisLabel(file, tick, layout.tickStep)}
@@ -276,7 +262,7 @@ export function GanttDiagram({
         <text
           className="af-gantt-axis-label"
           x={0}
-          y={GANTT.axisHeight - 14}
+          y={layout.plotTop - 14}
           fontSize={10}
         >
           {axisCaption(file, layout)}

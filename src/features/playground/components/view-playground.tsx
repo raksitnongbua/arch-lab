@@ -65,6 +65,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import {
   AlignLeft,
@@ -199,6 +200,7 @@ import {
 
 import { CANVAS_LOCKED_BY_DEFAULT } from "../lib/canvas-lock";
 import { KIND_BLURB } from "../lib/kind-copy";
+import { KIND_MARK, KIND_ORDER } from "@/components/ui/kind-mark";
 import { SOURCE_FOLDED_BY_DEFAULT } from "../lib/source-fold";
 import { useCanvasEditing } from "../lib/use-canvas-editing";
 import { useCanvasLocked, useSourceCollapsed } from "../lib/use-preference";
@@ -1580,8 +1582,8 @@ export function ViewPlayground({
                   it properly rather than being paraphrased in the furniture. */}
               {/* STARTERS, at the foot of the pane, one per document kind.
                   Not the example gallery this page used to carry — that
-                  offered two of six bundled documents and `/demo` lists all of
-                  them properly. This is the empty-page problem instead: a
+                  offered two of the bundled documents, and `/demo` lists them
+                  all properly, with a preview of each. This is the empty-page problem instead: a
                   reader who has read enough and wants to write their own needs
                   a shape to type into, and retyping a header from memory is
                   where a first document dies.
@@ -1591,14 +1593,21 @@ export function ViewPlayground({
                   target, and "you are already writing this kind" is worth
                   saying. Replacing is undoable with the textarea's own undo,
                   which is why there is no confirmation in front of it. */}
-              {/* ONE control that OPENS A LIST, not four controls in a row.
-                  Four labels plus a disclosure was five things competing for a
-                  strip of toolbar, and the four only mean something to a reader
-                  who already knows all four grammars. A single named button
-                  behind which the choices live — with each one's job written
-                  beside it — is the pattern Mermaid's editor uses for the same
-                  problem, and it is the right one: the toolbar states that
-                  samples exist, the menu answers which. */}
+              {/* ONE control that OPENS A LIST, not one control per kind in a
+                  row. Nine labels plus a disclosure would be ten things
+                  competing for a strip of toolbar, and the nine only mean
+                  something to a reader who already knows all nine grammars. A
+                  single named button behind which the choices live — with each
+                  one's job written beside it — is the pattern Mermaid's editor
+                  uses for the same problem, and it is the right one: the
+                  toolbar states that samples exist, the menu answers which.
+
+                  THE LIST IS DERIVED FROM `KIND_ORDER`, never written out
+                  here. It was a literal array of eight, and the ninth notation
+                  shipped without being added to it — so for a whole release
+                  there was no way to start a lifecycle from this page at all,
+                  and nothing failed. A hardcoded list cannot notice the thing
+                  it has never heard of (`codebase.md`). */}
               <div className="relative">
                 <button
                   type="button"
@@ -1631,21 +1640,16 @@ export function ViewPlayground({
                     aria-label="Sample diagrams"
                     /* Opens UPWARD: this toolbar sits at the bottom of the
                        source pane, so a downward menu would open off-screen. */
-                    className="af-glass absolute bottom-full left-0 z-50 mb-1.5 min-w-72 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+                    /* SCROLLS RATHER THAN OUTGROWING THE PANE. Nine rows of
+                       two lines each is around 400px; opening that upward from
+                       a toolbar at the foot of the source pane ran it off the
+                       top of a laptop viewport, taking the first kinds in the
+                       order with it. */
+                    className="af-glass absolute bottom-full left-0 z-50 mb-1.5 max-h-[min(60vh,24rem)] min-w-72 overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover py-1 shadow-lg"
                   >
-                    {(
-                      [
-                        "c4",
-                        "sequence",
-                        "flowchart",
-                        "usecase",
-                        "er",
-                        "dict",
-                        "gantt",
-                        "timeline",
-                      ] as const
-                    ).map((kind) => {
+                    {KIND_ORDER.map((kind) => {
                       const isCurrent = doc.kind === kind;
+                      const { accent, Glyph } = KIND_MARK[kind];
                       return (
                         <button
                           key={kind}
@@ -1666,10 +1670,22 @@ export function ViewPlayground({
                             "disabled:cursor-not-allowed disabled:opacity-50",
                           )}
                         >
-                          <FilePlus2
+                          {/* THE KIND'S OWN MARK, in the kind's own colour.
+                              Every row here used to carry the same generic
+                              file icon — nine identical glyphs in a list whose
+                              whole job is telling nine things apart, so the
+                              icon column was pure noise and the reader had
+                              only the label to go on. These are the marks the
+                              examples index uses, from the one table in
+                              `components/ui/kind-mark`, so a reader who has
+                              seen `/demo` already knows them. */}
+                          <span
                             aria-hidden="true"
-                            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                          />
+                            style={{ "--kind": accent } as CSSProperties}
+                            className="mt-0.5 shrink-0 text-(--kind)"
+                          >
+                            <Glyph />
+                          </span>
                           <span className="flex min-w-0 flex-col">
                             <span className="text-xs font-medium text-foreground">
                               {STARTER_BUTTON_LABEL[kind]}

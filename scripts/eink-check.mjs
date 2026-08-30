@@ -246,9 +246,27 @@ for (const theme of THEMES) {
   const failed = [];
   for (let i = 0; i < ROLE_FILLS.length; i += 1) {
     for (let j = i + 1; j < ROLE_FILLS.length; j += 1) {
-      const a = parseOklch(resolveToken(ROLE_FILLS[i], tokens, baseline));
-      const b = parseOklch(resolveToken(ROLE_FILLS[j], tokens, baseline));
+      let a = parseOklch(resolveToken(ROLE_FILLS[i], tokens, baseline));
+      let b = parseOklch(resolveToken(ROLE_FILLS[j], tokens, baseline));
       if (a === null || b === null) continue;
+      /* A LINE-ART THEME SEPARATES ITS ROLES ON THE BORDER. `paper` declares
+         every role fill transparent — a shape is its stroke and nothing else —
+         so measuring the fills would compare two nothings and fail a theme that
+         is behaving as designed. The pair still has to separate; the question
+         moves to the channel that now carries it.
+
+         Derived from the tokens, never from a theme name, for the reason this
+         file's own texture clause is: a hardcoded list cannot notice the theme
+         it has never heard of. And this is NOT an exemption — `eink` itself
+         must never take line art, because its roles separate by five greys AND
+         by a texture painted as a fill overlay, both of which live in the fill
+         (`src/lib/role-texture.ts` carries why that mattered enough to refuse
+         the theme twice). */
+      if (a.alpha === 0 && b.alpha === 0) {
+        a = parseOklch(resolveToken(`${ROLE_FILLS[i]}-border`, tokens, baseline));
+        b = parseOklch(resolveToken(`${ROLE_FILLS[j]}-border`, tokens, baseline));
+        if (a === null || b === null) continue;
+      }
       const chroma = chromaSeparation(a.oklch, b.oklch);
       const luma = contrast(a.rgb, b.rgb);
       const ta = textureByFill.get(ROLE_FILLS[i]).texture;

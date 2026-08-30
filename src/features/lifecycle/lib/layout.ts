@@ -68,6 +68,12 @@
  * syntax erasable and type-only imports as `import type`.
  */
 
+import {
+  isHeadingEmpty,
+  layoutDiagramHeading,
+  type DiagramHeading,
+  type DiagramHeadingMetrics,
+} from "@/lib/diagram-heading";
 import { wrapText } from "@/lib/text-metrics";
 import type { LifecycleLabFile } from "@/types";
 
@@ -84,6 +90,27 @@ import type { LifecycleLabFile } from "@/types";
  * is the grid this layout exists not to be, and the moment one appears every
  * argument in the file header stops being true.
  */
+/**
+ * THE SHEET'S MARGIN — air between the drawing and the edge of the ground it is
+ * drawn on, on screen and in the file alike.
+ *
+ * DELIBERATELY NOT A MEMBER OF `LIFECYCLE`. Everything in that table is a
+ * COORDINATE: move one and the drawing moves, and `check:lifecycle-layout`
+ * re-measures a different diagram. This is a FRAME. It widens the box the
+ * drawing is presented in and moves nothing inside it.
+ *
+ * WHY THE SCREEN NEEDS ONE. It did not, while the drawing sat straight on the
+ * pane and the viewer's own CSS padding supplied the air. It does now that the
+ * drawing sits on a SURFACE: a panel needs a margin of its own, or it runs to
+ * the edge of the `<svg>` and its stroke is half-clipped by the viewBox.
+ *
+ * WHY 40. It is the pad this kind's exported file has always used, and one
+ * number is what keeps a downloaded PNG framed the way the screen framed it.
+ * The exporter keeps its own literal for the reason its header gives; the two
+ * are asserted equal by `check:lifecycle-layout`.
+ */
+export const LIFECYCLE_FRAME_PAD = 40;
+
 export const LIFECYCLE = {
   /** Total canvas width. */
   width: 1040,
@@ -168,7 +195,32 @@ export const LIFECYCLE = {
    * motion check asserts the two agree, because a cap that drifts makes the
    * reveal budget wrong without anything failing. */
   waveCap: 8,
+  /** The heading block's type scale — the same one the other five notations
+   * that draw a title use, so a reader meeting two kinds sees one product. */
+  titleFontSize: 15,
+  titleLineHeight: 20,
+  descriptionFontSize: 12,
+  descriptionLineHeight: 17,
+  descriptionMaxLines: 3,
+  titleDescriptionGap: 6,
+  headingGap: 18,
+  titleMinWrapWidth: 320,
 } as const;
+
+/** This notation's type scale for the shared heading block. */
+const LIFECYCLE_HEADING: DiagramHeadingMetrics = {
+  titleFontSize: LIFECYCLE.titleFontSize,
+  titleLineHeight: LIFECYCLE.titleLineHeight,
+  descriptionFontSize: LIFECYCLE.descriptionFontSize,
+  descriptionLineHeight: LIFECYCLE.descriptionLineHeight,
+  descriptionMaxLines: LIFECYCLE.descriptionMaxLines,
+  titleDescriptionGap: LIFECYCLE.titleDescriptionGap,
+  headingGap: LIFECYCLE.headingGap,
+};
+
+/** The metrics the canvas and the exporter draw this kind's heading with. */
+export const LIFECYCLE_HEADING_METRICS: DiagramHeadingMetrics =
+  LIFECYCLE_HEADING;
 
 /* -------------------------------------------------------------------------- */
 /* Laid-out shapes                                                             */
@@ -296,6 +348,8 @@ export interface LaidLifecycleSubject {
 export interface LifecycleLayout {
   width: number;
   height: number;
+  /** The document's title and description, drawn above the diagram. */
+  heading: DiagramHeading;
   subject: LaidLifecycleSubject;
   states: LaidLifecycleState[];
   exits: LaidLifecycleExit[];
@@ -345,7 +399,23 @@ export function layoutLifecycle(file: LifecycleLabFile): LifecycleLayout {
 
   /* Annotated, not inferred: `LIFECYCLE` is `as const`, so `topPad` is the
      literal 24 and the cursor would be typed as that one value. */
-  let y: number = LIFECYCLE.topPad;
+  /* THE HEADING IS RESERVED BEFORE ANYTHING ELSE IS PLACED. Every y below is
+     this cursor's, so moving where it starts moves the whole diagram down and
+     nothing else has to know the heading exists. */
+  const heading = layoutDiagramHeading({
+    title: file.metadata.title,
+    description: file.metadata.description,
+    wrapWidth: Math.max(
+      LIFECYCLE.titleMinWrapWidth,
+      LIFECYCLE.width - LIFECYCLE.stateLabelX - 24,
+    ),
+    metrics: LIFECYCLE_HEADING,
+  });
+  /* An empty title reserves NOTHING, rather than opening the diagram with a
+     band of blank paper — `headingGap` is air under text, not a top margin. */
+  const headingHeight = isHeadingEmpty(heading) ? 0 : heading.height;
+
+  let y: number = LIFECYCLE.topPad + headingHeight;
 
   /* ---------------------------- the subject ----------------------------- */
   const subjectLabel = file.subject?.label ?? "";
@@ -548,6 +618,7 @@ export function layoutLifecycle(file: LifecycleLabFile): LifecycleLayout {
   return {
     width: LIFECYCLE.width,
     height: y + LIFECYCLE.bottomPad,
+    heading,
     subject,
     states,
     exits,

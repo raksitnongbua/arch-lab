@@ -7,6 +7,12 @@ import { VIEW_EXAMPLE_PARAM } from "@/features/playground/lib/example-param";
    barrel exports `ViewPlayground`, which is `"use client"`, and this page
    renders four headings. */
 import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
+import type { SeedKind } from "@/features/playground/input/parse";
+import { ExamplePreview } from "@/features/marketing/preview/example-preview";
+import {
+  exampleWireframe,
+  type Wireframe,
+} from "@/features/marketing/preview/wireframe";
 import { listSequenceExamples } from "@/features/sequence/service/example-service";
 import { listUseCaseExamples } from "@/features/usecase/service/example-service";
 import { listErExamples } from "@/features/er/service/example-service";
@@ -15,6 +21,7 @@ import { listGanttExamples } from "@/features/gantt/service/example-service";
 import { listTimelineExamples } from "@/features/timeline/service/example-service";
 import { listLifecycleExamples } from "@/features/lifecycle/service/example-service";
 import { listViewerModels } from "@/features/viewer";
+import { KIND_MARK, KIND_ORDER } from "@/components/ui/kind-mark";
 
 export const metadata: Metadata = {
   /* NAMES THE COUNT, NOT FOUR OF THE SEVEN. The title listed four notations in
@@ -42,40 +49,51 @@ export const metadata: Metadata = {
  * IT WAS A LANDING PAGE and did not need to be. Each card carried a gradient
  * hover wash, an icon tile, a "View-only" badge, four count statistics, a row
  * of level badges and its own call-to-action link — for a page whose entire
- * job is "here are nine documents, pick one".
+ * job is "here are nine documents, pick one". Stripping that back to plain
+ * rows fixed the noise and left two problems behind, which is what this
+ * revision is about.
  *
- * THEN IT BECAME HARD TO CLICK AND HARD TO READ, which is the failure this
- * revision is about, and both halves came from the same root: the page knew
- * what it meant and never said it.
+ * IT SHOWED NO DIAGRAMS. That is the one that matters. A reader arrives here
+ * asking whether this thing draws the kind of picture they have in mind, and
+ * nine sections of `12 steps · 14 arrows · 3 decisions` cannot answer it —
+ * `purpose.md` calls a page like that out by name, because presentation is
+ * what this project sells and a text index sells none of it. Every showcased
+ * document now carries a `Wireframe`: its real geometry, from the real layout,
+ * with the words dropped because none of them would be legible at 320px. The
+ * reasoning, and why the real SVG exporter could not be used, is in
+ * `features/marketing/preview/wireframe.ts`.
  *
- *   1. THE ROW LOOKED LIKE THE TARGET AND WAS NOT. Hovering anywhere in a row
- *      washed the whole row, but only the title text was a link — so the
- *      description, the counts and the empty two thirds to the right of the
- *      title all invited a click and swallowed it. That is worse than an
- *      obviously small target: the affordance promised a hit area that did not
- *      exist. The row is now one link, stretched over the whole row with an
- *      `after` overlay (see `ExampleRowItem`), which is what makes a full-row
- *      target legal without nesting one anchor inside another.
- *   2. NOTHING SAID WHERE A CLICK WENT. The title opened the editable
- *      playground and a 12px dotted link beside the counts opened the
- *      crawlable read-only page, and the page never named either. Every row
- *      now shows "Open in playground" against its own kind's accent, the
- *      second link reads "Read-only page" and is padded to a real target, and
- *      the intro says which is which once, in prose, instead of leaving it to
- *      be inferred.
- *   3. THE KIND HEADINGS WERE FINE PRINT. Four sections were separated by
- *      12px uppercase muted labels — quieter than the rows they governed, so
- *      the page read as one long list. Each is now a real heading carrying
- *      `KIND_BLURB`, the same sentence the playground's starter buttons use:
- *      "Use cases" tells a newcomer nothing, "who can do what at the system's
- *      edge" tells them whether to keep reading.
+ * IT WAS A KILOMETRE OF GREY. Nine sections of one-per-line rows is a scroll
+ * nobody finishes, and the rows themselves ran four shades deep —
+ * `foreground`, `muted-foreground`, then `/80` and `/60` beneath a tier that
+ * is already the quiet one — so nothing in a row was loud enough to scan by.
+ * The rows are a two-up card grid now, which halves the column; the shades are
+ * back to two; and the primary action is no longer flung to the far right by a
+ * `justify-between` inside a `max-w-4xl`, five hundred pixels from the title it
+ * belonged to.
  *
- * The counts stay, in one line rather than four blocks: they are the only
- * thing that distinguishes one document from another at a glance, and every
- * one is counted from the parsed document rather than written by hand.
+ * WHAT SURVIVED, AND WHY.
+ *
+ *   - THE WHOLE CARD IS THE TARGET, by the same stretched-link trick the rows
+ *     used (see `ExampleCard`): the anchor stays around the title so its
+ *     accessible name and its focus ring are the words, and an `after` overlay
+ *     grows its hit area to the card. That was right when it was a row and it
+ *     is right at four times the size.
+ *   - A CARD HAS ONE LINK. Both of the row's extra affordances are gone: the
+ *     "Open in playground →" label, which existed because a row with a hover
+ *     wash named no destination and is dead weight on a card whose picture of
+ *     a diagram says the same thing; and the read-only link, which was a
+ *     second target sitting on the card's whole reason to exist. Every
+ *     example's read-only page is linked once per section instead, under the
+ *     grid — see `ReadOnlyLinks`, and the note there about why those pages
+ *     must stay linked from somewhere.
+ *   - THE COUNTS STAY. They are still the only thing that separates two
+ *     documents of one kind in words, and every one is counted from the parsed
+ *     document rather than written by hand.
  *
  * A BROKEN EXAMPLE STAYS VISIBLE. A bundled document that fails to parse is a
- * bug in this repo, and hiding it behind a filter is how it stays one.
+ * bug in this repo, and hiding it behind a filter is how it stays one. It
+ * keeps its place in the grid and says so in words.
  */
 
 /** How many of a kind's examples the page SHOWS. See the note in DemoPage. */
@@ -84,16 +102,14 @@ const SHOWCASES_PER_KIND = 2;
 /** The heading, the intro and the jump bar take the first three cascade slots. */
 const ROWS_BEFORE_SECTIONS = 3;
 
-type Kind =
-  | "c4"
-  | "sequence"
-  | "flowchart"
-  | "usecase"
-  | "er"
-  | "dict"
-  | "gantt"
-  | "timeline"
-  | "lifecycle";
+/**
+ * The nine notations, named ONCE — in the playground's `SeedKind`.
+ *
+ * This page kept its own copy of the union, which meant a tenth notation
+ * needed the same nine strings written in two files and `KIND_BLURB` was
+ * already keyed by the other one. Importing it makes the drift unwritable.
+ */
+type Kind = SeedKind;
 
 /**
  * One showcased document, already resolved out of its kind's listing type.
@@ -117,95 +133,43 @@ type ExampleRow =
     }
   | { status: "invalid"; id: string; message: string };
 
+/**
+ * A showcased document with the two things only this page knows about it: its
+ * slot in the entrance cascade, and its shape.
+ *
+ * THE WIREFRAME IS ATTACHED HERE, not in the nine `.map()` blocks that build
+ * the rows, because this is where the `SHOWCASES_PER_KIND` slice has already
+ * happened and where the kind is still in hand. Laying out every REGISTERED
+ * example to draw two of them would be a build-time cost for pictures nobody
+ * sees, and the alternative — a `wireframe:` line in each of the nine
+ * blocks — is nine chances for one of them to name the wrong kind.
+ */
+interface Showcase {
+  row: ExampleRow;
+  slot: number;
+  /** `null` for a broken example, and for one whose layout draws nothing. */
+  wireframe: Wireframe | null;
+}
+
 /** A kind's section, with its slot in the page-wide entrance cascade. */
 interface KindSection {
   kind: Kind;
   /** Heading text — plural and spelled out, unlike the jump bar's short form. */
   title: string;
-  rows: { row: ExampleRow; slot: number }[];
-  /** The examples past the showcased two, as read-only pages. */
-  overflow: { id: string; title: string; href: string }[];
+  rows: Showcase[];
+  /**
+   * EVERY example of the kind, as its read-only page — not only the ones past
+   * the showcased two.
+   *
+   * It listed just the overflow while each card carried its own read-only link
+   * in the corner. That link is gone, and these pages are in the sitemap: this
+   * line is now the only thing linking to them, and a sitemap entry with no
+   * inbound link is an orphan page, which is the bug the read-only links were
+   * added to fix in the first place.
+   */
+  readOnly: { id: string; title: string; href: string }[];
   slot: number;
 }
-
-/**
- * Each kind's mark and colour, in ONE table.
- *
- * It was two: an array of four tuples for the jump bar and a four-branch
- * ternary inside the section heading, which is two places to edit a colour and
- * two chances for the bar to stop being the legend it is meant to be.
- */
-const KIND_CHROME: Record<
-  Kind,
-  { short: string; accent: string; Glyph: () => React.JSX.Element }
-> = {
-  c4: { short: "C4 models", accent: "var(--primary)", Glyph: C4Glyph },
-  sequence: {
-    short: "Sequence diagrams",
-    accent: "var(--accent)",
-    Glyph: SequenceGlyph,
-  },
-  flowchart: {
-    short: "Flowcharts",
-    accent: "var(--flow-decision-border)",
-    Glyph: FlowchartGlyph,
-  },
-  usecase: {
-    short: "Use cases",
-    accent: "var(--uc-actor-border)",
-    Glyph: UseCaseGlyph,
-  },
-  er: {
-    short: "ER diagrams",
-    accent: "var(--node-database-border)",
-    Glyph: ErGlyph,
-  },
-  dict: {
-    short: "Data dictionaries",
-    accent: "var(--node-queue-border)",
-    Glyph: DictGlyph,
-  },
-  /* `--gantt-critical` rather than a state fill: the critical path is what the
-     gantt canvas tints, so the section rule and the jump-bar mark wear the
-     same colour a reader will meet inside the diagram. */
-  gantt: {
-    short: "Gantt charts",
-    accent: "var(--gantt-critical)",
-    Glyph: GanttGlyph,
-  },
-  /* `--primary` because that is what the timeline canvas rings every dot
-     with, and it is the only accent that canvas has: this kind assigns no
-     meaning to colour, so there is no state fill or role tint to borrow. */
-  timeline: {
-    short: "Milestone timelines",
-    accent: "var(--primary)",
-    Glyph: TimelineGlyph,
-  },
-  /* `--edge` rather than `--primary`, which the timeline above already takes:
-     these two are the pair a reader is most likely to confuse (both are one
-     ordered spine), so their marks must not also share a colour. And the
-     lifecycle canvas's own second mark IS the connector — the returning
-     branch is what it has that a timeline does not — so `--edge` is the token
-     it actually wears rather than a colour picked to be different. */
-  lifecycle: {
-    short: "Lifecycles",
-    accent: "var(--edge)",
-    Glyph: LifecycleGlyph,
-  },
-};
-
-/** The order the sections render and the jump bar lists them in. */
-const KIND_ORDER: readonly Kind[] = [
-  "c4",
-  "sequence",
-  "flowchart",
-  "usecase",
-  "er",
-  "dict",
-  "gantt",
-  "timeline",
-  "lifecycle",
-] as const;
 
 export default function DemoPage(): React.JSX.Element {
   /*
@@ -423,23 +387,23 @@ export default function DemoPage(): React.JSX.Element {
     const rows = byKind[kind];
     return {
       kind,
-      title: KIND_CHROME[kind].short,
+      title: KIND_MARK[kind].short,
       slot: slot++,
-      rows: rows
-        .slice(0, SHOWCASES_PER_KIND)
-        .map((row) => ({ row, slot: slot++ })),
-      overflow: rows
-        .slice(SHOWCASES_PER_KIND)
-        .flatMap((row) =>
-          row.status === "ok"
-            ? [{ id: row.id, title: row.title, href: row.readOnlyHref }]
-            : [],
-        ),
+      rows: rows.slice(0, SHOWCASES_PER_KIND).map((row) => ({
+        row,
+        slot: slot++,
+        wireframe: row.status === "ok" ? exampleWireframe(kind, row.id) : null,
+      })),
+      readOnly: rows.flatMap((row) =>
+        row.status === "ok"
+          ? [{ id: row.id, title: row.title, href: row.readOnlyHref }]
+          : [],
+      ),
     };
   });
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-5 py-14 sm:px-8 sm:py-16">
+    <div className="mx-auto w-full max-w-5xl px-5 py-14 sm:px-8 sm:py-16">
       <h1
         className="af-demo-row text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
         style={{ "--row": 0 } as React.CSSProperties}
@@ -454,40 +418,48 @@ export default function DemoPage(): React.JSX.Element {
         className="af-demo-row mt-3 max-w-2xl text-muted-foreground"
         style={{ "--row": 1 } as React.CSSProperties}
       >
-        Real documents of all nine kinds, parsed by the same reader the app
-        uses. Click a row to open it in the playground, where its text is yours
-        to edit — or take the read-only page beside it, which is the one to send
-        someone who only wants to look.
+        Real documents of all nine kinds, parsed by the same reader the app uses
+        — every preview below is the document&apos;s own geometry, not a
+        mock-up. Click a card to open it in the playground, where its text is
+        yours to edit, or take the read-only page listed under each section,
+        which is the one to send someone who only wants to look.
       </p>
 
-      {/* A JUMP BAR, sticky under the header. Four sections of two rows is
-          short enough to scroll and long enough that "where is the flowchart
-          one" is a real question; four links answer it without the reader
-          hunting. Plain anchors, so they work before hydration and survive
-          being copied. `backdrop-blur` rather than a solid ground, because it
-          passes over rows as it sticks. */}
+      {/* A JUMP BAR, sticky under the header. Nine sections is long enough that
+          "where is the flowchart one" is a real question; nine links answer it
+          without the reader hunting. Plain anchors, so they work before
+          hydration and survive being copied. `backdrop-blur` rather than a
+          solid ground, because it passes over cards as it sticks.
+
+          IT SCROLLS SIDEWAYS RATHER THAN WRAPPING, which it did not when it
+          was built for four kinds. At nine, `flex-wrap` made it two lines on a
+          laptop and five on a phone — a block of sticky chrome parked over the
+          content it was meant to help the reader reach, and `scroll-mt-28`
+          below only ever cleared one line of it, so a jump landed the heading
+          underneath the bar that sent it there. One line is one line at every
+          width, which makes that offset correct again. */}
       <nav
         aria-label="Jump to a document kind"
-        className="af-demo-row sticky top-16 z-20 -mx-2 mt-8 flex flex-wrap gap-1 rounded-lg border border-border/60 bg-background/80 px-2 py-1.5 backdrop-blur"
+        className="af-demo-row sticky top-16 z-20 -mx-2 mt-8 flex [scrollbar-width:none] gap-1 overflow-x-auto rounded-lg border border-border/60 bg-background/80 px-2 py-1.5 backdrop-blur [&::-webkit-scrollbar]:hidden"
         style={{ "--row": 2 } as React.CSSProperties}
       >
         {KIND_ORDER.map((kind) => {
-          const { short, accent, Glyph } = KIND_CHROME[kind];
+          const { short, accent, Glyph } = KIND_MARK[kind];
           return (
             <a
               key={kind}
               href={`#${kind}`}
               /* Each link wears its OWN section's glyph and accent — the same
                  pair that heads the section it jumps to, so the bar is a legend
-                 as much as a nav. Four words alone made the reader match label
+                 as much as a nav. The words alone made the reader match label
                  to heading; the mark does that matching for them. The tint only
-                 arrives on hover, because four coloured icons sitting at rest
-                 would compete with the rows they sit above.
+                 arrives on hover, because nine coloured icons sitting at rest
+                 would compete with the cards they sit above.
                  `py-1.5` rather than `py-1`: at the old size these were 24px
                  tall, which is under every touch-target guideline going, on the
                  one control on the page a phone reader reaches for first. */
               style={{ "--kind": accent } as React.CSSProperties}
-              className="group/jump flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="group/jump flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <span className="text-muted-foreground/70 transition-colors group-hover/jump:text-(--kind)">
                 <Glyph />
@@ -529,8 +501,8 @@ export default function DemoPage(): React.JSX.Element {
  * connector picks it up without either of them naming a colour.
  */
 function Section({ section }: { section: KindSection }): React.JSX.Element {
-  const { kind, title, rows, overflow, slot } = section;
-  const { accent, Glyph } = KIND_CHROME[kind];
+  const { kind, title, rows, readOnly, slot } = section;
+  const { accent, Glyph } = KIND_MARK[kind];
   return (
     <section
       /* The anchor the sticky jump bar targets. `scroll-mt` clears the bar
@@ -539,266 +511,112 @@ function Section({ section }: { section: KindSection }): React.JSX.Element {
       className="af-demo-kind af-demo-row mt-12 scroll-mt-28"
       style={{ "--kind": accent, "--row": slot } as React.CSSProperties}
     >
-      <div className="flex items-center gap-2.5">
-        <span className="af-demo-glyph text-(--kind)">
+      {/* HEADING AND BLURB ON ONE LINE, where the blurb used to be a paragraph
+          indented under the heading. Nine of those cost the page a third of a
+          screen in labels for content the reader had not reached yet. The
+          blurb drops below `sm`, where there is no room for it beside the
+          heading and the two would wrap into the same stack it replaced. */}
+      <div className="flex items-baseline gap-2.5">
+        <span className="af-demo-glyph self-center text-(--kind)">
           <Glyph />
         </span>
-        <h2 className="text-base font-semibold tracking-tight text-foreground">
+        <h2 className="shrink-0 text-base font-semibold tracking-tight text-foreground">
           {title}
         </h2>
+        <p className="hidden truncate text-sm text-muted-foreground sm:block">
+          {KIND_BLURB[kind]}
+        </p>
         {/* A rule that runs out to the edge, tinted with the kind: it is what
-            makes the groups read as four at a glance, before any word is. */}
+            makes the groups read as nine at a glance, before any word is. */}
         <span
           aria-hidden="true"
-          className="h-px flex-1 bg-linear-to-r from-(--kind)/40 to-transparent"
+          className="h-px min-w-6 flex-1 bg-linear-to-r from-(--kind)/40 to-transparent"
         />
       </div>
-      <p className="mt-1 ml-[26px] max-w-2xl text-sm text-muted-foreground">
+      <p className="mt-1 ml-[26px] max-w-2xl text-sm text-muted-foreground sm:hidden">
         {KIND_BLURB[kind]}
       </p>
-      <ul className="mt-3 divide-y divide-border/60">
-        {rows.map(({ row, slot: rowSlot }) =>
+      {/* TWO UP, from one row per document. `items-start` rather than a
+          stretched grid: two cards whose descriptions differ by a line should
+          not both grow to the taller one's height, because the gap that
+          creates under the shorter one reads as a missing element. */}
+      <ul className="mt-4 grid items-start gap-4 sm:grid-cols-2">
+        {rows.map(({ row, slot: rowSlot, wireframe }) =>
           row.status === "invalid" ? (
             <Broken key={row.id} id={row.id} message={row.message} />
           ) : (
-            <ExampleRowItem key={row.id} row={row} slot={rowSlot} />
+            <ExampleCard
+              key={row.id}
+              row={row}
+              slot={rowSlot}
+              wireframe={wireframe}
+            />
           ),
         )}
-        <AlsoLinks kindTitle={title} items={overflow} />
       </ul>
+      <ReadOnlyLinks kindTitle={title} items={readOnly} />
     </section>
   );
 }
 
-/** C4's nesting: a frame holding a frame. */
-function C4Glyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-    >
-      <rect x="1.2" y="2.6" width="13.6" height="10.8" rx="2.2" />
-      <rect x="4.4" y="5.6" width="7.2" height="4.8" rx="1.4" />
-    </svg>
-  );
-}
-
-/** A sequence: two lifelines and the message between them. */
-function SequenceGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    >
-      <path d="M3.4 2v12M12.6 2v12" strokeDasharray="2 2" />
-      <path d="M3.4 7.4h9.2M10.6 5.6l2 1.8-2 1.8" />
-    </svg>
-  );
-}
-
-/** A use case: a stick figure beside an ellipse. The pairing is the whole
- * tell — an actor against the system's edge is what no other kind draws. */
-/** An ER diagram: two tables, ruled under their headers, and the line
- * between them ending in a crow's foot. */
-/** A dictionary: a heading rule and three ruled rows — a table of text. */
-function DictGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    >
-      <path d="M2 3.5h12M2 6.6h5M9.6 6.6h4.4M2 9.5h5M9.6 9.5h4.4M2 12.4h5M9.6 12.4h4.4" />
-    </svg>
-  );
-}
-
-/** A gantt: two bars on a measured rail, the second starting where the
- * first ends, and the elbow that says it could not start sooner. The offset
- * pair is the whole tell — a single bar is a progress meter. */
-function GanttGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    >
-      <path d="M1.4 3.2h13.2" strokeDasharray="0.1 3.3" />
-      <rect x="1.4" y="5.4" width="6.6" height="2.8" rx="1" />
-      <path d="M8 6.8h1v4.6h1" />
-      <rect x="10" y="10" width="4.6" height="2.8" rx="1" />
-    </svg>
-  );
-}
-
-/** A milestone timeline: a vertical spine with three dots on it and a label
- * beside each. Vertical is the whole tell — every other glyph here runs
- * across, and so does the gantt's, which is the one this must not be mistaken
- * for. The dots are evenly spaced but the labels are not the same length,
- * because the bands are sized by their content. */
-function TimelineGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    >
-      <path d="M4 2.4v11.2" />
-      <circle cx="4" cy="4" r="1.5" />
-      <circle cx="4" cy="8" r="1.5" />
-      <circle cx="4" cy="12" r="1.5" />
-      <path d="M7.4 4h7.2M7.4 8h4.4M7.4 12h6" />
-    </svg>
-  );
-}
-
-/** A lifecycle: a vertical spine of three dots with ONE branch leaving it and
- * curving back. The branch is the whole tell — it is what separates this from
- * the timeline glyph directly above, which is the same spine without one, and
- * it is drawn returning rather than ending so the mark says "goes back" at
- * 16px. */
-function LifecycleGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M11 2.6v10.8" />
-      <circle cx="11" cy="4" r="1.4" />
-      <circle cx="11" cy="8" r="1.4" />
-      <circle cx="11" cy="12" r="1.4" />
-      <path d="M11 12H4.2V6H11" />
-    </svg>
-  );
-}
-
-function ErGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    >
-      <rect x="1" y="3" width="5.2" height="6" rx="1" />
-      <path d="M1 5.2h5.2" />
-      <rect x="9.8" y="7" width="5.2" height="6" rx="1" />
-      <path d="M9.8 9.2h5" />
-      <path d="M6.2 6.1h1.8v3.9h1.8M8 8.6l1.8 1.4M8 11.4l1.8-1.4" />
-    </svg>
-  );
-}
-
-function UseCaseGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    >
-      <circle cx="4.2" cy="3.4" r="1.5" />
-      <path d="M4.2 4.9v3.4M2.2 6.6h4M4.2 8.3l-1.7 3.2M4.2 8.3l1.7 3.2" />
-      <ellipse cx="11.4" cy="8" rx="3.4" ry="2.4" />
-    </svg>
-  );
-}
-
-/** A flowchart: a step, a decision below it, and the branch leaving the
- * diamond. The rhombus is the whole tell — it is what no other kind draws. */
-function FlowchartGlyph(): React.JSX.Element {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    >
-      <rect x="4.6" y="1.6" width="6.8" height="3.4" rx="0.8" />
-      <path d="M8 5v2.2" />
-      <path d="M8 7.6l3 2.6-3 2.6-3-2.6z" />
-      <path d="M8 12.8v1.6" />
-    </svg>
-  );
-}
-
 /**
- * One example, as a row-sized link to the playground with a second, smaller
- * link to its read-only page.
+ * One example, as a card: its shape, its title, and a second link to its
+ * read-only page.
  *
- * THE WHOLE ROW IS THE PRIMARY TARGET, and getting there took two tries. It
- * was the row, then it became the TITLE ONLY because a row-wide anchor cannot
- * contain the read-only link beside it — nesting one anchor in another is
- * invalid HTML that browsers silently unnest. But the hover wash stayed on the
- * row, so the row kept advertising a target that had shrunk to a few words:
- * clicking the description, the counts, or the empty space to the right did
- * nothing at all.
+ * THE WHOLE CARD IS THE PRIMARY TARGET, and getting there took three tries.
+ * It was the row; then it became the TITLE ONLY, because a row-wide anchor
+ * cannot contain the read-only link beside it — nesting one anchor in another
+ * is invalid HTML that browsers silently unnest — while the hover wash stayed
+ * on the row, so the row kept advertising a target that had shrunk to a few
+ * words. The fix was the stretched link, and it is the part of that revision
+ * worth keeping: the anchor stays in the flow around the title, so its
+ * accessible name is the title and its focus ring outlines the words, and an
+ * `after` pseudo-element expands its HIT AREA to the positioned card. The
+ * second link is lifted above that overlay with `z-10`. Two anchors, neither
+ * inside the other, one of them the size of the card.
  *
- * The fix is the stretched link: the anchor stays in the flow around the title
- * (so its accessible name is the title and its focus ring outlines the words),
- * and an `after` pseudo-element expands its HIT AREA to the positioned row.
- * The second link is lifted above that overlay with `relative z-10`. Two
- * anchors, neither inside the other, one of them the size of the row.
+ * THE PREVIEW IS THE AFFORDANCE now, which is what let the row's
+ * "Open in playground →" label go. That label existed because a row with a
+ * hover wash named no destination; a picture of the diagram, under a cursor,
+ * over a card that lifts its border to the kind's own colour, does not have
+ * that problem.
+ *
+ * THE CARD CARRIES ONE LINK, NOT TWO. The read-only page used to have a badge
+ * in the preview's corner, and before that a dotted link sharing a line with
+ * the counts; both put a second target on a card whose whole surface is
+ * already the first one, and the badge sat on top of the picture that is the
+ * card's reason to exist. Every example's read-only page is now linked once
+ * per section, from `ReadOnlyLinks` under the grid — which keeps those pages
+ * out of the orphan state they were in before any of these links existed,
+ * without spending a second affordance per card on the quieter of two
+ * destinations.
  *
  * `aria-label` puts the destination after the title rather than replacing it,
  * so the accessible name still starts with the visible words — voice control
  * matches "click Order Shop", and a screen reader hears where it goes.
  */
-function ExampleRowItem({
+function ExampleCard({
   row,
   slot,
+  wireframe,
 }: {
   row: Extract<ExampleRow, { status: "ok" }>;
   /** Position in the page-wide cascade — drives the entrance, nothing else. */
   slot: number;
+  wireframe: Wireframe | null;
 }): React.JSX.Element {
   return (
     <li
       className="af-demo-row"
       style={{ "--row": slot } as React.CSSProperties}
     >
-      <div className="group relative flex flex-col gap-1 rounded-md px-3 py-4 transition-colors hover:bg-secondary/40">
-        <div className="flex items-baseline justify-between gap-4">
+      <div className="group relative flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card transition-colors hover:border-(--kind)/50">
+        <ExamplePreview wireframe={wireframe} />
+        <div className="flex flex-col gap-1 px-4 py-3.5">
           <Link
             href={`/live?${VIEW_EXAMPLE_PARAM}=${row.id}`}
             aria-label={`${row.title} — open in the playground`}
-            className="rounded-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="rounded-sm after:absolute after:inset-0 after:rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <span className="flex items-center gap-0 text-(--kind)">
               {/* Grows out of nothing on hover and meets the title — the
@@ -812,70 +630,54 @@ function ExampleRowItem({
               </span>
             </span>
           </Link>
-          {/* WHERE THE CLICK GOES, in words, on the row it belongs to. The row
-              had a hover wash and a growing tick and named no destination, so
-              the one thing a reader needed to know was the one thing the row
-              would not say. Decorative to assistive tech — the link's own
-              `aria-label` already carries it, and hearing it twice per row is
-              worse than not seeing it. */}
-          <span
-            aria-hidden="true"
-            className="shrink-0 text-xs whitespace-nowrap text-muted-foreground/60 transition-colors group-hover:text-(--kind)"
-          >
-            Open in playground →
+          {row.description === null ? null : (
+            /* CLAMPED TO TWO LINES. These are the documents' own `description`
+               metadata and one of them is a 300-character paragraph about
+               MirrorMaker — accurate, and on an index it turns one card into a
+               wall twice the height of the one beside it. Two lines is enough
+               to tell one example from another, which is all this page has to
+               do; the full text is on the page the card opens. */
+            <span className="line-clamp-2 text-sm text-muted-foreground">
+              {row.description}
+            </span>
+          )}
+          {/* ONLY COUNTS. This line used to carry the read-only link too, which
+              made it two things at once and put a target inside a run of prose.
+              And it is `muted-foreground` flat, where it was `/80`: the page
+              ran four shades deep and the bottom two were below the tier that
+              is already the quiet one. */}
+          <span className="mt-0.5 text-xs text-muted-foreground">
+            {row.meta.join(" · ")}
           </span>
         </div>
-        {row.description === null ? null : (
-          /* CLAMPED TO TWO LINES. These are the documents' own `description`
-             metadata and one of them is a 300-character paragraph about
-             MirrorMaker — accurate, and on an index it turns a row into a wall
-             that buries the two rows under it. Two lines is enough to tell one
-             example from another, which is all this page has to do; the full
-             text is on the page the row opens. */
-          <span className="line-clamp-2 max-w-2xl text-sm text-muted-foreground">
-            {row.description}
-          </span>
-        )}
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/80">
-          <span>{row.meta.join(" · ")}</span>
-          {/* The read-only page for this example. It carries its own title,
-              description and social card and is the only CRAWLABLE rendering
-              of the document — the playground renders nothing server-side for
-              a search engine to read. Before this link the examples were in
-              the sitemap with no inbound link at all, which is the definition
-              of an orphan page.
-              STILL QUIET, BUT NOW HITTABLE: it is padded to a real target and
-              lifted above the row's overlay, where before it was a 12px run of
-              text sharing a line with the counts, easier to miss than to hit.
-              And it says "page", not "view" — "read-only view" read as a mode
-              of the thing you were already looking at. */}
-          <Link
-            href={row.readOnlyHref}
-            className="relative z-10 -my-1 rounded px-1.5 py-1 underline decoration-dotted underline-offset-2 transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            Read-only page
-          </Link>
-        </span>
       </div>
     </li>
   );
 }
 
 /**
- * The examples this page does not showcase, as read-only pages.
+ * Every example of one kind, as its crawlable read-only page.
  *
- * Not a "show more" toggle: every one of these has a crawlable read-only page
- * listed in the sitemap, and a link a crawler cannot follow until JavaScript
- * runs is the orphan-page problem the read-only links exist to solve. Plain
- * anchors, always in the markup.
+ * IT USED TO LIST ONLY THE OVERFLOW — the examples past the showcased two —
+ * because each card carried its own read-only link. It carries none now, so
+ * this line is the only inbound link those pages have, and every one of them
+ * is in the sitemap: a sitemap entry nothing links to is an orphan page, which
+ * is the bug the read-only links were added to fix.
+ *
+ * Not a "show more" toggle: a link a crawler cannot follow until JavaScript
+ * runs is that same orphan problem wearing a different hat. Plain anchors,
+ * always in the markup.
  *
  * THE LEAD-IN NAMES WHAT THEY ARE. It said "Also:" — also what, of which kind,
  * opening where? Three questions for a reader who had no reason to ask any of
  * them. And the links were a comma-separated run of 12px text, which is a row
- * of targets a few pixels tall touching each other; they are padded chips now,
- * for the same reason the read-only link above is.
+ * of targets a few pixels tall touching each other; they are padded chips now.
+ *
+ * It sits BESIDE the grid rather than inside it: as an `li` among cards it was
+ * a grid cell, which put it in a column half the width of the line it needs
+ * and left a hole beside it.
  */
-function AlsoLinks({
+function ReadOnlyLinks({
   kindTitle,
   items,
 }: {
@@ -885,8 +687,10 @@ function AlsoLinks({
 }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pt-3 text-xs text-muted-foreground">
-      <span>More {kindTitle.toLowerCase()}, as read-only pages:</span>
+    <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <span>
+        Read-only pages for every one of these {kindTitle.toLowerCase()}:
+      </span>
       {items.map((item) => (
         <Link
           key={item.id}
@@ -896,7 +700,7 @@ function AlsoLinks({
           {item.title}
         </Link>
       ))}
-    </li>
+    </div>
   );
 }
 
@@ -908,7 +712,7 @@ function Broken({
   message: string;
 }): React.JSX.Element {
   return (
-    <li className="px-3 py-4">
+    <li className="rounded-xl border border-destructive/40 px-4 py-4">
       <span className="font-medium text-destructive">{id}</span>
       <span className="mt-1 block font-mono text-xs text-muted-foreground">
         {message}

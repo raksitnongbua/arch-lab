@@ -60,6 +60,21 @@ export const DICT = {
   sectionGap: 26,
   /** Canvas padding. */
   margin: 28,
+  /**
+   * Canvas padding at the FOOT, which is deeper than the other three.
+   *
+   * A dictionary is the one notation that ends in a hard horizontal edge — the
+   * last field's rule runs the full width of the table — so a symmetric margin
+   * put that rule a bare 28 units from the frame and the table read as cut off
+   * rather than finished. Every other kind tapers out: a flowchart ends on a
+   * terminator, a timeline on a dot, a gantt on a bar that stops short of the
+   * axis.
+   *
+   * Twice the margin is enough to read as deliberate white space rather than
+   * slack. It is spent on the SHEET, not the table: no column, row or rule
+   * moves, so `check:dict-layout` measures the same geometry it always has.
+   */
+  marginBottom: 56,
   /** Cell padding, left and right. */
   padX: 12,
   /** Font sizes. */
@@ -396,7 +411,10 @@ export function layoutDict(
 
   return {
     width,
-    height: Math.max(y - DICT.sectionGap + DICT.margin, DICT.margin * 2),
+    height: Math.max(
+      y - DICT.sectionGap + DICT.marginBottom,
+      DICT.margin + DICT.marginBottom,
+    ),
     title,
     titleY,
     sections: laid,

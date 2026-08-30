@@ -39,6 +39,8 @@
  * different ideas of where a stripe goes.
  */
 
+import { diagramHeadingMarkup } from "@/lib/diagram-heading";
+import { diagramSurfaceMarkup } from "@/lib/diagram-surface";
 import type { GanttLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
@@ -49,6 +51,7 @@ import { TextureRegistry } from "@/features/viewer/export/texture-registry";
 
 import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
 import {
+  GANTT_HEADING_METRICS,
   GANTT,
   TEXTURE_BY_STATE,
   hatchTilePaths,
@@ -179,12 +182,17 @@ export function renderGanttSvg(
   push(`<defs>${ground.defs}</defs>`);
   push(ground.layers(0, 0, width, height));
   /* The plan's own surface — see `gantt-diagram.tsx` for why this kind has one
-     and the other seven do not. Inside the export padding, so the sheet still
-     shows as a margin around it. */
+     and the other seven do not. It holds the drawing with
+     `EXPORT_SURFACE_PADDING` of air inside it, and what is left of the export
+     padding shows as a margin around it. */
   push(
-    `<rect x="${EXPORT_PADDING}" y="${EXPORT_PADDING}" width="${layout.width}" ` +
-      `height="${layout.height}" rx="12" fill="${theme.node}" ` +
-      `stroke="${theme.nodeBorder}" stroke-width="1"/>`,
+    diagramSurfaceMarkup({
+      width: layout.width,
+      height: layout.height,
+      stroke: theme.border,
+      originX: EXPORT_PADDING,
+      originY: EXPORT_PADDING,
+    }),
   );
 
   /* THE ROLE TEXTURES the bars actually wear, collected before the `<defs>` is
@@ -224,10 +232,24 @@ export function renderGanttSvg(
   );
   push(`<g transform="translate(${EXPORT_PADDING} ${EXPORT_PADDING})">`);
 
+  /* THE DOCUMENT'S TITLE, first inside the group so it sits in the drawing's
+     own coordinates — the same block the canvas draws, from the same metrics.
+     An exported gantt with no title belongs to nothing. */
+  push(
+    diagramHeadingMarkup({
+      heading: layout.heading,
+      x: 0,
+      top: 0,
+      metrics: GANTT_HEADING_METRICS,
+      titleFill: theme.foreground,
+      descriptionFill: theme.mutedForeground,
+    }),
+  );
+
   /* The axis first: its grid runs the full height of the plot, so anything
      drawn after sits on top of it. Painting it last would rule lines across
      every bar — the paint order the canvas uses, for the same reason. */
-  const axisY = GANTT.axisHeight - 8;
+  const axisY = layout.plotTop - 8;
   for (const tick of layout.ticks) {
     push(
       `<line x1="${tick.x}" y1="${axisY}" x2="${tick.x}" y2="${layout.height - 12}" ` +
@@ -242,12 +264,12 @@ export function renderGanttSvg(
   for (const tick of layout.ticks) {
     text(
       tick.x + 4,
-      GANTT.axisHeight - 14,
+      layout.plotTop - 14,
       axisLabel(file, tick, layout.tickStep),
       axisTextAttributes,
     );
   }
-  text(0, GANTT.axisHeight - 14, axisCaption(file, layout), axisTextAttributes);
+  text(0, layout.plotTop - 14, axisCaption(file, layout), axisTextAttributes);
 
   for (const section of layout.sections) {
     text(

@@ -45,6 +45,22 @@ export function contrast(a, b) {
  * would flatter every translucent palette ever added here.
  */
 export const parseOklch = (value) => {
+  /* `transparent` IS a colour here, at alpha 0.
+     A theme may declare a fill token transparent on purpose — that is how
+     `paper` opts into line art, where a shape is its stroke and nothing else
+     (see the `--node-person` note in its block). Returning null for it would
+     read as "this token failed to resolve" and fail a palette check for a
+     theme that is behaving exactly as designed.
+     Answering with alpha 0 is not a way around the measurement, it is what
+     makes the measurement CORRECT: every caller runs the value through
+     `flatten(fill, canvas)` first, so a transparent fill composites to the
+     canvas and each downstream contrast is then the real question — label on
+     the canvas, border on the canvas — rather than a skipped assertion. The
+     rgb is the canvas's own after flattening, so the triple here is unused
+     and any value would do; zeros say "contributes nothing". */
+  if (typeof value === "string" && value.trim() === "transparent") {
+    return { rgb: [0, 0, 0], alpha: 0, oklch: [0, 0, 0] };
+  }
   const m =
     /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+))?/.exec(
       value ?? "",
