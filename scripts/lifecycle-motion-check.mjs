@@ -108,7 +108,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:lifecycle-motion
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -752,10 +752,16 @@ console.log("the ambient drift cannot be sized wrong");
      subject comes back HERE", and it can only mean that while the thing
      running at rest is visibly sparser and slower. Read from the stylesheet's
      own properties, so retuning either changes what this enforces. */
-  const driftDash = Number(rootProp("lc-drift-dash"));
-  const driftGap = Number(rootProp("lc-drift-gap"));
-  const travelDash = Number(rootProp("lc-travel-dash"));
-  const travelGap = Number(rootProp("lc-travel-gap"));
+  /* UNITS STRIPPED, and the units are the point rather than noise. These are
+     `px` because `calc()` over unitless numbers has type `<number>`, which
+     cannot stand where a `<length>` is required — see the note above the
+     keyframe. Reading them with a bare `Number()` returned NaN and failed the
+     two assertions below, which is how the change announced itself. */
+  const length = (name) => Number.parseFloat(rootProp(name));
+  const driftDash = length("lc-drift-dash");
+  const driftGap = length("lc-drift-gap");
+  const travelDash = length("lc-travel-dash");
+  const travelGap = length("lc-travel-gap");
   const driftDuty = driftDash / (driftDash + driftGap);
   const travelDuty = travelDash / (travelDash + travelGap);
   const driftSpeed = (driftDash + driftGap) / ms("lc-drift");
@@ -797,6 +803,87 @@ console.log("the ambient drift cannot be sized wrong");
     tooSlow.length === 0,
     `${tooSlow.map(([name, speed]) => `${name} at ${(speed * 1000).toFixed(1)}`).join(", ")} — at that rate the pattern reads as a static dashed line, which is a decoration rather than an answer to "which way does time run"`,
   );
+
+  /* NO KEYFRAME ANIMATES A LENGTH TO A UNITLESS `calc()`, and this is the
+     assertion that would have caught a dashed line which never moved.
+
+     WHAT HAPPENED. `af-lc-march` animates `stroke-dashoffset` to
+     `calc((var(--lc-march-dash) + var(--lc-march-gap)) * -1)`. With the two
+     lengths unitless that calc has type `<number>` — and SVG's bare-number
+     allowance covers a literal TOKEN, not a calc RESULT, so the declaration was
+     invalid and the browser dropped it. `stroke-dasharray` accepts `<number>`
+     outright, so the dashes rendered and simply sat there. Nothing errored,
+     nothing logged, and every assertion in this file passed: the rule existed,
+     the keyframe existed, the speeds computed. Reported as three dots on the
+     spine.
+
+     EVERY OTHER CANVAS ESCAPED BY ACCIDENT rather than by knowing — the
+     timeline animates to a plain `var()`, the gantt, ER and sequence to
+     literals. This one is the only keyframe in the repo that does arithmetic,
+     which is why it is the only one that was inert.
+
+     SWEPT OVER EVERY CANVAS, not just this one, because the hazard is the
+     shape and not the file: the next keyframe anyone writes with a calc in it
+     is the next silently dead animation. */
+  {
+    const LENGTHS = /stroke-dash(offset|array)/;
+    const dead = [];
+    for (const feature of readdirSync(path.join(ROOT, "src/features"))) {
+      const sheet = path.join(
+        ROOT,
+        `src/features/${feature}/styles/${feature}-motion.css`,
+      );
+      if (!existsSync(sheet)) continue;
+      const text = readFileSync(sheet, "utf8").replace(
+        /\/\*[\s\S]*?\*\//g,
+        " ",
+      );
+      for (const block of text.matchAll(
+        /@keyframes\s+([\w-]+)\s*\{([\s\S]*?\n\})/g,
+      )) {
+        for (const line of block[2].split("\n")) {
+          if (!LENGTHS.test(line) || !/calc\(/.test(line)) continue;
+          /* A calc is only safe here if SOMETHING in it carries a unit. */
+          if (
+            !/\d(px|em|rem|%)/.test(line) &&
+            !/var\([^)]*\)\s*\*\s*1(px|em)/.test(line)
+          ) {
+            const cited = [...line.matchAll(/var\((--[\w-]+)\)/g)].map(
+              (m) => m[1],
+            );
+            /* THE `var()` CHAIN IS FOLLOWED TO ITS LITERAL. One level was not
+               enough and the first version stopped there — `--lc-march-dash` is
+               declared as `var(--lc-drift-dash)`, which is not a number, so the
+               real defect was reported as clean while a probe written directly
+               against a numeric token failed. An alias is exactly how the value
+               reaches this keyframe. */
+            const literal = (name, depth = 0) => {
+              if (depth > 6) return null;
+              const declared = new RegExp(`${name}:\\s*([^;]+);`).exec(text);
+              if (declared === null) return null;
+              const value = declared[1].trim();
+              const alias = /^var\((--[\w-]+)\)$/.exec(value);
+              return alias === null ? value : literal(alias[1], depth + 1);
+            };
+            const unitless = cited.filter((name) => {
+              const value = literal(name);
+              return value !== null && /^[\d.]+$/.test(value);
+            });
+            if (cited.length === 0 || unitless.length > 0) {
+              dead.push(
+                `${feature}/@keyframes ${block[1]}: ${line.trim()}${unitless.length > 0 ? ` (${unitless.join(", ")} unitless)` : ""}`,
+              );
+            }
+          }
+        }
+      }
+    }
+    check(
+      "no keyframe animates a dash length to a unitless calc()",
+      dead.length === 0,
+      `${dead.join("; ")} — calc() over numbers has type <number>, the declaration is invalid where a <length> is wanted, and the browser drops it silently: the dashes render and never move`,
+    );
+  }
 
   /* THE WAYS OUT ARE BROKEN LINES, AT REST. A terminal branch is the one
      connector the subject does not come back along, and the only mark saying so

@@ -198,15 +198,15 @@
      about two thirds of the speed. The two are the same motion, and the
      ambient has to stay the quieter one or lighting a branch says nothing. */
   --lc-drift: 1.1s;
-  --lc-drift-dash: 8;
-  --lc-drift-gap: 16;
+  --lc-drift-dash: 8px;
+  --lc-drift-gap: 16px;
 
   /* The travelling dash on a lit return. Faster and denser than the ambient:
      it is a journey rather than a drift, and it only ever runs on one path at
      a time. */
   --lc-travel: 0.75s;
-  --lc-travel-dash: 10;
-  --lc-travel-gap: 14;
+  --lc-travel-dash: 10px;
+  --lc-travel-gap: 14px;
 
   --lc-breathe: 1.6s;
   --lc-breathe-step: 120ms;
@@ -593,7 +593,21 @@
   }
 }
 
-/* ONE KEYFRAME, TWO RIDERS — the ambient drift down the spine and the
+/* THE LENGTHS CARRY `px`, AND THAT IS THE WHOLE REASON THIS MOVES AT ALL.
+   Unitless they were `<number>`s, and `calc()` over numbers has type
+   `<number>` — which is NOT substitutable where a `<length>` is required. SVG's
+   bare-number allowance covers a literal token, not a calc result. So
+   `stroke-dasharray: 8 16` applied, because that property accepts `<number>`
+   outright, and the keyframe's `to` was thrown away as invalid: a dashed line
+   that never travelled. Reported as three dots sitting on the spine.
+
+   EVERY OTHER CANVAS IN THIS REPO SIDESTEPPED IT BY ACCIDENT. The timeline
+   animates to `var(--tl-spine-len)`, a plain number token; the gantt, ER and
+   sequence all animate to literals. `af-lc-march` is the only keyframe here
+   that does arithmetic, and it is the only one that was silently inert.
+   `check:lifecycle-motion` now refuses a unitless `calc()` in any of them.
+
+   ONE KEYFRAME, TWO RIDERS — the ambient drift down the spine and the
    travelling dash on a lit return. They were two, and the second was written
    as a copy of the first with different numbers; they are the same motion, and
    what differs between them is the pattern, the speed and what they run on.
