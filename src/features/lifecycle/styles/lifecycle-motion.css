@@ -206,14 +206,14 @@
      element: what differs is density and pace. Both carry `px`: unitless they
      would be `<number>`s, and `calc()` over numbers cannot stand where a
      `<length>` is wanted, which left this march silently inert once already. */
-  --lc-return-drift: 1.1s;
+  --lc-return-drift: 1.32s;
   --lc-return-dash: 8px;
   --lc-return-gap: 16px;
 
   /* The travelling dash on a lit return. Faster and denser than the ambient:
      it is a journey rather than a drift, and it only ever runs on one path at
      a time. */
-  --lc-travel: 0.75s;
+  --lc-travel: 0.9s;
   --lc-travel-dash: 10px;
   --lc-travel-gap: 14px;
 

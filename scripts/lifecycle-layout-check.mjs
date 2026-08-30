@@ -67,9 +67,8 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 
 const { parseLifecycleText } = await load("src/features/archtext/index.ts");
-const { layoutLifecycle, LIFECYCLE, LIFECYCLE_FRAME_PAD } = await load(
-  "src/features/lifecycle/lib/layout.ts",
-);
+const { layoutLifecycle, lifecycleHitRegions, LIFECYCLE, LIFECYCLE_FRAME_PAD } =
+  await load("src/features/lifecycle/lib/layout.ts");
 const { LIFECYCLE_EXAMPLE } = await load(
   "src/features/lifecycle/input/example.ts",
 );
@@ -840,6 +839,90 @@ console.log("the layout is total (the canvas draws whatever parsed)");
     exportSrc.includes("diagramSurfaceMarkup("),
     "the exporter emits no panel, or one of its own — a downloaded diagram " +
       "is framed differently from the one on screen",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("a click lands on the ink, not on the row around it");
+
+/* IT WAS THE WHOLE ROW — the full canvas width and the full height a state
+   occupies — so the empty band left of the branch lane, the empty band right of
+   the label and every gap between them selected that state. On this canvas the
+   ink is a narrow column of dots, a column of words and a lane of exits; most
+   of what a pointer crosses is the space around them. The gantt had the same
+   defect and the same fix.
+
+   MEASURED THROUGH THE FUNCTION THE CANVAS DRAWS WITH, which is why it lives in
+   `lib/layout.ts`: a copy beside the element — in a file this script cannot
+   parse at all — would mean checking a re-derivation and calling it the canvas.
+   Two halves, each self-consistent, free to disagree. */
+{
+  const boxes = (d) =>
+    [...d.matchAll(/M (-?[\d.]+) (-?[\d.]+) H (-?[\d.]+) V (-?[\d.]+)/g)].map(
+      (m) => ({
+        x0: Number(m[1]),
+        y0: Number(m[2]),
+        x1: Number(m[3]),
+        y1: Number(m[4]),
+      }),
+    );
+
+  let rowArea = 0;
+  let hitArea = 0;
+  const offCanvas = [];
+  const missing = [];
+  for (const [name, , layout] of ALL) {
+    for (const state of layout.states) {
+      const exits = layout.exits.filter((exit) => exit.from === state.id);
+      const regions = boxes(lifecycleHitRegions(state, exits));
+      rowArea += LIFECYCLE.width * Math.max(1, state.y1 - state.y0);
+      for (const box of regions) {
+        hitArea += (box.x1 - box.x0) * (box.y1 - box.y0);
+        if (box.x0 < 0 || box.x1 > LIFECYCLE.width) {
+          offCanvas.push(
+            `${name}/${state.id}: ${box.x0.toFixed(1)}–${box.x1.toFixed(1)}`,
+          );
+        }
+      }
+      /* ONE REGION FOR THE STATE AND ONE PER WAY OUT. Fewer means a way out
+         stopped being clickable and nothing else would say so — the exits sit
+         far off to the left and belong to this state's focus group, which is
+         what the full-row target used to give for free. */
+      if (regions.length !== exits.length + 1) {
+        missing.push(
+          `${name}/${state.id}: ${regions.length} region(s), want ${exits.length + 1}`,
+        );
+      }
+      /* THE DOT AND ITS WORDS ARE ONE BOX. A 6.5-unit dot is not a target on
+         its own, and the run of spine between it and the label is a hole a
+         pointer would fall through if they were separate. */
+      const stateBox = regions[0];
+      if (
+        stateBox !== undefined &&
+        (stateBox.x0 > LIFECYCLE.spineX || stateBox.x1 < LIFECYCLE.stateLabelX)
+      ) {
+        missing.push(
+          `${name}/${state.id}: its box ${stateBox.x0.toFixed(1)}–${stateBox.x1.toFixed(1)} misses the dot at ${LIFECYCLE.spineX} or the label at ${LIFECYCLE.stateLabelX}`,
+        );
+      }
+    }
+  }
+
+  const share = hitArea / rowArea;
+  check(
+    `the clickable area is a fraction of the row (${(share * 100).toFixed(1)}%)`,
+    share < 0.5,
+    `${(share * 100).toFixed(1)}% — the empty canvas around the ink is a target again, and every near-miss selects a state`,
+  );
+  check(
+    `every state keeps a region for itself and one per way out (${missing.length} exception(s))`,
+    missing.length === 0,
+    missing.slice(0, 3).join("; "),
+  );
+  check(
+    "no region runs off the canvas",
+    offCanvas.length === 0,
+    `${offCanvas.slice(0, 3).join("; ")} — a target outside the viewBox cannot be clicked`,
   );
 }
 

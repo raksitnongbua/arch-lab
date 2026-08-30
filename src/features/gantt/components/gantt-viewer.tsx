@@ -27,7 +27,9 @@
  * both what could delay it and what it could delay.
  *
  * AT REST IS A REAL STATE, AND A FRESH PAGE IS ALREADY IN IT. The ambient
- * motions stand down on any interaction and come back after `IDLE_AFTER_MS` of
+ * motions stand down while the entrance plays and run from then on — nothing a
+ * reader does here is sustained enough to yield to, and the wait that used to
+ * follow every click is gone with it. What remains of
  * quiet — an ambient that never stops competes with the person reading and
  * stops meaning anything, which is precisely how ER's pulse ended up needing a
  * second visual language to survive (see `new-diagram-type.md`).
@@ -54,7 +56,7 @@ import { DockRow } from "@/components/ui/dock-row";
 import { X } from "lucide-react";
 import { itemSchedule } from "../lib/axis";
 import { layoutGantt } from "../lib/layout";
-import { IDLE_AFTER_MS, GANTT_SETTLE_MS } from "../lib/motion";
+import { GANTT_SETTLE_MS } from "../lib/motion";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 
 import { GanttDiagram } from "./gantt-diagram";
@@ -82,8 +84,23 @@ export function GanttViewer({ file }: GanttViewerProps) {
      pointer could always do. */
   const [keyFocused, setKeyFocused] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
-  const [atRest, setAtRest] = useState(false);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* THE ENTRANCE IS A PHASE, AND IT HAS TO END. It was stamped as a bare
+     literal here, which kept every `[data-reveal="1"]` rule matching for the
+     life of the page — and each of those is `forwards`, so its end value went on
+     being contributed from the ANIMATION ORIGIN, which outranks every normal
+     author declaration. The focus dimming underneath it therefore applied to
+     nothing at all.
+
+     THE TIMELINE AND THE LIFECYCLE WERE FIXED THREE COMMITS AGO AND THIS WAS
+     NOT, because the assertion that catches it was written into their own
+     motion checks and this canvas has no equivalent — a per-canvas rule cannot
+     ask the canvas nobody thought to write it for. It is swept from the
+     filesystem in `check:view-input` now.
+
+     AND IT IS THE ONLY PHASE LEFT. `atRest` used to be its own flag, lowered by
+     an idle timer on every interaction; nothing stirs that timer any more, so
+     the two flags always agreed and one of them was ceremony. */
+  const [revealed, setRevealed] = useState(true);
 
   /* Both directions of the dependency graph, built once per document. The
      layout already resolved and de-duplicated `after`, so this reads the laid
@@ -132,12 +149,6 @@ export function GanttViewer({ file }: GanttViewerProps) {
     return seen;
   }, [selected, parents, children]);
 
-  const stir = useCallback(() => {
-    setAtRest(false);
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => setAtRest(true), IDLE_AFTER_MS);
-  }, []);
-
   /* FIRST RENDER USES THE SETTLE, every interaction after it uses the idle
      wait. See `../lib/motion` for why those are different questions; the short
      version is that a page nobody has touched is already at rest, and only the
@@ -149,10 +160,8 @@ export function GanttViewer({ file }: GanttViewerProps) {
      that `react-hooks/set-state-in-effect` refuses. `stir` keeps the reset for
      the interaction path, where standing the ambient down is a real change. */
   useEffect(() => {
-    idleTimer.current = setTimeout(() => setAtRest(true), GANTT_SETTLE_MS);
-    return () => {
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-    };
+    const settled = setTimeout(() => setRevealed(false), GANTT_SETTLE_MS);
+    return () => clearTimeout(settled);
   }, []);
 
   useEffect(() => {
@@ -249,18 +258,15 @@ export function GanttViewer({ file }: GanttViewerProps) {
         )}
         style={groundFieldCss(groundScale)}
         onClick={handleBackdropClick}
-        /* THE AMBIENT YIELDS TO AN ACT, NOT TO READING. `onPointerMove` and
-           `onWheel` used to stir it too, and both have stopped meaning what
-           they meant. The pointer one was put here when HOVERING selected a
-           row — it paused the ambient while the reader was picking one out —
-           and selecting takes a click now, so a pointer crossing the pane
-           changes nothing. The wheel one was never right: scrolling is how a
-           reader looks at MORE of a plan, which is the moment the ambient is
-           most worth having, and it stopped for three seconds every time.
+        /* NOTHING STIRS THE AMBIENT ANY MORE, because nothing on this canvas is
+           a sustained act for it to yield to. There is no camera here — no pan,
+           no zoom, no drag — so all a reader does is LOOK and SELECT, and both
+           are the moment the motion is worth having.
 
-           WHAT IS LEFT IS DELIBERATE: a press and a key. */
-        onPointerDown={stir}
-        onKeyDown={stir}
+           IT YIELDED TO A CLICK UNTIL NOW, so deselecting killed every moving
+           mark for three seconds. The wait was built for HOVER, which asked a
+           real question while pointing at a bar selected it and the pointer moved
+           continuously; selecting is a discrete press now. */
         /* Pointer leaving the canvas clears a hover but never a pin — the pin is
          the whole reason a reader can move the pointer away and keep looking. */
       >
@@ -280,9 +286,11 @@ export function GanttViewer({ file }: GanttViewerProps) {
              identity mark — was drawn on the neighbours too, and three bars
              claimed to be the one selected. */
             selectedId={selected}
-            reveal
+            reveal={revealed}
             idleMotion={idleState}
-            atRest={atRest}
+            /* AT REST IS EXACTLY "THE ENTRANCE IS OVER" now that nothing else
+             disturbs it. */
+            atRest={!revealed}
             onFocusItem={(id) =>
               setPinned((current) => (current === id ? null : id))
             }

@@ -30,7 +30,8 @@
  * recruiting a second row into the selection.
  *
  * AT REST IS A REAL STATE, AND A FRESH PAGE IS ALREADY IN IT. The sweep stands
- * down on any interaction and comes back after `IDLE_AFTER_MS` of quiet, but
+ * down while the entrance plays and runs from then on — nothing a reader
+ * does here is sustained enough to yield to, but
  * the FIRST transition is armed with `LIFECYCLE_SETTLE_MS` instead: a page
  * nobody has touched yet is not a page someone is busy with, and treating it
  * as one left the gantt canvas's ambient dead for three seconds after the
@@ -49,7 +50,7 @@ import type { LifecycleLabFile } from "@/types";
 
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
-import { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } from "../lib/motion";
+import { LIFECYCLE_SETTLE_MS } from "../lib/motion";
 import { layoutLifecycle } from "../lib/layout";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 
@@ -78,7 +79,6 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
      pointer could always do. */
   const [keyFocused, setKeyFocused] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
-  const [atRest, setAtRest] = useState(false);
   /* THE ENTRANCE IS A PHASE, AND IT HAS TO END. It used to be stamped as a
      bare literal, which kept every `[data-reveal="1"]` rule matching for the
      life of the page — and each of those is `forwards`, so its end value went
@@ -97,7 +97,6 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
      1, a drawn line ends at `stroke-dashoffset: 0` and rests with no dash at
      all. Nothing moves at the moment the phase ends. */
   const [revealed, setRevealed] = useState(true);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = pinned ?? keyFocused;
   const litKeys = useMemo(
@@ -137,25 +136,14 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
     [],
   );
 
-  const stir = useCallback(() => {
-    setAtRest(false);
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => setAtRest(true), IDLE_AFTER_MS);
-  }, []);
-
   /* FIRST RENDER USES THE SETTLE, every interaction after it uses the idle
      wait. Mount arms the countdown DIRECTLY rather than calling `stir`:
      `atRest` already starts false, so the reset inside `stir` would be a
      synchronous setState in an effect body — a cascading render that buys
      nothing and that `react-hooks/set-state-in-effect` refuses. */
   useEffect(() => {
-    idleTimer.current = setTimeout(() => {
-      setAtRest(true);
-      setRevealed(false);
-    }, LIFECYCLE_SETTLE_MS);
-    return () => {
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-    };
+    const settled = setTimeout(() => setRevealed(false), LIFECYCLE_SETTLE_MS);
+    return () => clearTimeout(settled);
   }, []);
 
   useEffect(() => {
@@ -203,20 +191,22 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
       )}
       style={groundFieldCss(groundScale)}
       onClick={handleBackdropClick}
-      /* THE AMBIENT YIELDS TO AN ACT, NOT TO READING. `onPointerMove` and
-         `onWheel` used to stir it too, and both have stopped meaning what they
-         meant. The pointer one was put here when HOVERING selected a row — it
-         paused the ambient while the reader was picking one out — and selecting
-         takes a click now, so a pointer crossing the pane changes nothing and
-         pausing for it buys nothing. The wheel one was never right: scrolling
-         is how a reader looks at MORE of the diagram, which is the moment the
-         ambient is most worth having, and it stopped for three seconds every
-         time. Reported as the animation dying on scroll.
+      /* NOTHING STIRS THE AMBIENT ANY MORE, because nothing on this canvas is
+         a sustained act for it to yield to. There is no camera here — no pan,
+         no zoom, no drag — so all a reader does is LOOK and SELECT, and both
+         are the moment the motion is worth having.
 
-         WHAT IS LEFT IS DELIBERATE: a press and a key. Those are the reader
-         doing something to the diagram rather than looking at it. */
-      onPointerDown={stir}
-      onKeyDown={stir}
+         IT YIELDED TO A CLICK UNTIL NOW, so deselecting killed every moving
+         mark for three seconds: the press reached the pane, stirred the idle
+         timer, and the wash and the drift both stopped. Reported as the
+         animation vanishing on unfocus. Focusing did it too, less visibly,
+         because the focus dash went on running while the rest went still.
+
+         THE WAIT WAS BUILT FOR HOVER. `IDLE_AFTER_MS` answered "how long
+         after the reader stops fiddling", which was a real question while
+         POINTING at a row selected it and the pointer moved continuously.
+         Selecting is a discrete press now, and a three-second blackout after
+         one click is the wrong shape for a discrete act. */
       /* Pointer leaving the canvas clears a hover but never a pin — the pin is
          the whole reason a reader can move the pointer away and keep looking. */
     >
@@ -232,7 +222,10 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
           litKeys={litKeys}
           reveal={revealed}
           idleMotion={idleState}
-          atRest={atRest}
+          /* AT REST IS EXACTLY "THE ENTRANCE IS OVER" now that nothing else
+             disturbs it — one timer and two derived attributes, rather
+             than two flags free to disagree. */
+          atRest={!revealed}
           onFocusState={(key) =>
             setPinned((current) => (current === key ? null : key))
           }

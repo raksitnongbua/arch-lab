@@ -160,7 +160,7 @@ const SPINES = [
     ),
   ],
 ];
-const { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } = await load(
+const { LIFECYCLE_SETTLE_MS } = await load(
   "src/features/lifecycle/lib/motion.ts",
 );
 
@@ -481,11 +481,6 @@ console.log("budget");
     `LIFECYCLE_SETTLE_MS (${LIFECYCLE_SETTLE_MS}ms) is at least the reveal's worst case`,
     LIFECYCLE_SETTLE_MS >= worst,
     `${LIFECYCLE_SETTLE_MS} < ${worst} — the sweep would start over an entrance still playing`,
-  );
-  check(
-    "and is well under the idle wait, so a fresh page is at rest quickly",
-    LIFECYCLE_SETTLE_MS < IDLE_AFTER_MS,
-    `settle ${LIFECYCLE_SETTLE_MS}ms vs idle ${IDLE_AFTER_MS}ms — a page nobody has touched is already at rest`,
   );
 }
 
@@ -1032,30 +1027,36 @@ console.log(
   "reading does not stop the ambient, and the entrance keeps the pattern",
 );
 
-/* SCROLLING IS READING. The pane stirred the idle timer on `onPointerMove` and
-   `onWheel` as well as on a press, so every wheel tick killed the ambient for
-   three seconds — and scrolling is exactly how a reader looks at MORE of a
-   diagram, which is when the ambient is most worth having. Reported as the
-   animation dying on scroll.
+/* NOTHING STIRS THE CANVAS BACK OUT OF REST, and this rule has narrowed twice.
 
-   THE POINTER ONE WAS STALE RATHER THAN WRONG. It was put there when HOVERING
-   selected a row: pausing while the reader picked one out made sense. Selecting
-   takes a click now, so a pointer crossing the pane changes nothing at all and
-   pausing for it buys nothing. A handler that outlives its reason is invisible
-   in a diff — nothing about it looks wrong — so it is pinned here instead.
+   It began by refusing a wheel and a pointer move while allowing a press and a
+   key: scrolling is how a reader looks at MORE of a diagram, and killing the
+   ambient for three seconds on every wheel tick meant it was off whenever
+   anyone was using the thing. Then deselecting turned out to kill it too — a
+   press is a stir as well, so the click that clears a selection took every
+   moving mark with it.
 
-   ASSERTED AS THE ABSENCE OF THE MECHANISM, like the hover rule in
-   `check:view-input`: re-adding `onPointerMove` is the obvious way to make a
-   canvas "feel responsive", and it would read as an improvement. */
+   THE ANSWER IS THAT THERE IS NOTHING TO YIELD TO. This canvas has no camera:
+   no pan, no zoom, no drag. All a reader does is LOOK and SELECT, and both are
+   the moment the motion is worth having. The wait it yielded with was built for
+   HOVER, when pointing at a row selected it and the pointer moved continuously;
+   selecting is a discrete press now, and a three-second blackout is the wrong
+   shape for a discrete act.
+
+   THE ABSENCE IS THE ASSERTION, because re-adding a stir is the obvious way to
+   make a canvas "settle down while you work", and in a diff that reads as a
+   courtesy rather than as dead canvas after every click. */
 {
-  const stirred = [...viewer.matchAll(/(on\w+)=\{stir\}/g)].map((m) => m[1]);
+  const bareViewer = viewer.replace(/\/\*[\s\S]*?\*\//g, " ");
   check(
-    `the idle timer is stirred by ${stirred.join(" and ") || "nothing"}`,
-    stirred.length > 0 &&
-      stirred.every(
-        (handler) => handler === "onPointerDown" || handler === "onKeyDown",
-      ),
-    `${stirred.join(", ")} — a wheel or a pointer crossing the pane is a reader LOOKING, and stopping the ambient for it means it is off whenever anyone is using the diagram`,
+    "nothing stirs the canvas back out of rest",
+    !/stir/.test(bareViewer) && !/IDLE_AFTER_MS/.test(bareViewer),
+    "a wheel or a press is a reader LOOKING, and stopping the ambient for it means the motion is off whenever anyone is using the diagram",
+  );
+  check(
+    "at rest is derived from the entrance, not tracked separately",
+    /atRest=\{!revealed\}/.test(bareViewer),
+    "two flags for one phase are two things that can disagree",
   );
 
   /* AND THE ENTRANCE ARRIVES AS WHAT IT STAYS. Drawing a return means one dash

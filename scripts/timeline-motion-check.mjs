@@ -144,7 +144,7 @@ const SPINES = [
     ),
   ],
 ];
-const { IDLE_AFTER_MS, TIMELINE_SETTLE_MS } = await load(
+const { TIMELINE_SETTLE_MS } = await load(
   "src/features/timeline/lib/motion.ts",
 );
 
@@ -451,11 +451,6 @@ console.log("budget");
     `TIMELINE_SETTLE_MS (${TIMELINE_SETTLE_MS}ms) is at least the reveal's worst case`,
     TIMELINE_SETTLE_MS >= worst,
     `${TIMELINE_SETTLE_MS} < ${worst} — the sweep would start over an entrance still playing`,
-  );
-  check(
-    "and is well under the idle wait, so a fresh page is at rest quickly",
-    TIMELINE_SETTLE_MS < IDLE_AFTER_MS,
-    `settle ${TIMELINE_SETTLE_MS}ms vs idle ${IDLE_AFTER_MS}ms — a page nobody has touched is already at rest`,
   );
 }
 
@@ -768,6 +763,34 @@ console.log("the ambient survives a selection");
     "the ambient keeps running while a row is selected",
     ambient.every(([selector]) => !/:not\([^)]*has-focus/.test(selector)),
     `${ambient.map(([s]) => s).join(" | ")} — a pinned selection would stop the canvas moving for as long as it is held`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("nothing stirs the canvas back out of rest");
+
+/* IT YIELDED TO A WHEEL AND TO A PRESS. Scrolling is how a reader looks at MORE
+   of a timeline, and every wheel tick killed the sweep for three seconds;
+   deselecting killed it too, because a press stirred the same timer. This
+   canvas has no camera — no pan, no zoom, no drag — so nothing a reader does
+   here is sustained and there is nothing for the ambient to yield to. The wait
+   it yielded with was built for HOVER, when pointing at an event selected it.
+
+   THE ABSENCE IS THE ASSERTION, because re-adding a stir is the obvious way to
+   make a canvas "settle down while you work", and in a diff it reads as a
+   courtesy rather than as dead canvas after every click. The gantt and the
+   lifecycle carry the same pair. */
+{
+  const bareViewer = viewer.replace(/\/\*[\s\S]*?\*\//g, " ");
+  check(
+    "nothing stirs the canvas back out of rest",
+    !/stir/.test(bareViewer) && !/IDLE_AFTER_MS/.test(bareViewer),
+    "a wheel or a press is a reader LOOKING, and stopping the ambient for it means the motion is off whenever anyone is using the diagram",
+  );
+  check(
+    "at rest is derived from the entrance, not tracked separately",
+    /atRest=\{!revealed\}/.test(bareViewer),
+    "two flags for one phase are two things that can disagree",
   );
 }
 

@@ -58,6 +58,7 @@ import { sweepHead } from "@/lib/sweep-head";
 import type { LifecycleLabFile } from "@/types";
 
 import {
+  lifecycleHitRegions,
   LIFECYCLE_FRAME_PAD,
   LIFECYCLE_HEADING_METRICS,
   LIFECYCLE,
@@ -350,15 +351,21 @@ function StateRow({
           </text>
         ))}
 
-      {/* A hit target spanning the whole row, so pointing anywhere near it
-          selects the state — a 6.5-unit dot would otherwise be the only place
-          a pointer could land. */}
-      <rect
+      {/* THE HIT TARGET IS THE INK, NOT THE ROW. It used to be one rect the
+          full width of the canvas and the full height a state occupies, so the
+          empty band left of the branch lane, the empty band right of the label
+          and every gap between them all selected this state. Most of what a
+          pointer crosses is that emptiness. The gantt had the same defect and
+          the same fix; `lifecycleHitRegions` carries the geometry, and the
+          reason it lives in the layout rather than here.
+
+          THE ORIGINAL REASON SURVIVES: a 6.5-unit dot is not a target on its
+          own, which is why its region is the dot AND the words beside it as one
+          box, with the short run of spine between them included rather than
+          left as a hole. */}
+      <path
         className="af-lc-hit"
-        x={0}
-        y={state.y0}
-        width={LIFECYCLE.width}
-        height={Math.max(1, state.y1 - state.y0)}
+        d={lifecycleHitRegions(state, exits)}
         tabIndex={onFocusState ? 0 : undefined}
         role={onFocusState ? "button" : undefined}
         aria-label={onFocusState ? describeState(state, exits) : undefined}

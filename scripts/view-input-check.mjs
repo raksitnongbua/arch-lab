@@ -1064,6 +1064,77 @@ console.log(
     `${ringed.join(", ")} — the hit target is a full-width band, so an outline is a coloured bar across the drawing`,
   );
 
+  /* THE ENTRANCE ENDS WHEREVER IT WOULD OTHERWISE OUTRANK THE FOCUS STATE.
+     A `forwards` animation goes on contributing its end value from the
+     ANIMATION ORIGIN, which outranks every normal author declaration — so while
+     `data-reveal` is stamped, a focus rule setting the same property on the
+     same element applies to nothing, and selecting a row does nothing visible.
+
+     THE CONDITION IS THE CLASH, NOT THE CANVAS. The first draft of this asked
+     every canvas whose shapes are buttons and failed three that are correct:
+     the flowchart, use case and sequence dim through component attributes
+     rather than CSS, so there is no declaration for an animation to outrank and
+     `reveal` as a literal costs them nothing. A check that fires on the right
+     answer is worse than no check — the next person makes it pass by changing
+     code that was already right. So the pair is found first, in the stylesheet,
+     and only a canvas that HAS one is asked.
+
+     IT IS HERE RATHER THAN IN A MOTION CHECK BECAUSE OF HOW IT WAS MISSED. The
+     rule went into `check:lifecycle-motion` and `check:timeline-motion` when
+     those two were fixed, and the gantt shipped the same defect for three more
+     commits: it has no motion check with an opinion about entrances, so a
+     per-canvas rule never asked the canvas nobody thought to write it for. */
+  for (const [feature] of components) {
+    const sheet = `src/features/${feature}/styles/${feature}-motion.css`;
+    const viewerPath = `src/features/${feature}/components/${feature}-viewer.tsx`;
+    if (
+      !existsSync(path.join(ROOT, sheet)) ||
+      !existsSync(path.join(ROOT, viewerPath))
+    ) {
+      continue;
+    }
+    const rules = [
+      ...read(sheet)
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .matchAll(/([^{}]+)\{([^{}]*)\}/g),
+    ].map((match) => [match[1].trim().replace(/\s+/g, " "), match[2]]);
+    const target = (selector) => {
+      const parts = selector.split(/\s+/).filter(Boolean);
+      return parts[parts.length - 1].replace(/[:[].*$/, "");
+    };
+    const filled = rules
+      .filter(
+        ([selector, body]) =>
+          /data-reveal="1"/.test(selector) &&
+          /forwards/.test(body) &&
+          /opacity:\s*0\s*;/.test(body),
+      )
+      .map(([selector]) => target(selector));
+    const dimmed = rules
+      .filter(
+        ([selector, body]) =>
+          /has-focus/.test(selector) && /opacity:/.test(body),
+      )
+      .map(([selector]) => target(selector));
+    const clash = filled.filter((name) => dimmed.includes(name));
+    if (clash.length === 0) continue;
+
+    const code = read(viewerPath);
+    check(
+      `${feature}: its entrance is bound to state (${clash.join(", ")} would be pinned otherwise)`,
+      /reveal=\{/.test(code),
+      `${viewerPath} passes a bare \`reveal\`, so the filled entrance holds ${clash.join(", ")} at full strength and the focus dimming under it never applies`,
+    );
+    /* TWO CLAIMS, NOT ONE. An earlier version asked only whether the word
+       "revealed" appeared, and a break that renamed the state to
+       `revealedAlways` and deleted the line lowering it sailed through. */
+    check(
+      `${feature}: and that state is lowered once the entrance has played`,
+      /setRevealed\(false\)/.test(code),
+      `${viewerPath} never lowers it — state that is never lowered is a literal with extra steps`,
+    );
+  }
+
   /* NO POINTER-HOVER SELECTION ANYWHERE IN THAT FAMILY. Asserted as the
      ABSENCE of the mechanism rather than as the presence of a click, because
      the defect being prevented is a re-addition: the obvious way to "make the
