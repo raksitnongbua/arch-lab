@@ -9,6 +9,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The themes are now something the site actually says it has.** The home page
+  has a short section naming all nine and what a theme reaches — node fills,
+  connector ink, the canvas ground and the SVG or PNG you export — `/faq`
+  answers "does it have a dark mode", and `/llms.txt`, `/llms-full.txt` and the
+  home page's structured data carry the same sentence, so an assistant asked
+  what arch-lab looks like has something to quote. Nothing about the themes
+  themselves changed.
 - **A third bundled gantt, an agile sprint** — `/live/gantt/search-sprint`, and
   on the examples index. The two plans already bundled are migrations, where the
   work sets the length; a sprint fixes the length first, so its ceremonies sit on

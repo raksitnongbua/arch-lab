@@ -2086,8 +2086,10 @@
  *      bottom. Without the first, every `dark:` utility in the app takes its
  *      LIGHT branch under your theme. (A second class on <html> would be the
  *      obvious alternative and is impossible: next-themes writes through
- *      DOMTokenList, which rejects a value containing a space.) Describe it in
- *      THEME_META (layout/theme-toggle.tsx) so the picker has a label.
+ *      DOMTokenList, which rejects a value containing a space.) Name it in
+ *      THEME_LABELS (lib/theme-copy.ts), which the picker and the site's
+ *      themes passage both read, and describe it in THEME_META
+ *      (layout/theme-toggle.tsx) so the picker row has a hint and a mark.
  *   4. Nothing else. No Tailwind change — @theme inline below already points
  *      every utility at the custom properties. `pnpm check:themes` measures
  *      the result and fails if a pair is illegible or a token was missed.

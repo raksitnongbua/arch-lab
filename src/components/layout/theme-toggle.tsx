@@ -28,6 +28,7 @@ import {
   type PanelPlacement,
 } from "@/components/ui/panel-placement";
 import { THEMES, type Theme } from "@/lib/constants";
+import { THEME_LABELS } from "@/lib/theme-copy";
 import { themeForScheme } from "@/lib/theme-default";
 import {
   useFollowSystem,
@@ -55,26 +56,25 @@ function useIsHydrated(): boolean {
 }
 
 /**
- * How each theme presents itself. Keyed by `Theme`, so adding a name to THEMES
- * without describing it here is a type error rather than a menu row reading
- * "midnight" with no icon — the compiler is the reminder.
+ * How each theme presents itself IN THE PICKER — its one-line hint and its
+ * mark. Keyed by `Theme`, so adding a name to THEMES without describing it here
+ * is a type error rather than a menu row with no icon.
+ *
+ * THE LABEL IS NOT HERE. It is `THEME_LABELS` in `lib/theme-copy.ts`, because
+ * this file is a client component and the same names are needed by the landing
+ * page, `/faq` and both `llms*.txt` — server surfaces that may not import a
+ * client chunk, and would otherwise have retyped the list. The hint and the
+ * icon stay: a hint is a caption under a menu row, which is a different job
+ * from a name a sentence can carry.
  */
-const THEME_META: Record<
-  Theme,
-  { label: string; hint: string; Icon: typeof Sun }
-> = {
-  light: { label: "Light", hint: "Cool white", Icon: Sun },
-  paper: { label: "Paper", hint: "Like a printed document", Icon: BookOpen },
-  pastel: {
-    label: "Pastel",
-    hint: "Colourful, between the two",
-    Icon: Palette,
-  },
-  glass: { label: "Liquid glass", hint: "Translucent surfaces", Icon: Layers },
-  dark: { label: "Dark", hint: "Tuned dark grey", Icon: Moon },
-  midnight: { label: "Midnight", hint: "True black, for OLED", Icon: MoonStar },
+const THEME_META: Record<Theme, { hint: string; Icon: typeof Sun }> = {
+  light: { hint: "Cool white", Icon: Sun },
+  paper: { hint: "Like a printed document", Icon: BookOpen },
+  pastel: { hint: "Colourful, between the two", Icon: Palette },
+  glass: { hint: "Translucent surfaces", Icon: Layers },
+  dark: { hint: "Tuned dark grey", Icon: Moon },
+  midnight: { hint: "True black, for OLED", Icon: MoonStar },
   contrast: {
-    label: "High contrast",
     /* NO LONGER "The default · stronger outlines". It was the default for
        everybody; it is now the default for a reader whose system prefers dark
        (`lib/theme-default.ts`), and the `light` row above has the same claim on
@@ -84,20 +84,12 @@ const THEME_META: Record<
     hint: "Stronger outlines",
     Icon: Contrast,
   },
-  blueprint: {
-    label: "Blueprint",
-    hint: "Drafting sheet, ruled grid",
-    Icon: Ruler,
-  },
+  blueprint: { hint: "Drafting sheet, ruled grid", Icon: Ruler },
   /* The hint names the TEXTURE, not the absence of colour. "Greyscale" says
      what this theme lacks; a reader choosing it wants to know that the roles
      are still told apart, which is the only reason a hue-free palette is
      allowed to exist here. */
-  eink: {
-    label: "E-ink",
-    hint: "No colour, roles by texture",
-    Icon: Newspaper,
-  },
+  eink: { hint: "No colour, roles by texture", Icon: Newspaper },
 };
 
 /**
@@ -261,7 +253,7 @@ export function ThemeToggle({
      System row's own hint rather than by a second tick further down the list. */
   const current =
     hydrated && !following ? (theme as Theme | undefined) : undefined;
-  const resolved = THEME_META[themeForScheme(prefersDark)].label;
+  const resolved = THEME_LABELS[themeForScheme(prefersDark)];
   /* WHAT THE TRIGGER ANNOUNCES, and it has to distinguish the two states: a
      reader on VoiceOver who is following the system and one who pinned high
      contrast both used to hear the same palette name, so the button gave no way
@@ -272,7 +264,7 @@ export function ThemeToggle({
       ? `Theme — follows your system (${resolved})`
       : current === undefined
         ? "Theme"
-        : `Theme — ${THEME_META[current]?.label ?? current}`;
+        : `Theme — ${THEME_LABELS[current] ?? current}`;
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
@@ -369,7 +361,7 @@ export function ThemeToggle({
               <ThemeRow
                 key={name}
                 Icon={meta.Icon}
-                label={meta.label}
+                label={THEME_LABELS[name]}
                 hint={meta.hint}
                 checked={current === name}
                 /* PINS, and the order matters: the flag has to be cleared

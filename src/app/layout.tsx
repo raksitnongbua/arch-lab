@@ -136,6 +136,24 @@ export const metadata: Metadata = {
     "order lifecycle diagram",
     "entity lifecycle as text",
     "status flow diagram",
+    /* THE THEME RUN, and it earns the exception on the gantt's terms: none of
+       these words appears anywhere else in this array, because a reader who
+       wants a diagram that matches their deck or their slide background does
+       not arrive typing "C4" — they type "dark mode" and "theme". Presentation
+       is what this product is sold on (`.claude/rules/purpose.md`) and the
+       vocabulary for it was entirely absent from the site.
+
+       FOUR, NOT NINE. One phrase per thing somebody actually searches for, not
+       one per palette: "blueprint" and "e-ink" are here because they are the
+       two names a reader would search FOR RATHER THAN discover, and the other
+       seven ("light", "paper", "dark") are words no one pairs with "diagram" in
+       a search box. The real weight went where it ranks — the H2 on the home
+       page, the passage under it and the JSON-LD `featureList`, all of which
+       say the same thing this run only agrees with. */
+    "architecture diagram themes",
+    "dark mode diagram tool",
+    "blueprint style diagram",
+    "e-ink diagram theme",
     "software architecture diagram",
     ".alab",
     "C4 editor",
