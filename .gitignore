@@ -81,3 +81,7 @@ yarn-error.log*
 
 # Agent-captured verification screenshots — evidence, not source.
 .claude-screenshots/
+
+# Design canvases — working files for the Claude Design skill, not product source.
+# The seeded *.html carry a ~2 MiB editor payload; none of it ships.
+.design/
