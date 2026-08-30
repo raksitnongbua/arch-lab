@@ -348,10 +348,21 @@
    only thing a keyboard reader could see, and it was covering for that bug
    rather than answering a need. The bug is fixed; the cover is not owed.
 
+   `:focus`, NOT ONLY `:focus-visible`, AND THIS IS THE HALF THAT SHIPPED
+   WRONG TWICE. Killing the outline on `:focus-visible` alone leaves the box
+   exactly where it was, because CLICKING an SVG element that carries a
+   tabindex gives it `:focus` WITHOUT `:focus-visible`, and Chrome still paints
+   `outline: auto` for that. `globals.css` names the mechanism — `@layer base`
+   gives every element `outline-ring/50`, so the browser's own indicator paints
+   in `--ring` — and the use-case and flowchart canvases already carry both
+   pseudo-classes for it. This canvas now selects on a CLICK and nothing else,
+   so it meets that path on every single selection.
+
    FOUR OF THE SIX CANVASES THAT MAKE A SHAPE A BUTTON already suppressed this —
    the flowchart and the use case in their components, ER and the sequence with
    a stroke on the shape itself — and `check:view-input` asserts that every one
    of them lights on `onFocus`, which is what makes suppressing it safe. */
+.af-lc-hit:focus,
 .af-lc-hit:focus-visible {
   outline: none;
 }

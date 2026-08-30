@@ -3527,8 +3527,15 @@
  * `outline: auto` for that — which is the rounded box that survived killing the
  * outline on :focus-visible alone. The RING stays keyboard-only below, because a
  * click already gets the app's own focused styling and does not need a second
- * indicator. (The sequence canvas only ever needed :focus-visible; its hits are
- * on <g> wrappers rather than shapes with tabindex, so it never saw this.) */
+ * indicator.
+ *
+ * THIS PARAGRAPH USED TO EXEMPT THE SEQUENCE CANVAS — "its hits are on <g>
+ * wrappers rather than shapes with tabindex, so it never saw this" — and that
+ * was simply wrong: `af-seq-chrome-hit` sits on `<rect>`s with `role="button"`
+ * and `tabIndex={0}`, so a clicked participant wore the box like everything
+ * else. The exemption is withdrawn and the canvas carries both pseudo-classes.
+ * `check:view-input` now asks each component whether its hit target is
+ * focusable instead of trusting a sentence here, which is how this was found. */
 .af-uc-hit:focus,
 .af-uc-hit:focus-visible,
 .af-flow-hit:focus,

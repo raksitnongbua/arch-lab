@@ -872,10 +872,89 @@ console.log(
     );
   }
 
-  /* AND NO CANVAS DRAWS THE RING BACK. Written as the absence of the mechanism
-     for the same reason the hover rule below is: restoring a focus outline is
-     the obvious thing to do if someone reads the accessibility rule without
-     reading what replaced it, and in a diff it would look like a fix. */
+  /* AND EVERY CANVAS ACTUALLY KILLS THE NATIVE RING, ON BOTH PSEUDO-CLASSES.
+
+     THE FIRST VERSION OF THIS ASSERTION WAS GREEN WITH THE BOX ON SCREEN, and
+     that is the whole reason it is written this way. It asked whether any
+     stylesheet DECLARED an `outline` other than `none` — and nothing did. The
+     rectangle was never authored: `globals.css` puts `outline-ring/50` on every
+     element in `@layer base`, so the BROWSER'S OWN indicator paints in `--ring`,
+     and Chrome paints `outline: auto` for a plain `:focus` — which is what an
+     SVG element with a tabindex gets when it is CLICKED rather than tabbed to.
+     Suppressing `:focus-visible` alone left every click showing a violet box.
+     `globals.css` had already written that failure down for the use-case and
+     flowchart canvases; this asked the wrong question and missed it anyway.
+
+     So the check is now for the SUPPRESSION being present and covering both,
+     not for the absence of a declaration. Absence proved nothing, because the
+     mark had no declaration behind it. */
+  const unsuppressed = components.flatMap(([feature, , code]) => {
+    /* THE FEATURE'S OWN HIT CLASS, read out of its component. Deriving it as
+       `af-${feature}-hit` would be wrong for the lifecycle, whose class is
+       `af-lc-hit`, and a hardcoded map is the thing a seventh canvas would not
+       be in. */
+    const classes = [
+      ...code.matchAll(/className="([^"]*\baf-[\w-]*hit\b[^"]*)"/g),
+    ].flatMap((match) =>
+      match[1].split(/\s+/).filter((name) => /^af-[\w-]*hit$/.test(name)),
+    );
+    if (classes.length === 0) return [];
+
+    /* SUPPRESSED IN THE FEATURE'S STYLESHEET OR IN `globals.css` — the
+       flowchart and the use case keep theirs in globals beside their shaped
+       rings, so both files are searched. But the SELECTOR searched for is
+       always this canvas's own class: the first version searched for
+       `af-[\w-]*hit:focus` across the concatenation, and `globals.css` carries
+       `.af-uc-hit:focus`, so every canvas passed on the use case's rule. A
+       break that reverted this very canvas to `:focus-visible` alone stayed
+       green. Anchoring the selector is the whole assertion. */
+    const stripped = (
+      read(`src/features/${feature}/styles/${feature}-motion.css`) +
+      read("src/app/globals.css")
+    ).replace(/\/\*[\s\S]*?\*\//g, " ");
+
+    return classes.flatMap((name) => {
+      /* ONLY A HIT THAT IS ITSELF FOCUSABLE can take `:focus` without
+         `:focus-visible`. The sequence canvas puts its handlers on `<g>`
+         wrappers rather than on the shape with the tabindex, which is why
+         `globals.css` records that it never saw this and needs only the one
+         pseudo-class. Asked of the code rather than exempted by name. */
+      /* THE ELEMENT IS THE CLASS NAME TO THE NEXT `/>`, with no character
+         bound. A bounded window (600) was tried and SILENTLY SKIPPED three
+         canvases: their hit rect carries an `onKeyDown` with a five-line
+         comment, which pushed the closing `/>` past the window, so `element`
+         came back null, `focusable` came back false, and the assertion
+         returned early for exactly the canvases it was written for. A break
+         reverting one of them to `:focus-visible` alone stayed green. Comments
+         are stripped first so a `/*` inside one cannot end an element early. */
+      const naked = code.replace(/\/\*[\s\S]*?\*\//g, " ");
+      const at = naked.search(
+        new RegExp(`className="[^"]*\\b${name}\\b[^"]*"`),
+      );
+      if (at < 0) return [];
+      const element = naked.slice(at, naked.indexOf("/>", at));
+      if (!/tabIndex=/.test(element)) return [];
+
+      const inComponent = new RegExp(
+        `className="[^"]*\\b${name}\\b[^"]*focus-visible:outline-none`,
+      ).test(code);
+      const plain = new RegExp(`\\.${name}:focus\\b(?!-visible)`).test(
+        stripped,
+      );
+      const visible = new RegExp(`\\.${name}:focus-visible`).test(stripped);
+      return (plain && visible) || (inComponent && plain) ? [] : [name];
+    });
+  });
+  check(
+    `every focusable hit target kills the native ring on :focus too (${components.length} canvases)`,
+    unsuppressed.length === 0,
+    `${unsuppressed.join(", ")} — a CLICK on an SVG element with a tabindex gives it :focus WITHOUT :focus-visible, and the browser paints outline: auto in --ring for that`,
+  );
+
+  /* AND NO CANVAS DRAWS ONE OF ITS OWN BACK. Written as the absence of the
+     mechanism for the same reason the hover rule below is: restoring a focus
+     outline is the obvious thing to do if someone reads the accessibility rule
+     without reading what replaced it, and in a diff it would look like a fix. */
   const ringed = readdirSync(path.join(ROOT, "src/features")).flatMap(
     (feature) => {
       const rel = `src/features/${feature}/styles/${feature}-motion.css`;

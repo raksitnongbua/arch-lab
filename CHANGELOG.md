@@ -27,12 +27,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **The focus ring is gone from the gantt, the timeline and the lifecycle.** On
-  those three the keyboard target is a band the full width of the drawing, so
-  the ring drew a coloured rectangle right across the diagram. Tabbing to a row
-  still lights it and fades everything else, which says where you are more
-  clearly than the ring did — and is what the other four canvases have always
-  relied on.
+- **The focus ring is gone from the gantt, the timeline and the lifecycle, and
+  clicking a sequence participant no longer boxes it.** On the first three the
+  keyboard target is a band the full width of the drawing, so the ring drew a
+  coloured rectangle right across the diagram. Tabbing to a row still lights it
+  and fades everything else, which says where you are more clearly than the ring
+  did. The sequence canvas had the same box on every click and was believed
+  exempt; it was not.
 
 - **Selecting a row on a gantt, a timeline or a lifecycle now takes a click.**
   Pointing at one used to select it, which meant crossing the diagram lit and
