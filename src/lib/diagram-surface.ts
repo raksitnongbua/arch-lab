@@ -6,9 +6,9 @@
  * and a drawing sitting straight on it has no edge — nothing says where the
  * document stops and the desk starts.
  *
- * IT IS A RULE, PLUS AN OPTIONAL PER-THEME WASH. It was a filled `--node` box,
- * which made the drawing area a second surface stacked on the well and turned
- * every theme into a hunt for two grounds that agree. The area is given by a
+ * IT IS A RULE, PLUS AN OPTIONAL PER-THEME WASH AND FROST. It was a filled
+ * `--node` box, which made the drawing area a second surface stacked on the
+ * well and turned every theme into a hunt for two grounds that agree. The area is given by a
  * LINE — a 1px border — so the well and the drawing sit on one continuous
  * ground and the frame says where the drawing lives. Paper and pencil rather
  * than paper on a desk.
@@ -24,9 +24,33 @@
  * line-only surface, byte for byte, in exports included.
  *
  * THE CEILING IS WHAT KEEPS IT A WASH. `check:canvas-grid` fails any theme
- * over 0.35, and fails any wash whose composite is louder than that theme's
+ * over 0.4, and fails any wash whose composite is louder than that theme's
  * own ruling. Without those two numbers "a faint tone" is one edit away from
  * being the panel again, which is exactly how this treatment got here.
+ *
+ * AND THE WASH IS ONLY HALF THE TREATMENT, which took three raises of that
+ * ceiling to find out. There are TWO failures a diagram area can have on a
+ * ruled sheet, and the wash is the right instrument for exactly one of them:
+ *
+ *   - **SEPARATION.** The area does not read as a document. A wash fixes this
+ *     by toning it, and pays for the fix out of the drawing's own contrast
+ *     budget — every increment moves the area's mean luminance toward the ink,
+ *     so the connector floor is what runs out (3.91:1 at 0.4, 3.41:1 at 0.6,
+ *     3.03:1 at 0.8, against a 3:1 limit).
+ *   - **INTERFERENCE.** The sheet's ruling beats against the drawing's own
+ *     strokes, which on a ruled theme is a lattice at ~2:1 crossing every bar,
+ *     tick and label at an unrelated pitch. A wash attenuates that only as a
+ *     side effect — at α the lattice still runs at (1−α) — so halving the
+ *     irritation costs nearly a doubling of the tone.
+ *
+ * `--diagram-surface-blur` is the second instrument, and it is a Gaussian
+ * rather than more alpha because a Gaussian is MEAN-PRESERVING: it takes the
+ * lattice's amplitude out and moves the area's mean luminance not at all, so
+ * it costs the connectors nothing. What it cannot do is the first job — blur
+ * the ruling to nothing and it converges to its own mean, 1.08:1 against
+ * `blueprint`'s canvas, under the 1.1:1 floor a ground must clear to be seen.
+ * One knob per failure. The strength history 0.25 → 0.4 → 0.6 → 0.4 is the
+ * record of one knob being turned at both, and of the correction.
  *
  * WHY IT IS SHARED NOW. The gantt argued, in a comment this module replaces,
  * that it was the only kind that needed a surface: it is the one notation whose

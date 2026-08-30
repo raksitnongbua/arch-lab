@@ -47,10 +47,11 @@ import {
 } from "@/lib/idle-motion";
 import type { LifecycleLabFile } from "@/types";
 
+import { DiagramFrost } from "@/components/ui/diagram-frost";
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
 import { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } from "../lib/motion";
-import { layoutLifecycle } from "../lib/layout";
+import { layoutLifecycle, LIFECYCLE_FRAME_PAD } from "../lib/layout";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 
 import { LifecycleDiagram } from "./lifecycle-diagram";
@@ -107,16 +108,22 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
      still a scale, and the ground's adaptive ladder is a question about SCREEN
      pixels — so a drawing squeezed into a narrow pane has its ground squeezed
      with it, and the ladder must be told or it selects a level that lands below
-     the readable band. Never magnified: the CSS cap only ever shrinks. */
+     the readable band. Never magnified: the CSS cap only ever shrinks.
+
+     THE FROST SPENDS THE SAME NUMBER, for the same reason one step further on:
+     its blur radius is stated against the ground's pitch at scale 1, so a
+     squeezed pitch under an unsqueezed radius would quiet the ruling hardest
+     on the narrowest panes. One measurement, two consumers — a second
+     observer for the same shrink is a second thing to keep in step. */
   const groundRef = useRef<HTMLDivElement>(null);
-  const naturalWidth = useMemo(() => layoutLifecycle(file).width, [file]);
+  const layout = useMemo(() => layoutLifecycle(file), [file]);
   const measureGroundScale = useCallback((): number => {
     const box = groundRef.current;
-    if (box === null || naturalWidth <= 0) return 1;
+    if (box === null || layout.width <= 0) return 1;
     return box.clientWidth <= 0
       ? 1
-      : Math.min(1, box.clientWidth / naturalWidth);
-  }, [naturalWidth]);
+      : Math.min(1, box.clientWidth / layout.width);
+  }, [layout.width]);
   const groundScale = useMeasuredScale(groundRef, measureGroundScale);
 
   return (
@@ -145,7 +152,19 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
          the whole reason a reader can move the pointer away and keep looking. */
       onPointerLeave={() => setHovered(null)}
     >
-      <div ref={groundRef}>
+      {/* THE FROST, and the box the drawing shares with it. The `<div>`
+          is inert in eight themes and blurs the ruling under the diagram
+          area in `blueprint`; `@/components/ui/diagram-frost` argues why
+          it cannot be the surface `<rect>` the drawing already draws. It
+          also shrink-wraps the `<svg>`, which is what keeps the measured
+          scale a reading of the drawing rather than of the pane. */}
+      <DiagramFrost
+        ref={groundRef}
+        width={layout.width}
+        height={layout.height}
+        framePad={LIFECYCLE_FRAME_PAD}
+        scale={groundScale}
+      >
         <LifecycleDiagram
           file={file}
           litKeys={litKeys}
@@ -157,7 +176,7 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
           }
           onHoverState={setHovered}
         />
-      </div>
+      </DiagramFrost>
     </div>
   );
 }

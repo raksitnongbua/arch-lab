@@ -40,11 +40,14 @@
  */
 
 import { diagramHeadingMarkup } from "@/lib/diagram-heading";
-import { diagramSurfaceMarkup } from "@/lib/diagram-surface";
+import { diagramSurfaceBox, diagramSurfaceMarkup } from "@/lib/diagram-surface";
 import type { GanttLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
-import { resolveExportGround } from "@/features/viewer/export/ground";
+import {
+  frostedGroundMarkup,
+  resolveExportGround,
+} from "@/features/viewer/export/ground";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 import { TextureRegistry } from "@/features/viewer/export/texture-registry";
@@ -179,14 +182,33 @@ export function renderGanttSvg(
   push(
     `<rect x="0" y="0" width="${width}" height="${height}" fill="${theme.canvas}"/>`,
   );
-  push(`<defs>${ground.defs}</defs>`);
-  push(ground.layers(0, 0, width, height));
+  /* SPLIT AROUND THE SURFACE WHEN THE THEME ASKS FOR A FROST, and emitted as
+     the single full-bleed call it always was when it does not — the branch
+     lives in the helper, so all three surface exporters cannot drift on it. */
+  const surfaceBox = diagramSurfaceBox({
+    width: layout.width,
+    height: layout.height,
+    originX: EXPORT_PADDING,
+    originY: EXPORT_PADDING,
+  });
+  const frosted = frostedGroundMarkup({
+    ground,
+    box: surfaceBox,
+    blur: theme.diagramSurface.blur,
+    width,
+    height,
+  });
+  push(`<defs>${frosted.defs}</defs>`);
+  push(frosted.layers);
   /* The plan's own surface — one of the THREE sheet-mounting kinds, with the
      timeline and the lifecycle; `lib/diagram-surface.ts` argues why a spine on
      a ruled ground wants a sheet as much as a lattice does. It holds the
      drawing with `EXPORT_SURFACE_PADDING` of air inside it, and what is left of
      the export padding shows as a margin around it. The wash rides on the same
-     rect and is nothing at all in every theme but `blueprint`. */
+     rect and is nothing at all in every theme but `blueprint`.
+     ITS BOX IS ALSO THE FROST'S: `frostedGroundMarkup` above was handed the
+     same `diagramSurfaceBox`, so the blurred region and the rule that edges it
+     are one geometry rather than two that happen to agree. */
   push(
     diagramSurfaceMarkup({
       width: layout.width,

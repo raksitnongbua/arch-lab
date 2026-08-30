@@ -23,11 +23,14 @@
  */
 
 import { diagramHeadingMarkup } from "@/lib/diagram-heading";
-import { diagramSurfaceMarkup } from "@/lib/diagram-surface";
+import { diagramSurfaceBox, diagramSurfaceMarkup } from "@/lib/diagram-surface";
 import type { TimelineLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
-import { resolveExportGround } from "@/features/viewer/export/ground";
+import {
+  frostedGroundMarkup,
+  resolveExportGround,
+} from "@/features/viewer/export/ground";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 import {
@@ -107,13 +110,32 @@ export function renderTimelineSvg(
   push(
     `<rect x="0" y="0" width="${width}" height="${height}" fill="${theme.canvas}"/>`,
   );
-  push(`<defs>${ground.defs}</defs>`);
-  push(ground.layers(0, 0, width, height));
+  /* SPLIT AROUND THE SURFACE WHEN THE THEME ASKS FOR A FROST, and emitted as
+     the single full-bleed call it always was when it does not — the branch
+     lives in the helper, so all three surface exporters cannot drift on it. */
+  const surfaceBox = diagramSurfaceBox({
+    width: layout.width,
+    height: layout.height,
+    originX: EXPORT_PADDING,
+    originY: EXPORT_PADDING,
+  });
+  const frosted = frostedGroundMarkup({
+    ground,
+    box: surfaceBox,
+    blur: theme.diagramSurface.blur,
+    width,
+    height,
+  });
+  push(`<defs>${frosted.defs}</defs>`);
+  push(frosted.layers);
   /* THE DIAGRAM'S SHEET, painted on the ground and under the drawing — the
      same panel the screen draws, from the same geometry, so a downloaded file
      is framed the way the reader saw it. Outside the translate below, because
      it is positioned in the FILE's coordinates and told where the drawing's
-     origin lands. */
+     origin lands.
+     ITS BOX IS ALSO THE FROST'S: `frostedGroundMarkup` above was handed the
+     same `diagramSurfaceBox`, so the blurred region and the rule that edges it
+     are one geometry rather than two that happen to agree. */
   push(
     diagramSurfaceMarkup({
       width: layout.width,

@@ -34,6 +34,17 @@
  *      the most demanding shape to hand a rasteriser. `baseFrequency` is per
  *      USER UNIT, so the grain comes out at exactly the same scale either way.
  *
+ *   3. **THE FROST IS A SPLIT, NOT A BACKDROP.** On screen the diagram area's
+ *      frost is a `<div>` whose `backdrop-filter` blurs whatever the pane
+ *      painted behind it. A file has no backdrop and no CSS box, so
+ *      {@link frostedGroundMarkup} reaches the same picture from the other
+ *      side: it emits these layers TWICE, disjointly — once clipped to
+ *      everything outside the surface box and left crisp, once clipped to the
+ *      inside of it and run through `<feGaussianBlur>`. Same layers, same σ,
+ *      and for the one theme that asks for a frost the agreement is exact,
+ *      because that theme has no material layer for the two mechanisms to
+ *      diverge on.
+ *
  * THE FILTER PRIMITIVES ARE LIFTED FROM THE THEME'S OWN DATA URI rather than
  * restated here. `--canvas-sheet-grain` is a `url("data:image/svg+xml,…")`
  * holding the very `<feTurbulence>` chain the screen paints, so this decodes it
@@ -48,6 +59,7 @@ import {
   groundLevels,
   type GroundLevel,
 } from "@/lib/canvas-ground";
+import { DIAGRAM_SURFACE_RADIUS } from "@/lib/diagram-surface";
 
 /** Everything an exporter needs to paint the ground it was read on. */
 export interface ExportGround {
@@ -208,4 +220,94 @@ export function resolveExportGround(): ExportGround {
     defs: defs.join(""),
     layers: (x, y, w, h) => layerParts.map((part) => part(x, y, w, h)).join(""),
   };
+}
+
+/**
+ * The ground, split around a frosted diagram surface — or emitted exactly as it
+ * always was, when no frost was asked for.
+ *
+ * AT `blur <= 0` THIS IS THE IDENTITY. It returns `ground.defs` untouched and
+ * the single full-bleed `ground.layers(0, 0, width, height)` call the three
+ * surface exporters made before the frost existed, byte for byte: no clip, no
+ * filter, no empty apparatus. Eight of the nine themes resolve
+ * `--diagram-surface-blur` to 0 and their downloads must not change a byte the
+ * day a ninth opts in — the same emit-nothing-at-zero contract the wash and the
+ * role textures carry, living HERE, once, rather than as a branch each exporter
+ * remembers to write.
+ *
+ * THREE DETAILS OF THE SPLIT ARE LOAD-BEARING, and each of them is a way to get
+ * a visibly wrong file:
+ *
+ *   - **The clip sits on a `<g>` OUTSIDE the filtered one.** Clipping before
+ *     filtering starves the blur of samples at the boundary, and a Gaussian
+ *     with nothing to average at its edge darkens: the surface would come out
+ *     ringed by a vignette. Clipping after lets the blur read the full-bleed
+ *     ground and then cuts a crisp edge exactly on the surface rect — where the
+ *     surface's own 1px rule already draws a line, so the construction adds no
+ *     edge the picture did not have.
+ *   - **The filter region is `userSpaceOnUse`, expanded by 3σ.** The default
+ *     region is percentages of the object's bounding box, which is the geometry
+ *     `new-diagram-type.md` bans filters on connectors over. Stating it in user
+ *     units is also what makes "the region is wide enough for the blur it
+ *     carries" a thing `check:canvas-grid` can measure rather than trust.
+ *   - **The outside piece is an even-odd path, not two rects.** A hole in a
+ *     clip has to be a second subpath under `clip-rule="evenodd"`; two `<rect>`
+ *     children of a `<clipPath>` union instead of subtract, which would clip
+ *     nothing at all and paint the crisp ground straight through the frost.
+ *
+ * AND IT IS STILL NOT A HOLE. Nothing is knocked out: the ground's ink is
+ * painted over every pixel of the file and the inside piece is merely low-pass
+ * filtered. `lib/diagram-surface.ts` argues the point in full and
+ * `check:canvas-grid` holds the residual above the visibility floor with
+ * arithmetic, so "the ruling still runs through the area" stays a measurement
+ * rather than a claim.
+ */
+export function frostedGroundMarkup({
+  ground,
+  box,
+  blur,
+  width,
+  height,
+}: {
+  ground: ExportGround;
+  /** The surface's box in the FILE's coordinates — `diagramSurfaceBox`. */
+  box: { x: number; y: number; width: number; height: number };
+  /** σ in user units, from `theme.diagramSurface.blur`. 0 disables the split. */
+  blur: number;
+  /** The file's own size; the ground is full-bleed over it. */
+  width: number;
+  height: number;
+}): { defs: string; layers: string } {
+  const crisp = {
+    defs: ground.defs,
+    layers: ground.layers(0, 0, width, height),
+  };
+  /* A theme that grounds nothing has nothing to frost, and a frost apparatus
+     over an empty ground is a `<defs>` full of clips that clip nothing. */
+  if (!(blur > 0) || ground.defs === "") return crisp;
+
+  const margin = blur * 3;
+  const outside =
+    `M0 0 H${width} V${height} H0 Z ` +
+    `M${box.x} ${box.y} h${box.width} v${box.height} h${-box.width} Z`;
+  const defs =
+    ground.defs +
+    `<clipPath id="af-frost-out">` +
+    `<path clip-rule="evenodd" fill-rule="evenodd" d="${outside}"/>` +
+    `</clipPath>` +
+    `<clipPath id="af-frost-in">` +
+    `<rect x="${box.x}" y="${box.y}" width="${box.width}" ` +
+    `height="${box.height}" rx="${DIAGRAM_SURFACE_RADIUS}"/>` +
+    `</clipPath>` +
+    `<filter id="af-frost-blur" filterUnits="userSpaceOnUse" ` +
+    `x="${box.x - margin}" y="${box.y - margin}" ` +
+    `width="${box.width + margin * 2}" height="${box.height + margin * 2}">` +
+    `<feGaussianBlur stdDeviation="${blur}"/>` +
+    `</filter>`;
+  const layers =
+    `<g clip-path="url(#af-frost-out)">${crisp.layers}</g>` +
+    `<g clip-path="url(#af-frost-in)">` +
+    `<g filter="url(#af-frost-blur)">${crisp.layers}</g>` +
+    `</g>`;
+  return { defs, layers };
 }

@@ -27,6 +27,23 @@ import {
  * A translucent wash is not a hole and does not become one: it TONES the
  * sheet, and the ruling runs through it at whatever the theme left over.
  *
+ * AND NEITHER IS A FROST, which has to be argued rather than asserted, because
+ * at a large enough radius a blur approaches a clearing and would deserve the
+ * objection. What makes a hole a hole is that the region REVERTS TO `--canvas`
+ * — the ground taken away and replaced by nothing, plus a hard edge where the
+ * drawing's edge already is. Three things say the frost is not that. Nothing is
+ * knocked out: the ruling's ink is painted over every pixel of the area, and
+ * the inside piece is low-pass filtered rather than removed. The filter is
+ * mean-preserving, so the sheet's own tone continues through the region instead
+ * of dropping back to the bare canvas. And at the radius `blueprint` asks for,
+ * the ruling inside the area still reads 1.510:1 against 2.124:1 crisp — a
+ * ghost of the ruling, but a visible one, so it literally still runs through.
+ * The one crisp edge the construction makes falls exactly on this rect's own
+ * 1px rule, which is the hole argument's own test: an edge that already exists.
+ * What WOULD concede the point is a radius large enough to flatten the ruling
+ * to its mean, and `check:canvas-grid` forbids that with a number rather than
+ * leaving it to taste.
+ *
  * The geometry — and the reason a surface must never sit on the drawing's own
  * bounds — is in `@/lib/diagram-surface`, shared with the exporters so a
  * downloaded file is framed the way the screen framed it.

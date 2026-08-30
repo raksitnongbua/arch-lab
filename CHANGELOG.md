@@ -35,6 +35,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the same wash. The other eight themes are unchanged, and their exported files
   are byte-for-byte what they were.
 
+- **And `blueprint` now blurs its drafting ruling under the diagram area rather
+  than leaning harder on that wash.** The ruling stays visible through the
+  drawing — it is softened, not cleared — so the bars, ticks and labels no
+  longer compete with a grid at an unrelated pitch, and the wash itself steps
+  back to a lighter tint that leaves connectors and text more room. Downloads
+  carry the same treatment; a browser without backdrop filters shows the ruling
+  crisp, as it did before. The other eight themes are untouched and their
+  exported files are still byte-for-byte what they were.
+
 - **Mermaid's `crit` tag now imports as the `at-risk` state**, and `at-risk`
   exports as `crit`. Previously `crit` was read and thrown away. Both spellings
   are an author saying a bar is in trouble, so a chart that arrives marked up

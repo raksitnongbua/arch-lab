@@ -59,6 +59,15 @@ const CONSTANTS = read("src/lib/constants.ts");
    loads the library code the app ships rather than a copy of it, or it measures
    a second implementation that agrees with nothing. */
 const ground = await import("../src/lib/canvas-ground.ts");
+/* AND THE EXPORT HELPER, for the same reason one layer up: the frost section
+   below measures the markup `frostedGroundMarkup` actually emits rather than
+   grepping for the shape it is supposed to emit. It is a pure function over a
+   ground and a box, so it loads here without a browser; the alias resolver is
+   what its `@/lib/...` imports need. */
+const { frostedGroundMarkup } = await (async () => {
+  const { registerTsResolution } = await import("./lib/resolve-ts.mjs");
+  return registerTsResolution(ROOT)("src/features/viewer/export/ground.ts");
+})();
 
 let failures = 0;
 let assertions = 0;
@@ -488,17 +497,26 @@ console.log(
    actually has, where a flat ceiling cannot, so it is what still catches a
    wash growing into a panel on a theme nobody has measured by hand.
 
-   THE BAND WAS [0, 0.35], THEN 0.4, NOW 0.6, raised each time to exactly the
-   value asked for and never to a round number past it. A band with slack in it
-   has stopped being a limit: the next person who wants a louder wash should
-   have to come back here and re-measure, and what they will find is that
-   roughly 0.8 is the end of the road and that past it the answer is a
-   different ink, not more alpha.
+   THE BAND WENT [0, 0.35], 0.4, 0.6, AND IS NOW BACK AT 0.4. Each raise was to
+   exactly the value asked for and never to a round number past it; the same
+   discipline is what brings it back down, because a ceiling left standing above
+   the strength anybody actually uses has stopped being a limit and is only a
+   licence nobody has read.
+
+   WHAT MADE THE CLIMB STOP was finding out which failure the knob was being
+   turned at. The area was hard to read because the drafting ruling BEATS
+   against the drawing's strokes under it, and a wash attenuates that only as a
+   side effect — at α the lattice still runs at (1−α) — so halving the
+   irritation meant nearly doubling a tone that is charged to the connectors.
+   `--diagram-surface-blur` attacks the interference directly and, being
+   mean-preserving, is charged nothing; the frost section below measures it. So
+   the road past 0.4 is not more alpha and is no longer a different ink either:
+   it is the other knob.
 
    And a wash that is switched on must not eat the drawing: the connectors and
    the text are measured ON the composite, at the same floors the palette
    checks hold them to everywhere else. */
-const WASH_MAX_OPACITY = 0.6;
+const WASH_MAX_OPACITY = 0.4;
 /* The ground's own visibility floor, kept from the model above rather than
    invented here: a wash quieter than this is an option a reader cannot see,
    which is worse than not offering it. */
@@ -595,6 +613,366 @@ for (const theme of THEMES) {
   );
 }
 
+console.log("\nthe frost quiets the ruling, and nothing is lost under it");
+
+/* THE FROST IS THE FOURTH SEAM, AND BLUR HAS NO CONTRAST NUMBER — but it has
+   arithmetic consequences, and those are measurable against the real ladder.
+   The property this section exists for is the one the wash's own first
+   assertion states in luminance, restated in FREQUENCY: the sheet is TONED,
+   never PIERCED. A wash that hides the ruling is a panel; a frost that erases
+   the ruling is a soft-edged clearing, which is the same mistake arriving by
+   the other door, and it would arrive silently because every colour assertion
+   above stays green while it happens.
+
+   THE MODEL, stated so a later reader can argue with it rather than trust it.
+   A Gaussian of standard deviation σ attenuates a periodic pattern of pitch p
+   by exp(−2π²σ²/p²) — its fundamental, which is what the eye reads as "the
+   ruling". The residual ruling's contrast is approximated as
+   1 + (crisp − 1)·residual: linear in contrast rather than in luminance, which
+   is a simplification, and a generous one in the direction that matters (it
+   over-reports what survives, so the "still visible" floor is the harder side
+   of it to pass).
+
+   TWO ENDS, BOTH FAILABLE. Too much σ and the ruling converges to its own mean
+   — on `blueprint` that is 1.08:1 against the canvas, under the 1.1:1 floor a
+   ground must clear to be seen at all, and the frost has become the hole
+   `lib/diagram-surface.ts` spends a paragraph refusing. Too little and the
+   residual is nearly 1: a knob that changes nothing, which reads as broken.
+
+   AND THE COMPOSITE IS RE-MEASURED, because the frost sits UNDER the wash and
+   the drawing sits on both. Blur is mean-preserving, so these numbers barely
+   move from the wash-only ones — the assertions are here so that a future σ,
+   ink or ladder change cannot quietly starve the connectors while every other
+   number in this file stays green.
+
+   WHAT THIS CANNOT ASSERT, said plainly: that a browser composites the blur.
+   It proves the declaration is present, theme-scoped and arithmetically sound,
+   and it proves the EXPORT construction in full, because a file is bytes. That
+   is the same epistemic position the wash is in — nothing here asserts the
+   browser paints `fill-opacity` either. */
+const FROST_MIN_VISIBLE = WASH_MIN_VISIBLE;
+/* Over this, σ is decoration. The window it leaves at blueprint's p = 40 is
+   roughly σ ∈ [5, 14]px, and 8 sits in the middle of it on purpose. */
+const FROST_MAX_RESIDUAL = 0.75;
+
+/* PINNED OFF, WITH THEIR REASONS — the `WASH_PINNED_OFF` shape, and one more
+   theme than the wash pins, because `contrast` refuses a frost for a reason of
+   its own rather than for the wash's. */
+const FROST_PINNED_OFF = {
+  contrast:
+    "it grounds NOTHING by explicit argument — anything behind the only marks " +
+    "carrying meaning does active harm — so a frost would be a treatment of a " +
+    "ground it refuses to have, and a blur in a maximum-legibility theme is a " +
+    "smear by definition",
+  paper:
+    "its ground is the MATERIAL, in sheet space: blurring paper fibre says the " +
+    "paper is out of focus, not that the drawing has a home. Same refusal the " +
+    "wash records, one layer down",
+  eink:
+    "its ground is likewise the sheet rather than a ruling, and its identity " +
+    "budget is spent — five greys plus the role texture plus the grain",
+};
+
+{
+  const mixOver = (ink, groundRgb, alpha) =>
+    ink.map((v, i) => v * alpha + groundRgb[i] * (1 - alpha));
+  const residualOf = (sigma, pitch) =>
+    Math.exp((-2 * Math.PI ** 2 * sigma ** 2) / pitch ** 2);
+
+  for (const theme of THEMES) {
+    const tokens = tokensOf(CSS, theme);
+    if (tokens === null) continue;
+    const raw = resolveToken("--diagram-surface-blur", tokens, baseline);
+    const sigma = Number.parseFloat(raw);
+    check(
+      `${theme}: its frost radius is a length (${raw})`,
+      Number.isFinite(sigma) && sigma >= 0,
+      `--diagram-surface-blur is ${raw}, which the exporter's ` +
+        "`Number.parseFloat` reads as 0 — the screen would frost and the " +
+        "downloaded file would not",
+    );
+    const pinned = FROST_PINNED_OFF[theme];
+    if (pinned !== undefined) {
+      check(
+        `${theme}: it stays off the frost`,
+        sigma === 0,
+        `${theme} opted into the diagram frost at ${raw}, but ${pinned}`,
+      );
+    }
+    if (!(sigma > 0)) continue;
+
+    const canvas = parseOklch(resolveToken("--canvas", tokens, baseline));
+    const dot = resolveToken("--canvas-rule-dot", tokens, baseline);
+    const line = resolveToken("--canvas-rule-line", tokens, baseline);
+    const ruleInk = parseOklch(line === "transparent" ? dot : line);
+    if (canvas === null || ruleInk === null) {
+      check(`${theme}: its frost tokens resolve`, false);
+      continue;
+    }
+    if (dot === "transparent" && line === "transparent") {
+      check(
+        `${theme}: it has a ruling for the frost to quiet`,
+        false,
+        "this theme rules its well in neither shape, so the frost is a " +
+          "compositing layer over a flat ground — all cost, nothing read",
+      );
+      continue;
+    }
+    const inkRgb = flatten(ruleInk, canvas);
+
+    /* THE REAL RUNG, from the module the exporter itself calls. An export has
+       no camera, so `groundLevels(1)` is the ladder the file carries — and the
+       screen's own frost is scaled by the viewer's measured shrink precisely so
+       the two stay this comparison. */
+    const levels = ground.groundLevels(1);
+    /* The LEAST attenuated level is the one that decides both ends: it is what
+       survives the blur (the visibility floor) and what the blur has to move
+       at all (the does-something ceiling). */
+    let worst = null;
+    for (const level of levels) {
+      const residual = residualOf(sigma, level.worldPitch);
+      if (worst === null || residual > worst.residual) {
+        worst = { level, residual };
+      }
+    }
+    const crisp = contrast(
+      mixOver(inkRgb, canvas.rgb, worst.level.opacity),
+      canvas.rgb,
+    );
+    const frosted = 1 + (crisp - 1) * worst.residual;
+    check(
+      `${theme}: its ruling still runs through the frost ` +
+        `(${crisp.toFixed(3)} → ${frosted.toFixed(3)}:1 at σ=${sigma})`,
+      frosted >= FROST_MIN_VISIBLE,
+      `at σ=${sigma} the ruling inside the diagram area falls to ` +
+        `${frosted.toFixed(3)}:1, under the ${FROST_MIN_VISIBLE}:1 floor — ` +
+        "the sheet no longer runs through the area, so this is a soft-edged " +
+        "clearing rather than a frost, which is the hole the surface " +
+        "treatment exists to refuse",
+    );
+    check(
+      `${theme}: its frost actually quiets something ` +
+        `(residual ${worst.residual.toFixed(3)})`,
+      worst.residual <= FROST_MAX_RESIDUAL,
+      `at σ=${sigma} against a ${worst.level.worldPitch}-unit pitch the ` +
+        `lattice keeps ${(worst.residual * 100).toFixed(0)}% of its amplitude ` +
+        `— over ${FROST_MAX_RESIDUAL * 100}% is a knob that costs a ` +
+        "compositing layer and changes nothing a reader can see",
+    );
+
+    /* THE COMPOSITE, with the frost in it: the ruling flattened to its blurred
+       MEAN over the canvas (mean-preserving is the whole reason blur costs the
+       drawing nothing, so this is the honest reading), then the wash over that,
+       then the drawing's ink on the result. */
+    const width = worst.level.lineWidthPx / worst.level.worldPitch;
+    const coverage = 2 * width - width * width;
+    const blurred = mixOver(inkRgb, canvas.rgb, worst.level.opacity * coverage);
+    const washOpacity = Number(
+      resolveToken("--diagram-surface-opacity", tokens, baseline),
+    );
+    const washInk = parseOklch(
+      resolveToken("--diagram-surface-fill", tokens, baseline),
+    );
+    const edge = parseOklch(resolveToken("--edge", tokens, baseline));
+    const text = parseOklch(resolveToken("--foreground", tokens, baseline));
+    if ([washInk, edge, text].some((c) => c === null)) {
+      check(`${theme}: its frosted composite resolves`, false);
+      continue;
+    }
+    const composite = mixOver(
+      flatten(washInk, canvas),
+      blurred,
+      Number.isFinite(washOpacity) ? washOpacity : 0,
+    );
+    const edgeOn = contrast(flatten(edge, canvas), composite);
+    const textOn = contrast(flatten(text, canvas), composite);
+    check(
+      `${theme}: connectors still read on the frosted composite (${edgeOn.toFixed(2)}:1)`,
+      edgeOn >= WASH_EDGE_MIN,
+      `--edge measures ${edgeOn.toFixed(2)}:1 on wash-over-frost, under ` +
+        `${WASH_EDGE_MIN}:1 — the sheet is swallowing the drawing`,
+    );
+    check(
+      `${theme}: text still reads on the frosted composite (${textOn.toFixed(2)}:1)`,
+      textOn >= WASH_TEXT_MIN,
+      `--foreground measures ${textOn.toFixed(2)}:1 on wash-over-frost, under ` +
+        `${WASH_TEXT_MIN}:1`,
+    );
+  }
+}
+
+/* THE DECLARATION IS SCOPED TO THE THEME, which is the argument `.af-glass`
+   made first and the one a later pass is most likely to "simplify": a backdrop
+   filter promotes a compositing layer whether or not the blur is visible, so an
+   unscoped rule charges eight themes for an effect one uses. */
+{
+  const frostRules = [
+    ...CSS.matchAll(/([^{}]*\.af-diagram-frost[^{}]*)\{([^{}]*)\}/g),
+  ].map(([, selector, body]) => ({ selector: selector.trim(), body }));
+  const filtered = frostRules.filter(({ body }) =>
+    /backdrop-filter/.test(body),
+  );
+  check(
+    `the frost's blur is declared once, under a theme (${filtered.length})`,
+    filtered.length === 1 &&
+      /^\.[a-z-]+ \.af-diagram-frost$/.test(filtered[0].selector),
+    filtered.length === 0
+      ? "nothing applies `backdrop-filter` to `.af-diagram-frost`, so the " +
+          "token is declared and spent by nobody"
+      : `\`${filtered.map((rule) => rule.selector).join("`, `")}\` — an ` +
+          "unscoped backdrop filter builds a compositing layer on every " +
+          "theme's diagram pane to show a blur only one of them asks for",
+  );
+  check(
+    "the frost's blur is the token, scaled by the shrink the viewer measured",
+    filtered.length === 1 &&
+      /var\(--diagram-surface-blur\)/.test(filtered[0].body) &&
+      /var\(--diagram-surface-blur-scale/.test(filtered[0].body),
+    "the blur is a literal, or ignores the measured shrink — a squeezed pane " +
+      "squeezes the ground's pitch with it, so a fixed radius quiets the " +
+      "ruling hardest for the readers with the least room",
+  );
+  /* THE FALLBACK IS FOUND BY POSITION rather than by content, because the
+     honest fallback here is an EMPTY block: an engine without backdrop filters
+     shows the crisp ruling under the wash, which is what shipped before the
+     frost and needs no rescuing. What the check is really asking is whether the
+     case was decided, so it looks for the block that follows the frost's own
+     declaration, the way `.af-glass` records its decision beside itself. */
+  const scoped = CSS.indexOf(".blueprint .af-diagram-frost");
+  const after = scoped < 0 ? "" : CSS.slice(scoped);
+  const supports =
+    /@supports not \(backdrop-filter: blur\(1px\)\)\s*\{([\s\S]*?)\n\}/.exec(
+      after,
+    );
+  check(
+    "the browsers without backdrop filters were decided about",
+    supports !== null,
+    "no `@supports not (backdrop-filter: …)` block follows the frost — the " +
+      "fallback is the wash-only rendering that shipped before it, and that " +
+      "is a decision worth recording rather than leaving to be rediscovered",
+  );
+  check(
+    "and the fallback does not fork the export by browser",
+    supports === null ||
+      !/--diagram-surface-(opacity|fill|blur)\s*:/.test(
+        supports[1].replace(/\/\*[\s\S]*?\*\//g, ""),
+      ),
+    "the support fallback redeclares a diagram-surface token, and the " +
+      "exporter reads those out of the live computed styles — two readers of " +
+      "one document would download two different pictures of it",
+  );
+}
+
+/* THE THIRD RENDITION READS THE SHARED GEOMETRY. `diagramSurfaceBox` is the one
+   answer to "where is the sheet"; the SVG rect, the exported markup and now the
+   frost `<div>` all go through it, or the blurred region and the rule that
+   edges it are two boxes that agree until somebody edits one. */
+{
+  const frost = readCode("src/components/ui/diagram-frost.tsx");
+  check(
+    "the frost is positioned from the shared surface geometry",
+    /diagramSurfaceBox\(/.test(frost) && /af-diagram-frost/.test(frost),
+    "`DiagramFrost` derives its own box, so the blur and the rule around it " +
+      "can drift apart by an edit to either",
+  );
+  for (const kind of SURFACE_KINDS) {
+    const viewer = readCode(
+      `src/features/${kind}/components/${kind}-viewer.tsx`,
+    ).replace(/^import[\s\S]*?;$/gm, "");
+    check(
+      `${kind}: its viewer mounts the frost around the drawing`,
+      /<DiagramFrost\b/.test(viewer),
+      "this kind draws its surface but never mounts the frost, so on " +
+        "`blueprint` its screen and its download disagree about the ruling " +
+        "under the diagram",
+    );
+  }
+  check(
+    "the export resolver reads the frost token",
+    /--diagram-surface-blur/.test(
+      readCode("src/features/viewer/export/theme.ts"),
+    ),
+    "`resolveExportTheme` never reads `--diagram-surface-blur`, so a frosted " +
+      "screen downloads a crisp file",
+  );
+  for (const kind of SURFACE_KINDS) {
+    check(
+      `${kind}: its exporter frosts from the theme, never a literal`,
+      /frostedGroundMarkup\(\{[\s\S]{0,240}?blur:\s*theme\.diagramSurface\.blur/.test(
+        readCode(`src/features/${kind}/export/render-svg.ts`),
+      ),
+      "this exporter splits the ground on a number of its own, so the file's " +
+        "frost stops being the one the reader was looking at",
+    );
+  }
+}
+
+/* AND THE CONSTRUCTION ITSELF IS MEASURED, not grepped. `frostedGroundMarkup`
+   is pure, so this calls it and reads the markup back. */
+{
+  const layers = (x, y, w, h) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+  const probe = { defs: "<pattern id='p'/>", layers };
+  const box = { x: 40, y: 40, width: 400, height: 300 };
+  const flat = frostedGroundMarkup({
+    ground: probe,
+    box,
+    blur: 0,
+    width: 500,
+    height: 400,
+  });
+  check(
+    "at blur 0 the ground is emitted exactly as it always was",
+    flat.defs === probe.defs && flat.layers === layers(0, 0, 500, 400),
+    "a theme with no frost gets a clip apparatus wrapped around its ground, " +
+      "which changes the bytes of eight themes' downloads to show nothing",
+  );
+  const sigma = 8;
+  const frosted = frostedGroundMarkup({
+    ground: probe,
+    box,
+    blur: sigma,
+    width: 500,
+    height: 400,
+  });
+  const region =
+    /<filter id="af-frost-blur" filterUnits="userSpaceOnUse" x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"><feGaussianBlur stdDeviation="([\d.]+)"\/>/.exec(
+      frosted.defs,
+    );
+  check(
+    "the frost's filter states its region in user units and carries the σ it was given",
+    region !== null && Number(region[5]) === sigma,
+    "the filter region is left to its `objectBoundingBox` default — the " +
+      "collapsed-region geometry `new-diagram-type.md` bans filters over — " +
+      "or the σ is not the one the theme asked for",
+  );
+  check(
+    `the region is expanded by at least 3σ (${region === null ? "no region" : Number(region[3]) - box.width})`,
+    region !== null &&
+      Number(region[1]) <= box.x - 3 * sigma &&
+      Number(region[2]) <= box.y - 3 * sigma &&
+      Number(region[3]) >= box.width + 6 * sigma &&
+      Number(region[4]) >= box.height + 6 * sigma,
+    "a region tighter than 3σ clips the blur's own tail, which draws a band " +
+      "just inside the surface where the ruling stops early",
+  );
+  check(
+    "the clip is applied OUTSIDE the filter, so the frost's edge does not vignette",
+    /<g clip-path="url\(#af-frost-in\)"><g filter="url\(#af-frost-blur\)">/.test(
+      frosted.layers,
+    ),
+    "the ground is clipped before it is blurred, so the Gaussian has nothing " +
+      "to average at the boundary and darkens into it — a shadow ringing the " +
+      "inside of the diagram's own frame",
+  );
+  check(
+    "the crisp piece is cut by an even-odd hole, not a second rectangle",
+    /<clipPath id="af-frost-out"><path clip-rule="evenodd"/.test(frosted.defs),
+    "two rects in one `<clipPath>` UNION rather than subtract, so the crisp " +
+      "ground paints straight through the frost and the blur is invisible",
+  );
+}
+
 /* THE PANNING MECHANISM, and it is one CSS keyword. `local` means "this
    background is part of the scrolled content", which is exactly what a rule is
    and exactly what the material below must never be. `scroll` (the initial
@@ -651,7 +1029,13 @@ for (const theme of THEMES) {
    which no longer carries a ground at all now that it lives on the pane — so
    that one must put it back. Same defect as before, from the other direction:
    the path that used to carry the ground when nobody wanted it is the path that
-   would now silently drop it. */
+   would now silently drop it.
+
+   THE THREE SURFACE KINDS REACH IT THROUGH `frostedGroundMarkup`, which hands
+   back the same `defs`/`layers` pair `resolveExportGround` produced — unsplit
+   when the theme asks for no frost, split around the diagram surface when it
+   does. Either spelling counts here: what this assertion is about is whether
+   the sheet reaches the file at all. */
 const exporters = [];
 for (const kind of [...KINDS.filter((kind) => kind !== "c4"), "viewer"]) {
   const exporter = `src/features/${kind}/export/render-svg.ts`;
@@ -663,7 +1047,9 @@ for (const kind of [...KINDS.filter((kind) => kind !== "c4"), "viewer"]) {
     `${kind}: its export carries the ground it was read on` +
       (clones ? " (clone path — it has to be put back)" : ""),
     /resolveExportGround\(\)/.test(code) &&
-      (clones ? /ground\.layers\(/.test(code) : /ground\.defs/.test(code)),
+      (clones
+        ? /ground\.layers\(/.test(code)
+        : /ground\.defs/.test(code) || /frostedGroundMarkup\(/.test(code)),
     clones
       ? "this exporter copies what is on screen, and the screen's ground is on " +
           "the PANE — outside the clone. A file from this path silently loses " +
