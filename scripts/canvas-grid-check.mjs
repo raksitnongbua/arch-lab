@@ -465,17 +465,35 @@ console.log(
    the numbers below are relative to the grid contrast this file already
    measures.
 
-   THE CEILING IS THE POINT. `--diagram-surface-opacity` may be anything in
-   [0, 0.35], and a wash that is switched on must additionally stay QUIETER
-   than its own theme's ruling. Between them those two say "tone the sheet,
-   do not stack a second ground on it" as arithmetic rather than as prose —
-   without which the treatment is one edit from being the opaque `--node`
-   panel the line-only revision removed, and nothing would notice.
+   THE RULING COMPARISON IS THE ASSERTION DOING THE WORK, and the band below is
+   the coarse backstop behind it. `--diagram-surface-opacity` may be anything in
+   [0, 0.4], and a wash that is switched on must additionally stay QUIETER than
+   its own theme's ruling. Between them those two say "tone the sheet, do not
+   stack a second ground on it" as arithmetic rather than as prose — without
+   which the treatment is one edit from being the opaque `--node` panel the
+   line-only revision removed, and nothing would notice.
+
+   THE BAND WAS [0, 0.35] AND WAS RAISED TO EXACTLY 0.4, which is worth saying
+   out loud because the honest version is less flattering than the tidy one:
+   the ceiling was a guess made before anyone had looked at the wash, blueprint
+   was moved to 0.4 by the person whose product it is, and the guess was what
+   gave way. It was raised to the value asked for and NOT a round number past
+   it — a band with slack in it has stopped being a limit, and the next person
+   to want a louder wash should have to come back here and re-measure rather
+   than find room already made for them.
+
+   WHAT DID NOT MOVE IS THE RULING COMPARISON, and that is the part to defend.
+   It scales with whatever ground a theme actually has, where a flat ceiling
+   cannot, so it is what still catches a wash growing into a panel on a theme
+   nobody has measured by hand. At 0.4 on blueprint the wash sits at 1.412:1
+   against a 2.030:1 ruling — real headroom — while `--node-border` at the same
+   alpha would read 2.341:1 and FAIL it. The ceiling did not catch that; this
+   did.
 
    And a wash that is switched on must not eat the drawing: the connectors and
    the text are measured ON the composite, at the same floors the palette
    checks hold them to everywhere else. */
-const WASH_MAX_OPACITY = 0.35;
+const WASH_MAX_OPACITY = 0.4;
 /* The ground's own visibility floor, kept from the model above rather than
    invented here: a wash quieter than this is an option a reader cannot see,
    which is worse than not offering it. */
