@@ -429,6 +429,33 @@ function Row({
             height={GANTT.barHeight}
             rx={4}
           />
+          {/* THE FOCUS HALO, and it is the one mark focus is allowed to ADD.
+              The standing rule that focus DIMS and never REPAINTS still holds —
+              nothing already drawn changes colour, weight or radius. What was
+              missing is that dimming only ever SUBTRACTS: everything unrelated
+              goes quiet and the bar you chose gains nothing, which reads as
+              weak on a plan busy enough to need selecting in the first place.
+
+              A DRAWN SHAPE, NEVER AN SVG `filter`. A glow was tried as a filter
+              on the ER canvas and its region collapsed on axis-aligned
+              geometry, painting bands across the diagram; this canvas's own
+              header carries the rule that came out of it, and a Gantt is almost
+              entirely axis-aligned runs, so it is the worst place to forget.
+              The use-case and flowchart canvases already emit a shaped ring
+              beside their hit target; this is the same family.
+
+              THREE UNITS PROUD OF THE BAR, which fits: `rowHeight` is 34 and
+              `barHeight` 18 at `barOffsetY` 8, so there are eight units of air
+              above and below every bar and the halo spends three of them. The
+              paint lives in `globals.css` beside the other rings. */}
+          <rect
+            className="af-gantt-ring"
+            x={item.x0 - 3}
+            y={item.barY - 3}
+            width={width + 6}
+            height={GANTT.barHeight + 6}
+            rx={7}
+          />
           {/* THE ROLE TEXTURE, between the fill and the duration hatch. Under
               the hatch on purpose: the hatch is the louder mark and the one
               that answers the question a plan is read for, so it must not be

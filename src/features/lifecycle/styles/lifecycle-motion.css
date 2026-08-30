@@ -377,6 +377,14 @@
 .af-lc-canvas.af-lc-has-focus .af-lc-row[data-lit="1"] {
   opacity: 1;
 }
+/* THE HALO ON THE SELECTED state. Its paint is in `globals.css` with the
+   other four canvases' rings; this is the only thing that differs — WHEN it
+   shows. Tied to `data-lit`, so it follows a click and a keyboard focus alike
+   rather than only `:focus-visible`, which would have left a clicked row with
+   the dimming and nothing else. */
+.af-lc-canvas.af-lc-has-focus .af-lc-row[data-lit="1"] .af-lc-ring {
+  opacity: 1;
+}
 
 /* ---------------------------------------------------------------------------
  * Motion proper.

@@ -270,6 +270,35 @@ function StateRow({
         <Exit key={exit.key} exit={exit} state={state} spineX={spineX} />
       ))}
 
+      {/* THE FOCUS HALO, and it is the one mark focus is allowed to ADD.
+          The standing rule on this canvas is that focus DIMS and never
+          REPAINTS, and that still holds — nothing already drawn changes colour,
+          weight or radius. What was missing is that dimming only ever
+          SUBTRACTS: everything unrelated goes quiet and the thing you chose
+          gains nothing, which reads as weak exactly when the diagram is busy.
+
+          A DRAWN SHAPE, NEVER AN SVG `filter`. A glow was tried as a filter on
+          the ER canvas and its region collapsed on axis-aligned geometry,
+          painting bands across the diagram; it cost three commits. The rule
+          that came out of it says what to do instead — "want a soft edge? draw
+          a wider path" — and the use-case and flowchart canvases already emit a
+          shaped ring beside their hit target for the same reason. This is the
+          third of that family.
+
+          IT COSTS NO SPACE, because the space was already spent.
+          `LIFECYCLE.ringRadius` has been in the layout table since this canvas
+          was written, commented as "the ring around a focused one", and every
+          state box is sized to `dotY + ringRadius + 2` — so the room has been
+          reserved all along and nothing was ever drawn in it.
+
+          The paint lives in `globals.css` beside those two, so one rule says
+          what a focus ring looks like; this canvas only says when it appears. */}
+      <circle
+        className="af-lc-ring"
+        cx={spineX}
+        cy={state.dotY}
+        r={LIFECYCLE.ringRadius}
+      />
       <circle
         className="af-lc-dot"
         cx={spineX}

@@ -27,6 +27,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **A selected row, event or bar now carries a ring, not just a dimmed
+  background.** Choosing one used to work only by fading everything else, which
+  subtracts and never adds — the thing you picked gained nothing. It now wears a
+  ring in the app's focus colour, the same shaped ring the flowchart and
+  use-case canvases have always drawn. On the timeline and the lifecycle the
+  room for it was reserved when those canvases were written and never used, so
+  nothing moves to make space.
+
 - **The focus ring is gone from the gantt, the timeline and the lifecycle, and
   clicking a sequence participant no longer boxes it.** On the first three the
   keyboard target is a band the full width of the drawing, so the ring drew a

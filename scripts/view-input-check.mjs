@@ -951,6 +951,57 @@ console.log(
     `${unsuppressed.join(", ")} — a CLICK on an SVG element with a tabindex gives it :focus WITHOUT :focus-visible, and the browser paints outline: auto in --ring for that`,
   );
 
+  /* FOCUS ADDS A MARK, IT STILL DOES NOT REPAINT ONE — and this is the line
+     that moved, so it is the line that has to be pinned.
+
+     Every one of these canvases carries a standing rule that focus DIMS and
+     never REPAINTS: no stroke, fill, width or radius on an existing mark
+     changes in either direction, because a focused dot that recolours is a new
+     mark where one already was. That rule stands. What it did not say is that
+     dimming only ever SUBTRACTS — everything unrelated goes quiet and the thing
+     the reader chose gains nothing — which is what a reader reported as the
+     focus style not reading well, suggesting a colour change or a glow.
+
+     BOTH SUGGESTIONS HAVE BEEN TRIED HERE AND REMOVED. `new-diagram-type.md`
+     records that the rule "used to permit a glow, a colour or a weight, and
+     colour and weight were both added and then removed, twice"; the glow was
+     an SVG `filter` whose region collapsed on axis-aligned geometry and painted
+     bands across the ER canvas, at a cost of three commits. So the answer is
+     the one that rule points at — "want a soft edge? draw a wider path" — a
+     real SVG shape in space the layout already reserved.
+
+     TWO THINGS ARE ASSERTED, and neither is "a ring exists". First that the
+     ring is a DRAWN SHAPE rather than a filter, because a filter is the thing
+     that shipped broken. Second that it is drawn BESIDE the mark rather than
+     on it, which is what keeps "focus does not repaint" true: if a canvas ever
+     satisfies this by restyling its dot, both halves of the rule are gone and
+     this check would have blessed it. */
+  const haloed = components.filter(([, , code]) => /-ring"/.test(code));
+  check(
+    `every canvas that lights a selection draws a shaped ring (${haloed.map(([f]) => f).join(", ")})`,
+    haloed.length >= 3,
+    `only ${haloed.length} — dimming alone subtracts and adds nothing, which is what a reader called weak`,
+  );
+  for (const [feature, rel, code] of haloed) {
+    check(
+      `${feature}: its focus ring is a drawn shape, not an SVG filter`,
+      !/filter=|filter:/.test(code),
+      `${rel} reaches for a filter — a percentage filter region is in objectBoundingBox units, and axis-aligned geometry collapses it (three commits on the ER canvas)`,
+    );
+    /* THE RING IS ITS OWN ELEMENT, never a class added to the mark. Asserted by
+       requiring the class to appear on a line that OPENS an element, so
+       `className="af-lc-dot af-lc-ring"` — restyling the dot, which is the
+       repaint the rule forbids — cannot satisfy it. */
+    const own = new RegExp(
+      `className="af-[\\w-]*-ring"[\\s\\S]{0,40}?(cx=|x=)`,
+    ).test(code);
+    check(
+      `${feature}: and is drawn beside the mark rather than onto it`,
+      own,
+      `${rel} carries the ring class on an existing mark — focus would then be repainting one, which every one of these canvases forbids in its own header`,
+    );
+  }
+
   /* AND NO CANVAS DRAWS ONE OF ITS OWN BACK. Written as the absence of the
      mechanism for the same reason the hover rule below is: restoring a focus
      outline is the obvious thing to do if someone reads the accessibility rule
