@@ -43,7 +43,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:canvas-grid
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1162,9 +1162,21 @@ console.log(
   "\nevery theme's --canvas-grid is visible, and quieter than its ink",
 );
 
-/* `--canvas-grid` IS NO LONGER THE WELL'S FIELD and still needs measuring: the
-   gantt's time ticks and the lifecycle's rail read it, and nothing else does.
-   Kept from the previous model with its floor and ceiling unchanged. */
+/* `--canvas-grid` IS NO LONGER THE WELL'S FIELD and still needs measuring —
+   but by whom changed, and this comment named the wrong readers while the
+   defect below was live. It is now read ONLY by things drawn on `--canvas`
+   itself: the home page's ruled backdrop and the marketing dot field. Every
+   mark inside a diagram has been moved off it, and the sweep after this one
+   holds them off it.
+
+   THE MEASUREMENT IS AGAINST `--canvas` BECAUSE THAT IS WHAT IT IS DRAWN ON,
+   which was true again only after that move. In between, the gantt's ticks,
+   the timeline's axis and rule and the lifecycle's spine all read this token
+   while sitting on the `--node` panel, and this section went on measuring them
+   against the canvas they had left. `midnight` passed here at 1.159:1 and
+   measured 1.030:1 against the panel actually under it — a line a reader
+   reported as simply not there. Floor and ceiling are unchanged; the readers
+   are what had to move. */
 for (const theme of THEMES) {
   const tokens = tokensOf(CSS, theme) ?? baseline;
   const grid = parseOklch(resolveToken("--canvas-grid", tokens, baseline));
@@ -1189,6 +1201,79 @@ for (const theme of THEMES) {
     failed.length === 0,
     failed.join("; "),
   );
+}
+
+console.log("\nnothing drawn on the panel is measured against the canvas");
+
+/* THE ASSERTION THE SECTION ABOVE ONLY LOOKED LIKE IT WAS MAKING. Its numbers
+   were right and its subject was wrong: it measured `--canvas-grid` against
+   `--canvas` while four canvases read that token from marks sitting on a
+   `--node` panel. Every theme passed. On `midnight` the timeline's axis, the
+   lifecycle's spine and the gantt's day ticks were all at 1.030:1 or below
+   against the ground actually behind them, and the first anyone knew was a
+   reader saying the line was not there.
+
+   So the rule is about WHO MAY READ THE TOKEN, not about its value: a mark on
+   the panel must paint from the `--node` family or from `--edge`, both of
+   which are measured against `--node` by construction. `--canvas-grid` is the
+   ground's own ruling and belongs to things drawn on the ground.
+
+   DERIVED FROM THE FILESYSTEM, never from a list of kind names — `codebase.md`
+   records three checks in this repo that passed while the feature under them
+   was broken, all for the same reason: a hardcoded list cannot notice the
+   thing it has never heard of. A fifth notation that draws on the surface is
+   covered the day it is written. */
+{
+  const FEATURES = path.join(ROOT, "src/features");
+  const onSurface = [];
+  /* COMMENTS STRIPPED BEFORE SCANNING, and this is not tidiness — the first
+     run of this sweep failed on all three fixed files, because the prose
+     explaining WHY the token was abandoned says its name. `check:lifecycle-
+     motion` carries the same stripper for the same reason: an assertion that
+     forbids a mechanism by name will always match the paragraph arguing
+     against it, and passing it a raw file makes a correct fix look like the
+     defect. */
+  const stripComments = (code) =>
+    code.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  for (const feature of readdirSync(FEATURES).sort()) {
+    /* THE MARKER IS THE SURFACE ITSELF, asked of the code rather than of a
+       register beside it. TWO SPELLINGS, because there are two ways onto the
+       panel: three kinds render the shared `DiagramSurface` (or emit
+       `diagramSurfaceMarkup`), and the dictionary draws its own panel by hand
+       and shares only the corner radius. The first pass of this sweep knew
+       only the first spelling and silently dropped the dictionary — caught by
+       the count assertion below, which exists for exactly that. */
+    const files = [
+      `${feature}/components/${feature}-diagram.tsx`,
+      `${feature}/export/render-svg.ts`,
+      `${feature}/styles/${feature}-motion.css`,
+    ]
+      .map((rel) => path.join(FEATURES, rel))
+      .filter((abs) => existsSync(abs))
+      .map((abs) => [abs, stripComments(readFileSync(abs, "utf8"))]);
+    if (files.length === 0) continue;
+    const draws = files.some(([, code]) =>
+      /DiagramSurface|diagramSurfaceMarkup|DIAGRAM_SURFACE_RADIUS/.test(code),
+    );
+    if (!draws) continue;
+    const offenders = files
+      .filter(([, code]) => /--canvas-grid|theme\.canvasGrid/.test(code))
+      .map(([abs]) => path.relative(ROOT, abs));
+    onSurface.push([feature, offenders]);
+  }
+
+  check(
+    `every kind that draws on the surface was found (${onSurface.map(([f]) => f).join(", ")})`,
+    onSurface.length >= 4,
+    `only ${onSurface.length} — the marker stopped matching, so the sweep below proves nothing`,
+  );
+  for (const [feature, offenders] of onSurface) {
+    check(
+      `${feature}: draws on the panel, so it reads no --canvas-grid`,
+      offenders.length === 0,
+      `${offenders.join(", ")} paints the ground's own ruling onto a --node panel, where it is not measured against anything`,
+    );
+  }
 }
 
 /* ----------------------------------------------------------------------- */

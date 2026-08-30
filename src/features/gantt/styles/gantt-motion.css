@@ -400,9 +400,24 @@
 .af-gantt-duration {
   fill: var(--node-meta);
 }
+/* THE TIME GRID AND THE RULES, which DO want to stay back — so unlike the
+   timeline's axis and the lifecycle's spine next door, these keep their role
+   and only change their reference. They painted from `--canvas-grid`, tuned
+   against `--canvas`, while the plan is drawn on a `--node` panel: on
+   `midnight` a day tick measured 1.016:1 against the panel it is drawn on,
+   which is not a quiet line but no line.
+
+   The panel's OWN edge, held back by `stroke-opacity` rather than by a
+   hand-picked colour, so it stays one relation in all nine themes. The three
+   strengths this canvas already draws — 0.55 for a day tick, 0.7 for a section
+   rule, 1 for the axis — multiply through it and land at 1.172–5.848:1, every
+   one inside the visible floor and under the ceiling `check:canvas-grid` holds
+   a ruling to. The hierarchy between them is unchanged; only the ground they
+   are measured against is. */
 .af-gantt-grid,
 .af-gantt-rule {
-  stroke: var(--canvas-grid);
+  stroke: var(--node-border);
+  stroke-opacity: 0.4;
 }
 
 .af-gantt-hit {

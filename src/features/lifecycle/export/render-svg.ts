@@ -174,7 +174,7 @@ export function renderLifecycleSvg(
 
   push(
     `<line x1="${layout.spineX}" y1="${layout.spineY0}" x2="${layout.spineX}" y2="${layout.spineY1}" ` +
-      `stroke="${theme.canvasGrid}" stroke-width="2" stroke-linecap="round"/>`,
+      `stroke="${theme.edge}" stroke-width="2" stroke-linecap="round"/>`,
   );
 
   for (const state of layout.states) {

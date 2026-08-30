@@ -56,6 +56,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A timeline's axis, a lifecycle's track and a gantt's day grid were close to
+  invisible on the dark themes.** All of them were painted in the colour the
+  canvas rules its own background with, which was fine while the drawing sat
+  straight on that background and stopped being fine when it moved onto a
+  panel: on `midnight` the timeline's axis was one step away from the panel
+  under it. The two structural lines are now drawn in the connector colour, and
+  the grids in the panel's own edge held back — measured against the panel in
+  all nine themes, on screen and in exported files alike. The lightest themes
+  change least; `midnight` and `dark` change most.
+
 - **A lifecycle branch that returned to its very first state pointed its arrow
   at blank canvas.** The arrowhead landed in the space above the first state,
   where the track has not started yet, so the one connector on the canvas that

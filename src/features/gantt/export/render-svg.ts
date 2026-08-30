@@ -256,12 +256,12 @@ export function renderGanttSvg(
   for (const tick of layout.ticks) {
     push(
       `<line x1="${tick.x}" y1="${axisY}" x2="${tick.x}" y2="${layout.height - 12}" ` +
-        `stroke="${theme.canvasGrid}" stroke-width="1" opacity="0.55"/>`,
+        `stroke="${theme.nodeBorder}" stroke-opacity="0.4" stroke-width="1" opacity="0.55"/>`,
     );
   }
   push(
     `<line x1="${GANTT.plotX0}" y1="${axisY}" x2="${GANTT.plotX1}" y2="${axisY}" ` +
-      `stroke="${theme.canvasGrid}" stroke-width="1"/>`,
+      `stroke="${theme.nodeBorder}" stroke-opacity="0.4" stroke-width="1"/>`,
   );
   const axisTextAttributes = `font-size="10" fill="${theme.mutedForeground}"`;
   for (const tick of layout.ticks) {
@@ -284,7 +284,7 @@ export function renderGanttSvg(
     );
     push(
       `<line x1="0" y1="${section.ruleY}" x2="${GANTT.plotX1}" y2="${section.ruleY}" ` +
-        `stroke="${theme.canvasGrid}" stroke-width="1" opacity="0.7"/>`,
+        `stroke="${theme.nodeBorder}" stroke-opacity="0.4" stroke-width="1" opacity="0.7"/>`,
     );
   }
 

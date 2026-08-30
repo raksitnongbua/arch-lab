@@ -122,14 +122,34 @@
   opacity: 1;
 }
 
+/* THE AXIS, AND IT IS INK RATHER THAN RULING. It used to paint from
+   `--canvas-grid`, the token for the faint lines the CANVAS rules its own
+   ground with, and that was survivable only while the drawing sat straight on
+   that ground. It does not any more: the drawing sits on a `--node` panel, and
+   `--canvas-grid` is tuned against `--canvas` — on `midnight` the two are one
+   step apart and the axis measured 1.030:1 against the panel it is drawn on.
+   That is not faint, it is absent, which is what a reader reported.
+
+   `--edge` is the connector token and is measured against `--node` in every
+   theme by construction (worst 3.008:1, on `pastel`). It is also the right
+   token on the merits and always was: this line is the mark the eye follows
+   from one event to the next, not a ruling the drawing politely ignores. */
 .af-timeline-spine {
-  stroke: var(--canvas-grid);
+  stroke: var(--edge);
   stroke-width: 2;
   stroke-linecap: round;
 }
 
+/* The quiet ruling, which genuinely does want to stay back — so it takes the
+   PANEL'S OWN EDGE held back, rather than the ground's ruling. Held back by
+   `stroke-opacity` and not by a hand-picked colour, so it stays one relation
+   ("a fainter version of the edge this panel is drawn with") in all nine
+   themes. 0.4 × the element's own 0.55 lands at 1.172–3.667:1 across them,
+   inside the visible floor and under the ceiling `check:canvas-grid` holds
+   every ruling to. */
 .af-timeline-rule {
-  stroke: var(--canvas-grid);
+  stroke: var(--node-border);
+  stroke-opacity: 0.4;
   stroke-width: 1;
   opacity: 0.55;
 }

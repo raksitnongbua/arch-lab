@@ -188,8 +188,23 @@
   opacity: 0.42;
 }
 
+/* THE TRACK, AND IT IS INK RATHER THAN RULING. It painted from
+   `--canvas-grid` — the token the CANVAS rules its own ground with — which
+   held only while the drawing sat straight on that ground. It sits on a
+   `--node` panel now, and `--canvas-grid` is tuned against `--canvas`: on
+   `midnight` the spine measured 1.030:1 against the panel under it. The
+   timeline's axis had the same defect for the same reason and is fixed in the
+   same breath.
+
+   `--edge` is measured against `--node` in every theme by construction (worst
+   3.008:1). It is also what this line always was: the continuous mark a reader
+   follows, which is the same class of thing as the stubs and returns that
+   already paint from it. One linework family, told apart by WEIGHT and
+   GEOMETRY — the spine is 2 and carries the dots, a branch is 1.5 and leaves
+   sideways — which is exactly the distinction-without-hue this canvas argues
+   for everywhere else. */
 .af-lc-spine {
-  stroke: var(--canvas-grid);
+  stroke: var(--edge);
   stroke-width: 2;
   stroke-linecap: round;
 }
