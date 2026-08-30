@@ -42,5 +42,18 @@ export function sourceLineAt(text: string, line: number): string | null {
  * the two functions cannot be read as disagreeing about what a line break is.
  */
 export function lineCount(text: string): number {
-  return text.replace(/\r?\n$/, "").split(/\r?\n/).length;
+  return sourceLines(text).length;
+}
+
+/**
+ * The lines a gutter should draw for `text`, in order.
+ *
+ * Same rule as `lineCount` — which is now defined as this list's length, so the
+ * two cannot disagree. A gutter that WRAPS needs the lines themselves and not
+ * just how many there are: each number has to be laid out beside a copy of its
+ * own line, because that copy is what makes the row as tall as the wrap made it.
+ * Counting alone was enough only while every line was exactly one row.
+ */
+export function sourceLines(text: string): string[] {
+  return text.replace(/\r?\n$/, "").split(/\r?\n/);
 }

@@ -1539,17 +1539,18 @@ export function ViewPlayground({
                   onKeyDown={(event) => handleEditorKeyDown(event, "source")}
                   aria-describedby={editingHintId}
                   aria-invalid={paneError?.pane === "source"}
-                  /* `rows` is the MOBILE size only: stacked, the page
-                     scrolls and a fixed height is right. On `lg` the pane
-                     flexes instead (see the rail's note) and `resize-none`
-                     goes with it — a drag handle fighting a flex height lets
-                     the editor push the hint off the bottom. */
-                  rows={14}
-                  /* The WRAPPER takes the sizing now — the gutter and the text
-                     are two columns inside it, so a height on the textarea
-                     alone would leave the numbers a different length. */
+                  /* THE WRAPPER CARRIES THE HEIGHT, and it has to: the pane
+                     wraps its long lines now, so the textarea is laid over a
+                     mirror of the text and is exactly as tall as that — `rows`
+                     would size a box that no longer decides anything.
+
+                     The fixed height is the MOBILE size only: stacked, the page
+                     scrolls and a pane that grew with the document would push
+                     everything below it off the screen. On `lg` the pane flexes
+                     instead (see the rail's note). 18.5rem is the 14 rows this
+                     asked for before, at the shared line height. */
                   className={cn(
-                    "w-full lg:min-h-0 lg:flex-1",
+                    "w-full max-lg:h-[18.5rem] lg:min-h-0 lg:flex-1",
                     paneError?.pane === "source"
                       ? "border-destructive/60"
                       : "border-border",

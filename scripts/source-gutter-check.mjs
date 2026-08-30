@@ -25,6 +25,11 @@
  *   4. Every gutter is `aria-hidden` and `select-none`. A number caught in a
  *      copy breaks the paste, which on panes whose whole job is text that parses
  *      is the worst failure available.
+ *   5. A gutter whose lines WRAP measures its rows against the text itself. The
+ *      editable pane wraps now — long `desc` lines were unreadable running off
+ *      to the right — and soft wrap is the other way for a gutter to lie: one
+ *      line becomes several rows, and a plain list of numbers drifts from the
+ *      first wrap onwards.
  *
  * WHAT IS DELIBERATELY NOT ASSERTED: that the surfaces share a type scale. The
  * rows only have to align WITHIN one surface, so an editable pane and a read-only
@@ -39,7 +44,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { lineCount } from "../src/lib/source-text.ts";
+import { lineCount, sourceLines } from "../src/lib/source-text.ts";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const read = (rel) => readFileSync(path.join(ROOT, rel), "utf8");
@@ -49,6 +54,8 @@ const GUTTERS = [
   {
     label: "the editable gutter",
     file: "src/components/ui/numbered-textarea.tsx",
+    /* This one WRAPS, which is a second way for a gutter to lie — see 5. */
+    wraps: true,
   },
   {
     label: "the read-only gutter",
@@ -105,6 +112,15 @@ check("lineCount drops only the final newline", () => {
   assert.equal(lineCount("a"), 1);
   assert.equal(lineCount("a\nb"), 2);
   assert.equal(lineCount("a\r\nb\r\n"), 2, "CRLF counts the same as LF");
+
+  /* And the two exports cannot drift apart, because one is the other's length
+     — asserted rather than assumed, since a gutter that lays a number beside
+     each line and a count that says how many numbers there are would put the
+     document one row out of step if they ever disagreed. */
+  for (const text of ["", "a", "a\n", "a\nb", "a\n\n", "a\r\nb\r\n"]) {
+    assert.equal(sourceLines(text).length, lineCount(text));
+  }
+  assert.deepEqual(sourceLines("a\nb\n"), ["a", "b"]);
 });
 
 /* ---- 2. nobody recomputes it -------------------------------------------- */
@@ -112,10 +128,14 @@ check("lineCount drops only the final newline", () => {
 check("every gutter derives its count from lineCount", () => {
   for (const { label, file } of GUTTERS) {
     const source = read(file);
+    /* Either name: a gutter that wraps needs the LINES (it lays each number
+       out beside a copy of its own line), one that does not needs only how
+       many there are. Both come from the same rule — `lineCount` is defined
+       as `sourceLines(...).length` — so importing either is importing it. */
     assert.match(
       source,
-      /import \{ lineCount \} from "@\/lib\/source-text"/,
-      `${label} (${file}) does not import lineCount`,
+      /import \{ (lineCount|sourceLines) \} from "@\/lib\/source-text"/,
+      `${label} (${file}) imports neither lineCount nor sourceLines`,
     );
     /* The private expression, in either of the two shapes it appeared in. A
        third surface writing it again is the regression this catches. */
@@ -160,6 +180,66 @@ check("no gutter is selectable or announced", () => {
           `and a screen reader reading "one two three" before every line is noise`,
       );
     }
+  }
+});
+
+/* ---- 5. a wrapping gutter is measured by the text ----------------------- */
+
+check("the wrapping gutter mirrors the text it numbers", () => {
+  for (const { label, file, wraps } of GUTTERS) {
+    if (wraps !== true) continue;
+    /* COMMENTS STRIPPED FIRST, and that is not tidiness. Every rule below
+       greps for the very words the file's own header uses to explain the rule
+       — the `content-start` assertion was written, run green, and then proved
+       green against code with `content-start` DELETED, because the prose two
+       lines above still said it. An assertion that reads the explanation of
+       the code instead of the code passes forever. */
+    const source = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
+
+    /* THE FAILURE THIS EXISTS FOR: soft wrap turns one line into several rows
+       while a plain list of numbers still draws one row per line, so every
+       number after the first wrapped line sits beside the wrong text. The fix
+       is that each number is laid out beside an invisible copy of its own
+       line, so the row is as tall as the wrap made it. Losing the copy — or
+       losing the wrapping on it — silently reintroduces the drift. */
+    assert.ok(
+      /wrap="soft"/.test(source),
+      `${label} no longer soft-wraps; if that is deliberate, this rule and the ` +
+        `mirror it guards should go with it`,
+    );
+    assert.ok(
+      /invisible[^"]*whitespace-pre-wrap/.test(source),
+      `${label} has no invisible wrapping mirror beside its numbers — the rows ` +
+        `no longer measure the wrap, so every number after a wrapped line lies`,
+    );
+
+    /* The mirror only predicts the wrap while it agrees with the textarea
+       about the type scale and BOTH horizontal insets. Shared constants are
+       the mechanism; a literal reappearing on one side is the regression. */
+    for (const shared of ["const TYPE", "const PAD_Y", "const PAD_X"]) {
+      assert.ok(
+        source.includes(shared),
+        `${label} lost ${shared} — the mirror and the textarea must take their ` +
+          `font, line height and insets from one place or the wrap points move`,
+      );
+    }
+    /* THE SECOND WAY THE ROWS DRIFT, and it shipped: the rows sit in a grid
+       that is `min-h-full` so the gutter's ground reaches the bottom of a
+       pane the document does not fill — and a grid's default `align-content`
+       spends that leftover height BY GROWING THE ROWS. The textarea laid over
+       them does not grow, so a short document drew its numbers down a pane
+       twice as tall as its text. Only start-alignment leaves the slack at the
+       bottom where it belongs. */
+    assert.ok(
+      !/\bmin-h-full\b/.test(source) || /\bcontent-start\b/.test(source),
+      `${label} stretches a min-height grid without content-start — the spare ` +
+        `height is shared out among the rows and every number drifts down`,
+    );
+    assert.ok(
+      !/\brows=\{/.test(source),
+      `${label} sizes itself with rows again — the textarea is laid over the ` +
+        `mirror and is as tall as its content, so height belongs to the wrapper`,
+    );
   }
 });
 
