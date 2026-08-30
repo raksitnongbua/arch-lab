@@ -69,21 +69,30 @@ const HATCH_OPACITY = 0.18;
  *
  * WHY THE FILE NEEDS ITS OWN. Nothing on this canvas is laid out with a margin:
  * the axis caption and every section label start at x=0, the section rules run
- * from x=0, and the last row ends 18 units above the bottom. On screen that is
- * fine because the viewer supplies the air in CSS (`px-5 py-6 sm:px-8` on the
- * scroll box) — but an exported file inherits no stylesheet, so the PNG came
- * out with the label rail flush against the left edge. The raster step adds
- * nothing either: `renderPngBlob` is a pure scale-and-blit of `width × scale`
- * by `height × scale` drawn at the origin. The crop was in the SVG.
+ * from x=0, and the last row ends 18 units above the bottom. An exported file
+ * inherits no stylesheet, so the PNG came out with the label rail flush against
+ * the left edge. The raster step adds nothing either: `renderPngBlob` is a pure
+ * scale-and-blit of `width × scale` by `height × scale` drawn at the origin.
+ * The crop was in the SVG.
  *
- * WHY 40, AND WHY HERE. There is NO shared export margin in this repo — each
- * kind carries its own, and they disagree on purpose: C4 uses 56 (it also has a
- * title block), ER 40, the dictionary 28, flowchart and use case 28. This
- * canvas is a wide ruled plot much closer to ER's boxes than to a compact
- * dictionary table, so it takes ER's 40. It lives in this file rather than in
- * `GANTT` deliberately: `GANTT` is shared with the on-screen canvas and the layout
- * check, and the screen already has its air from CSS — putting the pad in the
- * geometry would move every bar on the page to fix a file.
+ * AND THE SCREEN NEEDS THE SAME ONE. This header used to say the screen was
+ * fine because the viewer supplies the air in CSS (`px-5 py-6 sm:px-8` on the
+ * scroll box). That was true until the well grew a field: `CanvasField` is
+ * drawn inside the canvas's own `<svg>`, so the ruled sheet now ends exactly
+ * where the section headings begin and the CSS padding sits OUTSIDE it, between
+ * the sheet and the pane. The screen therefore frames the drawing with
+ * `GANTT_FRAME_PAD`, which is this number — see `../lib/layout` for why that
+ * lives beside `GANTT` rather than in it.
+ *
+ * WHY 40, AND WHY THE LITERAL STAYS HERE. There is NO shared export margin in
+ * this repo — each kind carries its own, and they disagree on purpose: C4 uses
+ * 56 (it also has a title block), ER 40, the dictionary 28, flowchart and use
+ * case 28. This canvas is a wide ruled plot much closer to ER's boxes than to a
+ * compact dictionary table, so it takes ER's 40. It is spelled out here rather
+ * than imported because `check:gantt-layout` reads this literal out of the
+ * source to prove the pad is a whole number of hatch tiles — and the same check
+ * asserts it equals `GANTT_FRAME_PAD`, so the file and the screen cannot drift
+ * into framing the same plan two different ways.
  *
  * A MULTIPLE OF `GANTT.hatchTile`, which is not decoration. The hatch is
  * `patternUnits="userSpaceOnUse"`, so translating the content translates the

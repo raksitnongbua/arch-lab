@@ -63,7 +63,9 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 
 const { parseGanttText } = await load("src/features/archtext/index.ts");
-const { layoutGantt, GANTT } = await load("src/features/gantt/lib/layout.ts");
+const { layoutGantt, GANTT, GANTT_FRAME_PAD } = await load(
+  "src/features/gantt/lib/layout.ts",
+);
 const { GANTT_EXAMPLE } = await load("src/features/gantt/input/example.ts");
 const { listGanttExampleIds, loadGanttExample } = await load(
   "src/features/gantt/service/example-service.ts",
@@ -744,6 +746,42 @@ console.log("the exported file has air around it");
     `the padding is a whole number of hatch tiles (${pad} / ${GANTT.hatchTile})`,
     Number.isInteger(pad / GANTT.hatchTile),
     `${pad} is not a multiple of ${GANTT.hatchTile} — the hatch phase shifts against the unpadded file and the hairlines land off pixel boundaries at scale 1`,
+  );
+
+  /* THE SCREEN IS FRAMED THE SAME WAY, and nothing else was checking it. The
+     header above used to reason that the screen needed no margin of its own
+     because the viewer's CSS supplied it — true until the well grew a field,
+     which is drawn INSIDE the canvas's `<svg>` and therefore ends exactly where
+     the section headings start. The screen now frames the drawing with
+     `GANTT_FRAME_PAD`, and these two assertions are what stop the file and the
+     canvas framing one plan two different ways. */
+  check(
+    `the screen frames the sheet with the same pad the file does (${GANTT_FRAME_PAD} / ${pad})`,
+    GANTT_FRAME_PAD === pad,
+    `the canvas pads by ${GANTT_FRAME_PAD} and the export by ${pad} — a reader ` +
+      "downloading what they are looking at would get a differently framed plan",
+  );
+
+  const diagram = readFileSync(
+    path.join(ROOT, "src/features/gantt/components/gantt-diagram.tsx"),
+    "utf8",
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+  check(
+    "the canvas grows its box by the pad and moves its origin out to meet it",
+    /const sheetWidth = layout\.width \+ GANTT_FRAME_PAD \* 2;/.test(diagram) &&
+      /const sheetHeight = layout\.height \+ GANTT_FRAME_PAD \* 2;/.test(
+        diagram,
+      ) &&
+      /viewBox=\{`\$\{-GANTT_FRAME_PAD\} \$\{-GANTT_FRAME_PAD\} \$\{sheetWidth\} \$\{sheetHeight\}`\}/.test(
+        diagram,
+      ) &&
+      /x=\{-GANTT_FRAME_PAD\}[\s\S]{0,80}?width=\{sheetWidth\}/.test(diagram),
+    "the sheet is the drawing plus its margin, the viewBox starts at the " +
+      "margin, and <CanvasField> covers the padded box — a field left on the " +
+      "unpadded box would rule the drawing and leave the margin bare, which " +
+      "is the crop this pad exists to remove",
   );
 }
 

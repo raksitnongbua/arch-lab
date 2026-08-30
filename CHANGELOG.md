@@ -313,6 +313,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- A Gantt chart has air around it again. The section headings, the axis caption
+  and the section rules all start at the very edge of the drawing, and since the
+  well grew a ruled ground — drawn inside the chart rather than on the pane —
+  that ground ended exactly where the text began, so the plan read as printed
+  past the trim. It is worst on `blueprint`, whose ruling makes the edge
+  visible, but it was every theme. The chart now carries the same margin its
+  exported file has always had, so a downloaded PNG is framed the way the screen
+  frames it. No bar, tick or connector moves.
+
 - The `paper` theme's diagram ground is lighter. Its cream well sat the full
   house step below the page and read as a hole in the sheet rather than a
   recess in it; the step is now half that, so the stock reads as one paper with

@@ -74,6 +74,7 @@ import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
 import type { LaidGanttItem, GanttLayout } from "../lib/layout";
 import {
   GANTT,
+  GANTT_FRAME_PAD,
   hatchTilePaths,
   layoutGantt,
   TEXTURE_BY_STATE,
@@ -113,6 +114,12 @@ export function GanttDiagram({
   onHoverItem,
 }: GanttDiagramProps) {
   const layout = layoutGantt(file);
+  /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
+     coordinate it had; the box around it grows, and the origin moves out to
+     meet it. See `GANTT_FRAME_PAD` for why the viewer's CSS padding cannot do
+     this job now that the ground is painted inside the <svg>. */
+  const sheetWidth = layout.width + GANTT_FRAME_PAD * 2;
+  const sheetHeight = layout.height + GANTT_FRAME_PAD * 2;
   const hasFocus = litIds !== undefined && litIds.size > 0;
   const lit = (id: string): "1" | undefined =>
     litIds?.has(id) ? "1" : undefined;
@@ -122,17 +129,19 @@ export function GanttDiagram({
       className={["af-gantt-canvas", hasFocus ? "af-gantt-has-focus" : ""]
         .filter(Boolean)
         .join(" ")}
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
-      /* ITS NATURAL SIZE, not `width="100%"`. Stretching a 1020-unit drawing
-         across a 1600px pane put the label rail against one edge and the last
-         tick against the other, with the whole thing upscaled to get there.
-         The stylesheet caps this with `max-width: 100%` and centres it, so a
-         wide pane gets air either side and a narrow one still fits — the
-         viewBox and `preserveAspectRatio` do the fitting, undistorted. The
-         geometry is untouched, which is what keeps the SVG export identical:
-         it builds its own `<svg>` from the same `layoutGantt` figures. */
-      width={layout.width}
-      height={layout.height}
+      viewBox={`${-GANTT_FRAME_PAD} ${-GANTT_FRAME_PAD} ${sheetWidth} ${sheetHeight}`}
+      /* ITS NATURAL SIZE, not `width="100%"`. Stretching the drawing across a
+         1600px pane put the label rail against one edge and the last tick
+         against the other, with the whole thing upscaled to get there. The
+         stylesheet caps this with `max-width: 100%` and centres it, so a wide
+         pane gets air either side and a narrow one still fits — the viewBox and
+         `preserveAspectRatio` do the fitting, undistorted. The natural size is
+         the SHEET rather than the drawing, which is the only thing the margin
+         changed: the geometry is untouched, which is what keeps the SVG export
+         identical — it builds its own `<svg>` from the same `layoutGantt`
+         figures and pads it by the same amount. */
+      width={sheetWidth}
+      height={sheetHeight}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={describeGantt(file, layout)}
@@ -144,11 +153,16 @@ export function GanttDiagram({
           diagram's OWN coordinates, so it pans, scrolls and zooms with the
           drawing rather than sitting still while the drawing moves over it
           — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
+          rules out a ground painted on the pane. IT COVERS THE SHEET, not the
+          drawing: a field on the unpadded box would rule up to the section
+          headings and leave the margin bare, which reads as the plan being
+          printed past the trim rather than as a page with air around it. */}
       <CanvasField
         id="af-field-gantt"
-        width={layout.width}
-        height={layout.height}
+        x={-GANTT_FRAME_PAD}
+        y={-GANTT_FRAME_PAD}
+        width={sheetWidth}
+        height={sheetHeight}
       />
       {/* The role textures, once for the whole plot — beside the duration
           hatch below, which is a different pattern answering a different
