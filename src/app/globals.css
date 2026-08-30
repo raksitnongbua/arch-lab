@@ -1696,12 +1696,25 @@
      mid-tone, and this ground is the darkest any light-family theme has —
      there is less headroom here than `light` or `paper` ever spend. */
   --muted-foreground: oklch(0.46 0.026 285);
-  /* Peach, taking over the accent from the old magenta-pink. Warmth is what
-     a pastel palette uses for emphasis (the cool hues are all spent on the
-     ground and the roles), and peach does it without re-introducing the
-     magenta the retune exists to retire. */
-  --accent: oklch(0.78 0.09 55);
-  --accent-foreground: oklch(0.28 0.05 55);
+  /* Blush, and it is the same blush `--flow-end` paints — the one pink the
+     retune kept. What the retune retired was pink DOMINANCE: h 342 used to
+     carry the accent, the flowchart terminator and the gantt running light at
+     once, so the theme had no second note. Here it carries one of the three,
+     which is what the old palette should have done.
+
+     Warmth is still the reason emphasis is warm at all — the cool hues are
+     spent on the ground and the roles — and the headline's running gradient
+     is where it shows most, sweeping the violet primary through this and
+     back. Peach at h 55 sat there first and read as yellow against that
+     violet, which is a two-colour sweep nobody asked for.
+
+     Hue-only move from that peach: L and C are unchanged, so every ratio
+     `check:themes` measures on this pair is the one peach was carrying. It
+     shares h 10 with `--flow-end` on purpose and with precedent — the old
+     accent sat at h 342 beside a terminator at h 344, and an accent is
+     chrome, never measured against the role fills. */
+  --accent: oklch(0.78 0.09 10);
+  --accent-foreground: oklch(0.28 0.05 10);
   /* A true soft red. The old theme painted destructive as a magenta-violet
      (h 302 — the ground's own hue, saturated), which made "delete" the same
      family as the wallpaper. Danger gets its own hue again. */
