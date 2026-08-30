@@ -266,6 +266,12 @@ export function GanttViewer({ file }: GanttViewerProps) {
           <GanttDiagram
             file={file}
             litIds={litIds}
+            /* THE CHOSEN ONE, SEPARATELY FROM ITS NEIGHBOURHOOD. `litIds` is the
+             one-hop set and it answers "what is related"; this answers "what
+             did you click". They were the same prop, so the ring — which is an
+             identity mark — was drawn on the neighbours too, and three bars
+             claimed to be the one selected. */
+            selectedId={selected}
             reveal
             idleMotion={idleState}
             atRest={atRest}

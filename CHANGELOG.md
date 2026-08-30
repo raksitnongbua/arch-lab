@@ -40,6 +40,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the lifecycle.** Previously the only ways out were clicking the same row again
   or pressing Escape — and on the timeline and lifecycle there was no way out at
   all once selecting moved from hover to click.
+- **Only the gantt bar you clicked wears the focus ring.** The bars it waits
+  for and the bars waiting on it stay at full strength, as they should, but they
+  no longer carry the ring as well — three bars claiming to be the one you
+  picked told you nothing about which one it was.
 - **A click on a gantt bar no longer flickers and clears itself.** The click
   reached the bar and then the pane behind it, so the same press both selected
   and deselected. Nothing stayed lit.

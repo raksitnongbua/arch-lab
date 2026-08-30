@@ -481,7 +481,16 @@
    Tied to `data-lit`, so it follows a click and a keyboard focus alike rather
    than only `:focus-visible`, which would have left a clicked bar with the
    dimming and nothing else. */
-.af-gantt-canvas.af-gantt-has-focus .af-gantt-row[data-lit="1"] .af-gantt-ring {
+/* `data-selected`, NOT `data-lit`. This canvas is the only one whose selection
+   has a NEIGHBOURHOOD: `litIds` holds the clicked bar plus what it waits for
+   and what waits on it, so everything in it stays at full strength. The ring is
+   a different claim — "this is the one you chose" — and keying it off `lit`
+   drew it on the neighbours too, so a single click ringed three bars and none
+   of them was identifiably the answer. The timeline and the lifecycle light
+   exactly one row, so their rings never had the question to get wrong. */
+.af-gantt-canvas.af-gantt-has-focus
+  .af-gantt-row[data-selected="1"]
+  .af-gantt-ring {
   opacity: 1;
 }
 

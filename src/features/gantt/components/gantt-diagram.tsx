@@ -91,6 +91,16 @@ export interface GanttDiagramProps {
    * from `af-gantt-has-focus`, never by changing any element's paint here.
    */
   litIds?: ReadonlySet<string>;
+  /**
+   * The id the reader actually clicked, which is NOT the same question as
+   * `litIds`.
+   *
+   * `litIds` is the one-hop neighbourhood and drives the DIMMING — everything
+   * outside it goes quiet. This drives the RING, which says "this is the one".
+   * Driving both from `litIds` put a ring on the neighbours as well, so a
+   * single click appeared to select three bars.
+   */
+  selectedId?: string | null;
   /** Whether the entrance should play. Off for the export path and for the
    * crawlable example pages, which want the resting state. */
   reveal?: boolean;
@@ -110,6 +120,7 @@ export interface GanttDiagramProps {
 export function GanttDiagram({
   file,
   litIds,
+  selectedId = null,
   reveal = false,
   idleMotion = "on",
   atRest = false,
@@ -297,6 +308,7 @@ export function GanttDiagram({
           key={item.id}
           item={item}
           lit={lit(item.id)}
+          selected={item.id === selectedId ? "1" : undefined}
           onFocusItem={onFocusItem}
           onKeyFocusItem={onKeyFocusItem}
         />
@@ -369,11 +381,15 @@ export function GanttDiagram({
 function Row({
   item,
   lit,
+  selected,
   onFocusItem,
   onKeyFocusItem,
 }: {
   item: LaidGanttItem;
   lit?: "1";
+  /** Set on the ONE row the reader clicked. The ring reads this; the dimming
+   * reads `lit`, which also covers the neighbours. */
+  selected?: "1";
   onFocusItem?: (id: string) => void;
   onKeyFocusItem?: (id: string | null) => void;
 }) {
@@ -384,6 +400,7 @@ function Row({
       data-state={item.state}
       data-critical={item.critical ? "1" : "0"}
       data-lit={lit}
+      data-selected={selected}
       style={{ "--gantt-wave": item.wave } as React.CSSProperties}
     >
       {!item.milestone && (

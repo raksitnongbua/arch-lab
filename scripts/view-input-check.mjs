@@ -995,6 +995,37 @@ console.log(
     const own = new RegExp(
       `className="af-[\\w-]*-ring"[\\s\\S]{0,40}?(cx=|x=)`,
     ).test(code);
+    /* THE RING MARKS ONE THING. It says "this is the one you chose", and a
+       canvas whose selection has a NEIGHBOURHOOD can key it off the wrong
+       attribute without anything looking broken: the gantt lights the clicked
+       bar plus what it waits for and what waits on it, and the ring was keyed
+       to that whole set, so one click ringed three bars and none of them was
+       identifiably the answer. Reported as the focus border wrapping several.
+
+       THE RULE IS CONDITIONAL ON THE VIEWER, and the first draft was not — it
+       fired on the timeline and the lifecycle, which are correct. Those build
+       their lit set as `new Set([selected])`, exactly one row for ever, so
+       "lit" and "selected" are the same claim there and keying the ring off
+       either is right. Only a canvas whose set can hold MORE than one has the
+       question, so only that canvas is asked it. */
+    const viewerPath = `src/features/${feature}/components/${feature}-viewer.tsx`;
+    const viewerCode = existsSync(path.join(ROOT, viewerPath))
+      ? read(viewerPath)
+      : "";
+    const singleSelection = /new Set\(\[selected\]\)/.test(viewerCode);
+    const sheet = `src/features/${feature}/styles/${feature}-motion.css`;
+    const rules = existsSync(path.join(ROOT, sheet))
+      ? read(sheet).replace(/\/\*[\s\S]*?\*\//g, " ")
+      : "";
+    const ringSelector = new RegExp(`([^{}]*\\baf-[\\w-]*-ring)\\s*\\{`).exec(
+      rules,
+    );
+    check(
+      `${feature}: its ring marks the selection, not everything left lit`,
+      singleSelection ||
+        (ringSelector !== null && !/data-lit="1"/.test(ringSelector[1])),
+      `${sheet} draws the ring on \`data-lit\`, and this canvas's lit set holds the NEIGHBOURS too — every one of them then claims to be the bar that was clicked`,
+    );
     check(
       `${feature}: and is drawn beside the mark rather than onto it`,
       own,
