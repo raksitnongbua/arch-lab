@@ -65,8 +65,10 @@
  *     staggered animation here (the focus breathe), and it carries one.
  *   - FOCUS DIMS AND ANIMATES, IT DOES NOT REPAINT. No stroke, fill, width or
  *     radius changes in either direction — a focused dot that recolours is a
- *     new mark appearing where one already was. `:focus-visible` is the one
- *     exception, because a keyboard user has no hover to fall back on.
+ *     new mark appearing where one already was. THERE IS NO LONGER AN
+ *     EXCEPTION FOR `:focus-visible` EITHER: it drew a ring the width of the
+ *     canvas, and the lit row a keyboard reader already gets says where they
+ *     are far better. The rule on the hit target carries the argument.
  *   - THE SWEEP RIDES A SEPARATE LINE. Never a dasharray on the spine itself:
  *     the spine is the continuous mark a reader follows, and a travelling
  *     dash over it would break the line it is describing.
@@ -108,6 +110,13 @@
      along a wire: a short head here reads as a dot lighting up, which on this
      canvas is an event. */
   --tl-sweep: 3.8s;
+  /* THE HEAD. THE DECLARED DEFAULT ONLY — the component overrides it per
+     diagram, capped to a share of the spine it travels, and `@/lib/sweep-head`
+     carries the argument. It stayed flat here for a while and paired with
+     `calc(spine-len - head)` as the gap, which went NEGATIVE on any spine
+     shorter than this: an invalid `stroke-dasharray` is dropped whole, so the
+     ambient painted a SOLID line pulsing on and off instead of a head
+     travelling down one. The check pins this number to `SWEEP_HEAD_MAX`. */
   --tl-sweep-head: 90;
 
   --tl-breathe: 1.6s;
@@ -122,14 +131,34 @@
   opacity: 1;
 }
 
+/* THE AXIS, AND IT IS INK RATHER THAN RULING. It used to paint from
+   `--canvas-grid`, the token for the faint lines the CANVAS rules its own
+   ground with, and that was survivable only while the drawing sat straight on
+   that ground. It does not any more: the drawing sits on a `--node` panel, and
+   `--canvas-grid` is tuned against `--canvas` — on `midnight` the two are one
+   step apart and the axis measured 1.030:1 against the panel it is drawn on.
+   That is not faint, it is absent, which is what a reader reported.
+
+   `--edge` is the connector token and is measured against `--node` in every
+   theme by construction (worst 3.008:1, on `pastel`). It is also the right
+   token on the merits and always was: this line is the mark the eye follows
+   from one event to the next, not a ruling the drawing politely ignores. */
 .af-timeline-spine {
-  stroke: var(--canvas-grid);
+  stroke: var(--edge);
   stroke-width: 2;
   stroke-linecap: round;
 }
 
+/* The quiet ruling, which genuinely does want to stay back — so it takes the
+   PANEL'S OWN EDGE held back, rather than the ground's ruling. Held back by
+   `stroke-opacity` and not by a hand-picked colour, so it stays one relation
+   ("a fainter version of the edge this panel is drawn with") in all nine
+   themes. 0.4 × the element's own 0.55 lands at 1.172–3.667:1 across them,
+   inside the visible floor and under the ceiling `check:canvas-grid` holds
+   every ruling to. */
 .af-timeline-rule {
-  stroke: var(--canvas-grid);
+  stroke: var(--node-border);
+  stroke-opacity: 0.4;
   stroke-width: 1;
   opacity: 0.55;
 }
@@ -178,10 +207,41 @@
   fill: transparent;
   cursor: pointer;
 }
-/* The one place focus is allowed to paint: a keyboard user has no hover. */
+/* NO RING, AND NOTHING REPLACES IT. `outline` on this element drew a rounded
+   rectangle the WIDTH OF THE CANVAS, because the hit target is a full-width
+   band rather than the shape itself — so what a keyboard reader got was a
+   coloured bar across the diagram, and what everyone got was the loudest mark
+   on a canvas that sells presentation.
+
+   THE FOCUS STATE ITSELF IS THE INDICATOR, and it is a stronger one: tabbing
+   to a row lights it and drops every other row to 0.24, declared outside the
+   media query so it holds under reduced motion too. That is not a smaller
+   affordance than a 2px outline, it is a much larger one.
+
+   WHY THE RING WAS EVER NEEDED ARGUES AGAINST PUTTING IT BACK. The dimming did
+   not work: every entrance rule is `forwards` and kept matching for the life of
+   the page, so the animation origin held every row at full strength and the
+   focus declarations underneath it never applied to anything. The ring was the
+   only thing a keyboard reader could see, and it was covering for that bug
+   rather than answering a need. The bug is fixed; the cover is not owed.
+
+   `:focus`, NOT ONLY `:focus-visible`, AND THIS IS THE HALF THAT SHIPPED
+   WRONG TWICE. Killing the outline on `:focus-visible` alone leaves the box
+   exactly where it was, because CLICKING an SVG element that carries a
+   tabindex gives it `:focus` WITHOUT `:focus-visible`, and Chrome still paints
+   `outline: auto` for that. `globals.css` names the mechanism — `@layer base`
+   gives every element `outline-ring/50`, so the browser's own indicator paints
+   in `--ring` — and the use-case and flowchart canvases already carry both
+   pseudo-classes for it. This canvas now selects on a CLICK and nothing else,
+   so it meets that path on every single selection.
+
+   FOUR OF THE SIX CANVASES THAT MAKE A SHAPE A BUTTON already suppressed this —
+   the flowchart and the use case in their components, ER and the sequence with
+   a stroke on the shape itself — and `check:view-input` asserts that every one
+   of them lights on `onFocus`, which is what makes suppressing it safe. */
+.af-timeline-hit:focus,
 .af-timeline-hit:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -192,6 +252,16 @@
   opacity: 0.24;
 }
 .af-timeline-canvas.af-timeline-has-focus .af-timeline-event[data-lit="1"] {
+  opacity: 1;
+}
+/* THE HALO ON THE SELECTED event. Its paint is in `globals.css` with the
+   other four canvases' rings; this is the only thing that differs — WHEN it
+   shows. Tied to `data-lit`, so it follows a click and a keyboard focus alike
+   rather than only `:focus-visible`, which would have left a clicked row with
+   the dimming and nothing else. */
+.af-timeline-canvas.af-timeline-has-focus
+  .af-timeline-event[data-lit="1"]
+  .af-timeline-ring {
   opacity: 1;
 }
 
@@ -224,15 +294,22 @@
       cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
 
-  /* 2. The sweep. Gated on the app-wide toggle AND on at-rest, like every
-     other ambient in this app: an ambient that never stops competes with the
-     person reading and stops meaning anything, which is precisely how ER's
-     pulse ended up needing a second visual language to survive. It yields to
-     focus too, or it would travel through the one dot the reader just lit. */
-  .af-timeline-canvas[data-af-idle="on"][data-idle="1"]:not(
-      .af-timeline-has-focus
-    )
-    .af-timeline-sweep {
+  /* 2. The sweep. Gated on the app-wide toggle and on at-rest.
+
+     IT NO LONGER YIELDS TO FOCUS, and that clause was right when it was
+     written and wrong now. Focus used to arrive on HOVER, so it lasted as long
+     as the pointer sat still and pausing the ambient under it was a moment.
+     Selecting is a CLICK now and a click PINS — so "yields to focus" became
+     "never runs again until you deselect", and the canvas simply stopped
+     moving. Reported as looking lifeless, which it was.
+
+     NOTHING ELSE TRAVELS ON THIS CANVAS, so unlike the lifecycle next door
+     there is not even a second moving mark to weigh: the only focus motion
+     here is the lit dot's breathe, which is opacity in place. The gantt keeps
+     its own yield and should — there the ambient and the focus current are the
+     SAME animation on the SAME connectors at two speeds, so running both is
+     one motion arguing with itself. */
+  .af-timeline-canvas[data-af-idle="on"][data-idle="1"] .af-timeline-sweep {
     stroke-dasharray: var(--tl-sweep-head)
       calc(var(--tl-spine-len) - var(--tl-sweep-head));
     animation: af-timeline-sweep var(--tl-sweep) linear infinite;

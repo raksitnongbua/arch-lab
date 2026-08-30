@@ -32,7 +32,10 @@
  *      BETWEEN two states rather than at one — which is both honest (the
  *      subject re-enters the track just before that state) and what makes
  *      "a branch never crosses a state it does not touch" a property of the
- *      geometry rather than a hope. `check:lifecycle-layout` measures it.
+ *      geometry rather than a hope. A rejoin to the FIRST state has no such
+ *      gap and lands on the spine's start instead; `routeRejoins` says why.
+ *      Wherever it lands, IT LANDS ON THE LINE — `check:lifecycle-layout`
+ *      measures that as well as the non-crossing.
  *
  * ── WHY VERTICAL ──────────────────────────────────────────────────────────
  *
@@ -74,7 +77,7 @@ import {
   type DiagramHeading,
   type DiagramHeadingMetrics,
 } from "@/lib/diagram-heading";
-import { wrapText } from "@/lib/text-metrics";
+import { CHAR_WIDTH_RATIO, wrapText } from "@/lib/text-metrics";
 import type { LifecycleLabFile } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -393,6 +396,89 @@ function channelXs(count: number): number[] {
  * MCP tools and hand-built models both reach here without going through the
  * parser's refusals.
  */
+/**
+ * The places a reader may click to select one state: its DOT, its TEXT, and
+ * the ways out that belong to it.
+ *
+ * IT WAS THE WHOLE ROW, `x` 0 to 1040 and the full height a state occupies —
+ * which on this canvas means the empty band left of the branch lane, the empty
+ * band right of the label, and every gap between them. Most of what a pointer
+ * crosses selected something, and every near-miss landed on a state rather than
+ * on nothing. The gantt had the same defect and the same fix; this is the
+ * second of them.
+ *
+ * FOUR KINDS OF REGION, and the state's first two are ONE box rather than two:
+ * the dot sits on the spine at 460 and the label starts at 492, so a box from
+ * the dot's ring out to the end of the text covers the dot, the short run of
+ * spine beside it and the words, with no gap worth leaving unclickable. Each
+ * exit then gets its own — its dot and its right-aligned text — because they
+ * are far off to the left and belong to this state's focus group: clicking a
+ * way out selects the state it leaves, which is what the row always did.
+ *
+ * TEXT WIDTHS ARE ESTIMATED from the shared `CHAR_WIDTH_RATIO`, as every layout
+ * here estimates them: there is no DOM to measure in, and being a few units
+ * generous is the right failure mode for a hit target.
+ *
+ * IT LIVES IN THE LAYOUT so `scripts/` can load it — that module cannot parse a
+ * `.tsx`, and a copy beside the component would mean the check measured its own
+ * re-derivation rather than the canvas.
+ */
+export function lifecycleHitRegions(
+  state: LaidLifecycleState,
+  exits: readonly LaidLifecycleExit[],
+): string {
+  const pad = 6;
+  const box = (x0: number, y0: number, x1: number, y1: number) =>
+    `M ${x0} ${y0} H ${x1} V ${y1} H ${x0} Z`;
+  const widest = (lines: readonly string[], size: number) =>
+    lines.length === 0
+      ? 0
+      : Math.max(...lines.map((line) => line.length * size * CHAR_WIDTH_RATIO));
+
+  /* The state's own band: down from the dot's ring to the foot of whichever of
+     its two runs of text goes lower. */
+  const labelBottom =
+    state.labelY + (state.labelLines.length - 1) * LIFECYCLE.stateLineHeight;
+  const textBottom =
+    state.descY === null
+      ? labelBottom
+      : state.descY +
+        (state.descriptionLines.length - 1) * LIFECYCLE.stateDescLineHeight;
+  const right =
+    LIFECYCLE.stateLabelX +
+    Math.max(
+      widest(state.labelLines, LIFECYCLE.stateSize),
+      widest(state.descriptionLines, LIFECYCLE.stateDescSize),
+    );
+  const regions = [
+    box(
+      LIFECYCLE.spineX - LIFECYCLE.ringRadius - pad,
+      Math.min(
+        state.dotY - LIFECYCLE.ringRadius,
+        state.labelY - LIFECYCLE.stateSize,
+      ) - pad,
+      right + pad,
+      Math.max(state.dotY + LIFECYCLE.ringRadius, textBottom) + pad,
+    ),
+  ];
+
+  for (const exit of exits) {
+    const exitRight = LIFECYCLE.branchDotX + LIFECYCLE.exitDotRadius + pad;
+    const exitLeft =
+      LIFECYCLE.branchTextRight -
+      Math.max(
+        widest(exit.labelLines, LIFECYCLE.exitSize),
+        widest(exit.whenLines, LIFECYCLE.whenSize),
+        widest(exit.descriptionLines, LIFECYCLE.whenSize),
+      ) -
+      pad;
+    regions.push(
+      box(Math.max(0, exitLeft), exit.y0 - pad, exitRight, exit.y1 + pad),
+    );
+  }
+  return regions.join(" ");
+}
+
 export function layoutLifecycle(file: LifecycleLabFile): LifecycleLayout {
   const states: LaidLifecycleState[] = [];
   const exits: LaidLifecycleExit[] = [];
@@ -638,12 +724,15 @@ export function layoutLifecycle(file: LifecycleLabFile): LifecycleLayout {
  *     dot would cross the exit's own label, which is right-aligned in the
  *     lane the branch has to travel through. So `departY` is placed in the
  *     gap under the exit's box, where the layout has already left air.
- *   - IT JOINS IN A GAP, NOT AT A DOT. `joinY` is inside the vertical space
- *     between the target state's box and whatever is above it, so the
- *     horizontal run into the spine passes through no state's box and no
- *     exit's — exits live inside their own state's box by construction. Two
- *     branches returning to one state are spread across that gap rather than
- *     drawn on top of each other.
+ *   - IT JOINS IN A GAP, NOT AT A DOT — everywhere the track has a gap.
+ *     `joinY` is inside the vertical space between the target state's box and
+ *     whatever is above it, so the horizontal run into the spine passes
+ *     through no state's box and no exit's — exits live inside their own
+ *     state's box by construction. Two branches returning to one state are
+ *     spread across that gap rather than drawn on top of each other.
+ *     THE FIRST STATE IS THE EXCEPTION AND HAS TO BE: the space above it is
+ *     under the subject, where there is no spine to meet. That join is
+ *     clamped down onto the spine's start, which is the target's own dot.
  *
  * A branch whose target is not in the document gets no path at all rather
  * than a route to nowhere: the parser refuses that document, but a hand-built
@@ -672,6 +761,11 @@ function routeRejoins(
   }
   const seen = new Map<string, number>();
 
+  /* WHERE THE TRACK ACTUALLY BEGINS. The spine is clipped to the state dots,
+     so there is no line at all above the first one — the space between the
+     subject and the first state is blank canvas, not track. */
+  const spineTop = states[0]?.dotY ?? 0;
+
   returning.forEach((exit, index) => {
     const targetId = exit.rejoins as string;
     const targetIndex = indexById.get(targetId) as number;
@@ -682,7 +776,24 @@ function routeRejoins(
     const share = perTarget.get(targetId) ?? 1;
     const ordinal = seen.get(targetId) ?? 0;
     seen.set(targetId, ordinal + 1);
-    const joinY = gapTop + ((gapBottom - gapTop) * (ordinal + 1)) / (share + 1);
+    /* CLAMPED ONTO THE SPINE, which only ever binds for a rejoin to the FIRST
+       state — and there it binds always, not in some awkward document. That
+       state has no predecessor, so the "gap above it" is the air under the
+       subject, which is above the top of the line: the arrowhead landed
+       roughly 23 units clear of the spine's start, pointing into blank canvas
+       with nothing to meet it. The starter document rejoins its first state,
+       so this was the first lifecycle most readers ever saw.
+       `check:lifecycle-layout` passed throughout, because it asked whether the
+       join was above the target's box and never whether it was ON the line —
+       it now asserts both. Clamping puts it on the spine's own start, which is
+       the truthful answer anyway: the subject re-enters the track exactly
+       where the track begins. Two branches returning to the first state land
+       together rather than spreading, and that is also the truth — they come
+       back to one place. */
+    const joinY = Math.max(
+      spineTop,
+      gapTop + ((gapBottom - gapTop) * (ordinal + 1)) / (share + 1),
+    );
 
     exit.rejoinPath = {
       channelX: lanes[index],

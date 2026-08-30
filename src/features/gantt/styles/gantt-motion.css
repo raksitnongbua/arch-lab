@@ -83,8 +83,10 @@
  *     connector blink off and back on.
  *   - FOCUS DIMS AND ANIMATES, IT DOES NOT REPAINT. No stroke, fill, width or
  *     arrowhead changes in either direction — a focused line that recolours is
- *     a new border appearing where one already was. `:focus-visible` is the one
- *     exception, because a keyboard user has no hover to fall back on.
+ *     a new border appearing where one already was. THERE IS NO LONGER AN
+ *     EXCEPTION FOR `:focus-visible` EITHER: it drew a ring the width of the
+ *     canvas, and the lit row a keyboard reader already gets says where they
+ *     are far better. The rule on the hit target carries the argument.
  *   - THE CURRENT RIDES A SEPARATE PATH. Never a dasharray on the base line:
  *     the base stroke carries critical-vs-slack meaning, and a dash pattern
  *     laid over it would overwrite exactly the distinction the reader needs.
@@ -400,19 +402,65 @@
 .af-gantt-duration {
   fill: var(--node-meta);
 }
+/* THE TIME GRID AND THE RULES, which DO want to stay back — so unlike the
+   timeline's axis and the lifecycle's spine next door, these keep their role
+   and only change their reference. They painted from `--canvas-grid`, tuned
+   against `--canvas`, while the plan is drawn on a `--node` panel: on
+   `midnight` a day tick measured 1.016:1 against the panel it is drawn on,
+   which is not a quiet line but no line.
+
+   The panel's OWN edge, held back by `stroke-opacity` rather than by a
+   hand-picked colour, so it stays one relation in all nine themes. The three
+   strengths this canvas already draws — 0.55 for a day tick, 0.7 for a section
+   rule, 1 for the axis — multiply through it and land at 1.172–5.848:1, every
+   one inside the visible floor and under the ceiling `check:canvas-grid` holds
+   a ruling to. The hierarchy between them is unchanged; only the ground they
+   are measured against is. */
 .af-gantt-grid,
 .af-gantt-rule {
-  stroke: var(--canvas-grid);
+  stroke: var(--node-border);
+  stroke-opacity: 0.4;
 }
 
 .af-gantt-hit {
   fill: transparent;
   cursor: pointer;
 }
-/* The one place focus is allowed to paint: a keyboard user has no hover. */
+/* NO RING, AND NOTHING REPLACES IT. `outline` on this element drew a rounded
+   rectangle the WIDTH OF THE CANVAS, because the hit target is a full-width
+   band rather than the shape itself — so what a keyboard reader got was a
+   coloured bar across the diagram, and what everyone got was the loudest mark
+   on a canvas that sells presentation.
+
+   THE FOCUS STATE ITSELF IS THE INDICATOR, and it is a stronger one: tabbing
+   to a row lights it and drops every other row to 0.24, declared outside the
+   media query so it holds under reduced motion too. That is not a smaller
+   affordance than a 2px outline, it is a much larger one.
+
+   WHY THE RING WAS EVER NEEDED ARGUES AGAINST PUTTING IT BACK. The dimming did
+   not work: every entrance rule is `forwards` and kept matching for the life of
+   the page, so the animation origin held every row at full strength and the
+   focus declarations underneath it never applied to anything. The ring was the
+   only thing a keyboard reader could see, and it was covering for that bug
+   rather than answering a need. The bug is fixed; the cover is not owed.
+
+   `:focus`, NOT ONLY `:focus-visible`, AND THIS IS THE HALF THAT SHIPPED
+   WRONG TWICE. Killing the outline on `:focus-visible` alone leaves the box
+   exactly where it was, because CLICKING an SVG element that carries a
+   tabindex gives it `:focus` WITHOUT `:focus-visible`, and Chrome still paints
+   `outline: auto` for that. `globals.css` names the mechanism — `@layer base`
+   gives every element `outline-ring/50`, so the browser's own indicator paints
+   in `--ring` — and the use-case and flowchart canvases already carry both
+   pseudo-classes for it. This canvas now selects on a CLICK and nothing else,
+   so it meets that path on every single selection.
+
+   FOUR OF THE SIX CANVASES THAT MAKE A SHAPE A BUTTON already suppressed this —
+   the flowchart and the use case in their components, ER and the sequence with
+   a stroke on the shape itself — and `check:view-input` asserts that every one
+   of them lights on `onFocus`, which is what makes suppressing it safe. */
+.af-gantt-hit:focus,
 .af-gantt-hit:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -425,6 +473,24 @@
 }
 .af-gantt-canvas.af-gantt-has-focus .af-gantt-row[data-lit="1"],
 .af-gantt-canvas.af-gantt-has-focus .af-gantt-edge[data-lit="1"] {
+  opacity: 1;
+}
+
+/* THE HALO ON THE SELECTED BAR. Its paint is in `globals.css` with the other
+   four canvases' rings; this is the only thing that differs — WHEN it shows.
+   Tied to `data-lit`, so it follows a click and a keyboard focus alike rather
+   than only `:focus-visible`, which would have left a clicked bar with the
+   dimming and nothing else. */
+/* `data-selected`, NOT `data-lit`. This canvas is the only one whose selection
+   has a NEIGHBOURHOOD: `litIds` holds the clicked bar plus what it waits for
+   and what waits on it, so everything in it stays at full strength. The ring is
+   a different claim — "this is the one you chose" — and keying it off `lit`
+   drew it on the neighbours too, so a single click ringed three bars and none
+   of them was identifiably the answer. The timeline and the lifecycle light
+   exactly one row, so their rings never had the question to get wrong. */
+.af-gantt-canvas.af-gantt-has-focus
+  .af-gantt-row[data-selected="1"]
+  .af-gantt-ring {
   opacity: 1;
 }
 

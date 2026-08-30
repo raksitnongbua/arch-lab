@@ -63,14 +63,17 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 
 const { parseGanttText } = await load("src/features/archtext/index.ts");
-const { layoutGantt, GANTT, GANTT_FRAME_PAD } = await load(
+const { layoutGantt, GANTT, GANTT_FRAME_PAD, ganttHitRegions } = await load(
   "src/features/gantt/lib/layout.ts",
 );
 const { GANTT_EXAMPLE } = await load("src/features/gantt/input/example.ts");
+const { itemSchedule } = await load("src/features/gantt/lib/axis.ts");
 const { DIAGRAM_SURFACE_PAD } = await load("src/lib/diagram-surface.ts");
 const { listGanttExampleIds, loadGanttExample } = await load(
   "src/features/gantt/service/example-service.ts",
 );
+
+const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
 let failures = 0;
 let assertions = 0;
@@ -833,6 +836,336 @@ console.log("the exported file has air around it");
     "the `--node` panel is back to being this canvas's own rect — the pad " +
       "above is then air on the wrong side of a stroked edge, which is " +
       "exactly the state that shipped once already",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("a selected bar names the days it actually occupies");
+
+/* THE ARITHMETIC A READER SHOULD NOT HAVE TO DO. A bar is labelled with its
+   duration, which is the one number the plan already states; what a reader
+   stopping on it wants is the other end — "six days from the 12th, so done
+   WHEN". Selecting one now answers that, and this is where the answer is
+   checked.
+
+   THE OFF-BY-ONE IS THE WHOLE ASSERTION. `finish` is EXCLUSIVE: a six-day task
+   starting on day 12 has `finish` 18, because 18 is where the next thing may
+   start. Printing `finish` names a day the work is not being done on, every
+   task silently claims a day it does not use, and NOTHING LOOKS WRONG — the
+   dates are plausible and the bar is drawn correctly either way. So the label
+   is measured back into days and compared with the duration the plan states,
+   over every bundled document, rather than eyeballed on one.
+
+   MEASURED THROUGH THE REAL FORMATTER, not by re-deriving it: the check parses
+   the string `itemSchedule` produced and counts the days between its ends, so
+   a change to the wording that broke the arithmetic fails here. */
+{
+  const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+  const wrong = [];
+  let labelled = 0;
+  for (const id of listGanttExampleIds()) {
+    const example = loadGanttExample(id);
+    if (example.status !== "ok" || !example.file.origin) continue;
+    const laid = layoutGantt(example.file);
+    for (const item of laid.items) {
+      const label = itemSchedule(example.file, item);
+      labelled += 1;
+      /* Both spellings the formatter can produce: "12–17 Apr" when one month
+         covers it, "28 Apr – 3 May" when it does not, and a bare date for a
+         milestone or a one-day task. */
+      const same = /^(\d+)–(\d+) (\w+)$/.exec(label);
+      const split = /^(\d+) (\w+) – (\d+) (\w+)$/.exec(label);
+      const one = /^(\d+) (\w+)$/.exec(label);
+      const year = new Date(
+        `${example.file.origin}T00:00:00Z`,
+      ).getUTCFullYear();
+      const at = (day, month) =>
+        Date.UTC(year, MONTHS.indexOf(month), Number(day));
+      let days = null;
+      if (same) days = Number(same[2]) - Number(same[1]) + 1;
+      else if (split) {
+        const from = at(split[1], split[2]);
+        const to = at(split[3], split[4]);
+        days = (to - from) / 86_400_000 + 1;
+      } else if (one) days = item.milestone ? 0 : 1;
+      const want = item.milestone ? 0 : item.duration;
+      if (days === null || days !== want) {
+        wrong.push(
+          `${id}/${item.id}: "${label}" spans ${days} day(s), plan says ${want}`,
+        );
+      }
+    }
+  }
+  check(
+    `every bundled bar's dates span exactly its duration (${labelled} items)`,
+    labelled > 0 && wrong.length === 0,
+    wrong.length === 0
+      ? "no dated example was reached, so this measured nothing"
+      : `${wrong.slice(0, 4).join("; ")} — printing the EXCLUSIVE finish claims a day the work is not done on, and nothing looks wrong when it does`,
+  );
+
+  /* AND A DOCUMENT WITH NO `starts` LINE STILL ANSWERS, in the relative units
+     its axis is already labelled in. Saying nothing there would make the
+     affordance appear and disappear depending on a header the reader may not
+     have written. */
+  const relative = layoutGantt(
+    parseGanttText(GANTT_EXAMPLE.replace(/^\s*starts .*$/m, "")),
+  );
+  const withoutOrigin = relative.items.map((item) =>
+    itemSchedule(
+      parseGanttText(GANTT_EXAMPLE.replace(/^\s*starts .*$/m, "")),
+      item,
+    ),
+  );
+  check(
+    `without a start date the label falls back to day numbers (${withoutOrigin[0]})`,
+    withoutOrigin.every((label) => /^day \d+(–\d+)?$/.test(label)),
+    `${withoutOrigin.filter((l) => !/^day \d+(–\d+)?$/.test(l)).join(", ")} — a calendar was invented for a plan that named no origin`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("selecting one bar lights one bar and its neighbours");
+
+/* IT USED TO LIGHT THE WHOLE CHAIN, transitively, in both directions — every
+   ancestor back to the first task and every descendant on to the last. On a
+   plan where most work is sequenced that is nearly the entire document, so
+   selecting one bar dimmed almost nothing. Reported as clicking one bar
+   focusing the lot.
+
+   MEASURED AS A SHARE OF THE PLAN, not by reading the walk. A cap on the count
+   would pass on a small document and say nothing about a large one; what has
+   to be true is that a selection SEPARATES the thing chosen from the rest, and
+   on the biggest bundled plan the old behaviour lit most of it. The bound is
+   the one-hop neighbourhood, so it is stated as exactly that: the item, plus
+   the ids it names and the ids that name it, and nothing two hops away. */
+{
+  const overreach = [];
+  for (const id of listGanttExampleIds()) {
+    const example = loadGanttExample(id);
+    if (example.status !== "ok") continue;
+    const laid = layoutGantt(example.file);
+    const byId = new Map(laid.items.map((item) => [item.id, item]));
+    for (const item of laid.items) {
+      /* THE NEIGHBOURHOOD, rebuilt here from the model rather than taken from
+         the viewer — a viewer that both lit and measured its own set would
+         agree with itself whatever it did. */
+      const want = new Set([item.id]);
+      for (const parent of item.after) want.add(parent);
+      for (const other of laid.items) {
+        if (other.after.includes(item.id)) want.add(other.id);
+      }
+      /* Two hops must NOT be in it: a grandparent is the case the transitive
+         walk swept in, and the one a reader noticed. */
+      const twoHops = item.after.flatMap(
+        (parent) => byId.get(parent)?.after ?? [],
+      );
+      const leaked = twoHops.filter((far) => want.has(far) && far !== item.id);
+      if (leaked.length > 0) {
+        overreach.push(`${id}/${item.id} reaches ${leaked.join(", ")}`);
+      }
+      if (want.size > laid.items.length * 0.75 && laid.items.length > 4) {
+        overreach.push(
+          `${id}/${item.id} lights ${want.size} of ${laid.items.length}`,
+        );
+      }
+    }
+  }
+  check(
+    "no selection reaches two hops, or most of the plan",
+    overreach.length === 0,
+    `${overreach.slice(0, 3).join("; ")} — a selection that lights nearly everything has not selected anything`,
+  );
+
+  /* AND THE VIEWER BUILDS THAT SET WITHOUT WALKING. Asserted against the code
+     because the shape of the bug was a recursive walk, and a walk is what
+     someone reaching for "show me the whole chain" would write again. */
+  const viewer = read("src/features/gantt/components/gantt-viewer.tsx");
+  const litBlock = /const litIds = useMemo\(\(\) => \{[\s\S]*?\}, \[/.exec(
+    viewer,
+  );
+  check(
+    "the viewer's lit set is one hop, with no recursion",
+    litBlock !== null && !/walk\(/.test(litBlock[0]),
+    "a transitive walk is back — it is the natural way to write 'the whole chain', and it lights the plan",
+  );
+
+  /* CLICKING EMPTY GROUND CLEARS THE SELECTION. There was no way out but
+     clicking the same bar again — which means finding it — or Escape, which
+     nobody discovers. Reported as being hard to unfocus. */
+  /* THE HANDLER IS ATTACHED, not merely declared. The first version of this
+     asked whether the NAME appeared in the file, and a break that deleted the
+     `onClick` line sailed through — the function was still defined, unused and
+     unreachable. Present-and-wired are two claims; this asks for the wiring. */
+  /* THE HANDLER IS ATTACHED, AND IT CLEARS. Two earlier drafts of this were
+     green over a break. The first asked whether the NAME appeared anywhere, and
+     deleting the `onClick` left the function defined and unreachable. The
+     second bounded nothing — `const handleBackdropClick[\s\S]*?setPinned` runs
+     past the end of the handler and finds the `setPinned(null)` in the dock's
+     CLOSE BUTTON, so gutting the handler still matched. The body is now cut at
+     the next declaration, which is a real boundary rather than a hopeful one. */
+  const backdropBody = (() => {
+    const at = viewer.indexOf("const handleBackdropClick");
+    if (at < 0) return "";
+    const rest = viewer.slice(at + 1);
+    const next = rest.search(/\n  (const |return |function )/);
+    return next < 0 ? rest : rest.slice(0, next);
+  })();
+  check(
+    "clicking the pane clears the selection",
+    /onClick=\{handleBackdropClick\}/.test(viewer) &&
+      /setPinned\(null\)/.test(backdropBody),
+    "the only ways out are re-clicking the bar you already lost track of, and a key nobody presses",
+  );
+
+  /* AND THE DOCK CARRIES THE DATES, which is where they went from the bar. */
+  check(
+    "the selected item's days are shown in the dock",
+    /itemSchedule\(file, focusedItem\)/.test(viewer),
+    "the dates went nowhere when they left the bar's label",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("a click lands on the ink, not on the row around it");
+
+/* THE HIT TARGET WAS THE WHOLE ROW, end to end, so the empty plot between and
+   after the bars selected whatever row it happened to fall in. On a plan whose
+   bars occupy a fifth of their row that is most of what a pointer crosses, and
+   every near-miss landed on something. Reported as being easy to misclick.
+
+   MEASURED THROUGH THE FUNCTION THE CANVAS DRAWS WITH, which is why it lives
+   in `lib/layout.ts` rather than beside the element: a copy in the `.tsx` — a
+   file this script cannot load at all — would mean checking a re-derivation
+   and calling it the canvas. Two halves, each self-consistent, free to
+   disagree.
+
+   FOUR THINGS HAVE TO HOLD, and the last three are all the ways narrowing a
+   hit target goes wrong quietly. */
+{
+  const parseBoxes = (d) =>
+    [...d.matchAll(/M (-?[\d.]+) (-?[\d.]+) H (-?[\d.]+)/g)].map((match) => ({
+      x0: Number(match[1]),
+      y: Number(match[2]),
+      x1: Number(match[3]),
+    }));
+
+  let rowTotal = 0;
+  let hitTotal = 0;
+  let narrowest = Infinity;
+  const offCanvas = [];
+  const merged = [];
+  const missing = [];
+
+  for (const id of listGanttExampleIds()) {
+    const example = loadGanttExample(id);
+    if (example.status !== "ok") continue;
+    const laid = layoutGantt(example.file);
+    for (const item of laid.items) {
+      const width = Math.max(item.x1 - item.x0, GANTT.minBarWidth);
+      const boxes = parseBoxes(ganttHitRegions(item, width));
+      rowTotal += GANTT.width;
+      for (const box of boxes) hitTotal += box.x1 - box.x0;
+
+      /* A TASK KEEPS TWO REGIONS AND A MILESTONE ONE, because a milestone has
+         no rail entry — its name sits beside its diamond. A task collapsing to
+         one region would mean its name or its bar had stopped being clickable
+         and nothing else would say so. */
+      const want = item.milestone ? 1 : 2;
+      if (boxes.length !== want) {
+        missing.push(
+          `${id}/${item.id}: ${boxes.length} region(s), want ${want}`,
+        );
+      }
+      if (boxes.some((box) => box.x0 < 0 || box.x1 > GANTT.width)) {
+        offCanvas.push(
+          `${id}/${item.id}: ${boxes.map((b) => `${b.x0.toFixed(1)}–${b.x1.toFixed(1)}`).join(", ")}`,
+        );
+      }
+      if (!item.milestone && boxes.length === 2) {
+        /* STRICTLY GREATER. They ABUT for anything starting on day 0: the
+           rail region ends at 194 (railWidth 196, less the label's 8, plus 6
+           of pad) and the bar's begins at 194 (plotX0 200, less the same 6).
+           Touching is not overlapping, and the six units between the rail and
+           the plot being clickable for a day-0 task is fine — it is one
+           continuous target for one item. `>=` called that a defect. */
+        if (boxes[0].x1 > boxes[1].x0) {
+          merged.push(`${id}/${item.id}: the rail region reaches the bar`);
+        }
+        narrowest = Math.min(narrowest, boxes[1].x1 - boxes[1].x0);
+      }
+    }
+  }
+
+  const share = hitTotal / rowTotal;
+  check(
+    `the clickable area is a fraction of the row (${(share * 100).toFixed(1)}%)`,
+    share < 0.5,
+    `${(share * 100).toFixed(1)}% — the empty plot is a target again, and every near-miss selects something`,
+  );
+  check(
+    `every item keeps a region for its name and one for its bar (${missing.length} exception(s))`,
+    missing.length === 0,
+    missing.slice(0, 3).join("; "),
+  );
+  /* THE THIN-BAR CASE IS THE ONE NARROWING BREAKS. A one-day bar is six units
+     wide, and the full-row target is what used to make it reachable at all —
+     `GANTT.minHitWidth` is now the only thing that does.
+
+     NOT MEASURED ON THE BUNDLED PLANS, because it cannot be. Their narrowest
+     bar is 52 units against a floor of 24, so deleting the floor changes
+     nothing any of them can see: the assertion passed because the data never
+     reaches the rule, which is a check that cannot fail dressed as one that
+     can. Proved by breaking it and watching nothing happen.
+
+     SO THE CASE IS BUILT. A one-day bar is `plotWidth / span` wide, which
+     falls under `minBarWidth` only past about 133 days — a half-year roadmap
+     with a one-day cutover in it, which is an ordinary document rather than a
+     contrived one. On that plan the floor is the whole difference between a
+     six-unit target and a reachable one. */
+  const longPlan = parseGanttText(
+    [
+      "archlab 1.0 gantt",
+      'title "A long road"',
+      "starts 2026-01-05",
+      "",
+      "@gantt",
+      '  section "The year"',
+      '    task groundwork "Groundwork" 200d',
+      '    task cutover "Cutover" 1d after groundwork',
+    ].join("\n"),
+  );
+  const longLaid = layoutGantt(longPlan);
+  const cutover = longLaid.items.find((item) => item.id === "cutover");
+  const cutoverWidth = Math.max(cutover.x1 - cutover.x0, GANTT.minBarWidth);
+  const cutoverBoxes = parseBoxes(ganttHitRegions(cutover, cutoverWidth));
+  const cutoverHit = cutoverBoxes[1].x1 - cutoverBoxes[1].x0;
+  check(
+    `a one-day bar on a ${longLaid.span}-day plan draws ${cutoverWidth.toFixed(1)} and is hit at ${cutoverHit.toFixed(1)}`,
+    cutoverWidth <= GANTT.minBarWidth + 0.001 &&
+      cutoverHit >= GANTT.minHitWidth,
+    `drawn ${cutoverWidth.toFixed(1)}, hit ${cutoverHit.toFixed(1)} against a floor of ${GANTT.minHitWidth} — if the drawn width is not at the minimum this plan no longer exercises the floor, and if the hit is under it a one-day task is unreachable`,
+  );
+  /* AND THE FLOOR IS REACHABLE AT ALL. The assertion above compares the hit
+     against `minHitWidth`, so it agrees with itself for any value — setting the
+     floor back to the dead 18 it started as left it green. A floor at
+     `minBarWidth + 2 × hitPad` is what padding already gives, so it can never
+     raise anything; this is the one question that cannot be asked by measuring
+     an item, because no item can tell you about the rule it never met. */
+  check(
+    `the floor can bind at all (${GANTT.minHitWidth} > ${GANTT.minBarWidth} + 2 × ${GANTT.hitPad})`,
+    GANTT.minHitWidth > GANTT.minBarWidth + 2 * GANTT.hitPad,
+    `${GANTT.minHitWidth} is at or under what the padding alone gives — a dead line that reads as a guarantee`,
+  );
+  check(
+    `and every bundled bar clears the floor too (${narrowest.toFixed(1)} units)`,
+    narrowest >= GANTT.minHitWidth,
+    `${narrowest.toFixed(1)} — under the floor, so a short task has become unhittable`,
+  );
+  check(
+    "no name region runs off the canvas or into the plot",
+    offCanvas.length === 0 && merged.length === 0,
+    `${[...offCanvas, ...merged].slice(0, 3).join("; ")} — a target outside the viewBox cannot be clicked, and one reaching the bar has re-made the row`,
   );
 }
 

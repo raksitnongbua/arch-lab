@@ -3527,8 +3527,15 @@
  * `outline: auto` for that — which is the rounded box that survived killing the
  * outline on :focus-visible alone. The RING stays keyboard-only below, because a
  * click already gets the app's own focused styling and does not need a second
- * indicator. (The sequence canvas only ever needed :focus-visible; its hits are
- * on <g> wrappers rather than shapes with tabindex, so it never saw this.) */
+ * indicator.
+ *
+ * THIS PARAGRAPH USED TO EXEMPT THE SEQUENCE CANVAS — "its hits are on <g>
+ * wrappers rather than shapes with tabindex, so it never saw this" — and that
+ * was simply wrong: `af-seq-chrome-hit` sits on `<rect>`s with `role="button"`
+ * and `tabIndex={0}`, so a clicked participant wore the box like everything
+ * else. The exemption is withdrawn and the canvas carries both pseudo-classes.
+ * `check:view-input` now asks each component whether its hit target is
+ * focusable instead of trusting a sentence here, which is how this was found. */
 .af-uc-hit:focus,
 .af-uc-hit:focus-visible,
 .af-flow-hit:focus,
@@ -3536,8 +3543,25 @@
   outline: none;
 }
 
+/* FIVE CANVASES, ONE APPEARANCE. The use case and the flowchart drew these
+ * first, revealed by `:focus-visible`; the gantt, the timeline and the
+ * lifecycle now draw the same shape for a SELECTED row, revealed by their own
+ * `data-lit` rules in their own stylesheets. Two triggers, one look — one rule
+ * says what a focus ring IS here, and each canvas says only when it appears.
+ *
+ * WHY THE LAST THREE GAINED ONE. Their focus was dimming alone, which only
+ * SUBTRACTS: everything unrelated goes quiet and the thing the reader chose
+ * gains nothing. Reported as the focus style not reading well, with a colour
+ * change or a glow suggested. Both of those were tried on this repo before and
+ * removed — a recolour twice over, and a glow whose SVG `filter` region
+ * collapsed on axis-aligned geometry and painted bands across the ER canvas.
+ * The rule that came out of that says what to do instead, and it is what these
+ * two classes already were: draw the shape. */
 .af-uc-ring,
-.af-flow-ring {
+.af-flow-ring,
+.af-lc-ring,
+.af-timeline-ring,
+.af-gantt-ring {
   fill: none;
   stroke: var(--ring);
   stroke-width: 2;

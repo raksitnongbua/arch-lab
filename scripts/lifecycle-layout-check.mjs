@@ -67,9 +67,8 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 
 const { parseLifecycleText } = await load("src/features/archtext/index.ts");
-const { layoutLifecycle, LIFECYCLE, LIFECYCLE_FRAME_PAD } = await load(
-  "src/features/lifecycle/lib/layout.ts",
-);
+const { layoutLifecycle, lifecycleHitRegions, LIFECYCLE, LIFECYCLE_FRAME_PAD } =
+  await load("src/features/lifecycle/lib/layout.ts");
 const { LIFECYCLE_EXAMPLE } = await load(
   "src/features/lifecycle/input/example.ts",
 );
@@ -387,15 +386,44 @@ for (const [name, , layout] of MEASURED) {
   const crossings = [];
   for (const exit of returns) {
     const path = exit.rejoinPath;
+    /* THE FIRST STATE IS THE ONE EXEMPTION, and it is forced rather than
+       granted: the "gap above" the first state is the air under the subject,
+       which is off the top of the spine, so a join placed there points into
+       blank canvas. The layout clamps that one join down onto the spine's
+       start — which is the first state's own dot, and therefore inside the
+       first state's own BOX. Both rules below would fire on it.
+
+       The exemption is written against the target's IDENTITY, never against a
+       y tolerance, so a join that drifts onto any other dot still fails. And
+       the box rule is not simply waived for it: that rectangle spans both
+       columns and is mostly empty at the dot's height, so the leg is measured
+       against the real INK instead, below — a stricter test than the one being
+       skipped, not a looser one. */
+    const targetIsFirst = path.targetId === layout.states[0]?.id;
     for (const state of layout.states) {
-      if (path.joinY > state.y0 && path.joinY < state.y1) {
+      const isTargetsOwnBox = targetIsFirst && state.id === path.targetId;
+      if (!isTargetsOwnBox && path.joinY > state.y0 && path.joinY < state.y1) {
         crossings.push(
           `${exit.key} joins at y=${path.joinY.toFixed(1)}, inside ${state.id} (${state.y0.toFixed(1)}–${state.y1.toFixed(1)})`,
         );
       }
     }
+    if (targetIsFirst) {
+      for (const box of boxes) {
+        if (
+          path.joinY > box.y0 &&
+          path.joinY < box.y1 &&
+          box.x1 > path.channelX &&
+          box.x0 < layout.spineX
+        ) {
+          crossings.push(
+            `${exit.key} joins at y=${path.joinY.toFixed(1)}, through ${box.what}`,
+          );
+        }
+      }
+    }
     const target = byId.get(path.targetId);
-    if (target !== undefined && path.joinY >= target.y0) {
+    if (target !== undefined && !targetIsFirst && path.joinY >= target.y0) {
       crossings.push(
         `${exit.key} joins at y=${path.joinY.toFixed(1)}, at or below its target ${target.id}'s top (${target.y0.toFixed(1)})`,
       );
@@ -405,6 +433,30 @@ for (const [name, , layout] of MEASURED) {
     `${name}: every return meets the spine in a gap, above the state it rejoins`,
     crossings.length === 0,
     crossings.join("; "),
+  );
+
+  /* AND THE PLACE IT MEETS IS ON THE LINE. This is the assertion the rule
+     above only LOOKED like it was making, and the gap between the two shipped:
+     a rejoin to the first state was placed in the gap under the subject, which
+     is above the spine's own start, so its arrowhead pointed into blank canvas
+     about 23 units clear of anything. Every lifecycle check passed — "above
+     the target's top" was true, and nothing asked whether the target's top was
+     on the track. The starter document rejoins its first state, so this was
+     the first lifecycle most readers ever saw. */
+  const offSpine = returns.filter(
+    (exit) =>
+      exit.rejoinPath.joinY < layout.spineY0 - 0.001 ||
+      exit.rejoinPath.joinY > layout.spineY1 + 0.001,
+  );
+  check(
+    `${name}: every return's arrowhead lands on the spine, not past its end`,
+    offSpine.length === 0,
+    offSpine
+      .map(
+        (exit) =>
+          `${exit.key} points at y=${exit.rejoinPath.joinY.toFixed(1)}, outside the spine (${layout.spineY0.toFixed(1)}–${layout.spineY1.toFixed(1)})`,
+      )
+      .join("; "),
   );
 
   /* THE DEPARTURE LEG runs left from the exit's own dot at a y BELOW that
@@ -787,6 +839,90 @@ console.log("the layout is total (the canvas draws whatever parsed)");
     exportSrc.includes("diagramSurfaceMarkup("),
     "the exporter emits no panel, or one of its own — a downloaded diagram " +
       "is framed differently from the one on screen",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("a click lands on the ink, not on the row around it");
+
+/* IT WAS THE WHOLE ROW — the full canvas width and the full height a state
+   occupies — so the empty band left of the branch lane, the empty band right of
+   the label and every gap between them selected that state. On this canvas the
+   ink is a narrow column of dots, a column of words and a lane of exits; most
+   of what a pointer crosses is the space around them. The gantt had the same
+   defect and the same fix.
+
+   MEASURED THROUGH THE FUNCTION THE CANVAS DRAWS WITH, which is why it lives in
+   `lib/layout.ts`: a copy beside the element — in a file this script cannot
+   parse at all — would mean checking a re-derivation and calling it the canvas.
+   Two halves, each self-consistent, free to disagree. */
+{
+  const boxes = (d) =>
+    [...d.matchAll(/M (-?[\d.]+) (-?[\d.]+) H (-?[\d.]+) V (-?[\d.]+)/g)].map(
+      (m) => ({
+        x0: Number(m[1]),
+        y0: Number(m[2]),
+        x1: Number(m[3]),
+        y1: Number(m[4]),
+      }),
+    );
+
+  let rowArea = 0;
+  let hitArea = 0;
+  const offCanvas = [];
+  const missing = [];
+  for (const [name, , layout] of ALL) {
+    for (const state of layout.states) {
+      const exits = layout.exits.filter((exit) => exit.from === state.id);
+      const regions = boxes(lifecycleHitRegions(state, exits));
+      rowArea += LIFECYCLE.width * Math.max(1, state.y1 - state.y0);
+      for (const box of regions) {
+        hitArea += (box.x1 - box.x0) * (box.y1 - box.y0);
+        if (box.x0 < 0 || box.x1 > LIFECYCLE.width) {
+          offCanvas.push(
+            `${name}/${state.id}: ${box.x0.toFixed(1)}–${box.x1.toFixed(1)}`,
+          );
+        }
+      }
+      /* ONE REGION FOR THE STATE AND ONE PER WAY OUT. Fewer means a way out
+         stopped being clickable and nothing else would say so — the exits sit
+         far off to the left and belong to this state's focus group, which is
+         what the full-row target used to give for free. */
+      if (regions.length !== exits.length + 1) {
+        missing.push(
+          `${name}/${state.id}: ${regions.length} region(s), want ${exits.length + 1}`,
+        );
+      }
+      /* THE DOT AND ITS WORDS ARE ONE BOX. A 6.5-unit dot is not a target on
+         its own, and the run of spine between it and the label is a hole a
+         pointer would fall through if they were separate. */
+      const stateBox = regions[0];
+      if (
+        stateBox !== undefined &&
+        (stateBox.x0 > LIFECYCLE.spineX || stateBox.x1 < LIFECYCLE.stateLabelX)
+      ) {
+        missing.push(
+          `${name}/${state.id}: its box ${stateBox.x0.toFixed(1)}–${stateBox.x1.toFixed(1)} misses the dot at ${LIFECYCLE.spineX} or the label at ${LIFECYCLE.stateLabelX}`,
+        );
+      }
+    }
+  }
+
+  const share = hitArea / rowArea;
+  check(
+    `the clickable area is a fraction of the row (${(share * 100).toFixed(1)}%)`,
+    share < 0.5,
+    `${(share * 100).toFixed(1)}% — the empty canvas around the ink is a target again, and every near-miss selects a state`,
+  );
+  check(
+    `every state keeps a region for itself and one per way out (${missing.length} exception(s))`,
+    missing.length === 0,
+    missing.slice(0, 3).join("; "),
+  );
+  check(
+    "no region runs off the canvas",
+    offCanvas.length === 0,
+    `${offCanvas.slice(0, 3).join("; ")} — a target outside the viewBox cannot be clicked`,
   );
 }
 

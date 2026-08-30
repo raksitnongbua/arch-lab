@@ -108,7 +108,7 @@
  * Exits non-zero on any failure. Run with: pnpm check:lifecycle-motion
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -118,8 +118,49 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
-const { LIFECYCLE } = await load("src/features/lifecycle/lib/layout.ts");
-const { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } = await load(
+const { LIFECYCLE, layoutLifecycle } = await load(
+  "src/features/lifecycle/lib/layout.ts",
+);
+const { SWEEP_HEAD_MAX, SWEEP_HEAD_SHARE, sweepHead } = await load(
+  "src/lib/sweep-head.ts",
+);
+const { parseLifecycleText } = await load("src/features/archtext/index.ts");
+const { LIFECYCLE_EXAMPLE } = await load(
+  "src/features/lifecycle/input/example.ts",
+);
+const { listLifecycleExampleIds, loadLifecycleExample } = await load(
+  "src/features/lifecycle/service/example-service.ts",
+);
+const { VIEW_STARTER_TEXT } = await load(
+  "src/features/playground/input/parse.ts",
+);
+
+/* EVERY SPINE THIS REPO CAN PRODUCE A LENGTH FOR, plus the smallest document
+   the grammar accepts. The bundled ones come from the REGISTRY so a third
+   example is covered the day it lands; the two-state document is written out
+   because no registry will hold the minimum on purpose, and the minimum is
+   where a flat head stops fitting. */
+const spineOf = (file) => {
+  const laid = layoutLifecycle(file);
+  return Math.max(1, laid.spineY1 - laid.spineY0);
+};
+const SPINES = [
+  ["seed", spineOf(parseLifecycleText(LIFECYCLE_EXAMPLE))],
+  ...listLifecycleExampleIds()
+    .map((id) => [id, loadLifecycleExample(id)])
+    .filter(([, example]) => example.status === "ok")
+    .map(([id, example]) => [id, spineOf(example.file)]),
+  ["starter", spineOf(parseLifecycleText(VIEW_STARTER_TEXT.lifecycle))],
+  [
+    "the smallest lifecycle there is",
+    spineOf(
+      parseLifecycleText(
+        `archlab 1.0 lifecycle\ntitle "T"\n\n@lifecycle\n  subject "S"\n  state a "A"\n  state b "B" ends\n`,
+      ),
+    ),
+  ],
+];
+const { LIFECYCLE_SETTLE_MS } = await load(
   "src/features/lifecycle/lib/motion.ts",
 );
 
@@ -441,11 +482,6 @@ console.log("budget");
     LIFECYCLE_SETTLE_MS >= worst,
     `${LIFECYCLE_SETTLE_MS} < ${worst} — the sweep would start over an entrance still playing`,
   );
-  check(
-    "and is well under the idle wait, so a fresh page is at rest quickly",
-    LIFECYCLE_SETTLE_MS < IDLE_AFTER_MS,
-    `settle ${LIFECYCLE_SETTLE_MS}ms vs idle ${IDLE_AFTER_MS}ms — a page nobody has touched is already at rest`,
-  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -573,8 +609,17 @@ console.log("the sweep says 'time', not 'where this one is now'");
       "a full-height sweep past the outermost state claims a passage the document does not contain",
     );
     check(
+      /* THE STAMPED VALUE IS DERIVED, asked of the COMPONENT rather than of the
+       tag. It used to require the subtraction inside the `<line>` itself,
+       which made hoisting it to a named const — the shape the sweep's head cap
+       needed — look like a regression. The claim was never "the arithmetic is
+       written here"; it is "this number comes from the solved geometry rather
+       than from a literal", and that survives the hoist. The timeline's twin
+       of this assertion was the weaker one and checked only that the property
+       was stamped at all; both now ask the same question. */
       "its travel length is stamped from the SOLVED spine, not typed into CSS",
-      /--lc-spine-len/.test(tag),
+      /--lc-spine-len/.test(tag) &&
+        /layout\.spineY1 - layout\.spineY0/.test(diagram),
       "a hardcoded length drifts from the geometry the moment a document changes height",
     );
   }
@@ -663,15 +708,371 @@ console.log("the connector motion says something (it is not decoration)");
     "with motion off there would be nothing at all saying which way a return goes",
   );
 
-  /* THE MOTIONS THAT EXIST are each named by a keyframe, so a fifth added
-     without an argument is visible in a diff of this number. */
+  /* THE MOTIONS THAT EXIST are each named by a keyframe, so one added without
+     an argument is visible in a diff of this number. SIX FOR FOUR MOTIONS, not
+     six motions: `af-lc-arrive` is the second half of motion 2, and it exists
+     because the arrowhead is FILLED and a dashoffset cannot draw it. */
   const keyframes = [...withoutComments.matchAll(/@keyframes\s+([\w-]+)/g)].map(
     (match) => match[1],
   );
   check(
-    `the canvas declares exactly the five keyframes its four motions need (${keyframes.join(", ")})`,
-    keyframes.length === 5,
-    "entrance rise, draw (shared by the spine and the returns), sweep, travel and focus breathe — a sixth needs an argument in the stylesheet header",
+    `the canvas declares exactly the six keyframes its four motions need (${keyframes.join(", ")})`,
+    keyframes.length === 6,
+    "entrance rise, draw (shared by the spine and the returns), the arrowhead's arrival, the spine's wash, march (shared by a terminal branch's drift and the focus dash) and focus breathe — a seventh needs an argument in the stylesheet header",
+  );
+
+  /* THE ARROWHEAD DOES NOT ARRIVE BEFORE ITS LINE. It shipped doing exactly
+     that: nothing sequenced it, so it appeared with its row and pointed into
+     the spine for the ~500ms the path spent drawing towards it. Asserted as
+     "it is delayed at all and it is hidden first", both of which the rule must
+     carry — a fade with no delay would be the same defect 300ms slower. */
+  const arrow = ruleBody(css, '.af-lc-canvas[data-reveal="1"] .af-lc-arrow');
+  check(
+    "the return's arrowhead is hidden until its path has been drawn to it",
+    /opacity:\s*0\s*;/.test(arrow) &&
+      /animation-delay:\s*calc\(/.test(arrow) &&
+      /--lc-return-draw/.test(arrow),
+    `${arrow || "no rule at all"} — an arrowhead with nothing attached to it is the one thing this canvas's single arrowhead must not look like`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("a returning branch is a broken line, and it travels");
+
+/* WHAT THE DEFECT WAS. The march used to ride the SPINE, and before that the
+   spine carried a lit head sized against its own length: `head` and
+   `calc(spine-len - head)`. On a diagram shorter than the head that gap is
+   NEGATIVE, and a negative value does not clamp — it invalidates the whole
+   `stroke-dasharray`, which is dropped, and the line paints solid. The spine
+   washes again now and `@/lib/sweep-head` caps its head, which is measured
+   below; the march moved to the RETURNING branches — `exit … rejoins` — where
+   it repeats a pattern of TWO CONSTANTS and cannot express that bug at all. It
+   spent one commit on the terminal branches instead, which was the wrong half:
+   a dash says "this continues somewhere", and a terminal exit means the
+   opposite.
+
+   THAT IS A PROPERTY WORTH PINNING rather than trusting: a later hand reaching
+   for `--lc-spine-len` to make a branch's dashes "fit" would be walking back
+   into it. */
+{
+  const march = RULES.find(
+    ([selector]) =>
+      selector.includes(".af-lc-return") && selector.includes("data-idle"),
+  )?.[1];
+  check(
+    "a returning branch marches a repeating pattern, not a head sized to a line",
+    march !== undefined && !/--lc-spine-len/.test(march),
+    `${march ?? "no rule at all"} — sizing a repeating dash against a line reintroduces the negative gap that paints it solid`,
+  );
+
+  /* THE DRIFT STAYS THE QUIETER OF THE TWO MARCHES. They are one keyframe now,
+     which is what makes this worth asserting: the focus dash means "the subject
+     comes back HERE", and it can only mean that while the thing running unasked
+     is visibly sparser and slower. */
+  const length = (name) => Number.parseFloat(rootProp(name));
+  const returnDash = length("lc-return-dash");
+  const returnGap = length("lc-return-gap");
+  const travelDash = length("lc-travel-dash");
+  const travelGap = length("lc-travel-gap");
+  const returnDuty = returnDash / (returnDash + returnGap);
+  const travelDuty = travelDash / (travelDash + travelGap);
+  const returnSpeed = (returnDash + returnGap) / ms("lc-return-drift");
+  const travelSpeed = (travelDash + travelGap) / ms("lc-travel");
+  check(
+    `a resting return is sparser than the same path under focus (${(returnDuty * 100).toFixed(0)}% against ${(travelDuty * 100).toFixed(0)}%)`,
+    returnDuty < travelDuty,
+    "two marches at the same density are one mark, and lighting a branch then says nothing",
+  );
+  check(
+    `and slower (${returnSpeed.toFixed(3)} against ${travelSpeed.toFixed(3)} units/ms)`,
+    returnSpeed < travelSpeed,
+    "a mark that runs unasked and keeps pace with the one a reader asked for competes with it",
+  );
+
+  /* AND BOTH ARE FAST ENOUGH TO BE SEEN. The ordering above was satisfiable all
+     the way down and was once satisfied at 8.6 units per second, against a
+     motion-detection threshold of roughly 3–7. `codebase.md` names the shape: a
+     rule that says what to DO survives no case its author did not imagine. The
+     floor is what makes the ordering safe. */
+  const PERCEPTIBLE = 15 / 1000;
+  const tooSlow = [
+    ["a resting return's drift", returnSpeed],
+    ["the focus dash", travelSpeed],
+  ].filter(([, speed]) => speed < PERCEPTIBLE);
+  check(
+    `both marches are perceptibly moving (${(returnSpeed * 1000).toFixed(1)} and ${(travelSpeed * 1000).toFixed(1)} units/s, floor ${PERCEPTIBLE * 1000})`,
+    tooSlow.length === 0,
+    `${tooSlow.map(([name, speed]) => `${name} at ${(speed * 1000).toFixed(1)}`).join(", ")} — at that rate a pattern reads as a static dashed line`,
+  );
+
+  /* THE SPINE WASHES, AND ITS HEAD FITS. Same shape as the timeline's, same
+     hazard: a flat head longer than the spine is a negative gap. */
+  const cssHead = Number(rootProp("lc-sweep-head"));
+  check(
+    `the stylesheet's declared head is SWEEP_HEAD_MAX (${SWEEP_HEAD_MAX})`,
+    cssHead === SWEEP_HEAD_MAX,
+    `${cssHead} in CSS, ${SWEEP_HEAD_MAX} in @/lib/sweep-head — CSS cannot import TypeScript, so the pair is pinned here`,
+  );
+  check(
+    "the component stamps the head, so the cap reaches the diagram at all",
+    /--lc-sweep-head/.test(diagram) && /sweepHead\(/.test(diagram),
+    "the stylesheet default would stand alone again, which is the flat number that shipped",
+  );
+  const tooLong = SPINES.filter(([, spineLength]) => {
+    const head = sweepHead(spineLength);
+    return head >= spineLength || head > spineLength * SWEEP_HEAD_SHARE + 0.001;
+  });
+  check(
+    `every spine is longer than its own head (${SPINES.length} documents, shortest ${Math.min(...SPINES.map(([, l]) => l)).toFixed(1)})`,
+    tooLong.length === 0,
+    `${tooLong.map(([name, l]) => `${name}: head ${sweepHead(l).toFixed(1)} on a spine of ${l.toFixed(1)}`).join("; ")} — a gap of zero or less invalidates the dasharray and the wash becomes a solid line`,
+  );
+
+  /* NO KEYFRAME ANIMATES A LENGTH TO A UNITLESS `calc()`. This is the guard
+     that caught a dashed line which rendered and never moved, and it was
+     deleted by accident one commit later when this section was rewritten around
+     the wash — the unused imports it left behind are the only reason that was
+     noticed. Restored, and worth the second telling:
+
+     `af-lc-march` animates `stroke-dashoffset` to a calc over two lengths. With
+     those unitless the calc has type `<number>`, and SVG's bare-number
+     allowance covers a literal TOKEN rather than a calc RESULT — so the
+     declaration is invalid where a `<length>` is wanted and the browser drops
+     it. `stroke-dasharray` accepts `<number>` outright, so the dashes render and
+     simply sit there. Nothing errors, nothing logs, and every other assertion
+     in this file passes.
+
+     SWEPT OVER EVERY CANVAS, because the hazard is the shape and not the file.
+     The timeline animates to a plain `var()` and the gantt, ER and sequence to
+     literals; this is the only keyframe in the repo that does arithmetic, which
+     is why it is the only one that was ever inert. */
+  {
+    const LENGTHS = /stroke-dash(offset|array)/;
+    const dead = [];
+    for (const feature of readdirSync(path.join(ROOT, "src/features"))) {
+      const sheet = path.join(
+        ROOT,
+        `src/features/${feature}/styles/${feature}-motion.css`,
+      );
+      if (!existsSync(sheet)) continue;
+      const text = readFileSync(sheet, "utf8").replace(
+        /\/\*[\s\S]*?\*\//g,
+        " ",
+      );
+      for (const block of text.matchAll(
+        /@keyframes\s+([\w-]+)\s*\{([\s\S]*?\n\})/g,
+      )) {
+        for (const line of block[2].split("\n")) {
+          if (!LENGTHS.test(line) || !/calc\(/.test(line)) continue;
+          if (/\d(px|em|rem|%)/.test(line)) continue;
+          const cited = [...line.matchAll(/var\((--[\w-]+)\)/g)].map(
+            (match) => match[1],
+          );
+          /* THE `var()` CHAIN IS FOLLOWED TO ITS LITERAL. One level was not
+             enough: `--lc-march-dash` is declared as `var(--lc-return-dash)`, so
+             a check stopping at the first hop saw an alias rather than a
+             number and called the real defect clean. */
+          const literal = (name, depth = 0) => {
+            if (depth > 6) return null;
+            const declared = new RegExp(`${name}:\\s*([^;]+);`).exec(text);
+            if (declared === null) return null;
+            const value = declared[1].trim();
+            const alias = /^var\((--[\w-]+)\)$/.exec(value);
+            return alias === null ? value : literal(alias[1], depth + 1);
+          };
+          const unitless = cited.filter((name) => {
+            const value = literal(name);
+            return value !== null && /^[\d.]+$/.test(value);
+          });
+          if (cited.length === 0 || unitless.length > 0) {
+            dead.push(
+              `${feature}/@keyframes ${block[1]}: ${line.trim()}${unitless.length > 0 ? ` (${unitless.join(", ")} unitless)` : ""}`,
+            );
+          }
+        }
+      }
+    }
+    check(
+      "no keyframe animates a dash length to a unitless calc()",
+      dead.length === 0,
+      `${dead.join("; ")} — calc() over numbers has type <number>, the declaration is invalid where a <length> is wanted, and the browser drops it silently: the dashes render and never move`,
+    );
+  }
+
+  /* A RETURN IS A BROKEN LINE AT REST — declared outside the media query, so a
+     reader with motion off and a downloaded file both keep it. This is a
+     distinction; only its travel is an animation. */
+  const resting = ruleBody(css, ".af-lc-return");
+  check(
+    "a returning branch is dashed even when nothing is moving",
+    /stroke-dasharray:/.test(resting),
+    `${resting || "no rule at all"} — with motion off the only thing separating a way BACK from a way OUT is the shape of the route, followed corner by corner`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("the entrance ends, and lets go of what it animated");
+
+/* TWO DEFECTS, ONE CAUSE, AND THE CAUSE IS THAT THE ENTRANCE NEVER FINISHED.
+   `data-reveal` was stamped as a literal, so every entrance rule kept matching
+   for the life of the page — and every one of them is `forwards`, which means
+   the animation goes on contributing its end value from the ANIMATION ORIGIN.
+   That origin outranks normal author declarations. Everything follows from it:
+
+     - FOCUS DIMMING COULD NOT WORK. `.af-lc-canvas.af-lc-has-focus .af-lc-row { opacity: 0.24 }`
+       is a normal declaration, and the filled entrance holds the same property
+       at 1. Nothing ever dimmed. Both this canvas and its neighbour shipped a
+       focus state that was inert.
+     - A LIT BRANCH VANISHED FOR 420ms. `.af-lc-return` had
+       `animation` declared by BOTH the entrance and the focus rule. Focus is
+       the more specific, so hovering swapped `af-lc-draw` for `af-lc-march`;
+       leaving focus swapped it back, and a re-added animation is a NEW one — it
+       replayed `animation-delay: var(--lc-spine-draw)` from the start. During
+       that delay a `forwards` animation contributes nothing, so the base values
+       stood: `stroke-dasharray: var(--lc-path-len)` against
+       `stroke-dashoffset: var(--lc-path-len)`. An odd dash count is doubled, so
+       that is one full period of offset — the whole path sitting in the gap.
+       Invisible, for 420ms, every time the pointer left a branch. Measured on
+       the starter: 1039.3 units in both properties.
+
+   The fix is that the entrance is a PHASE and it ends: the viewer drops
+   `data-reveal` once it has played, at the settle it already computes, and the
+   handover is seamless because every filled end value equals the resting
+   declaration underneath it. These two assertions say so — the first that the
+   phase ends at all, the second that nothing is fighting over an `animation`
+   while one is still running. */
+{
+  /* TWO HALVES, AND THE SECOND IS THE ONE THAT BITES. The first draft of this
+     asserted only that the word "revealed" appeared in the viewer, and a break
+     that renamed the state to `revealedAlways` and deleted the line that turns
+     it off SAILED THROUGH — the assertion passed on exactly the defect it was
+     written for. Binding the prop to an expression and actually turning it off
+     are different claims and both have to be made. */
+  check(
+    "the entrance prop is bound to state, not stamped as a literal",
+    /reveal=\{/.test(viewer),
+    "a bare `reveal` keeps every `forwards` entrance rule matching for the life of the page",
+  );
+  check(
+    "and that state is turned off once the entrance has played",
+    /setRevealed\(false\)/.test(viewer),
+    "state that is never lowered is a literal with extra steps, and an animation's fill outranks any focus declaration for the same property",
+  );
+
+  /* NO TWO RULES THAT CAN BOTH MATCH MAY DECLARE `animation`. Changing which
+     animation applies restarts it, and a restarted one-shot replays its delay
+     with no backwards fill — which is how a lit branch vanished. A PAIR SEARCH
+     over the real rules, not a note about the one that broke. */
+  const animated = RULES.filter(([, body]) => /\banimation:/.test(body));
+  const target = (selector) => {
+    const parts = selector.split(/\s+/).filter(Boolean);
+    return parts[parts.length - 1].replace(/[:[].*$/, "");
+  };
+  const contested = [];
+  for (const [aSel] of animated) {
+    for (const [bSel] of animated) {
+      if (aSel === bSel) continue;
+      if (target(aSel) !== target(bSel)) continue;
+      const reveal = /data-reveal="1"/.test(aSel);
+      const focus = /has-focus/.test(bSel) && !/:not\(\[data-reveal/.test(bSel);
+      if (reveal && focus)
+        contested.push(`${target(aSel)}: ${aSel} vs ${bSel}`);
+    }
+  }
+  check(
+    "no element is handed two animations that can apply at once",
+    contested.length === 0,
+    `${contested.join(" | ")} — whichever wins RESTARTS, and a one-shot restarting replays its delay with the line hidden`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("the ambient survives a selection");
+
+/* IT USED TO YIELD TO FOCUS, and that was correct while focus arrived on
+   HOVER: a pointer resting on a row held it for a second, and pausing the
+   ambient underneath was a moment. Selecting is a CLICK now, and a click PINS
+   until it is clicked again or Escape is pressed — so the clause turned into
+   "the canvas never moves again", and it was reported as looking lifeless.
+
+   ASSERTED AS THE ABSENCE OF THE MECHANISM, like the hover rule in
+   `check:view-input`, because restoring the yield is the obvious edit for
+   anyone who reads the ambient's original argument without noticing that the
+   interaction under it changed. In a diff it reads as a fix.
+
+   THE GANTT IS NOT COVERED BY THIS AND MUST NOT BE. Its ambient and its focus
+   current are the same animation on the same connectors at two speeds, so
+   running both is one motion arguing with itself rather than two coexisting.
+   That canvas keeps its yield, and the difference is a real one rather than an
+   oversight — which is why this assertion lives in the two checks it applies
+   to instead of being swept across every kind. */
+{
+  const ambient = RULES.filter(
+    ([selector]) => /data-idle="1"/.test(selector) && /sweep/.test(selector),
+  );
+  check(
+    `the ambient rule was found (${ambient.length})`,
+    ambient.length === 1,
+    "the selector moved, so the assertion below is measuring nothing",
+  );
+  check(
+    "the ambient keeps running while a row is selected",
+    ambient.every(([selector]) => !/:not\([^)]*has-focus/.test(selector)),
+    `${ambient.map(([s]) => s).join(" | ")} — a pinned selection would stop the canvas moving for as long as it is held`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log(
+  "reading does not stop the ambient, and the entrance keeps the pattern",
+);
+
+/* NOTHING STIRS THE CANVAS BACK OUT OF REST, and this rule has narrowed twice.
+
+   It began by refusing a wheel and a pointer move while allowing a press and a
+   key: scrolling is how a reader looks at MORE of a diagram, and killing the
+   ambient for three seconds on every wheel tick meant it was off whenever
+   anyone was using the thing. Then deselecting turned out to kill it too — a
+   press is a stir as well, so the click that clears a selection took every
+   moving mark with it.
+
+   THE ANSWER IS THAT THERE IS NOTHING TO YIELD TO. This canvas has no camera:
+   no pan, no zoom, no drag. All a reader does is LOOK and SELECT, and both are
+   the moment the motion is worth having. The wait it yielded with was built for
+   HOVER, when pointing at a row selected it and the pointer moved continuously;
+   selecting is a discrete press now, and a three-second blackout is the wrong
+   shape for a discrete act.
+
+   THE ABSENCE IS THE ASSERTION, because re-adding a stir is the obvious way to
+   make a canvas "settle down while you work", and in a diff that reads as a
+   courtesy rather than as dead canvas after every click. */
+{
+  const bareViewer = viewer.replace(/\/\*[\s\S]*?\*\//g, " ");
+  check(
+    "nothing stirs the canvas back out of rest",
+    !/stir/.test(bareViewer) && !/IDLE_AFTER_MS/.test(bareViewer),
+    "a wheel or a press is a reader LOOKING, and stopping the ambient for it means the motion is off whenever anyone is using the diagram",
+  );
+  check(
+    "at rest is derived from the entrance, not tracked separately",
+    /atRest=\{!revealed\}/.test(bareViewer),
+    "two flags for one phase are two things that can disagree",
+  );
+
+  /* AND THE ENTRANCE ARRIVES AS WHAT IT STAYS. Drawing a return means one dash
+     the length of the path with its offset animated to zero — and that dash
+     OVERRIDES the resting pattern, so the line came in solid and snapped to
+     dashed the instant the entrance ended. What arrives has to be what stays,
+     or the entrance is showing the reader a different mark. */
+  const revealReturn = RULES.find(
+    ([selector]) =>
+      selector.includes(".af-lc-return") &&
+      selector.includes('data-reveal="1"'),
+  )?.[1];
+  check(
+    "the entrance does not override a return's dash pattern",
+    revealReturn !== undefined && !/stroke-dasharray/.test(revealReturn),
+    `${revealReturn ?? "no rule at all"} — a full-length dash paints the line solid while it arrives, and it changes shape when the entrance lets go`,
   );
 }
 

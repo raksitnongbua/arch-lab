@@ -25,11 +25,29 @@
  *      are the same kind of thing. They are not — one is where the subject
  *      goes, the other is where it goes back to.
  *
- *   3. SPINE SWEEP — at rest, a wash travels down the spine and loops.
+ *      A RETURN'S ARROWHEAD IS PART OF THIS MOTION AND NEEDS ITS OWN RULE.
+ *      It is filled, not stroked, so the dashoffset that draws the path leaves
+ *      it alone — it shipped appearing the instant its row faded in and then
+ *      hanging there, unattached, for the whole time the line took to reach
+ *      it. That is six keyframes for four motions, not a fifth motion.
+ *
+ *   3. SPINE DRIFT — at rest, dashes march down the spine and loop, for ever.
  *      Answers "which way does time run", which a vertical line of identical
- *      dots genuinely cannot say standing still. The same argument the
- *      timeline's sweep makes, and it runs ALONG the spine and nowhere else
- *      for the same reason.
+ *      dots genuinely cannot say standing still. It runs ALONG the spine and
+ *      nowhere else.
+ *
+ *      IT WAS A SINGLE WASHING HEAD, and marching dashes replace it on a
+ *      request rather than on an argument — but the swap pays for itself
+ *      twice. The head had to be sized against the spine, which is what put a
+ *      negative number in the dash gap on short diagrams and painted the whole
+ *      line solid; a repeating pattern does not know how long the line is, so
+ *      that class of bug cannot be written here again. And it turned out to be
+ *      the same motion as the travelling dash on a lit return, which had been
+ *      written as a separate keyframe — they now share one.
+ *
+ *      THE TIMELINE'S SWEEP IS STILL A WASH and is deliberately left alone.
+ *      The two canvases no longer move alike, which is a real cost and is
+ *      accepted: this one was asked for by the person reading it.
  *
  *      WHAT IT IS NOT: a today marker or a playhead. arch-lab draws neither
  *      anywhere on purpose — a share link carries its document but not the
@@ -93,8 +111,10 @@
  *     here (the focus breathe and the travelling dash) carry one.
  *   - FOCUS DIMS AND ANIMATES, IT DOES NOT REPAINT. No stroke, fill, width or
  *     radius changes in either direction — a focused dot that recolours is a
- *     new mark appearing where one already was. `:focus-visible` is the one
- *     exception, because a keyboard user has no hover to fall back on.
+ *     new mark appearing where one already was. THERE IS NO LONGER AN
+ *     EXCEPTION FOR `:focus-visible` EITHER: it drew a ring the width of the
+ *     canvas, and the lit row a keyboard reader already gets says where they
+ *     are far better. The rule on the hit target carries the argument.
  *   - THE SWEEP RIDES A SEPARATE LINE. Never a dasharray on the spine itself:
  *     the spine is the continuous mark a reader follows, and a travelling
  *     dash over it would break the line it is describing. The travelling dash
@@ -146,19 +166,56 @@
 
   --lc-spine-draw: 420ms;
   --lc-return-draw: 460ms;
+  /* The arrowhead's fade. Timed to FINISH with the return's draw rather than
+     to start there, so it lands with the line and costs the reveal budget
+     nothing — see the rule under motion 2. */
+  --lc-arrow-in: 300ms;
 
-  /* The sweep. Slow, because it is a wash over a line rather than a pulse
-     along a wire: a short head here reads as a dot lighting up, which on this
-     canvas is a state. */
+  /* THE SPINE WASHES, like the timeline's next door. A single lit head runs
+     the length of the track and loops, which is the gesture that answers "which
+     way does time run" — one mark travelling a long line, seen at a glance.
+
+     IT WAS MARCHING DASHES FOR TWO COMMITS, and that was a misreading rather
+     than a design that failed: what was asked for was a drifting dashed line
+     AND a solid vertical track, and the dashes were put ON the track instead of
+     on the branches, where they belong. The track is the continuous mark a
+     reader follows; a branch is one journey.
+
+     THE HEAD IS CAPPED per diagram by `@/lib/sweep-head` — a flat length longer
+     than a short spine puts a negative number in the dash gap, which
+     invalidates the whole `stroke-dasharray` and paints the line solid. This
+     value is the declared default only, pinned to `SWEEP_HEAD_MAX`. */
   --lc-sweep: 3.8s;
   --lc-sweep-head: 90;
 
-  /* The travelling dash on a lit return. Faster than the sweep: it is a
-     journey rather than a wash, and it only ever runs on one path at a
-     time. */
-  --lc-travel: 1.5s;
-  --lc-travel-dash: 10;
-  --lc-travel-gap: 14;
+  /* A RETURNING BRANCH DRIFTS. `exit … rejoins <state>` — the long path that
+     leaves the track, travels a reserved channel and comes back in further up.
+     It is dashed at rest and its dashes travel, which is where the drifting
+     dashed line belongs: it is ONE JOURNEY off the spine and back, so a dash
+     pattern on it breaks no continuous reference mark, and the dash is that
+     journey.
+
+     NOT THE TERMINAL BRANCHES. `exit … ends` stops at a bar and goes nowhere —
+     there is no journey to draw, and a dash there would say "this continues
+     somewhere" about the one mark on the canvas that means the opposite. They
+     were dashed for one commit, which was the wrong half.
+
+     SPARSER AND SLOWER THAN THE SAME PATH UNDER FOCUS — 33% duty against 42%,
+     about two thirds the speed. Selecting a branch has to visibly change it or
+     the focus dash says nothing, and both marks are the same motion on the same
+     element: what differs is density and pace. Both carry `px`: unitless they
+     would be `<number>`s, and `calc()` over numbers cannot stand where a
+     `<length>` is wanted, which left this march silently inert once already. */
+  --lc-return-drift: 1.32s;
+  --lc-return-dash: 8px;
+  --lc-return-gap: 16px;
+
+  /* The travelling dash on a lit return. Faster and denser than the ambient:
+     it is a journey rather than a drift, and it only ever runs on one path at
+     a time. */
+  --lc-travel: 0.9s;
+  --lc-travel-dash: 10px;
+  --lc-travel-gap: 14px;
 
   --lc-breathe: 1.6s;
   --lc-breathe-step: 120ms;
@@ -178,8 +235,23 @@
   opacity: 0.42;
 }
 
+/* THE TRACK, AND IT IS INK RATHER THAN RULING. It painted from
+   `--canvas-grid` — the token the CANVAS rules its own ground with — which
+   held only while the drawing sat straight on that ground. It sits on a
+   `--node` panel now, and `--canvas-grid` is tuned against `--canvas`: on
+   `midnight` the spine measured 1.030:1 against the panel under it. The
+   timeline's axis had the same defect for the same reason and is fixed in the
+   same breath.
+
+   `--edge` is measured against `--node` in every theme by construction (worst
+   3.008:1). It is also what this line always was: the continuous mark a reader
+   follows, which is the same class of thing as the stubs and returns that
+   already paint from it. One linework family, told apart by WEIGHT and
+   GEOMETRY — the spine is 2 and carries the dots, a branch is 1.5 and leaves
+   sideways — which is exactly the distinction-without-hue this canvas argues
+   for everywhere else. */
 .af-lc-spine {
-  stroke: var(--canvas-grid);
+  stroke: var(--edge);
   stroke-width: 2;
   stroke-linecap: round;
 }
@@ -223,6 +295,25 @@
   fill: var(--edge);
 }
 
+/* A RETURNING BRANCH IS DRAWN AS A BROKEN LINE. Every other connector here is
+   a route the subject travels once and leaves behind; this is the one that
+   doubles back, and until now the only thing saying so was the shape of the
+   route itself — followed with the eye, corner by corner, to find out where it
+   lands.
+
+   A DASH IS A SHAPE, which is the only currency this canvas trades in. It
+   separates the two kinds of departure at a glance, it survives greyscale and a
+   screenshot, and it costs no hue — the palette argument in the header is
+   untouched.
+
+   DECLARED OUTSIDE THE MEDIA QUERY, so a reader with motion off and a
+   downloaded file both keep the distinction. Only the travel below is motion.
+   The entrance's own dasharray outranks this while the diagram is arriving, and
+   stops applying when the entrance ends. */
+.af-lc-return {
+  stroke-dasharray: var(--lc-return-dash) var(--lc-return-gap);
+}
+
 .af-lc-subject {
   fill: var(--foreground);
 }
@@ -250,11 +341,26 @@
    canvas would be a permanent extra state at the top of the spine. */
 .af-lc-sweep {
   fill: none;
-  /* `--edge-drift` is this app's designated travelling-mark token, and it is
-     near-neutral in every theme — which is what a wash over a structural line
-     has to be. Nothing on this canvas carries meaning in a stroke colour, so
-     there is nothing for the sweep to be confused with and no new token is
-     owed. */
+  /* `--edge-drift` is this app's designated travelling-mark token. It differs
+     from `--edge` — which the spine under it now paints from — mostly in HUE:
+     measured across the nine themes it is 1.00–1.29:1 against the spine in
+     luminance but 0.06–0.12 in OKLab distance, where a just-noticeable
+     difference is 0.002. So the colour alone would carry this on a screen and
+     carry nothing in greyscale.
+
+     THE WIDTH IS THEREFORE LOAD-BEARING, not a taste. At 4 against the spine's
+     2 the marching dashes stand a unit proud on each side, which is a
+     GEOMETRIC difference and survives everything a hue does not — the same
+     argument this canvas makes for telling a terminal branch from a returning
+     one by shape.
+
+     ZERO-LENGTH DASH AT REST, never `opacity: 0`: every `opacity: 0` here is
+     reserved for the entrance and `check:lifecycle-motion` fails any other
+     rule outside the media query that hides something. The BUTT cap is what
+     stops that zero-length dash painting a dot — a round cap would leave a
+     permanent extra state at the top of the spine — and it is also what keeps
+     the marching dashes rectangular rather than rounding 2 units onto each
+     end of an 8-unit dash. */
   stroke: var(--edge-drift);
   stroke-width: 4;
   stroke-linecap: butt;
@@ -265,10 +371,41 @@
   fill: transparent;
   cursor: pointer;
 }
-/* The one place focus is allowed to paint: a keyboard user has no hover. */
+/* NO RING, AND NOTHING REPLACES IT. `outline` on this element drew a rounded
+   rectangle the WIDTH OF THE CANVAS, because the hit target is a full-width
+   band rather than the shape itself — so what a keyboard reader got was a
+   coloured bar across the diagram, and what everyone got was the loudest mark
+   on a canvas that sells presentation.
+
+   THE FOCUS STATE ITSELF IS THE INDICATOR, and it is a stronger one: tabbing
+   to a row lights it and drops every other row to 0.24, declared outside the
+   media query so it holds under reduced motion too. That is not a smaller
+   affordance than a 2px outline, it is a much larger one.
+
+   WHY THE RING WAS EVER NEEDED ARGUES AGAINST PUTTING IT BACK. The dimming did
+   not work: every entrance rule is `forwards` and kept matching for the life of
+   the page, so the animation origin held every row at full strength and the
+   focus declarations underneath it never applied to anything. The ring was the
+   only thing a keyboard reader could see, and it was covering for that bug
+   rather than answering a need. The bug is fixed; the cover is not owed.
+
+   `:focus`, NOT ONLY `:focus-visible`, AND THIS IS THE HALF THAT SHIPPED
+   WRONG TWICE. Killing the outline on `:focus-visible` alone leaves the box
+   exactly where it was, because CLICKING an SVG element that carries a
+   tabindex gives it `:focus` WITHOUT `:focus-visible`, and Chrome still paints
+   `outline: auto` for that. `globals.css` names the mechanism — `@layer base`
+   gives every element `outline-ring/50`, so the browser's own indicator paints
+   in `--ring` — and the use-case and flowchart canvases already carry both
+   pseudo-classes for it. This canvas now selects on a CLICK and nothing else,
+   so it meets that path on every single selection.
+
+   FOUR OF THE SIX CANVASES THAT MAKE A SHAPE A BUTTON already suppressed this —
+   the flowchart and the use case in their components, ER and the sequence with
+   a stroke on the shape itself — and `check:view-input` asserts that every one
+   of them lights on `onFocus`, which is what makes suppressing it safe. */
+.af-lc-hit:focus,
 .af-lc-hit:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -279,6 +416,14 @@
   opacity: 0.24;
 }
 .af-lc-canvas.af-lc-has-focus .af-lc-row[data-lit="1"] {
+  opacity: 1;
+}
+/* THE HALO ON THE SELECTED state. Its paint is in `globals.css` with the
+   other four canvases' rings; this is the only thing that differs — WHEN it
+   shows. Tied to `data-lit`, so it follows a click and a keyboard focus alike
+   rather than only `:focus-visible`, which would have left a clicked row with
+   the dimming and nothing else. */
+.af-lc-canvas.af-lc-has-focus .af-lc-row[data-lit="1"] .af-lc-ring {
   opacity: 1;
 }
 
@@ -312,10 +457,21 @@
       forwards;
   }
   .af-lc-canvas[data-reveal="1"] .af-lc-return {
-    stroke-dasharray: var(--lc-path-len);
-    stroke-dashoffset: var(--lc-path-len);
-    animation: af-lc-draw var(--lc-return-draw) cubic-bezier(0.4, 0, 0.2, 1)
-      forwards;
+    /* IT FADES IN, IT DOES NOT DRAW. Drawing means one dash the length of the
+       path with the offset animated to zero — and that dash OVERRIDES the
+       resting pattern, so the line arrived solid and snapped to dashed the
+       moment the entrance ended. A reader saw a solid line travel in and then
+       change into something else.
+
+       A FADE KEEPS THE PATTERN FROM THE FIRST FRAME, so what arrives is what
+       stays. The ORDER the header argues for is untouched — the delay below
+       still holds it until the spine has drawn, because a return cannot precede
+       the track it returns to — and the direction it goes is carried by the
+       arrowhead and by the drift, which are the marks that carry it at rest
+       too. `af-lc-arrive` is the arrowhead's own keyframe; this needs the same
+       thing and does not need a seventh. */
+    opacity: 0;
+    animation: af-lc-arrive var(--lc-return-draw) linear forwards;
     /* AFTER the spine, never with it: a return cannot precede the track it
        returns to. Positive on purpose and safe on purpose — this is a
        `forwards` one-shot, not an infinite animation, so the restart hazard
@@ -323,17 +479,60 @@
     animation-delay: var(--lc-spine-draw);
   }
 
-  /* 3. The sweep. Gated on the app-wide toggle AND on at-rest, like every
-     other ambient in this app: an ambient that never stops competes with the
-     person reading and stops meaning anything, which is precisely how ER's
-     pulse ended up needing a second visual language to survive. It yields to
-     focus too, or it would travel through the one state the reader just
-     lit. */
-  .af-lc-canvas[data-af-idle="on"][data-idle="1"]:not(.af-lc-has-focus)
-    .af-lc-sweep {
+  /* AND ITS ARROWHEAD ARRIVES WITH IT. This is part of motion 2, not a fifth
+     motion — but it needs its own rule, because the arrowhead is a FILLED
+     triangle and the dashoffset that draws the path does not touch it. Without
+     this it sat at full strength on the spine from the moment its row faded in
+     and stayed there for the whole ~500ms the line spent travelling towards
+     it: a mark pointing into the track with nothing attached to it, which is
+     the one thing this canvas's single arrowhead must never look like.
+
+     THE DELAY IS THE DRAW MINUS THE FADE, so the arrowhead reaches full
+     strength exactly as the line reaches it and the reveal's worst case is
+     unchanged — `check:lifecycle-motion` computes that budget from these same
+     properties, so a longer fade would show up there rather than drift. */
+  .af-lc-canvas[data-reveal="1"] .af-lc-arrow {
+    opacity: 0;
+    animation: af-lc-arrive var(--lc-arrow-in) linear forwards;
+    animation-delay: calc(
+      var(--lc-spine-draw) + var(--lc-return-draw) - var(--lc-arrow-in)
+    );
+  }
+
+  /* 3. The drift. Gated on the app-wide toggle and on at-rest.
+
+     IT NO LONGER YIELDS TO FOCUS, and that clause was right when it was
+     written and wrong now. Focus used to arrive on HOVER, so it lasted as long
+     as the pointer sat still and pausing the ambient under it was a moment.
+     Selecting is a CLICK now and a click PINS — so "yields to focus" became
+     "never runs again until you deselect", and the canvas simply stopped
+     moving. Reported as looking lifeless, which it was.
+
+     TWO MARKS CAN NOW MOVE AT ONCE HERE, and that is the cost. It is payable
+     because they are nowhere near each other and are measurably unalike: the
+     ambient runs the spine down the middle while a lit return runs off to the left, and `check:lifecycle-motion` pins the ambient at a lower duty and a lower speed than the focus dash. The gantt keeps its own yield and
+     should — there the ambient and the focus current are the SAME animation on
+     the SAME connectors at two speeds, so running both is one motion arguing
+     with itself rather than two motions coexisting. */
+  .af-lc-canvas[data-af-idle="on"][data-idle="1"] .af-lc-sweep {
     stroke-dasharray: var(--lc-sweep-head)
       calc(var(--lc-spine-len) - var(--lc-sweep-head));
     animation: af-lc-sweep var(--lc-sweep) linear infinite;
+  }
+
+  /* THE RETURNS TRAVEL. The one ambient on this canvas is the spine's wash;
+     this is a second moving mark, and the standing objection to two at once is
+     answered by WHERE they are rather than by how they look — the wash runs the
+     track down the middle, a return runs off it and around, and a reader
+     following one is not in the other's way.
+
+     THE SAME ELEMENT MOVES FASTER UNDER FOCUS, below. That is the point rather
+     than a clash: at rest a return drifts quietly and says "this doubles back";
+     lit, it travels, and says which way. */
+  .af-lc-canvas[data-af-idle="on"][data-idle="1"] .af-lc-return {
+    --lc-march-dash: var(--lc-return-dash);
+    --lc-march-gap: var(--lc-return-gap);
+    animation: af-lc-march var(--lc-return-drift) linear infinite;
   }
 
   /* 4a. Focus, the dot. Opacity only — no stroke, fill or radius moves, so
@@ -359,11 +558,25 @@
      a line a reader was using. Its dash pattern is a fixed length rather than
      a fraction of the path, so a long return and a short one travel at the
      same visual speed. */
-  .af-lc-canvas[data-af-idle="on"].af-lc-has-focus
+  /* `:not([data-reveal="1"])` IS THE WHOLE POINT OF THIS SELECTOR, not tidying.
+     The entrance also declares `animation` on this element, and two rules that
+     can both match means one wins and the animation RESTARTS whenever which
+     one wins changes. Leaving focus handed `af-lc-draw` back as a NEW
+     animation, which replayed its 420ms delay — and during a delay a
+     `forwards` animation contributes nothing, so the base values stood:
+     `stroke-dasharray: var(--lc-path-len)` against an equal
+     `stroke-dashoffset`, which is one whole period of offset and puts the
+     entire path in the gap. The branch vanished, then redrew, every time the
+     pointer left it. The viewer now ends the entrance at 940ms so the two
+     cannot normally coexist; this guard covers the window before that, when a
+     reader hovering a still-arriving diagram would otherwise hit it. */
+  .af-lc-canvas[data-af-idle="on"].af-lc-has-focus:not([data-reveal="1"])
     .af-lc-row[data-lit="1"]
     .af-lc-return {
-    stroke-dasharray: var(--lc-travel-dash) var(--lc-travel-gap);
-    animation: af-lc-travel var(--lc-travel) linear infinite;
+    --lc-march-dash: var(--lc-travel-dash);
+    --lc-march-gap: var(--lc-travel-gap);
+    stroke-dasharray: var(--lc-march-dash) var(--lc-march-gap);
+    animation: af-lc-march var(--lc-travel) linear infinite;
     animation-delay: calc(var(--lc-wave, 0) * var(--lc-breathe-step) * -1);
   }
 }
@@ -385,11 +598,26 @@
   }
 }
 
+/* The arrowhead catching up with the line it belongs to. Opacity only, and
+   deliberately NOT `af-lc-rise`: that keyframe slides its subject up 8 units,
+   which on an 8-unit triangle reads as a second object arriving from below
+   rather than as the end of a path being reached. */
+@keyframes af-lc-arrive {
+  to {
+    opacity: 1;
+  }
+}
+
 /* The wash fades up off the top end and back down into the bottom one. A hard
-   cut at either end would read as an object arriving and leaving — a thing at
-   a moment — where a fade reads as the line itself catching light. Peak
-   opacity is deliberately modest: this is the only thing moving once the
-   canvas is at rest, so it must not become the loudest mark on the page. */
+   cut at either end would read as an object arriving and leaving — a thing at a
+   moment — where a fade reads as the line itself catching light. Peak opacity
+   is deliberately modest: it is the loudest thing on a resting canvas.
+
+   `var()`, NOT `calc()`, and the sibling keyframe below is why that is worth
+   saying: `--lc-spine-len` is stamped as a plain number, so substituting it
+   leaves a bare token where SVG allows one. Wrapping the same value in
+   arithmetic would type it `<number>`, which cannot stand where a `<length>` is
+   wanted, and the declaration would be dropped in silence. */
 @keyframes af-lc-sweep {
   0% {
     stroke-dashoffset: var(--lc-spine-len);
@@ -405,16 +633,45 @@
   }
 }
 
-/* One dash-and-gap of travel per cycle, so the marks appear to move
-   continuously rather than restarting. The offset counts DOWN, which on an
-   SVG path moves the dashes forward along the path's own direction — and the
-   component draws every return from its exit TO the spine, so forward is the
-   direction the subject goes. */
-@keyframes af-lc-travel {
+/* THE LENGTHS CARRY `px`, AND THAT IS THE WHOLE REASON THIS MOVES AT ALL.
+   Unitless they were `<number>`s, and `calc()` over numbers has type
+   `<number>` — which is NOT substitutable where a `<length>` is required. SVG's
+   bare-number allowance covers a literal token, not a calc result. So
+   `stroke-dasharray: 8 16` applied, because that property accepts `<number>`
+   outright, and the keyframe's `to` was thrown away as invalid: a dashed line
+   that never travelled. Reported as three dots sitting on the spine.
+
+   EVERY OTHER CANVAS IN THIS REPO SIDESTEPPED IT BY ACCIDENT. The timeline
+   animates to `var(--tl-spine-len)`, a plain number token; the gantt, ER and
+   sequence all animate to literals. `af-lc-march` is the only keyframe here
+   that does arithmetic, and it is the only one that was silently inert.
+   `check:lifecycle-motion` now refuses a unitless `calc()` in any of them.
+
+   ONE KEYFRAME, TWO RIDERS — the drift out along a terminal branch and the
+   travelling dash on a lit return. They were two, and the second was written
+   as a copy of the first with different numbers; they are the same motion, and
+   what differs between them is the pattern, the speed and what they run on.
+   Each rule sets `--lc-march-dash` and `--lc-march-gap` on its own element,
+   and custom properties in a keyframe resolve against the element the
+   animation runs on, so one declaration serves both without either knowing
+   about the other.
+
+   ONE DASH-AND-GAP PER CYCLE, so the marks appear to move continuously rather
+   than restarting: after exactly one period the pattern is back where it
+   started and the loop is seamless. The offset counts DOWN, which moves the
+   dashes FORWARD along the line's own direction — the spine is drawn top to
+   bottom, so the drift runs the way time runs, and every return is drawn from
+   its exit TO the spine, so its dash runs the way the subject goes. A path
+   written backwards would animate the opposite claim.
+
+   NO FADE AT THE ENDS. The wash this replaced needed one, because it was a
+   single head arriving and leaving and a hard cut would have read as an object
+   appearing. A repeating pattern has no arrival to soften — it is already
+   everywhere on the line — so it carries a constant `stroke-opacity` instead
+   and the loop has no seam to hide. */
+@keyframes af-lc-march {
   to {
-    stroke-dashoffset: calc(
-      (var(--lc-travel-dash) + var(--lc-travel-gap)) * -1
-    );
+    stroke-dashoffset: calc((var(--lc-march-dash) + var(--lc-march-gap)) * -1);
   }
 }
 

@@ -102,8 +102,49 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
-const { TIMELINE } = await load("src/features/timeline/lib/layout.ts");
-const { IDLE_AFTER_MS, TIMELINE_SETTLE_MS } = await load(
+const { TIMELINE, layoutTimeline } = await load(
+  "src/features/timeline/lib/layout.ts",
+);
+const { SWEEP_HEAD_MAX, SWEEP_HEAD_SHARE, sweepHead } = await load(
+  "src/lib/sweep-head.ts",
+);
+const { parseTimelineText } = await load("src/features/archtext/index.ts");
+const { TIMELINE_EXAMPLE } = await load(
+  "src/features/timeline/input/example.ts",
+);
+const { listTimelineExampleIds, loadTimelineExample } = await load(
+  "src/features/timeline/service/example-service.ts",
+);
+const { VIEW_STARTER_TEXT } = await load(
+  "src/features/playground/input/parse.ts",
+);
+
+/* EVERY SPINE THIS REPO CAN PRODUCE A LENGTH FOR, plus the smallest document
+   the grammar accepts. The bundled ones are read from the REGISTRY so a third
+   example is covered the day it lands; the two-event document is written out
+   because no registry will ever hold the minimum on purpose, and the minimum
+   is where the defect lived. */
+const spineOf = (file) => {
+  const laid = layoutTimeline(file);
+  return Math.max(1, laid.spineY1 - laid.spineY0);
+};
+const SPINES = [
+  ["seed", spineOf(parseTimelineText(TIMELINE_EXAMPLE))],
+  ...listTimelineExampleIds()
+    .map((id) => [id, loadTimelineExample(id)])
+    .filter(([, example]) => example.status === "ok")
+    .map(([id, example]) => [id, spineOf(example.file)]),
+  ["starter", spineOf(parseTimelineText(VIEW_STARTER_TEXT.timeline))],
+  [
+    "the smallest timeline there is",
+    spineOf(
+      parseTimelineText(
+        `archlab 1.0 timeline\ntitle "T"\n\n@timeline\n  period "P"\n    event "A"\n    event "B"\n`,
+      ),
+    ),
+  ],
+];
+const { TIMELINE_SETTLE_MS } = await load(
   "src/features/timeline/lib/motion.ts",
 );
 
@@ -411,11 +452,6 @@ console.log("budget");
     TIMELINE_SETTLE_MS >= worst,
     `${TIMELINE_SETTLE_MS} < ${worst} — the sweep would start over an entrance still playing`,
   );
-  check(
-    "and is well under the idle wait, so a fresh page is at rest quickly",
-    TIMELINE_SETTLE_MS < IDLE_AFTER_MS,
-    `settle ${TIMELINE_SETTLE_MS}ms vs idle ${IDLE_AFTER_MS}ms — a page nobody has touched is already at rest`,
-  );
 }
 
 /* ----------------------------------------------------------------------- */
@@ -522,9 +558,17 @@ console.log("the sweep says 'time', not 'today'");
       "a full-height sweep past the outermost event claims time the document does not contain",
     );
     check(
+      /* THE STAMPED VALUE IS DERIVED, asked of the COMPONENT rather than of the
+       tag. It used to require the subtraction inside the `<line>` itself,
+       which made hoisting it to a named const — the shape the sweep's head cap
+       needed — look like a regression. The claim was never "the arithmetic is
+       written here"; it is "this number comes from the solved geometry rather
+       than from a literal", and that survives the hoist. The lifecycle's twin
+       of this assertion was the weaker one and checked only that the property
+       was stamped at all; both now ask the same question. */
       "its travel length is stamped from the SOLVED spine, not typed into CSS",
       /--tl-spine-len/.test(tag) &&
-        /layout\.spineY1 - layout\.spineY0/.test(tag),
+        /layout\.spineY1 - layout\.spineY0/.test(diagram),
       "a hardcoded length drifts from the geometry the moment a document changes height",
     );
   }
@@ -566,6 +610,187 @@ console.log("no connector motion is invented");
     `the canvas declares exactly the four keyframes its three motions need (${keyframes.join(", ")})`,
     keyframes.length === 4,
     "entrance rise, spine draw, sweep and focus breathe — a fifth needs an argument in the stylesheet header",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("the sweep's head fits the spine it travels");
+
+/* THE DEFECT: both stylesheets held a flat head and paired it with
+   `calc(spine-len - head)` as the gap. On any spine shorter than the head that
+   gap is NEGATIVE, and a negative value does not clamp — it invalidates the
+   whole `stroke-dasharray`, which is then dropped, and the ambient paints the
+   line SOLID and pulses it on and off for ever. A timeline built from the
+   smallest document the notation accepts measures well under it.
+
+   MEASURED OVER REAL LAYOUTS, not asserted about the constant. A rule that
+   only read `SWEEP_HEAD_MAX < something` would be a restatement; what has to
+   be true is that on EVERY document this repo ships, and on the smallest one
+   it accepts, the head is shorter than the line — and shorter by enough that
+   what travels still reads as a head rather than as the line itself. */
+{
+  const cssHead = Number(rootProp("tl-sweep-head"));
+  check(
+    `the stylesheet's declared head is SWEEP_HEAD_MAX (${SWEEP_HEAD_MAX})`,
+    cssHead === SWEEP_HEAD_MAX,
+    `${cssHead} in CSS, ${SWEEP_HEAD_MAX} in @/lib/sweep-head — CSS cannot import TypeScript, so the pair is pinned here`,
+  );
+  check(
+    "the component stamps the head, so the cap reaches the diagram at all",
+    /--tl-sweep-head/.test(diagram) && /sweepHead\(/.test(diagram),
+    "the stylesheet default would stand alone again, which is the flat number that shipped",
+  );
+
+  const tooLong = [];
+  for (const [name, length] of SPINES) {
+    const head = sweepHead(length);
+    if (head >= length)
+      tooLong.push(
+        `${name}: head ${head.toFixed(1)} on a spine of ${length.toFixed(1)}`,
+      );
+    else if (head > length * SWEEP_HEAD_SHARE + 0.001)
+      tooLong.push(
+        `${name}: head ${head.toFixed(1)} is over ${SWEEP_HEAD_SHARE} of ${length.toFixed(1)}`,
+      );
+  }
+  check(
+    `every spine is longer than its own head (${SPINES.length} documents, shortest ${Math.min(...SPINES.map(([, l]) => l)).toFixed(1)})`,
+    tooLong.length === 0,
+    `${tooLong.join("; ")} — a gap of zero or less invalidates the dasharray and the ambient becomes a solid line`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("the entrance ends, and lets go of what it animated");
+
+/* TWO DEFECTS, ONE CAUSE, AND THE CAUSE IS THAT THE ENTRANCE NEVER FINISHED.
+   `data-reveal` was stamped as a literal, so every entrance rule kept matching
+   for the life of the page — and every one of them is `forwards`, which means
+   the animation goes on contributing its end value from the ANIMATION ORIGIN.
+   That origin outranks normal author declarations. Everything follows from it:
+
+     - FOCUS DIMMING COULD NOT WORK. `.af-timeline-canvas.af-timeline-has-focus .af-timeline-event { opacity: 0.24 }`
+       is a normal declaration, and the filled entrance holds the same property
+       at 1. Nothing ever dimmed. Both this canvas and its neighbour shipped a
+       focus state that was inert.
+     - THIS CANVAS HAS NO SECOND HALF. The lifecycle also had a
+       connector whose `animation` was claimed by two rules at once; the
+       timeline draws no returning branch, so only the dead focus dimming
+       reached here. The pair search below is kept all the same — it is the
+       assertion that would have caught the other one.
+
+   The fix is that the entrance is a PHASE and it ends: the viewer drops
+   `data-reveal` once it has played, at the settle it already computes, and the
+   handover is seamless because every filled end value equals the resting
+   declaration underneath it. These two assertions say so — the first that the
+   phase ends at all, the second that nothing is fighting over an `animation`
+   while one is still running. */
+{
+  /* TWO HALVES, AND THE SECOND IS THE ONE THAT BITES. The first draft of this
+     asserted only that the word "revealed" appeared in the viewer, and a break
+     that renamed the state to `revealedAlways` and deleted the line that turns
+     it off SAILED THROUGH — the assertion passed on exactly the defect it was
+     written for. Binding the prop to an expression and actually turning it off
+     are different claims and both have to be made. */
+  check(
+    "the entrance prop is bound to state, not stamped as a literal",
+    /reveal=\{/.test(viewer),
+    "a bare `reveal` keeps every `forwards` entrance rule matching for the life of the page",
+  );
+  check(
+    "and that state is turned off once the entrance has played",
+    /setRevealed\(false\)/.test(viewer),
+    "state that is never lowered is a literal with extra steps, and an animation's fill outranks any focus declaration for the same property",
+  );
+
+  /* NO TWO RULES THAT CAN BOTH MATCH MAY DECLARE `animation`. Changing which
+     animation applies restarts it, and a restarted one-shot replays its delay
+     with no backwards fill — which is how a lit branch vanished. A PAIR SEARCH
+     over the real rules, not a note about the one that broke. */
+  const animated = RULES.filter(([, body]) => /\banimation:/.test(body));
+  const target = (selector) => {
+    const parts = selector.split(/\s+/).filter(Boolean);
+    return parts[parts.length - 1].replace(/[:[].*$/, "");
+  };
+  const contested = [];
+  for (const [aSel] of animated) {
+    for (const [bSel] of animated) {
+      if (aSel === bSel) continue;
+      if (target(aSel) !== target(bSel)) continue;
+      const reveal = /data-reveal="1"/.test(aSel);
+      const focus = /has-focus/.test(bSel) && !/:not\(\[data-reveal/.test(bSel);
+      if (reveal && focus)
+        contested.push(`${target(aSel)}: ${aSel} vs ${bSel}`);
+    }
+  }
+  check(
+    "no element is handed two animations that can apply at once",
+    contested.length === 0,
+    `${contested.join(" | ")} — whichever wins RESTARTS, and a one-shot restarting replays its delay with the line hidden`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("the ambient survives a selection");
+
+/* IT USED TO YIELD TO FOCUS, and that was correct while focus arrived on
+   HOVER: a pointer resting on a row held it for a second, and pausing the
+   ambient underneath was a moment. Selecting is a CLICK now, and a click PINS
+   until it is clicked again or Escape is pressed — so the clause turned into
+   "the canvas never moves again", and it was reported as looking lifeless.
+
+   ASSERTED AS THE ABSENCE OF THE MECHANISM, like the hover rule in
+   `check:view-input`, because restoring the yield is the obvious edit for
+   anyone who reads the ambient's original argument without noticing that the
+   interaction under it changed. In a diff it reads as a fix.
+
+   THE GANTT IS NOT COVERED BY THIS AND MUST NOT BE. Its ambient and its focus
+   current are the same animation on the same connectors at two speeds, so
+   running both is one motion arguing with itself rather than two coexisting.
+   That canvas keeps its yield, and the difference is a real one rather than an
+   oversight — which is why this assertion lives in the two checks it applies
+   to instead of being swept across every kind. */
+{
+  const ambient = RULES.filter(
+    ([selector]) => /data-idle="1"/.test(selector) && /sweep/.test(selector),
+  );
+  check(
+    `the ambient rule was found (${ambient.length})`,
+    ambient.length === 1,
+    "the selector moved, so the assertion below is measuring nothing",
+  );
+  check(
+    "the ambient keeps running while a row is selected",
+    ambient.every(([selector]) => !/:not\([^)]*has-focus/.test(selector)),
+    `${ambient.map(([s]) => s).join(" | ")} — a pinned selection would stop the canvas moving for as long as it is held`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("nothing stirs the canvas back out of rest");
+
+/* IT YIELDED TO A WHEEL AND TO A PRESS. Scrolling is how a reader looks at MORE
+   of a timeline, and every wheel tick killed the sweep for three seconds;
+   deselecting killed it too, because a press stirred the same timer. This
+   canvas has no camera — no pan, no zoom, no drag — so nothing a reader does
+   here is sustained and there is nothing for the ambient to yield to. The wait
+   it yielded with was built for HOVER, when pointing at an event selected it.
+
+   THE ABSENCE IS THE ASSERTION, because re-adding a stir is the obvious way to
+   make a canvas "settle down while you work", and in a diff it reads as a
+   courtesy rather than as dead canvas after every click. The gantt and the
+   lifecycle carry the same pair. */
+{
+  const bareViewer = viewer.replace(/\/\*[\s\S]*?\*\//g, " ");
+  check(
+    "nothing stirs the canvas back out of rest",
+    !/stir/.test(bareViewer) && !/IDLE_AFTER_MS/.test(bareViewer),
+    "a wheel or a press is a reader LOOKING, and stopping the ambient for it means the motion is off whenever anyone is using the diagram",
+  );
+  check(
+    "at rest is derived from the entrance, not tracked separately",
+    /atRest=\{!revealed\}/.test(bareViewer),
+    "two flags for one phase are two things that can disagree",
   );
 }
 

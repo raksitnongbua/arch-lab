@@ -27,6 +27,103 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Selecting a gantt bar opens a details panel, and selects less.** Clicking a
+  bar used to light its whole dependency chain in both directions, which on a
+  sequenced plan is most of the chart; it now lights the bar and the items it
+  directly waits for or blocks. The panel — right-hand on a desktop, a sheet on
+  a phone, the same one the flowchart and use-case viewers open — names the days
+  the item actually occupies, worked out from the plan's start date, along with
+  its duration, state, float and what it waits for. The dates name the last day
+  the work is done, not the day after. A plan with no `starts` line answers in
+  day numbers rather than staying silent.
+- **Clicking empty space clears the selection, on the gantt, the timeline and
+  the lifecycle.** Previously the only ways out were clicking the same row again
+  or pressing Escape — and on the timeline and lifecycle there was no way out at
+  all once selecting moved from hover to click.
+- **A gantt click has to land on the item, not near it.** The whole row used to
+  be clickable end to end, so empty plot space selected whatever row it fell in
+  — about three quarters of every row was a target for nothing that was drawn
+  there. Now it is the item's name and its bar. A one-day bar, which is six
+  pixels wide, keeps a target you can actually hit.
+
+- **A lifecycle click has to land on the item, not near it.** The whole row was
+  clickable, so the empty space either side of the drawing selected a state. Now
+  it is the dot and its words, and each way out with its own text.
+- **Deselecting no longer stops the idle animation.** Clearing a selection
+  counted as the reader being busy, so every moving mark stopped for three
+  seconds — and selecting did the same. Nothing on these canvases is a sustained
+  act to stand aside for, so nothing stands aside any more.
+- **Focusing a gantt bar dimmed nothing.** The same defect the timeline and the
+  lifecycle had: the entrance animation held every row at full strength for the
+  life of the page, and an animation outranks the dimming underneath it.
+
+- **Scrolling no longer stops the idle animation.** Every wheel tick counted as
+  the reader being busy, so the motion cut out for three seconds each time — on a
+  gantt, a timeline and a lifecycle alike. Scrolling is how you look at more of a
+  diagram, which is when the motion is worth having. Moving the pointer across
+  the canvas stopped it too, left over from when hovering picked a row out.
+- **A lifecycle's returning branch no longer arrives solid and then turns
+  dashed.** It drew itself in as a solid line and changed shape the moment the
+  entrance finished. It now fades in already dashed.
+
+- **Only the gantt bar you clicked wears the focus ring.** The bars it waits
+  for and the bars waiting on it stay at full strength, as they should, but they
+  no longer carry the ring as well — three bars claiming to be the one you
+  picked told you nothing about which one it was.
+- **A click on a gantt bar no longer flickers and clears itself.** The click
+  reached the bar and then the pane behind it, so the same press both selected
+  and deselected. Nothing stayed lit.
+
+- **A selected row, event or bar now carries a ring, not just a dimmed
+  background.** Choosing one used to work only by fading everything else, which
+  subtracts and never adds — the thing you picked gained nothing. It now wears a
+  ring in the app's focus colour, the same shaped ring the flowchart and
+  use-case canvases have always drawn. On the timeline and the lifecycle the
+  room for it was reserved when those canvases were written and never used, so
+  nothing moves to make space.
+
+- **A timeline or lifecycle no longer stops moving once you select something.**
+  The idle animation stepped aside for focus, which was right while focus meant
+  hovering and lasted a moment; selecting is a click now and a click stays put,
+  so the canvas went still and remained still. The gantt still steps aside, and
+  should — there the idle motion and the selected-chain motion are the same
+  mark.
+
+- **The focus ring is gone from the gantt, the timeline and the lifecycle, and
+  clicking a sequence participant no longer boxes it.** On the first three the
+  keyboard target is a band the full width of the drawing, so the ring drew a
+  coloured rectangle right across the diagram. Tabbing to a row still lights it
+  and fades everything else, which says where you are more clearly than the ring
+  did. The sequence canvas had the same box on every click and was believed
+  exempt; it was not.
+
+- **Selecting a row on a gantt, a timeline or a lifecycle now takes a click.**
+  Pointing at one used to select it, which meant crossing the diagram lit and
+  cleared rows the reader never meant to touch. Tabbing to a row still lights
+  it without committing, and Enter or Space now selects it — those shapes have
+  always announced themselves as buttons and have never answered a key press.
+  Click the same row again, or press Escape, to clear.
+
+- **A lifecycle's track sweeps like a timeline's, and a branch that doubles
+  back is a dashed line that travels.** The dashes had been put on the track itself, where
+  they broke the one continuous mark a reader follows, and they never moved
+  anyway. The track now carries a single lit head running its length, the same
+  gesture the timeline uses. A branch the subject does not come back from is
+  drawn broken and its dashes drift along it — a fifth slower than they were at
+  first — so the two kinds of departure are told apart at a glance rather than by tracing the route corner by corner. A
+  branch that just stops stays solid; selecting one still makes its dashes run
+  faster, which is how it says which way it goes. And a branch the
+  subject does not come back from is now drawn broken rather than solid, so it
+  says where it goes before your eye reaches the stop mark at the end — it drifts
+  outward on the same clock the track drifts down, one motion in two places.
+
+- **A lifecycle's idle animation is now dashes marching down the track**, in
+  place of a single lit wash travelling down it once per loop. The track itself
+  stays solid and still; the dashes drift over it, sparser and about half the
+  speed of the dash that runs on a branch you have selected, so the two never
+  read as the same mark. Nothing else about how the canvas moves changed — the
+  entrance and the focus motions are as they were. The timeline still washes.
+
 - **Timelines, gantt charts and lifecycles now draw on a panel instead of a
   hairline frame** — the same surface the data dictionary already gives its
   tables, in all nine themes. The diagram area is filled and edged in the pair
@@ -54,7 +151,48 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   authors what a use-case export drops.** Every notation added after the use
   case inherited the wrong two paragraphs. Each kind now states its own.
 
-### Fixed
+- **Focusing an event or a state dimmed nothing.** On both the timeline and
+  the lifecycle, hovering or clicking a row was supposed to fade everything
+  unrelated so the selection stands out; it never did. The entrance animation
+  held every row at full strength for the life of the page, and an animation
+  outranks the dimming underneath it. The entrance now ends once it has played.
+
+- **Hovering off a lifecycle branch made it disappear and redraw.** The
+  returning line was handed one animation by the entrance and another by focus,
+  so leaving focus restarted the entrance's — and it spends its first 420ms
+  fully hidden before it starts drawing. Selecting a branch and letting go now
+  leaves the line where it was.
+
+- **A short timeline or lifecycle showed a solid line pulsing on and off where
+  the travelling wash should be.** The wash's lit head was a fixed length, and
+  on a diagram whose spine was shorter than that head the dash pattern became
+  invalid and was dropped whole — so the whole line lit up instead of a mark
+  moving down it. The smallest timeline the format accepts was less than half
+  the length needed. The head is now capped to a share of the line it travels;
+  every bundled example and both playground starters look exactly as they did.
+
+- **A timeline's axis, a lifecycle's track and a gantt's day grid were close to
+  invisible on the dark themes.** All of them were painted in the colour the
+  canvas rules its own background with, which was fine while the drawing sat
+  straight on that background and stopped being fine when it moved onto a
+  panel: on `midnight` the timeline's axis was one step away from the panel
+  under it. The two structural lines are now drawn in the connector colour, and
+  the grids in the panel's own edge held back — measured against the panel in
+  all nine themes, on screen and in exported files alike. The lightest themes
+  change least; `midnight` and `dark` change most.
+
+- **A lifecycle branch that returned to its very first state pointed its arrow
+  at blank canvas.** The arrowhead landed in the space above the first state,
+  where the track has not started yet, so the one connector on the canvas that
+  carries a direction met nothing. It now lands on the start of the line — the
+  first state itself, which is where the subject actually re-enters. The
+  playground's starter lifecycle returns to its first state, so this was the
+  first lifecycle most readers ever saw; a branch returning to any later state
+  is unchanged.
+- **A lifecycle's return arrow appeared before the line it belongs to.** On the
+  entrance it arrived with its row and then hovered, unattached, for half a
+  second while its path drew towards it. It now fades up as the line reaches
+  it, and the entrance is no longer than it was.
 
 - **The playground offered to convert a lifecycle to Mermaid, and the button
   did nothing.** Pressing it left the text unchanged and the toggle snapped

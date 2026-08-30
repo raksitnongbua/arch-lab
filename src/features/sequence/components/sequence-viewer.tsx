@@ -160,6 +160,7 @@ import type {
   SequenceReorder,
 } from "./sequence-diagram";
 import { resolveFocusSteps, SequenceDiagram } from "./sequence-diagram";
+import { DockRow } from "@/components/ui/dock-row";
 
 /* -------------------------------------------------------------------------- */
 /* Editing                                                                      */
@@ -3226,28 +3227,6 @@ function ParticipantForm({
 }
 
 /** One stacked term/value row — the dock has vertical room, so it uses it. */
-function DockRow({
-  term,
-  value,
-  mono = false,
-}: {
-  term: string;
-  value: string;
-  mono?: boolean;
-}): React.JSX.Element {
-  return (
-    <div>
-      <dt className="text-xs font-medium text-muted-foreground">{term}</dt>
-      <dd
-        className={
-          mono ? "font-mono text-xs text-foreground" : "text-sm text-foreground"
-        }
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
 
 /**
  * The dock's message list: REAL buttons, one per message, each re-focusing

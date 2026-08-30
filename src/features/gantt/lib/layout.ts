@@ -63,6 +63,7 @@ import {
 import { TEXTURE_BY_ROLE } from "@/features/editor/lib/node-colors";
 import { TEXTURE_BY_SHAPE } from "@/features/flowchart/lib/shapes";
 import type { RoleTexture } from "@/lib/role-texture";
+import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import type { GanttItem, GanttItemState, GanttLabFile } from "@/types";
 
 /* -------------------------------------------------------------------------- */
@@ -98,6 +99,34 @@ export const GANTT = {
   /** A bar this narrow would otherwise vanish; a one-day task must stay
    * visible on a two-year plan or the diagram silently loses a row. */
   minBarWidth: 6,
+  /**
+   * The narrowest a bar's HIT region may be, which is a different number from
+   * `minBarWidth` and has to be.
+   *
+   * `minBarWidth` is how thin a bar may be DRAWN — six units, because a one-day
+   * task on a thirty-day axis is genuinely that thin and widening it would lie
+   * about the duration. This is how thin it may be POINTED AT, and six units is
+   * a target a pointer misses. The row used to be clickable end to end so the
+   * question never came up; narrowing the hit to the ink is what makes it the
+   * load-bearing number.
+   *
+   * 24 RATHER THAN 18, AND THE DIFFERENCE IS WHETHER IT DOES ANYTHING. It was
+   * 18 first, which is `minBarWidth` plus the six units of padding on each
+   * side — so it equalled the value it was meant to raise and could never
+   * bind. A floor that is arithmetically unreachable is not a conservative
+   * choice, it is a dead line that reads as a guarantee.
+   */
+  minHitWidth: 24,
+  /**
+   * The air added around a hit region on every side.
+   *
+   * A CONSTANT RATHER THAN A LOCAL because `minHitWidth` is only meaningful
+   * against it: a floor of `minBarWidth + 2 × hitPad` is arithmetically
+   * unreachable, which is exactly what the first value here was. Naming this
+   * lets `check:gantt-layout` ask whether the floor can ever bind instead of
+   * comparing it with itself and always agreeing.
+   */
+  hitPad: 6,
   /** How far a connector's arrowhead overshoots into its target. */
   arrowLength: 7,
   /**
@@ -189,7 +218,6 @@ export const GANTT_FRAME_PAD = 40;
    the pad is spent rather than added, and for the bug that made it necessary:
    a surface drawn at the drawing's own bounds put a stroked edge exactly where
    every section heading sits. */
-
 
 /**
  * The two diagonal segments that make up one hatch tile, as `d` attributes.
@@ -684,6 +712,62 @@ function tickStepFor(span: number): number {
 /* -------------------------------------------------------------------------- */
 /* Entry point                                                                 */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * The two places a reader may click to select one item: its NAME and its BAR.
+ *
+ * Returned as one `d` so a single element carries both — see the note at the
+ * hit target for why two elements would be worse than one.
+ *
+ * THE TWO KINDS SIT DIFFERENTLY and this is the whole of the branching. A task
+ * writes its name right-aligned in the rail and draws its bar out in the plot,
+ * so its regions are far apart. A milestone has no rail entry at all: it is a
+ * diamond at its own day with the name beside it, so its two regions are
+ * adjacent and become one.
+ *
+ * TEXT WIDTHS ARE ESTIMATED from the shared `CHAR_WIDTH_RATIO`, the same way
+ * every other layout in this repo estimates them — there is no DOM here to
+ * measure in, and this is a hit target, so being a few units generous is the
+ * failure mode to prefer.
+ *
+ * IT LIVES IN THE LAYOUT, not beside the element that uses it, for the reason
+ * every other number in this file does: `scripts/` loads this module through
+ * Node's type stripping and cannot parse a `.tsx`. A copy in the component
+ * would mean the check measured its own re-derivation — two halves, each
+ * self-consistent, free to disagree. `codebase.md` names that as the most
+ * expensive class of defect in this repo.
+ */
+export function ganttHitRegions(item: LaidGanttItem, width: number): string {
+  const pad = GANTT.hitPad;
+  const y0 = item.rowY;
+  const y1 = item.rowY + GANTT.rowHeight;
+  const box = (left: number, right: number) =>
+    `M ${left} ${y0} H ${right} V ${y1} H ${left} Z`;
+  const textWidth = (text: string, size: number) =>
+    text.length * size * CHAR_WIDTH_RATIO;
+
+  if (item.milestone) {
+    const label = textWidth(item.label, 12);
+    return box(
+      item.x0 - GANTT.milestoneRadius - pad,
+      item.x0 + GANTT.milestoneRadius + 8 + label + pad,
+    );
+  }
+
+  const name = textWidth(item.label, 12.5);
+  const railRight = GANTT.railWidth - 8;
+  /* FLOORED, NOT JUST PADDED. `minHitWidth` is what keeps a one-day bar
+     reachable now that the row around it is not. */
+  const barLeft = item.x0 - pad;
+  const barRight = Math.max(item.x0 + width + pad, barLeft + GANTT.minHitWidth);
+  /* CLAMPED AT THE DRAWING'S EDGE. A long enough name runs past the rail's
+     own left edge — `search-sprint`'s longest measures 188 units against a
+     188-unit rail — and without this the hit region started at x = -6.5, which
+     is outside the viewBox and therefore unreachable. That the LABEL overflows
+     is a separate matter and is left alone here; the target for it must not. */
+  const railLeft = Math.max(0, railRight - name - pad);
+  return `${box(railLeft, railRight + pad)} ${box(barLeft, barRight)}`;
+}
 
 export function layoutGantt(file: GanttLabFile): GanttLayout {
   /* Flatten once, keeping declaration order and remembering which section

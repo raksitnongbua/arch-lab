@@ -65,6 +65,7 @@ import {
   SEQUENCE_HEAD_SHAPES,
 } from "../lib/arrow-heads";
 import { CANVAS_DRAG_THRESHOLD } from "../lib/reorder";
+import { keyActivate } from "@/lib/key-activate";
 
 /**
  * A point on a message's colour ramp: the sender's lane at `t` 0, the
@@ -598,17 +599,6 @@ export function SequenceDiagram({
   const lineGradId = (step: number) => `${gradPrefix}line${step}`;
   const cardGradId = (participantId: string) =>
     `${gradPrefix}card${participantId}`;
-
-  const keyActivate =
-    (action: () => void) => (event: React.KeyboardEvent<SVGElement>) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        // Stop the key from also reaching the viewer's wrapper handler and
-        // from scrolling the pane (Space scrolls by default).
-        event.stopPropagation();
-        action();
-      }
-    };
 
   return (
     <svg

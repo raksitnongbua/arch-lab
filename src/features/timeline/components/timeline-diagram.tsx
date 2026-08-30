@@ -57,7 +57,9 @@ import {
   TIMELINE,
   layoutTimeline,
 } from "../lib/layout";
+import { sweepHead } from "@/lib/sweep-head";
 import type { LaidTimelineEvent, TimelineLayout } from "../lib/layout";
+import { keyActivate } from "@/lib/key-activate";
 
 export interface TimelineDiagramProps {
   file: TimelineLabFile;
@@ -80,7 +82,7 @@ export interface TimelineDiagramProps {
   /** Pointer entered an event, or left every event (`null`). Separate from
    * `onFocusEvent` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
-  onHoverEvent?: (key: string | null) => void;
+  onKeyFocusEvent?: (key: string | null) => void;
 }
 
 export function TimelineDiagram({
@@ -90,10 +92,14 @@ export function TimelineDiagram({
   idleMotion = "on",
   atRest = false,
   onFocusEvent,
-  onHoverEvent,
+  onKeyFocusEvent,
 }: TimelineDiagramProps) {
   const layout = layoutTimeline(file);
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
+  /* CLAMPED AT 1: a one-event timeline has both spine ends on the same dot,
+     and a zero-length line makes both the draw and the sweep's arithmetic
+     meaningless. */
+  const spineLength = Math.max(1, layout.spineY1 - layout.spineY0);
 
   /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
      coordinate it had; the box around it grows, and the origin moves out to
@@ -185,7 +191,12 @@ export function TimelineDiagram({
         y2={layout.spineY1}
         style={
           {
-            "--tl-spine-len": Math.max(1, layout.spineY1 - layout.spineY0),
+            "--tl-spine-len": spineLength,
+            /* THE HEAD, capped to a share of the line it travels. A flat 90
+               against a shorter spine put a NEGATIVE number in the dasharray's
+               gap, which invalidates the whole declaration and paints the
+               sweep as a solid line — see `@/lib/sweep-head`. */
+            "--tl-sweep-head": sweepHead(spineLength),
           } as React.CSSProperties
         }
       />
@@ -197,7 +208,7 @@ export function TimelineDiagram({
           spineX={layout.spineX}
           lit={litKeys?.has(event.key) ? "1" : undefined}
           onFocusEvent={onFocusEvent}
-          onHoverEvent={onHoverEvent}
+          onKeyFocusEvent={onKeyFocusEvent}
         />
       ))}
     </svg>
@@ -209,13 +220,13 @@ function Event({
   spineX,
   lit,
   onFocusEvent,
-  onHoverEvent,
+  onKeyFocusEvent,
 }: {
   event: LaidTimelineEvent;
   spineX: number;
   lit?: "1";
   onFocusEvent?: (key: string) => void;
-  onHoverEvent?: (key: string | null) => void;
+  onKeyFocusEvent?: (key: string | null) => void;
 }) {
   return (
     <g
@@ -228,6 +239,35 @@ function Event({
         cx={spineX}
         cy={event.dotY}
         r={TIMELINE.dotRadius}
+      />
+      {/* THE FOCUS HALO, and it is the one mark focus is allowed to ADD.
+          The standing rule on this canvas is that focus DIMS and never
+          REPAINTS, and that still holds — nothing already drawn changes colour,
+          weight or radius. What was missing is that dimming only ever
+          SUBTRACTS: everything unrelated goes quiet and the thing you chose
+          gains nothing, which reads as weak exactly when the diagram is busy.
+
+          A DRAWN SHAPE, NEVER AN SVG `filter`. A glow was tried as a filter on
+          the ER canvas and its region collapsed on axis-aligned geometry,
+          painting bands across the diagram; it cost three commits. The rule
+          that came out of it says what to do instead — "want a soft edge? draw
+          a wider path" — and the use-case and flowchart canvases already emit a
+          shaped ring beside their hit target for the same reason. This is the
+          third of that family.
+
+          IT COSTS NO SPACE, because the space was already spent.
+          `TIMELINE.ringRadius` has been in the layout table since this canvas
+          was written, commented as the ring around a focused dot, and every
+          event box is sized to `dotY + ringRadius + 2` — so the room has been
+          reserved all along and nothing was ever drawn in it.
+
+          The paint lives in `globals.css` beside those two, so one rule says
+          what a focus ring looks like; this canvas only says when it appears. */}
+      <circle
+        className="af-timeline-ring"
+        cx={spineX}
+        cy={event.dotY}
+        r={TIMELINE.ringRadius}
       />
       {event.labelLines.map((line, index) => (
         <text
@@ -267,12 +307,32 @@ function Event({
         aria-label={
           onFocusEvent ? `${event.period}: ${event.label}` : undefined
         }
-        onClick={onFocusEvent ? () => onFocusEvent(event.key) : undefined}
-        onPointerEnter={
-          onHoverEvent ? () => onHoverEvent(event.key) : undefined
+        /* STOPPED, OR THE PANE BEHIND IT CLEARS THE FOCUS THIS CLICK JUST
+           SET. The viewer's pane is the backdrop that deselects on a click to
+           empty ground, and it is an ANCESTOR of this rect — so without this
+           the same click both sets the selection and clears it, and what a
+           reader sees is a flicker and nothing staying lit. That shipped on the
+           gantt the moment its backdrop was added; the ER canvas has carried
+           the same one-line note since it added its own. `keyActivate` already
+           does this for the keyboard half. */
+        onClick={
+          onFocusEvent
+            ? (pointer) => {
+                pointer.stopPropagation();
+                onFocusEvent(event.key);
+              }
+            : undefined
         }
-        onFocus={onHoverEvent ? () => onHoverEvent(event.key) : undefined}
-        onBlur={onHoverEvent ? () => onHoverEvent(null) : undefined}
+        /* THE KEYBOARD HALF OF THE CLICK. `role="button"` promises a
+           reader that Enter and Space do what a press does, and nothing in
+           the platform honours that on an SVG shape. It mattered less while
+           a hover could light a row; now that a press is the ONLY way to
+           select one, a canvas without this is a canvas for mice. */
+        onKeyDown={
+          onFocusEvent ? keyActivate(() => onFocusEvent(event.key)) : undefined
+        }
+        onFocus={onKeyFocusEvent ? () => onKeyFocusEvent(event.key) : undefined}
+        onBlur={onKeyFocusEvent ? () => onKeyFocusEvent(null) : undefined}
       />
     </g>
   );

@@ -523,6 +523,18 @@
   pointer-events: all;
 }
 
+/* `:focus` AS WELL AS `:focus-visible`, and this canvas was believed exempt.
+   `globals.css` recorded that the sequence "only ever needed :focus-visible;
+   its hits are on <g> wrappers rather than shapes with tabindex, so it never
+   saw this". That is not true and may never have been: `af-seq-chrome-hit` is
+   on `<rect>` elements carrying `role="button"`, `tabIndex={0}` and `onClick`,
+   which is exactly the shape that takes `:focus` without `:focus-visible` when
+   it is CLICKED — and Chrome paints `outline: auto` for that, in the `--ring`
+   colour `@layer base` gives every element. So a clicked participant or
+   message wore a rectangle on top of the shaped ring this canvas draws for it.
+   Found by the sweep in `check:view-input`, which asks the component whether
+   the hit is focusable rather than trusting a note that said it was not. */
+.af-seq-chrome-hit:focus,
 .af-seq-chrome-hit:focus-visible {
   outline: none;
 }

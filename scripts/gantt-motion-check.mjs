@@ -111,9 +111,7 @@ const load = registerTsResolution(ROOT);
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
 const { GANTT } = await load("src/features/gantt/lib/layout.ts");
-const { IDLE_AFTER_MS, GANTT_SETTLE_MS } = await load(
-  "src/features/gantt/lib/motion.ts",
-);
+const { GANTT_SETTLE_MS } = await load("src/features/gantt/lib/motion.ts");
 
 const css = read("src/features/gantt/styles/gantt-motion.css");
 const diagram = read("src/features/gantt/components/gantt-diagram.tsx");
@@ -431,16 +429,33 @@ console.log("budget");
     GANTT_SETTLE_MS >= worst,
     `settle ${GANTT_SETTLE_MS}ms is SHORTER than the ${worst}ms reveal the stylesheet computes to — the hatch would march under rows still fading in and the current would travel a line still drawing itself`,
   );
+  /* AND NOTHING PUTS THE CANVAS BACK TO WORK AFTERWARDS. There used to be a
+     second wait — `IDLE_AFTER_MS`, 3.2s of quiet after any interaction — and
+     an `onPointerMove`/`onWheel`/`onPointerDown` handler that reset it. It
+     answered a real question while POINTING at a bar selected it, because the
+     pointer moved continuously. Selecting is a discrete press now and this
+     canvas has no camera, so nothing a reader does is sustained: yielding to a
+     click meant DESELECTING killed every moving mark for three seconds.
+
+     ASSERTED AS THE ABSENCE OF THE MECHANISM, because re-adding a stir is the
+     obvious way to make a canvas "settle down while you work" and it would read
+     as a courtesy in a diff. The settle is the only wait left, and `atRest` is
+     now derived from the same flag the entrance uses rather than being a second
+     one free to disagree. */
+  const bareViewer = viewer.replace(/\/\*[\s\S]*?\*\//g, " ");
   check(
-    "the settle is not just the idle wait by another name",
-    GANTT_SETTLE_MS < IDLE_AFTER_MS,
-    `settle ${GANTT_SETTLE_MS}ms vs idle ${IDLE_AFTER_MS}ms — a fresh page has not been fiddled with, and making it wait as though it had is the defect this constant exists to fix`,
+    "nothing stirs the canvas back out of rest",
+    /* COMMENTS STRIPPED FIRST: the prose explaining why the stir went away
+       names it, and the raw file would match that and report a correct fix as
+       the defect — the same trap `check:lifecycle-motion` already carries a
+       stripper for. */
+    !/stir/.test(bareViewer) && !/IDLE_AFTER_MS/.test(bareViewer),
+    "a wheel or a press is a reader LOOKING at the plan, and stopping the ambient for it means the motion is off whenever anyone is using the diagram",
   );
   check(
-    "the viewer arms its FIRST at-rest transition with the settle, and interactions with the idle wait",
-    /setTimeout\(\(\) => setAtRest\(true\), GANTT_SETTLE_MS\)/.test(viewer) &&
-      /setTimeout\(\(\) => setAtRest\(true\), IDLE_AFTER_MS\)/.test(viewer),
-    "a constant nothing reads is a fix that never shipped — the mount effect takes the settle, `stir` keeps the idle wait",
+    "at rest is derived from the entrance, not tracked separately",
+    /atRest=\{!revealed\}/.test(viewer),
+    "two flags for one phase are two things that can disagree",
   );
 
   check(

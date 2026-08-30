@@ -54,9 +54,11 @@
 
 import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
 import { DiagramSurface } from "@/components/ui/diagram-surface";
+import { sweepHead } from "@/lib/sweep-head";
 import type { LifecycleLabFile } from "@/types";
 
 import {
+  lifecycleHitRegions,
   LIFECYCLE_FRAME_PAD,
   LIFECYCLE_HEADING_METRICS,
   LIFECYCLE,
@@ -68,6 +70,7 @@ import type {
   LifecycleLayout,
   RejoinPath,
 } from "../lib/layout";
+import { keyActivate } from "@/lib/key-activate";
 
 export interface LifecycleDiagramProps {
   file: LifecycleLabFile;
@@ -91,7 +94,7 @@ export interface LifecycleDiagramProps {
   /** Pointer entered a row, or left every row (`null`). Separate from
    * `onFocusState` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
-  onHoverState?: (key: string | null) => void;
+  onKeyFocusState?: (key: string | null) => void;
 }
 
 /** The key a state is focused by. States and exits share one key space so the
@@ -105,7 +108,7 @@ export function LifecycleDiagram({
   idleMotion = "on",
   atRest = false,
   onFocusState,
-  onHoverState,
+  onKeyFocusState,
 }: LifecycleDiagramProps) {
   const layout = layoutLifecycle(file);
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
@@ -207,7 +210,18 @@ export function LifecycleDiagram({
         x2={layout.spineX}
         y1={layout.spineY0}
         y2={layout.spineY1}
-        style={{ "--lc-spine-len": spineLength } as React.CSSProperties}
+        style={
+          {
+            "--lc-spine-len": spineLength,
+            /* THE HEAD, capped to a share of the line it travels. A flat 90
+               against a shorter spine puts a NEGATIVE number in the dasharray's
+               gap, which invalidates the whole declaration and paints the wash
+               as a solid line — see `@/lib/sweep-head`. The terminal branches
+               need no equivalent: their pattern is two constants and knows
+               nothing about the length of what it rides. */
+            "--lc-sweep-head": sweepHead(spineLength),
+          } as React.CSSProperties
+        }
       />
 
       {layout.states.map((state, index) => (
@@ -219,7 +233,7 @@ export function LifecycleDiagram({
           spineX={layout.spineX}
           lit={litKeys?.has(stateKey(index)) ? "1" : undefined}
           onFocusState={onFocusState}
-          onHoverState={onHoverState}
+          onKeyFocusState={onKeyFocusState}
         />
       ))}
     </svg>
@@ -243,7 +257,7 @@ function StateRow({
   spineX,
   lit,
   onFocusState,
-  onHoverState,
+  onKeyFocusState,
 }: {
   state: LaidLifecycleState;
   index: number;
@@ -251,7 +265,7 @@ function StateRow({
   spineX: number;
   lit?: "1";
   onFocusState?: (key: string) => void;
-  onHoverState?: (key: string | null) => void;
+  onKeyFocusState?: (key: string | null) => void;
 }) {
   const key = stateKey(index);
   return (
@@ -265,6 +279,35 @@ function StateRow({
         <Exit key={exit.key} exit={exit} state={state} spineX={spineX} />
       ))}
 
+      {/* THE FOCUS HALO, and it is the one mark focus is allowed to ADD.
+          The standing rule on this canvas is that focus DIMS and never
+          REPAINTS, and that still holds — nothing already drawn changes colour,
+          weight or radius. What was missing is that dimming only ever
+          SUBTRACTS: everything unrelated goes quiet and the thing you chose
+          gains nothing, which reads as weak exactly when the diagram is busy.
+
+          A DRAWN SHAPE, NEVER AN SVG `filter`. A glow was tried as a filter on
+          the ER canvas and its region collapsed on axis-aligned geometry,
+          painting bands across the diagram; it cost three commits. The rule
+          that came out of it says what to do instead — "want a soft edge? draw
+          a wider path" — and the use-case and flowchart canvases already emit a
+          shaped ring beside their hit target for the same reason. This is the
+          third of that family.
+
+          IT COSTS NO SPACE, because the space was already spent.
+          `LIFECYCLE.ringRadius` has been in the layout table since this canvas
+          was written, commented as "the ring around a focused one", and every
+          state box is sized to `dotY + ringRadius + 2` — so the room has been
+          reserved all along and nothing was ever drawn in it.
+
+          The paint lives in `globals.css` beside those two, so one rule says
+          what a focus ring looks like; this canvas only says when it appears. */}
+      <circle
+        className="af-lc-ring"
+        cx={spineX}
+        cy={state.dotY}
+        r={LIFECYCLE.ringRadius}
+      />
       <circle
         className="af-lc-dot"
         cx={spineX}
@@ -308,22 +351,50 @@ function StateRow({
           </text>
         ))}
 
-      {/* A hit target spanning the whole row, so pointing anywhere near it
-          selects the state — a 6.5-unit dot would otherwise be the only place
-          a pointer could land. */}
-      <rect
+      {/* THE HIT TARGET IS THE INK, NOT THE ROW. It used to be one rect the
+          full width of the canvas and the full height a state occupies, so the
+          empty band left of the branch lane, the empty band right of the label
+          and every gap between them all selected this state. Most of what a
+          pointer crosses is that emptiness. The gantt had the same defect and
+          the same fix; `lifecycleHitRegions` carries the geometry, and the
+          reason it lives in the layout rather than here.
+
+          THE ORIGINAL REASON SURVIVES: a 6.5-unit dot is not a target on its
+          own, which is why its region is the dot AND the words beside it as one
+          box, with the short run of spine between them included rather than
+          left as a hole. */}
+      <path
         className="af-lc-hit"
-        x={0}
-        y={state.y0}
-        width={LIFECYCLE.width}
-        height={Math.max(1, state.y1 - state.y0)}
+        d={lifecycleHitRegions(state, exits)}
         tabIndex={onFocusState ? 0 : undefined}
         role={onFocusState ? "button" : undefined}
         aria-label={onFocusState ? describeState(state, exits) : undefined}
-        onClick={onFocusState ? () => onFocusState(key) : undefined}
-        onPointerEnter={onHoverState ? () => onHoverState(key) : undefined}
-        onFocus={onHoverState ? () => onHoverState(key) : undefined}
-        onBlur={onHoverState ? () => onHoverState(null) : undefined}
+        /* STOPPED, OR THE PANE BEHIND IT CLEARS THE FOCUS THIS CLICK JUST
+           SET. The viewer's pane is the backdrop that deselects on a click to
+           empty ground, and it is an ANCESTOR of this rect — so without this
+           the same click both sets the selection and clears it, and what a
+           reader sees is a flicker and nothing staying lit. That shipped on the
+           gantt the moment its backdrop was added; the ER canvas has carried
+           the same one-line note since it added its own. `keyActivate` already
+           does this for the keyboard half. */
+        onClick={
+          onFocusState
+            ? (pointer) => {
+                pointer.stopPropagation();
+                onFocusState(key);
+              }
+            : undefined
+        }
+        /* THE KEYBOARD HALF OF THE CLICK. `role="button"` promises a
+           reader that Enter and Space do what a press does, and nothing in
+           the platform honours that on an SVG shape. It mattered less while
+           a hover could light a row; now that a press is the ONLY way to
+           select one, a canvas without this is a canvas for mice. */
+        onKeyDown={
+          onFocusState ? keyActivate(() => onFocusState(key)) : undefined
+        }
+        onFocus={onKeyFocusState ? () => onKeyFocusState(key) : undefined}
+        onBlur={onKeyFocusState ? () => onKeyFocusState(null) : undefined}
       />
     </g>
   );

@@ -27,7 +27,9 @@
  * both what could delay it and what it could delay.
  *
  * AT REST IS A REAL STATE, AND A FRESH PAGE IS ALREADY IN IT. The ambient
- * motions stand down on any interaction and come back after `IDLE_AFTER_MS` of
+ * motions stand down while the entrance plays and run from then on — nothing a
+ * reader does here is sustained enough to yield to, and the wait that used to
+ * follow every click is gone with it. What remains of
  * quiet — an ambient that never stops competes with the person reading and
  * stops meaning anything, which is precisely how ER's pulse ended up needing a
  * second visual language to survive (see `new-diagram-type.md`).
@@ -50,8 +52,11 @@ import type { GanttLabFile } from "@/types";
 
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
+import { DockRow } from "@/components/ui/dock-row";
+import { X } from "lucide-react";
+import { itemSchedule } from "../lib/axis";
 import { layoutGantt } from "../lib/layout";
-import { IDLE_AFTER_MS, GANTT_SETTLE_MS } from "../lib/motion";
+import { GANTT_SETTLE_MS } from "../lib/motion";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 
 import { GanttDiagram } from "./gantt-diagram";
@@ -65,10 +70,37 @@ export function GanttViewer({ file }: GanttViewerProps) {
   const idleMotion = useIdleMotion();
   const idleState = idleMotionState(reduced, idleMotion);
 
-  const [hovered, setHovered] = useState<string | null>(null);
+  /* KEYBOARD FOCUS, NOT HOVER. Pointing at a row used to select it; it now
+     takes a press, because a selection that follows the pointer fires on the
+     way to somewhere else and a reader crossing the canvas sets and clears it
+     a dozen times without meaning to.
+
+     THE CHANNEL SURVIVES THE HOVER, and that is why this stays a second piece
+     of state rather than collapsing into `pinned`. Tabbing to a row lights it
+     WITHOUT committing to it — the same transient look the pointer used to
+     give — and Enter or Space then pins it, through the same handler a click
+     goes through. Deleting this along with the hover would have left a
+     keyboard reader unable to look before choosing, which is the one thing the
+     pointer could always do. */
+  const [keyFocused, setKeyFocused] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
-  const [atRest, setAtRest] = useState(false);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* THE ENTRANCE IS A PHASE, AND IT HAS TO END. It was stamped as a bare
+     literal here, which kept every `[data-reveal="1"]` rule matching for the
+     life of the page — and each of those is `forwards`, so its end value went on
+     being contributed from the ANIMATION ORIGIN, which outranks every normal
+     author declaration. The focus dimming underneath it therefore applied to
+     nothing at all.
+
+     THE TIMELINE AND THE LIFECYCLE WERE FIXED THREE COMMITS AGO AND THIS WAS
+     NOT, because the assertion that catches it was written into their own
+     motion checks and this canvas has no equivalent — a per-canvas rule cannot
+     ask the canvas nobody thought to write it for. It is swept from the
+     filesystem in `check:view-input` now.
+
+     AND IT IS THE ONLY PHASE LEFT. `atRest` used to be its own flag, lowered by
+     an idle timer on every interaction; nothing stirs that timer any more, so
+     the two flags always agreed and one of them was ceremony. */
+  const [revealed, setRevealed] = useState(true);
 
   /* Both directions of the dependency graph, built once per document. The
      layout already resolved and de-duplicated `after`, so this reads the laid
@@ -89,28 +121,33 @@ export function GanttViewer({ file }: GanttViewerProps) {
     return { parents: parentMap, children: childMap };
   }, [file]);
 
-  const selected = pinned ?? hovered;
+  const selected = pinned ?? keyFocused;
 
+  /**
+   * What one selection lights: the item, and the items it TOUCHES.
+   *
+   * IT USED TO WALK THE WHOLE CHAIN, transitively, in both directions — every
+   * ancestor to the first task and every descendant to the last. On a plan
+   * where most work is sequenced that is nearly the whole document, so
+   * selecting one bar dimmed almost nothing and the reader was told "here is
+   * everything, again". Reported as clicking one bar focusing the lot.
+   *
+   * ONE HOP, NOT ZERO. The literal request was the clicked bar alone, and this
+   * deliberately keeps its immediate neighbours — because with zero hops every
+   * connector attached to the selected bar dims, and a lit bar with faded
+   * arrows leaving it reads as broken rather than as focused. One hop is also
+   * the question a reader actually has at a bar: what is this waiting for, and
+   * what is waiting on it. Two hops away is a different question and can be
+   * asked by clicking again.
+   */
   const litIds = useMemo(() => {
     if (!selected) return undefined;
     const seen = new Set<string>([selected]);
-    const walk = (id: string, edges: Map<string, string[]>): void => {
-      for (const next of edges.get(id) ?? []) {
-        if (seen.has(next)) continue;
-        seen.add(next);
-        walk(next, edges);
-      }
-    };
-    walk(selected, parents);
-    walk(selected, children);
+    for (const edges of [parents, children]) {
+      for (const next of edges.get(selected) ?? []) seen.add(next);
+    }
     return seen;
   }, [selected, parents, children]);
-
-  const stir = useCallback(() => {
-    setAtRest(false);
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => setAtRest(true), IDLE_AFTER_MS);
-  }, []);
 
   /* FIRST RENDER USES THE SETTLE, every interaction after it uses the idle
      wait. See `../lib/motion` for why those are different questions; the short
@@ -123,10 +160,8 @@ export function GanttViewer({ file }: GanttViewerProps) {
      that `react-hooks/set-state-in-effect` refuses. `stir` keeps the reset for
      the interaction path, where standing the ambient down is a real change. */
   useEffect(() => {
-    idleTimer.current = setTimeout(() => setAtRest(true), GANTT_SETTLE_MS);
-    return () => {
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-    };
+    const settled = setTimeout(() => setRevealed(false), GANTT_SETTLE_MS);
+    return () => clearTimeout(settled);
   }, []);
 
   useEffect(() => {
@@ -155,9 +190,56 @@ export function GanttViewer({ file }: GanttViewerProps) {
   }, [layout.width]);
   const groundScale = useMeasuredScale(groundRef, measureGroundScale);
 
+  /* THE SELECTED ITEM AS AN OBJECT, for the dock. Read off the SOLVED layout
+     rather than off `file.items`, because float, criticality and the day
+     offsets are all computed by `layoutGantt` and none of them is in the
+     document — a dock built from the source text could name the duration and
+     nothing else worth docking. */
+  const focusedItem = useMemo(
+    () =>
+      selected === null
+        ? null
+        : (layoutGantt(file).items.find((item) => item.id === selected) ??
+          null),
+    [file, selected],
+  );
+
+  /* CLICKING THE PANE CLEARS THE SELECTION. Every interactive shape inside the
+     SVG stops the event reaching here, so this only ever fires on empty
+     ground. It was missing entirely: the only ways out were clicking the same
+     bar again — which means finding it — or pressing Escape, which nobody
+     discovers. The flowchart viewer has done it this way from the start and
+     this is the same handler with its pan guard dropped, since this canvas has
+     no camera to pan.
+
+     THE CLIENT-SIZE GUARD EXEMPTS THE SCROLLBAR GUTTERS, which are inside the
+     element's box but outside its content: a click on the scrollbar would
+     otherwise read as a click on empty ground and clear a selection the reader
+     was scrolling to look at. */
+  const handleBackdropClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const pane = event.currentTarget;
+      const rect = pane.getBoundingClientRect();
+      if (
+        event.clientX - rect.left > pane.clientWidth ||
+        event.clientY - rect.top > pane.clientHeight
+      ) {
+        return;
+      }
+      setPinned(null);
+      setKeyFocused(null);
+    },
+    [],
+  );
+
   return (
-    <div
-      /* THE SCROLL BOX AND THE GUTTERS. `min-h-0 flex-1` claims the height the
+    /* A POSITIONING PARENT AROUND THE SCROLL BOX, not on it. The dock is
+       absolutely positioned, and an absolute child of a SCROLLING element
+       scrolls away with the content — so the box that establishes the
+       containing block has to be the one that does not scroll. */
+    <div className="relative flex min-h-0 w-full flex-1">
+      <div
+        /* THE SCROLL BOX AND THE GUTTERS. `min-h-0 flex-1` claims the height the
          host gives it — the example page hands over the rest of the page, the
          playground hands over the pane between its two strips — and
          `overflow-auto` is what lets a tall plan scroll inside that instead of
@@ -168,40 +250,134 @@ export function GanttViewer({ file }: GanttViewerProps) {
          plus the canvas's own `margin-inline: auto` centres it with less to go
          wrong. The padding is the air either side: without it the label rail
          and the last tick sit on the container's edges. */
-      /* THE GROUND, filling the pane rather than the drawing — the reversal
+        /* THE GROUND, filling the pane rather than the drawing — the reversal
          is recorded at `.af-canvas-rule` in globals.css. */
-      className={cn(
-        "min-h-0 w-full flex-1 overflow-auto px-5 py-6 sm:px-8",
-        CANVAS_RULE_CLASS,
-      )}
-      style={groundFieldCss(groundScale)}
-      onPointerMove={stir}
-      onPointerDown={stir}
-      onKeyDown={stir}
-      onWheel={stir}
-      /* Pointer leaving the canvas clears a hover but never a pin — the pin is
+        className={cn(
+          "min-h-0 w-full flex-1 overflow-auto px-5 py-6 sm:px-8",
+          CANVAS_RULE_CLASS,
+        )}
+        style={groundFieldCss(groundScale)}
+        onClick={handleBackdropClick}
+        /* NOTHING STIRS THE AMBIENT ANY MORE, because nothing on this canvas is
+           a sustained act for it to yield to. There is no camera here — no pan,
+           no zoom, no drag — so all a reader does is LOOK and SELECT, and both
+           are the moment the motion is worth having.
+
+           IT YIELDED TO A CLICK UNTIL NOW, so deselecting killed every moving
+           mark for three seconds. The wait was built for HOVER, which asked a
+           real question while pointing at a bar selected it and the pointer moved
+           continuously; selecting is a discrete press now. */
+        /* Pointer leaving the canvas clears a hover but never a pin — the pin is
          the whole reason a reader can move the pointer away and keep looking. */
-      onPointerLeave={() => setHovered(null)}
-    >
-      <div
-        ref={groundRef}
-        /* SHRINK-WRAPS THE DRAWING, which is what keeps `measureGroundScale`
+      >
+        <div
+          ref={groundRef}
+          /* SHRINK-WRAPS THE DRAWING, which is what keeps `measureGroundScale`
            a reading of the `<svg>` rather than of the pane around it.
            `margin-inline: auto` is the canvas's own centring. */
-        className="mx-auto w-fit"
-      >
-        <GanttDiagram
-          file={file}
-          litIds={litIds}
-          reveal
-          idleMotion={idleState}
-          atRest={atRest}
-          onFocusItem={(id) =>
-            setPinned((current) => (current === id ? null : id))
-          }
-          onHoverItem={setHovered}
-        />
+          className="mx-auto w-fit"
+        >
+          <GanttDiagram
+            file={file}
+            litIds={litIds}
+            /* THE CHOSEN ONE, SEPARATELY FROM ITS NEIGHBOURHOOD. `litIds` is the
+             one-hop set and it answers "what is related"; this answers "what
+             did you click". They were the same prop, so the ring — which is an
+             identity mark — was drawn on the neighbours too, and three bars
+             claimed to be the one selected. */
+            selectedId={selected}
+            reveal={revealed}
+            idleMotion={idleState}
+            /* AT REST IS EXACTLY "THE ENTRANCE IS OVER" now that nothing else
+             disturbs it. */
+            atRest={!revealed}
+            onFocusItem={(id) =>
+              setPinned((current) => (current === id ? null : id))
+            }
+            onKeyFocusItem={setKeyFocused}
+          />
+        </div>
       </div>
+
+      {/* ---- the details dock, matching the flowchart and use-case viewers ----
+          RIGHT-HAND ON DESKTOP, A SHEET ON A PHONE. Same markup as the two
+          viewers that already dock, because a fourth arrangement of the same
+          idea is the "Nth of something" failure `codebase.md` names — a reader
+          meeting two kinds should see one product.
+
+          WHY THE DATES LIVE HERE. They were on the bar's own label for one
+          commit, which put sixteen characters beside a bar whose right edge may
+          be anywhere and needed the text anchor to flip near the plot's edge. A
+          panel has room for the span, the duration, the float and the state; a
+          bar has room for one number. */}
+      {focusedItem !== null ? (
+        <aside
+          aria-label="Selected item"
+          className={
+            "absolute z-10 flex flex-col border-border bg-card/95 shadow-lg backdrop-blur-sm " +
+            "max-md:inset-x-0 max-md:bottom-0 max-md:max-h-72 max-md:rounded-t-xl max-md:border-t " +
+            "md:top-0 md:right-0 md:bottom-0 md:w-72 md:border-l"
+          }
+        >
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2">
+            <h2 className="text-sm font-semibold text-foreground">
+              {focusedItem.milestone ? "Milestone" : "Task"}
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setPinned(null);
+                setKeyFocused(null);
+              }}
+              aria-label="Close details and clear the selection"
+              className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <X aria-hidden="true" className="size-4" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            <dl className="flex flex-col gap-2.5">
+              <DockRow term="Name" value={focusedItem.label} />
+              {/* THE ROW THIS DOCK EXISTS FOR: the plan states a duration and
+                  leaves the reader to count the other end off the tick rail.
+                  `itemSchedule` names the days it actually occupies, and the
+                  last day it is worked rather than the day after. */}
+              <DockRow term="Days" value={itemSchedule(file, focusedItem)} />
+              {!focusedItem.milestone ? (
+                <DockRow term="Duration" value={`${focusedItem.duration}d`} />
+              ) : null}
+              <DockRow term="State" value={focusedItem.state} mono />
+              {/* FLOAT IS THE DERIVED NUMBER NOTHING ELSE SHOWS. Criticality is
+                  painted on the bar, but "how much could this slip" is only
+                  ever the arithmetic behind it, and zero float is worth saying
+                  in words beside a bar that is already marked. */}
+              {!focusedItem.milestone ? (
+                <DockRow
+                  term="Float"
+                  value={
+                    focusedItem.critical
+                      ? "0d — on the critical path"
+                      : `${focusedItem.float}d`
+                  }
+                />
+              ) : null}
+              {focusedItem.after.length > 0 ? (
+                <DockRow
+                  term="Waits for"
+                  value={focusedItem.after.join(", ")}
+                  mono
+                />
+              ) : null}
+              {focusedItem.description !== undefined ? (
+                <DockRow term="Details" value={focusedItem.description} />
+              ) : null}
+              {focusedItem.tags !== undefined ? (
+                <DockRow term="Tags" value={focusedItem.tags.join(", ")} mono />
+              ) : null}
+            </dl>
+          </div>
+        </aside>
+      ) : null}
     </div>
   );
 }

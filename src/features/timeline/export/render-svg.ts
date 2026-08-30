@@ -145,7 +145,7 @@ export function renderTimelineSvg(
   for (const period of layout.periods) {
     push(
       `<line x1="0" y1="${period.ruleY}" x2="${TIMELINE.width - 20}" y2="${period.ruleY}" ` +
-        `stroke="${theme.canvasGrid}" stroke-width="1" opacity="0.55"/>`,
+        `stroke="${theme.nodeBorder}" stroke-opacity="0.4" stroke-width="1" opacity="0.55"/>`,
     );
     text(
       TIMELINE.railWidth,
@@ -158,7 +158,7 @@ export function renderTimelineSvg(
 
   push(
     `<line x1="${layout.spineX}" y1="${layout.spineY0}" x2="${layout.spineX}" y2="${layout.spineY1}" ` +
-      `stroke="${theme.canvasGrid}" stroke-width="2" stroke-linecap="round"/>`,
+      `stroke="${theme.edge}" stroke-width="2" stroke-linecap="round"/>`,
   );
 
   for (const event of layout.events) {

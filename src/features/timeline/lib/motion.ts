@@ -13,7 +13,7 @@
  * leaf in the same way: it imports from no sibling feature and no sibling
  * imports it.
  *
- * THE TWO WAITS ARE NOT THE SAME QUESTION, and conflating them was a shipped
+ * THE TWO WAITS WERE NOT THE SAME QUESTION, and conflating them was a shipped
  * bug on the gantt canvas: "the reader has stopped fiddling" and "the page has
  * just arrived" are different states that happen to share an outcome, and
  * answering both with `IDLE_AFTER_MS` meant a freshly loaded page spent over
@@ -25,11 +25,21 @@
  */
 
 /**
- * How long the reader must be quiet, AFTER AN INTERACTION, before the ambient
- * spine sweep resumes. Long enough that it never fires mid-scroll, short
- * enough that a reader who stops to look sees it without waiting.
+ * THERE IS NO IDLE WAIT ANY MORE, and the empty space here is deliberate.
+ *
+ * `IDLE_AFTER_MS` used to live in this file: 3200ms of quiet after an
+ * interaction before the ambient resumed. It answered a real question while
+ * POINTING at a row selected it — the pointer moved continuously, so "has the
+ * reader stopped fiddling" needed a timer. Selecting is a discrete press now,
+ * and this canvas has no camera: no pan, no zoom, no drag. Nothing a reader can
+ * do here is sustained, so there is nothing for the ambient to yield to, and
+ * yielding to a click meant deselecting killed every moving mark for three
+ * seconds.
+ *
+ * Keeping the constant with nothing reading it would be a dead line that reads
+ * as a guarantee — the same fault as a floor that can never bind. It is gone,
+ * and `check:*-motion` no longer compares against it.
  */
-export const IDLE_AFTER_MS = 3200;
 
 /**
  * How long the canvas waits ON FIRST RENDER before it counts as at rest.

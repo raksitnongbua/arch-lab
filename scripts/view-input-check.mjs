@@ -789,6 +789,479 @@ for (const kind of ["c4", "sequence", "flowchart", "usecase"]) {
   );
 }
 
+console.log(
+  "\nselecting a row is a press, and a press is reachable by keyboard",
+);
+
+/* THE THREE CANVASES THAT LET A READER SELECT A ROW — the gantt, the timeline
+   and the lifecycle — used to do it on HOVER as well as on click, and the
+   hover was withdrawn: a selection that follows the pointer fires on the way
+   to somewhere else, so crossing the canvas set and cleared it repeatedly
+   without the reader meaning any of it.
+
+   WHAT THAT COSTS IF IT IS DONE CARELESSLY, and what these assertions exist to
+   stop: those rows are `<rect>`s carrying `role="button"` and `tabIndex={0}`,
+   and NOTHING IN THE PLATFORM makes Enter or Space activate a non-native
+   element. While a hover could light a row that was survivable — a keyboard
+   reader could at least tab and look. With the press as the only way to
+   select, a canvas missing the key handler is a canvas only a mouse can use,
+   and no existing check had an opinion about it.
+
+   DERIVED FROM THE FILESYSTEM, never from a list of three kind names.
+   `codebase.md` records three checks in this repo that passed while the
+   feature under them was broken, every one because a hardcoded list cannot
+   notice what it has never heard of. The set here is "every diagram component
+   that makes a shape a button", which a fourth canvas joins by writing the
+   role rather than by being remembered. */
+{
+  const components = readdirSync(path.join(ROOT, "src/features"))
+    .flatMap((feature) => {
+      const rel = `src/features/${feature}/components/${feature}-diagram.tsx`;
+      return existsSync(path.join(ROOT, rel))
+        ? [[feature, rel, read(rel)]]
+        : [];
+    })
+    .filter(([, , code]) => /role=\{[^}]*"button"|role="button"/.test(code));
+
+  check(
+    `every canvas that makes a shape a button was found (${components.map(([f]) => f).join(", ")})`,
+    components.length >= 3,
+    `only ${components.length} — the marker stopped matching, so the sweep below proves nothing`,
+  );
+
+  for (const [feature, rel, code] of components) {
+    check(
+      `${feature}: a shape that is a button answers Enter and Space`,
+      /onKeyDown=/.test(code),
+      `${rel} gives a shape role="button" and tabIndex but no key handler — a control only a mouse can reach`,
+    );
+    /* AND IT USES THE SHARED HELPER. Six copies of this four-line body existed
+       across the canvases before one of them was extracted, which is `dry.md`'s
+       own example of real duplication; a seventh written inline would be the
+       helper re-implemented one import away from where it lives. */
+    check(
+      `${feature}: and does it through the one shared keyActivate`,
+      /keyActivate/.test(code),
+      `${rel} spells the Enter/Space dance out again instead of importing @/lib/key-activate`,
+    );
+  }
+
+  /* TABBING TO A SHAPE LIGHTS IT, and this is the assertion that lets the
+     canvases suppress the browser's focus ring at all.
+
+     Those rings were withdrawn because they were unusable to look at — the hit
+     target on three of these canvases is a band the full width of the drawing,
+     so `outline` drew a coloured rectangle across the whole diagram. But a
+     control that a keyboard reader can reach and cannot SEE is worse than an
+     ugly one, so the ring may only go where something else says "you are here".
+     On every one of these canvases that something is the focus state itself:
+     `onFocus` selects the shape, which lights it and drops everything else.
+
+     THE WIRING IS THE CLAIM, not the stylesheet. A dimming rule can exist and
+     still never fire — that is exactly what happened here, where a `forwards`
+     entrance held every row at full strength and the focus declarations under
+     it applied to nothing for the life of the page. So this asks the component
+     whether focus is CONNECTED, and `check:*-motion` asks separately whether
+     the entrance lets go so it can take effect. Neither question answers the
+     other. */
+  for (const [feature, rel, code] of components) {
+    check(
+      `${feature}: tabbing to a shape selects it, so focus is visible without a ring`,
+      /onFocus=/.test(code),
+      `${rel} makes a shape focusable but nothing happens when it is focused — with no outline either, a keyboard reader cannot see where they are`,
+    );
+  }
+
+  /* AND EVERY CANVAS ACTUALLY KILLS THE NATIVE RING, ON BOTH PSEUDO-CLASSES.
+
+     THE FIRST VERSION OF THIS ASSERTION WAS GREEN WITH THE BOX ON SCREEN, and
+     that is the whole reason it is written this way. It asked whether any
+     stylesheet DECLARED an `outline` other than `none` — and nothing did. The
+     rectangle was never authored: `globals.css` puts `outline-ring/50` on every
+     element in `@layer base`, so the BROWSER'S OWN indicator paints in `--ring`,
+     and Chrome paints `outline: auto` for a plain `:focus` — which is what an
+     SVG element with a tabindex gets when it is CLICKED rather than tabbed to.
+     Suppressing `:focus-visible` alone left every click showing a violet box.
+     `globals.css` had already written that failure down for the use-case and
+     flowchart canvases; this asked the wrong question and missed it anyway.
+
+     So the check is now for the SUPPRESSION being present and covering both,
+     not for the absence of a declaration. Absence proved nothing, because the
+     mark had no declaration behind it. */
+  const unsuppressed = components.flatMap(([feature, , code]) => {
+    /* THE FEATURE'S OWN HIT CLASS, read out of its component. Deriving it as
+       `af-${feature}-hit` would be wrong for the lifecycle, whose class is
+       `af-lc-hit`, and a hardcoded map is the thing a seventh canvas would not
+       be in. */
+    const classes = [
+      ...code.matchAll(/className="([^"]*\baf-[\w-]*hit\b[^"]*)"/g),
+    ].flatMap((match) =>
+      match[1].split(/\s+/).filter((name) => /^af-[\w-]*hit$/.test(name)),
+    );
+    if (classes.length === 0) return [];
+
+    /* SUPPRESSED IN THE FEATURE'S STYLESHEET OR IN `globals.css` — the
+       flowchart and the use case keep theirs in globals beside their shaped
+       rings, so both files are searched. But the SELECTOR searched for is
+       always this canvas's own class: the first version searched for
+       `af-[\w-]*hit:focus` across the concatenation, and `globals.css` carries
+       `.af-uc-hit:focus`, so every canvas passed on the use case's rule. A
+       break that reverted this very canvas to `:focus-visible` alone stayed
+       green. Anchoring the selector is the whole assertion. */
+    const stripped = (
+      read(`src/features/${feature}/styles/${feature}-motion.css`) +
+      read("src/app/globals.css")
+    ).replace(/\/\*[\s\S]*?\*\//g, " ");
+
+    return classes.flatMap((name) => {
+      /* ONLY A HIT THAT IS ITSELF FOCUSABLE can take `:focus` without
+         `:focus-visible`. The sequence canvas puts its handlers on `<g>`
+         wrappers rather than on the shape with the tabindex, which is why
+         `globals.css` records that it never saw this and needs only the one
+         pseudo-class. Asked of the code rather than exempted by name. */
+      /* THE ELEMENT IS THE CLASS NAME TO THE NEXT `/>`, with no character
+         bound. A bounded window (600) was tried and SILENTLY SKIPPED three
+         canvases: their hit rect carries an `onKeyDown` with a five-line
+         comment, which pushed the closing `/>` past the window, so `element`
+         came back null, `focusable` came back false, and the assertion
+         returned early for exactly the canvases it was written for. A break
+         reverting one of them to `:focus-visible` alone stayed green. Comments
+         are stripped first so a `/*` inside one cannot end an element early. */
+      const naked = code.replace(/\/\*[\s\S]*?\*\//g, " ");
+      const at = naked.search(
+        new RegExp(`className="[^"]*\\b${name}\\b[^"]*"`),
+      );
+      if (at < 0) return [];
+      const element = naked.slice(at, naked.indexOf("/>", at));
+      if (!/tabIndex=/.test(element)) return [];
+
+      const inComponent = new RegExp(
+        `className="[^"]*\\b${name}\\b[^"]*focus-visible:outline-none`,
+      ).test(code);
+      const plain = new RegExp(`\\.${name}:focus\\b(?!-visible)`).test(
+        stripped,
+      );
+      const visible = new RegExp(`\\.${name}:focus-visible`).test(stripped);
+      return (plain && visible) || (inComponent && plain) ? [] : [name];
+    });
+  });
+  check(
+    `every focusable hit target kills the native ring on :focus too (${components.length} canvases)`,
+    unsuppressed.length === 0,
+    `${unsuppressed.join(", ")} — a CLICK on an SVG element with a tabindex gives it :focus WITHOUT :focus-visible, and the browser paints outline: auto in --ring for that`,
+  );
+
+  /* FOCUS ADDS A MARK, IT STILL DOES NOT REPAINT ONE — and this is the line
+     that moved, so it is the line that has to be pinned.
+
+     Every one of these canvases carries a standing rule that focus DIMS and
+     never REPAINTS: no stroke, fill, width or radius on an existing mark
+     changes in either direction, because a focused dot that recolours is a new
+     mark where one already was. That rule stands. What it did not say is that
+     dimming only ever SUBTRACTS — everything unrelated goes quiet and the thing
+     the reader chose gains nothing — which is what a reader reported as the
+     focus style not reading well, suggesting a colour change or a glow.
+
+     BOTH SUGGESTIONS HAVE BEEN TRIED HERE AND REMOVED. `new-diagram-type.md`
+     records that the rule "used to permit a glow, a colour or a weight, and
+     colour and weight were both added and then removed, twice"; the glow was
+     an SVG `filter` whose region collapsed on axis-aligned geometry and painted
+     bands across the ER canvas, at a cost of three commits. So the answer is
+     the one that rule points at — "want a soft edge? draw a wider path" — a
+     real SVG shape in space the layout already reserved.
+
+     TWO THINGS ARE ASSERTED, and neither is "a ring exists". First that the
+     ring is a DRAWN SHAPE rather than a filter, because a filter is the thing
+     that shipped broken. Second that it is drawn BESIDE the mark rather than
+     on it, which is what keeps "focus does not repaint" true: if a canvas ever
+     satisfies this by restyling its dot, both halves of the rule are gone and
+     this check would have blessed it. */
+  const haloed = components.filter(([, , code]) => /-ring"/.test(code));
+  check(
+    `every canvas that lights a selection draws a shaped ring (${haloed.map(([f]) => f).join(", ")})`,
+    haloed.length >= 3,
+    `only ${haloed.length} — dimming alone subtracts and adds nothing, which is what a reader called weak`,
+  );
+  for (const [feature, rel, code] of haloed) {
+    check(
+      `${feature}: its focus ring is a drawn shape, not an SVG filter`,
+      !/filter=|filter:/.test(code),
+      `${rel} reaches for a filter — a percentage filter region is in objectBoundingBox units, and axis-aligned geometry collapses it (three commits on the ER canvas)`,
+    );
+    /* THE RING IS ITS OWN ELEMENT, never a class added to the mark. Asserted by
+       requiring the class to appear on a line that OPENS an element, so
+       `className="af-lc-dot af-lc-ring"` — restyling the dot, which is the
+       repaint the rule forbids — cannot satisfy it. */
+    const own = new RegExp(
+      `className="af-[\\w-]*-ring"[\\s\\S]{0,40}?(cx=|x=)`,
+    ).test(code);
+    /* THE RING MARKS ONE THING. It says "this is the one you chose", and a
+       canvas whose selection has a NEIGHBOURHOOD can key it off the wrong
+       attribute without anything looking broken: the gantt lights the clicked
+       bar plus what it waits for and what waits on it, and the ring was keyed
+       to that whole set, so one click ringed three bars and none of them was
+       identifiably the answer. Reported as the focus border wrapping several.
+
+       THE RULE IS CONDITIONAL ON THE VIEWER, and the first draft was not — it
+       fired on the timeline and the lifecycle, which are correct. Those build
+       their lit set as `new Set([selected])`, exactly one row for ever, so
+       "lit" and "selected" are the same claim there and keying the ring off
+       either is right. Only a canvas whose set can hold MORE than one has the
+       question, so only that canvas is asked it. */
+    const viewerPath = `src/features/${feature}/components/${feature}-viewer.tsx`;
+    const viewerCode = existsSync(path.join(ROOT, viewerPath))
+      ? read(viewerPath)
+      : "";
+    const singleSelection = /new Set\(\[selected\]\)/.test(viewerCode);
+    const sheet = `src/features/${feature}/styles/${feature}-motion.css`;
+    const rules = existsSync(path.join(ROOT, sheet))
+      ? read(sheet).replace(/\/\*[\s\S]*?\*\//g, " ")
+      : "";
+    const ringSelector = new RegExp(`([^{}]*\\baf-[\\w-]*-ring)\\s*\\{`).exec(
+      rules,
+    );
+    check(
+      `${feature}: its ring marks the selection, not everything left lit`,
+      singleSelection ||
+        (ringSelector !== null && !/data-lit="1"/.test(ringSelector[1])),
+      `${sheet} draws the ring on \`data-lit\`, and this canvas's lit set holds the NEIGHBOURS too — every one of them then claims to be the bar that was clicked`,
+    );
+    check(
+      `${feature}: and is drawn beside the mark rather than onto it`,
+      own,
+      `${rel} carries the ring class on an existing mark — focus would then be repainting one, which every one of these canvases forbids in its own header`,
+    );
+  }
+
+  /* AND NO CANVAS DRAWS ONE OF ITS OWN BACK. Written as the absence of the
+     mechanism for the same reason the hover rule below is: restoring a focus
+     outline is the obvious thing to do if someone reads the accessibility rule
+     without reading what replaced it, and in a diff it would look like a fix. */
+  const ringed = readdirSync(path.join(ROOT, "src/features")).flatMap(
+    (feature) => {
+      const rel = `src/features/${feature}/styles/${feature}-motion.css`;
+      if (!existsSync(path.join(ROOT, rel))) return [];
+      const css = read(rel).replace(/\/\*[\s\S]*?\*\//g, " ");
+      /* THE VALUE IS READ AND COMPARED, never matched with a negative
+         lookahead. The first draft asked for `outline:\s*(?!none)` and reported
+         EVERY canvas, the fixed ones included: `\s*` backtracks to empty, the
+         lookahead then sits on the space before "none" instead of on "none",
+         and it succeeds for any value at all. An assertion that cannot pass is
+         as useless as one that cannot fail, and it is louder about it. */
+      return [...css.matchAll(/:focus-visible[^{]*\{([^}]*)\}/g)].some(
+        (rule) => {
+          const value = /outline:\s*([^;]+)/.exec(rule[1]);
+          return value !== null && value[1].trim() !== "none";
+        },
+      )
+        ? [feature]
+        : [];
+    },
+  );
+  check(
+    "no canvas draws a focus outline on its hit target",
+    ringed.length === 0,
+    `${ringed.join(", ")} — the hit target is a full-width band, so an outline is a coloured bar across the drawing`,
+  );
+
+  /* THE ENTRANCE ENDS WHEREVER IT WOULD OTHERWISE OUTRANK THE FOCUS STATE.
+     A `forwards` animation goes on contributing its end value from the
+     ANIMATION ORIGIN, which outranks every normal author declaration — so while
+     `data-reveal` is stamped, a focus rule setting the same property on the
+     same element applies to nothing, and selecting a row does nothing visible.
+
+     THE CONDITION IS THE CLASH, NOT THE CANVAS. The first draft of this asked
+     every canvas whose shapes are buttons and failed three that are correct:
+     the flowchart, use case and sequence dim through component attributes
+     rather than CSS, so there is no declaration for an animation to outrank and
+     `reveal` as a literal costs them nothing. A check that fires on the right
+     answer is worse than no check — the next person makes it pass by changing
+     code that was already right. So the pair is found first, in the stylesheet,
+     and only a canvas that HAS one is asked.
+
+     IT IS HERE RATHER THAN IN A MOTION CHECK BECAUSE OF HOW IT WAS MISSED. The
+     rule went into `check:lifecycle-motion` and `check:timeline-motion` when
+     those two were fixed, and the gantt shipped the same defect for three more
+     commits: it has no motion check with an opinion about entrances, so a
+     per-canvas rule never asked the canvas nobody thought to write it for. */
+  for (const [feature] of components) {
+    const sheet = `src/features/${feature}/styles/${feature}-motion.css`;
+    const viewerPath = `src/features/${feature}/components/${feature}-viewer.tsx`;
+    if (
+      !existsSync(path.join(ROOT, sheet)) ||
+      !existsSync(path.join(ROOT, viewerPath))
+    ) {
+      continue;
+    }
+    const rules = [
+      ...read(sheet)
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .matchAll(/([^{}]+)\{([^{}]*)\}/g),
+    ].map((match) => [match[1].trim().replace(/\s+/g, " "), match[2]]);
+    const target = (selector) => {
+      const parts = selector.split(/\s+/).filter(Boolean);
+      return parts[parts.length - 1].replace(/[:[].*$/, "");
+    };
+    const filled = rules
+      .filter(
+        ([selector, body]) =>
+          /data-reveal="1"/.test(selector) &&
+          /forwards/.test(body) &&
+          /opacity:\s*0\s*;/.test(body),
+      )
+      .map(([selector]) => target(selector));
+    const dimmed = rules
+      .filter(
+        ([selector, body]) =>
+          /has-focus/.test(selector) && /opacity:/.test(body),
+      )
+      .map(([selector]) => target(selector));
+    const clash = filled.filter((name) => dimmed.includes(name));
+    if (clash.length === 0) continue;
+
+    const code = read(viewerPath);
+    check(
+      `${feature}: its entrance is bound to state (${clash.join(", ")} would be pinned otherwise)`,
+      /reveal=\{/.test(code),
+      `${viewerPath} passes a bare \`reveal\`, so the filled entrance holds ${clash.join(", ")} at full strength and the focus dimming under it never applies`,
+    );
+    /* TWO CLAIMS, NOT ONE. An earlier version asked only whether the word
+       "revealed" appeared, and a break that renamed the state to
+       `revealedAlways` and deleted the line lowering it sailed through. */
+    check(
+      `${feature}: and that state is lowered once the entrance has played`,
+      /setRevealed\(false\)/.test(code),
+      `${viewerPath} never lowers it — state that is never lowered is a literal with extra steps`,
+    );
+  }
+
+  /* NO POINTER-HOVER SELECTION ANYWHERE IN THAT FAMILY. Asserted as the
+     ABSENCE of the mechanism rather than as the presence of a click, because
+     the defect being prevented is a re-addition: the obvious way to "make the
+     canvas feel responsive" later is to put the hover back, and it would look
+     like an improvement in the diff. */
+  const hovering = components.filter(([, , code]) =>
+    /onPointerEnter=/.test(code),
+  );
+  check(
+    "no canvas selects a row on hover",
+    hovering.length === 0,
+    `${hovering.map(([f]) => f).join(", ")} — a selection that follows the pointer fires on the way to somewhere else`,
+  );
+}
+
+console.log("\na click that selects is not eaten by the pane behind it");
+
+/* THE PAIR THAT HAS TO HOLD TOGETHER, and it shipped broken because each half
+   was checked alone. A viewer's pane is the backdrop that deselects on a click
+   to empty ground; every shape that SETS a selection sits inside that pane, so
+   the same click reaches both. Without `stopPropagation` on the shape, one
+   click selects and then immediately clears — the reader sees a flicker and
+   nothing stays lit.
+
+   THAT IS EXACTLY WHAT WENT OUT. `check:gantt-layout` gained "clicking the pane
+   clears the selection" and it was true; nothing asked whether the pane also
+   ate the click that had just set one, so the assertion passed over a canvas
+   where selecting had stopped working at all. The ER canvas has carried a
+   one-line note about this since it added its own backdrop.
+
+   SWEPT OVER EVERY CANVAS FROM THE FILESYSTEM, and stated as an implication
+   rather than as a rule about three names: a canvas with no backdrop needs no
+   stop, and a canvas that grows one tomorrow is covered the day it does. */
+{
+  const withBackdrop = readdirSync(path.join(ROOT, "src/features")).flatMap(
+    (feature) => {
+      const viewer = `src/features/${feature}/components/${feature}-viewer.tsx`;
+      const diagram = `src/features/${feature}/components/${feature}-diagram.tsx`;
+      if (
+        !existsSync(path.join(ROOT, viewer)) ||
+        !existsSync(path.join(ROOT, diagram))
+      ) {
+        return [];
+      }
+      const viewerCode = read(viewer);
+      /* A BACKDROP IS A PANE-LEVEL CLICK THAT CLEARS, however it is spelled —
+         asked of what the handler DOES rather than of what it is called. */
+      const clears =
+        /onClick=\{[\w.]*[Bb]ackdrop/.test(viewerCode) ||
+        /onClick=\{\(\) => on\w*Focus\w*\(null\)/.test(viewerCode);
+      return clears ? [[feature, diagram, read(diagram)]] : [];
+    },
+  );
+
+  /* EVERY CANVAS THAT CAN SELECT MUST BE ABLE TO DESELECT, which is the other
+     direction and the one a "does it have a backdrop" sweep cannot see: a set
+     derived from HAVING the thing can never report its absence. `components`
+     is the canvases whose shapes are buttons, so the two lists must match.
+
+     THE GANTT'S OWN CHECK HAD THIS AND ONLY THE GANTT DID, which is why the
+     timeline and the lifecycle shipped with no way out of a selection at all
+     once hover stopped clearing it. Deselecting is not a per-kind nicety. */
+  /* RE-DERIVED IN THIS BLOCK rather than reaching for the `components` list
+     above, which is scoped to its own. The first draft did reach for it, the
+     script threw `components is not defined`, and the break loop around it
+     printed nothing — an empty grep for a failure line reads exactly like a
+     pass. Same marker, same filesystem sweep. */
+  const selectable = readdirSync(path.join(ROOT, "src/features")).filter(
+    (feature) => {
+      const rel = `src/features/${feature}/components/${feature}-diagram.tsx`;
+      return (
+        existsSync(path.join(ROOT, rel)) &&
+        /role=\{[^}]*"button"|role="button"/.test(read(rel))
+      );
+    },
+  );
+  const noWayOut = selectable.filter(
+    (feature) => !withBackdrop.some(([f]) => f === feature),
+  );
+  check(
+    `every canvas that selects can also deselect (${withBackdrop.map(([f]) => f).join(", ")})`,
+    noWayOut.length === 0,
+    `${noWayOut.join(", ")} — the only ways out are re-clicking the row you already lost track of, and a key nobody presses`,
+  );
+
+  /* EACH HANDLER IS READ BY MATCHING ITS BRACES, never by a character window.
+     The first attempt bounded the body at 400 characters and ended it at the
+     first line holding only `}` — which is not how these are written (they end
+     `}}`), so the match ran on into the NEXT handler and reported the use-case
+     canvas, which stops propagation perfectly well. Every bounded window in
+     this session has eventually skipped or swallowed the thing it was aimed
+     at; brace matching has no window to be wrong about. */
+  const handlerBodies = (code) => {
+    const bodies = [];
+    let at = code.indexOf("onClick={");
+    while (at >= 0) {
+      let depth = 0;
+      let index = at + "onClick=".length;
+      for (; index < code.length; index += 1) {
+        if (code[index] === "{") depth += 1;
+        else if (code[index] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      bodies.push(code.slice(at, index + 1));
+      at = code.indexOf("onClick={", index + 1);
+    }
+    return bodies;
+  };
+
+  const eaten = withBackdrop.filter(([, , code]) => {
+    const selecting = handlerBodies(code).filter((body) =>
+      /on\w*Focus\w*\(/.test(body),
+    );
+    return (
+      selecting.length === 0 ||
+      selecting.some((body) => !/stopPropagation\(\)/.test(body))
+    );
+  });
+  check(
+    "every shape that selects stops the click before the pane sees it",
+    eaten.length === 0,
+    `${eaten.map(([f]) => f).join(", ")} — the same click sets the selection and then the backdrop clears it, which is a flicker and nothing staying lit`,
+  );
+}
+
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);
   process.exit(1);

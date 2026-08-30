@@ -75,12 +75,14 @@ import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
 import type { LaidGanttItem, GanttLayout } from "../lib/layout";
 import {
   GANTT,
+  ganttHitRegions,
   GANTT_FRAME_PAD,
   GANTT_HEADING_METRICS,
   hatchTilePaths,
   layoutGantt,
   TEXTURE_BY_STATE,
 } from "../lib/layout";
+import { keyActivate } from "@/lib/key-activate";
 
 export interface GanttDiagramProps {
   file: GanttLabFile;
@@ -90,6 +92,16 @@ export interface GanttDiagramProps {
    * from `af-gantt-has-focus`, never by changing any element's paint here.
    */
   litIds?: ReadonlySet<string>;
+  /**
+   * The id the reader actually clicked, which is NOT the same question as
+   * `litIds`.
+   *
+   * `litIds` is the one-hop neighbourhood and drives the DIMMING — everything
+   * outside it goes quiet. This drives the RING, which says "this is the one".
+   * Driving both from `litIds` put a ring on the neighbours as well, so a
+   * single click appeared to select three bars.
+   */
+  selectedId?: string | null;
   /** Whether the entrance should play. Off for the export path and for the
    * crawlable example pages, which want the resting state. */
   reveal?: boolean;
@@ -103,17 +115,18 @@ export interface GanttDiagramProps {
   /** Pointer entered a row, or left every row (`null`). Separate from
    * `onFocusItem` because a hover and a click mean different things here: one
    * is a look, the other pins the look in place. */
-  onHoverItem?: (id: string | null) => void;
+  onKeyFocusItem?: (id: string | null) => void;
 }
 
 export function GanttDiagram({
   file,
   litIds,
+  selectedId = null,
   reveal = false,
   idleMotion = "on",
   atRest = false,
   onFocusItem,
-  onHoverItem,
+  onKeyFocusItem,
 }: GanttDiagramProps) {
   const layout = layoutGantt(file);
   /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
@@ -296,8 +309,9 @@ export function GanttDiagram({
           key={item.id}
           item={item}
           lit={lit(item.id)}
+          selected={item.id === selectedId ? "1" : undefined}
           onFocusItem={onFocusItem}
-          onHoverItem={onHoverItem}
+          onKeyFocusItem={onKeyFocusItem}
         />
       ))}
 
@@ -368,13 +382,17 @@ export function GanttDiagram({
 function Row({
   item,
   lit,
+  selected,
   onFocusItem,
-  onHoverItem,
+  onKeyFocusItem,
 }: {
   item: LaidGanttItem;
   lit?: "1";
+  /** Set on the ONE row the reader clicked. The ring reads this; the dimming
+   * reads `lit`, which also covers the neighbours. */
+  selected?: "1";
   onFocusItem?: (id: string) => void;
-  onHoverItem?: (id: string | null) => void;
+  onKeyFocusItem?: (id: string | null) => void;
 }) {
   const width = Math.max(item.x1 - item.x0, GANTT.minBarWidth);
   return (
@@ -383,6 +401,7 @@ function Row({
       data-state={item.state}
       data-critical={item.critical ? "1" : "0"}
       data-lit={lit}
+      data-selected={selected}
       style={{ "--gantt-wave": item.wave } as React.CSSProperties}
     >
       {!item.milestone && (
@@ -427,6 +446,33 @@ function Row({
             width={width}
             height={GANTT.barHeight}
             rx={4}
+          />
+          {/* THE FOCUS HALO, and it is the one mark focus is allowed to ADD.
+              The standing rule that focus DIMS and never REPAINTS still holds —
+              nothing already drawn changes colour, weight or radius. What was
+              missing is that dimming only ever SUBTRACTS: everything unrelated
+              goes quiet and the bar you chose gains nothing, which reads as
+              weak on a plan busy enough to need selecting in the first place.
+
+              A DRAWN SHAPE, NEVER AN SVG `filter`. A glow was tried as a filter
+              on the ER canvas and its region collapsed on axis-aligned
+              geometry, painting bands across the diagram; this canvas's own
+              header carries the rule that came out of it, and a Gantt is almost
+              entirely axis-aligned runs, so it is the worst place to forget.
+              The use-case and flowchart canvases already emit a shaped ring
+              beside their hit target; this is the same family.
+
+              THREE UNITS PROUD OF THE BAR, which fits: `rowHeight` is 34 and
+              `barHeight` 18 at `barOffsetY` 8, so there are eight units of air
+              above and below every bar and the halo spends three of them. The
+              paint lives in `globals.css` beside the other rings. */}
+          <rect
+            className="af-gantt-ring"
+            x={item.x0 - 3}
+            y={item.barY - 3}
+            width={width + 6}
+            height={GANTT.barHeight + 6}
+            rx={7}
           />
           {/* THE ROLE TEXTURE, between the fill and the duration hatch. Under
               the hatch on purpose: the hatch is the louder mark and the one
@@ -473,6 +519,13 @@ function Row({
               rx={1.5}
             />
           )}
+          {/* THE DURATION, and only the duration. It briefly carried the
+              date range on selection as well, which put a sixteen-character
+              label on a bar whose right edge may be anywhere — including
+              against the plot's own edge, which needed the anchor to flip. The
+              dates moved to the viewer's dock instead: a panel has room for
+              the start, the finish, the float and the state, and a bar has room
+              for one number. */}
           <text
             className="af-gantt-duration"
             x={item.x0 + width + 8}
@@ -484,14 +537,26 @@ function Row({
         </>
       )}
 
-      {/* A full-width hit target, so pointing anywhere on the row selects it —
-          a one-day bar is six pixels wide and would otherwise be unhittable. */}
-      <rect
+      {/* THE HIT TARGET IS THE INK, NOT THE ROW. It used to be one rect the
+          full width of the canvas, which made the empty plot between and after
+          the bars clickable — and on a plan whose bars occupy a fifth of their
+          row, most of what a reader's pointer crosses selects something. Every
+          near-miss landed on a row rather than on nothing. Reported as being
+          easy to misclick.
+
+          THE ORIGINAL REASON SURVIVES INTACT: a one-day bar is six units wide
+          and would be unhittable on its own, so the bar's region is padded and
+          floored at `GANTT.minHitWidth`. Losing that was the risk in narrowing
+          this, and it is the case a plan of short tasks is made of.
+
+          ONE `<path>` WITH TWO SUBPATHS rather than two rects. The two regions
+          are disjoint — the name in the rail, the bar out in the plot — but
+          they are ONE control: two elements would mean two tab stops per row,
+          so tabbing a twenty-item plan would take forty presses to cross, and
+          the second stop would announce the same name as the first. */}
+      <path
         className="af-gantt-hit"
-        x={0}
-        y={item.rowY}
-        width={GANTT.width}
-        height={GANTT.rowHeight}
+        d={ganttHitRegions(item, width)}
         tabIndex={onFocusItem ? 0 : undefined}
         role={onFocusItem ? "button" : undefined}
         aria-label={
@@ -499,10 +564,32 @@ function Row({
             ? `${item.label}${item.critical ? ", on the critical chain" : ""}`
             : undefined
         }
-        onClick={onFocusItem ? () => onFocusItem(item.id) : undefined}
-        onPointerEnter={onHoverItem ? () => onHoverItem(item.id) : undefined}
-        onFocus={onHoverItem ? () => onHoverItem(item.id) : undefined}
-        onBlur={onHoverItem ? () => onHoverItem(null) : undefined}
+        /* STOPPED, OR THE PANE BEHIND IT CLEARS THE FOCUS THIS CLICK JUST
+           SET. The viewer's pane is the backdrop that deselects on a click to
+           empty ground, and it is an ANCESTOR of this rect — so without this
+           the same click both sets the selection and clears it, and what a
+           reader sees is a flicker and nothing staying lit. That shipped on the
+           gantt the moment its backdrop was added; the ER canvas has carried
+           the same one-line note since it added its own. `keyActivate` already
+           does this for the keyboard half. */
+        onClick={
+          onFocusItem
+            ? (pointer) => {
+                pointer.stopPropagation();
+                onFocusItem(item.id);
+              }
+            : undefined
+        }
+        /* THE KEYBOARD HALF OF THE CLICK. `role="button"` promises a
+           reader that Enter and Space do what a press does, and nothing in
+           the platform honours that on an SVG shape. It mattered less while
+           a hover could light a row; now that a press is the ONLY way to
+           select one, a canvas without this is a canvas for mice. */
+        onKeyDown={
+          onFocusItem ? keyActivate(() => onFocusItem(item.id)) : undefined
+        }
+        onFocus={onKeyFocusItem ? () => onKeyFocusItem(item.id) : undefined}
+        onBlur={onKeyFocusItem ? () => onKeyFocusItem(null) : undefined}
       />
     </g>
   );

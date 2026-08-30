@@ -30,7 +30,8 @@
  * recruiting a second row into the selection.
  *
  * AT REST IS A REAL STATE, AND A FRESH PAGE IS ALREADY IN IT. The sweep stands
- * down on any interaction and comes back after `IDLE_AFTER_MS` of quiet, but
+ * down while the entrance plays and runs from then on — nothing a reader
+ * does here is sustained enough to yield to, but
  * the FIRST transition is armed with `LIFECYCLE_SETTLE_MS` instead: a page
  * nobody has touched yet is not a page someone is busy with, and treating it
  * as one left the gantt canvas's ambient dead for three seconds after the
@@ -49,7 +50,7 @@ import type { LifecycleLabFile } from "@/types";
 
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { cn } from "@/lib/utils";
-import { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } from "../lib/motion";
+import { LIFECYCLE_SETTLE_MS } from "../lib/motion";
 import { layoutLifecycle } from "../lib/layout";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 
@@ -64,22 +65,76 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
   const idleMotion = useIdleMotion();
   const idleState = idleMotionState(reduced, idleMotion);
 
-  const [hovered, setHovered] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string | null>(null);
-  const [atRest, setAtRest] = useState(false);
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* KEYBOARD FOCUS, NOT HOVER. Pointing at a row used to select it; it now
+     takes a press, because a selection that follows the pointer fires on the
+     way to somewhere else and a reader crossing the canvas sets and clears it
+     a dozen times without meaning to.
 
-  const selected = pinned ?? hovered;
+     THE CHANNEL SURVIVES THE HOVER, and that is why this stays a second piece
+     of state rather than collapsing into `pinned`. Tabbing to a row lights it
+     WITHOUT committing to it — the same transient look the pointer used to
+     give — and Enter or Space then pins it, through the same handler a click
+     goes through. Deleting this along with the hover would have left a
+     keyboard reader unable to look before choosing, which is the one thing the
+     pointer could always do. */
+  const [keyFocused, setKeyFocused] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  /* THE ENTRANCE IS A PHASE, AND IT HAS TO END. It used to be stamped as a
+     bare literal, which kept every `[data-reveal="1"]` rule matching for the
+     life of the page — and each of those is `forwards`, so its end value went
+     on being contributed from the ANIMATION ORIGIN, which outranks every
+     normal author declaration. The focus dimming underneath it therefore never
+     applied to anything, on either canvas.
+
+     DROPPED AT THE SETTLE, the wait this viewer already computes, and that is
+     the same instant rather than a second guess: `LIFECYCLE_SETTLE_MS` is pinned by
+     `check:lifecycle-motion` to be at or above the entrance's worst case. Separate state
+     from `atRest` on purpose — `stir` puts the canvas back to work on every
+     pointer move, and reusing that flag would replay the entrance each time.
+
+     THE HANDOVER IS SEAMLESS because every value the entrance fills equals the
+     resting declaration underneath it: a row ends at `opacity: 1` and rests at
+     1, a drawn line ends at `stroke-dashoffset: 0` and rests with no dash at
+     all. Nothing moves at the moment the phase ends. */
+  const [revealed, setRevealed] = useState(true);
+
+  const selected = pinned ?? keyFocused;
   const litKeys = useMemo(
     () => (selected === null ? undefined : new Set([selected])),
     [selected],
   );
 
-  const stir = useCallback(() => {
-    setAtRest(false);
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => setAtRest(true), IDLE_AFTER_MS);
-  }, []);
+  /* CLICKING THE PANE CLEARS THE SELECTION. Every interactive shape inside the
+     SVG stops the event reaching here, so this only ever fires on empty
+     ground — and that stop is load-bearing rather than tidy: without it the
+     same click sets the selection and then clears it, which is a flicker and
+     nothing staying lit.
+
+     IT WAS MISSING ENTIRELY, and only became a problem when selecting stopped
+     happening on hover. A hover cleared itself the moment the pointer moved
+     away; a click PINS, so the only ways out were clicking the same row again —
+     which means finding it — or Escape, which nobody discovers. Reported as
+     being unable to deselect at all.
+
+     THE CLIENT-SIZE GUARD EXEMPTS THE SCROLLBAR GUTTERS, which are inside the
+     element's box but outside its content: a click on the scrollbar would
+     otherwise read as a click on empty ground and clear a selection the reader
+     was scrolling to look at. */
+  const handleBackdropClick = useCallback(
+    (pointer: React.MouseEvent<HTMLDivElement>) => {
+      const pane = pointer.currentTarget;
+      const rect = pane.getBoundingClientRect();
+      if (
+        pointer.clientX - rect.left > pane.clientWidth ||
+        pointer.clientY - rect.top > pane.clientHeight
+      ) {
+        return;
+      }
+      setPinned(null);
+      setKeyFocused(null);
+    },
+    [],
+  );
 
   /* FIRST RENDER USES THE SETTLE, every interaction after it uses the idle
      wait. Mount arms the countdown DIRECTLY rather than calling `stir`:
@@ -87,10 +142,8 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
      synchronous setState in an effect body — a cascading render that buys
      nothing and that `react-hooks/set-state-in-effect` refuses. */
   useEffect(() => {
-    idleTimer.current = setTimeout(() => setAtRest(true), LIFECYCLE_SETTLE_MS);
-    return () => {
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-    };
+    const settled = setTimeout(() => setRevealed(false), LIFECYCLE_SETTLE_MS);
+    return () => clearTimeout(settled);
   }, []);
 
   useEffect(() => {
@@ -137,13 +190,25 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
         CANVAS_RULE_CLASS,
       )}
       style={groundFieldCss(groundScale)}
-      onPointerMove={stir}
-      onPointerDown={stir}
-      onKeyDown={stir}
-      onWheel={stir}
+      onClick={handleBackdropClick}
+      /* NOTHING STIRS THE AMBIENT ANY MORE, because nothing on this canvas is
+         a sustained act for it to yield to. There is no camera here — no pan,
+         no zoom, no drag — so all a reader does is LOOK and SELECT, and both
+         are the moment the motion is worth having.
+
+         IT YIELDED TO A CLICK UNTIL NOW, so deselecting killed every moving
+         mark for three seconds: the press reached the pane, stirred the idle
+         timer, and the wash and the drift both stopped. Reported as the
+         animation vanishing on unfocus. Focusing did it too, less visibly,
+         because the focus dash went on running while the rest went still.
+
+         THE WAIT WAS BUILT FOR HOVER. `IDLE_AFTER_MS` answered "how long
+         after the reader stops fiddling", which was a real question while
+         POINTING at a row selected it and the pointer moved continuously.
+         Selecting is a discrete press now, and a three-second blackout after
+         one click is the wrong shape for a discrete act. */
       /* Pointer leaving the canvas clears a hover but never a pin — the pin is
          the whole reason a reader can move the pointer away and keep looking. */
-      onPointerLeave={() => setHovered(null)}
     >
       <div
         ref={groundRef}
@@ -155,13 +220,16 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
         <LifecycleDiagram
           file={file}
           litKeys={litKeys}
-          reveal
+          reveal={revealed}
           idleMotion={idleState}
-          atRest={atRest}
+          /* AT REST IS EXACTLY "THE ENTRANCE IS OVER" now that nothing else
+             disturbs it — one timer and two derived attributes, rather
+             than two flags free to disagree. */
+          atRest={!revealed}
           onFocusState={(key) =>
             setPinned((current) => (current === key ? null : key))
           }
-          onHoverState={setHovered}
+          onKeyFocusState={setKeyFocused}
         />
       </div>
     </div>

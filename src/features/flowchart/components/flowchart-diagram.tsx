@@ -82,6 +82,7 @@ import {
   shapeGeometry,
   TEXTURE_BY_SHAPE,
 } from "../lib/shapes";
+import { keyActivate } from "@/lib/key-activate";
 
 /* -------------------------------------------------------------------------- */
 /* Focus model                                                                  */
@@ -159,15 +160,6 @@ export function FlowchartDiagram({
   const edgeDimmed = (index: number): boolean =>
     focusSet !== null && !focusSet.edges.has(index);
   const nodeById = new Map(layout.nodes.map((n) => [n.id, n]));
-
-  const keyActivate =
-    (action: () => void) => (event: React.KeyboardEvent<SVGElement>) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        event.stopPropagation();
-        action();
-      }
-    };
 
   return (
     <svg

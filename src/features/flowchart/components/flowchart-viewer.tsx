@@ -78,6 +78,7 @@ import type { LaidFlowEdge } from "../lib/layout";
 import { layoutFlowchart } from "../lib/layout";
 import type { FlowchartFocus } from "./flowchart-diagram";
 import { FlowchartDiagram, resolveFlowFocus } from "./flowchart-diagram";
+import { DockRow } from "@/components/ui/dock-row";
 
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
@@ -779,30 +780,6 @@ export function FlowchartViewer({
           </aside>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function DockRow({
-  term,
-  value,
-  mono = false,
-}: {
-  term: string;
-  value: string;
-  mono?: boolean;
-}): React.JSX.Element {
-  return (
-    <div>
-      <dt className="text-xs font-medium text-muted-foreground">{term}</dt>
-      <dd
-        className={cn(
-          "mt-0.5 text-sm break-words text-foreground",
-          mono && "font-mono text-xs",
-        )}
-      >
-        {value}
-      </dd>
     </div>
   );
 }
