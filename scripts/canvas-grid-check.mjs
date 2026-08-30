@@ -465,35 +465,40 @@ console.log(
    the numbers below are relative to the grid contrast this file already
    measures.
 
-   THE RULING COMPARISON IS THE ASSERTION DOING THE WORK, and the band below is
-   the coarse backstop behind it. `--diagram-surface-opacity` may be anything in
-   [0, 0.4], and a wash that is switched on must additionally stay QUIETER than
-   its own theme's ruling. Between them those two say "tone the sheet, do not
-   stack a second ground on it" as arithmetic rather than as prose — without
-   which the treatment is one edit from being the opaque `--node` panel the
-   line-only revision removed, and nothing would notice.
+   THREE LIMITS, AND MEASURING THE LADDER CHANGED WHICH ONE IS LOAD-BEARING.
+   `--diagram-surface-opacity` may be anything in [0, 0.6]; a wash that is on
+   must stay QUIETER than its own theme's ruling; and the drawing's ink must
+   still read on the composite. Together they say "tone the sheet, do not stack
+   a second ground on it" as arithmetic rather than as prose — without which
+   the treatment is one edit from being the opaque `--node` panel the line-only
+   revision removed, and nothing would notice.
 
-   THE BAND WAS [0, 0.35] AND WAS RAISED TO EXACTLY 0.4, which is worth saying
-   out loud because the honest version is less flattering than the tidy one:
-   the ceiling was a guess made before anyone had looked at the wash, blueprint
-   was moved to 0.4 by the person whose product it is, and the guess was what
-   gave way. It was raised to the value asked for and NOT a round number past
-   it — a band with slack in it has stopped being a limit, and the next person
-   to want a louder wash should have to come back here and re-measure rather
-   than find room already made for them.
+   THE RULING COMPARISON WAS BELIEVED TO BE THE BINDING ONE. It is not, and the
+   correction is worth keeping because it was believed twice, in this comment
+   and in the CSS. Sweeping blueprint from 0.4 to 0.8 and reading the numbers
+   out: the wash goes 1.412 → 1.824:1 against a ruling that sits at 2.030:1, so
+   the comparison NEVER fires across the whole usable range. What actually runs
+   out is the CONNECTOR FLOOR — 3.91 at 0.4, 3.41 at 0.6, 3.03 at 0.8, which is
+   the 3:1 limit itself. The wall is the drawing's own ink, not the ground.
 
-   WHAT DID NOT MOVE IS THE RULING COMPARISON, and that is the part to defend.
-   It scales with whatever ground a theme actually has, where a flat ceiling
-   cannot, so it is what still catches a wash growing into a panel on a theme
-   nobody has measured by hand. At 0.4 on blueprint the wash sits at 1.412:1
-   against a 2.030:1 ruling — real headroom — while `--node-border` at the same
-   alpha would read 2.341:1 and FAIL it. The ceiling did not catch that; this
-   did.
+   THE RULING COMPARISON IS STILL THE ONE TO DEFEND, for a different reason
+   than the one first written here. It does not bind on OPACITY, but it binds
+   on INK: `--node-border` at the same alpha reads 2.341:1 and fails it, which
+   is how the fill token was chosen. It scales with whatever ground a theme
+   actually has, where a flat ceiling cannot, so it is what still catches a
+   wash growing into a panel on a theme nobody has measured by hand.
+
+   THE BAND WAS [0, 0.35], THEN 0.4, NOW 0.6, raised each time to exactly the
+   value asked for and never to a round number past it. A band with slack in it
+   has stopped being a limit: the next person who wants a louder wash should
+   have to come back here and re-measure, and what they will find is that
+   roughly 0.8 is the end of the road and that past it the answer is a
+   different ink, not more alpha.
 
    And a wash that is switched on must not eat the drawing: the connectors and
    the text are measured ON the composite, at the same floors the palette
    checks hold them to everywhere else. */
-const WASH_MAX_OPACITY = 0.4;
+const WASH_MAX_OPACITY = 0.6;
 /* The ground's own visibility floor, kept from the model above rather than
    invented here: a wash quieter than this is an option a reader cannot see,
    which is worse than not offering it. */

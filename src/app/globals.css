@@ -1025,7 +1025,7 @@
      the two pinned refusals). It is the one whose ground is a full-strength
      ruling AND whose `--border` is deliberately quieter than that ruling, two
      tokens above — the frame cannot win, so the area needs a ground of its own.
-     0.4 of `--canvas-grid` over this canvas measures 1.412:1, clearing the
+     0.6 of `--canvas-grid` over this canvas measures 1.618:1, clearing the
      1.1:1 floor a ground must clear to be seen at all and staying under the
      ruling's own 2.030:1: the wash remains a LESSER mark than the sheet's
      lines, which is the difference between toning the sheet and piercing it.
@@ -1046,7 +1046,7 @@
      fail worse, and `--node` is invisible at 1.022:1. So the ink is not a
      preference here any more, it is the only survivor, and moving the strength
      again without re-running the check would very likely break something. */
-  --diagram-surface-opacity: 0.4;
+  --diagram-surface-opacity: 0.6;
   --node: oklch(0.245 0.062 250);
   --node-foreground: oklch(0.97 0.012 250);
   /* ≥3:1 against --node (measured 4.13:1). */
