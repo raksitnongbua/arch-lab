@@ -102,7 +102,48 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
-const { TIMELINE } = await load("src/features/timeline/lib/layout.ts");
+const { TIMELINE, layoutTimeline } = await load(
+  "src/features/timeline/lib/layout.ts",
+);
+const { SWEEP_HEAD_MAX, SWEEP_HEAD_SHARE, sweepHead } = await load(
+  "src/lib/sweep-head.ts",
+);
+const { parseTimelineText } = await load("src/features/archtext/index.ts");
+const { TIMELINE_EXAMPLE } = await load(
+  "src/features/timeline/input/example.ts",
+);
+const { listTimelineExampleIds, loadTimelineExample } = await load(
+  "src/features/timeline/service/example-service.ts",
+);
+const { VIEW_STARTER_TEXT } = await load(
+  "src/features/playground/input/parse.ts",
+);
+
+/* EVERY SPINE THIS REPO CAN PRODUCE A LENGTH FOR, plus the smallest document
+   the grammar accepts. The bundled ones are read from the REGISTRY so a third
+   example is covered the day it lands; the two-event document is written out
+   because no registry will ever hold the minimum on purpose, and the minimum
+   is where the defect lived. */
+const spineOf = (file) => {
+  const laid = layoutTimeline(file);
+  return Math.max(1, laid.spineY1 - laid.spineY0);
+};
+const SPINES = [
+  ["seed", spineOf(parseTimelineText(TIMELINE_EXAMPLE))],
+  ...listTimelineExampleIds()
+    .map((id) => [id, loadTimelineExample(id)])
+    .filter(([, example]) => example.status === "ok")
+    .map(([id, example]) => [id, spineOf(example.file)]),
+  ["starter", spineOf(parseTimelineText(VIEW_STARTER_TEXT.timeline))],
+  [
+    "the smallest timeline there is",
+    spineOf(
+      parseTimelineText(
+        `archlab 1.0 timeline\ntitle "T"\n\n@timeline\n  period "P"\n    event "A"\n    event "B"\n`,
+      ),
+    ),
+  ],
+];
 const { IDLE_AFTER_MS, TIMELINE_SETTLE_MS } = await load(
   "src/features/timeline/lib/motion.ts",
 );
@@ -522,9 +563,17 @@ console.log("the sweep says 'time', not 'today'");
       "a full-height sweep past the outermost event claims time the document does not contain",
     );
     check(
+      /* THE STAMPED VALUE IS DERIVED, asked of the COMPONENT rather than of the
+       tag. It used to require the subtraction inside the `<line>` itself,
+       which made hoisting it to a named const — the shape the sweep's head cap
+       needed — look like a regression. The claim was never "the arithmetic is
+       written here"; it is "this number comes from the solved geometry rather
+       than from a literal", and that survives the hoist. The lifecycle's twin
+       of this assertion was the weaker one and checked only that the property
+       was stamped at all; both now ask the same question. */
       "its travel length is stamped from the SOLVED spine, not typed into CSS",
       /--tl-spine-len/.test(tag) &&
-        /layout\.spineY1 - layout\.spineY0/.test(tag),
+        /layout\.spineY1 - layout\.spineY0/.test(diagram),
       "a hardcoded length drifts from the geometry the moment a document changes height",
     );
   }
@@ -566,6 +615,53 @@ console.log("no connector motion is invented");
     `the canvas declares exactly the four keyframes its three motions need (${keyframes.join(", ")})`,
     keyframes.length === 4,
     "entrance rise, spine draw, sweep and focus breathe — a fifth needs an argument in the stylesheet header",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("the sweep's head fits the spine it travels");
+
+/* THE DEFECT: both stylesheets held a flat head and paired it with
+   `calc(spine-len - head)` as the gap. On any spine shorter than the head that
+   gap is NEGATIVE, and a negative value does not clamp — it invalidates the
+   whole `stroke-dasharray`, which is then dropped, and the ambient paints the
+   line SOLID and pulses it on and off for ever. A timeline built from the
+   smallest document the notation accepts measures well under it.
+
+   MEASURED OVER REAL LAYOUTS, not asserted about the constant. A rule that
+   only read `SWEEP_HEAD_MAX < something` would be a restatement; what has to
+   be true is that on EVERY document this repo ships, and on the smallest one
+   it accepts, the head is shorter than the line — and shorter by enough that
+   what travels still reads as a head rather than as the line itself. */
+{
+  const cssHead = Number(rootProp("tl-sweep-head"));
+  check(
+    `the stylesheet's declared head is SWEEP_HEAD_MAX (${SWEEP_HEAD_MAX})`,
+    cssHead === SWEEP_HEAD_MAX,
+    `${cssHead} in CSS, ${SWEEP_HEAD_MAX} in @/lib/sweep-head — CSS cannot import TypeScript, so the pair is pinned here`,
+  );
+  check(
+    "the component stamps the head, so the cap reaches the diagram at all",
+    /--tl-sweep-head/.test(diagram) && /sweepHead\(/.test(diagram),
+    "the stylesheet default would stand alone again, which is the flat number that shipped",
+  );
+
+  const tooLong = [];
+  for (const [name, length] of SPINES) {
+    const head = sweepHead(length);
+    if (head >= length)
+      tooLong.push(
+        `${name}: head ${head.toFixed(1)} on a spine of ${length.toFixed(1)}`,
+      );
+    else if (head > length * SWEEP_HEAD_SHARE + 0.001)
+      tooLong.push(
+        `${name}: head ${head.toFixed(1)} is over ${SWEEP_HEAD_SHARE} of ${length.toFixed(1)}`,
+      );
+  }
+  check(
+    `every spine is longer than its own head (${SPINES.length} documents, shortest ${Math.min(...SPINES.map(([, l]) => l)).toFixed(1)})`,
+    tooLong.length === 0,
+    `${tooLong.join("; ")} — a gap of zero or less invalidates the dasharray and the ambient becomes a solid line`,
   );
 }
 

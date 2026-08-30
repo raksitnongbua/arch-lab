@@ -108,6 +108,13 @@
      along a wire: a short head here reads as a dot lighting up, which on this
      canvas is an event. */
   --tl-sweep: 3.8s;
+  /* THE HEAD. THE DECLARED DEFAULT ONLY — the component overrides it per
+     diagram, capped to a share of the spine it travels, and `@/lib/sweep-head`
+     carries the argument. It stayed flat here for a while and paired with
+     `calc(spine-len - head)` as the gap, which went NEGATIVE on any spine
+     shorter than this: an invalid `stroke-dasharray` is dropped whole, so the
+     ambient painted a SOLID line pulsing on and off instead of a head
+     travelling down one. The check pins this number to `SWEEP_HEAD_MAX`. */
   --tl-sweep-head: 90;
 
   --tl-breathe: 1.6s;

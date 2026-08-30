@@ -49,6 +49,7 @@
 
 import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
 import { DiagramSurface } from "@/components/ui/diagram-surface";
+import { sweepHead } from "@/lib/sweep-head";
 import type { TimelineLabFile } from "@/types";
 
 import {
@@ -94,6 +95,10 @@ export function TimelineDiagram({
 }: TimelineDiagramProps) {
   const layout = layoutTimeline(file);
   const hasFocus = litKeys !== undefined && litKeys.size > 0;
+  /* CLAMPED AT 1: a one-event timeline has both spine ends on the same dot,
+     and a zero-length line makes both the draw and the sweep's arithmetic
+     meaningless. */
+  const spineLength = Math.max(1, layout.spineY1 - layout.spineY0);
 
   /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
      coordinate it had; the box around it grows, and the origin moves out to
@@ -185,7 +190,12 @@ export function TimelineDiagram({
         y2={layout.spineY1}
         style={
           {
-            "--tl-spine-len": Math.max(1, layout.spineY1 - layout.spineY0),
+            "--tl-spine-len": spineLength,
+            /* THE HEAD, capped to a share of the line it travels. A flat 90
+               against a shorter spine put a NEGATIVE number in the dasharray's
+               gap, which invalidates the whole declaration and paints the
+               sweep as a solid line — see `@/lib/sweep-head`. */
+            "--tl-sweep-head": sweepHead(spineLength),
           } as React.CSSProperties
         }
       />

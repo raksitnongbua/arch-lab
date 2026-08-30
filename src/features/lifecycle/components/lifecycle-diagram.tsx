@@ -54,6 +54,7 @@
 
 import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
 import { DiagramSurface } from "@/components/ui/diagram-surface";
+import { sweepHead } from "@/lib/sweep-head";
 import type { LifecycleLabFile } from "@/types";
 
 import {
@@ -207,7 +208,16 @@ export function LifecycleDiagram({
         x2={layout.spineX}
         y1={layout.spineY0}
         y2={layout.spineY1}
-        style={{ "--lc-spine-len": spineLength } as React.CSSProperties}
+        style={
+          {
+            "--lc-spine-len": spineLength,
+            /* THE HEAD, capped to a share of the line it travels. A flat 90
+               against a shorter spine put a NEGATIVE number in the dasharray's
+               gap, which invalidates the whole declaration and paints the
+               sweep as a solid line — see `@/lib/sweep-head`. */
+            "--lc-sweep-head": sweepHead(spineLength),
+          } as React.CSSProperties
+        }
       />
 
       {layout.states.map((state, index) => (

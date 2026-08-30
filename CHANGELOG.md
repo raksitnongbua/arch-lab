@@ -56,6 +56,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A short timeline or lifecycle showed a solid line pulsing on and off where
+  the travelling wash should be.** The wash's lit head was a fixed length, and
+  on a diagram whose spine was shorter than that head the dash pattern became
+  invalid and was dropped whole — so the whole line lit up instead of a mark
+  moving down it. The smallest timeline the format accepts was less than half
+  the length needed. The head is now capped to a share of the line it travels;
+  every bundled example and both playground starters look exactly as they did.
+
 - **A timeline's axis, a lifecycle's track and a gantt's day grid were close to
   invisible on the dark themes.** All of them were painted in the colour the
   canvas rules its own background with, which was fine while the drawing sat
