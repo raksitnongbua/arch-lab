@@ -214,7 +214,7 @@ export function Header(): React.JSX.Element {
            the field. The floor is measured, not felt: over every surface the
            header actually crosses — page `--background`, `--canvas`, node
            `--card` — `--foreground` nav text composited through this ground
-           stays ≥ 10:1 in all eight themes (worst: pastel over canvas, 10.1:1
+           stays ≥ 10:1 in all eight themes (worst: pastel over canvas, 10.0:1
            at the text band's thinnest alpha; scripts/lib/oklch.mjs maths).
            The alpha is nearly irrelevant over those surfaces because the tint
            is background-coloured over the background; what the thinning DOES

@@ -1608,7 +1608,7 @@
  * in its GROUND rather than only in its accents.
  *
  * It sits between light and dark on purpose: the ground is a dusk lavender at
- * L 0.88, which is neither the near-white of `light` / `paper` nor the
+ * L 0.885, which is neither the near-white of `light` / `paper` nor the
  * near-black of `dark` / `midnight`. Somebody who finds white glaring and black
  * stark had no option here until now — `paper` only warms the white.
  *
@@ -1618,27 +1618,38 @@
  * rule at the bottom of this file — adding it to either would flip a few hundred
  * utilities under a theme whose text is nearly black.
  *
- * Derived from `.paper` — as `.paper` stood at the time; it has since been
- * re-tuned onto its own cream ground and pastel keeps the values measured here
- * — by transform rather than hand-typed, so that no token could be forgotten: surfaces dropped toward the dusk ground and pulled toward
- * the lavender hue, accents given more chroma than any other light theme
- * carries, text left dark. Two pairs came back under their minimum from that
- * transform and were corrected by hand — `--muted-foreground` (4.10:1 on the
- * new, darker ground) and the external node's outline (2.64:1 on its own fill);
- * both are noted at their declarations.
+ * RETUNED ONCE, WHOLESALE, and this is why no token below matches the first
+ * shipping of this theme. The original was derived from `.paper` by transform
+ * and carried two hues — a violet primary at chroma 0.224 and a magenta-pink
+ * (h ~342) in the accent, the running light, the destructive, the `end`
+ * terminator and one whole end of the wash. Measured, it passed; looked at, it
+ * read as a hot violet-pink theme, not a pastel one. The retune keeps the
+ * theme's job (a colourful mid-tone ground, dark text) and changes what
+ * "colourful" means here: chroma comes DOWN everywhere a surface or accent
+ * carries it, and the hue wheel opens UP — mint, sky, periwinkle, lilac, blush,
+ * peach, butter — so no single hue dominates the way the pink did. The floors
+ * did not move to allow this: softer fills make the ΔE separations HARDER to
+ * hold, which is exactly why the fills spread across more of the wheel instead
+ * of crowding two hues at lower chroma.
  *
  * Every ratio is MEASURED by `pnpm check:themes`, which is why none is annotated
- * here. `.paper`'s comments record numbers for `.paper`'s values; repeating them
- * under different colours would be a lie, and the check is the honest record.
+ * here unless it is a verified worst case. `.paper`'s comments record numbers
+ * for `.paper`'s values; repeating them under different colours would be a lie,
+ * and the check is the honest record.
  */
 .pastel {
   --radius: 0.625rem;
 
-  /* THE 50:50 GRADIENT. The two halves of this theme are a blue and a pink, and
-     the ground is where they actually meet — `--background` is the midpoint they
-     average to, and `--pastel-wash` paints the diagonal between them. Kept as a
-     token rather than inlined so the one rule that applies it (below the theme
-     blocks) does not hard-code either hue.
+  /* THE GRADIENT IS THE HUE STORY IN ONE STROKE: sky, through the pale
+     lavender the flat tokens live on, to a soft butter-peach — cool to warm
+     across the diagonal, with no stop more chromatic than 0.04. It used to run
+     blue-to-pink, which is where most of the theme's pinkness actually came
+     from: the wash is the largest painted area in the app, so its corner hue
+     IS the theme's first impression. `--background` is the lavender the
+     diagonal passes through at its middle stop, kept as the flat fallback so a
+     browser that ignores the image still gets the theme rather than white.
+     Kept as a token rather than inlined so the one rule that applies it (below
+     the theme blocks) does not hard-code any of the three hues.
 
      Every other token stays a FLAT colour on purpose: a gradient behind a card,
      a menu or a diagram canvas would slide under its own text as the element
@@ -1646,95 +1657,119 @@
      rather than a number. The gradient is the page, not the furniture. */
   --pastel-wash: linear-gradient(
     135deg,
-    oklch(0.885 0.045 264) 0%,
-    oklch(0.895 0.02 302) 48%,
-    oklch(0.885 0.045 344) 100%
+    oklch(0.89 0.04 230) 0%,
+    oklch(0.895 0.018 285) 48%,
+    oklch(0.89 0.035 60) 100%
   );
-  --background: oklch(0.88 0.025 302);
-  --foreground: oklch(0.275 0.03 302);
-  --card: oklch(0.905 0.021 302);
-  --card-foreground: oklch(0.275 0.03 302);
-  --popover: oklch(0.905 0.021 302);
-  --popover-foreground: oklch(0.275 0.03 302);
-  --primary: oklch(0.58 0.224 280);
-  /* The cap measures 2.98:1 on `--node-internal` and `--flow-decision`, both
-     oklch L 0.855 — under the 3:1 non-text minimum, and the cap is the ONLY
-     per-bar signal of criticality (the border already carries state). Darkened
-     to L 0.55, which measures 3.39:1 on the worst pair. Pastel's own
-     `--primary` is untouched: this is a gantt constraint, not a brand one,
-     and moving the brand colour would drag every button and ring in the theme
-     into a re-audit. */
-  --gantt-critical: oklch(0.55 0.224 280);
-  /* Pastel's `--accent` is a pink (h 342) rather than the cyan the other six
-     themes carry, and the running light follows the THEME rather than the
-     token: a cyan head would be a third hue in a violet-and-pink palette. The
-     base cyan does pass here (3.41:1), so this override is identity rather
-     than legibility — and it happens to measure better anyway (4.38:1). */
-  --gantt-flow: oklch(0.5 0.15 342);
-  --primary-foreground: oklch(0.9 0.021 297);
-  --secondary: oklch(0.855 0.032 302);
-  --secondary-foreground: oklch(0.295 0.029 302);
-  --muted: oklch(0.855 0.032 302);
-  /* Darkened from the transform's 0.505, which measured 4.10:1 on this
-     theme's darker ground — secondary text has to clear 4.5:1. */
-  --muted-foreground: oklch(0.462 0.029 302);
-  --accent: oklch(0.72 0.15 342);
-  --accent-foreground: oklch(0.215 0.041 342);
-  --destructive: oklch(0.58 0.23 302);
-  --destructive-foreground: oklch(0.9 0.026 302);
-  --success: oklch(0.62 0.179 150);
-  --success-foreground: oklch(0.9 0.026 278);
-  --warning: oklch(0.75 0.168 75);
-  --warning-foreground: oklch(0.255 0.054 302);
-  --border: oklch(0.82 0.032 302);
-  --input: oklch(0.82 0.032 302);
-  --ring: oklch(0.58 0.224 280);
-  --canvas: oklch(0.87 0.026 302);
-  --canvas-grid: oklch(0.825 0.036 302);
-  --node: oklch(0.91 0.02 302);
-  --node-foreground: oklch(0.275 0.03 302);
-  --node-border: oklch(0.6 0.018 70);
-  /* Darkened from the transform's L 0.465. This theme's role fills sit ~ΔL 0.07
-     deeper than the light themes' near-white cards, and secondary text on a
-     card's own surface WASH (the deepest stop, ~14% of the border folded in) is
-     the worst case of the lot — it measured 3.76:1 there. L 0.42 clears 4.5:1
-     against every fill and every wash top, measured by check:flowchart-palette
-     across all six shapes. */
-  --node-meta: oklch(0.42 0.032 302);
-  --node-person: oklch(0.855 0.055 297);
-  --node-person-border: oklch(0.53 0.179 295);
-  --node-internal: oklch(0.855 0.055 268);
-  --node-internal-border: oklch(0.52 0.146 250);
-  --node-external: oklch(0.87 0.029 302);
-  /* Darkened from the transform's L 0.600, which measured 2.64:1 against its
-     own fill — an outline has to clear 3:1 or the card has no edge. External is
-     the one role kept deliberately quiet, so its fill sits close to the surface
-     and there is less room here than any other role has; L 0.53 measures
-     3.54:1, which leaves margin without making "not ours" shout. */
-  --node-external-border: oklch(0.53 0.02 70);
-  --node-database: oklch(0.855 0.055 232);
-  --node-database-border: oklch(0.5 0.094 195);
-  --node-queue: oklch(0.86 0.055 203);
-  /* Nudged down from the transform's L 0.520: the queue green is what the
-     flowchart's `start` terminator paints with, and its border measured 2.98:1
-     on the wash top — two hundredths under the 3:1 an outline needs. */
-  --node-queue-border: oklch(0.495 0.126 150);
-  /* The flowchart's two OWN hues keep their own identities: every shape colour
-     has to stay distinguishable from every other (check:flowchart-palette
-     measures the OKLab distance), and folding them onto this theme's midpoint
-     hue collapsed end, decision and call onto one colour. `end` takes the pink
-     half of the pair, which suits a terminator; `decision` keeps the amber it
-     has in every theme, because nothing else on the canvas is warm and that is
-     what makes a diamond findable. */
-  --flow-end: oklch(0.855 0.055 344);
-  --flow-end-border: oklch(0.53 0.168 344);
-  --flow-decision: oklch(0.855 0.055 80);
-  --flow-decision-border: oklch(0.52 0.106 80);
+  --background: oklch(0.885 0.02 285);
+  --foreground: oklch(0.275 0.028 285);
+  --card: oklch(0.905 0.018 285);
+  --card-foreground: oklch(0.275 0.028 285);
+  --popover: oklch(0.905 0.018 285);
+  --popover-foreground: oklch(0.275 0.028 285);
+  /* Chroma 0.13, down from 0.224 — the single biggest reason the old theme
+     read hot rather than pastel was a full-saturation violet on every button
+     and ring. Contrast is carried by LIGHTNESS against the pale ground
+     instead, which is the pastel move: soft colour, dark enough to matter. */
+  --primary: oklch(0.54 0.13 275);
+  /* The cap is the ONLY per-bar signal of criticality (the border already
+     carries state) and must clear 3:1 against all four state fills, which
+     `--primary` was not tuned for — the worst pair is the L 0.87 planned
+     fill. Darkened from `--primary`'s L rather than re-chromed: this is a
+     gantt constraint, not a brand one. */
+  --gantt-critical: oklch(0.5 0.13 275);
+  /* Teal, not the base cyan and not the old theme's pink. The pink head was
+     an identity override for a two-hue violet-and-pink palette that no longer
+     exists; on the widened wheel the running light takes the one band the
+     role fills leave empty between mint (h 185) and sky (h 230), so it reads
+     as its own moving thing rather than as any bar's colour passing by. */
+  --gantt-flow: oklch(0.48 0.1 205);
+  --primary-foreground: oklch(0.93 0.015 285);
+  --secondary: oklch(0.855 0.026 285);
+  --secondary-foreground: oklch(0.295 0.026 285);
+  --muted: oklch(0.855 0.026 285);
+  /* L 0.46: secondary text has to clear 4.5:1 on a ground that is itself
+     mid-tone, and this ground is the darkest any light-family theme has —
+     there is less headroom here than `light` or `paper` ever spend. */
+  --muted-foreground: oklch(0.46 0.026 285);
+  /* Peach, taking over the accent from the old magenta-pink. Warmth is what
+     a pastel palette uses for emphasis (the cool hues are all spent on the
+     ground and the roles), and peach does it without re-introducing the
+     magenta the retune exists to retire. */
+  --accent: oklch(0.78 0.09 55);
+  --accent-foreground: oklch(0.28 0.05 55);
+  /* A true soft red. The old theme painted destructive as a magenta-violet
+     (h 302 — the ground's own hue, saturated), which made "delete" the same
+     family as the wallpaper. Danger gets its own hue again. */
+  --destructive: oklch(0.55 0.16 20);
+  --destructive-foreground: oklch(0.93 0.015 20);
+  --success: oklch(0.6 0.13 155);
+  --success-foreground: oklch(0.93 0.015 155);
+  --warning: oklch(0.75 0.14 75);
+  --warning-foreground: oklch(0.26 0.05 75);
+  --border: oklch(0.82 0.026 285);
+  --input: oklch(0.82 0.026 285);
+  --ring: oklch(0.54 0.13 275);
+  --canvas: oklch(0.87 0.02 285);
+  --canvas-grid: oklch(0.825 0.03 285);
+  --node: oklch(0.91 0.016 285);
+  --node-foreground: oklch(0.275 0.028 285);
+  /* Cool grey on the spine hue, replacing the warm h 70 grey the `.paper`
+     transform left behind — a warm outline on every plain node was one more
+     off-palette hue in a theme that had too many. At the same L a violet grey
+     is also the darker of the two in luminance, so the outline gains margin
+     rather than spending it. */
+  --node-border: oklch(0.6 0.016 285);
+  /* L 0.42: this theme's role fills sit ~ΔL 0.07 deeper than the light
+     themes' near-white cards, and secondary text on a card's own surface WASH
+     (the deepest stop, ~14% of the border folded in) is the worst case of the
+     lot. L 0.42 clears 4.5:1 against every fill and every wash top, measured
+     by check:flowchart-palette across all six shapes. */
+  --node-meta: oklch(0.42 0.028 285);
+  /* THE ROLE WHEEL. Six chromatic fills at one lightness and ONE soft chroma
+     (0.05 — down from 0.055, and the borders down much further), spread
+     across the wheel instead of huddling around violet: person lilac 300,
+     internal periwinkle 265, database sky 230, queue mint 185, `end` blush 10,
+     `decision` butter 85. Softening every fill narrows the OKLab distances
+     `check:flowchart-palette` enforces, so the spread is what pays for the
+     softness — adjacent roles sit ≥35° apart, which holds every pair over its
+     floor at this chroma. Collapse two neighbours toward each other and the
+     check, not a reviewer, is what catches it. */
+  --node-person: oklch(0.855 0.05 300);
+  --node-person-border: oklch(0.52 0.12 300);
+  --node-internal: oklch(0.855 0.05 265);
+  --node-internal-border: oklch(0.52 0.12 260);
+  --node-external: oklch(0.87 0.022 285);
+  /* External is the one role kept deliberately quiet, so its fill sits close
+     to the surface and its outline has less room than any other role's — an
+     outline still has to clear 3:1 against its own fill or the card has no
+     edge, which is what pins this L. Neutral on the spine hue, matching the
+     plain node border above, so "not ours" never shouts. */
+  --node-external-border: oklch(0.52 0.016 285);
+  --node-database: oklch(0.855 0.05 230);
+  --node-database-border: oklch(0.5 0.09 225);
+  --node-queue: oklch(0.86 0.05 185);
+  --node-queue-border: oklch(0.495 0.1 170);
+  /* The flowchart's two OWN hues. `end` moves from the old magenta-pink
+     (h 344) to a blush rose — still unmistakably the warm terminator opposite
+     the mint `start`, without being the bubble-gum note the retune retires.
+     `decision` keeps the amber family it has in every theme, because a warm
+     diamond on a cool canvas is what makes a decision findable — here it is
+     a soft butter rather than a hot amber, the same identity at this theme's
+     volume. */
+  --flow-end: oklch(0.86 0.05 10);
+  --flow-end-border: oklch(0.53 0.13 15);
+  --flow-decision: oklch(0.855 0.05 85);
+  --flow-decision-border: oklch(0.52 0.1 80);
   --tag-fill-l: 0.93;
   --tag-fill-c: 0.055;
-  --edge: oklch(0.6 0.022 265);
+  --edge: oklch(0.59 0.02 275);
   --edge-drift: color-mix(in oklch, var(--edge) 40%, var(--primary));
-  --selection: oklch(0.58 0.224 280 / 0.18);
+  --selection: oklch(0.54 0.13 275 / 0.18);
+  /* The light family's shared lane inks, unchanged. A lifeline is a LINE, not
+     a surface: pastel lives in the ground and the fills, and softening the
+     one ink a reader has to follow across the page would trade legibility for
+     a mood the lanes do not set. */
   --seq-lane-1: #1baf7a;
   --seq-lane-2: #eb6834;
   --seq-lane-3: #2a78d6;
@@ -1964,9 +1999,9 @@
  * On `html`, not `body`: `html` is what carries `background-color` for the
  * pre-hydration paint above, so putting the wash on the same element keeps one
  * owner of the page's ground instead of two that can disagree during load. The
- * `background-color` stays underneath as the fallback — it is the midpoint the
- * two hues average to, so a browser that ignores the image still gets the theme
- * rather than white.
+ * `background-color` stays underneath as the fallback — it is the lavender of
+ * the wash's middle stop, so a browser that ignores the image still gets the
+ * theme rather than white.
  *
  * `fixed` so the diagonal belongs to the VIEWPORT rather than to the document:
  * scrolling a long page through a moving gradient makes the text look like it is

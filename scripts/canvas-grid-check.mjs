@@ -522,10 +522,10 @@ console.log(
 
    AND THE SEPARATION IS IN THE RULE, NOT THE FILL — the finding that decided
    what to measure. The panel's fill lifts the area by 1.033:1 (`paper`) to
-   1.136:1 (`pastel`) against the canvas: under the 1.1:1 ground-visibility
+   1.135:1 (`pastel`) against the canvas: under the 1.1:1 ground-visibility
    floor in six of the nine, and deliberately so, because a fill that separated
    by itself would be spending the drawing's own contrast budget to do it. What
-   marks the document is `--node-border`, at 2.652:1 (`pastel`) to 13.663:1
+   marks the document is `--node-border`, at 2.664:1 (`pastel`) to 13.663:1
    (`contrast`). So the floor below is on the RULE. A floor on the fill would
    fail six themes that look correct, and — worse — would invite someone to
    darken `--node` to pass it, which is the wash's whole failure re-run through
@@ -553,7 +553,7 @@ console.log(
    emptying the one fill that must stay filled. */
 const PANEL_MIN_ALPHA = 0.5;
 /* Above every `--border` (max 1.864:1, on `blueprint`) and below every
-   `--node-border` (min 2.652:1, on `pastel`) — see the header above. */
+   `--node-border` (min 2.664:1, on `pastel`) — see the header above. */
 const PANEL_RULE_MIN = 2;
 /* The palette checks' own floors, not new numbers: connectors at 3:1 and text
    at 4.5:1, measured on the panel because that is what the drawing now sits on
