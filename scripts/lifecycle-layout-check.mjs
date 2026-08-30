@@ -387,15 +387,44 @@ for (const [name, , layout] of MEASURED) {
   const crossings = [];
   for (const exit of returns) {
     const path = exit.rejoinPath;
+    /* THE FIRST STATE IS THE ONE EXEMPTION, and it is forced rather than
+       granted: the "gap above" the first state is the air under the subject,
+       which is off the top of the spine, so a join placed there points into
+       blank canvas. The layout clamps that one join down onto the spine's
+       start — which is the first state's own dot, and therefore inside the
+       first state's own BOX. Both rules below would fire on it.
+
+       The exemption is written against the target's IDENTITY, never against a
+       y tolerance, so a join that drifts onto any other dot still fails. And
+       the box rule is not simply waived for it: that rectangle spans both
+       columns and is mostly empty at the dot's height, so the leg is measured
+       against the real INK instead, below — a stricter test than the one being
+       skipped, not a looser one. */
+    const targetIsFirst = path.targetId === layout.states[0]?.id;
     for (const state of layout.states) {
-      if (path.joinY > state.y0 && path.joinY < state.y1) {
+      const isTargetsOwnBox = targetIsFirst && state.id === path.targetId;
+      if (!isTargetsOwnBox && path.joinY > state.y0 && path.joinY < state.y1) {
         crossings.push(
           `${exit.key} joins at y=${path.joinY.toFixed(1)}, inside ${state.id} (${state.y0.toFixed(1)}–${state.y1.toFixed(1)})`,
         );
       }
     }
+    if (targetIsFirst) {
+      for (const box of boxes) {
+        if (
+          path.joinY > box.y0 &&
+          path.joinY < box.y1 &&
+          box.x1 > path.channelX &&
+          box.x0 < layout.spineX
+        ) {
+          crossings.push(
+            `${exit.key} joins at y=${path.joinY.toFixed(1)}, through ${box.what}`,
+          );
+        }
+      }
+    }
     const target = byId.get(path.targetId);
-    if (target !== undefined && path.joinY >= target.y0) {
+    if (target !== undefined && !targetIsFirst && path.joinY >= target.y0) {
       crossings.push(
         `${exit.key} joins at y=${path.joinY.toFixed(1)}, at or below its target ${target.id}'s top (${target.y0.toFixed(1)})`,
       );
@@ -405,6 +434,30 @@ for (const [name, , layout] of MEASURED) {
     `${name}: every return meets the spine in a gap, above the state it rejoins`,
     crossings.length === 0,
     crossings.join("; "),
+  );
+
+  /* AND THE PLACE IT MEETS IS ON THE LINE. This is the assertion the rule
+     above only LOOKED like it was making, and the gap between the two shipped:
+     a rejoin to the first state was placed in the gap under the subject, which
+     is above the spine's own start, so its arrowhead pointed into blank canvas
+     about 23 units clear of anything. Every lifecycle check passed — "above
+     the target's top" was true, and nothing asked whether the target's top was
+     on the track. The starter document rejoins its first state, so this was
+     the first lifecycle most readers ever saw. */
+  const offSpine = returns.filter(
+    (exit) =>
+      exit.rejoinPath.joinY < layout.spineY0 - 0.001 ||
+      exit.rejoinPath.joinY > layout.spineY1 + 0.001,
+  );
+  check(
+    `${name}: every return's arrowhead lands on the spine, not past its end`,
+    offSpine.length === 0,
+    offSpine
+      .map(
+        (exit) =>
+          `${exit.key} points at y=${exit.rejoinPath.joinY.toFixed(1)}, outside the spine (${layout.spineY0.toFixed(1)}–${layout.spineY1.toFixed(1)})`,
+      )
+      .join("; "),
   );
 
   /* THE DEPARTURE LEG runs left from the exit's own dot at a y BELOW that

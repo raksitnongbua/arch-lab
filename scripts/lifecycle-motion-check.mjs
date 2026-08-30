@@ -663,15 +663,31 @@ console.log("the connector motion says something (it is not decoration)");
     "with motion off there would be nothing at all saying which way a return goes",
   );
 
-  /* THE MOTIONS THAT EXIST are each named by a keyframe, so a fifth added
-     without an argument is visible in a diff of this number. */
+  /* THE MOTIONS THAT EXIST are each named by a keyframe, so one added without
+     an argument is visible in a diff of this number. SIX FOR FOUR MOTIONS, not
+     six motions: `af-lc-arrive` is the second half of motion 2, and it exists
+     because the arrowhead is FILLED and a dashoffset cannot draw it. */
   const keyframes = [...withoutComments.matchAll(/@keyframes\s+([\w-]+)/g)].map(
     (match) => match[1],
   );
   check(
-    `the canvas declares exactly the five keyframes its four motions need (${keyframes.join(", ")})`,
-    keyframes.length === 5,
-    "entrance rise, draw (shared by the spine and the returns), sweep, travel and focus breathe — a sixth needs an argument in the stylesheet header",
+    `the canvas declares exactly the six keyframes its four motions need (${keyframes.join(", ")})`,
+    keyframes.length === 6,
+    "entrance rise, draw (shared by the spine and the returns), the arrowhead's arrival, sweep, travel and focus breathe — a seventh needs an argument in the stylesheet header",
+  );
+
+  /* THE ARROWHEAD DOES NOT ARRIVE BEFORE ITS LINE. It shipped doing exactly
+     that: nothing sequenced it, so it appeared with its row and pointed into
+     the spine for the ~500ms the path spent drawing towards it. Asserted as
+     "it is delayed at all and it is hidden first", both of which the rule must
+     carry — a fade with no delay would be the same defect 300ms slower. */
+  const arrow = ruleBody(css, '.af-lc-canvas[data-reveal="1"] .af-lc-arrow');
+  check(
+    "the return's arrowhead is hidden until its path has been drawn to it",
+    /opacity:\s*0\s*;/.test(arrow) &&
+      /animation-delay:\s*calc\(/.test(arrow) &&
+      /--lc-return-draw/.test(arrow),
+    `${arrow || "no rule at all"} — an arrowhead with nothing attached to it is the one thing this canvas's single arrowhead must not look like`,
   );
 }
 

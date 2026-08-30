@@ -56,6 +56,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A lifecycle branch that returned to its very first state pointed its arrow
+  at blank canvas.** The arrowhead landed in the space above the first state,
+  where the track has not started yet, so the one connector on the canvas that
+  carries a direction met nothing. It now lands on the start of the line — the
+  first state itself, which is where the subject actually re-enters. The
+  playground's starter lifecycle returns to its first state, so this was the
+  first lifecycle most readers ever saw; a branch returning to any later state
+  is unchanged.
+- **A lifecycle's return arrow appeared before the line it belongs to.** On the
+  entrance it arrived with its row and then hovered, unattached, for half a
+  second while its path drew towards it. It now fades up as the line reaches
+  it, and the entrance is no longer than it was.
+
 - **The playground offered to convert a lifecycle to Mermaid, and the button
   did nothing.** Pressing it left the text unchanged and the toggle snapped
   back, while screen readers were told the conversion had succeeded. Mermaid
