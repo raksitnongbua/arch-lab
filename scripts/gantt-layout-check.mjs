@@ -67,6 +67,7 @@ const { layoutGantt, GANTT, GANTT_FRAME_PAD } = await load(
   "src/features/gantt/lib/layout.ts",
 );
 const { GANTT_EXAMPLE } = await load("src/features/gantt/input/example.ts");
+const { itemSchedule } = await load("src/features/gantt/lib/axis.ts");
 const { DIAGRAM_SURFACE_PAD } = await load("src/lib/diagram-surface.ts");
 const { listGanttExampleIds, loadGanttExample } = await load(
   "src/features/gantt/service/example-service.ts",
@@ -833,6 +834,91 @@ console.log("the exported file has air around it");
     "the `--node` panel is back to being this canvas's own rect — the pad " +
       "above is then air on the wrong side of a stroked edge, which is " +
       "exactly the state that shipped once already",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("a selected bar names the days it actually occupies");
+
+/* THE ARITHMETIC A READER SHOULD NOT HAVE TO DO. A bar is labelled with its
+   duration, which is the one number the plan already states; what a reader
+   stopping on it wants is the other end — "six days from the 12th, so done
+   WHEN". Selecting one now answers that, and this is where the answer is
+   checked.
+
+   THE OFF-BY-ONE IS THE WHOLE ASSERTION. `finish` is EXCLUSIVE: a six-day task
+   starting on day 12 has `finish` 18, because 18 is where the next thing may
+   start. Printing `finish` names a day the work is not being done on, every
+   task silently claims a day it does not use, and NOTHING LOOKS WRONG — the
+   dates are plausible and the bar is drawn correctly either way. So the label
+   is measured back into days and compared with the duration the plan states,
+   over every bundled document, rather than eyeballed on one.
+
+   MEASURED THROUGH THE REAL FORMATTER, not by re-deriving it: the check parses
+   the string `itemSchedule` produced and counts the days between its ends, so
+   a change to the wording that broke the arithmetic fails here. */
+{
+  const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+  const wrong = [];
+  let labelled = 0;
+  for (const id of listGanttExampleIds()) {
+    const example = loadGanttExample(id);
+    if (example.status !== "ok" || !example.file.origin) continue;
+    const laid = layoutGantt(example.file);
+    for (const item of laid.items) {
+      const label = itemSchedule(example.file, item);
+      labelled += 1;
+      /* Both spellings the formatter can produce: "12–17 Apr" when one month
+         covers it, "28 Apr – 3 May" when it does not, and a bare date for a
+         milestone or a one-day task. */
+      const same = /^(\d+)–(\d+) (\w+)$/.exec(label);
+      const split = /^(\d+) (\w+) – (\d+) (\w+)$/.exec(label);
+      const one = /^(\d+) (\w+)$/.exec(label);
+      const year = new Date(
+        `${example.file.origin}T00:00:00Z`,
+      ).getUTCFullYear();
+      const at = (day, month) =>
+        Date.UTC(year, MONTHS.indexOf(month), Number(day));
+      let days = null;
+      if (same) days = Number(same[2]) - Number(same[1]) + 1;
+      else if (split) {
+        const from = at(split[1], split[2]);
+        const to = at(split[3], split[4]);
+        days = (to - from) / 86_400_000 + 1;
+      } else if (one) days = item.milestone ? 0 : 1;
+      const want = item.milestone ? 0 : item.duration;
+      if (days === null || days !== want) {
+        wrong.push(
+          `${id}/${item.id}: "${label}" spans ${days} day(s), plan says ${want}`,
+        );
+      }
+    }
+  }
+  check(
+    `every bundled bar's dates span exactly its duration (${labelled} items)`,
+    labelled > 0 && wrong.length === 0,
+    wrong.length === 0
+      ? "no dated example was reached, so this measured nothing"
+      : `${wrong.slice(0, 4).join("; ")} — printing the EXCLUSIVE finish claims a day the work is not done on, and nothing looks wrong when it does`,
+  );
+
+  /* AND A DOCUMENT WITH NO `starts` LINE STILL ANSWERS, in the relative units
+     its axis is already labelled in. Saying nothing there would make the
+     affordance appear and disappear depending on a header the reader may not
+     have written. */
+  const relative = layoutGantt(
+    parseGanttText(GANTT_EXAMPLE.replace(/^\s*starts .*$/m, "")),
+  );
+  const withoutOrigin = relative.items.map((item) =>
+    itemSchedule(
+      parseGanttText(GANTT_EXAMPLE.replace(/^\s*starts .*$/m, "")),
+      item,
+    ),
+  );
+  check(
+    `without a start date the label falls back to day numbers (${withoutOrigin[0]})`,
+    withoutOrigin.every((label) => /^day \d+(–\d+)?$/.test(label)),
+    `${withoutOrigin.filter((l) => !/^day \d+(–\d+)?$/.test(l)).join(", ")} — a calendar was invented for a plan that named no origin`,
   );
 }
 

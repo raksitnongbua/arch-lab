@@ -447,14 +447,22 @@
     );
   }
 
-  /* 3. The sweep. Gated on the app-wide toggle AND on at-rest, like every
-     other ambient in this app: an ambient that never stops competes with the
-     person reading and stops meaning anything, which is precisely how ER's
-     pulse ended up needing a second visual language to survive. It yields to
-     focus too, or it would travel through the one state the reader just
-     lit. */
-  .af-lc-canvas[data-af-idle="on"][data-idle="1"]:not(.af-lc-has-focus)
-    .af-lc-sweep {
+  /* 3. The drift. Gated on the app-wide toggle and on at-rest.
+
+     IT NO LONGER YIELDS TO FOCUS, and that clause was right when it was
+     written and wrong now. Focus used to arrive on HOVER, so it lasted as long
+     as the pointer sat still and pausing the ambient under it was a moment.
+     Selecting is a CLICK now and a click PINS — so "yields to focus" became
+     "never runs again until you deselect", and the canvas simply stopped
+     moving. Reported as looking lifeless, which it was.
+
+     TWO MARKS CAN NOW MOVE AT ONCE HERE, and that is the cost. It is payable
+     because they are nowhere near each other and are measurably unalike: the
+     ambient runs the spine down the middle while a lit return runs off to the left, and `check:lifecycle-motion` pins the ambient at a lower duty and a lower speed than the focus dash. The gantt keeps its own yield and
+     should — there the ambient and the focus current are the SAME animation on
+     the SAME connectors at two speeds, so running both is one motion arguing
+     with itself rather than two motions coexisting. */
+  .af-lc-canvas[data-af-idle="on"][data-idle="1"] .af-lc-sweep {
     --lc-march-dash: var(--lc-drift-dash);
     --lc-march-gap: var(--lc-drift-gap);
     stroke-dasharray: var(--lc-march-dash) var(--lc-march-gap);

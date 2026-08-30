@@ -294,15 +294,22 @@
       cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
 
-  /* 2. The sweep. Gated on the app-wide toggle AND on at-rest, like every
-     other ambient in this app: an ambient that never stops competes with the
-     person reading and stops meaning anything, which is precisely how ER's
-     pulse ended up needing a second visual language to survive. It yields to
-     focus too, or it would travel through the one dot the reader just lit. */
-  .af-timeline-canvas[data-af-idle="on"][data-idle="1"]:not(
-      .af-timeline-has-focus
-    )
-    .af-timeline-sweep {
+  /* 2. The sweep. Gated on the app-wide toggle and on at-rest.
+
+     IT NO LONGER YIELDS TO FOCUS, and that clause was right when it was
+     written and wrong now. Focus used to arrive on HOVER, so it lasted as long
+     as the pointer sat still and pausing the ambient under it was a moment.
+     Selecting is a CLICK now and a click PINS — so "yields to focus" became
+     "never runs again until you deselect", and the canvas simply stopped
+     moving. Reported as looking lifeless, which it was.
+
+     NOTHING ELSE TRAVELS ON THIS CANVAS, so unlike the lifecycle next door
+     there is not even a second moving mark to weigh: the only focus motion
+     here is the lit dot's breathe, which is opacity in place. The gantt keeps
+     its own yield and should — there the ambient and the focus current are the
+     SAME animation on the SAME connectors at two speeds, so running both is
+     one motion arguing with itself. */
+  .af-timeline-canvas[data-af-idle="on"][data-idle="1"] .af-timeline-sweep {
     stroke-dasharray: var(--tl-sweep-head)
       calc(var(--tl-spine-len) - var(--tl-sweep-head));
     animation: af-timeline-sweep var(--tl-sweep) linear infinite;

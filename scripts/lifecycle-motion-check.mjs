@@ -849,6 +849,42 @@ console.log("the entrance ends, and lets go of what it animated");
 }
 
 /* ----------------------------------------------------------------------- */
+console.log("the ambient survives a selection");
+
+/* IT USED TO YIELD TO FOCUS, and that was correct while focus arrived on
+   HOVER: a pointer resting on a row held it for a second, and pausing the
+   ambient underneath was a moment. Selecting is a CLICK now, and a click PINS
+   until it is clicked again or Escape is pressed — so the clause turned into
+   "the canvas never moves again", and it was reported as looking lifeless.
+
+   ASSERTED AS THE ABSENCE OF THE MECHANISM, like the hover rule in
+   `check:view-input`, because restoring the yield is the obvious edit for
+   anyone who reads the ambient's original argument without noticing that the
+   interaction under it changed. In a diff it reads as a fix.
+
+   THE GANTT IS NOT COVERED BY THIS AND MUST NOT BE. Its ambient and its focus
+   current are the same animation on the same connectors at two speeds, so
+   running both is one motion arguing with itself rather than two coexisting.
+   That canvas keeps its yield, and the difference is a real one rather than an
+   oversight — which is why this assertion lives in the two checks it applies
+   to instead of being swept across every kind. */
+{
+  const ambient = RULES.filter(
+    ([selector]) => /data-idle="1"/.test(selector) && /sweep/.test(selector),
+  );
+  check(
+    `the ambient rule was found (${ambient.length})`,
+    ambient.length === 1,
+    "the selector moved, so the assertion below is measuring nothing",
+  );
+  check(
+    "the ambient keeps running while a row is selected",
+    ambient.every(([selector]) => !/:not\([^)]*has-focus/.test(selector)),
+    `${ambient.map(([s]) => s).join(" | ")} — a pinned selection would stop the canvas moving for as long as it is held`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("");
 if (failures > 0) {

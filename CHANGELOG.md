@@ -27,6 +27,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Selecting a gantt bar now tells you when it finishes.** A bar has always
+  been labelled with its duration — the one number the plan states outright —
+  and left you to count the other end off the tick rail. Click one and the label
+  becomes the days it actually occupies, `12–17 Apr`, worked out from the plan's
+  start date. It names the last day the work is done, not the day after it. A
+  plan with no `starts` line answers in day numbers rather than staying silent.
+
 - **A selected row, event or bar now carries a ring, not just a dimmed
   background.** Choosing one used to work only by fading everything else, which
   subtracts and never adds — the thing you picked gained nothing. It now wears a
@@ -34,6 +41,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   use-case canvases have always drawn. On the timeline and the lifecycle the
   room for it was reserved when those canvases were written and never used, so
   nothing moves to make space.
+
+- **A timeline or lifecycle no longer stops moving once you select something.**
+  The idle animation stepped aside for focus, which was right while focus meant
+  hovering and lasted a moment; selecting is a click now and a click stays put,
+  so the canvas went still and remained still. The gantt still steps aside, and
+  should — there the idle motion and the selected-chain motion are the same
+  mark.
 
 - **The focus ring is gone from the gantt, the timeline and the lifecycle, and
   clicking a sequence participant no longer boxes it.** On the first three the
