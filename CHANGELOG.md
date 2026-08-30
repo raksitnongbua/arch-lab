@@ -46,6 +46,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   there. Now it is the item's name and its bar. A one-day bar, which is six
   pixels wide, keeps a target you can actually hit.
 
+- **Scrolling no longer stops the idle animation.** Every wheel tick counted as
+  the reader being busy, so the motion cut out for three seconds each time — on a
+  gantt, a timeline and a lifecycle alike. Scrolling is how you look at more of a
+  diagram, which is when the motion is worth having. Moving the pointer across
+  the canvas stopped it too, left over from when hovering picked a row out.
+- **A lifecycle's returning branch no longer arrives solid and then turns
+  dashed.** It drew itself in as a solid line and changed shape the moment the
+  entrance finished. It now fades in already dashed.
+
 - **Only the gantt bar you clicked wears the focus ring.** The bars it waits
   for and the bars waiting on it stay at full strength, as they should, but they
   no longer carry the ring as well — three bars claiming to be the one you
