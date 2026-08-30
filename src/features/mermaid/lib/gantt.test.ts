@@ -494,12 +494,21 @@ describe("serializeMermaidGantt", () => {
     // Emit must write SOME start, and day 0's date is the honest one — the
     // same normalisation the importer applies to Mermaid's implicit
     // previous-row start, in reverse.
+    //
+    // A SECOND, ANCHORED ROW IS LOAD-BEARING and not scene-setting. With the
+    // unanchored row alone this assertion cannot fail: the importer recomputes
+    // the origin as the earliest date in the chart, so whatever day the emit
+    // picks becomes day 0 and `at: 0` comes back regardless. Written with one
+    // row first, it passed with the emitter deliberately writing day 1. The
+    // anchored row fixes the origin, so a shifted start shows up as `at: 5`
+    // becoming `at: 4`.
     const file = parseMermaidGantt(
-      "gantt\nsection S\n  A :a, 2026-01-01, 3d\n",
+      "gantt\nsection S\n  Late :late, 2026-01-06, 3d\n  Early :early, 2026-01-01, 2d\n",
     );
-    delete file.sections[0].items[0].at;
+    delete file.sections[0].items[1].at;
     const back = parseMermaidGantt(serializeMermaidGantt(file));
-    expect(back.sections[0].items[0].at).toBe(0);
+    expect(back.sections[0].items[1].at).toBe(0);
+    expect(back.sections[0].items[0].at).toBe(5);
   });
 
   it("renames a task id that spells a Mermaid tag, and its `after` follows", () => {

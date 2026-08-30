@@ -1846,6 +1846,7 @@ const GANTT_SAMPLE = `gantt
     section Cut over
       Freeze writes       :freeze, 2026-10-01, 2026-10-03
       Point traffic over  :cutover, after freeze, 3d
+      Retire shadow rows  :retire, after cutover, 2w
 `;
 
 {
@@ -1925,7 +1926,11 @@ const GANTT_SAMPLE = `gantt
      different set of choices, and these are the ones the caveat promises. */
   check(
     "durations are always written in days, never re-emitted as weeks",
-    !/\d+w\b/.test(emitted) && emitted.includes("12d"),
+    !/\d+w\b/.test(emitted) &&
+      emitted.includes("12d") &&
+      /* The 2w row, spelled out: without it this assertion passes on a
+         sample that never had a week in it to canonicalise. */
+      emitted.includes("14d"),
     emitted,
   );
   check(
@@ -2058,6 +2063,7 @@ starts 2026-09-07
   section "Prepare"
     task something "Something" 3d #risky
       desc "A note Mermaid has nowhere to put."
+    task anchored "Anchored" 3d at 5
 `);
   const extrasBack = parseMermaidGantt(serializeMermaidGantt(withExtras));
   check(
@@ -2066,10 +2072,17 @@ starts 2026-09-07
       extrasBack.sections[0].items[0].description === undefined,
     JSON.stringify(extrasBack.sections[0].items[0]),
   );
+  /* THE ANCHORED ROW BESIDE IT IS LOAD-BEARING. With the unanchored row
+     alone this cannot fail: the importer recomputes the origin as the
+     earliest date in the chart, so whatever day the emit picks becomes day 0
+     and `at: 0` comes back either way. (Written that way first, it passed
+     against an emitter deliberately writing day 1.) The anchored row pins the
+     origin, so a shifted start shows up as `at: 5` becoming `at: 4`. */
   check(
     "a row with neither at nor after comes back explicitly at day 0, not invented elsewhere",
-    extrasBack.sections[0].items[0].at === 0,
-    JSON.stringify(extrasBack.sections[0].items[0]),
+    extrasBack.sections[0].items[0].at === 0 &&
+      extrasBack.sections[0].items[1].at === 5,
+    JSON.stringify(extrasBack.sections[0].items.map((item) => item.at)),
   );
 }
 
