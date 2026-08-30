@@ -1071,7 +1071,7 @@
 .paper {
   /* The same deepened accent as the baseline — this theme's ground is
      the light family's and its `--accent` is the same cyan, so the
-     measurement lands in the same place (4.34:1 on the canvas). Spelled
+     measurement lands in the same place (4.40:1 on the canvas). Spelled
      out rather than inherited because `check:themes` requires every theme
      to carry every CONCRETE colour: a literal left to fall through is a
      theme silently painting the light palette's value. See `:root` for
@@ -1133,15 +1133,27 @@
   --input: oklch(0.845 0.016 80);
   --ring: oklch(0.5 0.15 40);
 
-  /* Canvas-specific tokens the future editor will consume. */
-  --canvas: oklch(0.945 0.015 88);
+  /* Canvas-specific tokens the future editor will consume.
+     A HALF-STEP WELL, not the house step. `diagram-well.tsx` describes the
+     recess as ΔL 0.010 under --background, and this theme shipped at exactly
+     that — but cream at L 0.945 reads as a deeper hole than the same step
+     does on the near-white grounds the figure was chosen against, and the
+     ground was reported as too dark to present on. ΔL 0.005 gives back what
+     there is to give: the ceiling is --background itself, since a well
+     LIGHTER than its chrome is not a recess at all, and `check:canvas-grid`
+     now fails on that inversion. The gap lands at 1.015:1 under the chrome,
+     against ~1.030:1 for the rest of the light family and 1.103:1 for dark
+     and blueprint. Every ratio measured on this ground is re-recorded in the
+     comments below; --canvas is also read by the SVG exporter, so a file
+     exported from this theme carries the lighter stock too. */
+  --canvas: oklch(0.95 0.015 88);
   --canvas-grid: oklch(0.885 0.016 84);
   /* BELOW the canvas, not above it — the header's fault 2. A node is ink and
      stock, so it takes the page's own hue at a shade under the page's
-     lightness (1.06:1 on --canvas): found by its rule rather than by glare. */
+     lightness (1.045:1 on --canvas): found by its rule rather than by glare. */
   --node: oklch(0.965 0.012 86);
   --node-foreground: oklch(0.26 0.021 60);
-  /* ≥3:1 against --node (measured 4.40:1) and against --canvas (4.15:1). The
+  /* ≥3:1 against --node (measured 4.40:1) and against --canvas (4.21:1). The
      rule does more work here than in any other theme, because the surface it
      bounds no longer separates itself by brightness. */
   --node-border: oklch(0.55 0.022 70);
@@ -1226,7 +1238,7 @@
      token, so a blue-grey edge made the whole warm palette a filter over a
      cool one (the header's fault 1). Deepened at the same time: 3.46:1 on the
      ground was under the 3:1 line for anything smaller than a hairline and is
-     5.29:1 now, 5.14:1 on the canvas and 5.45:1 on a node. */
+     5.29:1 now, 5.21:1 on the canvas and 5.45:1 on a node. */
   --edge: oklch(0.5 0.026 65);
   /* The resting drift that rides ON TOP of a connector. A real token, not an
      inline color-mix, because the animated GIF export has to resolve the exact

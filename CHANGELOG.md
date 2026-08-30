@@ -313,6 +313,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- The `paper` theme's diagram ground is lighter. Its cream well sat the full
+  house step below the page and read as a hole in the sheet rather than a
+  recess in it; the step is now half that, so the stock reads as one paper with
+  the drawing inset into it. The well stays below the chrome — a diagram
+  exported from `paper` carries the lighter ground too, and every ink, role
+  fill and Gantt colour measured on it has been re-measured.
+
 - The ground behind a diagram no longer changes shade depending on which
   notation is open. Sequence, flowchart and use-case diagrams sat in the
   slightly recessed well the palette defines for them, while ER, data
