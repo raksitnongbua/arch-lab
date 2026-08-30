@@ -7,6 +7,34 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Gantt charts now convert to Mermaid as well as from it.** The playground's
+  format toggle rewrites a plan as Mermaid `gantt`, and a pane holding Mermaid
+  downloads under a `.mmd` name. One plan cannot make the trip and says so
+  instead of guessing: a chart with no `starts` date has no calendar to anchor
+  to, Mermaid's gantt axis is always a calendar, and the toggle is disabled with
+  that sentence rather than inventing a date. What no export carries is the
+  computed critical path — Mermaid has nowhere to record a derived chain, and a
+  hand-typed `crit` tag would read as a claim rather than as the arithmetic.
+
+### Changed
+
+- **Mermaid's `crit` tag now imports as the `at-risk` state**, and `at-risk`
+  exports as `crit`. Previously `crit` was read and thrown away. Both spellings
+  are an author saying a bar is in trouble, so a chart that arrives marked up
+  keeps its markings. `crit` on a task already marked `done` keeps the `done`
+  and drops the `crit`, since a finished task is no longer at risk.
+- **A Mermaid gantt carrying `accTitle` or `accDescr` now imports.** Those lines
+  previously stopped the import with an error about a task row that was never
+  written; they are dropped as page metadata, as they already were for
+  timelines. Mermaid's `weekday` setting is now refused by name alongside
+  `axisFormat` and `tickInterval`, rather than falling through to a vaguer
+  error.
+- **The playground's "what conversion drops" note told ER, gantt and timeline
+  authors what a use-case export drops.** Every notation added after the use
+  case inherited the wrong two paragraphs. Each kind now states its own.
+
 ### Fixed
 
 - **Immersive mode did not cover the screen for a sequence, flowchart or use

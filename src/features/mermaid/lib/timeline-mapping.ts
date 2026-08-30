@@ -5,31 +5,33 @@
  * table used by both directions cannot let import and export disagree about
  * what a construct means.
  *
- * MERMAID HAS A REAL TIMELINE, and — unlike the gantt next door — it is small
- * enough that CONVERSION IS TWO-WAY. That decision is stated here once and
- * every other file points at it:
+ * MERMAID HAS A REAL TIMELINE, and it is small enough that CONVERSION IS
+ * TWO-WAY AND UNCONDITIONALLY SO. That decision is stated here once and every
+ * other file points at it:
  *
  *   - DETECTION IS EXACT, as it is for `erDiagram` and `gantt`: the first
  *     meaningful word behind any frontmatter is `timeline` or it is not.
- *   - CONVERSION IS TWO-WAY. `./timeline-emit.ts` exists, and the share menu
- *     and the pane's format toggle both offer Mermaid for this kind. The
- *     gantt's import-only rule does NOT apply here and the reason is precise:
- *     the gantt refuses to emit because two things it says — `at-risk` and a
- *     COMPUTED critical path — have no Mermaid spelling, so an emit would
- *     downgrade one and misrepresent the other. A timeline says neither. It
- *     has no state vocabulary and nothing derived: a period is a label and an
- *     event is a label, and Mermaid `timeline` holds both exactly.
+ *   - CONVERSION IS TWO-WAY, with no document of this kind carved out.
+ *     `./timeline-emit.ts` exists and the pane's format toggle offers Mermaid
+ *     for every timeline. The contrast with the gantt next door is no longer
+ *     one-way versus two-way — that dialect emits too — but ANCHORED versus
+ *     unanchored: a Mermaid gantt reaches a calendar through `dateFormat`, so
+ *     a plan with no `starts` date has nothing to write and its emitter
+ *     refuses that document by name. A timeline is anchored to nothing. A
+ *     period is a label and an event is a label, Mermaid holds both exactly,
+ *     and so `serializeMermaidTimeline` has no refusal in it at all.
  *
- * WHAT EACH DIRECTION LOSES, and why neither loss is the gantt's kind of loss:
+ * WHAT EACH DIRECTION LOSES, and why neither is a claim the diagram makes:
  *
  *   - IMPORT loses nothing about the diagram, and refuses (rather than
  *     approximates) the one construct Mermaid has that arch-lab does not —
  *     see `REFUSED_TIMELINE_CONSTRUCTS`.
  *   - EXPORT loses `#tag`s, an event's `desc` and the `.alab` header beyond
  *     the title. Mermaid `timeline` has no slot for any of them. That is the
- *     same shape of loss `MERMAID_ER_EXPORT_CAVEAT` names — metadata around
- *     the diagram, never a claim the diagram makes — and it is why this is
- *     "two-way" in the sense C4, sequence and ER are, not "lossless".
+ *     same shape of loss `MERMAID_ER_EXPORT_CAVEAT` and
+ *     `MERMAID_GANTT_EXPORT_CAVEAT` name — metadata around the diagram, never
+ *     a claim the diagram makes — and it is why this is "two-way" in the
+ *     sense C4, sequence, ER and gantt are, not "lossless".
  *
  * THE STRUCTURAL MISMATCH, which is the whole of the refusal list. Mermaid's
  * timeline has THREE levels — `section` › period › event — and arch-lab's has

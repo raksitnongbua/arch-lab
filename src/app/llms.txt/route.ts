@@ -61,11 +61,15 @@ text: C4 models, UML-style sequence diagrams, flowcharts, use-case diagrams,
 entity-relationship diagrams, data dictionaries, gantt charts, milestone
 timelines and lifecycles. The text format is \`.alab\`; arch-lab JSON and
 Mermaid (\`C4Context\`, \`sequenceDiagram\`, \`flowchart\`/\`graph\`,
-\`erDiagram\`, \`gantt\`, \`timeline\`) are also accepted and converted. The ER
-and timeline conversions are the two that run BOTH WAYS and are total over the
-diagram — Mermaid has a real \`erDiagram\` and a real \`timeline\`, so nothing
-either picture shows is lost in either direction; \`gantt\` is a one-way
-import, since Mermaid has no way to record a computed critical path. The
+\`erDiagram\`, \`gantt\`, \`timeline\`) are also accepted and converted. The ER,
+timeline and gantt conversions run BOTH WAYS and are total over the diagram —
+Mermaid has a real \`erDiagram\`, \`timeline\` and \`gantt\`, so nothing any of
+those three pictures shows is lost in either direction. The one gantt that
+cannot be exported is a plan with no \`starts\` date: Mermaid \`gantt\` has no
+relative axis, and arch-lab refuses that document by name rather than
+inventing a day 0. What no export carries is the COMPUTED critical path,
+which Mermaid has no slot for and which is never faked with a typed
+\`crit\` tag. The
 lifecycle has NO Mermaid dialect in either direction and none was invented:
 \`stateDiagram-v2\` is a state machine — every transition that could happen —
 rather than one subject's ordered history.

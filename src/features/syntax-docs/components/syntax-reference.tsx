@@ -585,11 +585,15 @@ export function SyntaxReference(): React.JSX.Element {
           <Link href="/live?d=gantt" className="underline">
             gantt playground
           </Link>
-          , which also imports pasted Mermaid <Code>gantt</Code> code one-way.
-          One-way is the whole of it: nothing writes <Code>gantt</Code> back,
-          because <Code>at-risk</Code> has no Mermaid tag and the critical path
-          this format computes would arrive there as a <Code>crit</Code>
-          decoration anyone could then contradict.
+          , which also converts Mermaid <Code>gantt</Code> code in both
+          directions — <Code>at-risk</Code> travels as Mermaid&rsquo;s{" "}
+          <Code>crit</Code>, since both are an author saying a bar is in
+          trouble. Two things do not travel. The critical path this format
+          COMPUTES is never written out, because a derived chain typed as a{" "}
+          <Code>crit</Code> tag is indistinguishable from one somebody asserted.
+          And a plan with no <Code>starts</Code> line cannot become Mermaid at
+          all: Mermaid&rsquo;s axis is always a calendar, and no date is
+          invented for it.
         </P>
       </Section>
 

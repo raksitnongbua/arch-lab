@@ -52,12 +52,18 @@
  * Picking a winner would mean a document whose drawn start silently disagrees
  * with a line the author wrote and can still see.
  *
- * WHY THERE IS NO `crit` KEYWORD. Mermaid's `gantt` has one, and it is the one
- * construct this grammar deliberately refuses to mirror: there, `crit` is a
- * decoration the author types; here the critical path is COMPUTED from the
- * float pass in `src/features/gantt/lib/layout.ts`. A declared critical
- * path can contradict the arithmetic, and when it does the diagram is simply
- * wrong. The importer drops Mermaid's `crit` and says so by name.
+ * WHY THERE IS NO `crit` KEYWORD, WHICH IS NOT THE SAME AS THE TAG BEING
+ * UNREPRESENTABLE. This grammar has no way to DECLARE a critical path, and it
+ * must not grow one: the path is COMPUTED from the float pass in
+ * `src/features/gantt/lib/layout.ts`, and a declared one can contradict the
+ * arithmetic — when it does, the diagram is simply wrong.
+ *
+ * Mermaid's `crit` tag is nonetheless carried, both ways, because it is not
+ * actually a path declaration: it is a decoration an author types to say a
+ * bar is in trouble, which is what `at-risk` says here. So the tag maps onto
+ * the STATE word this file already has, no new keyword is owed, and the
+ * computed path is still never written down anywhere. The mapping lives in
+ * `src/features/mermaid/lib/gantt-mapping.ts`.
  *
  * COLLISION CHECK against the other six grammars' tokens, done once so nobody
  * has to redo it:
