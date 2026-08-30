@@ -9,6 +9,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A third bundled gantt, an agile sprint** — `/live/gantt/search-sprint`, and
+  on the examples index. The two plans already bundled are migrations, where the
+  work sets the length; a sprint fixes the length first, so its ceremonies sit on
+  a cadence instead of falling out of a dependency, three of its stories run side
+  by side out of planning, and the only chain with no float is the story blocked on
+  another team that finishes four days after the review. Deleting its `starts`
+  line turns it into a reusable sprint template on a relative axis.
 - **Gantt charts now convert to Mermaid as well as from it.** The playground's
   format toggle rewrites a plan as Mermaid `gantt`, and a pane holding Mermaid
   downloads under a `.mmd` name. One plan cannot make the trip and says so
