@@ -359,12 +359,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   exported file has always had, so a downloaded PNG is framed the way the screen
   frames it. No bar, tick or connector moves.
 
-- The `paper` theme's diagram ground is lighter. Its cream well sat the full
-  house step below the page and read as a hole in the sheet rather than a
-  recess in it; the step is now half that, so the stock reads as one paper with
-  the drawing inset into it. The well stays below the chrome — a diagram
-  exported from `paper` carries the lighter ground too, and every ink, role
-  fill and Gantt colour measured on it has been re-measured.
+- The `paper` theme is lighter. Its cream stock read as dark to present on, and
+  the ground itself has moved — the page, the diagram well, the panels, the node
+  surface, the role fills and the tag band all rise together, so the theme is a
+  lighter paper rather than a shallower recess. The hue and warmth are
+  unchanged; the well keeps the same house-step recess under the page every
+  other theme has. A diagram exported from `paper` carries the lighter stock
+  too, and every ink, role fill and Gantt colour measured on it has been
+  re-measured.
 
 - The ground behind a diagram no longer changes shade depending on which
   notation is open. Sequence, flowchart and use-case diagrams sat in the

@@ -1075,8 +1075,14 @@
  * themes and not of these.
  *
  * `paper` takes the glare off. The default light theme is a cool near-white at
- * L 0.985; this is warmer (hue 85) and a step darker, which is what a page
+ * L 0.985; this is warmer (hue 88) and a shade darker, which is what a page
  * looks like when you are reading it for an hour rather than glancing at it.
+ * THE SHADE IS NARROWER THAN IT WAS. The theme shipped at L 0.955 and was
+ * reported twice as too dark to present on, so the whole block was lightened
+ * to 0.972 in one pass — hue and chroma untouched, since warmth was never the
+ * complaint. The argument for every number below is unchanged; the numbers
+ * themselves were re-measured against the moved ground, and `--canvas` at
+ * 0.962 is what an exported SVG from this theme is now printed on.
  *
  * IT USED TO BE A CREAM FILTER OVER THE COOL DEFAULT RATHER THAN A REDESIGN,
  * and the three faults were each a number in this file:
@@ -1084,18 +1090,19 @@
  *   1. THE INK WAS BLUE-GREY. The ground was hue 88 and the text hue 55 — warm,
  *      deliberate — while `--edge`, which EVERY connector in EVERY notation is
  *      drawn with, was hue 265, inherited unchanged from `light`. It also
- *      measured only 3.46:1 on the ground. It is hue 65 now, and 5.29:1.
+ *      measured only 3.46:1 on the ground. It is hue 65 now, and 5.56:1.
  *   2. EVERY BOX WAS A STICKER. `--node` was oklch(0.995 0.004 85) — white, on
  *      a 0.955 cream ground, so each card floated above the sheet instead of
- *      being printed on it. ON PAPER NOTHING IS BRIGHTER THAN THE PAPER: the
- *      node surface now sits a shade BELOW the page (0.965 on a 0.955 canvas,
- *      1.06:1 — a surface you find by its rule, not by its glare). The panel
- *      tokens (`--card`, `--popover`) are deliberately NOT part of this: a
- *      dialog genuinely floats above the page, where a node is printed on it.
+ *      being printed on it. The node surface now sits INSIDE the page's own
+ *      range rather than over it: 1.045:1 on the well it is drawn on and
+ *      1.015:1 against the chrome, which is a surface you find by its rule
+ *      rather than by its glare. The panel tokens (`--card`, `--popover`) are
+ *      deliberately NOT part of this: a dialog genuinely floats above the
+ *      page, where a node is printed on it.
  *   3. THE ROLE FILLS WERE BYTE-IDENTICAL TO `light`'S. They were mixed for a
  *      near-white blue-grey ground and read as pastel plastic on cream. Their
  *      HUES are CVD-safe and audited and have NOT moved; their lightness and
- *      chroma are re-tuned against THIS ground — L 0.93 → 0.90, chroma −15%
+ *      chroma are re-tuned against THIS ground — L 0.93 → 0.912, chroma −15%
  *      across the set — exactly as the dark themes re-tune theirs. Worst
  *      adjacent fill separation after the cut is ΔE 0.023 (person↔internal),
  *      still over the 0.02 floor `check:flowchart-palette` holds.
@@ -1118,7 +1125,7 @@
 .paper {
   /* The same deepened accent as the baseline — this theme's ground is
      the light family's and its `--accent` is the same cyan, so the
-     measurement lands in the same place (4.40:1 on the canvas). Spelled
+     measurement lands in the same place (4.56:1 on the canvas). Spelled
      out rather than inherited because `check:themes` requires every theme
      to carry every CONCRETE colour: a literal left to fall through is a
      theme silently painting the light palette's value. See `:root` for
@@ -1130,17 +1137,33 @@
      of stock actually has. */
   --radius: 0.125rem;
 
-  /* Cream stock rather than warm white — a shade further from the screen and
-     closer to the paper it is named after. */
-  --background: oklch(0.955 0.014 88);
+  /* Cream stock rather than warm white — the hue and chroma of the paper this
+     theme is named after, at a lightness that is still stock rather than
+     screen.
+     LIGHTENED IN A SECOND PASS, and the whole block moved with it. The theme
+     shipped at L 0.955 and was twice reported as too dark to present on; the
+     first attempt lifted `--canvas` alone by ΔL 0.005, which is under the
+     threshold of noticing and could only ever close the recess, never lighten
+     the theme. What reads dark is the absolute cream, so THIS is the lever:
+     the ground moves and every surface tuned against it moves too (--canvas,
+     --card, --popover, --secondary, --muted, --node, the role fills and the
+     tag-fill band). Hue 88 and chroma 0.014 are untouched — paper is warm on
+     purpose, and this is a lightness move only. Ink does not move with stock:
+     --foreground, --edge, --border, --primary and every role border are the
+     same colours they were, and every ratio they carry improved. */
+  --background: oklch(0.972 0.014 88);
   /* Ink, not black: a warm dark brown is what print actually leaves on stock,
      and it is what stops a cream ground reading as a filter over a dark theme. */
   --foreground: oklch(0.245 0.024 55);
 
-  --card: oklch(0.982 0.008 88);
+  /* ABOVE the ground, not below it: a dialog floats over a page, where a node
+     is printed on one. The step is ΔL 0.018 rather than the 0.027 it was —
+     the relationship is what was tuned, and the ceiling is white. 1.054:1
+     over the chrome; --muted-foreground on it, 6.11:1. */
+  --card: oklch(0.99 0.008 88);
   --card-foreground: oklch(0.245 0.024 55);
 
-  --popover: oklch(0.982 0.008 88);
+  --popover: oklch(0.99 0.008 88);
   --popover-foreground: oklch(0.245 0.024 55);
 
   /* THE ONE TOKEN THIS THEME TAKES OFF THE HOUSE PALETTE, and the first theme
@@ -1148,18 +1171,18 @@
      the mark no press leaves on stock — it is a screen colour — and a violet
      button on cream was the last cool thing left after the ink was warmed. A
      deep sienna at hue 40 is the same gesture in something paper can hold.
-     5.64:1 on the ground (needs 3:1); --primary-foreground on it, 6.14:1.
+     5.93:1 on the ground (needs 3:1); --primary-foreground on it, 6.14:1.
      `--gantt-critical` ALIASES this token (see :root), so the critical cap on
-     a gantt bar moved with it — re-measured at 4.76:1 on the worst state fill
-     and 5.80:1 on a milestone, both up from 3.72:1 and 4.52:1 under the
-     violet, because the sienna is a step darker as well as warmer. */
+     a gantt bar moved with it — re-measured at 4.94:1 on the worst state fill
+     (at-risk) and 6.01:1 on a milestone, both up from 3.72:1 and 4.52:1 under
+     the violet, because the sienna is a step darker as well as warmer. */
   --primary: oklch(0.5 0.15 40);
   --primary-foreground: oklch(0.985 0.005 40);
 
-  --secondary: oklch(0.93 0.012 82);
+  --secondary: oklch(0.947 0.012 82);
   --secondary-foreground: oklch(0.28 0.02 60);
 
-  --muted: oklch(0.93 0.012 82);
+  --muted: oklch(0.947 0.012 82);
   --muted-foreground: oklch(0.49 0.02 70);
 
   --accent: oklch(0.72 0.14 195);
@@ -1181,20 +1204,23 @@
   --ring: oklch(0.5 0.15 40);
 
   /* Canvas-specific tokens the future editor will consume.
-     A HALF-STEP WELL, not the house step. `diagram-well.tsx` describes the
-     recess as ΔL 0.010 under --background, and this theme shipped at exactly
-     that — but cream at L 0.945 reads as a deeper hole than the same step
-     does on the near-white grounds the figure was chosen against, and the
-     ground was reported as too dark to present on. ΔL 0.005 gives back what
-     there is to give: the ceiling is --background itself, since a well
-     LIGHTER than its chrome is not a recess at all, and `check:canvas-grid`
-     now fails on that inversion. The gap lands at 1.015:1 under the chrome,
-     against ~1.030:1 for the rest of the light family and 1.103:1 for dark
-     and blueprint. Every ratio measured on this ground is re-recorded in the
-     comments below; --canvas is also read by the SVG exporter, so a file
-     exported from this theme carries the lighter stock too. */
-  --canvas: oklch(0.95 0.015 88);
-  --canvas-grid: oklch(0.885 0.016 84);
+     THE HOUSE STEP AGAIN, ΔL 0.010 under --background exactly as
+     `diagram-well.tsx` describes it — and the road back to it is the story
+     worth keeping. The well was cut to a HALF step (ΔL 0.005) in an attempt
+     to answer "the ground is too dark", on the reasoning that --background is
+     a hard ceiling: a well LIGHTER than its chrome is not a recess at all,
+     and `check:canvas-grid` fails on that inversion. That was the wrong
+     lever twice over — ΔL 0.005 is under the threshold of noticing, and
+     shrinking the recess cannot lighten a theme, it can only flatten it. The
+     ground moved instead (see --background), so the recess could be given
+     back. The gap lands at 1.030:1 under the chrome, level with `light`
+     (1.030), `glass` (1.030) and `pastel` (1.033).
+     --canvas IS READ BY THE SVG EXPORTER, so a file exported from this theme
+     carries the lighter stock too — which is the point: an exported paper
+     diagram is the presentation artefact. Every ratio measured on this
+     ground is re-recorded in the comments below. */
+  --canvas: oklch(0.962 0.015 88);
+  --canvas-grid: oklch(0.897 0.016 84);
   /* THE SHEET IS THE MATERIAL, so it takes the material layer and NO dot field.
      A dot grid printed on top of fibre is two grounds arguing about which one
      is the page, and plain paper has no dots on it.
@@ -1208,16 +1234,18 @@
      across the tile edge and the reader sees a 120px grid — precisely the
      artefact this texture exists to avoid. `check:canvas-grid` asserts it.
      Mean alpha lands at 1.114:1 on this canvas (fractal noise averages half
-     its range), peaking at 1.234:1. */
+     its range), peaking at 1.258:1 — 21% and 23% of this theme's own ink,
+     under the 60% ceiling `check:canvas-grid` holds. */
   --canvas-rule-dot: transparent;
   --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0' result='grain'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
   --canvas-sheet-opacity: 0.22;
-  /* BELOW the canvas, not above it — the header's fault 2. A node is ink and
-     stock, so it takes the page's own hue at a shade under the page's
-     lightness (1.045:1 on --canvas): found by its rule rather than by glare. */
-  --node: oklch(0.965 0.012 86);
+  /* A node is ink and stock, so it takes the page's own hue a half-shade off
+     the page's lightness (1.045:1 on --canvas): found by its rule rather than
+     by glare. Moved with the ground — held at the same 1.045:1 rather than at
+     the same L, since the separation is what was tuned. */
+  --node: oklch(0.977 0.012 86);
   --node-foreground: oklch(0.26 0.021 60);
-  /* ≥3:1 against --node (measured 4.40:1) and against --canvas (4.21:1). The
+  /* ≥3:1 against --node (measured 4.56:1) and against --canvas (4.36:1). The
      rule does more work here than in any other theme, because the surface it
      bounds no longer separates itself by brightness. */
   --node-border: oklch(0.55 0.022 70);
@@ -1237,8 +1265,11 @@
      colour that MEANS something ("not ours") and therefore the only one
      kept deliberately quiet. RE-TUNED FOR THIS GROUND rather than inherited:
      the hues are the audited CVD-safe set and have not moved, but the fills
-     sit at L≈0.90 with 15% less chroma than the light theme's, because a fill
+     sit at L≈0.912 with 15% less chroma than the light theme's, because a fill
      mixed for a near-white blue-grey page reads as pastel plastic on cream.
+     They rode the ground's lightening up by the same ΔL 0.012 the well took,
+     which is what keeps them ~ΔL 0.065 under --node rather than sinking away
+     from a page that moved without them.
      Text on them switches to --node-meta above for the secondary lines.
      Ratios below are computed (oklch → sRGB → WCAG relative luminance) by
      the audit script kept with the palette job, and re-annotated whenever a
@@ -1250,32 +1281,32 @@
      flat-fill and wash-top rows on every pair, so wash-top stays the worst
      case). Thresholds: text ≥4.5:1, border and the border-tinted icon
      ≥3:1. */
-  /* name 11.49:1, meta 5.50:1, border 4.16:1 (wash-top: 9.71 / 4.65 / 3.52) */
-  --node-person: oklch(0.9 0.031 295);
+  /* name 11.93:1, meta 5.71:1, border 4.32:1 (wash-top: 10.05 / 4.81 / 3.64) */
+  --node-person: oklch(0.912 0.031 295);
   --node-person-border: oklch(0.53 0.16 295);
-  /* name 11.60:1, meta 5.55:1, border 4.09:1 (wash-top: 9.79 / 4.69 / 3.45) */
-  --node-internal: oklch(0.9 0.029 250);
+  /* name 12.04:1, meta 5.76:1, border 4.25:1 (wash-top: 10.13 / 4.85 / 3.57) */
+  --node-internal: oklch(0.912 0.029 250);
   --node-internal-border: oklch(0.52 0.13 250);
-  /* name 12.50:1, meta 5.98:1, border 3.90:1 (no wash — external stays matte) */
-  --node-external: oklch(0.925 0.014 84);
+  /* name 12.96:1, meta 6.20:1, border 4.05:1 (no wash — external stays matte) */
+  --node-external: oklch(0.937 0.014 84);
   --node-external-border: oklch(0.55 0.022 70);
-  /* name 11.77:1, meta 5.64:1, border 4.34:1 (wash-top: 9.88 / 4.73 / 3.65) */
-  --node-database: oklch(0.9 0.047 195);
+  /* name 12.22:1, meta 5.85:1, border 4.51:1 (wash-top: 10.22 / 4.89 / 3.77) */
+  --node-database: oklch(0.912 0.047 195);
   --node-database-border: oklch(0.5 0.084 195);
-  /* name 11.95:1, meta 5.72:1, border 4.01:1 (wash-top: 10.15 / 4.86 / 3.41) */
-  --node-queue: oklch(0.905 0.047 150);
+  /* name 12.40:1, meta 5.94:1, border 4.16:1 (wash-top: 10.50 / 5.03 / 3.52) */
+  --node-queue: oklch(0.917 0.047 150);
   --node-queue-border: oklch(0.52 0.11 150);
 
   /* Flowchart shape colours (the light block carries the design notes; the
      start/step/io/call aliases live once in :root and resolve to THIS
-     theme's role tokens on their own). Re-tuned onto the same L 0.90 band as
+     theme's role tokens on their own). Re-tuned onto the same L 0.912 band as
      the role fills above and by the same −15% chroma, so a flowchart and a C4
      diagram are printed on one stock; the two hues are unmoved. */
-  /* name 11.42:1, meta 5.46:1, border 4.20:1 (wash-top: 9.58 / 4.59 / 3.53) */
-  --flow-end: oklch(0.9 0.034 345);
+  /* name 11.85:1, meta 5.67:1, border 4.36:1 (wash-top: 9.91 / 4.75 / 3.65) */
+  --flow-end: oklch(0.912 0.034 345);
   --flow-end-border: oklch(0.53 0.15 345);
-  /* name 11.56:1, meta 5.53:1, border 4.13:1 (wash-top: 9.81 / 4.70 / 3.51) */
-  --flow-decision: oklch(0.9 0.051 85);
+  /* name 12.00:1, meta 5.74:1, border 4.29:1 (wash-top: 10.15 / 4.86 / 3.63) */
+  --flow-decision: oklch(0.912 0.051 85);
   --flow-decision-border: oklch(0.52 0.095 80);
 
   /* tagColors fills are REBUILT from the author's colour rather than mixed:
@@ -1284,17 +1315,21 @@
      rationale). These two pins are what guarantee a tag fill lands on the
      same measured lightness band as the role fills above, whatever hex the
      author typed.
-     THESE TWO DID NOT FOLLOW THE ROLE FILLS DOWN TO L 0.90, and that is
-     measured rather than an oversight: a tag fill is built under an AUTHORED
-     hex — the curated `NODE_TAG_PALETTE` strokes are five fixed colours shared
-     by all eight themes, so unlike a role border they cannot be re-tuned per
-     ground. At L 0.90 the constructed fill takes four of the five under the
-     3:1 stroke minimum (amber 2.85:1, plum 2.89:1, rose 2.90:1, orange 2.91:1;
-     `check:canvas-edit` measures every one). 0.93 is still a shade under this
-     theme's own canvas, so a tagged node is printed on the sheet like every
-     other node — it simply sits at the top of the band rather than with the
-     role fills. */
-  --tag-fill-l: 0.93;
+     THESE TWO STILL DO NOT FOLLOW THE ROLE FILLS DOWN, and that is measured
+     rather than an oversight: a tag fill is built under an AUTHORED hex — the
+     curated `NODE_TAG_PALETTE` strokes are five fixed colours shared by all
+     eight themes, so unlike a role border they cannot be re-tuned per ground.
+     A lighter ground does not buy this back, because the binding constraint is
+     the fill against a FIXED stroke, not the fill against the page: at the
+     role band's L 0.912 three of the five fall under the 3:1 stroke minimum
+     (amber 2.95:1, brick 2.98:1, plum 2.99:1) and the other two only just
+     clear it (orange 3.01:1, rose 3.00:1). Re-measured at the band this pass
+     puts them on: brick 3.19:1, orange 3.22:1, amber 3.24:1, plum 3.27:1,
+     rose 3.23:1 — `check:canvas-edit` measures every one. 0.942 is still a
+     shade under this theme's own canvas, so a tagged node is printed on the
+     sheet like every other node — it simply sits at the top of the band
+     rather than with the role fills. */
+  --tag-fill-l: 0.942;
   --tag-fill-c: 0.055;
 
   /* THE INK. Hue 65, not the 265 this theme inherited from `light` for its
@@ -1302,7 +1337,8 @@
      token, so a blue-grey edge made the whole warm palette a filter over a
      cool one (the header's fault 1). Deepened at the same time: 3.46:1 on the
      ground was under the 3:1 line for anything smaller than a hairline and is
-     5.29:1 now, 5.21:1 on the canvas and 5.45:1 on a node. */
+     5.56:1 now, 5.40:1 on the canvas and 5.65:1 on a node — the ink did not
+     move when the stock was lightened, so all three rose with the ground. */
   --edge: oklch(0.5 0.026 65);
   /* The resting drift that rides ON TOP of a connector. A real token, not an
      inline color-mix, because the animated GIF export has to resolve the exact
