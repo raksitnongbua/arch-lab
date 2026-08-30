@@ -118,7 +118,48 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
-const { LIFECYCLE } = await load("src/features/lifecycle/lib/layout.ts");
+const { LIFECYCLE, layoutLifecycle } = await load(
+  "src/features/lifecycle/lib/layout.ts",
+);
+const { SWEEP_HEAD_MAX, SWEEP_HEAD_SHARE, sweepHead } = await load(
+  "src/lib/sweep-head.ts",
+);
+const { parseLifecycleText } = await load("src/features/archtext/index.ts");
+const { LIFECYCLE_EXAMPLE } = await load(
+  "src/features/lifecycle/input/example.ts",
+);
+const { listLifecycleExampleIds, loadLifecycleExample } = await load(
+  "src/features/lifecycle/service/example-service.ts",
+);
+const { VIEW_STARTER_TEXT } = await load(
+  "src/features/playground/input/parse.ts",
+);
+
+/* EVERY SPINE THIS REPO CAN PRODUCE A LENGTH FOR, plus the smallest document
+   the grammar accepts. The bundled ones come from the REGISTRY so a third
+   example is covered the day it lands; the two-state document is written out
+   because no registry will hold the minimum on purpose, and the minimum is
+   where a flat head stops fitting. */
+const spineOf = (file) => {
+  const laid = layoutLifecycle(file);
+  return Math.max(1, laid.spineY1 - laid.spineY0);
+};
+const SPINES = [
+  ["seed", spineOf(parseLifecycleText(LIFECYCLE_EXAMPLE))],
+  ...listLifecycleExampleIds()
+    .map((id) => [id, loadLifecycleExample(id)])
+    .filter(([, example]) => example.status === "ok")
+    .map(([id, example]) => [id, spineOf(example.file)]),
+  ["starter", spineOf(parseLifecycleText(VIEW_STARTER_TEXT.lifecycle))],
+  [
+    "the smallest lifecycle there is",
+    spineOf(
+      parseLifecycleText(
+        `archlab 1.0 lifecycle\ntitle "T"\n\n@lifecycle\n  subject "S"\n  state a "A"\n  state b "B" ends\n`,
+      ),
+    ),
+  ],
+];
 const { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } = await load(
   "src/features/lifecycle/lib/motion.ts",
 );
@@ -680,9 +721,9 @@ console.log("the connector motion says something (it is not decoration)");
     (match) => match[1],
   );
   check(
-    `the canvas declares exactly the five keyframes its four motions need (${keyframes.join(", ")})`,
-    keyframes.length === 5,
-    "entrance rise, draw (shared by the spine and the returns), the arrowhead's arrival, march (shared by the ambient drift and the focus dash) and focus breathe — a sixth needs an argument in the stylesheet header",
+    `the canvas declares exactly the six keyframes its four motions need (${keyframes.join(", ")})`,
+    keyframes.length === 6,
+    "entrance rise, draw (shared by the spine and the returns), the arrowhead's arrival, the spine's wash, march (shared by a terminal branch's drift and the focus dash) and focus breathe — a seventh needs an argument in the stylesheet header",
   );
 
   /* THE ARROWHEAD DOES NOT ARRIVE BEFORE ITS LINE. It shipped doing exactly
@@ -701,130 +742,112 @@ console.log("the connector motion says something (it is not decoration)");
 }
 
 /* ----------------------------------------------------------------------- */
-console.log("the ambient drift cannot be sized wrong");
+console.log("the marching dash cannot be sized wrong");
 
-/* WHAT THE DEFECT WAS, AND WHY IT CANNOT BE WRITTEN HERE AGAIN. The ambient
-   used to be a single lit head washing down the spine, sized against the
-   spine: `head` and `calc(spine-len - head)`. On any diagram shorter than the
-   head that gap is NEGATIVE, and a negative value does not clamp — it
-   invalidates the whole `stroke-dasharray`, which is dropped, and the ambient
-   painted the line SOLID and pulsed it on and off for ever. The smallest
-   lifecycle the grammar accepts measures 49.9 units against a head of 90.
+/* WHAT THE DEFECT WAS. The march used to ride the SPINE, and before that the
+   spine carried a lit head sized against its own length: `head` and
+   `calc(spine-len - head)`. On a diagram shorter than the head that gap is
+   NEGATIVE, and a negative value does not clamp — it invalidates the whole
+   `stroke-dasharray`, which is dropped, and the line paints solid. The spine
+   washes again now and `@/lib/sweep-head` caps its head, which is measured
+   below; the march moved to the terminal branches, where it repeats a pattern
+   of TWO CONSTANTS and cannot express that bug at all.
 
-   The march that replaced it repeats a pattern of TWO CONSTANTS, so it does
-   not know how long the line is and the arithmetic that produced the bug has
-   nowhere to live. That is a property worth pinning rather than trusting: a
-   later hand reaching for `--lc-spine-len` to make the dashes "fit" would be
-   walking straight back into it, so the assertion is that neither dash length
-   mentions the spine at all.
-
-   THE TIMELINE STILL WASHES, and `check:timeline-motion` still measures its
-   head against every document it ships. The two canvases move differently on
-   purpose; the checks say so rather than one silently covering both. */
+   THAT IS A PROPERTY WORTH PINNING rather than trusting: a later hand reaching
+   for `--lc-spine-len` to make a branch's dashes "fit" would be walking back
+   into it. */
 {
-  /* FOUND IN `RULES`, NOT WITH `ruleBody`. That helper compares the selector
-     verbatim, and this one is long enough that the formatter wraps it across
-     two lines — so it would answer "" and every assertion under it would pass
-     on an empty string. `RULES` normalises the whitespace first. The first run
-     of this section did exactly that and reported "no rule at all". */
-  const drift =
-    RULES.find(
-      ([selector]) =>
-        selector.includes(".af-lc-sweep") && selector.includes("data-idle"),
-    )?.[1] ?? "";
+  const march = RULES.find(
+    ([selector]) =>
+      selector.includes(".af-lc-stub-ends") && selector.includes("data-idle"),
+  )?.[1];
   check(
-    "the ambient marches a repeating pattern, not a head sized to the spine",
-    /stroke-dasharray:\s*var\(--lc-march-dash\)\s*var\(--lc-march-gap\)/.test(
-      drift,
-    ),
-    `${drift || "no rule at all"} — a one-dash pattern is a head, and a head has to be measured against the line`,
-  );
-  check(
-    "and neither of its lengths is derived from the spine",
-    !/--lc-spine-len/.test(drift) &&
-      !/--lc-drift-dash:\s*[^;]*--lc-spine-len/.test(withoutComments) &&
-      !/--lc-drift-gap:\s*[^;]*--lc-spine-len/.test(withoutComments),
-    "sizing a repeating dash against the line reintroduces the negative gap that painted the ambient solid",
+    "a terminal branch marches a repeating pattern, not a head sized to a line",
+    march !== undefined && !/--lc-spine-len/.test(march),
+    `${march ?? "no rule at all"} — sizing a repeating dash against a line reintroduces the negative gap that paints it solid`,
   );
 
-  /* THE AMBIENT STAYS THE QUIETER OF THE TWO MARCHES. They are one motion now,
-     which is what makes this worth asserting: the focus dash means "the
-     subject comes back HERE", and it can only mean that while the thing
-     running at rest is visibly sparser and slower. Read from the stylesheet's
-     own properties, so retuning either changes what this enforces. */
-  /* UNITS STRIPPED, and the units are the point rather than noise. These are
-     `px` because `calc()` over unitless numbers has type `<number>`, which
-     cannot stand where a `<length>` is required — see the note above the
-     keyframe. Reading them with a bare `Number()` returned NaN and failed the
-     two assertions below, which is how the change announced itself. */
+  /* THE DRIFT STAYS THE QUIETER OF THE TWO MARCHES. They are one keyframe now,
+     which is what makes this worth asserting: the focus dash means "the subject
+     comes back HERE", and it can only mean that while the thing running unasked
+     is visibly sparser and slower. */
   const length = (name) => Number.parseFloat(rootProp(name));
-  const driftDash = length("lc-drift-dash");
-  const driftGap = length("lc-drift-gap");
+  const exitDash = length("lc-exit-dash");
+  const exitGap = length("lc-exit-gap");
   const travelDash = length("lc-travel-dash");
   const travelGap = length("lc-travel-gap");
-  const driftDuty = driftDash / (driftDash + driftGap);
+  const exitDuty = exitDash / (exitDash + exitGap);
   const travelDuty = travelDash / (travelDash + travelGap);
-  const driftSpeed = (driftDash + driftGap) / ms("lc-drift");
+  const exitSpeed = (exitDash + exitGap) / ms("lc-exit-travel");
   const travelSpeed = (travelDash + travelGap) / ms("lc-travel");
   check(
-    `the ambient is sparser than the focus dash (${(driftDuty * 100).toFixed(0)}% against ${(travelDuty * 100).toFixed(0)}%)`,
-    driftDuty < travelDuty,
+    `a way out is sparser than the focus dash (${(exitDuty * 100).toFixed(0)}% against ${(travelDuty * 100).toFixed(0)}%)`,
+    exitDuty < travelDuty,
     "two marches at the same density are one mark, and lighting a branch then says nothing",
   );
   check(
-    `and slower (${driftSpeed.toFixed(3)} against ${travelSpeed.toFixed(3)} units/ms)`,
-    driftSpeed < travelSpeed,
-    "an ambient that keeps pace with the motion a reader asked for competes with it",
+    `and slower (${exitSpeed.toFixed(3)} against ${travelSpeed.toFixed(3)} units/ms)`,
+    exitSpeed < travelSpeed,
+    "a mark that runs unasked and keeps pace with the one a reader asked for competes with it",
   );
 
-  /* AND BOTH ARE FAST ENOUGH TO BE SEEN. This is the constraint that was
-     missing, and its absence is what let the ordering above drive the ambient
-     into the ground: "slower than the focus dash" was satisfiable all the way
-     down, so it was satisfied at 8.6 units per second against a
-     motion-detection threshold of roughly 3–7. Technically travelling,
-     practically static — reported as the lifecycle's line being broken next to
-     the timeline's, which runs at 156.
-
-     `codebase.md` names this shape exactly: a rule stricter than the product
-     needs will cause defects of its own, and a rule that says what to DO
-     survives no case its author did not imagine. The ordering says what to do;
-     this says what to CHECK, and the pair is what makes the ordering safe.
-
-     THE FLOOR IS 15 UNITS PER SECOND, comfortably clear of the threshold band
-     rather than sitting on its edge — a value inside 3–7 would be arguing
-     about perception, and the point is to be past arguing. */
+  /* AND BOTH ARE FAST ENOUGH TO BE SEEN. The ordering above was satisfiable all
+     the way down and was once satisfied at 8.6 units per second, against a
+     motion-detection threshold of roughly 3–7. `codebase.md` names the shape: a
+     rule that says what to DO survives no case its author did not imagine. The
+     floor is what makes the ordering safe. */
   const PERCEPTIBLE = 15 / 1000;
   const tooSlow = [
-    ["the ambient drift", driftSpeed],
+    ["a way out's drift", exitSpeed],
     ["the focus dash", travelSpeed],
   ].filter(([, speed]) => speed < PERCEPTIBLE);
   check(
-    `both marches are perceptibly moving (${(driftSpeed * 1000).toFixed(1)} and ${(travelSpeed * 1000).toFixed(1)} units/s, floor ${PERCEPTIBLE * 1000})`,
+    `both marches are perceptibly moving (${(exitSpeed * 1000).toFixed(1)} and ${(travelSpeed * 1000).toFixed(1)} units/s, floor ${PERCEPTIBLE * 1000})`,
     tooSlow.length === 0,
-    `${tooSlow.map(([name, speed]) => `${name} at ${(speed * 1000).toFixed(1)}`).join(", ")} — at that rate the pattern reads as a static dashed line, which is a decoration rather than an answer to "which way does time run"`,
+    `${tooSlow.map(([name, speed]) => `${name} at ${(speed * 1000).toFixed(1)}`).join(", ")} — at that rate a pattern reads as a static dashed line`,
   );
 
-  /* NO KEYFRAME ANIMATES A LENGTH TO A UNITLESS `calc()`, and this is the
-     assertion that would have caught a dashed line which never moved.
+  /* THE SPINE WASHES, AND ITS HEAD FITS. Same shape as the timeline's, same
+     hazard: a flat head longer than the spine is a negative gap. */
+  const cssHead = Number(rootProp("lc-sweep-head"));
+  check(
+    `the stylesheet's declared head is SWEEP_HEAD_MAX (${SWEEP_HEAD_MAX})`,
+    cssHead === SWEEP_HEAD_MAX,
+    `${cssHead} in CSS, ${SWEEP_HEAD_MAX} in @/lib/sweep-head — CSS cannot import TypeScript, so the pair is pinned here`,
+  );
+  check(
+    "the component stamps the head, so the cap reaches the diagram at all",
+    /--lc-sweep-head/.test(diagram) && /sweepHead\(/.test(diagram),
+    "the stylesheet default would stand alone again, which is the flat number that shipped",
+  );
+  const tooLong = SPINES.filter(([, spineLength]) => {
+    const head = sweepHead(spineLength);
+    return head >= spineLength || head > spineLength * SWEEP_HEAD_SHARE + 0.001;
+  });
+  check(
+    `every spine is longer than its own head (${SPINES.length} documents, shortest ${Math.min(...SPINES.map(([, l]) => l)).toFixed(1)})`,
+    tooLong.length === 0,
+    `${tooLong.map(([name, l]) => `${name}: head ${sweepHead(l).toFixed(1)} on a spine of ${l.toFixed(1)}`).join("; ")} — a gap of zero or less invalidates the dasharray and the wash becomes a solid line`,
+  );
 
-     WHAT HAPPENED. `af-lc-march` animates `stroke-dashoffset` to
-     `calc((var(--lc-march-dash) + var(--lc-march-gap)) * -1)`. With the two
-     lengths unitless that calc has type `<number>` — and SVG's bare-number
-     allowance covers a literal TOKEN, not a calc RESULT, so the declaration was
-     invalid and the browser dropped it. `stroke-dasharray` accepts `<number>`
-     outright, so the dashes rendered and simply sat there. Nothing errored,
-     nothing logged, and every assertion in this file passed: the rule existed,
-     the keyframe existed, the speeds computed. Reported as three dots on the
-     spine.
+  /* NO KEYFRAME ANIMATES A LENGTH TO A UNITLESS `calc()`. This is the guard
+     that caught a dashed line which rendered and never moved, and it was
+     deleted by accident one commit later when this section was rewritten around
+     the wash — the unused imports it left behind are the only reason that was
+     noticed. Restored, and worth the second telling:
 
-     EVERY OTHER CANVAS ESCAPED BY ACCIDENT rather than by knowing — the
-     timeline animates to a plain `var()`, the gantt, ER and sequence to
-     literals. This one is the only keyframe in the repo that does arithmetic,
-     which is why it is the only one that was inert.
+     `af-lc-march` animates `stroke-dashoffset` to a calc over two lengths. With
+     those unitless the calc has type `<number>`, and SVG's bare-number
+     allowance covers a literal TOKEN rather than a calc RESULT — so the
+     declaration is invalid where a `<length>` is wanted and the browser drops
+     it. `stroke-dasharray` accepts `<number>` outright, so the dashes render and
+     simply sit there. Nothing errors, nothing logs, and every other assertion
+     in this file passes.
 
-     SWEPT OVER EVERY CANVAS, not just this one, because the hazard is the
-     shape and not the file: the next keyframe anyone writes with a calc in it
-     is the next silently dead animation. */
+     SWEPT OVER EVERY CANVAS, because the hazard is the shape and not the file.
+     The timeline animates to a plain `var()` and the gantt, ER and sequence to
+     literals; this is the only keyframe in the repo that does arithmetic, which
+     is why it is the only one that was ever inert. */
   {
     const LENGTHS = /stroke-dash(offset|array)/;
     const dead = [];
@@ -843,37 +866,30 @@ console.log("the ambient drift cannot be sized wrong");
       )) {
         for (const line of block[2].split("\n")) {
           if (!LENGTHS.test(line) || !/calc\(/.test(line)) continue;
-          /* A calc is only safe here if SOMETHING in it carries a unit. */
-          if (
-            !/\d(px|em|rem|%)/.test(line) &&
-            !/var\([^)]*\)\s*\*\s*1(px|em)/.test(line)
-          ) {
-            const cited = [...line.matchAll(/var\((--[\w-]+)\)/g)].map(
-              (m) => m[1],
+          if (/\d(px|em|rem|%)/.test(line)) continue;
+          const cited = [...line.matchAll(/var\((--[\w-]+)\)/g)].map(
+            (match) => match[1],
+          );
+          /* THE `var()` CHAIN IS FOLLOWED TO ITS LITERAL. One level was not
+             enough: `--lc-march-dash` is declared as `var(--lc-exit-dash)`, so
+             a check stopping at the first hop saw an alias rather than a
+             number and called the real defect clean. */
+          const literal = (name, depth = 0) => {
+            if (depth > 6) return null;
+            const declared = new RegExp(`${name}:\\s*([^;]+);`).exec(text);
+            if (declared === null) return null;
+            const value = declared[1].trim();
+            const alias = /^var\((--[\w-]+)\)$/.exec(value);
+            return alias === null ? value : literal(alias[1], depth + 1);
+          };
+          const unitless = cited.filter((name) => {
+            const value = literal(name);
+            return value !== null && /^[\d.]+$/.test(value);
+          });
+          if (cited.length === 0 || unitless.length > 0) {
+            dead.push(
+              `${feature}/@keyframes ${block[1]}: ${line.trim()}${unitless.length > 0 ? ` (${unitless.join(", ")} unitless)` : ""}`,
             );
-            /* THE `var()` CHAIN IS FOLLOWED TO ITS LITERAL. One level was not
-               enough and the first version stopped there — `--lc-march-dash` is
-               declared as `var(--lc-drift-dash)`, which is not a number, so the
-               real defect was reported as clean while a probe written directly
-               against a numeric token failed. An alias is exactly how the value
-               reaches this keyframe. */
-            const literal = (name, depth = 0) => {
-              if (depth > 6) return null;
-              const declared = new RegExp(`${name}:\\s*([^;]+);`).exec(text);
-              if (declared === null) return null;
-              const value = declared[1].trim();
-              const alias = /^var\((--[\w-]+)\)$/.exec(value);
-              return alias === null ? value : literal(alias[1], depth + 1);
-            };
-            const unitless = cited.filter((name) => {
-              const value = literal(name);
-              return value !== null && /^[\d.]+$/.test(value);
-            });
-            if (cited.length === 0 || unitless.length > 0) {
-              dead.push(
-                `${feature}/@keyframes ${block[1]}: ${line.trim()}${unitless.length > 0 ? ` (${unitless.join(", ")} unitless)` : ""}`,
-              );
-            }
           }
         }
       }
@@ -885,30 +901,14 @@ console.log("the ambient drift cannot be sized wrong");
     );
   }
 
-  /* THE WAYS OUT ARE BROKEN LINES, AT REST. A terminal branch is the one
-     connector the subject does not come back along, and the only mark saying so
-     was a bar at its far end — read after the eye has already followed the
-     line. The dash says it first, and it is declared OUTSIDE the media query so
-     a reader with motion off and a downloaded file both keep it: this is a
-     distinction, not an animation, and only its travel is the latter. */
+  /* THE WAYS OUT ARE BROKEN LINES, AT REST — declared outside the media query,
+     so a reader with motion off and a downloaded file both keep it. This is a
+     distinction; only its travel is an animation. */
   const ends = ruleBody(css, ".af-lc-stub-ends");
   check(
     "a terminal branch is dashed even when nothing is moving",
     /stroke-dasharray:/.test(ends),
     `${ends || "no rule at all"} — with motion off the only thing distinguishing a way out from a way back is an eight-unit bar at the far end of it`,
-  );
-
-  /* AND ITS TRAVEL IS THE AMBIENT'S, not a second one. One gesture in two
-     places at one speed and one pattern, which is what keeps the header's
-     objection to two competing ambients answered rather than ignored. */
-  const endsMarch = RULES.find(
-    ([selector]) =>
-      selector.includes(".af-lc-stub-ends") && selector.includes("data-idle"),
-  )?.[1];
-  check(
-    "and it drifts on the same clock as the track, not a clock of its own",
-    endsMarch !== undefined && /var\(--lc-drift\)/.test(endsMarch),
-    `${endsMarch ?? "no rule at all"} — a second speed makes it a second ambient, and two ambients is how one stops meaning anything`,
   );
 }
 

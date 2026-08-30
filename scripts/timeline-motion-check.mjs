@@ -106,7 +106,7 @@ const { TIMELINE, layoutTimeline } = await load(
   "src/features/timeline/lib/layout.ts",
 );
 const { SWEEP_HEAD_MAX, SWEEP_HEAD_SHARE, sweepHead } = await load(
-  "src/features/timeline/lib/sweep-head.ts",
+  "src/lib/sweep-head.ts",
 );
 const { parseTimelineText } = await load("src/features/archtext/index.ts");
 const { TIMELINE_EXAMPLE } = await load(

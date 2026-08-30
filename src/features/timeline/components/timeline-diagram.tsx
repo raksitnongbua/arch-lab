@@ -57,7 +57,7 @@ import {
   TIMELINE,
   layoutTimeline,
 } from "../lib/layout";
-import { sweepHead } from "../lib/sweep-head";
+import { sweepHead } from "@/lib/sweep-head";
 import type { LaidTimelineEvent, TimelineLayout } from "../lib/layout";
 import { keyActivate } from "@/lib/key-activate";
 

@@ -1,14 +1,14 @@
 /**
  * How long the lit head of an ambient sweep is, given the line it travels.
  *
- * THE TIMELINE'S ALONE, and it lived in `src/lib` for exactly one commit. The
- * lifecycle drew the same washing head down its own spine and had the same
- * defect in it, so the fix was shared; then the lifecycle's ambient became
- * marching dashes, whose pattern is two constants and needs no cap at all.
- * `dry.md` is plain that code used inside one feature stays in that feature,
- * and a shared module with one consumer is a claim about coupling that is no
- * longer true. Should the timeline's wash ever become a march too, this file
- * does not move back — it goes away.
+ * SHARED BY THE TIMELINE AND THE LIFECYCLE, and it has been in three places
+ * now — which is worth recording rather than tidying away. It started here for
+ * both; it moved into the timeline when the lifecycle's ambient became marching
+ * dashes and stopped needing a head; it is back because the marching dashes
+ * turned out to belong on the branches rather than on the track, and the
+ * lifecycle's spine washes again like its neighbour. `dry.md`'s rule is about
+ * how many callers a module HAS, not how many it looked like it would have, so
+ * the file follows the callers rather than a prediction about them.
  *
  * The stylesheet held a flat `--tl-sweep-head: 90` and paired it with
  * `calc(spine-len - 90)` as the gap.
@@ -47,8 +47,9 @@
  * solid line, and that is the exact failure being fixed here. The components
  * already stamp the spine's solved length; the head is arithmetic on the same
  * number. Both stylesheets keep the flat value as their declared default, and
- * `check:timeline-motion` pins it to `SWEEP_HEAD_MAX` and measures the result
- * over every bundled document plus the grammar's minimum.
+ * `check:timeline-motion` and `check:lifecycle-motion` pin it to
+ * `SWEEP_HEAD_MAX` and measure the result over every bundled document plus the
+ * grammar's minimum.
  */
 
 /** The head's length in user units on any spine long enough to carry it. */

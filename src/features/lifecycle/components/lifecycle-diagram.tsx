@@ -54,6 +54,7 @@
 
 import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
 import { DiagramSurface } from "@/components/ui/diagram-surface";
+import { sweepHead } from "@/lib/sweep-head";
 import type { LifecycleLabFile } from "@/types";
 
 import {
@@ -208,11 +209,18 @@ export function LifecycleDiagram({
         x2={layout.spineX}
         y1={layout.spineY0}
         y2={layout.spineY1}
-        /* ONLY THE LENGTH, and only for the resting zero-length dash. The
-           ambient marches a REPEATING pattern of two constants, so unlike the
-           washing head it replaced it needs to know nothing about how long the
-           spine is — which is why no short-diagram cap is stamped here. */
-        style={{ "--lc-spine-len": spineLength } as React.CSSProperties}
+        style={
+          {
+            "--lc-spine-len": spineLength,
+            /* THE HEAD, capped to a share of the line it travels. A flat 90
+               against a shorter spine puts a NEGATIVE number in the dasharray's
+               gap, which invalidates the whole declaration and paints the wash
+               as a solid line — see `@/lib/sweep-head`. The terminal branches
+               need no equivalent: their pattern is two constants and knows
+               nothing about the length of what it rides. */
+            "--lc-sweep-head": sweepHead(spineLength),
+          } as React.CSSProperties
+        }
       />
 
       {layout.states.map((state, index) => (
