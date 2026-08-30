@@ -19,6 +19,49 @@ export function encodeInlineBreaks(text: string): string {
   return text.replace(/\r\n|\r|\n/g, "<br/>");
 }
 
+/**
+ * A label rewritten so a separator-delimited Mermaid dialect cannot re-split
+ * it, then encoded for output.
+ *
+ * SHARED BY THE `timeline` AND `gantt` EMITTERS, and shared rather than copied
+ * because the second copy is where the two would drift: both dialects put
+ * structure on a bare character with no escape — `:` separates a timeline's
+ * period from its events and a gantt's task text from its metadata — so both
+ * need the identical rewrite, and a fix applied to one copy only would leave
+ * the other silently emitting a row that re-parses as two.
+ *
+ * Runs of separators COLLAPSE and the result is TRIMMED, which is the part
+ * that is about correctness rather than tidiness: `":: x"` must not export as
+ * a row that opens with the separator, because in both dialects a leading
+ * separator means something structural (a timeline continuation row, a gantt
+ * task with no text) and the row would change which thing it belongs to. That
+ * is the one way this substitution could alter the diagram rather than only
+ * its wording, so it is closed here.
+ *
+ * A label made ENTIRELY of separators collapses to nothing and falls back to
+ * `emptied` for the same reason. A visible placeholder is worse than the
+ * original label and better than a row that reparents itself — the trade every
+ * substitution in this pair makes, and each caller's export caveat names it.
+ *
+ * `separator` is a plain string, not a pattern: both dialects' separators are
+ * single literal characters, and a regex here would invite a caller to pass
+ * one whose metacharacters silently changed what collapses.
+ */
+export function mermaidSeparatorFreeLabel(
+  text: string,
+  separator: string,
+  emptied: string,
+): string {
+  const withoutSeparators = text
+    .split(separator)
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .join(" - ");
+  return withoutSeparators === ""
+    ? emptied
+    : encodeInlineBreaks(withoutSeparators);
+}
+
 /** Escapes text for a double-quoted Mermaid string argument. */
 export function escapeMermaidString(text: string): string {
   return encodeInlineBreaks(text.replace(/\\/g, "\\\\").replace(/"/g, '\\"'));

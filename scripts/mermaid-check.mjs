@@ -38,16 +38,19 @@
  *      Mermaid → `.alab` round-trips all three edge kinds; and
  *      flowchart-flavoured constructs fail the use-case reading with a
  *      located error that names the flowchart importer as the way out.
- *   9. The gantt dialect, which is the only ONE-WAY conversion here: there is
- *      no emit path and none may appear (an emit would downgrade `at-risk` to
- *      `active` and restate arch-lab's COMPUTED critical path as Mermaid's
- *      hand-typed `crit`); every keyword in the refusal table really refuses,
- *      by name and at a located line, walked FROM the table so a ninth entry
- *      cannot be added without a refusal behind it; `crit` is DROPPED rather
- *      than refused, leaving no trace in the model and named in the caveat;
- *      an imported chart serializes to `.alab` text that parses back to the
- *      same model, which is the join with `check:gantt`; and no dialect
- *      steals another's document in either direction.
+ *   9. The gantt dialect, TWO-WAY for calendar plans and refusing relative
+ *      ones by name: the emit path exists and is reachable; `at-risk`
+ *      survives a Mermaid round trip as `at-risk` (it travels as `crit`,
+ *      which is an authored alarm on both sides and never arch-lab's COMPUTED
+ *      critical path); `crit, done` imports as `done` with the caveat naming
+ *      the drop; second-generation output is byte-identical; `.alab` → emit →
+ *      import loses only the normalisations the caveat lists; an origin-less
+ *      plan throws with `starts` in the message; every keyword in the refusal
+ *      table really refuses, by name and at a located line, walked FROM the
+ *      table so a tenth entry cannot be added without a refusal behind it; an
+ *      imported chart serializes to `.alab` text that parses back to the same
+ *      model, which is the join with `check:gantt`; and no dialect steals
+ *      another's document in either direction.
  *
  * Exits non-zero on any failure. Run with: pnpm check:mermaid
  */
@@ -103,8 +106,10 @@ const {
   detectMermaidEr,
   parseMermaidSequence,
   parseMermaidGantt,
+  serializeMermaidGantt,
   detectMermaidGantt,
   MERMAID_GANTT_CAVEAT,
+  MERMAID_GANTT_EXPORT_CAVEAT,
   parseMermaidTimeline,
   serializeMermaidTimeline,
   detectMermaidTimeline,
@@ -137,11 +142,15 @@ const { REFUSED_TIMELINE_CONSTRUCTS } = await import(
     .href
 );
 
-const { DROPPED_GANTT_KEYWORDS, GANTT_CRIT_TAG, REFUSED_GANTT_KEYWORDS } =
-  await import(
-    pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/gantt-mapping.ts"))
-      .href
-  );
+const {
+  DROPPED_GANTT_KEYWORDS,
+  GANTT_STATE_BY_TAG,
+  GANTT_TAG_BY_STATE,
+  REFUSED_GANTT_KEYWORDS,
+} = await import(
+  pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/gantt-mapping.ts"))
+    .href
+);
 const { validateArchLabFile } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/validate.ts")).href
 );
@@ -1751,42 +1760,47 @@ for (const [what, source, pattern] of [
 /* ----------------------------------------------------------------------- */
 
 /*
- * The gantt dialect is the only one here whose conversion is ONE-WAY, and
- * that asymmetry is what this section exists to hold in place. Every other
- * dialect has a `*-emit.ts` beside its reader; this one must not grow one,
- * because two things a gantt says have no Mermaid spelling:
+ * The gantt dialect converts BOTH WAYS — for calendar plans. It is the only
+ * dialect here with a document it refuses to emit, and holding both halves of
+ * that in place is what this section is for.
  *
- *   - `at-risk`. Mermaid's vocabulary is `done` / `active` / `crit`, and an
- *     emit would write the amber bar out as `active` and tell nobody.
- *   - THE CRITICAL PATH, which arch-lab COMPUTES from the float pass and
- *     Mermaid DECORATES by hand. Emitting our derived chain as `crit` turns
- *     an arithmetic result into a typed claim the next editor can falsify;
- *     emitting nothing drops the one line of the plan that matters most.
+ * The old argument this replaces said `at-risk` had no Mermaid spelling and
+ * the critical path could not be written. Half of it was wrong and half of it
+ * survives, and the half that survives is the one most likely to be "tidied"
+ * away by a future reader who sees an obvious gap in the export:
  *
- * The unit layer (`src/features/mermaid/lib/gantt.test.ts`, 40 cases)
- * already covers the mapping field by field. What is asserted HERE is what
- * only the integration layer can see, and each clause names the failure it
- * prevents:
+ *   - `at-risk` ⇄ `crit`, BOTH DIRECTIONS. Mermaid's `crit` is a hand-typed
+ *     decoration and arch-lab's `at-risk` is a hand-typed alarm; they say the
+ *     same thing about the same bar. What was actually unrepresentable was
+ *     never the tag.
+ *   - THE COMPUTED CRITICAL PATH IS STILL NEVER WRITTEN. arch-lab derives it
+ *     from the float pass; Mermaid has no slot for a derived path, and `crit`
+ *     is spent on the state above. A derived chain emitted as `crit` would be
+ *     indistinguishable on re-import from one somebody claimed, which breaks
+ *     the round trip on exactly the field the two-way conversion exists to
+ *     preserve — so clause 6 pins the silence.
  *
- *   1. THERE IS NO EMIT PATH — no `gantt-emit.ts` on disk, and nothing
- *      named `serialize*`/`emit*` reachable from the gantt modules or the
- *      feature barrel. The unit test asserts this too; it is repeated here
- *      because the failure is not a wrong value in one function, it is a
- *      file somebody adds six months from now to close a menu gap, and the
- *      first thing it would ship is a silent downgrade of `at-risk` and a
- *      misrepresented critical path.
+ * The unit layer (`src/features/mermaid/lib/gantt.test.ts`) already covers
+ * the mapping field by field. What is asserted HERE is what only the
+ * integration layer can see, and each clause names the failure it prevents:
+ *
+ *   1. THE EMIT PATH EXISTS AND IS REACHABLE — `gantt-emit.ts` on disk and
+ *      `serializeMermaidGantt` a function on the feature barrel. The mirror
+ *      of the clause this used to be, and asserted from the other side for
+ *      the same reason: a menu gap closed by DELETING the emitter would be as
+ *      silent a change as the one that added it.
  *   2. THE REFUSALS ARE DRIVEN FROM THE MAPPING TABLE, not from a list typed
  *      here. `REFUSED_GANTT_KEYWORDS` is walked, and each entry must produce
  *      a located refusal naming its own keyword. A hardcoded list cannot
- *      notice a keyword it has never heard of — a ninth entry added to the
+ *      notice a keyword it has never heard of — a tenth entry added to the
  *      table with no refusal behind it would leave this check green while
  *      the importer silently swallowed the construct.
- *   3. `crit` IS DROPPED, NOT REFUSED. The distinction is the whole argument
- *      of the dialect: a chart carrying `crit` must still import (refusing it
- *      would make the commonest real-world gantt unimportable), and the model
- *      must carry no trace of it (honouring it would paint a path the float
- *      pass disagrees with). Both halves are asserted, plus that the caveat
- *      says so in words, because a drop nobody is told about is data loss.
+ *   3. THE ROUND TRIP, IN BOTH GENERATIONS. Import → emit → import must give
+ *      an equal model over a sample exercising every state, `after` with two
+ *      targets, an explicit `at`, an implicit previous-row start, a `2w`
+ *      duration, an end-date row and a milestone; and emitting the emitted
+ *      text again must be byte-identical, which is the C4 rule and the only
+ *      way one canonical spelling per construct can be measured.
  *   4. THE IMPORTER LANDS ON TEXT THE `.alab` ROUND TRIP ALREADY GUARANTEES.
  *      Import → `serializeGanttText` → `parseGanttText` must reproduce
  *      the model exactly. This is the join between this check and
@@ -1800,6 +1814,23 @@ for (const [what, source, pattern] of [
  *      seventh thing a pasted diagram could be, and a detector that answers
  *      confidently and wrongly routes the text to a parser whose error then
  *      misleads about a document that is not malformed.
+ *   6. `at-risk` SURVIVES AS `at-risk`, PINNED BY NAME — it was the headline
+ *      reason the conversion was one-way and is now the headline claim that
+ *      it is not, and a round-trip assertion alone would still pass if every
+ *      state collapsed to `planned`. Beside it: `crit, done` imports as
+ *      `done` with the caveat naming the drop (this replaces the old "`crit`
+ *      leaves no trace" clause), and no `crit` appears in the export of a
+ *      plan whose every task is on the computed critical path.
+ *   7. `.alab` → EMIT → IMPORT LOSES ONLY WHAT THE CAVEAT LISTS, exercised
+ *      deliberately rather than trusted: a `desc`/`#tag` item comes back
+ *      without them, an item with no `at`/`after` comes back `at: 0`, and an
+ *      item id spelling a Mermaid tag comes back renamed with its dependents'
+ *      `after` following. A caveat that over-promises is worse than one that
+ *      under-promises, because a reader acts on it.
+ *   8. THE ORIGIN-LESS PLAN IS REFUSED BY NAME. Mermaid `gantt` has no
+ *      relative axis, and the one thing this converter must never do is
+ *      invent a day 0 — so the throw is asserted, and so is `starts` being in
+ *      the message, the same walked-refusal discipline the keyword table gets.
  */
 
 console.log("\nmermaid gantt -> .alab gantt");
@@ -1818,44 +1849,265 @@ const GANTT_SAMPLE = `gantt
 `;
 
 {
-  /* 1. NO EMIT PATH. Two independent readings — the filesystem and the
-     modules' own export lists — because either alone can be defeated: a file
-     could exist unexported, and an emitter could be added to `gantt.ts`
-     without a new file. */
+  /* 1. THE EMIT PATH EXISTS. Two independent readings — the filesystem and
+     the barrel's own export list — because either alone can be defeated: a
+     file can exist unexported, and an export can survive a deleted file only
+     until the next build. */
   check(
-    "there is no gantt-emit.ts — the file that would hold the other direction does not exist",
-    !existsSync(path.join(ROOT, "src/features/mermaid/lib/gantt-emit.ts")),
-    "an emit path would downgrade at-risk to active and restate a computed critical path as a typed one",
+    "an emit path exists on disk and on the barrel",
+    existsSync(path.join(ROOT, "src/features/mermaid/lib/gantt-emit.ts")) &&
+      typeof serializeMermaidGantt === "function",
+    "the gantt dialect is two-way; deleting the emitter is as silent a change as adding one was",
+  );
+  check(
+    "the caveat no longer calls the conversion one-way, and names the crit mapping",
+    !/one-way/i.test(MERMAID_GANTT_CAVEAT) &&
+      /crit is at-risk/i.test(MERMAID_GANTT_CAVEAT) &&
+      /critical path/i.test(MERMAID_GANTT_CAVEAT),
+    MERMAID_GANTT_CAVEAT,
+  );
+  check(
+    "the export caveat names what the trip drops, including the computed path and the starts refusal",
+    /desc/i.test(MERMAID_GANTT_EXPORT_CAVEAT) &&
+      /#tag/i.test(MERMAID_GANTT_EXPORT_CAVEAT) &&
+      /critical path/i.test(MERMAID_GANTT_EXPORT_CAVEAT) &&
+      /starts/i.test(MERMAID_GANTT_EXPORT_CAVEAT),
+    MERMAID_GANTT_EXPORT_CAVEAT,
+  );
+  /* The two tables are inverses of each other, checked rather than assumed:
+     `GANTT_TAG_BY_STATE` is DERIVED from `GANTT_STATE_BY_TAG`, and the whole
+     point of deriving it is that import and export cannot disagree about what
+     a tag means. A partial inverse would silently drop a state on the way
+     out. */
+  const notInverse = Object.entries(GANTT_STATE_BY_TAG).filter(
+    ([tag, state]) => GANTT_TAG_BY_STATE[state] !== tag,
+  );
+  check(
+    "the state table and the tag table are exact inverses, so the two directions cannot disagree",
+    notInverse.length === 0,
+    notInverse.map(([tag, state]) => `${tag} -> ${state}`).join(", "),
+  );
+}
+
+{
+  /* 3. THE ROUND TRIP, BOTH GENERATIONS. The sample deliberately exercises
+     every construct whose emitted spelling is a CHOICE — a `2w` duration, an
+     end-date row, an implicit previous-row start, `after` with two targets —
+     because those are the ones where a first-generation difference is
+     expected and a second-generation one would be a bug. */
+  const original = parseMermaidGantt(GANTT_SAMPLE);
+  const emitted = serializeMermaidGantt(original);
+  const back = parseMermaidGantt(emitted);
+  check(
+    "Mermaid -> model -> Mermaid -> model reproduces the model exactly",
+    JSON.stringify(back.sections) === JSON.stringify(original.sections) &&
+      back.origin === original.origin &&
+      back.metadata.title === original.metadata.title,
+    firstDiff(
+      JSON.stringify(original.sections, null, 1),
+      JSON.stringify(back.sections, null, 1),
+    ),
+  );
+  check(
+    "the second generation is byte-identical — one canonical spelling per construct",
+    serializeMermaidGantt(back) === emitted,
+    firstDiff(emitted, serializeMermaidGantt(back)),
+  );
+  check(
+    "the emitted chart is still a gantt to the detector, and to no other dialect",
+    detectMermaidGantt(emitted) &&
+      !detectMermaidEr(emitted) &&
+      !detectMermaidTimeline(emitted),
+    emitted,
+  );
+  /* The canonical spellings, asserted by name rather than left to the
+     byte-identity above — that assertion would pass just as happily on a
+     different set of choices, and these are the ones the caveat promises. */
+  check(
+    "durations are always written in days, never re-emitted as weeks",
+    !/\d+w\b/.test(emitted) && emitted.includes("12d"),
+    emitted,
+  );
+  check(
+    "every task row carries the three-field form, so every row is referenceable by after",
+    emitted
+      .split("\n")
+      .filter((line) => line.includes(" :"))
+      .every((line) => line.split(",").length >= 3),
+    emitted,
+  );
+}
+
+{
+  /* 6. `at-risk` SURVIVES AS `at-risk`, and the computed path is still not
+     written. Pinned by name because a model-equality assertion would pass on
+     a converter that collapsed every state to `planned`. */
+  const file = parseMermaidGantt(GANTT_SAMPLE);
+  const emitted = serializeMermaidGantt(file);
+  const back = parseMermaidGantt(emitted);
+  const states = (model) =>
+    model.sections.flatMap((section) =>
+      section.items.map((item) => item.state ?? "planned"),
+    );
+  check(
+    "at-risk survives the Mermaid round trip as at-risk — the field the dialect was one-way over",
+    states(back).includes("at-risk") &&
+      JSON.stringify(states(back)) === JSON.stringify(states(file)),
+    JSON.stringify(states(back)),
+  );
+  check(
+    "the export writes crit for at-risk, and writes it exactly once per at-risk row",
+    (emitted.match(/\bcrit\b/g) ?? []).length ===
+      states(file).filter((state) => state === "at-risk").length,
+    emitted,
   );
 
-  const ganttModule = await import(
-    pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/gantt.ts")).href
-  );
-  const ganttMapping = await import(
-    pathToFileURL(path.join(ROOT, "src/features/mermaid/lib/gantt-mapping.ts"))
-      .href
-  );
-  const mermaidBarrel = await import(
-    pathToFileURL(path.join(ROOT, "src/features/mermaid/index.ts")).href
-  );
-  const emitters = [
-    ...Object.keys(ganttModule),
-    ...Object.keys(ganttMapping),
-  ].filter((name) => /^(serialize|emit)/i.test(name));
-  const barrelEmitters = Object.keys(mermaidBarrel).filter(
-    (name) => /^(serialize|emit)/i.test(name) && /gantt/i.test(name),
+  /* THE COMPUTED CRITICAL PATH IS NOT WRITTEN. A chain with no slack — every
+     task on the critical path — must still emit no `crit`, because the tag is
+     spent on the authored state and a derived chain there could not be told
+     apart from a claimed one on the way back in. */
+  const chain = parseMermaidGantt(
+    "gantt\n  dateFormat YYYY-MM-DD\n  section S\n    A :a, 2026-01-01, 3d\n    B :b, after a, 3d\n    C :c, after b, 3d\n",
   );
   check(
-    "the gantt modules export no serializer and no emitter",
-    emitters.length === 0 && barrelEmitters.length === 0,
-    [...emitters, ...barrelEmitters].join(", "),
+    "a plan whose every task is on the computed critical path still emits no crit",
+    !serializeMermaidGantt(chain).includes("crit"),
+    serializeMermaidGantt(chain),
+  );
+
+  /* `crit, done` — a real Mermaid spelling with a principled winner, unlike
+     `done, active`, which stays refused. */
+  const landed = parseMermaidGantt(
+    "gantt\n  dateFormat YYYY-MM-DD\n  section S\n    The risky bit :crit, done, risky, 2026-01-01, 3d\n",
   );
   check(
-    "the one-way decision and BOTH of its reasons are stated in the caveat",
-    /one-way/i.test(MERMAID_GANTT_CAVEAT) &&
-      MERMAID_GANTT_CAVEAT.includes("at-risk") &&
-      /critical path/i.test(MERMAID_GANTT_CAVEAT),
-    "a converter that is one-way without saying why reads as an unfinished one",
+    "crit on a done task imports as done — a finished task is no longer at risk",
+    landed.sections[0].items[0].state === "done",
+    JSON.stringify(landed.sections[0].items[0]),
+  );
+  check(
+    "and the caveat names that drop rather than leaving it to be discovered",
+    /crit on a done task/i.test(MERMAID_GANTT_CAVEAT),
+    MERMAID_GANTT_CAVEAT,
+  );
+}
+
+{
+  /* 7. `.alab` → EMIT → IMPORT loses only the named normalisations. This is
+     the direction the "two-way" claim is actually about: a plan an author
+     wrote HERE must survive a trip through Mermaid unchanged in what it
+     draws. Each loss below is asserted as a LOSS, so the caveat cannot
+     quietly become optimistic. */
+  const ALAB = `archlab 1.0 gantt
+title "Order store migration"
+starts 2026-09-07
+
+@gantt
+  section "Prepare"
+    task done "Schema audit" 5d done at 0
+    task backfill "Historical backfill" 12d at-risk after done
+    milestone parity "Parity signed off" after done
+`;
+  const original = parseGanttText(ALAB);
+  /* RE-IMPORTED INSIDE A CATCH, because the failure this pair of assertions
+     exists to catch is a chart that will not re-open at all, and a raw throw
+     out of the round trip would end this script with a stack trace instead of
+     a named assertion. (Confirmed by breaking the id rename and watching it:
+     without the catch, `check:mermaid` died mid-section and never reached the
+     clause that was supposed to report it.) */
+  let back = null;
+  let backFailure = null;
+  try {
+    back = parseMermaidGantt(serializeMermaidGantt(original));
+  } catch (error) {
+    backFailure = error.message;
+  }
+  check(
+    ".alab -> Mermaid -> model keeps every section, row, length, state and dependency",
+    back !== null &&
+      back.sections.length === original.sections.length &&
+      back.sections[0].items.length === original.sections[0].items.length &&
+      back.sections[0].items[0].state === "done" &&
+      back.sections[0].items[1].state === "at-risk" &&
+      back.sections[0].items[2].milestone === true &&
+      back.origin === original.origin,
+    backFailure ?? JSON.stringify(back?.sections),
+  );
+  /* THE ID RENAME, exercised deliberately: `.alab` reserves none of Mermaid's
+     task tags (a task called `done` is an ordinary thing to write), and
+     Mermaid strips those words from ANY metadata position — so without the
+     rename the row loses its id field, reads its start as its id, and the
+     `after` naming it then refers to nothing. */
+  check(
+    "an item id spelling a Mermaid tag is renamed, and every after that names it follows",
+    back !== null &&
+      back.sections[0].items[0].id === "t_done" &&
+      JSON.stringify(back.sections[0].items[1].after) ===
+        JSON.stringify(["t_done"]),
+    backFailure ??
+      JSON.stringify(
+        back?.sections[0].items.map((item) => [item.id, item.after]),
+      ),
+  );
+
+  const withExtras = parseGanttText(`archlab 1.0 gantt
+title "Extras"
+starts 2026-09-07
+
+@gantt
+  section "Prepare"
+    task something "Something" 3d #risky
+      desc "A note Mermaid has nowhere to put."
+`);
+  const extrasBack = parseMermaidGantt(serializeMermaidGantt(withExtras));
+  check(
+    "the export drops exactly what the caveat says it drops (desc, #tags)",
+    extrasBack.sections[0].items[0].tags === undefined &&
+      extrasBack.sections[0].items[0].description === undefined,
+    JSON.stringify(extrasBack.sections[0].items[0]),
+  );
+  check(
+    "a row with neither at nor after comes back explicitly at day 0, not invented elsewhere",
+    extrasBack.sections[0].items[0].at === 0,
+    JSON.stringify(extrasBack.sections[0].items[0]),
+  );
+}
+
+{
+  /* 8. THE ORIGIN-LESS PLAN. The one document of this kind that cannot
+     travel, and the one thing this converter must never do about it is
+     invent a day 0 — so the refusal is asserted, and so is its naming the
+     line the author has to add. */
+  const relative = parseGanttText(`archlab 1.0 gantt
+title "Relative plan"
+
+@gantt
+  section "Prepare"
+    task audit "Schema audit" 5d at 0
+`);
+  let thrown = null;
+  try {
+    serializeMermaidGantt(relative);
+  } catch (error) {
+    thrown = error;
+  }
+  check(
+    "a plan with no starts date is refused rather than given an invented origin",
+    thrown !== null,
+    "it emitted a chart anchored to a date nobody wrote",
+  );
+  check(
+    "and the refusal names `starts`, which is the line the author has to add",
+    thrown !== null && /starts/.test(thrown.message),
+    thrown === null ? "it did not throw" : thrown.message,
+  );
+  check(
+    "the same plan with a starts date does emit — the refusal is about the origin, not the kind",
+    typeof serializeMermaidGantt({
+      ...relative,
+      origin: "2026-09-07",
+    }) === "string",
+    "an origin-less refusal that also refuses anchored plans is a broken emitter, not a policy",
   );
 }
 
@@ -1920,8 +2172,8 @@ const GANTT_SAMPLE = `gantt
 }
 
 {
-  /* 3. `crit` IS DROPPED, NOT REFUSED — and the row beside it keeps its own
-     state, which is the position-free tag reading Mermaid's own parser does. */
+  /* A `crit` task imports, position-free, as the `at-risk` STATE — the
+     mapping the whole two-way conversion rests on. */
   const file = parseMermaidGantt(GANTT_SAMPLE);
   const backfill = file.sections[0].items[2];
   check(
@@ -1930,19 +2182,9 @@ const GANTT_SAMPLE = `gantt
     JSON.stringify(file.sections[0].items.map((item) => item.id)),
   );
   check(
-    "the imported model carries NO trace of crit, anywhere",
-    !JSON.stringify(file).includes("crit"),
-    "honouring crit would paint a critical path the float pass disagrees with",
-  );
-  check(
-    "a crit tag beside a state does not eat the state",
-    backfill.state === "active",
+    "crit imports as the at-risk state, read from any position in the metadata",
+    backfill.state === "at-risk",
     JSON.stringify(backfill),
-  );
-  check(
-    "the caveat names crit, so the drop is stated rather than discovered",
-    MERMAID_GANTT_CAVEAT.includes(GANTT_CRIT_TAG),
-    "a silent drop is data loss with a green check over it",
   );
 
   /* The keywords that are dropped rather than refused, walked from the table
@@ -2138,16 +2380,19 @@ const GANTT_SAMPLE = `gantt
 /* ----------------------------------------------------------------------- */
 
 /*
- * The timeline dialect is the gantt's neighbour and its opposite: TWO-WAY.
- * Every assertion below exists because that asymmetry is the thing most
- * likely to be "tidied" into consistency by someone who has just read the
- * gantt section above, in one direction or the other.
+ * The timeline dialect is the gantt's neighbour, and both are now TWO-WAY —
+ * but they are not the same shape of two-way, and the surviving difference is
+ * what someone who has just read the gantt section above is most likely to
+ * "tidy" into consistency. The gantt is anchored to a CALENDAR, so it refuses
+ * the one document that has no date to write. A timeline is anchored to
+ * nothing: a period is a label, an event is a label, and Mermaid holds both
+ * exactly, so `serializeMermaidTimeline` has no refusal in it at all and must
+ * not grow one.
  *
  *   1. THE EMIT PATH EXISTS AND IS REACHABLE. `timeline-emit.ts` on disk and
- *      `serializeMermaidTimeline` on the feature barrel — the mirror of the
- *      gantt's "there is no emit path" clause, and asserted for the same
- *      reason from the other side: a menu gap closed by deleting the emitter
- *      would be as silent as one closed by adding one.
+ *      `serializeMermaidTimeline` on the feature barrel — asserted for the
+ *      reason the gantt's twin clause is: a menu gap closed by deleting the
+ *      emitter would be as silent as one closed by adding one.
  *   2. THE ROUND TRIP IS LOSSLESS OVER THE DIAGRAM. `.alab` → Mermaid →
  *      `.alab` must reproduce every period and every event, in order. This is
  *      the claim "two-way" makes and the only one that can be measured; what
@@ -2182,7 +2427,7 @@ const MERMAID_TIMELINE_SAMPLE = `timeline
     "an emit path exists on disk and on the barrel",
     existsSync(path.join(ROOT, "src/features/mermaid/lib/timeline-emit.ts")) &&
       typeof serializeMermaidTimeline === "function",
-    "the timeline dialect is two-way; deleting the emitter is as silent a change as adding one to the gantt",
+    "the timeline dialect is two-way and unconditionally so; deleting the emitter is as silent a change as adding one was",
   );
 
   check(
