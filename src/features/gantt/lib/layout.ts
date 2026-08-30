@@ -190,6 +190,7 @@ export const GANTT_FRAME_PAD = 40;
    a surface drawn at the drawing's own bounds put a stroked edge exactly where
    every section heading sits. */
 
+
 /**
  * The two diagonal segments that make up one hatch tile, as `d` attributes.
  *

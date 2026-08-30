@@ -50,6 +50,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **The kind bar on `/demo` no longer wraps.** With nine notations it had become
   several lines of sticky chrome parked over the page, and a jump could land a
   heading underneath it; it is one scrolling line at every width.
+
 - **The canvas ground is now two layers, and one of them adapts to the zoom.**
   A **rule** — the grid or dot field — belongs to the drawing: it pans and zooms
   with it, and it now _subdivides_. There is a ladder of pitches, each five
