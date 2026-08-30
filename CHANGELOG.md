@@ -35,8 +35,9 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   Exported SVG, PNG and GIF carry the panel, so downloaded files in every theme
   look different from the ones the previous release produced. This replaces the
   faint per-theme wash and the blurred ruling that were previously listed here
-  and never shipped in a release. `paper` gets the panel too; its line-art
-  shapes are unchanged.
+  and never shipped in a release — an opaque panel leaves nothing underneath it
+  to tone or to blur. `paper` gets the panel too; its line-art shapes are
+  unchanged.
 
 - **Mermaid's `crit` tag now imports as the `at-risk` state**, and `at-risk`
   exports as `crit`. Previously `crit` was read and thrown away. Both spellings

@@ -28,14 +28,11 @@
  */
 
 import { diagramHeadingMarkup } from "@/lib/diagram-heading";
-import { diagramSurfaceBox, diagramSurfaceMarkup } from "@/lib/diagram-surface";
+import { diagramSurfaceMarkup } from "@/lib/diagram-surface";
 import type { LifecycleLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
-import {
-  frostedGroundMarkup,
-  resolveExportGround,
-} from "@/features/viewer/export/ground";
+import { resolveExportGround } from "@/features/viewer/export/ground";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
 import {
@@ -122,36 +119,13 @@ export function renderLifecycleSvg(
   push(
     `<rect x="0" y="0" width="${width}" height="${height}" fill="${theme.canvas}"/>`,
   );
-  /* SPLIT AROUND THE SURFACE WHEN THE THEME ASKS FOR A FROST, and emitted as
-     the single full-bleed call it always was when it does not — the branch
-     lives in the helper, so all three surface exporters cannot drift on it. */
-  const surfaceBox = diagramSurfaceBox({
-    width: layout.width,
-    height: layout.height,
-    originX: EXPORT_PADDING,
-    originY: EXPORT_PADDING,
-  });
-  const frosted = frostedGroundMarkup({
-    ground,
-    box: surfaceBox,
-    blur: theme.diagramSurface.blur,
-    width,
-    height,
-  });
-  push(`<defs>${frosted.defs}</defs>`);
-  push(frosted.layers);
+  push(`<defs>${ground.defs}</defs>`);
+  push(ground.layers(0, 0, width, height));
   /* THE DIAGRAM'S SHEET, painted on the ground and under the drawing — the
      same panel the screen draws, from the same geometry, so a downloaded file
      is framed the way the reader saw it. Outside the translate below, because
      it is positioned in the FILE's coordinates and told where the drawing's
-     origin lands.
-     ITS BOX IS ALSO THE FROST'S: `frostedGroundMarkup` above was handed the
-     same `diagramSurfaceBox`, so the blurred region and the panel that covers
-     it are one geometry rather than two that happen to agree — and COVERS is
-     now the literal relationship. `--node` is opaque in eight of the nine
-     themes, so the frosted ground under this rect shows through in `glass`
-     alone, which asks for no frost. `components/ui/diagram-frost.tsx` records
-     that this makes the frost inert and what is waiting on a decision. */
+     origin lands. */
   push(
     diagramSurfaceMarkup({
       width: layout.width,

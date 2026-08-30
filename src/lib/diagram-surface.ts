@@ -38,10 +38,26 @@
  * WHAT WAS TRIED, in order, because the record is the useful part: an opaque
  * `--node` panel; then a 1px `--border` line and no fill, on the theory above;
  * then a translucent per-theme wash of the sheet's own ruling ink at 0.25,
- * raised to 0.4, then 0.6, then returned to 0.4; then a Gaussian frost under
- * the area to quiet the ruling's interference without spending contrast. Each
+ * raised to 0.4, then 0.6, then returned to 0.4; then a Gaussian FROST under
+ * the area, blurring the well's ruling so it stopped beating against the
+ * drawing's own strokes without spending any of the drawing's contrast. Each
  * step was a smaller correction than the last, which is the shape of a search
  * converging on the wrong thing. The panel was where it started.
+ *
+ * AND THE FROST IS WHY A BLUR CANNOT COME BACK HERE. It was the right
+ * instrument for a real problem — on a drafting ground the ruling is a lattice
+ * at an unrelated pitch to the bars, ticks and labels, which is interference in
+ * exactly the band the drawing's 1–1.5px strokes occupy — and it was preferred
+ * to more wash because a Gaussian is mean-preserving, so it cost the connectors
+ * nothing. The panel solves that same problem by being OPAQUE: there is no
+ * ruling left under the drawing to beat against it. Which also makes a blur of
+ * what is underneath unobservable BY CONSTRUCTION, not by measurement — an
+ * opaque fill in front of a filtered region shows none of it, in every theme
+ * whose `--node` has alpha 1, on screen and in a file alike. The frost was
+ * deleted for that reason rather than for being disliked. If the panel is ever
+ * made translucent, the interference comes back and this is the instrument for
+ * it; while the panel is opaque, a blur under it is a compositing layer, a
+ * token, a component and a check section that no reader can ever see.
  *
  * `paper` GETS THE PANEL TOO, reversing its own earlier line-art exception —
  * chosen deliberately, in full knowledge that it reverses it. Note what is NOT
@@ -170,9 +186,8 @@ export function diagramSurfaceBox({
  * corner, so a reader moving between them sees one product rather than two
  * conventions.
  *
- * FOUR RENDITIONS READ THIS, and `check:canvas-grid` pins each: the shared
- * `<rect>` on screen, the three exporters' markup, the frost's CSS
- * `border-radius`, and the dictionary's own per-section panel. It was three
- * hand-typed `10`s and a `2` before.
+ * THREE RENDITIONS READ THIS, and `check:canvas-grid` pins each: the shared
+ * `<rect>` on screen, the three exporters' markup, and the dictionary's own
+ * per-section panel. It was two hand-typed `10`s and a `2` before.
  */
 export const DIAGRAM_SURFACE_RADIUS = 10;

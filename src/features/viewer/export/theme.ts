@@ -92,24 +92,6 @@ export interface ExportTheme {
    * their exported bytes identical to what they were before this existed.
    */
   roleTexture: { ink: string; opacity: number };
-  /**
-   * THE DIAGRAM SHEET'S FROST — its Gaussian standard deviation in USER UNITS,
-   * off `--diagram-surface-blur`. The one entry here that is a distance rather
-   * than a colour or a ratio.
-   *
-   * IT NO LONGER CARRIES THE SURFACE'S COLOURS, and that is the whole reshape.
-   * The surface used to be a per-theme translucent wash needing an ink and a
-   * strength nothing else on this type had; it is now `--node` on
-   * `--node-border`, which this type already resolves as `node` and
-   * `nodeBorder` for every shape in every drawing. The exporters read those.
-   * A second pair of entries holding the same two values is exactly the
-   * duplication `dry.md` names.
-   *
-   * Zero in every theme but `blueprint`, and at zero `frostedGroundMarkup`
-   * emits the single unsplit `ground.layers` call the exporters emitted before
-   * the frost existed — the emit-nothing-at-zero contract.
-   */
-  diagramSurface: { blur: number };
 }
 
 const TOKEN_VARS = {
@@ -129,7 +111,6 @@ const TOKEN_VARS = {
   destructive: "--destructive",
   destructiveForeground: "--destructive-foreground",
   roleTextureInk: "--role-texture-ink",
-  diagramSurfaceBlur: "--diagram-surface-blur",
 } as const;
 
 const ROLE_TOKEN_VARS: Record<NodeColorRole, { fill: string; border: string }> =
@@ -240,22 +221,11 @@ export function resolveExportTheme(): ExportTheme {
   );
 
   const canvasGrid = resolve(TOKEN_VARS.canvasGrid, nodeBorder);
-  /* A LENGTH, so `parseFloat` is doing real work here rather than being a
-     defensive habit: the token is authored as `8px` and what the exporter needs
-     is the number 8, in user units. An unparseable value degrades to 0 — a file
-     with a crisp ground, which is the rendering every theme but one ships
-     anyway, never a file frosted by an amount nobody chose. */
-  const diagramSurfaceBlur = Number.parseFloat(
-    styles.getPropertyValue(TOKEN_VARS.diagramSurfaceBlur),
-  );
 
   return {
     roleTexture: {
       ink: resolveExpression(TOKEN_VARS.roleTextureInk, nodeBorder),
       opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,
-    },
-    diagramSurface: {
-      blur: Number.isFinite(diagramSurfaceBlur) ? diagramSurfaceBlur : 0,
     },
     canvas: resolve(TOKEN_VARS.canvas, "#ffffff"),
     node,

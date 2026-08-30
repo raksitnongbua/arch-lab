@@ -191,36 +191,18 @@
   --role-texture-ink: var(--node-border);
   --role-texture-opacity: 0;
 
-  /* THE DIAGRAM SURFACE'S FROST — what is left of a four-token seam, now that
-     the surface itself needs no tokens of its own.
-
-     THE SURFACE IS `--node` ON `--node-border`, declared nowhere on this page
-     because both already are. That is the argument, not a shortcut: the pair is
-     what every canvas here uses for a shape against its background, so it is
-     already contrast-measured in all nine themes, where a bespoke surface ink
+  /* THE DIAGRAM SURFACE HAS NO TOKENS OF ITS OWN, and that is the design
+     rather than an omission. It is `--node` filled and `--node-border` ruled —
+     the pair every canvas here uses for a shape against its background, so it
+     arrives contrast-measured in all nine themes, where a bespoke surface ink
      would be a colour relationship nobody had checked. `DiagramSurface` and the
      three exporters read those two properties directly.
-     WHAT WENT WITH IT: `--diagram-surface-fill` and
-     `--diagram-surface-opacity`, the per-theme translucent wash that toned the
-     sheet where the document sat, and `blueprint`'s opt-in to it. The wash was
-     an answer to a line-only surface that could not be seen on a drafting
-     ground; a panel with a `--node-border` rule is seen on every ground, so
-     there was nothing left for either token to do and neither has a reader.
-     `lib/diagram-surface.ts` carries the whole history, in order.
-
-     THE BLUR IS A LENGTH, IN CSS PIXELS, and it is the ONE token here that is a
-     distance rather than a colour or a ratio. On screen `.af-diagram-frost`
-     spends it on `backdrop-filter`; in a file the exporter spends it as an
-     `feGaussianBlur` standard deviation over a second, clipped emission of the
-     same ground layers. It is zero everywhere but `blueprint`, and at zero both
-     halves emit nothing at all rather than an empty clip apparatus — the same
-     contract `--role-texture-opacity` carries directly above.
-
-     AND IT IS INERT WHEREVER IT IS DECLARED, because the panel is opaque and
-     sits on top of the region this blurs. `components/ui/diagram-frost.tsx`
-     states that plainly and says what deciding about it would mean; nothing
-     here should be tuned until that decision is made. */
-  --diagram-surface-blur: 0px;
+     THREE TOKENS LIVED HERE AND ALL THREE ARE GONE, each once it had no reader:
+     `--diagram-surface-fill` and `--diagram-surface-opacity`, a per-theme wash
+     that toned the sheet where the document sat, and `--diagram-surface-blur`,
+     a Gaussian that quieted the ruling's interference under the drawing. The
+     panel settled what both were for — see `lib/diagram-surface.ts`, which
+     carries the whole history in order. */
 
   /* The CSS rendition of the same seven tiles, for C4's live view — whose
      nodes are HTML boxes an SVG `<pattern>` cannot reach. The geometry is
@@ -1017,22 +999,6 @@
      every ladder level under 60% of its own theme's connector. */
   --canvas-rule-dot: transparent;
   --canvas-rule-line: var(--edge);
-  /* THE FROST, in CSS pixels, and 8 is a measured value rather than a taste.
-     A Gaussian of standard deviation σ attenuates a lattice of pitch p by
-     exp(−2π²σ²/p²); this theme's export rung is p = 40 at 1.443px and 0.2486
-     alpha (`groundLevels(1)`), painting a ruling that reads 2.124:1 on the
-     canvas. At σ = 8 the residual amplitude is 0.454, so the ruling inside the
-     diagram area still reads 1.510:1 — quieted by half, and comfortably above
-     the 1.1:1 floor a ground must clear to be seen. Past σ ≈ 14 the residual
-     falls to that floor and the frost becomes a soft-edged clearing; under
-     σ ≈ 5 the residual is over 0.75 and the knob is decoration.
-     `check:canvas-grid` holds both ends with arithmetic off the real ladder,
-     so a later σ cannot be nudged by eye.
-     ALL OF WHICH IS CURRENTLY UNSEEN: the diagram surface is an opaque
-     `--node` panel over exactly this region, so no reader of this theme sees
-     any of it. `components/ui/diagram-frost.tsx` records why the machinery is
-     still standing and what would settle it. */
-  --diagram-surface-blur: 8px;
   --node: oklch(0.245 0.062 250);
   --node-foreground: oklch(0.97 0.012 250);
   /* ≥3:1 against --node (measured 4.13:1). */
@@ -3264,101 +3230,6 @@
   .glass .af-glass {
     background-color: oklch(1 0 0 / 0.94);
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/* The diagram surface's frost: the ruling, quieted where the drawing sits     */
-/* -------------------------------------------------------------------------- */
-
-/**
- * THE THIRD RENDITION OF ONE GEOMETRY. The diagram surface is a single box —
- * `diagramSurfaceBox` in `lib/diagram-surface.ts` — drawn three ways: as an
- * SVG `<rect>` on screen (the `--node` panel and its `--node-border` rule), as
- * markup in an exported file, and, for a theme that asks for a frost, as this
- * `<div>` sitting behind the drawing's `<svg>` and blurring what is behind IT.
- * The panel is opaque, so the third rendition currently shows nothing;
- * `components/ui/diagram-frost.tsx` records the decision that is waiting.
- *
- * IT IS A DOM ELEMENT BECAUSE IT HAS TO BE. The obvious move is to hang
- * `backdrop-filter` on the surface `<rect>` the canvas already draws, and it
- * does not work: `backdrop-filter` is defined for CSS boxes, and no engine
- * applies it to an SVG graphics element. The other obvious move — reproducing
- * the ruled ground INSIDE the `<svg>` and blurring the copy — was rejected
- * harder: the pane's field is anchored to the scrolled content's origin at a
- * pitch derived per measured shrink, so a copy would have to match pitch,
- * phase and level opacity in the drawing's units on every remeasure, and a
- * half-pixel phase error reads as a printing smear exactly where the reader is
- * looking. Two independently painted halves that must agree to the pixel is
- * the failure `codebase.md` names.
- *
- * SCOPED TO THE THEME, not applied everywhere at `blur(0)` — the same argument
- * `.af-glass` makes twenty lines above, for the same reason: a backdrop filter
- * promotes its element to a compositing layer whether or not the blur is
- * visible. The `<div>` is mounted by all nine themes and is inert in eight,
- * which is the paint-always/show-by-token contract the role textures already
- * carry; what appears only under `.blueprint` is the filter PROPERTY. And no hand-written `-webkit-` prefix, for the reason recorded at
- * the glass block: the build drops the unprefixed line.
- *
- * ONE LAYER PER PANE, NOT PER NODE, which is the granularity the glass block
- * already drew the line at. The three kinds that mount a surface have no
- * pan-and-zoom camera — panning is scrolling — so this never re-filters at
- * 60fps under a moving camera the way a C4 frost would. If a camera-bearing
- * notation ever grows a surface, that is a different budget and this decision
- * has to be made again.
- */
-.af-diagram-frost-frame {
-  /* Shrink-wraps the drawing so the frost can be positioned in PERCENTAGES of
-     it. The three hosts draw their `<svg>` at natural size and let
-     `max-width: 100%` shrink it; a percentage box is a fixed fraction of
-     whatever that shrink produced, so the frost tracks it with no measurement
-     and nothing to resync. */
-  position: relative;
-  width: fit-content;
-  margin-inline: auto;
-}
-
-.af-diagram-frost-frame > svg {
-  /* PAINT ORDER, and it is the one thing that would silently invert. The frost
-     is absolutely positioned and the drawing is not, so without this the
-     positioned element paints LAST — a blur over the diagram instead of under
-     it. Positioning the drawing too puts both in the same step, where DOM
-     order decides: ground, frost, drawing. */
-  position: relative;
-}
-
-.af-diagram-frost {
-  position: absolute;
-  /* Never a hit target: the drawing underneath is what the reader clicks, and
-     a full-area overlay would eat every hover the focus machinery runs on. */
-  pointer-events: none;
-}
-
-.blueprint .af-diagram-frost {
-  /* SCALED BY THE SHRINK THE VIEWER ALREADY MEASURED. The token is a radius in
-     CSS pixels against the ground's pitch at scale 1; a pane narrow enough to
-     shrink the drawing shrinks the on-screen pitch with it, so a fixed radius
-     would over-blur exactly the readers with the least room. The viewer writes
-     `--diagram-surface-blur-scale` from the `groundScale` it already computes
-     for the field itself — one multiply on a number it has. The fallback of 1
-     is the server-rendered first frame, before anything has been measured. */
-  backdrop-filter: blur(
-    calc(var(--diagram-surface-blur) * var(--diagram-surface-blur-scale, 1))
-  );
-}
-
-@supports not (backdrop-filter: blur(1px)) {
-  /* NO FROST, AND DELIBERATELY NO COMPENSATION. An engine without backdrop
-     filters shows the ruling crisp around the drawing and the same opaque
-     panel under it as every other engine — a slightly busier field, never a
-     broken one, so there is nothing to rescue with a fallback the way
-     `.af-glass` needs one.
-     WHAT MUST NOT GO IN HERE IS A COMPENSATING SURFACE TOKEN. Everything the
-     surface paints with is read out of the live computed styles at export
-     time, so redeclaring any of it under `@supports not` would make a
-     downloaded file's contents depend on which browser downloaded it. Two
-     readers of one document would have two different pictures of it, which is
-     a worse bug than a busier ground on a legacy engine. This block is empty
-     on purpose: it records that the case was decided rather than missed. */
 }
 
 /* ---- the hero's icon-led primary call to action -----------------------------
