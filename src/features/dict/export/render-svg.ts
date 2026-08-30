@@ -18,6 +18,7 @@
  * with rows missing.
  */
 
+import { DIAGRAM_SURFACE_RADIUS } from "@/lib/diagram-surface";
 import type { DictLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
@@ -115,7 +116,8 @@ export function renderDictSvg(
       `<rect x="${layout.columnX.name - DICT.padX}" y="${section.headerY - DICT.padX * 0.5}" ` +
         `width="${right - layout.columnX.name + DICT.padX * 2}" ` +
         `height="${section.y + section.height - section.headerY + DICT.padX * 0.5}" ` +
-        `rx="10" fill="${theme.node}" stroke="${theme.nodeBorder}" stroke-width="1"/>`,
+        `rx="${DIAGRAM_SURFACE_RADIUS}" fill="${theme.node}" ` +
+        `stroke="${theme.nodeBorder}" stroke-width="1"/>`,
     );
     for (const column of Object.keys(COLUMN_LABEL) as DictColumn[]) {
       push(

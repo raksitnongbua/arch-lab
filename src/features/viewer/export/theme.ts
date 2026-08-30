@@ -58,8 +58,6 @@ export interface ExportTheme {
    * axis heavier than the one the reader saw.
    */
   canvasGrid: string;
-  /** `--border` — the hairline the diagram area's own frame is ruled with. */
-  border: string;
   /** The gantt's critical-path cap. Aliases `--primary` in every theme but
    * `pastel`, where the cap's 3:1-against-four-state-fills requirement and the
    * brand colour disagree. Resolved, never assumed to equal `primary`. */
@@ -95,30 +93,23 @@ export interface ExportTheme {
    */
   roleTexture: { ink: string; opacity: number };
   /**
-   * THE DIAGRAM SHEET'S WASH, resolved to a concrete ink and a number — the
-   * same shape as `roleTexture` above, and for the same reason.
+   * THE DIAGRAM SHEET'S FROST — its Gaussian standard deviation in USER UNITS,
+   * off `--diagram-surface-blur`. The one entry here that is a distance rather
+   * than a colour or a ratio.
    *
-   * A `blueprint` export frames its plan on a sheet whose `--border` is
-   * deliberately quieter than the drafting ruling behind it, so without the
-   * wash the downloaded file shows a drawing floating on bare grid — a
-   * different picture from the one the reader was looking at when they pressed
-   * Download, which is the failure export parity exists to prevent.
+   * IT NO LONGER CARRIES THE SURFACE'S COLOURS, and that is the whole reshape.
+   * The surface used to be a per-theme translucent wash needing an ink and a
+   * strength nothing else on this type had; it is now `--node` on
+   * `--node-border`, which this type already resolves as `node` and
+   * `nodeBorder` for every shape in every drawing. The exporters read those.
+   * A second pair of entries holding the same two values is exactly the
+   * duplication `dry.md` names.
    *
-   * `opacity: 0` in all eight other themes, and every exporter is required to
-   * emit the `fill="none"` it emitted before this existed rather than an
-   * invisible fill — that is what keeps their exported bytes identical.
-   *
-   * `blur` is the frost's Gaussian standard deviation in USER UNITS, off
-   * `--diagram-surface-blur`. It is the one entry here that is a distance
-   * rather than a colour or a ratio, and it is resolved the same way for the
-   * same reason: the file has to frost the ruling by the amount the screen
-   * frosted it, and a literal in the exporter would be a second answer.
-   * Zero everywhere but `blueprint`, and at zero
-   * `frostedGroundMarkup` emits the single unsplit `ground.layers` call the
-   * exporters emitted before the frost existed — the emit-nothing-at-zero
-   * contract, extended to the third token.
+   * Zero in every theme but `blueprint`, and at zero `frostedGroundMarkup`
+   * emits the single unsplit `ground.layers` call the exporters emitted before
+   * the frost existed — the emit-nothing-at-zero contract.
    */
-  diagramSurface: { fill: string; opacity: number; blur: number };
+  diagramSurface: { blur: number };
 }
 
 const TOKEN_VARS = {
@@ -132,17 +123,12 @@ const TOKEN_VARS = {
   mutedForeground: "--muted-foreground",
   nodeMeta: "--node-meta",
   canvasGrid: "--canvas-grid",
-  /* The hairline every rule in the app is drawn with. Resolved here because
-     `diagramSurfaceMarkup` draws the diagram AREA with it, and the exported
-     frame has to be the colour the screen framed it in. */
-  border: "--border",
   criticalCap: "--gantt-critical",
   foreground: "--foreground",
   accent: "--accent",
   destructive: "--destructive",
   destructiveForeground: "--destructive-foreground",
   roleTextureInk: "--role-texture-ink",
-  diagramSurfaceFill: "--diagram-surface-fill",
   diagramSurfaceBlur: "--diagram-surface-blur",
 } as const;
 
@@ -253,14 +239,7 @@ export function resolveExportTheme(): ExportTheme {
     styles.getPropertyValue("--role-texture-opacity"),
   );
 
-  /* Same two-part treatment, same reasons: the fill is an INDIRECTION
-     (`var(--canvas-grid)` in the baseline) and needs the probe path, and a
-     non-finite opacity degrades to 0 — a plainer file, never a wash at an
-     unintended strength. */
   const canvasGrid = resolve(TOKEN_VARS.canvasGrid, nodeBorder);
-  const diagramSurfaceOpacity = Number.parseFloat(
-    styles.getPropertyValue("--diagram-surface-opacity"),
-  );
   /* A LENGTH, so `parseFloat` is doing real work here rather than being a
      defensive habit: the token is authored as `8px` and what the exporter needs
      is the number 8, in user units. An unparseable value degrades to 0 — a file
@@ -276,14 +255,9 @@ export function resolveExportTheme(): ExportTheme {
       opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,
     },
     diagramSurface: {
-      fill: resolveExpression(TOKEN_VARS.diagramSurfaceFill, canvasGrid),
-      opacity: Number.isFinite(diagramSurfaceOpacity)
-        ? diagramSurfaceOpacity
-        : 0,
       blur: Number.isFinite(diagramSurfaceBlur) ? diagramSurfaceBlur : 0,
     },
     canvas: resolve(TOKEN_VARS.canvas, "#ffffff"),
-    border: resolve(TOKEN_VARS.border, "#d9d9de"),
     node,
     nodeForeground: resolve(TOKEN_VARS.nodeForeground, "#1f2430"),
     nodeBorder,

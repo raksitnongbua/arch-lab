@@ -27,22 +27,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **On the `blueprint` theme, timelines, gantt charts and lifecycles now sit on
-  a faint wash of the sheet's own ruling colour**, so the document separates
-  from the drafting grid instead of dissolving into it — that theme frames the
-  diagram area in a border deliberately quieter than its ruling, which left the
-  frame unable to say where the drawing lived. Exported SVG, PNG and GIF carry
-  the same wash. The other eight themes are unchanged, and their exported files
-  are byte-for-byte what they were.
-
-- **And `blueprint` now blurs its drafting ruling under the diagram area rather
-  than leaning harder on that wash.** The ruling stays visible through the
-  drawing — it is softened, not cleared — so the bars, ticks and labels no
-  longer compete with a grid at an unrelated pitch, and the wash itself steps
-  back to a lighter tint that leaves connectors and text more room. Downloads
-  carry the same treatment; a browser without backdrop filters shows the ruling
-  crisp, as it did before. The other eight themes are untouched and their
-  exported files are still byte-for-byte what they were.
+- **Timelines, gantt charts and lifecycles now draw on a panel instead of a
+  hairline frame** — the same surface the data dictionary already gives its
+  tables, in all nine themes. The diagram area is filled and edged in the pair
+  every diagram here already uses for a shape on its background, so the drawing
+  reads as a document set on the canvas rather than as marks floating on it.
+  Exported SVG, PNG and GIF carry the panel, so downloaded files in every theme
+  look different from the ones the previous release produced. This replaces the
+  faint per-theme wash and the blurred ruling that were previously listed here
+  and never shipped in a release. `paper` gets the panel too; its line-art
+  shapes are unchanged.
 
 - **Mermaid's `crit` tag now imports as the `at-risk` state**, and `at-risk`
   exports as `crit`. Previously `crit` was read and thrown away. Both spellings

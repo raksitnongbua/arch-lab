@@ -191,63 +191,35 @@
   --role-texture-ink: var(--node-border);
   --role-texture-opacity: 0;
 
-  /* THE DIAGRAM SURFACE'S WASH AND FROST — the third and fourth opt-in seams
-     on this page, and the same shape as `--role-texture-opacity` directly
-     above: declared once here, zero by default, per-theme opt-in, and the
-     exporters emit NOTHING at zero rather than an invisible fill or an empty
-     clip apparatus. That last clause is what keeps eight of the nine themes'
-     downloaded files byte-identical to what they were before these tokens
-     existed.
+  /* THE DIAGRAM SURFACE'S FROST — what is left of a four-token seam, now that
+     the surface itself needs no tokens of its own.
 
-     WHAT IT IS FOR. `DiagramSurface` marks where the document lives with a
-     1px `--border` rule and no fill, on the argument that a filled panel makes
-     the drawing a SECOND ground stacked on the well's ground and turns every
-     theme into a hunt for two grounds that agree (`lib/diagram-surface.ts`).
-     That argument holds everywhere the frame can actually be seen. On
-     `blueprint` it cannot: that theme's `--border` is DELIBERATELY quieter
-     than its own ruling ("a panel edge on a drafting sheet is a lesser line
-     than the sheet's ruling"), so the one mark saying "the document is here"
-     is fainter than the field it has to say it against, and the diagram area
-     reads as nothing.
+     THE SURFACE IS `--node` ON `--node-border`, declared nowhere on this page
+     because both already are. That is the argument, not a shortcut: the pair is
+     what every canvas here uses for a shape against its background, so it is
+     already contrast-measured in all nine themes, where a bespoke surface ink
+     would be a colour relationship nobody had checked. `DiagramSurface` and the
+     three exporters read those two properties directly.
+     WHAT WENT WITH IT: `--diagram-surface-fill` and
+     `--diagram-surface-opacity`, the per-theme translucent wash that toned the
+     sheet where the document sat, and `blueprint`'s opt-in to it. The wash was
+     an answer to a line-only surface that could not be seen on a drafting
+     ground; a panel with a `--node-border` rule is seen on every ground, so
+     there was nothing left for either token to do and neither has a reader.
+     `lib/diagram-surface.ts` carries the whole history, in order.
 
-     A WASH IS NOT A PANEL, and the difference is translucency, not degree.
-     The ink defaults to `--canvas-grid` — the sheet's own ruling colour laid
-     flat, so an opting theme tones its working area rather than importing a
-     foreign surface — and at the strengths this seam permits the ruling keeps
-     running underneath and THROUGH the drawing area. `check:canvas-grid` holds
-     the ceiling at 0.4 and holds the composite quieter than the theme's own
-     grid, which is what stops a wash quietly growing back into the panel the
-     line-only revision removed.
+     THE BLUR IS A LENGTH, IN CSS PIXELS, and it is the ONE token here that is a
+     distance rather than a colour or a ratio. On screen `.af-diagram-frost`
+     spends it on `backdrop-filter`; in a file the exporter spends it as an
+     `feGaussianBlur` standard deviation over a second, clipped emission of the
+     same ground layers. It is zero everywhere but `blueprint`, and at zero both
+     halves emit nothing at all rather than an empty clip apparatus — the same
+     contract `--role-texture-opacity` carries directly above.
 
-     THE FROST IS A SECOND KNOB BECAUSE THERE ARE TWO FAILURES, and running one
-     knob at both of them is how the wash climbed 0.25 → 0.4 → 0.6 without ever
-     feeling right. A wash separates the AREA by tone, and it pays for that out
-     of the drawing's own contrast budget — every increment moves the area's
-     mean luminance toward the ink, which is why the connector floor, not the
-     ruling comparison, is what runs out first. A frost quiets the ruling's
-     FREQUENCY under the drawing, where a lattice at an unrelated pitch beats
-     against the drawing's own 1–1.5px strokes; a Gaussian blur is
-     mean-preserving, so it costs the connectors nothing at all. What it cannot
-     do is separate: blur the ruling to death and it converges to its own mean,
-     which on `blueprint` is 1.08:1 against the canvas — under the 1.1:1 floor
-     a ground must clear to be seen. So neither token replaces the other, and a
-     theme reaching for a louder wash should reach for this instead.
-
-     THE BLUR IS A LENGTH, IN CSS PIXELS, and it is the ONE token on this page
-     that both halves read as a distance rather than a colour or a ratio. On
-     screen `.af-diagram-frost` spends it on `backdrop-filter`; in a file the
-     exporter spends it as an `feGaussianBlur` standard deviation over a second,
-     clipped emission of the same ground layers. `check:canvas-grid` measures
-     what a σ does to the real ladder rung (`groundLevels(1)`) and fails a value
-     that either does nothing or flattens the ruling into a soft-edged hole.
-
-     TWO THEMES ARE PINNED OFF, with reasons, in that same check. `paper` is
-     line art by an explicit user decision — its whole argument is stroke, not
-     fill — and `eink` has spent its identity budget on five greys plus the
-     role texture, so a third grey material would shift every fill the texture
-     is measured against. Do not "complete the set". */
-  --diagram-surface-fill: var(--canvas-grid);
-  --diagram-surface-opacity: 0;
+     AND IT IS INERT WHEREVER IT IS DECLARED, because the panel is opaque and
+     sits on top of the region this blurs. `components/ui/diagram-frost.tsx`
+     states that plainly and says what deciding about it would mean; nothing
+     here should be tuned until that decision is made. */
   --diagram-surface-blur: 0px;
 
   /* The CSS rendition of the same seven tiles, for C4's live view — whose
@@ -1045,49 +1017,21 @@
      every ladder level under 60% of its own theme's connector. */
   --canvas-rule-dot: transparent;
   --canvas-rule-line: var(--edge);
-  /* THE ONLY THEME THAT OPTS INTO THE DIAGRAM WASH — AND NOW THE FROST WITH IT
-     (`:root` has both seams and the pinned refusals). It is the one whose
-     ground is a full-strength ruling AND whose `--border` is deliberately
-     quieter than that ruling, two tokens above — the frame cannot win, so the
-     area needs a ground of its own. 0.4 of `--canvas-grid` over this canvas
-     measures 1.412:1, clearing the 1.1:1 floor a ground must clear to be seen
-     at all and staying well under the ruling's own 2.030:1: the wash remains a
-     LESSER mark than the sheet's lines, which is the difference between toning
-     the sheet and piercing it. The drawing's ink still reads on it — `--edge`
-     3.91:1 (needs 3:1) and `--foreground` 11.12:1 (needs 4.5:1).
-     THE STRENGTH WENT 0.25 → 0.4 → 0.6 → 0.4, AND THE LAST STEP IS NOT A
-     RETREAT. Every raise was asked for after looking at the theme, and every
-     raise was really an attempt to fix something the strength was the wrong
-     instrument for: what made the area hard to read was never that it lacked
-     TONE, it was the drafting ruling beating against the drawing's own strokes
-     underneath it. The wash attenuates that interference only as a side effect
-     — at opacity α the lattice still runs at (1−α) — so halving the irritation
-     meant nearly doubling the tone, and the tone is paid for out of the
-     connectors: `--edge` reads 3.91:1 at 0.4 and 3.41:1 at 0.6, against a 3:1
-     floor. The frost below does that job directly and costs the connectors
-     nothing, so the strength comes back to the value whose four figures were
-     healthy. The band in `check:canvas-grid` comes back to 0.4 with it: a
-     ceiling left standing above the value anybody uses is a ceiling that has
-     stopped being a limit.
-     AT THIS STRENGTH `--canvas-grid` IS STILL THE ONLY INK LEFT. The
-     alternatives had headroom at 0.25 and have none at 0.4: `--node-border`
-     reads 2.341:1 — LOUDER than the ruling — and drops the connectors to
-     2.36:1, `--edge` and `--foreground` fail worse, and `--node` is invisible
-     at 1.022:1. So the ink is not a preference here any more, it is the only
-     survivor. */
-  --diagram-surface-opacity: 0.4;
   /* THE FROST, in CSS pixels, and 8 is a measured value rather than a taste.
      A Gaussian of standard deviation σ attenuates a lattice of pitch p by
      exp(−2π²σ²/p²); this theme's export rung is p = 40 at 1.443px and 0.2486
      alpha (`groundLevels(1)`), painting a ruling that reads 2.124:1 on the
      canvas. At σ = 8 the residual amplitude is 0.454, so the ruling inside the
      diagram area still reads 1.510:1 — quieted by half, and comfortably above
-     the 1.1:1 floor, which is what keeps this a FROST rather than a hole: the
-     ruling's ink is painted over every pixel of the area and still runs
-     visibly through it. Past σ ≈ 14 the residual falls to that floor and the
-     area becomes a soft-edged clearing; under σ ≈ 5 the residual is over 0.75
-     and the knob is decoration. `check:canvas-grid` holds both ends with
-     arithmetic off the real ladder, so a later σ cannot be nudged by eye. */
+     the 1.1:1 floor a ground must clear to be seen. Past σ ≈ 14 the residual
+     falls to that floor and the frost becomes a soft-edged clearing; under
+     σ ≈ 5 the residual is over 0.75 and the knob is decoration.
+     `check:canvas-grid` holds both ends with arithmetic off the real ladder,
+     so a later σ cannot be nudged by eye.
+     ALL OF WHICH IS CURRENTLY UNSEEN: the diagram surface is an opaque
+     `--node` panel over exactly this region, so no reader of this theme sees
+     any of it. `components/ui/diagram-frost.tsx` records why the machinery is
+     still standing and what would settle it. */
   --diagram-surface-blur: 8px;
   --node: oklch(0.245 0.062 250);
   --node-foreground: oklch(0.97 0.012 250);
@@ -3329,9 +3273,11 @@
 /**
  * THE THIRD RENDITION OF ONE GEOMETRY. The diagram surface is a single box —
  * `diagramSurfaceBox` in `lib/diagram-surface.ts` — drawn three ways: as an
- * SVG `<rect>` on screen (the rule and the wash), as markup in an exported
- * file, and, for a theme that asks for a frost, as this `<div>` sitting behind
- * the drawing's `<svg>` and blurring what is behind IT.
+ * SVG `<rect>` on screen (the `--node` panel and its `--node-border` rule), as
+ * markup in an exported file, and, for a theme that asks for a frost, as this
+ * `<div>` sitting behind the drawing's `<svg>` and blurring what is behind IT.
+ * The panel is opaque, so the third rendition currently shows nothing;
+ * `components/ui/diagram-frost.tsx` records the decision that is waiting.
  *
  * IT IS A DOM ELEMENT BECAUSE IT HAS TO BE. The obvious move is to hang
  * `backdrop-filter` on the surface `<rect>` the canvas already draws, and it
@@ -3349,9 +3295,8 @@
  * `.af-glass` makes twenty lines above, for the same reason: a backdrop filter
  * promotes its element to a compositing layer whether or not the blur is
  * visible. The `<div>` is mounted by all nine themes and is inert in eight,
- * which is the paint-always/show-by-token contract the wash and the role
- * textures already carry; what appears only under `.blueprint` is the filter
- * PROPERTY. And no hand-written `-webkit-` prefix, for the reason recorded at
+ * which is the paint-always/show-by-token contract the role textures already
+ * carry; what appears only under `.blueprint` is the filter PROPERTY. And no hand-written `-webkit-` prefix, for the reason recorded at
  * the glass block: the build drops the unprefixed line.
  *
  * ONE LAYER PER PANE, NOT PER NODE, which is the granularity the glass block
@@ -3403,17 +3348,17 @@
 
 @supports not (backdrop-filter: blur(1px)) {
   /* NO FROST, AND DELIBERATELY NO COMPENSATION. An engine without backdrop
-     filters shows the ruling crisp under the drawing, which is exactly the
-     wash-only rendering that shipped before the frost existed — a slightly
-     busier area, never a broken one, so there is nothing to rescue with an
-     opaque fallback the way `.af-glass` needs one.
-     WHAT MUST NOT GO IN HERE IS A LOUDER WASH. `--diagram-surface-opacity` is
-     read out of the live computed styles at export time, so raising it under
-     `@supports not` would make a downloaded file's contents depend on which
-     browser downloaded it. Two readers of one document would have two
-     different pictures of it, which is a worse bug than a busier ground on a
-     legacy engine. This block is empty on purpose: it records that the case
-     was decided rather than missed. */
+     filters shows the ruling crisp around the drawing and the same opaque
+     panel under it as every other engine — a slightly busier field, never a
+     broken one, so there is nothing to rescue with a fallback the way
+     `.af-glass` needs one.
+     WHAT MUST NOT GO IN HERE IS A COMPENSATING SURFACE TOKEN. Everything the
+     surface paints with is read out of the live computed styles at export
+     time, so redeclaring any of it under `@supports not` would make a
+     downloaded file's contents depend on which browser downloaded it. Two
+     readers of one document would have two different pictures of it, which is
+     a worse bug than a busier ground on a legacy engine. This block is empty
+     on purpose: it records that the case was decided rather than missed. */
 }
 
 /* ---- the hero's icon-led primary call to action -----------------------------

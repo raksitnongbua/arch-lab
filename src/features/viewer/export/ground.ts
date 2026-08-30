@@ -231,8 +231,8 @@ export function resolveExportGround(): ExportGround {
  * surface exporters made before the frost existed, byte for byte: no clip, no
  * filter, no empty apparatus. Eight of the nine themes resolve
  * `--diagram-surface-blur` to 0 and their downloads must not change a byte the
- * day a ninth opts in — the same emit-nothing-at-zero contract the wash and the
- * role textures carry, living HERE, once, rather than as a branch each exporter
+ * day a ninth opts in — the same emit-nothing-at-zero contract the role
+ * textures carry, living HERE, once, rather than as a branch each exporter
  * remembers to write.
  *
  * THREE DETAILS OF THE SPLIT ARE LOAD-BEARING, and each of them is a way to get
@@ -255,12 +255,12 @@ export function resolveExportGround(): ExportGround {
  *     children of a `<clipPath>` union instead of subtract, which would clip
  *     nothing at all and paint the crisp ground straight through the frost.
  *
- * AND IT IS STILL NOT A HOLE. Nothing is knocked out: the ground's ink is
- * painted over every pixel of the file and the inside piece is merely low-pass
- * filtered. `lib/diagram-surface.ts` argues the point in full and
- * `check:canvas-grid` holds the residual above the visibility floor with
- * arithmetic, so "the ruling still runs through the area" stays a measurement
- * rather than a claim.
+ * AND IT IS NOT WHAT HIDES THE RULING ANY MORE. Nothing here is knocked out:
+ * the ground's ink is painted over every pixel of the file and the inside piece
+ * is merely low-pass filtered. What follows this markup in each exporter is an
+ * opaque `--node` panel over the same box, which hides the frosted piece
+ * completely — `components/ui/diagram-frost.tsx` records why that leaves this
+ * construction standing rather than deleted.
  */
 export function frostedGroundMarkup({
   ground,

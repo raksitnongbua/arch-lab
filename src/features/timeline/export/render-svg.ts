@@ -134,15 +134,18 @@ export function renderTimelineSvg(
      it is positioned in the FILE's coordinates and told where the drawing's
      origin lands.
      ITS BOX IS ALSO THE FROST'S: `frostedGroundMarkup` above was handed the
-     same `diagramSurfaceBox`, so the blurred region and the rule that edges it
-     are one geometry rather than two that happen to agree. */
+     same `diagramSurfaceBox`, so the blurred region and the panel that covers
+     it are one geometry rather than two that happen to agree — and COVERS is
+     now the literal relationship. `--node` is opaque in eight of the nine
+     themes, so the frosted ground under this rect shows through in `glass`
+     alone, which asks for no frost. `components/ui/diagram-frost.tsx` records
+     that this makes the frost inert and what is waiting on a decision. */
   push(
     diagramSurfaceMarkup({
       width: layout.width,
       height: layout.height,
-      stroke: theme.border,
-      fill: theme.diagramSurface.fill,
-      fillOpacity: theme.diagramSurface.opacity,
+      stroke: theme.nodeBorder,
+      fill: theme.node,
       originX: EXPORT_PADDING,
       originY: EXPORT_PADDING,
     }),

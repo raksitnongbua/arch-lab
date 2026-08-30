@@ -381,25 +381,25 @@ check(
     "nothing above",
 );
 
-/* THE DIAGRAM GETS A BACKGROUND; THE GROUND DOES NOT GET A HOLE.
-   A ground that fills the pane runs under every drawing, and one notation needs
-   to sit ON something rather than in a clearing cut out of the sheet: a gantt's
-   own time ticks and section rules are a LATTICE, and two lattices at unrelated
-   pitches beat. The surface is now one shared component — `DiagramSurface` on
-   screen, `diagramSurfaceMarkup` in the exporters — mounted by the three kinds
-   below, and it is a RULE plus an optional per-theme WASH rather than the
-   opaque `--node` panel it started as. The wash is what keeps the rule honest
-   on `blueprint`, whose `--border` is deliberately quieter than its own
-   ruling; being translucent, it tones the sheet rather than piercing it, and
-   the seam section further down holds it to that.
+/* THE DIAGRAM GETS A BACKGROUND, AND IT IS A PANEL.
+   A ground that fills the pane runs under every drawing, and a drawing sitting
+   straight on it has no edge. The surface is one shared component —
+   `DiagramSurface` on screen, `diagramSurfaceMarkup` in the exporters —
+   mounted by the three kinds below, and it is now `--node` filled and
+   `--node-border` ruled: the dictionary's panel, the pair every canvas here
+   already uses for a shape against its background. It was a line-only `--border`
+   rule with an optional per-theme translucent wash; `lib/diagram-surface.ts`
+   carries the whole history and the panel section further down carries the
+   arithmetic.
 
    ASSERTED IN BOTH PLACES, because a screen surface with no exported twin is a
    download that does not look like the screen.
 
-   THESE TWO REPLACE A PAIR THAT HAD GONE STALE: they grepped for the old
-   gantt-only `rx={12}` `--node`-filled, `--node-border`-stroked markup, a
-   shape that has existed nowhere since the surface became shared, and they
-   asked about `gantt` alone while `timeline` and `lifecycle` mount it too. */
+   THESE REPLACE A PAIR THAT HAD GONE STALE TWICE: first grepping for a
+   gantt-only `rx={12}` markup shape that stopped existing when the surface
+   became shared, then grepping for the wash tokens that stopped existing when
+   it became a panel. Both times the assertion kept passing on the wrong thing
+   or was ready to. */
 const SURFACE_KINDS = ["timeline", "gantt", "lifecycle"];
 {
   for (const kind of SURFACE_KINDS) {
@@ -416,13 +416,21 @@ const SURFACE_KINDS = ["timeline", "gantt", "lifecycle"];
       "the drawing lost its sheet — on `blueprint` the frame is quieter than " +
         "the ruling, so without the surface the diagram area reads as nothing",
     );
+    /* FROM THE THEME, NOT FROM A LITERAL, and both halves of the pair: an
+       exporter that resolved only the fill would download a panel with no
+       edge, which is precisely the mark the panel depends on. */
+    const exportCode = readCode(`src/features/${kind}/export/render-svg.ts`);
     check(
-      `${kind}: the exported file carries the same surface`,
-      /diagramSurfaceMarkup\(\{[\s\S]{0,200}?fill:\s*theme\.diagramSurface\.fill/.test(
-        readCode(`src/features/${kind}/export/render-svg.ts`),
-      ),
-      "the download drops the wash the screen shows — a `blueprint` export " +
-        "would frame the plan on bare ruling",
+      `${kind}: the exported file carries the same panel, from the theme`,
+      /diagramSurfaceMarkup\(\{[\s\S]{0,240}?stroke:\s*theme\.nodeBorder/.test(
+        exportCode,
+      ) &&
+        /diagramSurfaceMarkup\(\{[\s\S]{0,240}?fill:\s*theme\.node\b/.test(
+          exportCode,
+        ),
+      "the download paints its diagram surface from something other than the " +
+        "resolved `--node` / `--node-border` pair, so a downloaded file stops " +
+        "agreeing with the screen that produced it",
     );
   }
   /* AND THE SEAM IS TOKENS, NEVER LITERALS. The screen twin and the exporter
@@ -432,12 +440,42 @@ const SURFACE_KINDS = ["timeline", "gantt", "lifecycle"];
   {
     const seam = readCode("src/components/ui/diagram-surface.tsx");
     check(
-      "the surface paints the wash from the tokens, on both halves",
-      /fill="var\(--diagram-surface-fill\)"/.test(seam) &&
-        /fillOpacity="var\(--diagram-surface-opacity\)"/.test(seam),
-      "`DiagramSurface` hardcodes its wash (or paints only half of it), so a " +
-        "theme opting in changes nothing on screen while its export changes",
+      "the surface paints the panel from the tokens, on both halves",
+      /fill="var\(--node\)"/.test(seam) &&
+        /stroke="var\(--node-border\)"/.test(seam),
+      "`DiagramSurface` hardcodes its panel (or paints only half of it), so a " +
+        "theme change moves the export and leaves the screen behind",
     );
+    /* THE GEOMETRY IS STILL THE SHARED ONE. A panel drawn at a hand-typed box
+       is the bug `DIAGRAM_SURFACE_PAD` exists for — a stroked edge landing on
+       the drawing's own text — and it would look correct in whichever pane its
+       author checked. */
+    check(
+      "the surface takes its box from the shared `diagramSurfaceBox`",
+      /diagramSurfaceBox\(/.test(seam) &&
+        /rx=\{DIAGRAM_SURFACE_RADIUS\}/.test(seam),
+      "`DiagramSurface` derives its own geometry, so the screen and the three " +
+        "exporters can frame one drawing two different ways",
+    );
+    /* AND THE DICTIONARY CUTS THE SAME CORNER. Its panel is per-SECTION rather
+       than per-drawing, so it does not share the box — but the radius was a
+       hand-typed `10` in its canvas and a second one in its exporter, and the
+       surface adopting the dictionary's treatment is exactly the moment those
+       stop being allowed to drift apart. `dry.md`: a value that exists in one
+       place is interpolated, never retyped. */
+    for (const rel of [
+      "src/features/dict/components/dict-diagram.tsx",
+      "src/features/dict/export/render-svg.ts",
+    ]) {
+      const dictCode = readCode(rel);
+      check(
+        `${rel.split("/").pop()}: its panel cuts the shared corner`,
+        /DIAGRAM_SURFACE_RADIUS/.test(dictCode),
+        "the dictionary's section panel hand-types its corner radius, so the " +
+          "dictionary and the three sheet-mounting notations — which now draw " +
+          "the same `--node` on `--node-border` panel — can round differently",
+      );
+    }
   }
   /* AND NO KIND CUTS A HOLE. `--canvas` painted over the ground inside a
      drawing is a clearing, which puts a hard edge on the sheet exactly where
@@ -459,14 +497,14 @@ const SURFACE_KINDS = ["timeline", "gantt", "lifecycle"];
 }
 
 console.log(
-  "\nevery theme's diagram wash is a wash, and nothing is lost on it",
+  "\nevery theme's diagram panel is complete, and nothing is lost on it",
 );
 
-/* THE WASH IS A CUSTOMISATION SURFACE, so it gets a check that measures EVERY
-   variant rather than the one that opted in. `purpose.md`: a new customisation
-   surface needs a script proving every variant complete and legible, "in the
-   manner of `check:themes` and `check:icon-contrast`" — a half-populated
-   option ships a choice that makes the diagram look broken.
+/* THE SURFACE IS A CUSTOMISATION SURFACE, so it gets a check that measures
+   EVERY theme rather than the one that looked wrong. `purpose.md`: a new
+   customisation surface needs a script proving every variant complete and
+   legible, "in the manner of `check:themes` and `check:icon-contrast`" — a
+   half-populated option ships a choice that makes the diagram look broken.
 
    IT LIVES HERE rather than in a script of its own because this file already
    loads `THEMES`, the token resolver and the oklch maths, and a second copy of
@@ -474,155 +512,142 @@ console.log(
    the numbers below are relative to the grid contrast this file already
    measures.
 
-   THREE LIMITS, AND MEASURING THE LADDER CHANGED WHICH ONE IS LOAD-BEARING.
-   `--diagram-surface-opacity` may be anything in [0, 0.6]; a wash that is on
-   must stay QUIETER than its own theme's ruling; and the drawing's ink must
-   still read on the composite. Together they say "tone the sheet, do not stack
-   a second ground on it" as arithmetic rather than as prose — without which
-   the treatment is one edit from being the opaque `--node` panel the line-only
-   revision removed, and nothing would notice.
+   WHAT THIS REPLACED, and why the arithmetic changed shape. The surface used to
+   be a 1px `--border` rule plus a per-theme translucent WASH of the sheet's own
+   ruling ink, and this section held that wash to a ceiling (0.4), to a
+   quieter-than-its-own-ruling comparison, and to the drawing's ink floors. All
+   five of those constants had nothing left to guard the moment the surface
+   became `--node` on `--node-border`: there is no strength to cap, no ink to
+   compare against the ruling, and no opt-in to pin off. Deleting them without
+   replacement would have left the largest single area in three notations
+   measured by nothing at all, which is how the wash got to 0.6 in the first
+   place.
 
-   THE RULING COMPARISON WAS BELIEVED TO BE THE BINDING ONE. It is not, and the
-   correction is worth keeping because it was believed twice, in this comment
-   and in the CSS. Sweeping blueprint from 0.4 to 0.8 and reading the numbers
-   out: the wash goes 1.412 → 1.824:1 against a ruling that sits at 2.030:1, so
-   the comparison NEVER fires across the whole usable range. What actually runs
-   out is the CONNECTOR FLOOR — 3.91 at 0.4, 3.41 at 0.6, 3.03 at 0.8, which is
-   the 3:1 limit itself. The wall is the drawing's own ink, not the ground.
+   THE PROPERTY IT GUARDS NOW IS THE ONE THE PANEL RESTS ON: `--node` on
+   `--canvas` is ALREADY MEASURED IN EVERY THEME, which is the entire reason
+   the surface is that pair rather than a bespoke tint. That claim is only true
+   while both tokens are real, present and separable in all nine, so it is
+   asserted rather than assumed.
 
-   THE RULING COMPARISON IS STILL THE ONE TO DEFEND, for a different reason
-   than the one first written here. It does not bind on OPACITY, but it binds
-   on INK: `--node-border` at the same alpha reads 2.341:1 and fails it, which
-   is how the fill token was chosen. It scales with whatever ground a theme
-   actually has, where a flat ceiling cannot, so it is what still catches a
-   wash growing into a panel on a theme nobody has measured by hand.
+   AND THE SEPARATION IS IN THE RULE, NOT THE FILL — the finding that decided
+   what to measure. The panel's fill lifts the area by 1.033:1 (`paper`) to
+   1.136:1 (`pastel`) against the canvas: under the 1.1:1 ground-visibility
+   floor in six of the nine, and deliberately so, because a fill that separated
+   by itself would be spending the drawing's own contrast budget to do it. What
+   marks the document is `--node-border`, at 2.652:1 (`pastel`) to 13.663:1
+   (`contrast`). So the floor below is on the RULE. A floor on the fill would
+   fail six themes that look correct, and — worse — would invite someone to
+   darken `--node` to pass it, which is the wash's whole failure re-run through
+   a different token.
 
-   THE BAND WENT [0, 0.35], 0.4, 0.6, AND IS NOW BACK AT 0.4. Each raise was to
-   exactly the value asked for and never to a round number past it; the same
-   discipline is what brings it back down, because a ceiling left standing above
-   the strength anybody actually uses has stopped being a limit and is only a
-   licence nobody has read.
+   `--border` IS WHY THE FLOOR IS WHERE IT IS. The rule this panel replaced was
+   drawn in `--border`, which measures 1.181:1 to 1.864:1 on the canvas in
+   eight of the nine themes — a chrome hairline, under or barely over the
+   visibility floor, which is exactly why `blueprint` needed a wash to be seen
+   at all. `PANEL_RULE_MIN` sits above every one of those eight and below every
+   `--node-border`, so it is the number that distinguishes the treatment that
+   worked from the treatment that did not, rather than a round number chosen to
+   pass.
 
-   WHAT MADE THE CLIMB STOP was finding out which failure the knob was being
-   turned at. The area was hard to read because the drafting ruling BEATS
-   against the drawing's strokes under it, and a wash attenuates that only as a
-   side effect — at α the lattice still runs at (1−α) — so halving the
-   irritation meant nearly doubling a tone that is charged to the connectors.
-   `--diagram-surface-blur` attacks the interference directly and, being
-   mean-preserving, is charged nothing; the frost section below measures it. So
-   the road past 0.4 is not more alpha and is no longer a different ink either:
-   it is the other knob.
+   And the drawing must still read ON the panel, at the same floors the palette
+   checks hold its ink to everywhere else. */
 
-   And a wash that is switched on must not eat the drawing: the connectors and
-   the text are measured ON the composite, at the same floors the palette
-   checks hold them to everywhere else. */
-const WASH_MAX_OPACITY = 0.4;
-/* The ground's own visibility floor, kept from the model above rather than
-   invented here: a wash quieter than this is an option a reader cannot see,
-   which is worse than not offering it. */
-const WASH_MIN_VISIBLE = 1.1;
-const WASH_EDGE_MIN = 3;
-const WASH_TEXT_MIN = 4.5;
-
-/* PINNED OFF, WITH THEIR REASONS. Both are decisions someone made on purpose
-   and both would be "completed" by a well-meaning later pass; the blurb is
-   where the reason lives, so the failure argues rather than just refuses. */
-const WASH_PINNED_OFF = {
-  paper:
-    "line art is an explicit, twice-approved user decision — that theme's " +
-    "whole argument is stroke rather than fill, and a wash is a fill",
-  eink:
-    "its identity budget is spent — five greys plus the role texture plus the " +
-    "sheet grain. A third grey material shifts every fill `check:eink` " +
-    "measures the texture against",
-};
+/* Both tokens must be a real colour. `paper` and `eink` set their ROLE fills
+   (`--node-person`, `--flow-decision`, …) to `transparent` on purpose — that is
+   how a line-art theme is declared, and `check:eink`, `check:gantt-palette` and
+   `check:flowchart-palette` all derive "this theme is line art" from
+   `fill.alpha === 0`. The SURFACE is not a role: a transparent surface is not
+   line art, it is no sheet, and the drawing falls back onto bare ruling. This
+   assertion is what keeps a future line-art pass from "completing the set" by
+   emptying the one fill that must stay filled. */
+const PANEL_MIN_ALPHA = 0.5;
+/* Above every `--border` (max 1.864:1, on `blueprint`) and below every
+   `--node-border` (min 2.652:1, on `pastel`) — see the header above. */
+const PANEL_RULE_MIN = 2;
+/* The palette checks' own floors, not new numbers: connectors at 3:1 and text
+   at 4.5:1, measured on the panel because that is what the drawing now sits on
+   rather than on the canvas. */
+const PANEL_EDGE_MIN = 3;
+const PANEL_TEXT_MIN = 4.5;
 
 for (const theme of THEMES) {
   const tokens = tokensOf(CSS, theme);
   if (tokens === null) continue;
-  const raw = resolveToken("--diagram-surface-opacity", tokens, baseline);
-  const opacity = Number(raw);
-  check(
-    `${theme}: its wash strength is a number inside the wash band (${raw})`,
-    Number.isFinite(opacity) && opacity >= 0 && opacity <= WASH_MAX_OPACITY,
-    `--diagram-surface-opacity is ${raw}; over ${WASH_MAX_OPACITY} the tone ` +
-      "stops reading as the sheet toned and starts reading as a panel laid on " +
-      "top of it, which is the treatment this one replaced",
-  );
-  const pinned = WASH_PINNED_OFF[theme];
-  if (pinned !== undefined) {
-    check(
-      `${theme}: it stays off the wash`,
-      opacity === 0,
-      `${theme} opted into the diagram wash at ${raw}, but ${pinned}`,
-    );
-  }
-  if (!(opacity > 0)) continue;
-
   const canvas = parseOklch(resolveToken("--canvas", tokens, baseline));
-  const ink = parseOklch(
-    resolveToken("--diagram-surface-fill", tokens, baseline),
+  const node = parseOklch(resolveToken("--node", tokens, baseline));
+  const nodeBorder = parseOklch(
+    resolveToken("--node-border", tokens, baseline),
   );
-  const grid = parseOklch(resolveToken("--canvas-grid", tokens, baseline));
   const edge = parseOklch(resolveToken("--edge", tokens, baseline));
   const text = parseOklch(resolveToken("--foreground", tokens, baseline));
-  if ([canvas, ink, grid, edge, text].some((c) => c === null)) {
-    check(`${theme}: its wash tokens resolve`, false);
+  if ([canvas, node, nodeBorder, edge, text].some((c) => c === null)) {
+    check(`${theme}: its diagram panel's tokens resolve`, false);
     continue;
   }
-  /* COMPOSITED THE WAY THE BROWSER PAINTS IT: the ink is first flattened onto
-     the canvas for its own alpha (a theme may declare a translucent token),
-     then laid over the canvas again at the wash's opacity. Measuring the ink
-     alone would report a surface no reader ever sees. */
-  const inkOnCanvas = flatten(ink, canvas);
-  const surface = flatten(
-    { rgb: inkOnCanvas, alpha: opacity },
-    { rgb: canvas.rgb },
-  );
-  const vsCanvas = contrast(surface, canvas.rgb);
-  const gridVsCanvas = contrast(flatten(grid, canvas), canvas.rgb);
-  const edgeOnSurface = contrast(flatten(edge, canvas), surface);
-  const textOnSurface = contrast(flatten(text, canvas), surface);
 
   check(
-    `${theme}: its wash is visible at all (${vsCanvas.toFixed(3)}:1)`,
-    vsCanvas >= WASH_MIN_VISIBLE,
-    `${vsCanvas.toFixed(3)}:1 against --canvas is under the ${WASH_MIN_VISIBLE}:1 ` +
-      "floor — this theme ships a diagram sheet the reader cannot make out, " +
-      "which looks like a bug rather than like a choice",
+    `${theme}: its panel is a real surface, not a transparent one (--node α ${node.alpha}, --node-border α ${nodeBorder.alpha})`,
+    node.alpha >= PANEL_MIN_ALPHA && nodeBorder.alpha >= PANEL_MIN_ALPHA,
+    "the diagram surface is painted from --node and --node-border, and one of " +
+      `them is under α ${PANEL_MIN_ALPHA} in this theme — the three ` +
+      "sheet-mounting notations would draw their whole drawing straight onto " +
+      "the well's ruling. A transparent ROLE fill is how a line-art theme is " +
+      "declared and is correct; a transparent SURFACE is a missing sheet",
+  );
+
+  /* COMPOSITED THE WAY THE BROWSER PAINTS IT: the panel is flattened onto the
+     canvas for its own alpha first (`glass` declares `--node` at 0.62), and
+     every reading below is against that composite rather than against the raw
+     token — which would report a surface no reader ever sees. */
+  const panel = flatten(node, canvas);
+  const ruleVsCanvas = contrast(flatten(nodeBorder, canvas), canvas.rgb);
+  const fillVsCanvas = contrast(panel, canvas.rgb);
+  const edgeOnPanel = contrast(flatten(edge, { rgb: panel }), panel);
+  const textOnPanel = contrast(flatten(text, { rgb: panel }), panel);
+
+  check(
+    `${theme}: its panel's edge marks the document (${ruleVsCanvas.toFixed(3)}:1)`,
+    ruleVsCanvas >= PANEL_RULE_MIN,
+    `--node-border measures ${ruleVsCanvas.toFixed(3)}:1 against --canvas, ` +
+      `under the ${PANEL_RULE_MIN}:1 floor. The panel's fill separates by only ` +
+      `${fillVsCanvas.toFixed(3)}:1 by design, so the rule is the whole mark — ` +
+      "under this floor the reader cannot see where the document stops, which " +
+      "is the failure the line-only surface had on `blueprint`",
   );
   check(
-    `${theme}: its wash stays quieter than its own ruling (${vsCanvas.toFixed(3)} ≤ ${gridVsCanvas.toFixed(3)})`,
-    vsCanvas <= gridVsCanvas,
-    `the wash reads at ${vsCanvas.toFixed(3)}:1 and the ruling at ` +
-      `${gridVsCanvas.toFixed(3)}:1, so the sheet's working area is now a ` +
-      "louder mark than the sheet's own lines — that is a panel, not a tone",
+    `${theme}: connectors still read on the panel (${edgeOnPanel.toFixed(2)}:1)`,
+    edgeOnPanel >= PANEL_EDGE_MIN,
+    `--edge measures ${edgeOnPanel.toFixed(2)}:1 on the panel, under ` +
+      `${PANEL_EDGE_MIN}:1 — the sheet the drawing sits on is swallowing the ` +
+      "drawing",
   );
   check(
-    `${theme}: connectors still read on the wash (${edgeOnSurface.toFixed(2)}:1)`,
-    edgeOnSurface >= WASH_EDGE_MIN,
-    `--edge measures ${edgeOnSurface.toFixed(2)}:1 on the washed surface, ` +
-      `under ${WASH_EDGE_MIN}:1 — the ground the drawing sits on is swallowing ` +
-      "the drawing",
-  );
-  check(
-    `${theme}: text still reads on the wash (${textOnSurface.toFixed(2)}:1)`,
-    textOnSurface >= WASH_TEXT_MIN,
-    `--foreground measures ${textOnSurface.toFixed(2)}:1 on the washed ` +
-      `surface, under ${WASH_TEXT_MIN}:1`,
+    `${theme}: text still reads on the panel (${textOnPanel.toFixed(2)}:1)`,
+    textOnPanel >= PANEL_TEXT_MIN,
+    `--foreground measures ${textOnPanel.toFixed(2)}:1 on the panel, under ` +
+      `${PANEL_TEXT_MIN}:1`,
   );
 }
 
 console.log("\nthe frost quiets the ruling, and nothing is lost under it");
 
-/* THE FROST IS THE FOURTH SEAM, AND BLUR HAS NO CONTRAST NUMBER — but it has
-   arithmetic consequences, and those are measurable against the real ladder.
-   The property this section exists for is the one the wash's own first
-   assertion states in luminance, restated in FREQUENCY: the sheet is TONED,
-   never PIERCED. A wash that hides the ruling is a panel; a frost that erases
-   the ruling is a soft-edged clearing, which is the same mistake arriving by
-   the other door, and it would arrive silently because every colour assertion
-   above stays green while it happens.
+/* THE FROST IS A SEAM THE PANEL HAS MADE INVISIBLE, and this section is kept
+   in that knowledge rather than in ignorance of it. `--diagram-surface-blur`
+   still declares a σ on `blueprint`, `frostedGroundMarkup` still splits the
+   exported ground around the surface box, and the opaque panel is painted over
+   the whole of that region — so nothing measured below reaches a reader.
+   `components/ui/diagram-frost.tsx` states the decision that is waiting and
+   what taking it would delete, this section included.
+
+   WHAT IT STILL PROVES, and the reason it was not deleted with the wash's five
+   constants: the machinery is arithmetically sound and the export construction
+   is correct, so reversing the panel restores a working frost rather than a
+   frost that has silently rotted while nothing measured it. BLUR HAS NO
+   CONTRAST NUMBER, but it has arithmetic consequences measurable against the
+   real ladder, and the property is the sheet being TONED rather than PIERCED:
+   a frost that erases the ruling is a soft-edged clearing, and it would arrive
+   silently because every colour assertion elsewhere stays green while it
+   happens.
 
    THE MODEL, stated so a later reader can argue with it rather than trust it.
    A Gaussian of standard deviation σ attenuates a periodic pattern of pitch p
@@ -635,29 +660,23 @@ console.log("\nthe frost quiets the ruling, and nothing is lost under it");
 
    TWO ENDS, BOTH FAILABLE. Too much σ and the ruling converges to its own mean
    — on `blueprint` that is 1.08:1 against the canvas, under the 1.1:1 floor a
-   ground must clear to be seen at all, and the frost has become the hole
-   `lib/diagram-surface.ts` spends a paragraph refusing. Too little and the
-   residual is nearly 1: a knob that changes nothing, which reads as broken.
-
-   AND THE COMPOSITE IS RE-MEASURED, because the frost sits UNDER the wash and
-   the drawing sits on both. Blur is mean-preserving, so these numbers barely
-   move from the wash-only ones — the assertions are here so that a future σ,
-   ink or ladder change cannot quietly starve the connectors while every other
-   number in this file stays green.
+   ground must clear to be seen at all. Too little and the residual is nearly 1:
+   a knob that changes nothing, which reads as broken.
 
    WHAT THIS CANNOT ASSERT, said plainly: that a browser composites the blur.
    It proves the declaration is present, theme-scoped and arithmetically sound,
-   and it proves the EXPORT construction in full, because a file is bytes. That
-   is the same epistemic position the wash is in — nothing here asserts the
-   browser paints `fill-opacity` either. */
-const FROST_MIN_VISIBLE = WASH_MIN_VISIBLE;
+   and it proves the EXPORT construction in full, because a file is bytes. */
+/* The ground's own visibility floor: a mark quieter than this is one a reader
+   cannot see. Kept from the ladder model above rather than invented here, and
+   no longer borrowed from the wash's copy of it, which is gone. */
+const FROST_MIN_VISIBLE = 1.1;
 /* Over this, σ is decoration. The window it leaves at blueprint's p = 40 is
    roughly σ ∈ [5, 14]px, and 8 sits in the middle of it on purpose. */
 const FROST_MAX_RESIDUAL = 0.75;
 
-/* PINNED OFF, WITH THEIR REASONS — the `WASH_PINNED_OFF` shape, and one more
-   theme than the wash pins, because `contrast` refuses a frost for a reason of
-   its own rather than for the wash's. */
+/* PINNED OFF, WITH THEIR REASONS. Each is a decision someone made on purpose
+   and each would be "completed" by a well-meaning later pass; the blurb is
+   where the reason lives, so the failure argues rather than just refuses. */
 const FROST_PINNED_OFF = {
   contrast:
     "it grounds NOTHING by explicit argument — anything behind the only marks " +
@@ -666,8 +685,7 @@ const FROST_PINNED_OFF = {
     "smear by definition",
   paper:
     "its ground is the MATERIAL, in sheet space: blurring paper fibre says the " +
-    "paper is out of focus, not that the drawing has a home. Same refusal the " +
-    "wash records, one layer down",
+    "paper is out of focus, not that the drawing has a home",
   eink:
     "its ground is likewise the sheet rather than a ruling, and its identity " +
     "budget is spent — five greys plus the role texture plus the grain",
@@ -760,44 +778,14 @@ const FROST_PINNED_OFF = {
         "compositing layer and changes nothing a reader can see",
     );
 
-    /* THE COMPOSITE, with the frost in it: the ruling flattened to its blurred
-       MEAN over the canvas (mean-preserving is the whole reason blur costs the
-       drawing nothing, so this is the honest reading), then the wash over that,
-       then the drawing's ink on the result. */
-    const width = worst.level.lineWidthPx / worst.level.worldPitch;
-    const coverage = 2 * width - width * width;
-    const blurred = mixOver(inkRgb, canvas.rgb, worst.level.opacity * coverage);
-    const washOpacity = Number(
-      resolveToken("--diagram-surface-opacity", tokens, baseline),
-    );
-    const washInk = parseOklch(
-      resolveToken("--diagram-surface-fill", tokens, baseline),
-    );
-    const edge = parseOklch(resolveToken("--edge", tokens, baseline));
-    const text = parseOklch(resolveToken("--foreground", tokens, baseline));
-    if ([washInk, edge, text].some((c) => c === null)) {
-      check(`${theme}: its frosted composite resolves`, false);
-      continue;
-    }
-    const composite = mixOver(
-      flatten(washInk, canvas),
-      blurred,
-      Number.isFinite(washOpacity) ? washOpacity : 0,
-    );
-    const edgeOn = contrast(flatten(edge, canvas), composite);
-    const textOn = contrast(flatten(text, canvas), composite);
-    check(
-      `${theme}: connectors still read on the frosted composite (${edgeOn.toFixed(2)}:1)`,
-      edgeOn >= WASH_EDGE_MIN,
-      `--edge measures ${edgeOn.toFixed(2)}:1 on wash-over-frost, under ` +
-        `${WASH_EDGE_MIN}:1 — the sheet is swallowing the drawing`,
-    );
-    check(
-      `${theme}: text still reads on the frosted composite (${textOn.toFixed(2)}:1)`,
-      textOn >= WASH_TEXT_MIN,
-      `--foreground measures ${textOn.toFixed(2)}:1 on wash-over-frost, under ` +
-        `${WASH_TEXT_MIN}:1`,
-    );
+    /* NO COMPOSITE READING HERE ANY MORE, and its removal is the honest half of
+       this section. It used to flatten the blurred ruling, lay the wash over
+       it, and measure the drawing's ink on the result — because the drawing did
+       sit on that stack. It does not now: an opaque `--node` panel sits between
+       the frost and the drawing, so the ink's contrast is a question about the
+       PANEL and is asked once, for all nine themes, in the panel section above.
+       Restating it here would be a second answer to one question, and it would
+       be the wrong one, since it would measure a surface nothing is drawn on. */
   }
 }
 
@@ -834,8 +822,8 @@ const FROST_PINNED_OFF = {
   );
   /* THE FALLBACK IS FOUND BY POSITION rather than by content, because the
      honest fallback here is an EMPTY block: an engine without backdrop filters
-     shows the crisp ruling under the wash, which is what shipped before the
-     frost and needs no rescuing. What the check is really asking is whether the
+     shows the crisp ruling around the drawing and the same opaque panel under
+     it, which needs no rescuing. What the check is really asking is whether the
      case was decided, so it looks for the block that follows the frost's own
      declaration, the way `.af-glass` records its decision beside itself. */
   const scoped = CSS.indexOf(".blueprint .af-diagram-frost");
@@ -848,18 +836,18 @@ const FROST_PINNED_OFF = {
     "the browsers without backdrop filters were decided about",
     supports !== null,
     "no `@supports not (backdrop-filter: …)` block follows the frost — the " +
-      "fallback is the wash-only rendering that shipped before it, and that " +
-      "is a decision worth recording rather than leaving to be rediscovered",
+      "fallback is a crisp ruling around an unchanged panel, and that is a " +
+      "decision worth recording rather than leaving to be rediscovered",
   );
   check(
     "and the fallback does not fork the export by browser",
     supports === null ||
-      !/--diagram-surface-(opacity|fill|blur)\s*:/.test(
+      !/--(diagram-surface-blur|node|node-border)\s*:/.test(
         supports[1].replace(/\/\*[\s\S]*?\*\//g, ""),
       ),
-    "the support fallback redeclares a diagram-surface token, and the " +
-      "exporter reads those out of the live computed styles — two readers of " +
-      "one document would download two different pictures of it",
+    "the support fallback redeclares a token the diagram surface paints with, " +
+      "and the exporter reads those out of the live computed styles — two " +
+      "readers of one document would download two different pictures of it",
   );
 }
 

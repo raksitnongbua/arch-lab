@@ -7,42 +7,28 @@ import {
  * The sheet a canvas draws on, as an SVG element.
  *
  * Paints first, inside the `<svg>`, before anything else the canvas draws.
- * `--border` rules the area, because a drawn frame should use the hairline
- * every other rule in the app already uses. It used to be a filled `--node`
- * panel — see `@/lib/diagram-surface` for why that became a rule.
+ * `--node` filled and `--node-border` ruled — the dictionary's panel, and the
+ * pair every canvas here already uses for a shape against its background, so
+ * it arrives measured in all nine themes. `@/lib/diagram-surface` carries the
+ * full argument, the treatments this replaced, and the numbers.
  *
- * THE WASH IS PAINTED BY EVERY THEME AND SHOWN BY ONE, exactly like the role
- * texture overlays: `--diagram-surface-opacity` is 0 in the baseline, so this
- * rect is `fill="none"` in effect everywhere except `blueprint`, whose
- * `--border` is quieter than its own ruling and therefore cannot mark the
- * document on its own. Both halves must be the TOKENS — a literal here is a
- * canvas that stops following the theme, and it is also a screen that stops
- * agreeing with the export, which resolves the same two tokens.
+ * BOTH HALVES MUST BE THE TOKENS. A literal here is a canvas that stops
+ * following the theme, and it is also a screen that stops agreeing with the
+ * export, which resolves the same two properties through `ExportTheme`.
+ * `check:canvas-grid` pins both sides.
  *
- * THE GROUND DOES NOT GET A HOLE. That is the rule this treatment has always
- * followed: the drawing gets a background, and the well's ruled ground keeps
- * running underneath and around it. Clipping the ground so a drawing could sit
- * in a clearing would be the ground apologising for existing, and it would put
- * a hard edge on the sheet exactly where the drawing's own edge already is.
- * A translucent wash is not a hole and does not become one: it TONES the
- * sheet, and the ruling runs through it at whatever the theme left over.
- *
- * AND NEITHER IS A FROST, which has to be argued rather than asserted, because
- * at a large enough radius a blur approaches a clearing and would deserve the
- * objection. What makes a hole a hole is that the region REVERTS TO `--canvas`
- * — the ground taken away and replaced by nothing, plus a hard edge where the
- * drawing's edge already is. Three things say the frost is not that. Nothing is
- * knocked out: the ruling's ink is painted over every pixel of the area, and
- * the inside piece is low-pass filtered rather than removed. The filter is
- * mean-preserving, so the sheet's own tone continues through the region instead
- * of dropping back to the bare canvas. And at the radius `blueprint` asks for,
- * the ruling inside the area still reads 1.510:1 against 2.124:1 crisp — a
- * ghost of the ruling, but a visible one, so it literally still runs through.
- * The one crisp edge the construction makes falls exactly on this rect's own
- * 1px rule, which is the hole argument's own test: an edge that already exists.
- * What WOULD concede the point is a radius large enough to flatten the ruling
- * to its mean, and `check:canvas-grid` forbids that with a number rather than
- * leaving it to taste.
+ * THIS IS A HOLE IN THE GROUND, and that is now the accepted answer rather
+ * than the refused one. Earlier revisions of this component argued at length
+ * that the well's ruled ground had to keep running under and around the
+ * drawing, and that an opaque panel would be "the ground apologising for
+ * existing". The panel is opaque in eight of the nine themes — `glass` alone
+ * leaves `--node` at alpha 0.62 — so under it the ground genuinely stops. That
+ * argument has been withdrawn on the merits: a document sits ON a desk, and
+ * the desk showing through it was a principle no reader was getting off the
+ * screen. What the objection was really protecting against is still guarded,
+ * by a different assertion: no kind may knock `--canvas` out inside its own
+ * drawing, because that is a clearing with no edge and no identity of its own.
+ * A panel is a document; a `--canvas` rect is a missing sheet.
  *
  * The geometry — and the reason a surface must never sit on the drawing's own
  * bounds — is in `@/lib/diagram-surface`, shared with the exporters so a
@@ -64,9 +50,8 @@ export function DiagramSurface({
       width={box.width}
       height={box.height}
       rx={DIAGRAM_SURFACE_RADIUS}
-      fill="var(--diagram-surface-fill)"
-      fillOpacity="var(--diagram-surface-opacity)"
-      stroke="var(--border)"
+      fill="var(--node)"
+      stroke="var(--node-border)"
       strokeWidth={1}
     />
   );

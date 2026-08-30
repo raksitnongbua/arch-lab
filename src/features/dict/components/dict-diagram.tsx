@@ -25,6 +25,7 @@
  * one a search engine cannot quote.
  */
 
+import { DIAGRAM_SURFACE_RADIUS } from "@/lib/diagram-surface";
 import type { DictLabFile } from "@/types";
 
 import { BADGE, COLUMN_LABEL, DICT, layoutDict } from "../lib/layout";
@@ -295,10 +296,19 @@ export function DictDiagram({
           {/* THE TABLE'S OWN SURFACE, drawn before the headings so everything
               sits on it. `--node` on `--canvas` is the pair every other canvas
               here uses for a shape against its background, so it is already
-              measured in all eight themes — which is why the panel is that pair
+              measured in all nine themes — which is why the panel is that pair
               rather than a hand-picked tint of the canvas colour, and why it
               lifts the table without the high-contrast theme losing the
-              distinction.
+              distinction. This argument outlived the dictionary: the three
+              sheet-mounting notations adopted the same pair for their whole
+              drawing surface, and `lib/diagram-surface.ts` carries it now.
+
+              THE GEOMETRY STAYS THE DICTIONARY'S OWN. `DiagramSurface` frames
+              one drawing; this frames one SECTION, and a dictionary has as
+              many panels as it has tables. Only the corner is shared, as
+              `DIAGRAM_SURFACE_RADIUS` — it was a hand-typed 10 here and
+              another in the exporter, and the four renditions now cut one
+              corner. `check:canvas-grid` pins each.
 
               The SECTION HEADING STAYS OUTSIDE IT, above the top edge: the
               heading names the table, and a name printed inside the thing it
@@ -310,7 +320,7 @@ export function DictDiagram({
             height={
               section.y + section.height - section.headerY + DICT.padX * 0.5
             }
-            rx={10}
+            rx={DIAGRAM_SURFACE_RADIUS}
             fill="var(--node)"
             stroke="var(--node-border)"
             strokeWidth={1}

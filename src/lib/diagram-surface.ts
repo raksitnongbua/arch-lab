@@ -6,53 +6,52 @@
  * and a drawing sitting straight on it has no edge — nothing says where the
  * document stops and the desk starts.
  *
- * IT IS A RULE, PLUS AN OPTIONAL PER-THEME WASH AND FROST. It was a filled
- * `--node` box, which made the drawing area a second surface stacked on the
- * well and turned every theme into a hunt for two grounds that agree. The area is given by a
- * LINE — a 1px border — so the well and the drawing sit on one continuous
- * ground and the frame says where the drawing lives. Paper and pencil rather
- * than paper on a desk.
+ * IT IS A PANEL: `--node` filled, `--node-border` ruled. That pair is the whole
+ * argument, and it is the dictionary's argument, carried here from
+ * `features/dict/components/dict-diagram.tsx` where it has shipped for longer.
+ * `--node` on `--canvas` is what every canvas in this app already uses for a
+ * shape against its background, so it is ALREADY MEASURED in all nine themes —
+ * which is why the surface is that pair rather than a hand-picked tint of the
+ * canvas colour. A new tint is a new colour relationship nobody has checked; a
+ * node is a relationship every theme was designed around.
  *
- * WHAT THAT REVISION ENDED WAS THE OPAQUE PANEL, not fill as such, and the
- * distinction is load-bearing rather than pedantic. A translucent wash of the
- * sheet's own ruling ink is not a second ground: the ruling keeps running
- * underneath and THROUGH it, so there is one ground, toned where the document
- * sits. `blueprint` is the theme that needs this and the reason the seam
- * exists — its `--border` is deliberately quieter than its own ruling, so a
- * line ALONE cannot mark the document there, and the area reads as nothing.
- * Every other theme leaves `--diagram-surface-opacity` at 0 and gets today's
- * line-only surface, byte for byte, in exports included.
+ * THE MARK IS THE RULE, NOT THE FILL, and the numbers say so plainly. The fill
+ * lifts the area by only 1.03–1.14:1 against the canvas across the nine themes
+ * — deliberately almost nothing, so the drawing's own ink keeps its budget.
+ * What separates the document from the desk is `--node-border`, which reads
+ * 2.65:1 (`pastel`) to 13.66:1 (`contrast`) on the canvas. The rule this panel
+ * replaced was drawn in `--border`, which reads 1.18–1.86:1 in eight of the
+ * nine: a hairline for chrome, not a mark that can carry a document's edge.
+ * Swapping the stroke token is most of what changed here.
  *
- * THE CEILING IS WHAT KEEPS IT A WASH. `check:canvas-grid` fails any theme
- * over 0.4, and fails any wash whose composite is louder than that theme's
- * own ruling. Without those two numbers "a faint tone" is one edit away from
- * being the panel again, which is exactly how this treatment got here.
+ * AND YES, THIS IS A HOLE IN THE GROUND. The previous revisions of this module
+ * asserted, twice and at length, that "the ground does not get a hole" — that
+ * the well's ruling must keep running under and through the drawing, and that
+ * anything opaque was a clearing the sheet had been made to apologise for. An
+ * opaque `--node` panel is exactly that clearing. The claim is not being
+ * finessed; it is being withdrawn. Presentation is the product
+ * (`purpose.md`), the person whose product it is looked at the dictionary's
+ * panel beside the toned sheet and preferred the panel, and "one continuous
+ * ground" was a principle nobody was reading off the screen. A document sits
+ * ON a desk. The desk does not need to show through it.
  *
- * AND THE WASH IS ONLY HALF THE TREATMENT, which took three raises of that
- * ceiling to find out. There are TWO failures a diagram area can have on a
- * ruled sheet, and the wash is the right instrument for exactly one of them:
+ * WHAT WAS TRIED, in order, because the record is the useful part: an opaque
+ * `--node` panel; then a 1px `--border` line and no fill, on the theory above;
+ * then a translucent per-theme wash of the sheet's own ruling ink at 0.25,
+ * raised to 0.4, then 0.6, then returned to 0.4; then a Gaussian frost under
+ * the area to quiet the ruling's interference without spending contrast. Each
+ * step was a smaller correction than the last, which is the shape of a search
+ * converging on the wrong thing. The panel was where it started.
  *
- *   - **SEPARATION.** The area does not read as a document. A wash fixes this
- *     by toning it, and pays for the fix out of the drawing's own contrast
- *     budget — every increment moves the area's mean luminance toward the ink,
- *     so the connector floor is what runs out (3.91:1 at 0.4, 3.41:1 at 0.6,
- *     3.03:1 at 0.8, against a 3:1 limit).
- *   - **INTERFERENCE.** The sheet's ruling beats against the drawing's own
- *     strokes, which on a ruled theme is a lattice at ~2:1 crossing every bar,
- *     tick and label at an unrelated pitch. A wash attenuates that only as a
- *     side effect — at α the lattice still runs at (1−α) — so halving the
- *     irritation costs nearly a doubling of the tone.
+ * `paper` GETS THE PANEL TOO, reversing its own earlier line-art exception —
+ * chosen deliberately, in full knowledge that it reverses it. Note what is NOT
+ * reversed: `paper`'s ROLE fills (`--node-person`, `--node-internal`,
+ * `--flow-decision`, …) stay `transparent`, which is what `check:eink`,
+ * `check:gantt-palette` and `check:flowchart-palette` derive "this is a
+ * line-art theme" from. The surface is the sheet, not a shape in the drawing;
+ * a line-art drawing on a sheet is still line art.
  *
- * `--diagram-surface-blur` is the second instrument, and it is a Gaussian
- * rather than more alpha because a Gaussian is MEAN-PRESERVING: it takes the
- * lattice's amplitude out and moves the area's mean luminance not at all, so
- * it costs the connectors nothing. What it cannot do is the first job — blur
- * the ruling to nothing and it converges to its own mean, 1.08:1 against
- * `blueprint`'s canvas, under the 1.1:1 floor a ground must clear to be seen.
- * One knob per failure. The strength history 0.25 → 0.4 → 0.6 → 0.4 is the
- * record of one knob being turned at both, and of the correction.
- *
- * WHY IT IS SHARED NOW. The gantt argued, in a comment this module replaces,
+ * WHY IT IS SHARED. The gantt argued, in a comment this module replaces,
  * that it was the only kind that needed a surface: it is the one notation whose
  * own marks are a LATTICE — time ticks and section rules — and two lattices at
  * unrelated pitches beat against each other, where the timeline and the
@@ -90,9 +89,16 @@ export const DIAGRAM_SURFACE_PAD = 30;
 /**
  * The surface as SVG markup, for the exporters.
  *
- * The colour arrives as a plain string rather than an `ExportTheme`: that type
+ * The colours arrive as plain strings rather than an `ExportTheme`: that type
  * belongs to the viewer feature, and a module in `lib/` that reached for it
- * would invert the layering for one hex value.
+ * would invert the layering for two resolved values.
+ *
+ * BOTH ARE REQUIRED, with no default and no zero case. The wash this replaced
+ * had an emit-nothing-at-zero contract so that eight themes' downloaded files
+ * stayed byte-identical while one theme opted in; there is no opt-in any more,
+ * every theme paints the panel, and an optional fill would only be a way for
+ * one exporter to quietly ship an unfilled surface. Exports in every theme
+ * change appearance with this — that is the intent, and the changelog says so.
  *
  * `x`/`y` default to the drawing's origin, which is what a canvas component
  * wants; an exporter that has already translated its content by a margin
@@ -104,46 +110,24 @@ export function diagramSurfaceMarkup({
   height,
   stroke,
   fill,
-  fillOpacity = 0,
   originX = 0,
   originY = 0,
 }: {
   /** The DRAWING's size, not the sheet's — the pad is added here. */
   width: number;
   height: number;
-  /** The rule's colour. */
+  /** The rule's colour — `--node-border`, resolved. */
   stroke: string;
-  /**
-   * The wash's ink, when the theme opts into one (`--diagram-surface-fill`,
-   * already resolved to concrete sRGB by the exporter's theme resolver).
-   * Ignored at zero opacity, which is eight of the nine themes.
-   */
-  fill?: string;
-  /**
-   * `--diagram-surface-opacity`, 0…1. **At 0 — the default, and every theme
-   * but `blueprint` — this emits the exact `fill="none"` string it emitted
-   * before the wash existed**, not an invisible fill. That is the same
-   * emit-nothing-at-zero contract the role textures carry, and it is the only
-   * reason the other eight themes' downloaded files did not all change bytes
-   * the day `blueprint` gained a wash. `check:canvas-grid` measures the
-   * strengths a theme may ask for; this function does not police them.
-   */
-  fillOpacity?: number;
+  /** The panel's colour — `--node`, resolved. */
+  fill: string;
   /** Where the drawing's own origin sits in the file's coordinates. */
   originX?: number;
   originY?: number;
 }): string {
   const box = diagramSurfaceBox({ width, height, originX, originY });
-  /* `fill-opacity` as its own attribute rather than a premixed `rgba()`: the
-     colour then stays a plain sRGB value, which is what the strict rasterisers
-     outside the browser accept (`viewer/export/theme.ts` has that story). */
-  const paint =
-    fill === undefined || fillOpacity <= 0
-      ? `fill="none"`
-      : `fill="${fill}" fill-opacity="${fillOpacity}"`;
   return (
     `<rect x="${box.x}" y="${box.y}" width="${box.width}" ` +
-    `height="${box.height}" rx="${DIAGRAM_SURFACE_RADIUS}" ${paint} ` +
+    `height="${box.height}" rx="${DIAGRAM_SURFACE_RADIUS}" fill="${fill}" ` +
     `stroke="${stroke}" stroke-width="1"/>`
   );
 }
@@ -176,11 +160,19 @@ export function diagramSurfaceBox({
 }
 
 /**
- * Corner radius.
+ * Corner radius for a diagram panel, in drawing units.
  *
- * 2, not the 12 this treatment started from. A surface that is a RULE rather
- * than a panel is a drawn frame, and a drawn frame has the cut corner a sheet
- * has — the same argument `paper` already makes for its own `--radius`, which
- * is this number.
+ * 10 — the dictionary's number, and the reason this constant is exported to it
+ * rather than being a third copy. A radius of 2 belongs to a drawn frame, which
+ * is what the line-only surface was; a PANEL is a card, and a card's corner is
+ * the one the dictionary's section tables have always had. Matching it is the
+ * point: the three surface notations and the dictionary now cut the same
+ * corner, so a reader moving between them sees one product rather than two
+ * conventions.
+ *
+ * FOUR RENDITIONS READ THIS, and `check:canvas-grid` pins each: the shared
+ * `<rect>` on screen, the three exporters' markup, the frost's CSS
+ * `border-radius`, and the dictionary's own per-section panel. It was three
+ * hand-typed `10`s and a `2` before.
  */
-export const DIAGRAM_SURFACE_RADIUS = 2;
+export const DIAGRAM_SURFACE_RADIUS = 10;

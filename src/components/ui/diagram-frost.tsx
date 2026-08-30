@@ -9,16 +9,24 @@ import {
  * The frost behind a drawing: the well's ruling, quieted where the document
  * sits, without any of it being taken away.
  *
- * WHY THIS EXISTS AT ALL — and it is the half of the surface problem the wash
- * cannot reach. `blueprint` rules its well at full strength on purpose, and a
- * drafting lattice crossing every bar, tick and label at an unrelated pitch is
- * high-frequency interference in exactly the band the drawing's own 1–1.5px
- * strokes occupy. Raising `--diagram-surface-opacity` attenuates that only as a
- * side effect — at α the lattice still runs at (1−α) — and every increment is
- * charged to the connectors, which is the wall the wash actually hit. A blur is
- * mean-preserving: it takes the interference out and spends none of the
- * drawing's contrast budget. Two failures, two knobs; `lib/diagram-surface.ts`
- * has the full argument and `globals.css` has the measured σ.
+ * IT IS CURRENTLY INERT, AND THAT IS NOT A BUG IN IT. This component was the
+ * answer to interference — `blueprint` rules its well at full strength on
+ * purpose, and a drafting lattice crossing every bar, tick and label at an
+ * unrelated pitch is high-frequency noise in exactly the band the drawing's own
+ * 1–1.5px strokes occupy. A blur is mean-preserving, so it took that noise out
+ * and spent none of the drawing's contrast budget, which is what the toned
+ * sheet it accompanied could not do. The surface has since become an OPAQUE
+ * `--node` panel (`lib/diagram-surface.ts` has that decision and its history),
+ * and an opaque panel removes the interference completely by removing the
+ * ruling. This frost sits UNDER that panel, so in `blueprint` — the only theme
+ * that asks for a σ — nothing it does is visible.
+ *
+ * SO IT IS KEPT, NOT DELETED, PENDING A DECISION, and the decision is one
+ * sentence: if the panel stays, this whole component, its CSS block, its
+ * `--diagram-surface-blur` token, `frostedGroundMarkup`, and the frost section
+ * of `check:canvas-grid` should all go, because none of them can be seen. It
+ * was left standing rather than removed in the same pass that made it inert, so
+ * that reversing the panel does not also mean rebuilding this.
  *
  * IT WRAPS THE DRAWING RATHER THAN BEING DRAWN BY IT. `backdrop-filter` is
  * defined for CSS boxes and no engine applies it to an SVG graphics element, so
@@ -35,10 +43,13 @@ import {
  * a fraction of the drawing tracks any shrink with no measurement and nothing
  * to keep in sync. `check:canvas-grid` pins this component to that function.
  *
- * MOUNTED BY NINE THEMES, VISIBLE IN ONE. The filter property lives only under
- * `.blueprint` (a backdrop filter promotes a compositing layer whether or not
- * the blur is visible), so in the other eight this is an empty positioned
- * `<div>` — the same paint-always/show-by-token contract as the wash.
+ * MOUNTED BY NINE THEMES, DECLARED IN ONE. The filter property lives only
+ * under `.blueprint` (a backdrop filter promotes a compositing layer whether or
+ * not the blur is visible), so in the other eight this is an empty positioned
+ * `<div>` — the paint-always/show-by-token contract the role textures carry.
+ * With the panel above it, even the one theme that declares it shows nothing:
+ * the cost is a promoted layer for no picture, which is the strongest argument
+ * in the paragraph above for deciding rather than leaving this.
  */
 export function DiagramFrost({
   ref,
@@ -88,9 +99,9 @@ export function DiagramFrost({
           height: percent(box.height, sheetHeight),
           /* THE ONE PLACE THE RADIUS CHANGES UNITS. Everywhere else
              `DIAGRAM_SURFACE_RADIUS` is drawing units; here it is CSS px, and
-             the two differ by the shrink. At radius 2 under a cap that only
-             ever shrinks, the worst case is a sub-pixel disagreement on a
-             corner — cheaper to state than to engineer a scaled radius for. */
+             the two differ by the shrink. The worst case is a few pixels of
+             disagreement on a corner of a region that the panel now covers
+             entirely — cheaper to state than to engineer a scaled radius for. */
           borderRadius: DIAGRAM_SURFACE_RADIUS,
         }}
       />
