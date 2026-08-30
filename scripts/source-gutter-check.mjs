@@ -188,7 +188,13 @@ check("no gutter is selectable or announced", () => {
 check("the wrapping gutter mirrors the text it numbers", () => {
   for (const { label, file, wraps } of GUTTERS) {
     if (wraps !== true) continue;
-    const source = read(file);
+    /* COMMENTS STRIPPED FIRST, and that is not tidiness. Every rule below
+       greps for the very words the file's own header uses to explain the rule
+       — the `content-start` assertion was written, run green, and then proved
+       green against code with `content-start` DELETED, because the prose two
+       lines above still said it. An assertion that reads the explanation of
+       the code instead of the code passes forever. */
+    const source = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
 
     /* THE FAILURE THIS EXISTS FOR: soft wrap turns one line into several rows
        while a plain list of numbers still draws one row per line, so every
@@ -217,6 +223,18 @@ check("the wrapping gutter mirrors the text it numbers", () => {
           `font, line height and insets from one place or the wrap points move`,
       );
     }
+    /* THE SECOND WAY THE ROWS DRIFT, and it shipped: the rows sit in a grid
+       that is `min-h-full` so the gutter's ground reaches the bottom of a
+       pane the document does not fill — and a grid's default `align-content`
+       spends that leftover height BY GROWING THE ROWS. The textarea laid over
+       them does not grow, so a short document drew its numbers down a pane
+       twice as tall as its text. Only start-alignment leaves the slack at the
+       bottom where it belongs. */
+    assert.ok(
+      !/\bmin-h-full\b/.test(source) || /\bcontent-start\b/.test(source),
+      `${label} stretches a min-height grid without content-start — the spare ` +
+        `height is shared out among the rows and every number drifts down`,
+    );
     assert.ok(
       !/\brows=\{/.test(source),
       `${label} sizes itself with rows again — the textarea is laid over the ` +

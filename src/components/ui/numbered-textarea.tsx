@@ -102,8 +102,20 @@ export function NumberedTextarea({
         className,
       )}
     >
+      {/* `content-start` IS LOAD-BEARING. `min-h-full` makes this grid taller
+          than its rows whenever the document does not fill the pane, and a
+          grid's default `align-content` divides that leftover height BETWEEN
+          the auto-sized rows. Every row grew a little, the textarea laid over
+          them did not, and a 13-line document drew its numbers down a pane
+          twice as tall as its text — the exact drift the mirror exists to
+          prevent, arriving from the other direction. Start-aligned, the rows
+          keep their own height and the slack stays at the bottom. */}
       <div
-        className={cn("relative grid min-h-full w-full", TYPE, PAD_Y)}
+        className={cn(
+          "relative grid min-h-full w-full content-start",
+          TYPE,
+          PAD_Y,
+        )}
         style={{ gridTemplateColumns: `${gutter} 1fr` }}
       >
         {/* The gutter's own background, drawn full height rather than per row,
