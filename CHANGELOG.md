@@ -27,6 +27,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **On the `blueprint` theme, timelines, gantt charts and lifecycles now sit on
+  a faint wash of the sheet's own ruling colour**, so the document separates
+  from the drafting grid instead of dissolving into it — that theme frames the
+  diagram area in a border deliberately quieter than its ruling, which left the
+  frame unable to say where the drawing lived. Exported SVG, PNG and GIF carry
+  the same wash. The other eight themes are unchanged, and their exported files
+  are byte-for-byte what they were.
+
 - **Mermaid's `crit` tag now imports as the `at-risk` state**, and `at-risk`
   exports as `crit`. Previously `crit` was read and thrown away. Both spellings
   are an author saying a bar is in trouble, so a chart that arrives marked up

@@ -94,6 +94,21 @@ export interface ExportTheme {
    * their exported bytes identical to what they were before this existed.
    */
   roleTexture: { ink: string; opacity: number };
+  /**
+   * THE DIAGRAM SHEET'S WASH, resolved to a concrete ink and a number — the
+   * same shape as `roleTexture` above, and for the same reason.
+   *
+   * A `blueprint` export frames its plan on a sheet whose `--border` is
+   * deliberately quieter than the drafting ruling behind it, so without the
+   * wash the downloaded file shows a drawing floating on bare grid — a
+   * different picture from the one the reader was looking at when they pressed
+   * Download, which is the failure export parity exists to prevent.
+   *
+   * `opacity: 0` in all eight other themes, and every exporter is required to
+   * emit the `fill="none"` it emitted before this existed rather than an
+   * invisible fill — that is what keeps their exported bytes identical.
+   */
+  diagramSurface: { fill: string; opacity: number };
 }
 
 const TOKEN_VARS = {
@@ -117,6 +132,7 @@ const TOKEN_VARS = {
   destructive: "--destructive",
   destructiveForeground: "--destructive-foreground",
   roleTextureInk: "--role-texture-ink",
+  diagramSurfaceFill: "--diagram-surface-fill",
 } as const;
 
 const ROLE_TOKEN_VARS: Record<NodeColorRole, { fill: string; border: string }> =
@@ -226,10 +242,25 @@ export function resolveExportTheme(): ExportTheme {
     styles.getPropertyValue("--role-texture-opacity"),
   );
 
+  /* Same two-part treatment, same reasons: the fill is an INDIRECTION
+     (`var(--canvas-grid)` in the baseline) and needs the probe path, and a
+     non-finite opacity degrades to 0 — a plainer file, never a wash at an
+     unintended strength. */
+  const canvasGrid = resolve(TOKEN_VARS.canvasGrid, nodeBorder);
+  const diagramSurfaceOpacity = Number.parseFloat(
+    styles.getPropertyValue("--diagram-surface-opacity"),
+  );
+
   return {
     roleTexture: {
       ink: resolveExpression(TOKEN_VARS.roleTextureInk, nodeBorder),
       opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,
+    },
+    diagramSurface: {
+      fill: resolveExpression(TOKEN_VARS.diagramSurfaceFill, canvasGrid),
+      opacity: Number.isFinite(diagramSurfaceOpacity)
+        ? diagramSurfaceOpacity
+        : 0,
     },
     canvas: resolve(TOKEN_VARS.canvas, "#ffffff"),
     border: resolve(TOKEN_VARS.border, "#d9d9de"),
@@ -260,7 +291,8 @@ export function resolveExportTheme(): ExportTheme {
     nodeMeta: resolve(TOKEN_VARS.nodeMeta, "#6a7080"),
     // Falls back to the node border rather than a grey literal: a browser that
     // cannot resolve the grid token still rules the axis in a theme colour.
-    canvasGrid: resolve(TOKEN_VARS.canvasGrid, nodeBorder),
+    // Hoisted above, because the surface wash falls back to it in turn.
+    canvasGrid,
     foreground: resolve(TOKEN_VARS.foreground, "#1f2430"),
     nodeRoles: {
       person: role("person"),

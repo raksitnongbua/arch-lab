@@ -191,6 +191,41 @@
   --role-texture-ink: var(--node-border);
   --role-texture-opacity: 0;
 
+  /* THE DIAGRAM SURFACE'S WASH — the third opt-in seam on this page, and the
+     same shape as `--role-texture-opacity` directly above: declared once here,
+     zero by default, per-theme opt-in, and the exporters emit NOTHING at zero
+     rather than an invisible fill. That last clause is what keeps eight of the
+     nine themes' downloaded files byte-identical to what they were before this
+     token existed.
+
+     WHAT IT IS FOR. `DiagramSurface` marks where the document lives with a
+     1px `--border` rule and no fill, on the argument that a filled panel makes
+     the drawing a SECOND ground stacked on the well's ground and turns every
+     theme into a hunt for two grounds that agree (`lib/diagram-surface.ts`).
+     That argument holds everywhere the frame can actually be seen. On
+     `blueprint` it cannot: that theme's `--border` is DELIBERATELY quieter
+     than its own ruling ("a panel edge on a drafting sheet is a lesser line
+     than the sheet's ruling"), so the one mark saying "the document is here"
+     is fainter than the field it has to say it against, and the diagram area
+     reads as nothing.
+
+     A WASH IS NOT A PANEL, and the difference is translucency, not degree.
+     The ink defaults to `--canvas-grid` — the sheet's own ruling colour laid
+     flat, so an opting theme tones its working area rather than importing a
+     foreign surface — and at the strengths this seam permits the ruling keeps
+     running underneath and THROUGH the drawing area. `check:canvas-grid` holds
+     the ceiling at 0.35 and holds the composite quieter than the theme's own
+     grid, which is what stops a wash quietly growing back into the panel the
+     line-only revision removed.
+
+     TWO THEMES ARE PINNED OFF, with reasons, in that same check. `paper` is
+     line art by an explicit user decision — its whole argument is stroke, not
+     fill — and `eink` has spent its identity budget on five greys plus the
+     role texture, so a third grey material would shift every fill the texture
+     is measured against. Do not "complete the set". */
+  --diagram-surface-fill: var(--canvas-grid);
+  --diagram-surface-opacity: 0;
+
   /* The CSS rendition of the same seven tiles, for C4's live view — whose
      nodes are HTML boxes an SVG `<pattern>` cannot reach. The geometry is
      duplicated from `lib/role-texture.ts` because CSS cannot import it, in
@@ -986,6 +1021,20 @@
      every ladder level under 60% of its own theme's connector. */
   --canvas-rule-dot: transparent;
   --canvas-rule-line: var(--edge);
+  /* THE ONLY THEME THAT OPTS INTO THE DIAGRAM WASH (`:root` has the seam and
+     the two pinned refusals). It is the one whose ground is a full-strength
+     ruling AND whose `--border` is deliberately quieter than that ruling, two
+     tokens above — the frame cannot win, so the area needs a ground of its own.
+     0.25 of `--canvas-grid` over this canvas measures 1.257:1, clearing the
+     1.1:1 floor a ground must clear to be seen at all and staying well under
+     the ruling's own 2.030:1: the wash remains a LESSER mark than the sheet's
+     lines, which is the difference between toning the sheet and piercing it.
+     The drawing's ink still reads on it — `--edge` 4.39:1 (needs 3:1) and
+     `--foreground` 12.49:1 (needs 4.5:1). `--node-border` was tried at the
+     same alpha and landed on exactly 3.00:1 for the connectors, with no
+     margin; `--edge` and `--foreground` swallow the drawing's own ink at
+     2.59:1 and 1.18:1. `check:canvas-grid` re-measures all four every run. */
+  --diagram-surface-opacity: 0.25;
   --node: oklch(0.245 0.062 250);
   --node-foreground: oklch(0.97 0.012 250);
   /* ≥3:1 against --node (measured 4.13:1). */

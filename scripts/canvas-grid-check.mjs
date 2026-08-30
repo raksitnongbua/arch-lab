@@ -47,7 +47,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { contrast, luminance, parseOklch } from "./lib/oklch.mjs";
+import { contrast, flatten, luminance, parseOklch } from "./lib/oklch.mjs";
 import { resolveToken, tokensOf } from "./lib/theme-css.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -376,27 +376,60 @@ check(
    A ground that fills the pane runs under every drawing, and one notation needs
    to sit ON something rather than in a clearing cut out of the sheet: a gantt's
    own time ticks and section rules are a LATTICE, and two lattices at unrelated
-   pitches beat. The fix is a surface on the drawing, never a hole in the
-   ground — `dict` set that precedent long before this branch. Asserted in both
-   places, because a screen surface with no exported twin is a download that
-   does not look like the screen. */
+   pitches beat. The surface is now one shared component — `DiagramSurface` on
+   screen, `diagramSurfaceMarkup` in the exporters — mounted by the three kinds
+   below, and it is a RULE plus an optional per-theme WASH rather than the
+   opaque `--node` panel it started as. The wash is what keeps the rule honest
+   on `blueprint`, whose `--border` is deliberately quieter than its own
+   ruling; being translucent, it tones the sheet rather than piercing it, and
+   the seam section further down holds it to that.
+
+   ASSERTED IN BOTH PLACES, because a screen surface with no exported twin is a
+   download that does not look like the screen.
+
+   THESE TWO REPLACE A PAIR THAT HAD GONE STALE: they grepped for the old
+   gantt-only `rx={12}` `--node`-filled, `--node-border`-stroked markup, a
+   shape that has existed nowhere since the surface became shared, and they
+   asked about `gantt` alone while `timeline` and `lifecycle` mount it too. */
+const SURFACE_KINDS = ["timeline", "gantt", "lifecycle"];
 {
-  const surface =
-    /rx=\{12\}[\s\S]{0,120}fill="var\(--node\)"[\s\S]{0,120}stroke="var\(--node-border\)"/;
-  check(
-    "gantt: its plan is drawn on its own surface, not in a hole in the ground",
-    surface.test(readCode("src/features/gantt/components/gantt-diagram.tsx")),
-    "the gantt draws straight onto the sheet, so the ladder's rules and the " +
-      "plan's own ticks are two lattices at unrelated pitches",
-  );
-  check(
-    "gantt: the exported file carries the same surface",
-    /rx="12" fill="\$\{theme\.node\}"[\s\S]{0,40}stroke="\$\{theme\.nodeBorder\}"/.test(
-      readCode("src/features/gantt/export/render-svg.ts"),
-    ),
-    "the download drops the surface the screen shows, so the exported plan " +
-      "sits on bare ruling",
-  );
+  for (const kind of SURFACE_KINDS) {
+    /* IMPORT LINES STRIPPED, the same precaution the pane-ground checks take
+       above: a `DiagramSurface` imported and never rendered reads identically
+       to one that is rendered, and deleting the usage is the one-line way this
+       regresses. */
+    const diagramCode = readCode(
+      `src/features/${kind}/components/${kind}-diagram.tsx`,
+    ).replace(/^import[\s\S]*?;$/gm, "");
+    check(
+      `${kind}: its drawing sits on the shared surface, not in a hole in the ground`,
+      /<DiagramSurface\s/.test(diagramCode),
+      "the drawing lost its sheet — on `blueprint` the frame is quieter than " +
+        "the ruling, so without the surface the diagram area reads as nothing",
+    );
+    check(
+      `${kind}: the exported file carries the same surface`,
+      /diagramSurfaceMarkup\(\{[\s\S]{0,200}?fill:\s*theme\.diagramSurface\.fill/.test(
+        readCode(`src/features/${kind}/export/render-svg.ts`),
+      ),
+      "the download drops the wash the screen shows — a `blueprint` export " +
+        "would frame the plan on bare ruling",
+    );
+  }
+  /* AND THE SEAM IS TOKENS, NEVER LITERALS. The screen twin and the exporter
+     resolve the same two custom properties; a literal on either side is a
+     canvas that stops following the theme AND a screen that stops agreeing
+     with its own download. */
+  {
+    const seam = readCode("src/components/ui/diagram-surface.tsx");
+    check(
+      "the surface paints the wash from the tokens, on both halves",
+      /fill="var\(--diagram-surface-fill\)"/.test(seam) &&
+        /fillOpacity="var\(--diagram-surface-opacity\)"/.test(seam),
+      "`DiagramSurface` hardcodes its wash (or paints only half of it), so a " +
+        "theme opting in changes nothing on screen while its export changes",
+    );
+  }
   /* AND NO KIND CUTS A HOLE. `--canvas` painted over the ground inside a
      drawing is a clearing, which puts a hard edge on the sheet exactly where
      the drawing's edge already is. */
@@ -414,6 +447,129 @@ check(
         "instead, the way gantt and dict do",
     );
   }
+}
+
+console.log(
+  "\nevery theme's diagram wash is a wash, and nothing is lost on it",
+);
+
+/* THE WASH IS A CUSTOMISATION SURFACE, so it gets a check that measures EVERY
+   variant rather than the one that opted in. `purpose.md`: a new customisation
+   surface needs a script proving every variant complete and legible, "in the
+   manner of `check:themes` and `check:icon-contrast`" — a half-populated
+   option ships a choice that makes the diagram look broken.
+
+   IT LIVES HERE rather than in a script of its own because this file already
+   loads `THEMES`, the token resolver and the oklch maths, and a second copy of
+   all three is exactly what `dry.md` forbids. It is also the right neighbour:
+   the numbers below are relative to the grid contrast this file already
+   measures.
+
+   THE CEILING IS THE POINT. `--diagram-surface-opacity` may be anything in
+   [0, 0.35], and a wash that is switched on must additionally stay QUIETER
+   than its own theme's ruling. Between them those two say "tone the sheet,
+   do not stack a second ground on it" as arithmetic rather than as prose —
+   without which the treatment is one edit from being the opaque `--node`
+   panel the line-only revision removed, and nothing would notice.
+
+   And a wash that is switched on must not eat the drawing: the connectors and
+   the text are measured ON the composite, at the same floors the palette
+   checks hold them to everywhere else. */
+const WASH_MAX_OPACITY = 0.35;
+/* The ground's own visibility floor, kept from the model above rather than
+   invented here: a wash quieter than this is an option a reader cannot see,
+   which is worse than not offering it. */
+const WASH_MIN_VISIBLE = 1.1;
+const WASH_EDGE_MIN = 3;
+const WASH_TEXT_MIN = 4.5;
+
+/* PINNED OFF, WITH THEIR REASONS. Both are decisions someone made on purpose
+   and both would be "completed" by a well-meaning later pass; the blurb is
+   where the reason lives, so the failure argues rather than just refuses. */
+const WASH_PINNED_OFF = {
+  paper:
+    "line art is an explicit, twice-approved user decision — that theme's " +
+    "whole argument is stroke rather than fill, and a wash is a fill",
+  eink:
+    "its identity budget is spent — five greys plus the role texture plus the " +
+    "sheet grain. A third grey material shifts every fill `check:eink` " +
+    "measures the texture against",
+};
+
+for (const theme of THEMES) {
+  const tokens = tokensOf(CSS, theme);
+  if (tokens === null) continue;
+  const raw = resolveToken("--diagram-surface-opacity", tokens, baseline);
+  const opacity = Number(raw);
+  check(
+    `${theme}: its wash strength is a number inside the wash band (${raw})`,
+    Number.isFinite(opacity) && opacity >= 0 && opacity <= WASH_MAX_OPACITY,
+    `--diagram-surface-opacity is ${raw}; over ${WASH_MAX_OPACITY} the tone ` +
+      "stops reading as the sheet toned and starts reading as a panel laid on " +
+      "top of it, which is the treatment this one replaced",
+  );
+  const pinned = WASH_PINNED_OFF[theme];
+  if (pinned !== undefined) {
+    check(
+      `${theme}: it stays off the wash`,
+      opacity === 0,
+      `${theme} opted into the diagram wash at ${raw}, but ${pinned}`,
+    );
+  }
+  if (!(opacity > 0)) continue;
+
+  const canvas = parseOklch(resolveToken("--canvas", tokens, baseline));
+  const ink = parseOklch(
+    resolveToken("--diagram-surface-fill", tokens, baseline),
+  );
+  const grid = parseOklch(resolveToken("--canvas-grid", tokens, baseline));
+  const edge = parseOklch(resolveToken("--edge", tokens, baseline));
+  const text = parseOklch(resolveToken("--foreground", tokens, baseline));
+  if ([canvas, ink, grid, edge, text].some((c) => c === null)) {
+    check(`${theme}: its wash tokens resolve`, false);
+    continue;
+  }
+  /* COMPOSITED THE WAY THE BROWSER PAINTS IT: the ink is first flattened onto
+     the canvas for its own alpha (a theme may declare a translucent token),
+     then laid over the canvas again at the wash's opacity. Measuring the ink
+     alone would report a surface no reader ever sees. */
+  const inkOnCanvas = flatten(ink, canvas);
+  const surface = flatten(
+    { rgb: inkOnCanvas, alpha: opacity },
+    { rgb: canvas.rgb },
+  );
+  const vsCanvas = contrast(surface, canvas.rgb);
+  const gridVsCanvas = contrast(flatten(grid, canvas), canvas.rgb);
+  const edgeOnSurface = contrast(flatten(edge, canvas), surface);
+  const textOnSurface = contrast(flatten(text, canvas), surface);
+
+  check(
+    `${theme}: its wash is visible at all (${vsCanvas.toFixed(3)}:1)`,
+    vsCanvas >= WASH_MIN_VISIBLE,
+    `${vsCanvas.toFixed(3)}:1 against --canvas is under the ${WASH_MIN_VISIBLE}:1 ` +
+      "floor — this theme ships a diagram sheet the reader cannot make out, " +
+      "which looks like a bug rather than like a choice",
+  );
+  check(
+    `${theme}: its wash stays quieter than its own ruling (${vsCanvas.toFixed(3)} ≤ ${gridVsCanvas.toFixed(3)})`,
+    vsCanvas <= gridVsCanvas,
+    `the wash reads at ${vsCanvas.toFixed(3)}:1 and the ruling at ` +
+      `${gridVsCanvas.toFixed(3)}:1, so the sheet's working area is now a ` +
+      "louder mark than the sheet's own lines — that is a panel, not a tone",
+  );
+  check(
+    `${theme}: connectors still read on the wash (${edgeOnSurface.toFixed(2)}:1)`,
+    edgeOnSurface >= WASH_EDGE_MIN,
+    `--edge measures ${edgeOnSurface.toFixed(2)}:1 on the washed surface, ` +
+      `under ${WASH_EDGE_MIN}:1 — the ground the drawing sits on is swallowing ` +
+      "the drawing",
+  );
+  check(
+    `${theme}: text still reads on the wash (${textOnSurface.toFixed(2)}:1)`,
+    textOnSurface >= WASH_TEXT_MIN,
+    `--foreground measures ${textOnSurface.toFixed(2)}:1 on the washed ` +
+      `surface, under ${WASH_TEXT_MIN}:1`,
+  );
 }
 
 /* THE PANNING MECHANISM, and it is one CSS keyword. `local` means "this

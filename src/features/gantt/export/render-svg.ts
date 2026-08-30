@@ -181,15 +181,19 @@ export function renderGanttSvg(
   );
   push(`<defs>${ground.defs}</defs>`);
   push(ground.layers(0, 0, width, height));
-  /* The plan's own surface — see `gantt-diagram.tsx` for why this kind has one
-     and the other seven do not. It holds the drawing with
-     `EXPORT_SURFACE_PADDING` of air inside it, and what is left of the export
-     padding shows as a margin around it. */
+  /* The plan's own surface — one of the THREE sheet-mounting kinds, with the
+     timeline and the lifecycle; `lib/diagram-surface.ts` argues why a spine on
+     a ruled ground wants a sheet as much as a lattice does. It holds the
+     drawing with `EXPORT_SURFACE_PADDING` of air inside it, and what is left of
+     the export padding shows as a margin around it. The wash rides on the same
+     rect and is nothing at all in every theme but `blueprint`. */
   push(
     diagramSurfaceMarkup({
       width: layout.width,
       height: layout.height,
       stroke: theme.border,
+      fill: theme.diagramSurface.fill,
+      fillOpacity: theme.diagramSurface.opacity,
       originX: EXPORT_PADDING,
       originY: EXPORT_PADDING,
     }),

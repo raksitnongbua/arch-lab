@@ -6,12 +6,27 @@
  * and a drawing sitting straight on it has no edge — nothing says where the
  * document stops and the desk starts.
  *
- * IT IS A RULE, NOT A PANEL, and that is the whole of this revision. It was a
- * filled `--node` box, which made the drawing area a second surface stacked on
- * the well and turned every theme into a hunt for two grounds that agree. The
- * area is now given by a LINE — a 1px border on no fill — so the well and the
- * drawing sit on one continuous ground and only the frame says where the
- * drawing lives. Paper and pencil rather than paper on a desk.
+ * IT IS A RULE, PLUS AN OPTIONAL PER-THEME WASH. It was a filled `--node` box,
+ * which made the drawing area a second surface stacked on the well and turned
+ * every theme into a hunt for two grounds that agree. The area is given by a
+ * LINE — a 1px border — so the well and the drawing sit on one continuous
+ * ground and the frame says where the drawing lives. Paper and pencil rather
+ * than paper on a desk.
+ *
+ * WHAT THAT REVISION ENDED WAS THE OPAQUE PANEL, not fill as such, and the
+ * distinction is load-bearing rather than pedantic. A translucent wash of the
+ * sheet's own ruling ink is not a second ground: the ruling keeps running
+ * underneath and THROUGH it, so there is one ground, toned where the document
+ * sits. `blueprint` is the theme that needs this and the reason the seam
+ * exists — its `--border` is deliberately quieter than its own ruling, so a
+ * line ALONE cannot mark the document there, and the area reads as nothing.
+ * Every other theme leaves `--diagram-surface-opacity` at 0 and gets today's
+ * line-only surface, byte for byte, in exports included.
+ *
+ * THE CEILING IS WHAT KEEPS IT A WASH. `check:canvas-grid` fails any theme
+ * over 0.35, and fails any wash whose composite is louder than that theme's
+ * own ruling. Without those two numbers "a faint tone" is one edit away from
+ * being the panel again, which is exactly how this treatment got here.
  *
  * WHY IT IS SHARED NOW. The gantt argued, in a comment this module replaces,
  * that it was the only kind that needed a surface: it is the one notation whose
@@ -64,22 +79,47 @@ export function diagramSurfaceMarkup({
   width,
   height,
   stroke,
+  fill,
+  fillOpacity = 0,
   originX = 0,
   originY = 0,
 }: {
   /** The DRAWING's size, not the sheet's — the pad is added here. */
   width: number;
   height: number;
-  /** The rule's colour. There is no fill — see the header. */
+  /** The rule's colour. */
   stroke: string;
+  /**
+   * The wash's ink, when the theme opts into one (`--diagram-surface-fill`,
+   * already resolved to concrete sRGB by the exporter's theme resolver).
+   * Ignored at zero opacity, which is eight of the nine themes.
+   */
+  fill?: string;
+  /**
+   * `--diagram-surface-opacity`, 0…1. **At 0 — the default, and every theme
+   * but `blueprint` — this emits the exact `fill="none"` string it emitted
+   * before the wash existed**, not an invisible fill. That is the same
+   * emit-nothing-at-zero contract the role textures carry, and it is the only
+   * reason the other eight themes' downloaded files did not all change bytes
+   * the day `blueprint` gained a wash. `check:canvas-grid` measures the
+   * strengths a theme may ask for; this function does not police them.
+   */
+  fillOpacity?: number;
   /** Where the drawing's own origin sits in the file's coordinates. */
   originX?: number;
   originY?: number;
 }): string {
   const box = diagramSurfaceBox({ width, height, originX, originY });
+  /* `fill-opacity` as its own attribute rather than a premixed `rgba()`: the
+     colour then stays a plain sRGB value, which is what the strict rasterisers
+     outside the browser accept (`viewer/export/theme.ts` has that story). */
+  const paint =
+    fill === undefined || fillOpacity <= 0
+      ? `fill="none"`
+      : `fill="${fill}" fill-opacity="${fillOpacity}"`;
   return (
     `<rect x="${box.x}" y="${box.y}" width="${box.width}" ` +
-    `height="${box.height}" rx="${DIAGRAM_SURFACE_RADIUS}" fill="none" ` +
+    `height="${box.height}" rx="${DIAGRAM_SURFACE_RADIUS}" ${paint} ` +
     `stroke="${stroke}" stroke-width="1"/>`
   );
 }

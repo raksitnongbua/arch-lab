@@ -119,6 +119,8 @@ export function renderTimelineSvg(
       width: layout.width,
       height: layout.height,
       stroke: theme.border,
+      fill: theme.diagramSurface.fill,
+      fillOpacity: theme.diagramSurface.opacity,
       originX: EXPORT_PADDING,
       originY: EXPORT_PADDING,
     }),
