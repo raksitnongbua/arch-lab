@@ -1618,11 +1618,13 @@
  * rule at the bottom of this file — adding it to either would flip a few hundred
  * utilities under a theme whose text is nearly black.
  *
- * RETUNED ONCE, WHOLESALE, and this is why no token below matches the first
- * shipping of this theme. The original was derived from `.paper` by transform
- * and carried two hues — a violet primary at chroma 0.224 and a magenta-pink
- * (h ~342) in the accent, the running light, the destructive, the `end`
- * terminator and one whole end of the wash. Measured, it passed; looked at, it
+ * RETUNED ONCE, WHOLESALE, and this is why almost no colour below matches the
+ * first shipping of this theme — the exceptions are the sequence lane inks, the
+ * tag-fill figures and the radius, each noted where it sits. The original was
+ * derived from `.paper` by transform and carried two hues — a violet primary at
+ * chroma 0.224 and a magenta-pink (h ~342) in the accent, the running light, the
+ * `end` terminator and one whole end of the wash, with `--destructive` on the
+ * ground's own hue rather than on either. Measured, it passed; looked at, it
  * read as a hot violet-pink theme, not a pastel one. The retune keeps the
  * theme's job (a colourful mid-tone ground, dark text) and changes what
  * "colourful" means here: chroma comes DOWN everywhere a surface or accent
@@ -1633,9 +1635,10 @@
  * of crowding two hues at lower chroma.
  *
  * Every ratio is MEASURED by `pnpm check:themes`, which is why none is annotated
- * here unless it is a verified worst case. `.paper`'s comments record numbers
- * for `.paper`'s values; repeating them under different colours would be a lie,
- * and the check is the honest record.
+ * here. `.paper`'s comments record numbers for `.paper`'s values; repeating them
+ * under different colours would be a lie, and the check is the honest record.
+ * The floors below are quoted as floors — what a token has to clear — never as
+ * what it measured on the day it was typed.
  */
 .pastel {
   --radius: 0.625rem;
@@ -1645,8 +1648,9 @@
      across the diagonal, with no stop more chromatic than 0.04. It used to run
      blue-to-pink, which is where most of the theme's pinkness actually came
      from: the wash is the largest painted area in the app, so its corner hue
-     IS the theme's first impression. `--background` is the lavender the
-     diagonal passes through at its middle stop, kept as the flat fallback so a
+     IS the theme's first impression. `--background` is the same lavender the
+     diagonal passes through at its middle stop, a hair deeper so that chrome
+     painted flat does not float off the wash, and it is the flat fallback: a
      browser that ignores the image still gets the theme rather than white.
      Kept as a token rather than inlined so the one rule that applies it (below
      the theme blocks) does not hard-code any of the three hues.
@@ -1667,9 +1671,9 @@
   --card-foreground: oklch(0.275 0.028 285);
   --popover: oklch(0.905 0.018 285);
   --popover-foreground: oklch(0.275 0.028 285);
-  /* Chroma 0.13, down from 0.224 — the single biggest reason the old theme
-     read hot rather than pastel was a full-saturation violet on every button
-     and ring. Contrast is carried by LIGHTNESS against the pale ground
+  /* Chroma 0.13, down from 0.224 — a violet that saturated, on every button
+     and ring in the app, is a large part of why the old theme read hot rather
+     than pastel. Contrast is carried by LIGHTNESS against the pale ground
      instead, which is the pastel move: soft colour, dark enough to matter. */
   --primary: oklch(0.54 0.13 275);
   /* The cap is the ONLY per-bar signal of criticality (the border already
@@ -1680,8 +1684,8 @@
   --gantt-critical: oklch(0.5 0.13 275);
   /* Teal, not the base cyan and not the old theme's pink. The pink head was
      an identity override for a two-hue violet-and-pink palette that no longer
-     exists; on the widened wheel the running light takes the one band the
-     role fills leave empty between mint (h 185) and sky (h 230), so it reads
+     exists; on the widened wheel the running light takes the cool band the
+     role fills leave empty, between mint (h 185) and sky (h 230), so it reads
      as its own moving thing rather than as any bar's colour passing by. */
   --gantt-flow: oklch(0.48 0.1 205);
   --primary-foreground: oklch(0.93 0.015 285);
@@ -1716,9 +1720,9 @@
   --node-foreground: oklch(0.275 0.028 285);
   /* Cool grey on the spine hue, replacing the warm h 70 grey the `.paper`
      transform left behind — a warm outline on every plain node was one more
-     off-palette hue in a theme that had too many. At the same L a violet grey
-     is also the darker of the two in luminance, so the outline gains margin
-     rather than spending it. */
+     off-palette hue in a theme that had too many. The swap is free on
+     contrast: at this chroma the two greys differ in luminance in the fourth
+     decimal, so the hue change costs the outline nothing either way. */
   --node-border: oklch(0.6 0.016 285);
   /* L 0.42: this theme's role fills sit ~ΔL 0.07 deeper than the light
      themes' near-white cards, and secondary text on a card's own surface WASH
@@ -1726,11 +1730,16 @@
      lot. L 0.42 clears 4.5:1 against every fill and every wash top, measured
      by check:flowchart-palette across all six shapes. */
   --node-meta: oklch(0.42 0.028 285);
-  /* THE ROLE WHEEL. Six chromatic fills at one lightness and ONE soft chroma
-     (0.05 — down from 0.055, and the borders down much further), spread
-     across the wheel instead of huddling around violet: person lilac 300,
-     internal periwinkle 265, database sky 230, queue mint 185, `end` blush 10,
-     `decision` butter 85. Softening every fill narrows the OKLab distances
+  /* THE ROLE WHEEL. Six chromatic fills at ONE soft chroma (0.05, down from
+     0.055) and one lightness band, spread across the wheel instead of huddling
+     around violet: person lilac 300, internal periwinkle 265, database sky 230,
+     queue mint 185, `end` blush 10, `decision` butter 85. Four sit at L 0.855
+     and the two terminators (queue, `end`) a half-step up at 0.86; that step is
+     inherited from the pre-retune values and nothing measures it — every check
+     here passes with all six at 0.855 — so do not read it as a floor. Borders
+     came down too, furthest where the old hue was hottest (person, `end`) and
+     barely at all where it was already quiet. Softening every fill narrows the
+     OKLab distances
      `check:flowchart-palette` enforces, so the spread is what pays for the
      softness — adjacent roles sit ≥35° apart, which holds every pair over its
      floor at this chroma. Collapse two neighbours toward each other and the
@@ -1740,11 +1749,14 @@
   --node-internal: oklch(0.855 0.05 265);
   --node-internal-border: oklch(0.52 0.12 260);
   --node-external: oklch(0.87 0.022 285);
-  /* External is the one role kept deliberately quiet, so its fill sits close
-     to the surface and its outline has less room than any other role's — an
-     outline still has to clear 3:1 against its own fill or the card has no
-     edge, which is what pins this L. Neutral on the spine hue, matching the
-     plain node border above, so "not ours" never shouts. */
+  /* External is the one role kept deliberately quiet: its fill sits close to
+     the surface, so this outline is the only thing giving the card an edge and
+     has to clear the 3:1 an outline needs against its own near-neutral fill —
+     which is what pins this L. It is not the tightest of the roles any more;
+     the chromatic borders came down further in the retune, so several of them
+     now sit closer to their fills than this one does to its. Neutral on the
+     spine hue, matching the plain node border above, so "not ours" never
+     shouts. */
   --node-external-border: oklch(0.52 0.016 285);
   --node-database: oklch(0.855 0.05 230);
   --node-database-border: oklch(0.5 0.09 225);
@@ -2000,8 +2012,8 @@
  * pre-hydration paint above, so putting the wash on the same element keeps one
  * owner of the page's ground instead of two that can disagree during load. The
  * `background-color` stays underneath as the fallback — it is the lavender of
- * the wash's middle stop, so a browser that ignores the image still gets the
- * theme rather than white.
+ * the wash's middle stop, a hair deeper, so a browser that ignores the image
+ * still gets the theme rather than white.
  *
  * `fixed` so the diagonal belongs to the VIEWPORT rather than to the document:
  * scrolling a long page through a moving gradient makes the text look like it is
