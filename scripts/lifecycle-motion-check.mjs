@@ -1028,6 +1028,54 @@ console.log("the ambient survives a selection");
 }
 
 /* ----------------------------------------------------------------------- */
+console.log(
+  "reading does not stop the ambient, and the entrance keeps the pattern",
+);
+
+/* SCROLLING IS READING. The pane stirred the idle timer on `onPointerMove` and
+   `onWheel` as well as on a press, so every wheel tick killed the ambient for
+   three seconds — and scrolling is exactly how a reader looks at MORE of a
+   diagram, which is when the ambient is most worth having. Reported as the
+   animation dying on scroll.
+
+   THE POINTER ONE WAS STALE RATHER THAN WRONG. It was put there when HOVERING
+   selected a row: pausing while the reader picked one out made sense. Selecting
+   takes a click now, so a pointer crossing the pane changes nothing at all and
+   pausing for it buys nothing. A handler that outlives its reason is invisible
+   in a diff — nothing about it looks wrong — so it is pinned here instead.
+
+   ASSERTED AS THE ABSENCE OF THE MECHANISM, like the hover rule in
+   `check:view-input`: re-adding `onPointerMove` is the obvious way to make a
+   canvas "feel responsive", and it would read as an improvement. */
+{
+  const stirred = [...viewer.matchAll(/(on\w+)=\{stir\}/g)].map((m) => m[1]);
+  check(
+    `the idle timer is stirred by ${stirred.join(" and ") || "nothing"}`,
+    stirred.length > 0 &&
+      stirred.every(
+        (handler) => handler === "onPointerDown" || handler === "onKeyDown",
+      ),
+    `${stirred.join(", ")} — a wheel or a pointer crossing the pane is a reader LOOKING, and stopping the ambient for it means it is off whenever anyone is using the diagram`,
+  );
+
+  /* AND THE ENTRANCE ARRIVES AS WHAT IT STAYS. Drawing a return means one dash
+     the length of the path with its offset animated to zero — and that dash
+     OVERRIDES the resting pattern, so the line came in solid and snapped to
+     dashed the instant the entrance ended. What arrives has to be what stays,
+     or the entrance is showing the reader a different mark. */
+  const revealReturn = RULES.find(
+    ([selector]) =>
+      selector.includes(".af-lc-return") &&
+      selector.includes('data-reveal="1"'),
+  )?.[1];
+  check(
+    "the entrance does not override a return's dash pattern",
+    revealReturn !== undefined && !/stroke-dasharray/.test(revealReturn),
+    `${revealReturn ?? "no rule at all"} — a full-length dash paints the line solid while it arrives, and it changes shape when the entrance lets go`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("");
 if (failures > 0) {

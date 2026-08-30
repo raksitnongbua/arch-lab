@@ -457,10 +457,21 @@
       forwards;
   }
   .af-lc-canvas[data-reveal="1"] .af-lc-return {
-    stroke-dasharray: var(--lc-path-len);
-    stroke-dashoffset: var(--lc-path-len);
-    animation: af-lc-draw var(--lc-return-draw) cubic-bezier(0.4, 0, 0.2, 1)
-      forwards;
+    /* IT FADES IN, IT DOES NOT DRAW. Drawing means one dash the length of the
+       path with the offset animated to zero — and that dash OVERRIDES the
+       resting pattern, so the line arrived solid and snapped to dashed the
+       moment the entrance ended. A reader saw a solid line travel in and then
+       change into something else.
+
+       A FADE KEEPS THE PATTERN FROM THE FIRST FRAME, so what arrives is what
+       stays. The ORDER the header argues for is untouched — the delay below
+       still holds it until the spine has drawn, because a return cannot precede
+       the track it returns to — and the direction it goes is carried by the
+       arrowhead and by the drift, which are the marks that carry it at rest
+       too. `af-lc-arrive` is the arrowhead's own keyframe; this needs the same
+       thing and does not need a seventh. */
+    opacity: 0;
+    animation: af-lc-arrive var(--lc-return-draw) linear forwards;
     /* AFTER the spine, never with it: a return cannot precede the track it
        returns to. Positive on purpose and safe on purpose — this is a
        `forwards` one-shot, not an infinite animation, so the restart hazard

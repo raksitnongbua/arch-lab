@@ -198,10 +198,20 @@ export function TimelineViewer({ file }: TimelineViewerProps) {
       )}
       style={groundFieldCss(groundScale)}
       onClick={handleBackdropClick}
-      onPointerMove={stir}
+      /* THE AMBIENT YIELDS TO AN ACT, NOT TO READING. `onPointerMove` and
+         `onWheel` used to stir it too, and both have stopped meaning what they
+         meant. The pointer one was put here when HOVERING selected a row — it
+         paused the ambient while the reader was picking one out — and selecting
+         takes a click now, so a pointer crossing the pane changes nothing and
+         pausing for it buys nothing. The wheel one was never right: scrolling
+         is how a reader looks at MORE of the diagram, which is the moment the
+         ambient is most worth having, and it stopped for three seconds every
+         time. Reported as the animation dying on scroll.
+
+         WHAT IS LEFT IS DELIBERATE: a press and a key. Those are the reader
+         doing something to the diagram rather than looking at it. */
       onPointerDown={stir}
       onKeyDown={stir}
-      onWheel={stir}
       /* Pointer leaving the canvas clears a hover but never a pin — the pin is
          the whole reason a reader can move the pointer away and keep looking. */
     >
