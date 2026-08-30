@@ -2,6 +2,7 @@ import { MCP_TOOLS } from "@/features/mcp/catalog";
 import { CANVAS_EDITING_PASSAGE } from "@/features/playground/input/canvas-edit";
 import { KIND_BLURB } from "@/features/playground/lib/kind-copy";
 import { APP_NAME } from "@/lib/constants";
+import { THEMES_PASSAGE } from "@/lib/theme-copy";
 
 /**
  * The questions `/faq` answers, and the single source both halves of that page
@@ -143,6 +144,27 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "a palette swap, there is an immersive view for showing a diagram on a screen while you " +
           "talk through it, and a share link carries the whole model inside the URL so the person " +
           "you send it to needs nothing installed.",
+        links: [{ href: "/demo", label: "Finished examples" }],
+      },
+      {
+        /* THE QUESTION AS SOMEBODY TYPES IT, which is "dark mode" and not
+           "theming". The answer above already claims the themes in passing, in
+           a sentence about presenting; this one is the question a reader asks
+           on its own, and until it existed the words "dark mode" appeared
+           nowhere on this site — so a model asked whether arch-lab has one
+           answered from a site that looked like it does not.
+
+           THE ANSWER IS `THEMES_PASSAGE` VERBATIM, on the same terms as the
+           canvas answer below it: the count and every name are derived from
+           `THEMES`, and the landing page, `/llms.txt` and `/llms-full.txt`
+           serve the identical string. A paraphrase here would be a fourth
+           wording of a claim whose whole value is being quotable. The
+           follow-on sentence is this page's own. */
+        question: "Does it have a dark mode, and can I change how it looks?",
+        answer:
+          `${THEMES_PASSAGE} Immersive view hides the site around the diagram ` +
+          "for the same reason, so what is on the screen while you talk is the " +
+          "diagram and nothing else.",
         links: [{ href: "/demo", label: "Finished examples" }],
       },
       {

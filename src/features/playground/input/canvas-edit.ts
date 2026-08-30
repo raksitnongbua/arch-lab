@@ -109,6 +109,7 @@ import {
   referenceableNodes,
 } from "@/features/viewer/lib/node-palette";
 import { APP_NAME } from "@/lib/constants";
+import { inWords, joinList } from "@/lib/prose";
 import { slugify } from "@/lib/slug";
 
 import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
@@ -806,51 +807,19 @@ const ABILITY_PAST_PARTICIPLE: Record<CanvasEditAbility, string> = {
  * C4 can be dragged, on the day a fifth learned to be. `check:canvas-edit`
  * proves the derivation by flipping a cell and reading the sentence back.
  *
- * The list itself is `joinNouns`, shared with the budgeted summary below.
+ * The list itself is `joinList` (`lib/prose.ts`), shared with the budgeted
+ * summary below and with the themes passage.
  */
 function onlyTheseNotations(ability: CanvasEditAbility): string {
   const nouns = Object.values(CANVAS_EDIT_OFFERS[ability])
     .filter((offer) => offer.offers)
     .map((offer) => offer.noun);
-  return `Only ${joinNouns(nouns)} can be ${ABILITY_PAST_PARTICIPLE[ability]}.`;
-}
-
-/**
- * "C4 diagrams and sequence diagrams", or a comma list ending in "and" once
- * there are three.
- *
- * Joined by hand rather than with `Intl.ListFormat` for the reason above: every
- * caller is a contract string, and none of them may vary with the ICU data a
- * runtime happens to ship.
- */
-function joinNouns(nouns: readonly string[]): string {
-  return nouns.length <= 2
-    ? nouns.join(" and ")
-    : `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}`;
+  return `Only ${joinList(nouns)} can be ${ABILITY_PAST_PARTICIPLE[ability]}.`;
 }
 
 /* -------------------------------------------------------------------------- */
 /* The same capability, said outwards: the passage the site quotes             */
 /* -------------------------------------------------------------------------- */
-
-/** Small counts as words, because prose reads them and a digit in a sentence
- *  about notations looks like a version number. Falls back to the numeral
- *  rather than `undefined` if this table is ever outrun. */
-const NUMBER_WORD: readonly string[] = [
-  "no",
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "ten",
-];
-
-const inWords = (count: number): string => NUMBER_WORD[count] ?? String(count);
 
 /**
  * Every offering cell's `onCanvas` clause, as the list it already is — one
@@ -899,9 +868,9 @@ export const CANVAS_GESTURE_CLAUSES: readonly string[] = Object.values(
  * two notations offer. Opening with the canvas would sell a drawing tool and
  * then take it back.
  *
- * The clauses are joined with "and" rather than by `Intl.ListFormat`, for the
- * same reason `onlyTheseNotations` is: this is a contract string, and it must
- * not vary with the ICU data a runtime happens to ship.
+ * The clauses are joined with "and" rather than by `Intl.ListFormat`, and the
+ * count is spelled by `inWords`: this is a contract string, so it must not vary
+ * with the ICU data a runtime happens to ship (`lib/prose.ts`).
  */
 export const CANVAS_EDITING_PASSAGE: string = (() => {
   const notations = Object.keys(CANVAS_EDIT_OFFERS.move) as Notation[];
@@ -945,7 +914,7 @@ export const CANVAS_EDITABLE_SUMMARY: string = (() => {
       ),
     ),
   ];
-  return `Canvas editing for ${joinNouns(nouns)}.`;
+  return `Canvas editing for ${joinList(nouns)}.`;
 })();
 
 /* -------------------------------------------------------------------------- */

@@ -16,6 +16,12 @@ import { listGanttExampleIds } from "@/features/gantt/service/example-service";
 import { listTimelineExampleIds } from "@/features/timeline/service/example-service";
 import { listLifecycleExampleIds } from "@/features/lifecycle/service/example-service";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
+/* The themes passage, on the same terms as the editing passage above: one
+   derivation of the count and the names, served in these words by the landing
+   page, `/faq` and `/llms-full.txt`. Before it, neither this file nor the full
+   reference contained the word "theme" — so "does arch-lab have a dark mode"
+   had nothing on this site to quote. */
+import { THEMES_PASSAGE } from "@/lib/theme-copy";
 
 /**
  * `/llms.txt` — what this site is, for a model reading it rather than a person.
@@ -144,6 +150,10 @@ milestone timeline. \`format_lifecycle\` rewrites the text canonically.
 ## Editing a diagram: as text, or on the canvas
 
 ${CANVAS_EDITING_PASSAGE}
+
+## Themes
+
+${THEMES_PASSAGE}
 
 ## For agents
 

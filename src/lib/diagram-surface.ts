@@ -19,7 +19,7 @@
  * lifts the area by only 1.03–1.14:1 against the canvas across the nine themes
  * — deliberately almost nothing, so the drawing's own ink keeps its budget.
  * What separates the document from the desk is `--node-border`, which reads
- * 2.65:1 (`pastel`) to 13.66:1 (`contrast`) on the canvas. The rule this panel
+ * 2.66:1 (`pastel`) to 13.66:1 (`contrast`) on the canvas. The rule this panel
  * replaced was drawn in `--border`, which reads 1.18–1.86:1 in eight of the
  * nine: a hairline for chrome, not a mark that can carry a document's edge.
  * Swapping the stroke token is most of what changed here.

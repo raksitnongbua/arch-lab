@@ -9,6 +9,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The themes are now something the site actually says it has.** The home page
+  has a short section naming all nine and what a theme reaches — node fills,
+  connector ink, the canvas ground and the SVG or PNG you export — `/faq`
+  answers "does it have a dark mode", and `/llms.txt`, `/llms-full.txt` and the
+  home page's structured data carry the same sentence, so an assistant asked
+  what arch-lab looks like has something to quote. Nothing about the themes
+  themselves changed.
 - **A third bundled gantt, an agile sprint** — `/live/gantt/search-sprint`, and
   on the examples index. The two plans already bundled are migrations, where the
   work sets the length; a sprint fixes the length first, so its ceremonies sit on
@@ -26,6 +33,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   hand-typed `crit` tag would read as a claim rather than as the arithmetic.
 
 ### Changed
+
+- **The pastel theme is genuinely pastel now.** It used to be a hot violet-and-pink
+  pair; the whole palette is retuned onto a softer, wider wheel — mint, sky,
+  periwinkle, lilac, blush, peach and butter — with the wash running sky to
+  peach instead of blue to pink, the accent keeping a pink but only one of the
+  three jobs the old one held, the destructive red becoming an actual red, and
+  every contrast floor still
+  measured and met. A diagram saved under the old pastel reopens in the new one.
 
 - **Selecting a gantt bar opens a details panel, and selects less.** Clicking a
   bar used to light its whole dependency chain in both directions, which on a

@@ -110,9 +110,12 @@ export const APP_DESCRIPTION =
  *   2. a matching CSS block in `globals.css` redefining every concrete colour
  *      (see the EXTENSION POINT comment there) — a theme with no block is
  *      offered in the picker and silently renders as light;
- *   3. an entry in `THEME_META` in `layout/theme-toggle.tsx` — a
- *      `Record<Theme, …>`, so the compiler asks for it rather than the menu
- *      rendering a bare slug — and, for a DARK-FAMILY theme, its name in the
+ *   3. an entry in `THEME_LABELS` in `lib/theme-copy.ts` (its NAME, which the
+ *      picker, the landing page and both `llms*.txt` all read) and one in
+ *      `THEME_META` in `layout/theme-toggle.tsx` (its picker hint and mark) —
+ *      both `Record<Theme, …>`, so the compiler asks for them rather than the
+ *      menu rendering a bare slug and the site's themes passage naming one
+ *      palette fewer than ships — and, for a DARK-FAMILY theme, its name in the
  *      `dark` variant and the `color-scheme` rule in `globals.css`.
  *
  *   4. an entry in `TAG_FILL_BY_THEME` in `editor/lib/free-color.ts` — also a

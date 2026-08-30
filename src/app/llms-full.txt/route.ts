@@ -15,6 +15,10 @@ import { listGanttExampleIds } from "@/features/gantt/service/example-service";
 import { listTimelineExampleIds } from "@/features/timeline/service/example-service";
 import { listLifecycleExampleIds } from "@/features/lifecycle/service/example-service";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
+/* The themes passage, derived from `THEMES` and served in these same words by
+   the landing page, `/faq` and `/llms.txt` — the reason stated for the editing
+   passage above applies unchanged. */
+import { THEMES_PASSAGE } from "@/lib/theme-copy";
 
 /**
  * `/llms-full.txt` — the whole thing, in one plain-text read.
@@ -95,6 +99,16 @@ spacing elsewhere in the file survive. The notations that answer no gesture
 solve their layout from the text itself, so there is no coordinate in those
 grammars for a drag to write — ${origin}/faq answers that one in full, per
 notation.
+
+## Themes
+
+${THEMES_PASSAGE}
+
+A theme is a complete palette, never a subset: every concrete colour is
+redefined, and \`pnpm check:themes\` measures each one for contrast and fails
+the build on a token a new palette forgot. That is why the count above can be
+stated as a fact — a half-populated theme cannot ship. Nothing about the choice
+leaves the browser; it is one key in localStorage.
 
 ## Formats it reads
 

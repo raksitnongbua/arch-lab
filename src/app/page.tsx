@@ -52,7 +52,14 @@ import {
   APP_DESCRIPTION,
   APP_NAME,
   CANVAS_EDIT_ENABLED,
+  THEMES,
 } from "@/lib/constants";
+import { inWords } from "@/lib/prose";
+/* The themes passage, at the constant `/faq` and both `llms*.txt` read it from
+   — one derivation of the count and the names, for the reason the editing
+   passage above is one: a passage is what gets quoted, and two wordings are two
+   chances to be quoted wrongly. */
+import { THEMES_PASSAGE } from "@/lib/theme-copy";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -336,6 +343,19 @@ function homeJsonLd(): string {
               .map((offer) => `Canvas editing for ${offer.noun}`),
           ),
           "Text editing for every notation",
+          /* THE PRESENTATION HALF, and it was the one capability missing from
+             a list that already claimed nine notations and two editing modes.
+             `purpose.md` names the themes as the first place this product
+             promises customisation, and an assistant asked "can I make an
+             arch-lab diagram match my deck" read a `featureList` that had
+             never heard of a theme.
+
+             The count is `THEMES.length` for the same reason every other entry
+             here is derived: a tenth palette must not need this line edited to
+             stop being a lie. "contrast-measured" is the word that makes it a
+             fact rather than a boast — `pnpm check:themes` fails a palette
+             that is not. */
+          `Presentation themes (${THEMES.length}, every one contrast-measured)`,
           "Mermaid import and export",
           `MCP server for AI agents (${MCP_TOOLS.length} read-only tools)`,
         ],
@@ -637,6 +657,64 @@ export default function Home() {
             );
           })}
         </ul>
+      </section>
+
+      {/* ------------------------------------------------------------ themes */}
+      {/* THE ONLY SECTION ON THIS PAGE THAT BACKS THE HEADLINE UP. The H1
+          promises a diagram you can PRESENT and `purpose.md` says presentation
+          is the product — and after the presentation section was cut, the page
+          argued it nowhere: the hero shows a diagram, the cards say what it
+          draws, the steps say how it is used, and not one of them says the
+          reader can decide what it LOOKS like.
+
+          IT IS NOT THE CUT SECTION COMING BACK, and the difference is the whole
+          licence for it. That one was a half-page animated figure with three
+          gesture rows saying "you can present this", which the hero already
+          said twice — an argument repeated. This is four lines saying a FACT
+          the site stated on no crawled surface at all: "theme" appeared in no
+          title, no meta description, neither `llms*.txt`, no `featureList`
+          entry and no sentence on this page, so a reader asking an assistant
+          "does arch-lab have a dark mode" was answered from a site that
+          appeared to have none.
+
+          THE PASSAGE IS THE WHOLE BODY, deliberately. It is written to be
+          quoted standalone (`new-diagram-type.md`, GEO) and served in these
+          same words by `/faq`, `/llms.txt` and `/llms-full.txt`; a paraphrase
+          here to make the paragraph "read better on the page" would be a fourth
+          wording and a fourth chance to be quoted wrongly. No swatch grid
+          either: a swatch can only be honest in the theme it is currently
+          rendered in, so nine of them would be nine hand-typed colours no
+          `check:themes` run measures.
+
+          THE LINK GOES TO `/demo`, not to the playground the other two sections
+          send readers to. This section's claim is about how a FINISHED diagram
+          looks, and the finished ones are there; the picker itself is in the
+          header of whatever page the reader is already on. */}
+      <section
+        aria-labelledby="themes-heading"
+        className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
+      >
+        <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
+          {inWords(THEMES.length)} themes
+        </p>
+        <h2
+          id="themes-heading"
+          className="mt-2 text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
+        >
+          Pick a theme, and the diagram wears it
+        </h2>
+        <p className="mt-4 max-w-3xl leading-relaxed text-muted-foreground">
+          {THEMES_PASSAGE}
+        </p>
+        <div className="mt-6">
+          <Link
+            href="/demo"
+            className={buttonClasses({ variant: "outline", size: "md" })}
+          >
+            See it on a finished diagram
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
       </section>
 
       {/* ------------------------------------------------------- agents + MCP */}

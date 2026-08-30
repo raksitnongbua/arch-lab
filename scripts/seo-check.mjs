@@ -97,6 +97,12 @@ registerHooks({
 const { CANVAS_EDITING_PASSAGE, CANVAS_EDITABLE_SUMMARY, CANVAS_EDIT_OFFERS } =
   await load("src/features/playground/input/canvas-edit.ts");
 
+/* THE THEME LIST AND THE SENTENCE BUILT FROM IT, loaded for section 11 on the
+   same terms as the grid above: the claim "nine themes" is only checkable
+   against the list that decides it. */
+const { THEMES } = await load("src/lib/constants.ts");
+const { THEMES_PASSAGE, THEME_LABELS } = await load("src/lib/theme-copy.ts");
+
 /* ----------------------------------------------------------------------- */
 /* Forwarding aliases, DERIVED FROM THE FILESYSTEM                          */
 /* ----------------------------------------------------------------------- */
@@ -1017,6 +1023,115 @@ console.log("\nthe canvas-editing passage is reachable and quotable");
     ),
     "the passage renders outside the flag branch, so it would keep promising a " +
       "canvas gesture after the flag turned it off",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 11. The themes are visible to a search result and to an assistant        */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * THE PRODUCT'S OWN SELLING POINT, absent from every surface that sells it.
+ * `.claude/rules/purpose.md` says presentation is the product and names the
+ * themes as the first place customisation is promised — and the word "theme"
+ * appeared in no title, no meta description, no `keywords` entry, neither
+ * `llms*.txt`, no `featureList` entry and no sentence on the landing page. Nine
+ * contrast-measured palettes shipped and the site advertised none of them, so
+ * "does arch-lab have a dark mode" was answered from a site that appeared to
+ * have none.
+ *
+ * The rules here are section 10's, applied to the second passage: it must SAY
+ * what the question asks (measured against `THEMES`, never read), and it must be
+ * reachable on the server-rendered page and in the two plain-text documents an
+ * assistant reaches first.
+ */
+console.log("\nthe themes passage is reachable and quotable");
+
+{
+  for (const theme of THEMES) {
+    const label = THEME_LABELS[theme];
+    check(
+      `the passage names the ${theme} theme ("${label}")`,
+      typeof label === "string" && THEMES_PASSAGE.includes(label),
+      "a palette the picker offers and the passage omits is a customisation " +
+        "option the site cannot be quoted as having",
+    );
+  }
+  /* THE COUNT, SPELLED, and measured against the list rather than the sentence.
+     A passage that names nine palettes and says "eight themes" reads as correct
+     to everyone who is not counting — which is the exact failure APP_DESCRIPTION
+     shipped with four notations of six. */
+  const NUMBER_WORD = [
+    "no",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+  ];
+  const expected = NUMBER_WORD[THEMES.length] ?? String(THEMES.length);
+  check(
+    `the passage says "${expected} themes", the number THEMES holds`,
+    THEMES_PASSAGE.includes(`${expected} themes`),
+    `it names a different count from the ${THEMES.length} palettes in THEMES`,
+  );
+  /* THE CLAIM A READER ASSUMES IS FALSE. Every theming pitch sounds like page
+     chrome; what makes this one worth quoting is that the export carries the
+     theme (`viewer/export/theme.ts` resolves concrete sRGB from the live
+     tokens). Losing that clause to a tidy-up would leave a passage that says
+     nothing a CSS variable could not. */
+  check(
+    "the passage says the theme reaches the exported file, not just the page",
+    /export/.test(THEMES_PASSAGE),
+    "without it the passage claims only that the website is themed",
+  );
+
+  /* SERVED FROM THE CONSTANT, not from a copy of its words — and the closing
+     brace is the assertion, for the reason section 10 records: testing for the
+     bare identifier passes on the import line alone. */
+  for (const [route, file] of [
+    ["/", "src/app/page.tsx"],
+    ["/faq", "src/features/marketing/faq.ts"],
+    ["/llms.txt", "src/app/llms.txt/route.ts"],
+    ["/llms-full.txt", "src/app/llms-full.txt/route.ts"],
+  ]) {
+    check(
+      `${route} serves the themes passage from the constant`,
+      read(file).includes("THEMES_PASSAGE}"),
+      "a pasted copy passes on the day it is pasted and drifts on the next " +
+        "palette that ships",
+    );
+  }
+
+  /* THE MACHINE HALF. `featureList` is what an assistant reads as "what can it
+     do", and a hand-typed count there is the same mistake one level up — a
+     tenth palette must not need this line edited to stop being a lie. */
+  check(
+    "the home page's featureList derives the theme count from THEMES",
+    /featureList:[\s\S]*?\$\{THEMES\.length\}[\s\S]*?themes/.test(
+      read("src/app/page.tsx"),
+    ),
+    "a typed number in the structured data is the half nobody re-reads",
+  );
+
+  /* THE FIELD THAT ACTUALLY RANKS. The `keywords` comment in `app/layout.tsx`
+     is honest that Google has ignored meta keywords since 2009, so a theme run
+     there is vocabulary agreement and nothing more: what ranks is a heading on
+     the page carrying the word. */
+  check(
+    "the landing page has a heading about themes, not just keywords",
+    /<h2[\s\S]{0,200}?themes-heading[\s\S]{0,300}?theme/i.test(
+      read("src/app/page.tsx"),
+    ),
+    "the title, the description and the headings are the fields that rank; a " +
+      "keywords array alone advertises nothing",
   );
 }
 
