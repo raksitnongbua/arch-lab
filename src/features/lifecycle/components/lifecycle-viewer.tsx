@@ -67,6 +67,24 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [atRest, setAtRest] = useState(false);
+  /* THE ENTRANCE IS A PHASE, AND IT HAS TO END. It used to be stamped as a
+     bare literal, which kept every `[data-reveal="1"]` rule matching for the
+     life of the page — and each of those is `forwards`, so its end value went
+     on being contributed from the ANIMATION ORIGIN, which outranks every
+     normal author declaration. The focus dimming underneath it therefore never
+     applied to anything, on either canvas.
+
+     DROPPED AT THE SETTLE, the wait this viewer already computes, and that is
+     the same instant rather than a second guess: `LIFECYCLE_SETTLE_MS` is pinned by
+     `check:lifecycle-motion` to be at or above the entrance's worst case. Separate state
+     from `atRest` on purpose — `stir` puts the canvas back to work on every
+     pointer move, and reusing that flag would replay the entrance each time.
+
+     THE HANDOVER IS SEAMLESS because every value the entrance fills equals the
+     resting declaration underneath it: a row ends at `opacity: 1` and rests at
+     1, a drawn line ends at `stroke-dashoffset: 0` and rests with no dash at
+     all. Nothing moves at the moment the phase ends. */
+  const [revealed, setRevealed] = useState(true);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = pinned ?? hovered;
@@ -87,7 +105,10 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
      synchronous setState in an effect body — a cascading render that buys
      nothing and that `react-hooks/set-state-in-effect` refuses. */
   useEffect(() => {
-    idleTimer.current = setTimeout(() => setAtRest(true), LIFECYCLE_SETTLE_MS);
+    idleTimer.current = setTimeout(() => {
+      setAtRest(true);
+      setRevealed(false);
+    }, LIFECYCLE_SETTLE_MS);
     return () => {
       if (idleTimer.current) clearTimeout(idleTimer.current);
     };
@@ -155,7 +176,7 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
         <LifecycleDiagram
           file={file}
           litKeys={litKeys}
-          reveal
+          reveal={revealed}
           idleMotion={idleState}
           atRest={atRest}
           onFocusState={(key) =>

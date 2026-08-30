@@ -666,6 +666,76 @@ console.log("the sweep's head fits the spine it travels");
 }
 
 /* ----------------------------------------------------------------------- */
+console.log("the entrance ends, and lets go of what it animated");
+
+/* TWO DEFECTS, ONE CAUSE, AND THE CAUSE IS THAT THE ENTRANCE NEVER FINISHED.
+   `data-reveal` was stamped as a literal, so every entrance rule kept matching
+   for the life of the page — and every one of them is `forwards`, which means
+   the animation goes on contributing its end value from the ANIMATION ORIGIN.
+   That origin outranks normal author declarations. Everything follows from it:
+
+     - FOCUS DIMMING COULD NOT WORK. `.af-timeline-canvas.af-timeline-has-focus .af-timeline-event { opacity: 0.24 }`
+       is a normal declaration, and the filled entrance holds the same property
+       at 1. Nothing ever dimmed. Both this canvas and its neighbour shipped a
+       focus state that was inert.
+     - THIS CANVAS HAS NO SECOND HALF. The lifecycle also had a
+       connector whose `animation` was claimed by two rules at once; the
+       timeline draws no returning branch, so only the dead focus dimming
+       reached here. The pair search below is kept all the same — it is the
+       assertion that would have caught the other one.
+
+   The fix is that the entrance is a PHASE and it ends: the viewer drops
+   `data-reveal` once it has played, at the settle it already computes, and the
+   handover is seamless because every filled end value equals the resting
+   declaration underneath it. These two assertions say so — the first that the
+   phase ends at all, the second that nothing is fighting over an `animation`
+   while one is still running. */
+{
+  /* TWO HALVES, AND THE SECOND IS THE ONE THAT BITES. The first draft of this
+     asserted only that the word "revealed" appeared in the viewer, and a break
+     that renamed the state to `revealedAlways` and deleted the line that turns
+     it off SAILED THROUGH — the assertion passed on exactly the defect it was
+     written for. Binding the prop to an expression and actually turning it off
+     are different claims and both have to be made. */
+  check(
+    "the entrance prop is bound to state, not stamped as a literal",
+    /reveal=\{/.test(viewer),
+    "a bare `reveal` keeps every `forwards` entrance rule matching for the life of the page",
+  );
+  check(
+    "and that state is turned off once the entrance has played",
+    /setRevealed\(false\)/.test(viewer),
+    "state that is never lowered is a literal with extra steps, and an animation's fill outranks any focus declaration for the same property",
+  );
+
+  /* NO TWO RULES THAT CAN BOTH MATCH MAY DECLARE `animation`. Changing which
+     animation applies restarts it, and a restarted one-shot replays its delay
+     with no backwards fill — which is how a lit branch vanished. A PAIR SEARCH
+     over the real rules, not a note about the one that broke. */
+  const animated = RULES.filter(([, body]) => /\banimation:/.test(body));
+  const target = (selector) => {
+    const parts = selector.split(/\s+/).filter(Boolean);
+    return parts[parts.length - 1].replace(/[:[].*$/, "");
+  };
+  const contested = [];
+  for (const [aSel] of animated) {
+    for (const [bSel] of animated) {
+      if (aSel === bSel) continue;
+      if (target(aSel) !== target(bSel)) continue;
+      const reveal = /data-reveal="1"/.test(aSel);
+      const focus = /has-focus/.test(bSel) && !/:not\(\[data-reveal/.test(bSel);
+      if (reveal && focus)
+        contested.push(`${target(aSel)}: ${aSel} vs ${bSel}`);
+    }
+  }
+  check(
+    "no element is handed two animations that can apply at once",
+    contested.length === 0,
+    `${contested.join(" | ")} — whichever wins RESTARTS, and a one-shot restarting replays its delay with the line hidden`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 console.log("");
 if (failures > 0) {

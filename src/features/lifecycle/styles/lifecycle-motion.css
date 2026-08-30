@@ -444,7 +444,19 @@
      a line a reader was using. Its dash pattern is a fixed length rather than
      a fraction of the path, so a long return and a short one travel at the
      same visual speed. */
-  .af-lc-canvas[data-af-idle="on"].af-lc-has-focus
+  /* `:not([data-reveal="1"])` IS THE WHOLE POINT OF THIS SELECTOR, not tidying.
+     The entrance also declares `animation` on this element, and two rules that
+     can both match means one wins and the animation RESTARTS whenever which
+     one wins changes. Leaving focus handed `af-lc-draw` back as a NEW
+     animation, which replayed its 420ms delay — and during a delay a
+     `forwards` animation contributes nothing, so the base values stood:
+     `stroke-dasharray: var(--lc-path-len)` against an equal
+     `stroke-dashoffset`, which is one whole period of offset and puts the
+     entire path in the gap. The branch vanished, then redrew, every time the
+     pointer left it. The viewer now ends the entrance at 940ms so the two
+     cannot normally coexist; this guard covers the window before that, when a
+     reader hovering a still-arriving diagram would otherwise hit it. */
+  .af-lc-canvas[data-af-idle="on"].af-lc-has-focus:not([data-reveal="1"])
     .af-lc-row[data-lit="1"]
     .af-lc-return {
     --lc-march-dash: var(--lc-travel-dash);

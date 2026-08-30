@@ -61,7 +61,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   authors what a use-case export drops.** Every notation added after the use
   case inherited the wrong two paragraphs. Each kind now states its own.
 
-### Fixed
+- **Focusing an event or a state dimmed nothing.** On both the timeline and
+  the lifecycle, hovering or clicking a row was supposed to fade everything
+  unrelated so the selection stands out; it never did. The entrance animation
+  held every row at full strength for the life of the page, and an animation
+  outranks the dimming underneath it. The entrance now ends once it has played.
+
+- **Hovering off a lifecycle branch made it disappear and redraw.** The
+  returning line was handed one animation by the entrance and another by focus,
+  so leaving focus restarted the entrance's — and it spends its first 420ms
+  fully hidden before it starts drawing. Selecting a branch and letting go now
+  leaves the line where it was.
 
 - **A short timeline or lifecycle showed a solid line pulsing on and off where
   the travelling wash should be.** The wash's lit head was a fixed length, and
