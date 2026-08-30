@@ -117,8 +117,15 @@ import {
   serializeLifecycleText,
 } from "@/features/archtext";
 import {
+  MERMAID_ER_CAVEAT,
+  MERMAID_ER_EXPORT_CAVEAT,
   MERMAID_FLOWCHART_EXPORT_CAVEAT,
+  MERMAID_GANTT_CAVEAT,
+  MERMAID_GANTT_EXPORT_CAVEAT,
+  MERMAID_GANTT_ORIGIN_REFUSAL,
   MERMAID_SEQUENCE_EXPORT_CAVEAT,
+  MERMAID_TIMELINE_CAVEAT,
+  MERMAID_TIMELINE_EXPORT_CAVEAT,
   MERMAID_USECASE_EXPORT_CAVEAT,
 } from "@/features/mermaid";
 import {
@@ -197,6 +204,82 @@ import {
   CANVAS_GESTURE_CLAUSES,
   canvasEditability,
 } from "../input/canvas-edit";
+
+/**
+ * The caveat each kind states when its pane holds Mermaid, keyed by kind.
+ *
+ * TABLES RATHER THAN THE NESTED TERNARIES THESE REPLACE, and the bug that
+ * bought the change is worth recording: the ternaries ended in a bare `:
+ * MERMAID_USECASE_EXPORT_CAVEAT`, so every kind added after the use case —
+ * ER, gantt, timeline — quietly inherited the USE-CASE sentences. A reader
+ * with a Mermaid ER diagram in the pane was told what a use-case export drops.
+ * Nothing reported it, because a fallback branch is a valid expression and
+ * these strings are only read by people.
+ *
+ * PARTIAL ON PURPOSE. A dictionary and a lifecycle have no Mermaid notation,
+ * so their panes are never `format === "mermaid"` and an entry for them would
+ * be a sentence with no reader — the vacuous-coverage failure `check:*`
+ * scripts are warned about, in table form. A missing key renders nothing,
+ * which is the honest answer for a kind that cannot be here.
+ */
+const MERMAID_IMPORT_CAVEATS: Partial<Record<ViewDocument["kind"], string>> = {
+  c4: MERMAID_LOSSY_NOTICE,
+  sequence: MERMAID_SEQUENCE_CAVEAT,
+  flowchart: MERMAID_FLOWCHART_CAVEAT,
+  usecase: MERMAID_USECASE_CAVEAT,
+  er: MERMAID_ER_CAVEAT,
+  gantt: MERMAID_GANTT_CAVEAT,
+  timeline: MERMAID_TIMELINE_CAVEAT,
+};
+
+/**
+ * The kinds that can NEVER be written as Mermaid, and the sentence each one
+ * shows on the disabled half of the format toggle.
+ *
+ * A TABLE, FOR THE REASON THE CAVEAT TABLES ABOVE ARE TABLES. This began as a
+ * ternary — gantt's sentence, else the dictionary's — and it had already
+ * grown the same defect that comment records: `lifecycle` was added as a kind
+ * and nobody added it here, so its Mermaid button stayed ENABLED. Pressing it
+ * ran a conversion that returned the `.alab` text unchanged, the pane
+ * re-detected `.alab`, the radio snapped back, and the live region announced
+ * "Converted the pane to Mermaid." A dead control that claimed success, and
+ * lied to a screen reader while doing it. A missing key here now renders an
+ * enabled button that converts, which is wrong in the safe direction and is
+ * caught by `check:view-input`; a missing branch in a ternary was wrong in
+ * the silent one.
+ *
+ * KIND-LEVEL REFUSALS ONLY. Gantt is refused per DOCUMENT — the conversion
+ * runs both ways and only a plan with no `starts` line has nothing to anchor
+ * to — so it cannot live in a table keyed by kind and is resolved beside it.
+ *
+ * WHY LIFECYCLE IS HERE rather than converted. `stateDiagram-v2` is the
+ * nearest Mermaid notation and it is not the same claim: a state diagram
+ * draws every transition that COULD happen, where a lifecycle is one
+ * subject's actual ordered history. `flowchart` is closer still — a lifecycle
+ * is a flowchart subset by `types/lifecycle.ts`'s own admission — but the
+ * whole value of the subtraction is that the picture is GUARANTEED to read as
+ * elapsed time down one spine, and a flowchart carries no such guarantee. The
+ * import direction settles it regardless: a general flowchart has no main
+ * track, permits forward rejoins and branches off branches, so reading one
+ * back as a lifecycle means inventing a declaration order the author never
+ * wrote.
+ */
+const MERMAID_KIND_REFUSALS: Partial<Record<ViewDocument["kind"], string>> = {
+  dict: "Mermaid has no data-dictionary notation, so there is nothing to convert to",
+  lifecycle:
+    "Mermaid has no lifecycle notation — stateDiagram-v2 draws every transition that could happen, not one subject's actual ordered history",
+};
+
+/** The mirror of `MERMAID_IMPORT_CAVEATS`: what leaving for Mermaid drops. */
+const MERMAID_EXPORT_CAVEATS: Partial<Record<ViewDocument["kind"], string>> = {
+  c4: MERMAID_C4_EXPORT_CAVEAT,
+  sequence: MERMAID_SEQUENCE_EXPORT_CAVEAT,
+  flowchart: MERMAID_FLOWCHART_EXPORT_CAVEAT,
+  usecase: MERMAID_USECASE_EXPORT_CAVEAT,
+  er: MERMAID_ER_EXPORT_CAVEAT,
+  gantt: MERMAID_GANTT_EXPORT_CAVEAT,
+  timeline: MERMAID_TIMELINE_EXPORT_CAVEAT,
+};
 
 import { CANVAS_LOCKED_BY_DEFAULT } from "../lib/canvas-lock";
 import { KIND_BLURB } from "../lib/kind-copy";
@@ -947,15 +1030,7 @@ export function ViewPlayground({
       applyEdit("source", converted);
       setAnnouncement(
         to === "mermaid"
-          ? `Converted the pane to Mermaid. ${
-              doc.kind === "c4"
-                ? MERMAID_C4_EXPORT_CAVEAT
-                : doc.kind === "sequence"
-                  ? MERMAID_SEQUENCE_EXPORT_CAVEAT
-                  : doc.kind === "flowchart"
-                    ? MERMAID_FLOWCHART_EXPORT_CAVEAT
-                    : MERMAID_USECASE_EXPORT_CAVEAT
-            }`
+          ? `Converted the pane to Mermaid. ${MERMAID_EXPORT_CAVEATS[doc.kind] ?? ""}`.trim()
           : "Converted the pane to .alab — nothing is lost in this direction.",
       );
     },
@@ -1257,23 +1332,11 @@ export function ViewPlayground({
             </summary>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
               <span className="font-medium text-foreground">Coming in:</span>{" "}
-              {doc.kind === "c4"
-                ? MERMAID_LOSSY_NOTICE
-                : doc.kind === "sequence"
-                  ? MERMAID_SEQUENCE_CAVEAT
-                  : doc.kind === "flowchart"
-                    ? MERMAID_FLOWCHART_CAVEAT
-                    : MERMAID_USECASE_CAVEAT}
+              {MERMAID_IMPORT_CAVEATS[doc.kind]}
             </p>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
               <span className="font-medium text-foreground">Going out:</span>{" "}
-              {doc.kind === "c4"
-                ? MERMAID_C4_EXPORT_CAVEAT
-                : doc.kind === "sequence"
-                  ? MERMAID_SEQUENCE_EXPORT_CAVEAT
-                  : doc.kind === "flowchart"
-                    ? MERMAID_FLOWCHART_EXPORT_CAVEAT
-                    : MERMAID_USECASE_EXPORT_CAVEAT}
+              {MERMAID_EXPORT_CAVEATS[doc.kind]}
             </p>
           </details>
         ) : null}
@@ -1359,21 +1422,27 @@ export function ViewPlayground({
                     >
                       {(["alab", "mermaid"] as const).map((format) => {
                         const current = doc.format === format;
-                        /* TWO KINDS CANNOT BE WRITTEN AS MERMAID, so for
+                        /* SOME DOCUMENTS CANNOT BE WRITTEN AS MERMAID, so for
                            them that half of the toggle has nothing to convert
                            to. Disabled and titled with the reason rather than
                            hidden: a control that vanishes for one kind reads
                            as a bug in the page, where a disabled one that says
                            why reads as an answer.
 
-                           The two are unwritable for DIFFERENT reasons and the
-                           title says which, because they mean different things
-                           to a reader: Mermaid has no data-dictionary notation
-                           at all, while its `gantt` exists and is READ here —
-                           the import is deliberately one-way, since `at-risk`
-                           has no Mermaid tag and this format computes the
-                           critical path rather than taking it dictated
-                           (`MERMAID_GANTT_CAVEAT`).
+                           NOTE WHICH NOUN EACH REFUSAL IS ABOUT, because they
+                           are not the same shape and the title says which:
+
+                           - A DICTIONARY is refused by KIND. Mermaid has no
+                             data-dictionary notation at all, so no document of
+                             the kind can ever be written.
+                           - A GANTT is refused by DOCUMENT, and only some. The
+                             conversion runs both ways, but Mermaid's `gantt`
+                             has no relative axis — every chart anchors to a
+                             calendar through `dateFormat` — so a plan with no
+                             `starts` line has no date to write and the
+                             emitter refuses it rather than inventing a day 0.
+                             Adding one line to the pane re-enables this
+                             button, which is why the title names that line.
 
                            HENCE `!current`, which is not defensive padding: a
                            pasted gantt sits in the pane AS Mermaid, and
@@ -1383,10 +1452,19 @@ export function ViewPlayground({
                            allowed; selecting is not. (For a dictionary the
                            Mermaid side is never current, so this reads as the
                            flat refusal it always was.) */
+                        const refusal =
+                          MERMAID_KIND_REFUSALS[doc.kind] ??
+                          (doc.kind === "gantt" && doc.file.origin === undefined
+                            ? /* The emitter's own sentence, not a second
+                                 hand-written one: a reader who presses this
+                                 and a caller who catches the throw must be
+                                 told the same thing. */
+                              MERMAID_GANTT_ORIGIN_REFUSAL
+                            : undefined);
                         const unsupported =
                           format === "mermaid" &&
                           !current &&
-                          (doc.kind === "dict" || doc.kind === "gantt");
+                          refusal !== undefined;
                         return (
                           <button
                             key={format}
@@ -1398,9 +1476,7 @@ export function ViewPlayground({
                             onClick={() => convertPane(format)}
                             title={
                               unsupported
-                                ? doc.kind === "gantt"
-                                  ? "arch-lab reads Mermaid gantt but never writes it back, so there is nothing to convert to"
-                                  : "Mermaid has no data-dictionary notation, so there is nothing to convert to"
+                                ? refusal
                                 : current
                                   ? `The pane is ${format === "alab" ? ".alab" : "Mermaid"}`
                                   : `Rewrite the pane as ${format === "alab" ? ".alab" : "Mermaid"}`
@@ -2134,6 +2210,7 @@ export function ViewPlayground({
                           <GanttShareButton
                             text={text}
                             title={documentTitle(doc)}
+                            format={doc.format}
                             onAnnounce={setAnnouncement}
                           />
                           <SvgExportButton

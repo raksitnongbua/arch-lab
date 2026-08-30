@@ -204,10 +204,13 @@ const DICT_SOURCE_ARG: McpArgDoc = {
 /**
  * The gantt tools' source argument.
  *
- * IT NAMES THE DIRECTION, not just the dialects. Mermaid `gantt` reads here
- * and never comes back out, which is a fact about the tool an agent cannot
- * discover by calling it — a caller that pastes gantt, gets `.alab` and plans
- * to convert back later is holding a plan it will not be able to return.
+ * IT NAMES WHAT THE IMPORT NORMALISES, not just the dialects, because that is
+ * the fact about the tool an agent cannot discover by calling it: a caller
+ * that pastes Mermaid and gets `.alab` back has had its dates collapsed onto
+ * one origin and its ids slugged, and nothing in the response would say so.
+ * (The conversion itself runs both ways in the app; this SERVER canonicalises
+ * to `.alab` for every kind, so what an agent gets back here is `.alab`
+ * whatever it sent — see the header of `tools/gantt.ts`.)
  */
 const GANTT_SOURCE_ARG: McpArgDoc = {
   name: "source",
@@ -216,8 +219,11 @@ const GANTT_SOURCE_ARG: McpArgDoc = {
     "The gantt text: `.alab` gantt (first line `archlab 1.0 gantt`) " +
     `or Mermaid \`gantt\` code (${MAX_SOURCE_CHARS_TEXT}). The format is ` +
     "detected from the first meaningful line — both dialects have a real " +
-    "header, so nothing here is guessed. Mermaid is READ ONLY: the import is " +
-    "one-way and lossy, and arch-lab never writes `gantt` back.",
+    "header, so nothing here is guessed. The import is lossy in named ways: " +
+    "the earliest date becomes the document origin and every other position " +
+    "becomes a whole number of days from it, and Mermaid's `crit` tag reads " +
+    "as the `at-risk` state (arch-lab computes the critical path, so no tag " +
+    "declares it). This tool always answers in `.alab`.",
 };
 
 /** The gantt keywords the importer refuses by name, derived from the table the
@@ -234,10 +240,12 @@ const REFUSED_GANTT_UNITS_TEXT = [...REFUSED_GANTT_DURATION_UNITS]
 /**
  * The timeline tools' source argument.
  *
- * IT NAMES THE DIRECTION TOO, and here the direction is the interesting fact:
- * this is the kind next door to the gantt whose Mermaid conversion runs BOTH
- * ways, so a caller who has read the gantt argument does not assume the same
- * restriction applies.
+ * SHAPED LIKE THE GANTT'S NEXT DOOR, and deliberately with no contrast drawn
+ * between them any more: both kinds convert both ways in the app, and both
+ * tools here answer in `.alab`. The sentence this used to carry ("unlike
+ * `gantt`, this conversion is TWO-WAY") was true when it was written and is
+ * now the opposite of the truth — an agent-facing description is a contract,
+ * and a stale one is worse than a terse one.
  */
 const TIMELINE_SOURCE_ARG: McpArgDoc = {
   name: "source",
@@ -247,8 +255,8 @@ const TIMELINE_SOURCE_ARG: McpArgDoc = {
     "`archlab 1.0 timeline`) or Mermaid `timeline` code " +
     `(${MAX_SOURCE_CHARS_TEXT}). The format is detected from the first ` +
     "meaningful line — both dialects have a real header, so nothing here is " +
-    "guessed. Unlike `gantt`, this conversion is TWO-WAY: arch-lab writes " +
-    "Mermaid `timeline` back.",
+    "guessed. The import keeps every period and event; this tool answers in " +
+    "`.alab`.",
 };
 
 /** The Mermaid timeline constructs the importer refuses by name, derived from
@@ -508,7 +516,7 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
       "the band draws no bar at all; and, as information rather than a fault, " +
       "items whose float exceeds their own duration. Reads `.alab` gantt " +
       "documents (first line `archlab 1.0 gantt`) and pasted Mermaid " +
-      "`gantt` code, naming on success what that one-way import dropped. " +
+      "`gantt` code, naming on success what that import normalised. " +
       /* The one-line job, INTERPOLATED rather than retyped. An assistant
          quotes one passage, not a page, so this sentence has to be
          word-identical with the home page, `/demo`, `/syntax` and both
@@ -527,23 +535,24 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     description:
       "Rewrite gantt text as canonical `.alab` gantt — the exact bytes " +
       "arch-lab would write, so diffs stay minimal. Also the way to turn " +
-      "pasted Mermaid `gantt` code into an `.alab` gantt, which is a " +
-      "ONE-WAY AND LOSSY import: the response names in full what it dropped, " +
-      "and arch-lab never emits `gantt` in return, because `at-risk` has no " +
-      "Mermaid tag and arch-lab's critical path is computed from the float " +
-      "pass rather than typed — an emit would silently downgrade the first " +
-      "and restate the second as a hand-written claim. Mermaid's `crit` tag " +
-      "is DROPPED on import rather than honoured, for the same reason: " +
-      "theirs is a decoration the author types, ours is derived from " +
-      "durations and dependencies, so honouring it would paint a path the " +
-      "arithmetic disagrees with. Refused BY NAME rather than approximated, " +
+      "pasted Mermaid `gantt` code into an `.alab` gantt. That import is " +
+      "LOSSY IN NAMED WAYS and the response lists them; this tool always " +
+      "answers in `.alab`, as every `format_*` tool here does. Mermaid's " +
+      "`crit` tag imports as the `at-risk` STATE — in Mermaid it is a " +
+      "decoration the author types, which is what `at-risk` is here — and " +
+      "NOT as a critical path: arch-lab computes that from durations and " +
+      "dependencies, so no tag declares it and `validate_gantt` is where the " +
+      "chain is reported. `crit` on a task already tagged `done` loses the " +
+      "`crit`, since a finished task is no longer at risk. Refused BY NAME " +
+      "rather than approximated, " +
       "each because it would make the chart mean something else: " +
       `${REFUSED_GANTT_TEXT} (a working week, an axis granularity or an ` +
       "end-date meaning arch-lab derives or fixes itself), `until` (an item " +
       "here has a length, not an end tied to another task), sub-day " +
       `durations (${REFUSED_GANTT_UNITS_TEXT}), and a \`dateFormat\` other ` +
-      `than \`${GANTT_DATE_FORMAT}\`. Gantt charts travel as \`.alab\` text or ` +
-      "as a share link.",
+      `than \`${GANTT_DATE_FORMAT}\`. Gantt charts travel as \`.alab\` text, as ` +
+      "Mermaid (a plan needs a `starts` date to become one — Mermaid `gantt` " +
+      "has no relative axis), or as a share link.",
     args: [GANTT_SOURCE_ARG],
   },
   {
@@ -577,10 +586,10 @@ export const MCP_TOOLS: readonly McpToolDoc[] = [
     description:
       "Rewrite timeline text as canonical `.alab` timeline — the exact bytes " +
       "arch-lab would write, so diffs stay minimal. Also the way to turn " +
-      "pasted Mermaid `timeline` code into an `.alab` timeline. THAT " +
-      "CONVERSION RUNS BOTH WAYS, unlike `gantt` next door: a timeline has no " +
-      "state vocabulary and derives nothing, so Mermaid holds everything it " +
-      "says. Import normalises two spellings rather than losing them — a " +
+      "pasted Mermaid `timeline` code into an `.alab` timeline. Mermaid " +
+      "holds everything a timeline says — a period is a label and an event " +
+      "is a label — so nothing about the diagram is approximated in either " +
+      "direction. Import normalises two spellings rather than losing them — a " +
       "continuation row (a line beginning `:`) folds into the period above " +
       "it, and `<br>` becomes a real newline — and refuses BY NAME " +
       `${REFUSED_TIMELINE_TEXT} (Mermaid groups periods one level above the ` +
@@ -949,7 +958,8 @@ export const MCP_TOOL_GROUPS: readonly McpToolGroup[] = [
       "The same check-and-format loop for how long work takes and what " +
       "blocks what — plus the two answers only arithmetic can give: the " +
       "critical path, and the dependency cycles that would make it a " +
-      "fiction. Mermaid `gantt` comes in here and never goes back out.",
+      "fiction. Mermaid `gantt` converts both ways in the app; these tools " +
+      "answer in `.alab`.",
     tools: toolsNamed("validate_gantt", "format_gantt"),
   },
   {

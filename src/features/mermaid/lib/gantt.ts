@@ -4,16 +4,12 @@
  * flowchart reader in `./flowchart.ts`, the use-case reader in `./usecase.ts`
  * and the ER reader in `./er.ts`.
  *
- * IMPORT ONLY, AND THAT IS A DECISION RATHER THAN AN OMISSION. Every other
- * dialect here has a `*-emit.ts` next to it; this one does not, and must not
- * grow one. The argument is written out in full in `./gantt-mapping.ts`
- * and is short enough to repeat: `at-risk` has no Mermaid tag, so an emit
- * would silently downgrade an amber bar to `active`; and our critical path is
- * COMPUTED by the float pass in `src/features/gantt/lib/layout.ts`, while
- * Mermaid's `crit` is typed by hand — so an emit would either drop the most
- * important line of the plan or restate a derived truth as a hand-written
- * claim the next editor can falsify. A reader looking for the missing "Copy
- * as Mermaid" item in the gantt share menu is looking for this paragraph.
+ * THE READING HALF OF A TWO-WAY CONVERSION. `./gantt-emit.ts` is the other
+ * half and both read one table (`./gantt-mapping.ts`), so what one writes is
+ * by construction what the other reads back. The two decisions that made the
+ * pair possible — `at-risk` ⇄ `crit` as a bijection, and the computed
+ * critical path staying computed and unserialized — are argued in that
+ * module's header; this file's job is only to apply them.
  *
  * DETECTION IS EXACT, as it is for `erDiagram` and unlike the flowchart pair:
  * Mermaid has a real `gantt` document type, so `detectMermaidGantt` tests one
@@ -59,8 +55,9 @@
  * what `.claude/rules/new-diagram-type.md` asks of a converter — and what
  * `./flowchart.ts` does for the hexagon, the cylinder and the flag.
  *
- * What is merely LOSSY is named, in full, by `MERMAID_GANTT_CAVEAT` below —
- * the same honesty contract as the other four import caveats.
+ * What is merely LOSSY or NORMALISED is named, in full, by
+ * `MERMAID_GANTT_CAVEAT` in the mapping module — the same honesty contract as
+ * the other import caveats.
  *
  * Imported by `scripts/mermaid-check.mjs` through Node's type stripping:
  * keep the syntax erasable and type-only imports as `import type`.
@@ -84,15 +81,15 @@ import {
 import {
   DROPPED_GANTT_KEYWORDS,
   GANTT_AFTER_RE,
-  GANTT_CRIT_TAG,
   GANTT_DATE_FORMAT,
   GANTT_DATE_RE,
   GANTT_DAYS_PER_UNIT,
   GANTT_DURATION_RE,
   GANTT_MILESTONE_TAG,
-  GANTT_STATE_BY_TAG,
+  GANTT_TAG_BY_STATE,
   GANTT_TASK_TAGS,
   GANTT_UNTIL_RE,
+  MERMAID_GANTT_CAVEAT,
   MERMAID_GANTT_HEADER_WORD,
   REFUSED_GANTT_DURATION_UNITS,
   REFUSED_GANTT_KEYWORDS,
@@ -100,39 +97,10 @@ import {
   isRealGanttDate,
 } from "./gantt-mapping";
 
-/* -------------------------------------------------------------------------- */
-/* The caveat — what a Mermaid gantt import DROPS                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Import is honest but not lossless. Named per item so the UI can say exactly
- * what changed, the way the other four import caveats do — and leading with
- * `crit`, which is the one entry that is a refusal to mirror rather than a
- * limitation.
- */
-export const MERMAID_GANTT_CAVEAT =
-  "Mermaid gantt is an import format: converting it is one-way — arch-lab " +
-  "never writes gantt back, because at-risk has no Mermaid tag and " +
-  "arch-lab's critical path is computed from the float pass rather than " +
-  "typed. The crit tag is DROPPED: in Mermaid it is a decoration the author " +
-  "types, while here the critical path is derived from durations and " +
-  "dependencies, so honouring crit would paint a path the arithmetic " +
-  "disagrees with. Dates are normalised: the earliest date in the chart " +
-  "becomes the document origin and every other date becomes a whole number " +
-  "of days from it (the model keeps a calendar in exactly one field), and a " +
-  "week-long duration (2w) becomes 14 calendar days. Task ids are kept where " +
-  "the metadata gives one and derived from the task's text where it does " +
-  "not, renamed deterministically into the .alab slug alphabet; a task " +
-  'whose only start is "the previous task ends" imports as an explicit ' +
-  "after on that task. displayMode, topAxis and click lines are dropped " +
-  "(layout and interactivity, which arch-lab owns on its own terms), and " +
-  "frontmatter keys other than title are dropped. Refused rather than " +
-  "guessed, because each would make the chart mean something else: excludes " +
-  "/ includes / weekend / weekdays (an arch-lab duration is calendar days), " +
-  "todayMarker (a shared link must not rot), axisFormat / tickInterval (the " +
-  "axis granularity is derived from the span), until (an item has a length, " +
-  "not an end tied to another task), sub-day durations, and a dateFormat " +
-  `other than ${GANTT_DATE_FORMAT}. Save as .alab to keep everything else.`;
+/* Re-exported from the shared table module, where it sits beside the entries
+   it describes — the arrangement `./timeline.ts` already has. Callers import
+   it from the dialect they are using, not from the table. */
+export { MERMAID_GANTT_CAVEAT };
 
 /* -------------------------------------------------------------------------- */
 /* Options                                                                     */
@@ -286,6 +254,26 @@ export function parseMermaidGantt(
     }
 
     /* ----------------------------- statements ---------------------------- */
+    /* THE COLON-TAKING SETTINGS GO FIRST, and only these. `accTitle: Q3` and
+       `accDescr: …` are the two gantt statements written with a colon rather
+       than a space, and the colon is exactly what a task row is introduced by
+       — so before they were tested for here they reached the task reader and
+       failed with a ":"-shaped error about a row nobody had written.
+
+       Deliberately NOT folded into the general keyword test below by teaching
+       it to accept a colon: `section:Prepare` would then open a section
+       labelled ":Prepare", and `Backfill:20d` — a real task row — would start
+       being read as a setting named Backfill. The colon means "metadata
+       follows" everywhere except on these two lines, so these two lines are
+       the exception, spelled out. */
+    const colonSetting = /^([A-Za-z][A-Za-z0-9_]*)\s*:/.exec(text)?.[1];
+    if (
+      colonSetting !== undefined &&
+      DROPPED_GANTT_KEYWORDS.has(colonSetting)
+    ) {
+      continue;
+    }
+
     const word = /^[A-Za-z]+/.exec(text)?.[0];
     const keyword =
       word !== undefined && new RegExp(`^${word}(\\s|$)`).test(text)
@@ -505,13 +493,6 @@ function readTaskLine(
     line,
     column: startCol,
   };
-  /* `crit` is READ and DROPPED here — the one construct this converter
-     refuses to mirror rather than merely losing. Mermaid's is typed by the
-     author; ours falls out of the float pass, and honouring the typed one
-     would draw a critical path the durations on the same chart contradict.
-     `MERMAID_GANTT_CAVEAT` says so by name. */
-  tags.delete(GANTT_CRIT_TAG);
-
   const state = readState(tags, fields, line, startCol);
   if (state !== undefined) item.state = state;
 
@@ -554,29 +535,60 @@ function splitFields(meta: string, metaColumn: number): Field[] {
   return fields.filter((field) => field.text !== "");
 }
 
-/** The reporting state the status tags name, or `undefined` for the default
+/**
+ * The reporting state the status tags name, or `undefined` for the default
  * (`planned`) — which stays ABSENT in the model rather than being written
- * out, the round-trip rule `GanttItemState` documents. */
+ * out, the round-trip rule `GanttItemState` documents.
+ *
+ * MERMAID STACKS TAGS AND ARCH-LAB HAS ONE FIELD, so the two combinations
+ * that really occur in hand-written charts each get a decided answer rather
+ * than a refusal, and the third stays refused:
+ *
+ *   - `crit, active` → `at-risk`. Not a conflict at all once `at-risk` is
+ *     read for what it says: "in flight AND in trouble" already contains
+ *     "in flight", so `active` adds nothing rather than contradicting.
+ *   - `crit, done` → `done`, with the loss named in `MERMAID_GANTT_CAVEAT`.
+ *     A finished task is no longer at risk, so the alarm is stale and the
+ *     fact outranks the status of work that no longer exists. Refusing was
+ *     considered and rejected: `crit, done` is common real Mermaid ("the
+ *     risky bit, now landed"), and unlike the pair below it has a principled
+ *     winner.
+ *   - `done, active` → still refused. Neither word outranks the other, so a
+ *     winner would have to be invented, and the fix is to delete one of them
+ *     — which is why both are quoted back at the author.
+ */
 function readState(
   tags: ReadonlySet<string>,
   fields: readonly Field[],
   line: number,
   startCol: number,
 ): GanttItemState | undefined {
-  const named = Object.keys(GANTT_STATE_BY_TAG).filter((tag) => tags.has(tag));
-  if (named.length > 1) {
-    /* Mermaid sets both flags and lets CSS decide; there is one `state` field
-       here, so a winner would have to be invented. Refused with both words
-       quoted, because the fix is to delete one of them. */
-    const at = fields.find((field) => field.text === named[1]);
+  const doneTag = GANTT_TAG_BY_STATE.done;
+  const activeTag = GANTT_TAG_BY_STATE.active;
+  if (tags.has(doneTag) && tags.has(activeTag)) {
+    const at = fields.find((field) => field.text === activeTag);
     failAt(
       line,
       at?.column ?? startCol,
-      `a task cannot be both "${named[0]}" and "${named[1]}" — an arch-lab row has one reporting state, so remove one of the two tags`,
-      named[1],
+      `a task cannot be both "${doneTag}" and "${activeTag}" — an arch-lab row has one reporting state, so remove one of the two tags`,
+      activeTag,
     );
   }
-  return named.length === 1 ? GANTT_STATE_BY_TAG[named[0]] : undefined;
+  /* THE PRECEDENCE IS SPELLED IN ARCH-LAB'S VOCABULARY and the Mermaid words
+     are looked up, so a tag renamed in the table is renamed here too rather
+     than silently ceasing to be recognised. Ordered by which claim survives
+     the stack, which is the whole of the rules above: a finished task wins
+     over its own stale alarm, and the alarm wins over the fact that the work
+     is under way. */
+  const precedence: readonly Exclude<GanttItemState, "planned">[] = [
+    "done",
+    "at-risk",
+    "active",
+  ];
+  for (const state of precedence) {
+    if (tags.has(GANTT_TAG_BY_STATE[state])) return state;
+  }
+  return undefined;
 }
 
 /**

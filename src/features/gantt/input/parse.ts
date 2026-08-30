@@ -6,14 +6,16 @@
  * for the same reason — the pane can never disagree with what a saved file
  * means.
  *
- * TWO READS, ONE WRITE. The Mermaid dialect joins as a second READ and never
- * as an emit: `at-risk` has no Mermaid tag and arch-lab's critical path is
- * computed rather than typed, so writing `gantt` back would downgrade the
- * first and misrepresent the second. That is why `GANTT_FORMAT_LABEL` has
- * two entries while the share menu offers one — the argument in full is on
- * `src/features/mermaid/lib/gantt-mapping.ts`, and a reader looking for
- * the missing "Copy as Mermaid" item is sent there from
- * `../share/share-button.tsx`.
+ * TWO READS AND TWO WRITES, with ONE DOCUMENT CARVED OUT. Both entries in
+ * `GANTT_FORMAT_LABEL` are real in both directions: a pasted Mermaid `gantt`
+ * parses, and a plan written here writes back out as `gantt`. The carve-out
+ * is the origin-less plan — the one whose axis reads `W1, W2, W3` — because
+ * Mermaid `gantt` has no relative axis and every chart anchors to a calendar
+ * through `dateFormat`. `serializeMermaidGantt` refuses that document by
+ * name rather than inventing a day 0, and the pane's format toggle disables
+ * its Mermaid half for exactly that document, carrying the emitter's own
+ * sentence as the title. The argument in full is on
+ * `src/features/mermaid/lib/gantt-mapping.ts`.
  *
  * DETECTION IS THE EXACT KIND on both sides, with no heuristic that could
  * steal a document from another canvas: `archlab 1.0 gantt` via
@@ -40,13 +42,22 @@ import {
 } from "@/features/archtext";
 import {
   MERMAID_GANTT_CAVEAT,
+  MERMAID_GANTT_EXPORT_CAVEAT,
+  MERMAID_GANTT_ORIGIN_REFUSAL,
   MermaidParseError,
   detectMermaidGantt,
   parseMermaidGantt,
 } from "@/features/mermaid";
 import { sourceLineAt } from "@/lib/source-text";
 
-export { MERMAID_GANTT_CAVEAT };
+/* Re-exported so the gantt feature's own surfaces — the share wrapper and the
+   playground's toggle — take the wording from one place rather than each
+   holding its own sentence about the same conversion. */
+export {
+  MERMAID_GANTT_CAVEAT,
+  MERMAID_GANTT_EXPORT_CAVEAT,
+  MERMAID_GANTT_ORIGIN_REFUSAL,
+};
 
 /** The two input languages the gantt canvas accepts. */
 export type GanttSourceFormat = "alab" | "mermaid";

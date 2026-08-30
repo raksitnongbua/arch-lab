@@ -56,12 +56,20 @@
  *     flowchart's ranks, and a coordinate in the text would be a second
  *     source of truth that the next parse would contradict.
  *
- *   - **The critical path is COMPUTED, never declared.** There is no `crit`
- *     flag on an item, and this is the one place the model deliberately
- *     departs from Mermaid's `gantt`, whose `crit` is a decoration the author
- *     types. A declared critical path can disagree with the arithmetic, and
- *     when it does the picture is simply wrong. `GanttItemState` therefore
- *     carries reporting status only; criticality falls out of the float pass.
+ *   - **The critical path is COMPUTED, never declared — and never
+ *     SERIALIZED.** There is no `crit` flag on an item and no `crit` keyword
+ *     in the grammar: a declared critical path can disagree with the
+ *     arithmetic, and when it does the picture is simply wrong. Criticality
+ *     falls out of the float pass in `src/features/gantt/lib/layout.ts`, and
+ *     `GanttItemState` carries reporting status only.
+ *
+ *     The second half of that rule is the one easily lost. Mermaid's `crit`
+ *     tag DOES cross the boundary — as the authored state `at-risk`, which
+ *     is what a hand-typed `crit` actually claims — but this arithmetic never
+ *     does. `serializeMermaidGantt` does not call the layout at all, because
+ *     a derived chain written out as a typed tag would be indistinguishable
+ *     on the way back in from one somebody asserted, and would go stale the
+ *     first time anyone edited a duration in the exported file.
  *
  * Nothing here is validated at runtime; the `.alab` gantt parser
  * (`src/features/archtext/lib/gantt/parse.ts`) is the loading gate.
@@ -87,9 +95,14 @@ import type { ArchLabMetadata } from "./c4";
  *   - `done`     — finished                   (`--node-queue`, green)
  *   - `at-risk`  — in flight and in trouble   (`--flow-decision`, amber)
  *
- * `at-risk` is the one value with no Mermaid `gantt` equivalent, and it is
- * half the reason the converter is import-only: an emit would silently
- * downgrade it to `active` and tell nobody.
+ * ALL FOUR HAVE A MERMAID SPELLING, `at-risk` included — it travels as
+ * Mermaid's `crit`, in both directions. That pairing is not a pun on the
+ * critical path below: `crit` is a decoration a Mermaid author TYPES, which
+ * is the same register as this field, and what it says about the bar ("must
+ * not slip") is what `at-risk` says. `at-risk` was once the reason the
+ * converter was import-only, on the argument that its nearest tag was
+ * `active`; reading `crit` as a state rather than as a path claim is what
+ * retired that. The table is in `features/mermaid/lib/gantt-mapping.ts`.
  *
  * Absent means `planned`, and absence survives the round trip as absence
  * rather than as the word — a plan where nothing has started should not have

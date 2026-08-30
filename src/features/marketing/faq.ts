@@ -118,9 +118,11 @@ export const FAQ_TOPICS: readonly FaqTopic[] = [
           "model level by level, step a sequence flow message by message, trace a flowchart as it " +
           "draws. It is not an either/or, though: Mermaid pastes straight into the playground. " +
           "C4Context, sequenceDiagram, erDiagram, gantt, timeline and flowchart or graph " +
-          "sources are converted on paste, and you can export back to Mermaid — except gantt, " +
-          "which is import-only because a gantt's critical path is computed and Mermaid has " +
-          "nowhere to write one down. Mermaid timeline, by contrast, goes both ways. The " +
+          "sources are converted on paste, and you can export back to Mermaid. A gantt has one " +
+          "limit worth knowing: a plan with no start date cannot become Mermaid, because " +
+          "Mermaid's gantt has no relative axis and arch-lab will not invent a date. Its " +
+          "computed critical path does not travel either — Mermaid has nowhere to record one, " +
+          "and a hand-typed crit tag would be a claim rather than the arithmetic. The " +
           "lifecycle has no Mermaid counterpart at all and none was invented: stateDiagram-v2 " +
           "is a state machine — every transition that could happen — rather than one subject's " +
           "actual history.",

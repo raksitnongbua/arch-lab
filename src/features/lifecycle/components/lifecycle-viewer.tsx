@@ -109,14 +109,14 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
      with it, and the ladder must be told or it selects a level that lands below
      the readable band. Never magnified: the CSS cap only ever shrinks. */
   const groundRef = useRef<HTMLDivElement>(null);
-  const naturalWidth = useMemo(() => layoutLifecycle(file).width, [file]);
+  const layout = useMemo(() => layoutLifecycle(file), [file]);
   const measureGroundScale = useCallback((): number => {
     const box = groundRef.current;
-    if (box === null || naturalWidth <= 0) return 1;
+    if (box === null || layout.width <= 0) return 1;
     return box.clientWidth <= 0
       ? 1
-      : Math.min(1, box.clientWidth / naturalWidth);
-  }, [naturalWidth]);
+      : Math.min(1, box.clientWidth / layout.width);
+  }, [layout.width]);
   const groundScale = useMeasuredScale(groundRef, measureGroundScale);
 
   return (
@@ -145,7 +145,13 @@ export function LifecycleViewer({ file }: LifecycleViewerProps) {
          the whole reason a reader can move the pointer away and keep looking. */
       onPointerLeave={() => setHovered(null)}
     >
-      <div ref={groundRef}>
+      <div
+        ref={groundRef}
+        /* SHRINK-WRAPS THE DRAWING, which is what keeps `measureGroundScale`
+           a reading of the `<svg>` rather than of the pane around it.
+           `margin-inline: auto` is the canvas's own centring. */
+        className="mx-auto w-fit"
+      >
         <LifecycleDiagram
           file={file}
           litKeys={litKeys}

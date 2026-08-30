@@ -15,14 +15,18 @@
  * encodes — and a share link carries its own document, so it needs no seed.
  * Every character the route does not spend goes to the payload.
  *
- * NO MERMAID BRANCH, and NOT because Mermaid lacks the notation — it has
- * `gantt`. The converter is deliberately IMPORT-ONLY: a gantt's `at-risk`
- * state has no Mermaid spelling and would silently emit as `active`, and its
- * critical path is COMPUTED here while Mermaid's `crit` is a decoration the
- * author types, so an emitted chain could contradict the arithmetic that drew
- * the one on screen. Reading a `gantt` in loses nothing; writing one out loses
- * two things and tells nobody. So the menu offers no Mermaid row, the download
- * fallback always writes `.alab`, and there is no `format` prop to pass.
+ * IT TAKES A `format`, as the ER and sequence wrappers do, and the reason is
+ * the download fallback rather than the link: a share link carries the pane's
+ * text verbatim in either dialect, but the file handed out when Web Share is
+ * unavailable must be NAMED for what it actually contains. A pane holding
+ * Mermaid `gantt` downloads as `.mmd`.
+ *
+ * The Mermaid CONVERSION lives on the pane's format toggle, not in this menu —
+ * the arrangement every kind here uses, and the reason there is no "Copy as
+ * Mermaid" row to look for. What the toggle refuses, and the only document of
+ * this kind it does refuse, is a plan with no `starts` line: Mermaid `gantt`
+ * has no relative axis, so there is no date to write and none is invented
+ * (`MERMAID_GANTT_ORIGIN_REFUSAL`).
  *
  * NOTHING IS UPLOADED. The payload lives in the URL fragment, which browsers
  * never send to a server.
@@ -36,12 +40,15 @@ const SHARE_ROUTE = "/live";
 export function GanttShareButton({
   text,
   title,
+  format,
   onAnnounce,
 }: {
   /** The document to pack — the pane's current text, verbatim. */
   text: string;
   /** Names the Web Share sheet and the downloaded file. */
   title: string;
+  /** The pane's detected format; only the download fallback cares. */
+  format: "alab" | "mermaid" | null;
   onAnnounce: (message: string) => void;
 }): React.JSX.Element {
   return (
@@ -52,7 +59,7 @@ export function GanttShareButton({
       noun="gantt"
       /* Opening downward would leave the pane this toolbar sits under. */
       panelSide="up"
-      downloadExtension={ARCHTEXT_EXTENSION}
+      downloadExtension={format === "mermaid" ? ".mmd" : ARCHTEXT_EXTENSION}
       onAnnounce={onAnnounce}
     />
   );

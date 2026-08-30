@@ -4,14 +4,14 @@
  * Both directions read the SAME table (`./timeline-mapping.ts`), so what this
  * writes is by construction what the importer reads back.
  *
- * WHY THIS FILE EXISTS AND `gantt-emit.ts` DOES NOT, since the two kinds are
- * neighbours and the asymmetry looks arbitrary until it is stated: the gantt
- * refuses to emit because two things it says — the `at-risk` state and a
- * COMPUTED critical path — have no Mermaid spelling, so writing one back would
- * downgrade the first and restate the second as a hand-typed claim the next
- * editor can falsify. A timeline says neither. It has no state vocabulary and
- * derives nothing: a period is a label, an event is a label, and Mermaid holds
- * both exactly. So this conversion runs both ways.
+ * WHY THIS EMITS UNCONDITIONALLY AND `gantt-emit.ts` DOES NOT, since the two
+ * kinds are neighbours and the surviving asymmetry is easy to mistake for an
+ * inconsistency: a gantt is anchored to a CALENDAR through Mermaid's
+ * `dateFormat`, so a plan with no `starts` line has no date to write and its
+ * emitter refuses that document by name rather than inventing one. A timeline
+ * is anchored to nothing — a period is a label, an event is a label, and
+ * Mermaid holds both exactly — so there is no document of this kind that
+ * cannot travel, and this function has no refusal in it at all.
  *
  * WHAT MERMAID CANNOT HOLD, and therefore what this drops — the same honesty
  * contract as the other export caveats, stated by
@@ -40,7 +40,7 @@
 
 import type { TimelineLabFile, TimelinePeriod } from "@/types";
 
-import { encodeInlineBreaks } from "./text";
+import { mermaidSeparatorFreeLabel } from "./text";
 import {
   MERMAID_TIMELINE_EXPORT_CAVEAT,
   MERMAID_TIMELINE_HEADER_WORD,
@@ -56,33 +56,26 @@ export interface SerializeMermaidTimelineOptions {
 }
 
 /**
- * A label Mermaid's timeline tokenizer can carry.
+ * What a cell whose label was made ENTIRELY of separators falls back to.
  *
- * `:` becomes ` - `, spaced so the result still reads as prose rather than as
- * a hyphenated compound: "Q3: the rebuild" goes out as "Q3 - the rebuild".
- * Runs of separators collapse, and the result is trimmed, so `":: x"` does not
- * export as a row that opens with the continuation spelling — which would
- * change which period the event belongs to, and is the one way this
- * substitution could have changed the diagram rather than only its wording.
- *
- * A label made ENTIRELY of separators (`":"`, `"::"`) collapses to nothing,
- * and an empty cell would do that same damage from the other end: the row
- * would open `  : …` and Mermaid would read it as a continuation of the
- * period above. So an emptied cell falls back to `-`. A visible placeholder is
- * worse than the original label and better than a silently reparented event,
- * which is the trade every substitution in this file makes.
+ * An empty first cell would do the substitution's damage from the other end:
+ * the row would open `  : …` and Mermaid would read it as a CONTINUATION of
+ * the period above, reparenting every event on it. `-` is the visible
+ * placeholder that cannot — worse than the author's label, better than a
+ * silently moved event. `mermaidSeparatorFreeLabel` (shared with the gantt
+ * emitter, which passes its own) is where the collapse happens.
  */
 const EMPTIED_CELL = "-";
 
+/** A label Mermaid's timeline tokenizer can carry: `:` has no escape in this
+ * dialect, so "Q3: the rebuild" goes out as "Q3 - the rebuild" — spaced, so
+ * the result reads as prose rather than as a hyphenated compound. */
 function cellText(text: string): string {
-  const withoutSeparators = text
-    .split(MERMAID_TIMELINE_SEPARATOR)
-    .map((part) => part.trim())
-    .filter((part) => part !== "")
-    .join(" - ");
-  return withoutSeparators === ""
-    ? EMPTIED_CELL
-    : encodeInlineBreaks(withoutSeparators);
+  return mermaidSeparatorFreeLabel(
+    text,
+    MERMAID_TIMELINE_SEPARATOR,
+    EMPTIED_CELL,
+  );
 }
 
 function periodLine(period: TimelinePeriod): string {

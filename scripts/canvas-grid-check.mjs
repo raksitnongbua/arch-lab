@@ -47,7 +47,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { contrast, luminance, parseOklch } from "./lib/oklch.mjs";
+import { contrast, flatten, luminance, parseOklch } from "./lib/oklch.mjs";
 import { resolveToken, tokensOf } from "./lib/theme-css.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -372,31 +372,102 @@ check(
     "nothing above",
 );
 
-/* THE DIAGRAM GETS A BACKGROUND; THE GROUND DOES NOT GET A HOLE.
-   A ground that fills the pane runs under every drawing, and one notation needs
-   to sit ON something rather than in a clearing cut out of the sheet: a gantt's
-   own time ticks and section rules are a LATTICE, and two lattices at unrelated
-   pitches beat. The fix is a surface on the drawing, never a hole in the
-   ground — `dict` set that precedent long before this branch. Asserted in both
-   places, because a screen surface with no exported twin is a download that
-   does not look like the screen. */
+/* THE DIAGRAM GETS A BACKGROUND, AND IT IS A PANEL.
+   A ground that fills the pane runs under every drawing, and a drawing sitting
+   straight on it has no edge. The surface is one shared component —
+   `DiagramSurface` on screen, `diagramSurfaceMarkup` in the exporters —
+   mounted by the three kinds below, and it is now `--node` filled and
+   `--node-border` ruled: the dictionary's panel, the pair every canvas here
+   already uses for a shape against its background. It was a line-only `--border`
+   rule with an optional per-theme translucent wash; `lib/diagram-surface.ts`
+   carries the whole history and the panel section further down carries the
+   arithmetic.
+
+   ASSERTED IN BOTH PLACES, because a screen surface with no exported twin is a
+   download that does not look like the screen.
+
+   THESE REPLACE A PAIR THAT HAD GONE STALE TWICE: first grepping for a
+   gantt-only `rx={12}` markup shape that stopped existing when the surface
+   became shared, then grepping for the wash tokens that stopped existing when
+   it became a panel. Both times the assertion kept passing on the wrong thing
+   or was ready to. */
+const SURFACE_KINDS = ["timeline", "gantt", "lifecycle"];
 {
-  const surface =
-    /rx=\{12\}[\s\S]{0,120}fill="var\(--node\)"[\s\S]{0,120}stroke="var\(--node-border\)"/;
-  check(
-    "gantt: its plan is drawn on its own surface, not in a hole in the ground",
-    surface.test(readCode("src/features/gantt/components/gantt-diagram.tsx")),
-    "the gantt draws straight onto the sheet, so the ladder's rules and the " +
-      "plan's own ticks are two lattices at unrelated pitches",
-  );
-  check(
-    "gantt: the exported file carries the same surface",
-    /rx="12" fill="\$\{theme\.node\}"[\s\S]{0,40}stroke="\$\{theme\.nodeBorder\}"/.test(
-      readCode("src/features/gantt/export/render-svg.ts"),
-    ),
-    "the download drops the surface the screen shows, so the exported plan " +
-      "sits on bare ruling",
-  );
+  for (const kind of SURFACE_KINDS) {
+    /* IMPORT LINES STRIPPED, the same precaution the pane-ground checks take
+       above: a `DiagramSurface` imported and never rendered reads identically
+       to one that is rendered, and deleting the usage is the one-line way this
+       regresses. */
+    const diagramCode = readCode(
+      `src/features/${kind}/components/${kind}-diagram.tsx`,
+    ).replace(/^import[\s\S]*?;$/gm, "");
+    check(
+      `${kind}: its drawing sits on the shared surface, not in a hole in the ground`,
+      /<DiagramSurface\s/.test(diagramCode),
+      "the drawing lost its sheet — on `blueprint` the frame is quieter than " +
+        "the ruling, so without the surface the diagram area reads as nothing",
+    );
+    /* FROM THE THEME, NOT FROM A LITERAL, and both halves of the pair: an
+       exporter that resolved only the fill would download a panel with no
+       edge, which is precisely the mark the panel depends on. */
+    const exportCode = readCode(`src/features/${kind}/export/render-svg.ts`);
+    check(
+      `${kind}: the exported file carries the same panel, from the theme`,
+      /diagramSurfaceMarkup\(\{[\s\S]{0,240}?stroke:\s*theme\.nodeBorder/.test(
+        exportCode,
+      ) &&
+        /diagramSurfaceMarkup\(\{[\s\S]{0,240}?fill:\s*theme\.node\b/.test(
+          exportCode,
+        ),
+      "the download paints its diagram surface from something other than the " +
+        "resolved `--node` / `--node-border` pair, so a downloaded file stops " +
+        "agreeing with the screen that produced it",
+    );
+  }
+  /* AND THE SEAM IS TOKENS, NEVER LITERALS. The screen twin and the exporter
+     resolve the same two custom properties; a literal on either side is a
+     canvas that stops following the theme AND a screen that stops agreeing
+     with its own download. */
+  {
+    const seam = readCode("src/components/ui/diagram-surface.tsx");
+    check(
+      "the surface paints the panel from the tokens, on both halves",
+      /fill="var\(--node\)"/.test(seam) &&
+        /stroke="var\(--node-border\)"/.test(seam),
+      "`DiagramSurface` hardcodes its panel (or paints only half of it), so a " +
+        "theme change moves the export and leaves the screen behind",
+    );
+    /* THE GEOMETRY IS STILL THE SHARED ONE. A panel drawn at a hand-typed box
+       is the bug `DIAGRAM_SURFACE_PAD` exists for — a stroked edge landing on
+       the drawing's own text — and it would look correct in whichever pane its
+       author checked. */
+    check(
+      "the surface takes its box from the shared `diagramSurfaceBox`",
+      /diagramSurfaceBox\(/.test(seam) &&
+        /rx=\{DIAGRAM_SURFACE_RADIUS\}/.test(seam),
+      "`DiagramSurface` derives its own geometry, so the screen and the three " +
+        "exporters can frame one drawing two different ways",
+    );
+    /* AND THE DICTIONARY CUTS THE SAME CORNER. Its panel is per-SECTION rather
+       than per-drawing, so it does not share the box — but the radius was a
+       hand-typed `10` in its canvas and a second one in its exporter, and the
+       surface adopting the dictionary's treatment is exactly the moment those
+       stop being allowed to drift apart. `dry.md`: a value that exists in one
+       place is interpolated, never retyped. */
+    for (const rel of [
+      "src/features/dict/components/dict-diagram.tsx",
+      "src/features/dict/export/render-svg.ts",
+    ]) {
+      const dictCode = readCode(rel);
+      check(
+        `${rel.split("/").pop()}: its panel cuts the shared corner`,
+        /DIAGRAM_SURFACE_RADIUS/.test(dictCode),
+        "the dictionary's section panel hand-types its corner radius, so the " +
+          "dictionary and the three sheet-mounting notations — which now draw " +
+          "the same `--node` on `--node-border` panel — can round differently",
+      );
+    }
+  }
   /* AND NO KIND CUTS A HOLE. `--canvas` painted over the ground inside a
      drawing is a clearing, which puts a hard edge on the sheet exactly where
      the drawing's edge already is. */
@@ -414,6 +485,139 @@ check(
         "instead, the way gantt and dict do",
     );
   }
+}
+
+console.log(
+  "\nevery theme's diagram panel is complete, and nothing is lost on it",
+);
+
+/* THE SURFACE IS A CUSTOMISATION SURFACE, so it gets a check that measures
+   EVERY theme rather than the one that looked wrong. `purpose.md`: a new
+   customisation surface needs a script proving every variant complete and
+   legible, "in the manner of `check:themes` and `check:icon-contrast`" — a
+   half-populated option ships a choice that makes the diagram look broken.
+
+   IT LIVES HERE rather than in a script of its own because this file already
+   loads `THEMES`, the token resolver and the oklch maths, and a second copy of
+   all three is exactly what `dry.md` forbids. It is also the right neighbour:
+   the numbers below are relative to the grid contrast this file already
+   measures.
+
+   WHAT THIS REPLACED, and why the arithmetic changed shape. The surface used to
+   be a 1px `--border` rule plus a per-theme translucent WASH of the sheet's own
+   ruling ink, and this section held that wash to a ceiling (0.4), to a
+   quieter-than-its-own-ruling comparison, and to the drawing's ink floors. All
+   five of those constants had nothing left to guard the moment the surface
+   became `--node` on `--node-border`: there is no strength to cap, no ink to
+   compare against the ruling, and no opt-in to pin off. Deleting them without
+   replacement would have left the largest single area in three notations
+   measured by nothing at all, which is how the wash got to 0.6 in the first
+   place.
+
+   THE PROPERTY IT GUARDS NOW IS THE ONE THE PANEL RESTS ON: `--node` on
+   `--canvas` is ALREADY MEASURED IN EVERY THEME, which is the entire reason
+   the surface is that pair rather than a bespoke tint. That claim is only true
+   while both tokens are real, present and separable in all nine, so it is
+   asserted rather than assumed.
+
+   AND THE SEPARATION IS IN THE RULE, NOT THE FILL — the finding that decided
+   what to measure. The panel's fill lifts the area by 1.033:1 (`paper`) to
+   1.136:1 (`pastel`) against the canvas: under the 1.1:1 ground-visibility
+   floor in six of the nine, and deliberately so, because a fill that separated
+   by itself would be spending the drawing's own contrast budget to do it. What
+   marks the document is `--node-border`, at 2.652:1 (`pastel`) to 13.663:1
+   (`contrast`). So the floor below is on the RULE. A floor on the fill would
+   fail six themes that look correct, and — worse — would invite someone to
+   darken `--node` to pass it, which is the wash's whole failure re-run through
+   a different token.
+
+   `--border` IS WHY THE FLOOR IS WHERE IT IS. The rule this panel replaced was
+   drawn in `--border`, which measures 1.181:1 to 1.864:1 on the canvas in
+   eight of the nine themes — a chrome hairline, under or barely over the
+   visibility floor, which is exactly why `blueprint` needed a wash to be seen
+   at all. `PANEL_RULE_MIN` sits above every one of those eight and below every
+   `--node-border`, so it is the number that distinguishes the treatment that
+   worked from the treatment that did not, rather than a round number chosen to
+   pass.
+
+   And the drawing must still read ON the panel, at the same floors the palette
+   checks hold its ink to everywhere else. */
+
+/* Both tokens must be a real colour. `paper` and `eink` set their ROLE fills
+   (`--node-person`, `--flow-decision`, …) to `transparent` on purpose — that is
+   how a line-art theme is declared, and `check:eink`, `check:gantt-palette` and
+   `check:flowchart-palette` all derive "this theme is line art" from
+   `fill.alpha === 0`. The SURFACE is not a role: a transparent surface is not
+   line art, it is no sheet, and the drawing falls back onto bare ruling. This
+   assertion is what keeps a future line-art pass from "completing the set" by
+   emptying the one fill that must stay filled. */
+const PANEL_MIN_ALPHA = 0.5;
+/* Above every `--border` (max 1.864:1, on `blueprint`) and below every
+   `--node-border` (min 2.652:1, on `pastel`) — see the header above. */
+const PANEL_RULE_MIN = 2;
+/* The palette checks' own floors, not new numbers: connectors at 3:1 and text
+   at 4.5:1, measured on the panel because that is what the drawing now sits on
+   rather than on the canvas. */
+const PANEL_EDGE_MIN = 3;
+const PANEL_TEXT_MIN = 4.5;
+
+for (const theme of THEMES) {
+  const tokens = tokensOf(CSS, theme);
+  if (tokens === null) continue;
+  const canvas = parseOklch(resolveToken("--canvas", tokens, baseline));
+  const node = parseOklch(resolveToken("--node", tokens, baseline));
+  const nodeBorder = parseOklch(
+    resolveToken("--node-border", tokens, baseline),
+  );
+  const edge = parseOklch(resolveToken("--edge", tokens, baseline));
+  const text = parseOklch(resolveToken("--foreground", tokens, baseline));
+  if ([canvas, node, nodeBorder, edge, text].some((c) => c === null)) {
+    check(`${theme}: its diagram panel's tokens resolve`, false);
+    continue;
+  }
+
+  check(
+    `${theme}: its panel is a real surface, not a transparent one (--node α ${node.alpha}, --node-border α ${nodeBorder.alpha})`,
+    node.alpha >= PANEL_MIN_ALPHA && nodeBorder.alpha >= PANEL_MIN_ALPHA,
+    "the diagram surface is painted from --node and --node-border, and one of " +
+      `them is under α ${PANEL_MIN_ALPHA} in this theme — the three ` +
+      "sheet-mounting notations would draw their whole drawing straight onto " +
+      "the well's ruling. A transparent ROLE fill is how a line-art theme is " +
+      "declared and is correct; a transparent SURFACE is a missing sheet",
+  );
+
+  /* COMPOSITED THE WAY THE BROWSER PAINTS IT: the panel is flattened onto the
+     canvas for its own alpha first (`glass` declares `--node` at 0.62), and
+     every reading below is against that composite rather than against the raw
+     token — which would report a surface no reader ever sees. */
+  const panel = flatten(node, canvas);
+  const ruleVsCanvas = contrast(flatten(nodeBorder, canvas), canvas.rgb);
+  const fillVsCanvas = contrast(panel, canvas.rgb);
+  const edgeOnPanel = contrast(flatten(edge, { rgb: panel }), panel);
+  const textOnPanel = contrast(flatten(text, { rgb: panel }), panel);
+
+  check(
+    `${theme}: its panel's edge marks the document (${ruleVsCanvas.toFixed(3)}:1)`,
+    ruleVsCanvas >= PANEL_RULE_MIN,
+    `--node-border measures ${ruleVsCanvas.toFixed(3)}:1 against --canvas, ` +
+      `under the ${PANEL_RULE_MIN}:1 floor. The panel's fill separates by only ` +
+      `${fillVsCanvas.toFixed(3)}:1 by design, so the rule is the whole mark — ` +
+      "under this floor the reader cannot see where the document stops, which " +
+      "is the failure the line-only surface had on `blueprint`",
+  );
+  check(
+    `${theme}: connectors still read on the panel (${edgeOnPanel.toFixed(2)}:1)`,
+    edgeOnPanel >= PANEL_EDGE_MIN,
+    `--edge measures ${edgeOnPanel.toFixed(2)}:1 on the panel, under ` +
+      `${PANEL_EDGE_MIN}:1 — the sheet the drawing sits on is swallowing the ` +
+      "drawing",
+  );
+  check(
+    `${theme}: text still reads on the panel (${textOnPanel.toFixed(2)}:1)`,
+    textOnPanel >= PANEL_TEXT_MIN,
+    `--foreground measures ${textOnPanel.toFixed(2)}:1 on the panel, under ` +
+      `${PANEL_TEXT_MIN}:1`,
+  );
 }
 
 /* THE PANNING MECHANISM, and it is one CSS keyword. `local` means "this
@@ -472,7 +676,24 @@ check(
    which no longer carries a ground at all now that it lives on the pane — so
    that one must put it back. Same defect as before, from the other direction:
    the path that used to carry the ground when nobody wanted it is the path that
-   would now silently drop it. */
+   would now silently drop it.
+
+   WHAT THIS ASSERTION IS ABOUT is whether the sheet reaches the file at all.
+   The three surface kinds emit `resolveExportGround`'s `defs`/`layers` pair
+   full-bleed and directly; they used to reach it through a helper that split
+   the ground around a frosted diagram surface, and that helper is gone with
+   the frost — `lib/diagram-surface.ts` records why.
+
+   BOTH HALVES OF THE PAIR, and the reason is a hole this assertion actually
+   had. It used to ask a non-cloning exporter for `ground.defs` alone. Deleting
+   the `ground.layers(...)` push from an exporter therefore left it GREEN — and
+   that is the worst shape a ground defect can take, because `defs` only
+   DECLARES the patterns. A file with the declarations and no painted layer is
+   a valid SVG carrying a fully-specified ground it never draws: it opens to a
+   bare canvas and nothing anywhere reports it. `defs` without `layers` is the
+   silent half; requiring both is what makes the assertion mean what its name
+   has always claimed. All nine exporters already satisfy it, so this tightens
+   the guard without asking anyone to change a file. */
 const exporters = [];
 for (const kind of [...KINDS.filter((kind) => kind !== "c4"), "viewer"]) {
   const exporter = `src/features/${kind}/export/render-svg.ts`;
@@ -484,7 +705,8 @@ for (const kind of [...KINDS.filter((kind) => kind !== "c4"), "viewer"]) {
     `${kind}: its export carries the ground it was read on` +
       (clones ? " (clone path — it has to be put back)" : ""),
     /resolveExportGround\(\)/.test(code) &&
-      (clones ? /ground\.layers\(/.test(code) : /ground\.defs/.test(code)),
+      /ground\.layers\(/.test(code) &&
+      (clones || /ground\.defs/.test(code)),
     clones
       ? "this exporter copies what is on screen, and the screen's ground is on " +
           "the PANE — outside the clone. A file from this path silently loses " +

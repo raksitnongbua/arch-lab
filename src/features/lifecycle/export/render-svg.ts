@@ -130,7 +130,8 @@ export function renderLifecycleSvg(
     diagramSurfaceMarkup({
       width: layout.width,
       height: layout.height,
-      stroke: theme.border,
+      stroke: theme.nodeBorder,
+      fill: theme.node,
       originX: EXPORT_PADDING,
       originY: EXPORT_PADDING,
     }),

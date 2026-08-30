@@ -39,27 +39,30 @@
  *     become edge labels, and `desc`, `[technology]`, `#tag`s, a boundary's
  *     tint and the header beyond the title have no Mermaid equivalent.
  *
- *   - `parseMermaidGantt(source, options?)` — Mermaid `gantt` code →
- *     `GanttLabFile`; what it drops is named by `MERMAID_GANTT_CAVEAT`,
- *     and `detectMermaidGantt` is exact for the same reason `detectMermaidEr`
- *     is (Mermaid has a real `gantt` document type). THE ONE DIALECT WITH NO
- *     `serializeMermaid*` PARTNER, deliberately: `at-risk` has no Mermaid tag
- *     and arch-lab's critical path is computed rather than typed, so an emit
- *     would downgrade the first and misrepresent the second. The argument is
- *     written out in `lib/gantt-mapping.ts`; do not add `gantt-emit.ts`
- *     without answering it.
+ *   - `parseMermaidGantt(source, options?)` /
+ *     `serializeMermaidGantt(file, options?)` — Mermaid `gantt` ⇄
+ *     `GanttLabFile`, with `detectMermaidGantt` exact for the same reason
+ *     `detectMermaidEr` is (Mermaid has a real `gantt` document type). What
+ *     each direction gives up is named by `MERMAID_GANTT_CAVEAT` and
+ *     `MERMAID_GANTT_EXPORT_CAVEAT`. TWO THINGS TO KNOW BEFORE CALLING THE
+ *     EMITTER: Mermaid's `crit` is arch-lab's `at-risk` in both directions
+ *     (it is an authored alarm on both sides, and NOT arch-lab's computed
+ *     critical path, which is never serialized); and a document with no
+ *     `origin` THROWS, because Mermaid `gantt` has no relative axis and no
+ *     date is invented — `MERMAID_GANTT_ORIGIN_REFUSAL` is the sentence to
+ *     show, and a caller offering this as a menu item disables it rather
+ *     than catching.
  *
  *   - `parseMermaidTimeline(source, options?)` /
  *     `serializeMermaidTimeline(file, options?)` — Mermaid `timeline` ⇄
- *     `TimelineLabFile`. TWO-WAY, and the contrast with the gantt above is
- *     the reason it is spelled out: a timeline has no state vocabulary and
- *     derives nothing, so Mermaid holds everything it says and the emit
- *     cannot misrepresent anything. `detectMermaidTimeline` is exact, like
+ *     `TimelineLabFile`. `detectMermaidTimeline` is exact, like
  *     `detectMermaidEr` and `detectMermaidGantt`. What each direction gives
  *     up is named by `MERMAID_TIMELINE_CAVEAT` and
  *     `MERMAID_TIMELINE_EXPORT_CAVEAT`; the one construct refused rather
  *     than approximated is Mermaid's `section`, which groups periods a level
- *     above the period and has no arch-lab counterpart.
+ *     above the period and has no arch-lab counterpart. Unlike the gantt
+ *     above, this emitter has no refusal in it at all: a timeline is
+ *     anchored to nothing, so every document of the kind can travel.
  *
  * Both the viewer and the editor consume this feature only through this
  * barrel.
@@ -112,6 +115,12 @@ export {
   MERMAID_GANTT_CAVEAT,
 } from "./lib/gantt";
 export type { ParseMermaidGanttOptions } from "./lib/gantt";
+export {
+  serializeMermaidGantt,
+  MERMAID_GANTT_EXPORT_CAVEAT,
+  MERMAID_GANTT_ORIGIN_REFUSAL,
+} from "./lib/gantt-emit";
+export type { SerializeMermaidGanttOptions } from "./lib/gantt-emit";
 export { MERMAID_GANTT_HEADER_WORD } from "./lib/gantt-mapping";
 export {
   detectMermaidTimeline,

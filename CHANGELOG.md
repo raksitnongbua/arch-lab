@@ -7,7 +7,60 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **A third bundled gantt, an agile sprint** — `/live/gantt/search-sprint`, and
+  on the examples index. The two plans already bundled are migrations, where the
+  work sets the length; a sprint fixes the length first, so its ceremonies sit on
+  a cadence instead of falling out of a dependency, three of its stories run side
+  by side out of planning, and the only chain with no float is the story blocked on
+  another team that finishes four days after the review. Deleting its `starts`
+  line turns it into a reusable sprint template on a relative axis.
+- **Gantt charts now convert to Mermaid as well as from it.** The playground's
+  format toggle rewrites a plan as Mermaid `gantt`, and a pane holding Mermaid
+  downloads under a `.mmd` name. One plan cannot make the trip and says so
+  instead of guessing: a chart with no `starts` date has no calendar to anchor
+  to, Mermaid's gantt axis is always a calendar, and the toggle is disabled with
+  that sentence rather than inventing a date. What no export carries is the
+  computed critical path — Mermaid has nowhere to record a derived chain, and a
+  hand-typed `crit` tag would read as a claim rather than as the arithmetic.
+
+### Changed
+
+- **Timelines, gantt charts and lifecycles now draw on a panel instead of a
+  hairline frame** — the same surface the data dictionary already gives its
+  tables, in all nine themes. The diagram area is filled and edged in the pair
+  every diagram here already uses for a shape on its background, so the drawing
+  reads as a document set on the canvas rather than as marks floating on it.
+  Exported SVG, PNG and GIF carry the panel, so downloaded files in every theme
+  look different from the ones the previous release produced. This replaces the
+  faint per-theme wash and the blurred ruling that were previously listed here
+  and never shipped in a release — an opaque panel leaves nothing underneath it
+  to tone or to blur. `paper` gets the panel too; its line-art shapes are
+  unchanged.
+
+- **Mermaid's `crit` tag now imports as the `at-risk` state**, and `at-risk`
+  exports as `crit`. Previously `crit` was read and thrown away. Both spellings
+  are an author saying a bar is in trouble, so a chart that arrives marked up
+  keeps its markings. `crit` on a task already marked `done` keeps the `done`
+  and drops the `crit`, since a finished task is no longer at risk.
+- **A Mermaid gantt carrying `accTitle` or `accDescr` now imports.** Those lines
+  previously stopped the import with an error about a task row that was never
+  written; they are dropped as page metadata, as they already were for
+  timelines. Mermaid's `weekday` setting is now refused by name alongside
+  `axisFormat` and `tickInterval`, rather than falling through to a vaguer
+  error.
+- **The playground's "what conversion drops" note told ER, gantt and timeline
+  authors what a use-case export drops.** Every notation added after the use
+  case inherited the wrong two paragraphs. Each kind now states its own.
+
 ### Fixed
+
+- **The playground offered to convert a lifecycle to Mermaid, and the button
+  did nothing.** Pressing it left the text unchanged and the toggle snapped
+  back, while screen readers were told the conversion had succeeded. Mermaid
+  has no lifecycle notation, so that half of the toggle is now disabled and
+  says why, as it already did for a data dictionary.
 
 - **Immersive mode did not cover the screen for a sequence, flowchart or use
   case.** The diagram stayed at pane size with the site header above it, so

@@ -66,6 +66,7 @@ import {
   serializeMermaidSequence,
   serializeMermaidUseCase,
   serializeMermaidEr,
+  serializeMermaidGantt,
   serializeMermaidTimeline,
 } from "@/features/mermaid";
 /* PAST THE BARRELS, DELIBERATELY, and the same exception `dry.md` already
@@ -520,26 +521,28 @@ export function sourceTextFor(doc: ViewDocument): string {
   }
   /* One dialect, so no format fork — Mermaid has no dictionary notation. */
   if (doc.kind === "dict") return serializeDictText(doc.file);
-  /* TWO DIALECTS IN, ONE OUT, and this is the one place in the file where
-     that asymmetry is visible. A pasted Mermaid `gantt` parses (the pane's
-     `format` really is `"mermaid"`), but nothing emits one: `at-risk` has no
-     Mermaid tag and the critical path here is computed rather than typed, so
-     writing `gantt` back would downgrade the first and misrepresent the
-     second — `MERMAID_GANTT_CAVEAT` in `mermaid/lib/gantt.ts` is the
-     argument in full.
+  /* TWO DIALECTS IN AND TWO OUT — but with the ONE CARVE-OUT in this file,
+     which is why this does not simply read like the sequence branch above. A
+     gantt is anchored to a calendar: Mermaid's `gantt` has no relative axis,
+     so a plan with no `starts` line has no date to write and
+     `serializeMermaidGantt` refuses it by name rather than inventing a day 0.
 
-     So this is the one kind where Format DOES flip the pane's language, which
-     the contract above otherwise forbids. It is the honest choice rather than
-     an oversight: the alternative is a Format button that silently does
-     nothing on the only document it could not rewrite. The reader is not
-     surprised by it either — the Mermaid half of the format toggle is
-     disabled for a gantt, with that same fact as its title, so the pane
-     has already said the conversion runs one way. */
-  if (doc.kind === "gantt") return serializeGanttText(doc.file);
-  /* TWO DIALECTS IN AND TWO OUT, which is why this reads like the sequence
-     branch above and not like the gantt branch below it. A timeline has no
-     state vocabulary and derives nothing, so Mermaid holds everything it says
-     and the emit cannot misrepresent anything — the argument is on
+     Falling back to `.alab` rather than letting the throw out is deliberate,
+     and it does not hide anything: this function's contract is "the pane's
+     text in the pane's own format", and a pane that cannot be shown in the
+     format it claims must show SOMETHING. The reader has already been told —
+     the Mermaid half of the format toggle is disabled for exactly this
+     document, carrying `MERMAID_GANTT_ORIGIN_REFUSAL` as its title — so
+     reaching this line means the format was set before the `starts` line was
+     deleted, and `.alab` is the format the document can still be written in. */
+  if (doc.kind === "gantt") {
+    return doc.format === "mermaid" && doc.file.origin !== undefined
+      ? serializeMermaidGantt(doc.file)
+      : serializeGanttText(doc.file);
+  }
+  /* TWO DIALECTS IN AND TWO OUT, unconditionally — the difference from the
+     gantt above is that a timeline is anchored to nothing, so there is no
+     document of this kind that cannot travel. The argument is on
      `mermaid/lib/timeline-mapping.ts`. */
   if (doc.kind === "timeline") {
     return doc.format === "mermaid"
@@ -589,13 +592,15 @@ export function convertedSourceText(
       : serializeErText(doc.file);
   }
   if (doc.kind === "dict") return serializeDictText(doc.file);
-  /* `to` is ignored for the same reason `sourceTextFor` has no fork: there is
-     no Mermaid `gantt` emitter, so `.alab` is the only text this kind can be
-     converted INTO. The toggle that would ask for the other direction is
-     disabled on this kind, so `to === "mermaid"` never reaches here from the
-     UI — returning the `.alab` anyway is the safe answer for a caller that
-     asks regardless. */
-  if (doc.kind === "gantt") return serializeGanttText(doc.file);
+  /* The gantt's carve-out again, and the same answer: an origin-less plan
+     cannot be written as Mermaid, the toggle that would ask for it is
+     disabled on exactly that document, and `.alab` is the safe answer for a
+     caller that asks regardless. */
+  if (doc.kind === "gantt") {
+    return to === "mermaid" && doc.file.origin !== undefined
+      ? serializeMermaidGantt(doc.file)
+      : serializeGanttText(doc.file);
+  }
   if (doc.kind === "timeline") {
     return to === "mermaid"
       ? serializeMermaidTimeline(doc.file)

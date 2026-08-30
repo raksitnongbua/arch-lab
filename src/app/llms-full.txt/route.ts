@@ -107,12 +107,17 @@ notation.
   carries the actor-and-use-case convention) — imported, and exported back.
   Import and export are each lossy in their own
   direction, and the app states exactly what each drops. A Mermaid shape with no
-  arch-lab counterpart is refused by name rather than approximated. \`gantt\` is
-  IMPORT ONLY: a gantt's critical path and float are computed, and Mermaid
-  has nowhere to record either, so an export would hand back a plan missing the
-  answers the document was drawn for. \`timeline\` is the opposite case and
-  runs BOTH WAYS: a milestone timeline computes nothing and has no status
-  vocabulary, so Mermaid holds everything it says — what an export drops is an
+  arch-lab counterpart is refused by name rather than approximated. \`gantt\`
+  runs both ways: Mermaid's \`crit\` tag is arch-lab's \`at-risk\` state in
+  either direction, since both are an author saying a bar is in trouble. What
+  an export never carries is the COMPUTED critical path and float — Mermaid
+  has no slot for a derived chain, and writing one out as a typed \`crit\`
+  would be indistinguishable from a claim somebody made, so the numbers stay
+  where they are computed: \`validate_gantt\` and the canvas. A plan with NO
+  \`starts\` date cannot be exported at all, because Mermaid \`gantt\` has no
+  relative axis and no date is invented. \`timeline\`
+  runs BOTH WAYS with nothing carved out: a milestone timeline computes nothing
+  and has no status vocabulary, so Mermaid holds everything it says — an
   event's description and its tags, which are notes around the diagram rather
   than claims it makes. Mermaid's \`section\`, which groups periods a level
   above the period, is refused by name rather than flattened. The LIFECYCLE

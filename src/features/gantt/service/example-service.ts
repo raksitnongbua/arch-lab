@@ -86,6 +86,79 @@ starts 2026-03-02
       desc "A branch nothing downstream waits for, so it carries float for a reason that has nothing to do with being behind."
 `;
 
+/**
+ * A third plan chosen for the one thing neither migration can show: a FIXED
+ * TIMEBOX. In the store migration and the hall move the work sets the length —
+ * the chain is as long as it is and the end date falls out of it. A sprint
+ * inverts that. The fortnight is agreed first and the work is fitted into it,
+ * which is why every ceremony here is pinned with `at` and not one of them
+ * hangs off an `after`: planning, refinement, review and retro are a CADENCE.
+ * Nothing computes them and nothing downstream is allowed to move them.
+ *
+ * PLANNING IS A TASK AND THE OTHER THREE CEREMONIES ARE MILESTONES, which is
+ * not an inconsistency. Planning is a session with a length and the other
+ * three are instants, so the notation already has the right word for each. It
+ * is also the only arrangement that draws: a milestone diamond centred on day
+ * 0 puts half of itself left of the plot's edge, which `check:gantt-layout`
+ * fails on by name.
+ *
+ * TWO MORE SHAPES ARRIVE WITH IT.
+ *
+ * The first is BREADTH. Both bundled plans are chains, and a reader who only
+ * ever meets a chain learns that a gantt is a queue. Three stories fan out of
+ * planning and then wait on nothing, each other included — a sprint board is
+ * mostly not a graph, and the row solve is worth seeing hold still as well as
+ * seeing it reorder.
+ *
+ * The second is a plan THAT DOES NOT FIT, and it is why the float numbers here
+ * read the opposite way round from the other two. `reindex` is another team's
+ * window and `synonyms` waits behind it, so the pair lands on day 15 — four
+ * days past the review the story was promised for. That pair is the entire
+ * critical path, which leaves EVERY committed story carrying float, seven to
+ * eleven days of it. In the migrations, float marks the branch nobody is
+ * waiting on. Here it marks everything that fitted, and the one chain with no
+ * float is the story that rolled over. Same arithmetic, opposite reading, and
+ * a bundle that only ever shows one of the two teaches the wrong lesson.
+ *
+ * `starts` IS HERE ON PURPOSE and it is worth knowing what deleting it does.
+ * That one line is what lets this plan leave for Mermaid at all —
+ * `serializeMermaidGantt` refuses an origin-less document by name rather than
+ * inventing a day 0 — so a bundled sprint without it would be the first screen
+ * on which the export is greyed out. Delete it and the axis goes relative
+ * (`W1, W2, W3`) and the same document becomes a reusable sprint template that
+ * no longer names a particular fortnight. That is a real second use for this
+ * file and it costs one keystroke to demonstrate, which is exactly why it is a
+ * line in this example rather than a fourth example of its own.
+ *
+ * All four states appear, `planned` spelled as ABSENCE the way
+ * `STATE_IS_DEFAULT` defines it and the way both other plans write it.
+ */
+const SEARCH_SPRINT = `archlab 1.0 gantt
+title "Search sprint 31"
+description "A fortnight, fixed. What was fitted into it, and the one story that did not fit"
+starts 2026-04-06
+
+@gantt
+  section "Ceremonies"
+    task planning "Sprint planning" 1d done at 0
+      desc "The only line in this plan that sets a date instead of reading one. The box is agreed here and everything below is fitted into it."
+    milestone refinement "Backlog refinement" at 7
+    milestone review "Sprint review" at 11
+    milestone retro "Retrospective" at 11
+  section "Committed stories"
+    task typeahead "Type-ahead suggestions" 4d done after planning
+      desc "One of three stories that leave planning together and then wait on nothing, each other included. A sprint board is mostly not a graph."
+    task filters "Filter chips" 3d done after planning
+    task export "Export results to CSV" 5d active after planning
+    task exportdocs "Document the export format" 2d after export
+      desc "The section's only dependency, and a small one: the format has to exist before anybody can write it down."
+  section "Waiting on the platform team"
+    task reindex "Reindex window" 12d at-risk at 0
+      desc "Not ours to shorten and not ours to schedule — the platform team owns the cluster, and the window is where the window is."
+    task synonyms "Synonym dictionary live" 3d after reindex
+      desc "Cannot start until the day after the review it was promised for. This is the story that rolls over, and it is the only chain here with no float."
+`;
+
 const SOURCES: readonly GanttExampleSource[] = [
   {
     id: "store-migration",
@@ -98,6 +171,12 @@ const SOURCES: readonly GanttExampleSource[] = [
     blurb:
       "A data-centre move whose critical chain is set by a carrier's lead time, with a milestone waiting on two chains and a wind-down branch that carries slack.",
     text: DATACENTRE_MOVE,
+  },
+  {
+    id: "search-sprint",
+    blurb:
+      "An agile sprint: ceremonies pinned to the calendar rather than to a dependency, three stories running side by side out of planning, and one story blocked outside the team that takes the whole critical path past the review.",
+    text: SEARCH_SPRINT,
   },
 ];
 
