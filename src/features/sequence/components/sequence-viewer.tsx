@@ -122,6 +122,8 @@ import {
 } from "@/components/ui/zoom-pill";
 import { orAbsent } from "@/lib/absent";
 import { useModKey } from "@/lib/mod-key";
+import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
+import { useMeasuredScale } from "@/components/ui/use-measured-scale";
 import { cn } from "@/lib/utils";
 
 import type { LaidMessage } from "../lib/layout";
@@ -778,6 +780,14 @@ export function SequenceViewer({
     if (width <= 0 || height <= 0) return 1;
     return Math.min(width / layout.width, height / layout.height);
   }, [layout]);
+
+  /* THE GROUND'S CAMERA. `zoom` is a MODE as often as it is a number, and the
+     adaptive ladder needs the number — `screenPitch = worldPitch × scale`. Fit
+     is therefore measured, and re-measured on resize, because the pane changes
+     size when the source rail collapses and when immersive mode opens. This is
+     the SAME camera the diagram is drawn at, resolved; not a second one. */
+  const fitScale = useMeasuredScale(diagramRegionRef, measureFitScale);
+  const groundScale = zoom === "fit" ? fitScale : zoom;
 
   /**
    * WHAT THE VIEW WAS CENTRED ON when a zoom started, as a fraction of the
@@ -1704,6 +1714,10 @@ export function SequenceViewer({
                how the ground behind a diagram came to change shade with the
                notation. */
             "h-full overflow-auto p-3",
+            /* THE GROUND, filling the pane rather than the drawing.
+               `.af-canvas-rule` in globals.css carries the reversal and the
+               reason `local` attachment is the whole panning mechanism. */
+            CANVAS_RULE_CLASS,
             // Flex ONLY at a numeric scale, so the wrapper's `m-auto` can
             // centre the drawing on both axes when it is smaller than the
             // pane. Fit mode is left as plain block layout: its child already
@@ -1718,6 +1732,7 @@ export function SequenceViewer({
             zoom !== "fit" && "cursor-grab",
             panning && "cursor-grabbing",
           )}
+          style={groundFieldCss(groundScale)}
           onClick={handleBackdropClick}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}

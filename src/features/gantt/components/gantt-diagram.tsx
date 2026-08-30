@@ -65,7 +65,6 @@
  * wait for a script to write a variable.
  */
 
-import { CanvasField } from "@/components/ui/canvas-field";
 import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { textureFill } from "@/lib/role-texture";
 import type { GanttLabFile } from "@/types";
@@ -74,6 +73,7 @@ import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
 import type { LaidGanttItem, GanttLayout } from "../lib/layout";
 import {
   GANTT,
+  GANTT_FRAME_PAD,
   hatchTilePaths,
   layoutGantt,
   TEXTURE_BY_STATE,
@@ -113,6 +113,12 @@ export function GanttDiagram({
   onHoverItem,
 }: GanttDiagramProps) {
   const layout = layoutGantt(file);
+  /* THE SHEET, which is the drawing plus its margin. The drawing keeps every
+     coordinate it had; the box around it grows, and the origin moves out to
+     meet it. See `GANTT_FRAME_PAD` for why the viewer's CSS padding cannot do
+     this job now that the ground is painted inside the <svg>. */
+  const sheetWidth = layout.width + GANTT_FRAME_PAD * 2;
+  const sheetHeight = layout.height + GANTT_FRAME_PAD * 2;
   const hasFocus = litIds !== undefined && litIds.size > 0;
   const lit = (id: string): "1" | undefined =>
     litIds?.has(id) ? "1" : undefined;
@@ -122,17 +128,19 @@ export function GanttDiagram({
       className={["af-gantt-canvas", hasFocus ? "af-gantt-has-focus" : ""]
         .filter(Boolean)
         .join(" ")}
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
-      /* ITS NATURAL SIZE, not `width="100%"`. Stretching a 1020-unit drawing
-         across a 1600px pane put the label rail against one edge and the last
-         tick against the other, with the whole thing upscaled to get there.
-         The stylesheet caps this with `max-width: 100%` and centres it, so a
-         wide pane gets air either side and a narrow one still fits — the
-         viewBox and `preserveAspectRatio` do the fitting, undistorted. The
-         geometry is untouched, which is what keeps the SVG export identical:
-         it builds its own `<svg>` from the same `layoutGantt` figures. */
-      width={layout.width}
-      height={layout.height}
+      viewBox={`${-GANTT_FRAME_PAD} ${-GANTT_FRAME_PAD} ${sheetWidth} ${sheetHeight}`}
+      /* ITS NATURAL SIZE, not `width="100%"`. Stretching the drawing across a
+         1600px pane put the label rail against one edge and the last tick
+         against the other, with the whole thing upscaled to get there. The
+         stylesheet caps this with `max-width: 100%` and centres it, so a wide
+         pane gets air either side and a narrow one still fits — the viewBox and
+         `preserveAspectRatio` do the fitting, undistorted. The natural size is
+         the SHEET rather than the drawing, which is the only thing the margin
+         changed: the geometry is untouched, which is what keeps the SVG export
+         identical — it builds its own `<svg>` from the same `layoutGantt`
+         figures and pads it by the same amount. */
+      width={sheetWidth}
+      height={sheetHeight}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={describeGantt(file, layout)}
@@ -140,15 +148,34 @@ export function GanttDiagram({
       data-af-idle={idleMotion}
       data-idle={atRest ? "1" : "0"}
     >
-      {/* THE WELL'S FIELD, under everything the diagram draws. In the
-          diagram's OWN coordinates, so it pans, scrolls and zooms with the
-          drawing rather than sitting still while the drawing moves over it
-          — components/ui/canvas-field.tsx carries the measurement that
-          rules out a ground painted on the pane. */}
-      <CanvasField
-        id="af-field-gantt"
+      {/* THE PLAN'S OWN SURFACE, and the reason it exists is a consequence of
+          the ground filling the pane.
+          THE DIAGRAM GETS A BACKGROUND; THE GROUND DOES NOT GET A HOLE. That
+          is the rule, and `dict` set the precedent — it has drawn its table on
+          a `--node` panel since it shipped. Clipping the ground so a drawing
+          could sit in a clearing would be the ground apologising for existing,
+          and it would put a hard edge on the sheet exactly where the drawing's
+          own edge already is.
+          WHY THIS KIND AND NOT THE OTHERS. A gantt is the one notation whose
+          own marks are a LATTICE: its time ticks and section rules are thin
+          lines in `--canvas-grid`, at no fixed relationship to the ladder's
+          pitch. Two lattices at unrelated pitches beat against each other,
+          which is the exact failure `gantt-diagram.tsx` already argues about
+          its three tile pitches a few lines below. Every other notation either
+          fills its shapes (c4, flowchart, use-case, ER, dict) or draws a single
+          rail rather than a field (timeline, lifecycle).
+          `--node` on `--node-border` is the pair every canvas here already uses
+          for a shape against its ground, so it is measured in all nine themes
+          and needs no new token. */}
+      <rect
+        x={0}
+        y={0}
         width={layout.width}
         height={layout.height}
+        rx={12}
+        fill="var(--node)"
+        stroke="var(--node-border)"
+        strokeWidth={1}
       />
       {/* The role textures, once for the whole plot — beside the duration
           hatch below, which is a different pattern answering a different

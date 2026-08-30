@@ -279,10 +279,17 @@ function chromeClassesOnDisk() {
 check("the stripper removes chrome by prefix, never by a list of names", () => {
   // A list is the failure this whole section exists for: it cannot notice the
   // class it has never heard of.
+  // The prefix selector, plus at most constants imported from elsewhere. The
+  // canvas ground is the one thing that legitimately joins it: it is drawn by a
+  // component SHARED with eight other notations, so it cannot wear an
+  // `af-seq-chrome-` class without that component knowing about this feature —
+  // and this is the one exporter that clones rather than builds, so a ground
+  // left in goes into every SVG, PNG and GIF frame. What must never appear is a
+  // hand-written class NAME, which is what the assertion below actually guards.
   assert.match(
     source,
-    /const DROPPED_ALWAYS = SEQUENCE_CHROME_SELECTOR;/,
-    "DROPPED_ALWAYS is not the shared prefix selector",
+    /const DROPPED_ALWAYS = (?:SEQUENCE_CHROME_SELECTOR;|`\$\{SEQUENCE_CHROME_SELECTOR\}(?:, \.\$\{[A-Z_]+\})*`;)/,
+    "DROPPED_ALWAYS is not built from the shared prefix selector",
   );
   assert.equal(
     SEQUENCE_CHROME_SELECTOR,

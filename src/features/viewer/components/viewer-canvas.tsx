@@ -42,8 +42,6 @@ import {
   useState,
 } from "react";
 import {
-  Background,
-  BackgroundVariant,
   MarkerType,
   Panel,
   ReactFlow,
@@ -60,6 +58,8 @@ import {
   type OnNodesChange,
   type Viewport,
 } from "@xyflow/react";
+
+import { CanvasGroundLayers } from "@/components/ui/canvas-ground-layers";
 
 import "@xyflow/react/dist/style.css";
 
@@ -85,12 +85,7 @@ import {
   getDiagram,
   type ViewerModel,
 } from "../lib/model";
-import {
-  CANVAS_FIELD_GAP,
-  CANVAS_RULE_MAJOR_STEP,
-  CANVAS_RULE_MAJOR_WIDTH,
-  CANVAS_RULE_WIDTH,
-} from "@/features/editor/lib/canvas-constants";
+import {} from "@/features/editor/lib/canvas-constants";
 import {
   EDGE_BASE_DASH_PERIOD,
   EDIT_GRID,
@@ -2612,36 +2607,14 @@ function ViewerCanvasInner({
               : "",
           ].join(" ")}
         >
-          {/* THE WELL'S FIELD, and this canvas had none for its whole life —
-              the only React Flow surface in the app without one, so a reader
-              who opened a shared model got a bare well where the editor showed
-              a grid. Three stacked layers, the same three tokens and the same
-              order as `editor/components/canvas.tsx`; two of them are
-              transparent unless the theme opts in. React Flow reads the
-              viewport transform itself, which is why the field pans and zooms
-              with the drawing here rather than needing the in-SVG pattern the
-              other eight notations use. */}
-          <Background
-            id="canvas-dots"
-            variant={BackgroundVariant.Dots}
-            gap={CANVAS_FIELD_GAP}
-            size={1.5}
-            color="var(--canvas-dot)"
-          />
-          <Background
-            id="canvas-rule-minor"
-            variant={BackgroundVariant.Lines}
-            gap={CANVAS_FIELD_GAP}
-            lineWidth={CANVAS_RULE_WIDTH}
-            color="var(--canvas-rule)"
-          />
-          <Background
-            id="canvas-rule-major"
-            variant={BackgroundVariant.Lines}
-            gap={CANVAS_FIELD_GAP * CANVAS_RULE_MAJOR_STEP}
-            lineWidth={CANVAS_RULE_MAJOR_WIDTH}
-            color="var(--canvas-rule-major)"
-          />
+          {/* THE WELL'S RULE LAYER, and this canvas had none for its whole
+              life before the seam existed — the only React Flow surface in the
+              app without one. The adaptive ladder, identical to the editor's
+              and to the eight SVG notations', because all three read
+              `lib/canvas-ground.ts`. React Flow applies the viewport transform
+              itself, which is why the field pans and zooms with the drawing
+              here rather than needing the in-SVG pattern the others use. */}
+          <CanvasGroundLayers />
           {/* Before every Panel so frames sit behind the nodes and the chrome. */}
           {/* `draggedDiagram`, not `diagram`: a frame's box is the bounding
               box of its members' positions (`placeFrames`), so feeding it the

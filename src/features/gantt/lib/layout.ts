@@ -121,6 +121,39 @@ export const GANTT = {
 } as const;
 
 /**
+ * THE SHEET'S MARGIN — air between the drawing and the edge of the ground it
+ * is drawn on, on screen and in the file alike.
+ *
+ * DELIBERATELY NOT A MEMBER OF `GANTT`. Everything in that table is a
+ * COORDINATE: move one and a bar moves, `check:gantt-layout` re-measures a
+ * different plot, and the connector router's no-crossing guarantee is proved
+ * against numbers nobody meant to change. This is a FRAME. It widens the box
+ * the drawing is presented in and moves nothing inside it — every bar, tick,
+ * label and elbow keeps the coordinate it has always had.
+ *
+ * WHY THE SCREEN NEEDS ONE NOW. Nothing on this canvas is laid out with a
+ * margin: the axis caption and every section heading start at x=0, the section
+ * rules run from x=0, and the last row ends 18 units above the bottom. That was
+ * survivable while the ground was the pane's, because the viewer's own
+ * `px-5 py-6 sm:px-8` supplied the air — the exporter's header still argues it,
+ * and it was true when it was written. It stopped being true when the well grew
+ * a FIELD: `CanvasField` is drawn inside this `<svg>`, in the drawing's
+ * coordinates, so the ruled sheet now ends exactly where the section headings
+ * begin. The CSS padding is outside the sheet; it separates the sheet from the
+ * pane and can never be the sheet's own margin. A reader on `blueprint`, whose
+ * field is a visible rule rather than a faint dot, sees the plan printed to the
+ * trim. It is every theme, and blueprint is only the one that shows it.
+ *
+ * WHY 40. It is the pad the exported file has always used, and one number is
+ * what keeps a downloaded PNG framed the way the screen framed it — the
+ * exporter keeps its own literal, because `check:gantt-layout` reads that
+ * literal out of the source, and the same check now asserts the two agree.
+ * A multiple of `hatchTile` for the reason the exporter gives: the bar hatch is
+ * `userSpaceOnUse`, and a whole number of tiles keeps its phase.
+ */
+export const GANTT_FRAME_PAD = 40;
+
+/**
  * The two diagonal segments that make up one hatch tile, as `d` attributes.
  *
  * TWO, NOT ONE, and the second is what the march needs rather than what the

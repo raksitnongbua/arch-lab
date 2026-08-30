@@ -47,7 +47,13 @@ import { THEMES, type Theme } from "@/lib/constants";
  */
 export const TAG_FILL_BY_THEME: Record<Theme, { l: number; c: number }> = {
   light: { l: 0.93, c: 0.055 },
-  paper: { l: 0.93, c: 0.055 },
+  /* A shade above the rest of the light family, and the stylesheet's tag-fill
+     comment carries the argument: paper's whole palette was lightened when its
+     cream ground was reported as too dark, and this band rode up with it to
+     stay under the theme's own canvas. It narrows nothing the other four do
+     not already narrow — a lighter fill only ever helps both bars — so the
+     interval the free picker searches is unchanged. */
+  paper: { l: 0.942, c: 0.055 },
   pastel: { l: 0.93, c: 0.055 },
   glass: { l: 0.93, c: 0.055 },
   dark: { l: 0.33, c: 0.06 },

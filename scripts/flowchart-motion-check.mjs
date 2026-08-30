@@ -483,9 +483,7 @@ check(
   "the resume delay carries NO --flow-jitter — the scatter runs to a full idle period, so adding it to a resume would leave a reader waiting seconds after their own click, which is the 'toggle broken' report this override exists to fix",
   gate !== null &&
     (() => {
-      const resume = gate[1].match(
-        /\[data-af-idle-resume\][^{]*\{([^}]*)\}/,
-      );
+      const resume = gate[1].match(/\[data-af-idle-resume\][^{]*\{([^}]*)\}/);
       /* Comments stripped first: the rule EXPLAINS why the scatter is absent,
          so a naive substring test finds `--flow-jitter` in the prose and fails
          on the very comment documenting its absence. Declarations only. */
@@ -569,7 +567,7 @@ check(
     /edge\.back && "af-flow-loop-march"/.test(diagram),
   );
   check(
-    'the march is gated on data-af-idle like the pulse — it is ambient perpetual motion, unlike the frame ring where the same walk is a selection the reader asked for',
+    "the march is gated on data-af-idle like the pulse — it is ambient perpetual motion, unlike the frame ring where the same walk is a selection the reader asked for",
     /\[data-af-idle="on"\][^{]*\.af-flow-loop-march\s*\{/.test(css),
   );
   check(
@@ -650,7 +648,8 @@ const pulseBand = (name) => {
     new RegExp(`\n\\.af-flow-pulse-${name}\\s*\\{([^}]*)\\}`),
   );
   const prop = (key) => {
-    const hit = rule === null ? null : rule[1].match(new RegExp(`${key}:\\s*([\\d.]+)`));
+    const hit =
+      rule === null ? null : rule[1].match(new RegExp(`${key}:\\s*([\\d.]+)`));
     return hit === null ? null : Number(hit[1]);
   };
   return {
@@ -700,7 +699,9 @@ check(
 
 {
   const bands = PULSE_BANDS.map(pulseBand);
-  const ok = bands.every((b) => b !== null && b.opacity !== null && b.width !== null);
+  const ok = bands.every(
+    (b) => b !== null && b.opacity !== null && b.width !== null,
+  );
 
   /* THE GRADIENT, as a measured property rather than a description: light
      falls off monotonically from the head outwards — each band wider than the
@@ -711,7 +712,9 @@ check(
     "the three pulse bands form a monotone falloff (each outer band wider AND fainter than the one inside it) — that graded edge is what reads as light rather than as a bead sliding along the line",
     ok &&
       bands.every((b, i) =>
-        i === 0 ? true : b.width < bands[i - 1].width && b.opacity > bands[i - 1].opacity,
+        i === 0
+          ? true
+          : b.width < bands[i - 1].width && b.opacity > bands[i - 1].opacity,
       ),
   );
 
@@ -721,8 +724,10 @@ check(
   check(
     "the pulse's TOTAL ink across all three bands stays under a tenth of the period — a budget met three times over is still a belt",
     ok &&
-      bands.reduce((sum, b) => sum + (b.lit * b.opacity) / (b.lit + b.gap), 0) <=
-        0.1,
+      bands.reduce(
+        (sum, b) => sum + (b.lit * b.opacity) / (b.lit + b.gap),
+        0,
+      ) <= 0.1,
   );
 
   /* All three must share ONE dash period, or they drift apart cycle by cycle
