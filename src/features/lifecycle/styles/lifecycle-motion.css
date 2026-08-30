@@ -181,17 +181,30 @@
      line is, so every lifecycle from two states to twenty marches at the same
      visual speed. `check:lifecycle-motion` asserts the two are constants.
 
-     SPARSER AND SLOWER THAN THE FOCUS DASH BELOW — 33% duty against 42%, and
-     about half the speed. The two are the same motion, and the ambient has to
-     stay the quieter one or lighting a branch says nothing. */
-  --lc-drift: 2.8s;
+     FAST ENOUGH TO BE SEEN AT ALL, which is the constraint that was missing.
+     These were 2.8s and 1.5s, so the pattern shifted at 8.6 and 16 units per
+     second against a motion-detection threshold of roughly 3–7 — technically
+     travelling, practically static. The timeline's sweep next door runs at 156
+     and reads as obviously alive, which is the comparison that was reported.
+     They now run at 22 and 32.
+
+     THE RULE THAT PRODUCED THAT was one of this repo's own: the ambient had to
+     be "slower than the focus dash", and slower was taken as far as it would
+     go without anyone asking how slow is still moving. `codebase.md` names the
+     shape — a rule that says what to DO survives no case its author did not
+     imagine — so the check now carries a FLOOR as well as the ordering.
+
+     SPARSER AND STILL SLOWER THAN THE FOCUS DASH — 33% duty against 42%, and
+     about two thirds of the speed. The two are the same motion, and the
+     ambient has to stay the quieter one or lighting a branch says nothing. */
+  --lc-drift: 1.1s;
   --lc-drift-dash: 8;
   --lc-drift-gap: 16;
 
   /* The travelling dash on a lit return. Faster and denser than the ambient:
      it is a journey rather than a drift, and it only ever runs on one path at
      a time. */
-  --lc-travel: 1.5s;
+  --lc-travel: 0.75s;
   --lc-travel-dash: 10;
   --lc-travel-gap: 14;
 
@@ -271,6 +284,25 @@
 }
 .af-lc-arrow {
   fill: var(--edge);
+}
+
+/* A WAY OUT IS DRAWN AS A BROKEN LINE. Every other connector on this canvas is
+   a route the subject travels and comes back from; a terminal branch is the one
+   that does not, and until now the only thing saying so was the bar at its far
+   end — a mark eight units wide at the edge of the drawing, read after the eye
+   has already followed the line.
+
+   A DASH IS A SHAPE, which is the only currency this canvas trades in. It says
+   "this does not continue" before the reader reaches the end of it, it survives
+   greyscale and a screenshot, and it costs no hue — the palette argument in the
+   header is untouched. It is also the convention every drawing tool already
+   uses for a link that is not a link.
+
+   THE RESTING PATTERN IS DECLARED HERE, outside the media query, so a reader
+   with motion turned off and a downloaded file both keep the distinction. Only
+   the travel below is motion. */
+.af-lc-stub-ends {
+  stroke-dasharray: var(--lc-drift-dash) var(--lc-drift-gap);
 }
 
 .af-lc-subject {
@@ -467,6 +499,24 @@
     --lc-march-gap: var(--lc-drift-gap);
     stroke-dasharray: var(--lc-march-dash) var(--lc-march-gap);
     stroke-opacity: 0.55;
+    animation: af-lc-march var(--lc-drift) linear infinite;
+  }
+
+  /* THE WAYS OUT DRIFT WITH THE TRACK, on the same clock and the same pattern.
+     NOT A SECOND AMBIENT, and the distinction is the whole reason this is
+     allowed: the header's standing objection is that two things moving at once
+     is how an ambient stops meaning anything, and that is about two DIFFERENT
+     gestures competing. This is one gesture in two places — the track drifting
+     down and the exits drifting out — at one speed, one pattern and one token,
+     so it reads as a single system rather than as two marks arguing.
+
+     ONLY THE TERMINAL BRANCHES. A rejoining one already has its own travelling
+     dash under focus, and giving it a second at rest would make the focused
+     state indistinguishable from the resting one — which is the chain that cost
+     the ER canvas three commits. */
+  .af-lc-canvas[data-af-idle="on"][data-idle="1"] .af-lc-stub-ends {
+    --lc-march-dash: var(--lc-drift-dash);
+    --lc-march-gap: var(--lc-drift-gap);
     animation: af-lc-march var(--lc-drift) linear infinite;
   }
 

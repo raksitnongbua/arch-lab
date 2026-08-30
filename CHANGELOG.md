@@ -84,6 +84,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   always announced themselves as buttons and have never answered a key press.
   Click the same row again, or press Escape, to clear.
 
+- **A lifecycle's idle motion actually moves now, and its ways out are dashed.**
+  The dashes drifting down the track were tuned so slowly they read as a static
+  dotted line beside the timeline's obviously-moving sweep; they and the dash on
+  a selected branch both run about two and a half times faster. And a branch the
+  subject does not come back from is now drawn broken rather than solid, so it
+  says where it goes before your eye reaches the stop mark at the end — it drifts
+  outward on the same clock the track drifts down, one motion in two places.
+
 - **A lifecycle's idle animation is now dashes marching down the track**, in
   place of a single lit wash travelling down it once per loop. The track itself
   stays solid and still; the dashes drift over it, sparser and about half the

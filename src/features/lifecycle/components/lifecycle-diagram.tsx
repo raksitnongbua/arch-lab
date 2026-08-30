@@ -403,7 +403,13 @@ function Exit({
           the departure. Orthogonal, because the notation implies it — the
           subject was travelling down the line and turned off it. */}
       <path
-        className="af-lc-stub"
+        /* AN ARRAY JOINED WITH A SPACE, never concatenated — a lost leading
+           space merges two classes into one nonsense class, every rule
+           targeting it silently stops applying, and a CSS selector that matches
+           nothing is not an error. That shipped on the ER canvas. */
+        className={["af-lc-stub", path === null ? "af-lc-stub-ends" : ""]
+          .filter(Boolean)
+          .join(" ")}
         d={`M ${spineX} ${state.dotY} L ${spineX} ${exit.dotY} L ${LIFECYCLE.branchDotX} ${exit.dotY}`}
       />
       <circle

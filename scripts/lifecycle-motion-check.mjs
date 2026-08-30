@@ -770,6 +770,59 @@ console.log("the ambient drift cannot be sized wrong");
     driftSpeed < travelSpeed,
     "an ambient that keeps pace with the motion a reader asked for competes with it",
   );
+
+  /* AND BOTH ARE FAST ENOUGH TO BE SEEN. This is the constraint that was
+     missing, and its absence is what let the ordering above drive the ambient
+     into the ground: "slower than the focus dash" was satisfiable all the way
+     down, so it was satisfied at 8.6 units per second against a
+     motion-detection threshold of roughly 3–7. Technically travelling,
+     practically static — reported as the lifecycle's line being broken next to
+     the timeline's, which runs at 156.
+
+     `codebase.md` names this shape exactly: a rule stricter than the product
+     needs will cause defects of its own, and a rule that says what to DO
+     survives no case its author did not imagine. The ordering says what to do;
+     this says what to CHECK, and the pair is what makes the ordering safe.
+
+     THE FLOOR IS 15 UNITS PER SECOND, comfortably clear of the threshold band
+     rather than sitting on its edge — a value inside 3–7 would be arguing
+     about perception, and the point is to be past arguing. */
+  const PERCEPTIBLE = 15 / 1000;
+  const tooSlow = [
+    ["the ambient drift", driftSpeed],
+    ["the focus dash", travelSpeed],
+  ].filter(([, speed]) => speed < PERCEPTIBLE);
+  check(
+    `both marches are perceptibly moving (${(driftSpeed * 1000).toFixed(1)} and ${(travelSpeed * 1000).toFixed(1)} units/s, floor ${PERCEPTIBLE * 1000})`,
+    tooSlow.length === 0,
+    `${tooSlow.map(([name, speed]) => `${name} at ${(speed * 1000).toFixed(1)}`).join(", ")} — at that rate the pattern reads as a static dashed line, which is a decoration rather than an answer to "which way does time run"`,
+  );
+
+  /* THE WAYS OUT ARE BROKEN LINES, AT REST. A terminal branch is the one
+     connector the subject does not come back along, and the only mark saying so
+     was a bar at its far end — read after the eye has already followed the
+     line. The dash says it first, and it is declared OUTSIDE the media query so
+     a reader with motion off and a downloaded file both keep it: this is a
+     distinction, not an animation, and only its travel is the latter. */
+  const ends = ruleBody(css, ".af-lc-stub-ends");
+  check(
+    "a terminal branch is dashed even when nothing is moving",
+    /stroke-dasharray:/.test(ends),
+    `${ends || "no rule at all"} — with motion off the only thing distinguishing a way out from a way back is an eight-unit bar at the far end of it`,
+  );
+
+  /* AND ITS TRAVEL IS THE AMBIENT'S, not a second one. One gesture in two
+     places at one speed and one pattern, which is what keeps the header's
+     objection to two competing ambients answered rather than ignored. */
+  const endsMarch = RULES.find(
+    ([selector]) =>
+      selector.includes(".af-lc-stub-ends") && selector.includes("data-idle"),
+  )?.[1];
+  check(
+    "and it drifts on the same clock as the track, not a clock of its own",
+    endsMarch !== undefined && /var\(--lc-drift\)/.test(endsMarch),
+    `${endsMarch ?? "no rule at all"} — a second speed makes it a second ambient, and two ambients is how one stops meaning anything`,
+  );
 }
 
 /* ----------------------------------------------------------------------- */
