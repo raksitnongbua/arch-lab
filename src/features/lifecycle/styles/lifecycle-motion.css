@@ -188,19 +188,27 @@
   --lc-sweep: 3.8s;
   --lc-sweep-head: 90;
 
-  /* THE WAYS OUT DRIFT. A terminal branch is dashed at rest and its dashes
-     travel outward — which is where the drifting dashed line was always meant
-     to go: one journey off the track rather than the track itself, so a dash
-     pattern on it breaks no continuous reference mark.
+  /* A RETURNING BRANCH DRIFTS. `exit … rejoins <state>` — the long path that
+     leaves the track, travels a reserved channel and comes back in further up.
+     It is dashed at rest and its dashes travel, which is where the drifting
+     dashed line belongs: it is ONE JOURNEY off the spine and back, so a dash
+     pattern on it breaks no continuous reference mark, and the dash is that
+     journey.
 
-     SPARSER AND SLOWER THAN THE FOCUS DASH BELOW — 33% duty against 42%, and
-     about two thirds the speed. The one that runs unasked has to stay the
-     quieter one. Both carry `px`: unitless they would be `<number>`s, and
-     `calc()` over numbers cannot stand where a `<length>` is wanted, which left
-     this march silently inert once already. */
-  --lc-exit-travel: 1.1s;
-  --lc-exit-dash: 8px;
-  --lc-exit-gap: 16px;
+     NOT THE TERMINAL BRANCHES. `exit … ends` stops at a bar and goes nowhere —
+     there is no journey to draw, and a dash there would say "this continues
+     somewhere" about the one mark on the canvas that means the opposite. They
+     were dashed for one commit, which was the wrong half.
+
+     SPARSER AND SLOWER THAN THE SAME PATH UNDER FOCUS — 33% duty against 42%,
+     about two thirds the speed. Selecting a branch has to visibly change it or
+     the focus dash says nothing, and both marks are the same motion on the same
+     element: what differs is density and pace. Both carry `px`: unitless they
+     would be `<number>`s, and `calc()` over numbers cannot stand where a
+     `<length>` is wanted, which left this march silently inert once already. */
+  --lc-return-drift: 1.1s;
+  --lc-return-dash: 8px;
+  --lc-return-gap: 16px;
 
   /* The travelling dash on a lit return. Faster and denser than the ambient:
      it is a journey rather than a drift, and it only ever runs on one path at
@@ -287,23 +295,23 @@
   fill: var(--edge);
 }
 
-/* A WAY OUT IS DRAWN AS A BROKEN LINE. Every other connector on this canvas is
-   a route the subject travels and comes back from; a terminal branch is the one
-   that does not, and until now the only thing saying so was the bar at its far
-   end — a mark eight units wide at the edge of the drawing, read after the eye
-   has already followed the line.
+/* A RETURNING BRANCH IS DRAWN AS A BROKEN LINE. Every other connector here is
+   a route the subject travels once and leaves behind; this is the one that
+   doubles back, and until now the only thing saying so was the shape of the
+   route itself — followed with the eye, corner by corner, to find out where it
+   lands.
 
-   A DASH IS A SHAPE, which is the only currency this canvas trades in. It says
-   "this does not continue" before the reader reaches the end of it, it survives
-   greyscale and a screenshot, and it costs no hue — the palette argument in the
-   header is untouched. It is also the convention every drawing tool already
-   uses for a link that is not a link.
+   A DASH IS A SHAPE, which is the only currency this canvas trades in. It
+   separates the two kinds of departure at a glance, it survives greyscale and a
+   screenshot, and it costs no hue — the palette argument in the header is
+   untouched.
 
-   THE RESTING PATTERN IS DECLARED HERE, outside the media query, so a reader
-   with motion turned off and a downloaded file both keep the distinction. Only
-   the travel below is motion. */
-.af-lc-stub-ends {
-  stroke-dasharray: var(--lc-exit-dash) var(--lc-exit-gap);
+   DECLARED OUTSIDE THE MEDIA QUERY, so a reader with motion off and a
+   downloaded file both keep the distinction. Only the travel below is motion.
+   The entrance's own dasharray outranks this while the diagram is arriving, and
+   stops applying when the entrance ends. */
+.af-lc-return {
+  stroke-dasharray: var(--lc-return-dash) var(--lc-return-gap);
 }
 
 .af-lc-subject {
@@ -501,21 +509,19 @@
     animation: af-lc-sweep var(--lc-sweep) linear infinite;
   }
 
-  /* THE WAYS OUT TRAVEL. The one ambient here is the spine's wash; this is a
-     second moving mark, and the standing objection to two at once is answered
-     by WHERE they are rather than by how they look — the wash runs the track
-     down the middle, these run off it sideways, and a reader following one is
-     not in the other's way. They are also the only marks that say "the subject
-     does not come back along here" before the eye reaches the bar at the end.
+  /* THE RETURNS TRAVEL. The one ambient on this canvas is the spine's wash;
+     this is a second moving mark, and the standing objection to two at once is
+     answered by WHERE they are rather than by how they look — the wash runs the
+     track down the middle, a return runs off it and around, and a reader
+     following one is not in the other's way.
 
-     ONLY THE TERMINAL BRANCHES. A rejoining one has its own travelling dash
-     under focus, and a second at rest would make the focused state
-     indistinguishable from the resting one — the chain that cost the ER canvas
-     three commits. */
-  .af-lc-canvas[data-af-idle="on"][data-idle="1"] .af-lc-stub-ends {
-    --lc-march-dash: var(--lc-exit-dash);
-    --lc-march-gap: var(--lc-exit-gap);
-    animation: af-lc-march var(--lc-exit-travel) linear infinite;
+     THE SAME ELEMENT MOVES FASTER UNDER FOCUS, below. That is the point rather
+     than a clash: at rest a return drifts quietly and says "this doubles back";
+     lit, it travels, and says which way. */
+  .af-lc-canvas[data-af-idle="on"][data-idle="1"] .af-lc-return {
+    --lc-march-dash: var(--lc-return-dash);
+    --lc-march-gap: var(--lc-return-gap);
+    animation: af-lc-march var(--lc-return-drift) linear infinite;
   }
 
   /* 4a. Focus, the dot. Opacity only — no stroke, fill or radius moves, so

@@ -84,13 +84,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   always announced themselves as buttons and have never answered a key press.
   Click the same row again, or press Escape, to clear.
 
-- **A lifecycle's track sweeps like a timeline's, and its dead ends are the
-  dashed lines that travel.** The dashes had been put on the track itself, where
+- **A lifecycle's track sweeps like a timeline's, and a branch that doubles
+  back is a dashed line that travels.** The dashes had been put on the track itself, where
   they broke the one continuous mark a reader follows, and they never moved
   anyway. The track now carries a single lit head running its length, the same
   gesture the timeline uses. A branch the subject does not come back from is
-  drawn broken and its dashes drift outward, so it says where it goes before
-  your eye reaches the stop mark at the end. And a branch the
+  drawn broken and its dashes drift along it, so the two kinds of departure are
+  told apart at a glance rather than by tracing the route corner by corner. A
+  branch that just stops stays solid; selecting one still makes its dashes run
+  faster, which is how it says which way it goes. And a branch the
   subject does not come back from is now drawn broken rather than solid, so it
   says where it goes before your eye reaches the stop mark at the end — it drifts
   outward on the same clock the track drifts down, one motion in two places.

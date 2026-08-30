@@ -742,7 +742,7 @@ console.log("the connector motion says something (it is not decoration)");
 }
 
 /* ----------------------------------------------------------------------- */
-console.log("the marching dash cannot be sized wrong");
+console.log("a returning branch is a broken line, and it travels");
 
 /* WHAT THE DEFECT WAS. The march used to ride the SPINE, and before that the
    spine carried a lit head sized against its own length: `head` and
@@ -750,8 +750,11 @@ console.log("the marching dash cannot be sized wrong");
    NEGATIVE, and a negative value does not clamp — it invalidates the whole
    `stroke-dasharray`, which is dropped, and the line paints solid. The spine
    washes again now and `@/lib/sweep-head` caps its head, which is measured
-   below; the march moved to the terminal branches, where it repeats a pattern
-   of TWO CONSTANTS and cannot express that bug at all.
+   below; the march moved to the RETURNING branches — `exit … rejoins` — where
+   it repeats a pattern of TWO CONSTANTS and cannot express that bug at all. It
+   spent one commit on the terminal branches instead, which was the wrong half:
+   a dash says "this continues somewhere", and a terminal exit means the
+   opposite.
 
    THAT IS A PROPERTY WORTH PINNING rather than trusting: a later hand reaching
    for `--lc-spine-len` to make a branch's dashes "fit" would be walking back
@@ -759,10 +762,10 @@ console.log("the marching dash cannot be sized wrong");
 {
   const march = RULES.find(
     ([selector]) =>
-      selector.includes(".af-lc-stub-ends") && selector.includes("data-idle"),
+      selector.includes(".af-lc-return") && selector.includes("data-idle"),
   )?.[1];
   check(
-    "a terminal branch marches a repeating pattern, not a head sized to a line",
+    "a returning branch marches a repeating pattern, not a head sized to a line",
     march !== undefined && !/--lc-spine-len/.test(march),
     `${march ?? "no rule at all"} — sizing a repeating dash against a line reintroduces the negative gap that paints it solid`,
   );
@@ -772,22 +775,22 @@ console.log("the marching dash cannot be sized wrong");
      comes back HERE", and it can only mean that while the thing running unasked
      is visibly sparser and slower. */
   const length = (name) => Number.parseFloat(rootProp(name));
-  const exitDash = length("lc-exit-dash");
-  const exitGap = length("lc-exit-gap");
+  const returnDash = length("lc-return-dash");
+  const returnGap = length("lc-return-gap");
   const travelDash = length("lc-travel-dash");
   const travelGap = length("lc-travel-gap");
-  const exitDuty = exitDash / (exitDash + exitGap);
+  const returnDuty = returnDash / (returnDash + returnGap);
   const travelDuty = travelDash / (travelDash + travelGap);
-  const exitSpeed = (exitDash + exitGap) / ms("lc-exit-travel");
+  const returnSpeed = (returnDash + returnGap) / ms("lc-return-drift");
   const travelSpeed = (travelDash + travelGap) / ms("lc-travel");
   check(
-    `a way out is sparser than the focus dash (${(exitDuty * 100).toFixed(0)}% against ${(travelDuty * 100).toFixed(0)}%)`,
-    exitDuty < travelDuty,
+    `a resting return is sparser than the same path under focus (${(returnDuty * 100).toFixed(0)}% against ${(travelDuty * 100).toFixed(0)}%)`,
+    returnDuty < travelDuty,
     "two marches at the same density are one mark, and lighting a branch then says nothing",
   );
   check(
-    `and slower (${exitSpeed.toFixed(3)} against ${travelSpeed.toFixed(3)} units/ms)`,
-    exitSpeed < travelSpeed,
+    `and slower (${returnSpeed.toFixed(3)} against ${travelSpeed.toFixed(3)} units/ms)`,
+    returnSpeed < travelSpeed,
     "a mark that runs unasked and keeps pace with the one a reader asked for competes with it",
   );
 
@@ -798,11 +801,11 @@ console.log("the marching dash cannot be sized wrong");
      floor is what makes the ordering safe. */
   const PERCEPTIBLE = 15 / 1000;
   const tooSlow = [
-    ["a way out's drift", exitSpeed],
+    ["a resting return's drift", returnSpeed],
     ["the focus dash", travelSpeed],
   ].filter(([, speed]) => speed < PERCEPTIBLE);
   check(
-    `both marches are perceptibly moving (${(exitSpeed * 1000).toFixed(1)} and ${(travelSpeed * 1000).toFixed(1)} units/s, floor ${PERCEPTIBLE * 1000})`,
+    `both marches are perceptibly moving (${(returnSpeed * 1000).toFixed(1)} and ${(travelSpeed * 1000).toFixed(1)} units/s, floor ${PERCEPTIBLE * 1000})`,
     tooSlow.length === 0,
     `${tooSlow.map(([name, speed]) => `${name} at ${(speed * 1000).toFixed(1)}`).join(", ")} — at that rate a pattern reads as a static dashed line`,
   );
@@ -871,7 +874,7 @@ console.log("the marching dash cannot be sized wrong");
             (match) => match[1],
           );
           /* THE `var()` CHAIN IS FOLLOWED TO ITS LITERAL. One level was not
-             enough: `--lc-march-dash` is declared as `var(--lc-exit-dash)`, so
+             enough: `--lc-march-dash` is declared as `var(--lc-return-dash)`, so
              a check stopping at the first hop saw an alias rather than a
              number and called the real defect clean. */
           const literal = (name, depth = 0) => {
@@ -901,14 +904,14 @@ console.log("the marching dash cannot be sized wrong");
     );
   }
 
-  /* THE WAYS OUT ARE BROKEN LINES, AT REST — declared outside the media query,
-     so a reader with motion off and a downloaded file both keep it. This is a
+  /* A RETURN IS A BROKEN LINE AT REST — declared outside the media query, so a
+     reader with motion off and a downloaded file both keep it. This is a
      distinction; only its travel is an animation. */
-  const ends = ruleBody(css, ".af-lc-stub-ends");
+  const resting = ruleBody(css, ".af-lc-return");
   check(
-    "a terminal branch is dashed even when nothing is moving",
-    /stroke-dasharray:/.test(ends),
-    `${ends || "no rule at all"} — with motion off the only thing distinguishing a way out from a way back is an eight-unit bar at the far end of it`,
+    "a returning branch is dashed even when nothing is moving",
+    /stroke-dasharray:/.test(resting),
+    `${resting || "no rule at all"} — with motion off the only thing separating a way BACK from a way OUT is the shape of the route, followed corner by corner`,
   );
 }
 
