@@ -7,7 +7,49 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Gantt plan touched the edge of its own surface.** The section headings and
+  the axis caption sit at the drawing's origin, and the plan's panel was drawn
+  at exactly those bounds — so "SHAPE IT" ran into the border, on screen and in
+  every exported SVG and PNG. The panel now holds the plan with air on every
+  side. The sheet is the same size it was, so a downloaded plan is framed as it
+  always was, only no longer trimmed to its own text.
+- **The playground's "Sample diagrams" menu was missing the lifecycle.** The
+  list of kinds was written out by hand and the ninth notation was never added
+  to it, so there was no way to start a lifecycle document from `/live`. The
+  menu is now derived from the one running order of the notations, and leaving a
+  notation out of that order no longer compiles.
+
 ### Changed
+
+- **Each row of the "Sample diagrams" menu now carries its own notation's mark**,
+  in that notation's colour — the same marks the examples index uses. All nine
+  rows previously showed one generic file icon, in a list whose only job is
+  telling nine things apart. The menu also scrolls instead of running off the
+  top of the viewport.
+- **Gantt charts, timelines and lifecycles now show the document's title.** The
+  title and description are drawn on the canvas, above the diagram, and travel
+  into exported SVGs and PNGs — an exported plan or timeline with no title
+  belongs to nothing. The other five notations that carry a heading already did
+  this; these three were the gap.
+- **Timelines and lifecycles are drawn on their own sheet**, the same `--node`
+  panel the Gantt and the data dictionary use, on screen and in exported files
+  alike. All three notations that sit on the well's ruled ground now read as
+  documents on a surface rather than ink on the wall. Exported file dimensions
+  are unchanged.
+- **The examples index now shows the diagrams.** Every showcased document on
+  `/demo` carries a preview drawn from its own layout — the real boxes, arrows,
+  diamonds, lifelines and spines, at the real proportions, with the labels
+  dropped because none of them would be legible at that size. The page used to
+  describe nine notations entirely in counts.
+- **`/demo` is a two-up card grid instead of nine stacked lists**, which roughly
+  halves the scroll. Each card is clickable end to end and opens the playground.
+  Read-only pages are no longer linked per card — each section now lists every
+  one of its examples as a read-only page, under the grid.
+- **The kind bar on `/demo` no longer wraps.** With nine notations it had become
+  several lines of sticky chrome parked over the page, and a jump could land a
+  heading underneath it; it is one scrolling line at every width.
 
 - **The canvas ground is now two layers, and one of them adapts to the zoom.**
   A **rule** — the grid or dot field — belongs to the drawing: it pans and zooms

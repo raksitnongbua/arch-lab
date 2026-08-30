@@ -58,6 +58,8 @@ export interface ExportTheme {
    * axis heavier than the one the reader saw.
    */
   canvasGrid: string;
+  /** `--border` — the hairline the diagram area's own frame is ruled with. */
+  border: string;
   /** The gantt's critical-path cap. Aliases `--primary` in every theme but
    * `pastel`, where the cap's 3:1-against-four-state-fills requirement and the
    * brand colour disagree. Resolved, never assumed to equal `primary`. */
@@ -105,6 +107,10 @@ const TOKEN_VARS = {
   mutedForeground: "--muted-foreground",
   nodeMeta: "--node-meta",
   canvasGrid: "--canvas-grid",
+  /* The hairline every rule in the app is drawn with. Resolved here because
+     `diagramSurfaceMarkup` draws the diagram AREA with it, and the exported
+     frame has to be the colour the screen framed it in. */
+  border: "--border",
   criticalCap: "--gantt-critical",
   foreground: "--foreground",
   accent: "--accent",
@@ -226,6 +232,7 @@ export function resolveExportTheme(): ExportTheme {
       opacity: Number.isFinite(roleTextureOpacity) ? roleTextureOpacity : 0,
     },
     canvas: resolve(TOKEN_VARS.canvas, "#ffffff"),
+    border: resolve(TOKEN_VARS.border, "#d9d9de"),
     node,
     nodeForeground: resolve(TOKEN_VARS.nodeForeground, "#1f2430"),
     nodeBorder,

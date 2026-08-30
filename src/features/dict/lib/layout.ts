@@ -60,8 +60,38 @@ export const DICT = {
   sectionGap: 26,
   /** Canvas padding. */
   margin: 28,
+  /**
+   * Canvas padding at the FOOT, which is deeper than the other three.
+   *
+   * A dictionary is the one notation that ends in a hard horizontal edge — the
+   * last field's rule runs the full width of the table — so a symmetric margin
+   * put that rule a bare 28 units from the frame and the table read as cut off
+   * rather than finished. Every other kind tapers out: a flowchart ends on a
+   * terminator, a timeline on a dot, a gantt on a bar that stops short of the
+   * axis.
+   *
+   * Twice the margin is enough to read as deliberate white space rather than
+   * slack. It is spent on the SHEET, not the table: no column, row or rule
+   * moves, so `check:dict-layout` measures the same geometry it always has.
+   */
+  marginBottom: 56,
   /** Cell padding, left and right. */
   padX: 12,
+  /**
+   * Air inside the table panel, BELOW the last field's row.
+   *
+   * The panel's height is the section's, and a section ended exactly at its
+   * last row — so the rounded box closed 6 units under the final rule
+   * (`padX * 0.5`, the same nudge that opens it at the top) and the table read
+   * as clipped rather than finished. Every other notation tapers out; this one
+   * ends on a full-width rule, which is the widest possible thing to cut.
+   *
+   * It is added to the SECTION's height rather than to the drawn rect, so the
+   * panel, the next section's position and the canvas height all pick it up
+   * from one number and the exporter cannot frame the table differently from
+   * the screen.
+   */
+  tablePadBottom: 16,
   /** Font sizes. */
   labelSize: 15,
   headerSize: 10.5,
@@ -386,7 +416,7 @@ export function layoutDict(
         : {}),
       ...(section.tags !== undefined ? { tags: section.tags } : {}),
       y: top,
-      height: y - top,
+      height: y - top + DICT.tablePadBottom,
       headerY,
       fields,
       index,
@@ -396,7 +426,10 @@ export function layoutDict(
 
   return {
     width,
-    height: Math.max(y - DICT.sectionGap + DICT.margin, DICT.margin * 2),
+    height: Math.max(
+      y - DICT.sectionGap + DICT.marginBottom,
+      DICT.margin + DICT.marginBottom,
+    ),
     title,
     titleY,
     sections: laid,

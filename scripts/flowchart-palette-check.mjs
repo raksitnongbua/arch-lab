@@ -238,13 +238,29 @@ console.log("\nshape colours stay distinct (OKLab ΔE, measured)");
 for (const [theme, byShape] of resolved) {
   if (byShape.size !== SHAPES.length) continue; // resolution already failed
   const failed = [];
+  /* A LINE-ART THEME CARRIES SHAPE IDENTITY IN THE BORDER, so the fill floor
+     below is the wrong question for it and would fail a theme behaving exactly
+     as designed. `paper` declares every shape fill `transparent`: a shape is
+     its stroke and nothing else, and the six hues that used to fill it now
+     outline it.
+
+     DERIVED FROM THE TOKENS, never a list of theme names — a hardcoded list
+     cannot notice the theme it has never heard of, which is the failure
+     `codebase.md` names. A theme is line-art here iff its shape fills resolve
+     transparent, which is the same thing the reader sees.
+
+     The border floor is NOT relaxed in exchange; it is the only floor left, so
+     it is now doing the whole job. `PAIR_BORDER_MIN` was already met by every
+     theme with room to spare, which is what makes dropping the fills safe at
+     all — and if a future theme's borders ever crowd, this is where it fails. */
+  const lineArt = SHAPES.every((shape) => byShape.get(shape).fill.alpha === 0);
   for (let i = 0; i < SHAPES.length; i += 1) {
     for (let j = i + 1; j < SHAPES.length; j += 1) {
       const a = byShape.get(SHAPES[i]);
       const b = byShape.get(SHAPES[j]);
       const dFill = oklchDeltaE(a.fill.oklch, b.fill.oklch);
       const dBorder = oklchDeltaE(a.border.oklch, b.border.oklch);
-      if (dFill < PAIR_FILL_MIN) {
+      if (!lineArt && dFill < PAIR_FILL_MIN) {
         failed.push(
           `${SHAPES[i]}/${SHAPES[j]} fills ΔE ${dFill.toFixed(3)} < ${PAIR_FILL_MIN}`,
         );
@@ -262,9 +278,11 @@ for (const [theme, byShape] of resolved) {
   const dTermBorder = oklchDeltaE(start.border.oklch, end.border.oklch);
   check(
     `${theme}: no pair collides, and start↔end reads as two colours ` +
-      `(fills ΔE ${dTerm.toFixed(3)} ≥ ${TERMINATOR_FILL_MIN}, borders ${dTermBorder.toFixed(3)} ≥ ${TERMINATOR_BORDER_MIN})`,
+      (lineArt
+        ? `(line art — borders ${dTermBorder.toFixed(3)} ≥ ${TERMINATOR_BORDER_MIN})`
+        : `(fills ΔE ${dTerm.toFixed(3)} ≥ ${TERMINATOR_FILL_MIN}, borders ${dTermBorder.toFixed(3)} ≥ ${TERMINATOR_BORDER_MIN})`),
     failed.length === 0 &&
-      dTerm >= TERMINATOR_FILL_MIN &&
+      (lineArt || dTerm >= TERMINATOR_FILL_MIN) &&
       dTermBorder >= TERMINATOR_BORDER_MIN,
     failed.join("; "),
   );

@@ -1219,7 +1219,13 @@
      carries the lighter stock too — which is the point: an exported paper
      diagram is the presentation artefact. Every ratio measured on this
      ground is re-recorded in the comments below. */
-  --canvas: oklch(0.962 0.015 88);
+  /* OPTION B — the well passes the node surface rather than stopping short of
+     it. At 0.962 the canvas sat ΔL 0.010 BELOW the page chrome, so it read as a
+     recess cut into the sheet, and the recess is most of what made this theme
+     feel yellowed. Lifting it to 0.988 puts the ground above `--node` (0.977):
+     nothing on the canvas is a raised panel any more, which is the premise the
+     line-art tokens below depend on. */
+  --canvas: oklch(0.988 0.008 88);
   --canvas-grid: oklch(0.897 0.016 84);
   /* THE SHEET IS THE MATERIAL, so it takes the material layer and NO dot field.
      A dot grid printed on top of fibre is two grounds arguing about which one
@@ -1238,7 +1244,21 @@
      under the 60% ceiling `check:canvas-grid` holds. */
   --canvas-rule-dot: transparent;
   --canvas-sheet-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0' result='grain'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
-  --canvas-sheet-opacity: 0.22;
+  /* THE MATERIAL, NOT `--canvas`, IS WHAT SETS HOW BRIGHT THIS THEME LOOKS —
+     which is the same trap `d8164af` records one level down, and this is the
+     level that actually holds the lever.
+
+     The ink here is `--foreground`: near-black brown at 0.245. Through the
+     grain mask (fractal noise, mean coverage about a half) a 0.22 layer pulls
+     an 0.988 ground down to roughly 0.906 — so lifting `--canvas` by 0.026 was
+     spending on a lever the fibre outweighed three times over. 0.11 is the FLOOR  holds: below it the
+     fibre stops being visible at all (peak 1.092:1 against the 1.1:1 the check
+     requires) and the theme would name a material it does not paint. It leaves
+     the ground near 0.951 — brighter than the 0.906 it was, short of the 0.969
+     the mockup showed, and the gap is the fibre refusing to disappear.
+
+     Raise this and the theme darkens no matter what `--canvas` says. */
+  --canvas-sheet-opacity: 0.11;
   /* A node is ink and stock, so it takes the page's own hue a half-shade off
      the page's lightness (1.045:1 on --canvas): found by its rule rather than
      by glare. Moved with the ground — held at the same 1.045:1 rather than at
@@ -1282,19 +1302,35 @@
      case). Thresholds: text ≥4.5:1, border and the border-tinted icon
      ≥3:1. */
   /* name 11.93:1, meta 5.71:1, border 4.32:1 (wash-top: 10.05 / 4.81 / 3.64) */
-  --node-person: oklch(0.912 0.031 295);
+  /* LINE ART. Every role fill is transparent on this theme, so a shape is its
+     STROKE and nothing else — the paper-and-pencil reading. The hues below are
+     untouched and still carry identity; they have simply moved from the inside
+     of the shape to its edge, where `--node-*-border` already held the same
+     five audited hues at one lightness.
+
+     A PER-THEME OPT-IN, exactly like `--role-texture-opacity` — and for the
+     same reason that token exists. `eink` MUST NOT take this: it separates its
+     roles by five distinct greys AND by a texture painted as a fill overlay,
+     so both of its identity channels live in the fill. Removing them there
+     would reintroduce the failure that got `eink` refused twice
+     (`src/lib/role-texture.ts`). Do not "complete the set".
+
+     The wash's `color-mix` leaves a ~14% stroke tint at the top and bottom
+     edges rather than nothing at all, which is what keeps a large shape from
+     reading as a hole. */
+  --node-person: transparent;
   --node-person-border: oklch(0.53 0.16 295);
   /* name 12.04:1, meta 5.76:1, border 4.25:1 (wash-top: 10.13 / 4.85 / 3.57) */
-  --node-internal: oklch(0.912 0.029 250);
+  --node-internal: transparent;
   --node-internal-border: oklch(0.52 0.13 250);
   /* name 12.96:1, meta 6.20:1, border 4.05:1 (no wash — external stays matte) */
-  --node-external: oklch(0.937 0.014 84);
+  --node-external: transparent;
   --node-external-border: oklch(0.55 0.022 70);
   /* name 12.22:1, meta 5.85:1, border 4.51:1 (wash-top: 10.22 / 4.89 / 3.77) */
-  --node-database: oklch(0.912 0.047 195);
+  --node-database: transparent;
   --node-database-border: oklch(0.5 0.084 195);
   /* name 12.40:1, meta 5.94:1, border 4.16:1 (wash-top: 10.50 / 5.03 / 3.52) */
-  --node-queue: oklch(0.917 0.047 150);
+  --node-queue: transparent;
   --node-queue-border: oklch(0.52 0.11 150);
 
   /* Flowchart shape colours (the light block carries the design notes; the
@@ -1303,10 +1339,10 @@
      the role fills above and by the same −15% chroma, so a flowchart and a C4
      diagram are printed on one stock; the two hues are unmoved. */
   /* name 11.85:1, meta 5.67:1, border 4.36:1 (wash-top: 9.91 / 4.75 / 3.65) */
-  --flow-end: oklch(0.912 0.034 345);
+  --flow-end: transparent;
   --flow-end-border: oklch(0.53 0.15 345);
   /* name 12.00:1, meta 5.74:1, border 4.29:1 (wash-top: 10.15 / 4.86 / 3.63) */
-  --flow-decision: oklch(0.912 0.051 85);
+  --flow-decision: transparent;
   --flow-decision-border: oklch(0.52 0.095 80);
 
   /* tagColors fills are REBUILT from the author's colour rather than mixed:

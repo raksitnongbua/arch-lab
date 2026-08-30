@@ -420,6 +420,16 @@ console.log("\nstate colours stay distinct (OKLab ΔE, measured)");
 for (const [theme, byState] of resolved) {
   if (byState.size !== ITEM_STATES.length) continue; // resolution already failed
   const failed = [];
+  /* A LINE-ART THEME SEPARATES ITS BARS ON THE BORDER. `paper` declares the
+     role fills these four states alias as transparent, so a bar is its outline
+     and its hatch; comparing the fills would compare two nothings and fail a
+     theme behaving as designed. Derived from the tokens rather than a theme
+     name, for the reason `codebase.md` gives about hardcoded lists. The border
+     floor is not relaxed — it is the only floor left, so it now does the whole
+     job of keeping done, active, planned and at-risk apart. */
+  const lineArt = ITEM_STATES.every(
+    (state) => byState.get(state).fill.alpha === 0,
+  );
   let closestFill = Infinity;
   let closestBorder = Infinity;
   for (let i = 0; i < ITEM_STATES.length; i += 1) {
@@ -430,7 +440,7 @@ for (const [theme, byState] of resolved) {
       const dBorder = oklchDeltaE(a.border.oklch, b.border.oklch);
       closestFill = Math.min(closestFill, dFill);
       closestBorder = Math.min(closestBorder, dBorder);
-      if (dFill < PAIR_FILL_MIN) {
+      if (!lineArt && dFill < PAIR_FILL_MIN) {
         failed.push(
           `${ITEM_STATES[i]}/${ITEM_STATES[j]} fills ΔE ${dFill.toFixed(3)} < ${PAIR_FILL_MIN}`,
         );
@@ -443,7 +453,10 @@ for (const [theme, byState] of resolved) {
     }
   }
   check(
-    `${theme}: no two states collide (closest fills ΔE ${closestFill.toFixed(3)}, borders ${closestBorder.toFixed(3)})`,
+    `${theme}: no two states collide (` +
+      (lineArt
+        ? `line art — closest borders ΔE ${closestBorder.toFixed(3)})`
+        : `closest fills ΔE ${closestFill.toFixed(3)}, borders ${closestBorder.toFixed(3)})`),
     failed.length === 0,
     failed.join("; "),
   );

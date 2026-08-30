@@ -67,6 +67,7 @@ const { layoutGantt, GANTT, GANTT_FRAME_PAD } = await load(
   "src/features/gantt/lib/layout.ts",
 );
 const { GANTT_EXAMPLE } = await load("src/features/gantt/input/example.ts");
+const { DIAGRAM_SURFACE_PAD } = await load("src/lib/diagram-surface.ts");
 const { listGanttExampleIds, loadGanttExample } = await load(
   "src/features/gantt/service/example-service.ts",
 );
@@ -181,7 +182,7 @@ console.log("rows");
   for (const [name, layout] of ALL) {
     for (const item of layout.items) {
       if (
-        item.rowY < GANTT.axisHeight ||
+        item.rowY < layout.plotTop ||
         item.rowY + GANTT.rowHeight > layout.height
       ) {
         outside.push(`${name}: ${item.id}`);
@@ -767,6 +768,43 @@ console.log("the exported file has air around it");
       "downloading what they are looking at would get a differently framed plan",
   );
 
+  /* THE SURFACE MUST NOT SIT ON THE DRAWING'S OWN EDGE, which is the failure
+     the pad assertions above could not see and did not catch.
+
+     They measure the SHEET's margin, and that is all they measure. The plan
+     then got its own `--node` panel and the panel was drawn at the drawing's
+     bounds — a hard, stroked, rounded edge back at x=0, precisely where the
+     pad had just moved one away from. "SHAPE IT" and the axis caption touched
+     the border, on screen and in every downloaded file, and every assertion
+     here stayed green because the sheet around the panel was still correctly
+     padded.
+
+     So the thing to assert is not "there is a pad" but "the panel CONTAINS the
+     drawing, with air on every side" — a relation between two boxes rather
+     than a number restated. The remainder matters too: a surface pad equal to
+     the frame pad would put the panel's stroke on the trim, where the viewBox
+     clips half of it.
+
+     THE SCREEN/FILE PARITY THIS USED TO ASSERT IS NOW STRUCTURAL. Both sides
+     take their box from `diagramSurfaceBox` in `@/lib/diagram-surface`, so
+     they cannot disagree about it; what is worth checking is that both still
+     go THROUGH that module rather than having grown a rect of their own back.
+     The panel is shared with the timeline and the lifecycle now, and each of
+     their layout checks asserts the same use. */
+  check(
+    `the surface holds the drawing with air on every side (${DIAGRAM_SURFACE_PAD} in, ${GANTT_FRAME_PAD - DIAGRAM_SURFACE_PAD} out)`,
+    DIAGRAM_SURFACE_PAD > 0 && DIAGRAM_SURFACE_PAD < GANTT_FRAME_PAD,
+    "the plan's surface is drawn at the drawing's own bounds — the axis " +
+      "caption and every section heading, the only text in the nine kinds " +
+      "drawn at x=0, touch the panel border",
+  );
+  check(
+    "the file paints its surface from the shared geometry",
+    /diagramSurfaceMarkup\(/.test(exportSvg),
+    "the gantt exporter emits a panel rect of its own — the screen and the " +
+      "file frame one plan two different ways again the moment either moves",
+  );
+
   const diagram = readFileSync(
     path.join(ROOT, "src/features/gantt/components/gantt-diagram.tsx"),
     "utf8",
@@ -786,6 +824,15 @@ console.log("the exported file has air around it");
       "margin — without both, the section headings and the axis caption, " +
       "which are the only text in the nine kinds drawn at x=0, sit hard " +
       "against the edge",
+  );
+  check(
+    "the canvas draws its surface around the drawing, not on it",
+    /<DiagramSurface\s+width=\{layout\.width\}\s+height=\{layout\.height\}\s*\/>/.test(
+      diagram,
+    ),
+    "the `--node` panel is back to being this canvas's own rect — the pad " +
+      "above is then air on the wrong side of a stroked edge, which is " +
+      "exactly the state that shipped once already",
   );
 }
 

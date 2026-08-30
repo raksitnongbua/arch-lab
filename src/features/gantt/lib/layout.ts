@@ -54,6 +54,12 @@
  * stripping: keep the syntax erasable and type-only imports as `import type`.
  */
 
+import {
+  isHeadingEmpty,
+  layoutDiagramHeading,
+  type DiagramHeading,
+  type DiagramHeadingMetrics,
+} from "@/lib/diagram-heading";
 import { TEXTURE_BY_ROLE } from "@/features/editor/lib/node-colors";
 import { TEXTURE_BY_SHAPE } from "@/features/flowchart/lib/shapes";
 import type { RoleTexture } from "@/lib/role-texture";
@@ -118,7 +124,31 @@ export const GANTT = {
    * reveal budget wrong without anything failing. */
   waveCap: 6,
   edgeWaveCap: 6,
+  /** The heading block's type scale — the same one the other five notations
+   * that draw a title use, so a reader meeting two kinds sees one product. */
+  titleFontSize: 15,
+  titleLineHeight: 20,
+  descriptionFontSize: 12,
+  descriptionLineHeight: 17,
+  descriptionMaxLines: 3,
+  titleDescriptionGap: 6,
+  headingGap: 18,
+  titleMinWrapWidth: 320,
 } as const;
+
+/** This notation's type scale for the shared heading block. */
+const GANTT_HEADING: DiagramHeadingMetrics = {
+  titleFontSize: GANTT.titleFontSize,
+  titleLineHeight: GANTT.titleLineHeight,
+  descriptionFontSize: GANTT.descriptionFontSize,
+  descriptionLineHeight: GANTT.descriptionLineHeight,
+  descriptionMaxLines: GANTT.descriptionMaxLines,
+  titleDescriptionGap: GANTT.titleDescriptionGap,
+  headingGap: GANTT.headingGap,
+};
+
+/** The metrics the canvas and the exporter draw this kind's heading with. */
+export const GANTT_HEADING_METRICS: DiagramHeadingMetrics = GANTT_HEADING;
 
 /**
  * THE SHEET'S MARGIN — air between the drawing and the edge of the ground it
@@ -152,6 +182,14 @@ export const GANTT = {
  * `userSpaceOnUse`, and a whole number of tiles keeps its phase.
  */
 export const GANTT_FRAME_PAD = 40;
+
+/* HOW MUCH OF THIS PAD FALLS INSIDE THE PLAN'S SURFACE is not decided here any
+   more. The panel is shared with the timeline and the lifecycle, and the split
+   lives with it in `@/lib/diagram-surface` — see `DIAGRAM_SURFACE_PAD` for why
+   the pad is spent rather than added, and for the bug that made it necessary:
+   a surface drawn at the drawing's own bounds put a stroked edge exactly where
+   every section heading sits. */
+
 
 /**
  * The two diagonal segments that make up one hatch tile, as `d` attributes.
@@ -305,6 +343,19 @@ export interface LaidGanttTick {
 export interface GanttLayout {
   width: number;
   height: number;
+  /** The document's title and description, drawn above the diagram. */
+  heading: DiagramHeading;
+  /**
+   * Y at which the plot begins — the axis rule sits 8 above it and its labels
+   * 14 above.
+   *
+   * DERIVED, NOT `GANTT.axisHeight`. The axis used to measure from that
+   * constant in the canvas, the exporter and the check, which was correct only
+   * while nothing could sit above it. The heading can, so the plot's top is a
+   * layout figure now and the three read it from here — otherwise a document
+   * with a title draws its ticks through its own heading.
+   */
+  plotTop: number;
   items: LaidGanttItem[];
   sections: LaidGanttSection[];
   dependencies: LaidGanttDependency[];
@@ -699,7 +750,23 @@ export function layoutGantt(file: GanttLabFile): GanttLayout {
   const byId = new Map(provisional.map((item) => [item.id, item]));
   const sections: LaidGanttSection[] = [];
   const ordered: LaidGanttItem[] = [];
-  let y = GANTT.axisHeight;
+  /* THE HEADING IS RESERVED BEFORE THE PLOT IS PLACED. Unlike the timeline and
+     the lifecycle, this canvas has something ABOVE its cursor — the axis, whose
+     ticks and captions sat at the constant `GANTT.axisHeight` — so the heading
+     cannot just push the cursor down. `plotTop` is what the axis now measures
+     from, which is the only way the two can agree about where the plot begins. */
+  const heading = layoutDiagramHeading({
+    title: file.metadata.title,
+    description: file.metadata.description,
+    wrapWidth: Math.max(GANTT.titleMinWrapWidth, GANTT.width - 24),
+    metrics: GANTT_HEADING,
+  });
+  /* An empty title reserves NOTHING, rather than opening the plan with a band
+     of blank paper — `headingGap` is air under text, not a top margin. */
+  const headingHeight = isHeadingEmpty(heading) ? 0 : heading.height;
+  const plotTop = headingHeight + GANTT.axisHeight;
+
+  let y = plotTop;
 
   file.sections.forEach((section, index) => {
     if (index > 0) y += GANTT.sectionGap;
@@ -778,6 +845,8 @@ export function layoutGantt(file: GanttLabFile): GanttLayout {
   return {
     width: GANTT.width,
     height: y + 18,
+    heading,
+    plotTop,
     items: ordered,
     sections,
     dependencies,

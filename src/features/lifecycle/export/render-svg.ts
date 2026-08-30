@@ -27,13 +27,19 @@
  * file that dropped it would say the subject can get somewhere it cannot.
  */
 
+import { diagramHeadingMarkup } from "@/lib/diagram-heading";
+import { diagramSurfaceMarkup } from "@/lib/diagram-surface";
 import type { LifecycleLabFile } from "@/types";
 
 import type { ExportTheme } from "@/features/viewer/export/theme";
 import { resolveExportGround } from "@/features/viewer/export/ground";
 import type { RenderedSvg } from "@/features/viewer/export/render-svg";
 
-import { LIFECYCLE, layoutLifecycle } from "../lib/layout";
+import {
+  LIFECYCLE_HEADING_METRICS,
+  LIFECYCLE,
+  layoutLifecycle,
+} from "../lib/layout";
 
 /**
  * Air around the exported diagram, on all four sides, in user units.
@@ -115,7 +121,35 @@ export function renderLifecycleSvg(
   );
   push(`<defs>${ground.defs}</defs>`);
   push(ground.layers(0, 0, width, height));
+  /* THE DIAGRAM'S SHEET, painted on the ground and under the drawing — the
+     same panel the screen draws, from the same geometry, so a downloaded file
+     is framed the way the reader saw it. Outside the translate below, because
+     it is positioned in the FILE's coordinates and told where the drawing's
+     origin lands. */
+  push(
+    diagramSurfaceMarkup({
+      width: layout.width,
+      height: layout.height,
+      stroke: theme.border,
+      originX: EXPORT_PADDING,
+      originY: EXPORT_PADDING,
+    }),
+  );
   push(`<g transform="translate(${EXPORT_PADDING} ${EXPORT_PADDING})">`);
+
+  /* THE DOCUMENT'S TITLE, first inside the group so it sits in the drawing's
+     own coordinates — the same block the canvas draws, from the same metrics.
+     An exported lifecycle with no title belongs to nothing. */
+  push(
+    diagramHeadingMarkup({
+      heading: layout.heading,
+      x: LIFECYCLE.channelX0,
+      top: 0,
+      metrics: LIFECYCLE_HEADING_METRICS,
+      titleFill: theme.foreground,
+      descriptionFill: theme.mutedForeground,
+    }),
+  );
 
   layout.subject.labelLines.forEach((line, index) => {
     text(

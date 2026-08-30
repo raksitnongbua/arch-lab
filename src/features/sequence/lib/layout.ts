@@ -45,6 +45,10 @@ import type {
   SequenceNotePlacement,
   SequenceParticipantKind,
 } from "@/types";
+import {
+  layoutDiagramHeading,
+  type DiagramHeadingMetrics,
+} from "@/lib/diagram-heading";
 import { CHAR_WIDTH_RATIO, wrapText } from "@/lib/text-metrics";
 import { isSelfMessage } from "@/types/sequence";
 
@@ -209,6 +213,17 @@ export const SEQ = {
   minColumnGap: 150,
   maxColumnGap: 460,
 } as const;
+
+/** This notation's type scale for the shared heading block. */
+const SEQ_HEADING: DiagramHeadingMetrics = {
+  titleFontSize: SEQ.titleFontSize,
+  titleLineHeight: SEQ.titleLineHeight,
+  descriptionFontSize: SEQ.descriptionFontSize,
+  descriptionLineHeight: SEQ.descriptionLineHeight,
+  descriptionMaxLines: SEQ.descriptionMaxLines,
+  titleDescriptionGap: SEQ.titleDescriptionGap,
+  headingGap: SEQ.headingGap,
+};
 
 function estimateWidth(text: string, fontSize: number): number {
   return Math.ceil(text.length * fontSize * SEQ.charWidthRatio);
@@ -533,49 +548,12 @@ function layoutHeading(
       : (xById.get(last) ?? 0) + (headerWidths.get(last) ?? 0) / 2;
   const wrapWidth = Math.max(SEQ.titleMinWrapWidth, right - left);
 
-  const titleLines = wrapText(
-    file.metadata.title,
+  return layoutDiagramHeading({
+    title: file.metadata.title,
+    description: file.metadata.description,
     wrapWidth,
-    SEQ.titleFontSize,
-  );
-
-  const description = file.metadata.description;
-  let descriptionLines: string[] = [];
-  if (description !== undefined && description.trim() !== "") {
-    const all = wrapText(description, wrapWidth, SEQ.descriptionFontSize);
-    descriptionLines = all.slice(0, SEQ.descriptionMaxLines);
-    if (all.length > descriptionLines.length) {
-      // Ellipsis on the last kept line, so a clipped description LOOKS clipped
-      // rather than reading as a sentence that simply ends oddly.
-      const lastIndex = descriptionLines.length - 1;
-      descriptionLines[lastIndex] = `${descriptionLines[lastIndex]}…`;
-    }
-  }
-
-  const height =
-    titleLines.length * SEQ.titleLineHeight +
-    (descriptionLines.length === 0
-      ? 0
-      : SEQ.titleDescriptionGap +
-        descriptionLines.length * SEQ.descriptionLineHeight) +
-    SEQ.headingGap;
-
-  /*
-   * The widest line, MEASURED, so the caller can widen the canvas if the block
-   * still does not fit. Wrapping alone is not enough: the wrap floor is 320px
-   * and a two-participant flow is ~318px wide, so a long title wrapped to the
-   * floor would have run straight off the right edge — the exact defect notes
-   * had before they wrapped, reintroduced one level up.
-   */
-  const width = Math.max(
-    0,
-    ...titleLines.map((line) => estimateWidth(line, SEQ.titleFontSize)),
-    ...descriptionLines.map((line) =>
-      estimateWidth(line, SEQ.descriptionFontSize),
-    ),
-  );
-
-  return { titleLines, descriptionLines, height, width };
+    metrics: SEQ_HEADING,
+  });
 }
 
 /**

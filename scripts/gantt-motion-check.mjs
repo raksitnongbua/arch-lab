@@ -729,12 +729,17 @@ console.log("the axis sweep says 'time', not 'today'");
      two is one number in the component. So this reads the geometry rather than
      the intent: both ends must sit on the axis rule's own y, which is the same
      expression `.af-gantt-rule` uses. */
+  /* `layout.plotTop`, not `GANTT.axisHeight`. The plot's top became a layout
+     figure when the plan gained a heading: something can sit above the axis
+     now, so a constant could no longer say where the axis is. The invariant
+     this asserts is unchanged — both ends pinned to the axis rule's own y —
+     only the expression that names that y. */
   const sweepElement =
     /className="af-gantt-axis-sweep"[\s\S]{0,400}?\/>/.exec(diagram)?.[0] ?? "";
   check(
     "the sweep is pinned to the axis rule's y at BOTH ends, never a full-height playhead",
-    /y1=\{GANTT\.axisHeight - 8\}/.test(sweepElement) &&
-      /y2=\{GANTT\.axisHeight - 8\}/.test(sweepElement),
+    /y1=\{layout\.plotTop - 8\}/.test(sweepElement) &&
+      /y2=\{layout\.plotTop - 8\}/.test(sweepElement),
     "a mark travelling down the bars reads as a date, and a shared diagram has no date to be right about",
   );
 

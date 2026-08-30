@@ -58,6 +58,12 @@
  * syntax erasable and type-only imports as `import type`.
  */
 
+import {
+  isHeadingEmpty,
+  layoutDiagramHeading,
+  type DiagramHeading,
+  type DiagramHeadingMetrics,
+} from "@/lib/diagram-heading";
 import { wrapText } from "@/lib/text-metrics";
 import type { TimelineLabFile } from "@/types";
 
@@ -74,6 +80,27 @@ import type { TimelineLabFile } from "@/types";
  * layout exists not to be, and the moment one appears every argument in the
  * file header stops being true.
  */
+/**
+ * THE SHEET'S MARGIN — air between the drawing and the edge of the ground it is
+ * drawn on, on screen and in the file alike.
+ *
+ * DELIBERATELY NOT A MEMBER OF `TIMELINE`. Everything in that table is a
+ * COORDINATE: move one and the drawing moves, and `check:timeline-layout`
+ * re-measures a different diagram. This is a FRAME. It widens the box the
+ * drawing is presented in and moves nothing inside it.
+ *
+ * WHY THE SCREEN NEEDS ONE. It did not, while the drawing sat straight on the
+ * pane and the viewer's own CSS padding supplied the air. It does now that the
+ * drawing sits on a SURFACE: a panel needs a margin of its own, or it runs to
+ * the edge of the `<svg>` and its stroke is half-clipped by the viewBox.
+ *
+ * WHY 40. It is the pad this kind's exported file has always used, and one
+ * number is what keeps a downloaded PNG framed the way the screen framed it.
+ * The exporter keeps its own literal for the reason its header gives; the two
+ * are asserted equal by `check:timeline-layout`.
+ */
+export const TIMELINE_FRAME_PAD = 40;
+
 export const TIMELINE = {
   /** Total canvas width. The label column is what is left after the rail. */
   width: 1020,
@@ -123,7 +150,31 @@ export const TIMELINE = {
    * motion check asserts the two agree, because a cap that drifts makes the
    * reveal budget wrong without anything failing. */
   waveCap: 8,
+  /** The heading block's type scale — the same one the other five notations
+   * that draw a title use, so a reader meeting two kinds sees one product. */
+  titleFontSize: 15,
+  titleLineHeight: 20,
+  descriptionFontSize: 12,
+  descriptionLineHeight: 17,
+  descriptionMaxLines: 3,
+  titleDescriptionGap: 6,
+  headingGap: 18,
+  titleMinWrapWidth: 320,
 } as const;
+
+/** This notation's type scale for the shared heading block. */
+const TIMELINE_HEADING: DiagramHeadingMetrics = {
+  titleFontSize: TIMELINE.titleFontSize,
+  titleLineHeight: TIMELINE.titleLineHeight,
+  descriptionFontSize: TIMELINE.descriptionFontSize,
+  descriptionLineHeight: TIMELINE.descriptionLineHeight,
+  descriptionMaxLines: TIMELINE.descriptionMaxLines,
+  titleDescriptionGap: TIMELINE.titleDescriptionGap,
+  headingGap: TIMELINE.headingGap,
+};
+
+/** The metrics the canvas and the exporter draw this kind's heading with. */
+export const TIMELINE_HEADING_METRICS: DiagramHeadingMetrics = TIMELINE_HEADING;
 
 /* -------------------------------------------------------------------------- */
 /* Laid-out shapes                                                             */
@@ -183,6 +234,8 @@ export interface LaidTimelinePeriod {
 export interface TimelineLayout {
   width: number;
   height: number;
+  /** The document's title and description, drawn above the diagram. */
+  heading: DiagramHeading;
   periods: LaidTimelinePeriod[];
   events: LaidTimelineEvent[];
   /** The spine, clipped to the first and last dot — see the file header. */
@@ -206,7 +259,23 @@ export function layoutTimeline(file: TimelineLabFile): TimelineLayout {
 
   /* Annotated, not inferred: `TIMELINE` is `as const`, so `topPad` is the
      literal 22 and the cursor would be typed as that one value. */
-  let y: number = TIMELINE.topPad;
+  /* THE HEADING IS RESERVED BEFORE ANYTHING ELSE IS PLACED. Every y below is
+     this cursor's, so moving where it starts moves the whole diagram down and
+     nothing else has to know the heading exists. */
+  const heading = layoutDiagramHeading({
+    title: file.metadata.title,
+    description: file.metadata.description,
+    wrapWidth: Math.max(
+      TIMELINE.titleMinWrapWidth,
+      TIMELINE.width - TIMELINE.railWidth - 24,
+    ),
+    metrics: TIMELINE_HEADING,
+  });
+  /* An empty title reserves NOTHING, rather than opening the diagram with a
+     band of blank paper — `headingGap` is air under text, not a top margin. */
+  const headingHeight = isHeadingEmpty(heading) ? 0 : heading.height;
+
+  let y: number = TIMELINE.topPad + headingHeight;
   let wave = 0;
 
   file.periods.forEach((period, periodIndex) => {
@@ -293,6 +362,7 @@ export function layoutTimeline(file: TimelineLabFile): TimelineLayout {
   return {
     width: TIMELINE.width,
     height: y + TIMELINE.bottomPad,
+    heading,
     periods,
     events,
     spineX: TIMELINE.spineX,

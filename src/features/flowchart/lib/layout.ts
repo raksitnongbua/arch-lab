@@ -68,6 +68,10 @@ import type {
   FlowchartNode,
   FlowchartNodeShape,
 } from "@/types";
+import {
+  layoutDiagramHeading,
+  type DiagramHeadingMetrics,
+} from "@/lib/diagram-heading";
 import { CHAR_WIDTH_RATIO, wrapText } from "@/lib/text-metrics";
 
 /* -------------------------------------------------------------------------- */
@@ -159,6 +163,17 @@ export const FLOW = {
   titleMinWrapWidth: 320,
   descriptionMaxLines: 3,
 } as const;
+
+/** This notation's type scale for the shared heading block. */
+const FLOW_HEADING: DiagramHeadingMetrics = {
+  titleFontSize: FLOW.titleFontSize,
+  titleLineHeight: FLOW.titleLineHeight,
+  descriptionFontSize: FLOW.descriptionFontSize,
+  descriptionLineHeight: FLOW.descriptionLineHeight,
+  descriptionMaxLines: FLOW.descriptionMaxLines,
+  titleDescriptionGap: FLOW.titleDescriptionGap,
+  headingGap: FLOW.headingGap,
+};
 
 function estimateWidth(text: string, fontSize: number): number {
   return Math.ceil(text.length * fontSize * FLOW.charWidthRatio);
@@ -1204,35 +1219,10 @@ function layoutHeading(
   file: FlowchartLabFile,
   rowSpan: number,
 ): FlowchartLayout["heading"] {
-  const wrapWidth = Math.max(FLOW.titleMinWrapWidth, rowSpan);
-  const titleLines = wrapText(
-    file.metadata.title,
-    wrapWidth,
-    FLOW.titleFontSize,
-  );
-  const description = file.metadata.description;
-  let descriptionLines: string[] = [];
-  if (description !== undefined && description.trim() !== "") {
-    const all = wrapText(description, wrapWidth, FLOW.descriptionFontSize);
-    descriptionLines = all.slice(0, FLOW.descriptionMaxLines);
-    if (all.length > descriptionLines.length) {
-      const last = descriptionLines.length - 1;
-      descriptionLines[last] = `${descriptionLines[last]}…`;
-    }
-  }
-  const height =
-    titleLines.length * FLOW.titleLineHeight +
-    (descriptionLines.length === 0
-      ? 0
-      : FLOW.titleDescriptionGap +
-        descriptionLines.length * FLOW.descriptionLineHeight) +
-    FLOW.headingGap;
-  const width = Math.max(
-    0,
-    ...titleLines.map((line) => estimateWidth(line, FLOW.titleFontSize)),
-    ...descriptionLines.map((line) =>
-      estimateWidth(line, FLOW.descriptionFontSize),
-    ),
-  );
-  return { titleLines, descriptionLines, height, width };
+  return layoutDiagramHeading({
+    title: file.metadata.title,
+    description: file.metadata.description,
+    wrapWidth: Math.max(FLOW.titleMinWrapWidth, rowSpan),
+    metrics: FLOW_HEADING,
+  });
 }
