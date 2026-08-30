@@ -40,6 +40,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   the lifecycle.** Previously the only ways out were clicking the same row again
   or pressing Escape — and on the timeline and lifecycle there was no way out at
   all once selecting moved from hover to click.
+- **A gantt click has to land on the item, not near it.** The whole row used to
+  be clickable end to end, so empty plot space selected whatever row it fell in
+  — about three quarters of every row was a target for nothing that was drawn
+  there. Now it is the item's name and its bar. A one-day bar, which is six
+  pixels wide, keeps a target you can actually hit.
+
 - **Only the gantt bar you clicked wears the focus ring.** The bars it waits
   for and the bars waiting on it stay at full strength, as they should, but they
   no longer carry the ring as well — three bars claiming to be the one you

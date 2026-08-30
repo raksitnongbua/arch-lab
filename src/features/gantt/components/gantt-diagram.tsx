@@ -75,6 +75,7 @@ import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
 import type { LaidGanttItem, GanttLayout } from "../lib/layout";
 import {
   GANTT,
+  ganttHitRegions,
   GANTT_FRAME_PAD,
   GANTT_HEADING_METRICS,
   hatchTilePaths,
@@ -536,14 +537,26 @@ function Row({
         </>
       )}
 
-      {/* A full-width hit target, so pointing anywhere on the row selects it —
-          a one-day bar is six pixels wide and would otherwise be unhittable. */}
-      <rect
+      {/* THE HIT TARGET IS THE INK, NOT THE ROW. It used to be one rect the
+          full width of the canvas, which made the empty plot between and after
+          the bars clickable — and on a plan whose bars occupy a fifth of their
+          row, most of what a reader's pointer crosses selects something. Every
+          near-miss landed on a row rather than on nothing. Reported as being
+          easy to misclick.
+
+          THE ORIGINAL REASON SURVIVES INTACT: a one-day bar is six units wide
+          and would be unhittable on its own, so the bar's region is padded and
+          floored at `GANTT.minHitWidth`. Losing that was the risk in narrowing
+          this, and it is the case a plan of short tasks is made of.
+
+          ONE `<path>` WITH TWO SUBPATHS rather than two rects. The two regions
+          are disjoint — the name in the rail, the bar out in the plot — but
+          they are ONE control: two elements would mean two tab stops per row,
+          so tabbing a twenty-item plan would take forty presses to cross, and
+          the second stop would announce the same name as the first. */}
+      <path
         className="af-gantt-hit"
-        x={0}
-        y={item.rowY}
-        width={GANTT.width}
-        height={GANTT.rowHeight}
+        d={ganttHitRegions(item, width)}
         tabIndex={onFocusItem ? 0 : undefined}
         role={onFocusItem ? "button" : undefined}
         aria-label={

@@ -63,7 +63,7 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 
 const { parseGanttText } = await load("src/features/archtext/index.ts");
-const { layoutGantt, GANTT, GANTT_FRAME_PAD } = await load(
+const { layoutGantt, GANTT, GANTT_FRAME_PAD, ganttHitRegions } = await load(
   "src/features/gantt/lib/layout.ts",
 );
 const { GANTT_EXAMPLE } = await load("src/features/gantt/input/example.ts");
@@ -1023,6 +1023,149 @@ console.log("selecting one bar lights one bar and its neighbours");
     "the selected item's days are shown in the dock",
     /itemSchedule\(file, focusedItem\)/.test(viewer),
     "the dates went nowhere when they left the bar's label",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("a click lands on the ink, not on the row around it");
+
+/* THE HIT TARGET WAS THE WHOLE ROW, end to end, so the empty plot between and
+   after the bars selected whatever row it happened to fall in. On a plan whose
+   bars occupy a fifth of their row that is most of what a pointer crosses, and
+   every near-miss landed on something. Reported as being easy to misclick.
+
+   MEASURED THROUGH THE FUNCTION THE CANVAS DRAWS WITH, which is why it lives
+   in `lib/layout.ts` rather than beside the element: a copy in the `.tsx` — a
+   file this script cannot load at all — would mean checking a re-derivation
+   and calling it the canvas. Two halves, each self-consistent, free to
+   disagree.
+
+   FOUR THINGS HAVE TO HOLD, and the last three are all the ways narrowing a
+   hit target goes wrong quietly. */
+{
+  const parseBoxes = (d) =>
+    [...d.matchAll(/M (-?[\d.]+) (-?[\d.]+) H (-?[\d.]+)/g)].map((match) => ({
+      x0: Number(match[1]),
+      y: Number(match[2]),
+      x1: Number(match[3]),
+    }));
+
+  let rowTotal = 0;
+  let hitTotal = 0;
+  let narrowest = Infinity;
+  const offCanvas = [];
+  const merged = [];
+  const missing = [];
+
+  for (const id of listGanttExampleIds()) {
+    const example = loadGanttExample(id);
+    if (example.status !== "ok") continue;
+    const laid = layoutGantt(example.file);
+    for (const item of laid.items) {
+      const width = Math.max(item.x1 - item.x0, GANTT.minBarWidth);
+      const boxes = parseBoxes(ganttHitRegions(item, width));
+      rowTotal += GANTT.width;
+      for (const box of boxes) hitTotal += box.x1 - box.x0;
+
+      /* A TASK KEEPS TWO REGIONS AND A MILESTONE ONE, because a milestone has
+         no rail entry — its name sits beside its diamond. A task collapsing to
+         one region would mean its name or its bar had stopped being clickable
+         and nothing else would say so. */
+      const want = item.milestone ? 1 : 2;
+      if (boxes.length !== want) {
+        missing.push(
+          `${id}/${item.id}: ${boxes.length} region(s), want ${want}`,
+        );
+      }
+      if (boxes.some((box) => box.x0 < 0 || box.x1 > GANTT.width)) {
+        offCanvas.push(
+          `${id}/${item.id}: ${boxes.map((b) => `${b.x0.toFixed(1)}–${b.x1.toFixed(1)}`).join(", ")}`,
+        );
+      }
+      if (!item.milestone && boxes.length === 2) {
+        /* STRICTLY GREATER. They ABUT for anything starting on day 0: the
+           rail region ends at 194 (railWidth 196, less the label's 8, plus 6
+           of pad) and the bar's begins at 194 (plotX0 200, less the same 6).
+           Touching is not overlapping, and the six units between the rail and
+           the plot being clickable for a day-0 task is fine — it is one
+           continuous target for one item. `>=` called that a defect. */
+        if (boxes[0].x1 > boxes[1].x0) {
+          merged.push(`${id}/${item.id}: the rail region reaches the bar`);
+        }
+        narrowest = Math.min(narrowest, boxes[1].x1 - boxes[1].x0);
+      }
+    }
+  }
+
+  const share = hitTotal / rowTotal;
+  check(
+    `the clickable area is a fraction of the row (${(share * 100).toFixed(1)}%)`,
+    share < 0.5,
+    `${(share * 100).toFixed(1)}% — the empty plot is a target again, and every near-miss selects something`,
+  );
+  check(
+    `every item keeps a region for its name and one for its bar (${missing.length} exception(s))`,
+    missing.length === 0,
+    missing.slice(0, 3).join("; "),
+  );
+  /* THE THIN-BAR CASE IS THE ONE NARROWING BREAKS. A one-day bar is six units
+     wide, and the full-row target is what used to make it reachable at all —
+     `GANTT.minHitWidth` is now the only thing that does.
+
+     NOT MEASURED ON THE BUNDLED PLANS, because it cannot be. Their narrowest
+     bar is 52 units against a floor of 24, so deleting the floor changes
+     nothing any of them can see: the assertion passed because the data never
+     reaches the rule, which is a check that cannot fail dressed as one that
+     can. Proved by breaking it and watching nothing happen.
+
+     SO THE CASE IS BUILT. A one-day bar is `plotWidth / span` wide, which
+     falls under `minBarWidth` only past about 133 days — a half-year roadmap
+     with a one-day cutover in it, which is an ordinary document rather than a
+     contrived one. On that plan the floor is the whole difference between a
+     six-unit target and a reachable one. */
+  const longPlan = parseGanttText(
+    [
+      "archlab 1.0 gantt",
+      'title "A long road"',
+      "starts 2026-01-05",
+      "",
+      "@gantt",
+      '  section "The year"',
+      '    task groundwork "Groundwork" 200d',
+      '    task cutover "Cutover" 1d after groundwork',
+    ].join("\n"),
+  );
+  const longLaid = layoutGantt(longPlan);
+  const cutover = longLaid.items.find((item) => item.id === "cutover");
+  const cutoverWidth = Math.max(cutover.x1 - cutover.x0, GANTT.minBarWidth);
+  const cutoverBoxes = parseBoxes(ganttHitRegions(cutover, cutoverWidth));
+  const cutoverHit = cutoverBoxes[1].x1 - cutoverBoxes[1].x0;
+  check(
+    `a one-day bar on a ${longLaid.span}-day plan draws ${cutoverWidth.toFixed(1)} and is hit at ${cutoverHit.toFixed(1)}`,
+    cutoverWidth <= GANTT.minBarWidth + 0.001 &&
+      cutoverHit >= GANTT.minHitWidth,
+    `drawn ${cutoverWidth.toFixed(1)}, hit ${cutoverHit.toFixed(1)} against a floor of ${GANTT.minHitWidth} — if the drawn width is not at the minimum this plan no longer exercises the floor, and if the hit is under it a one-day task is unreachable`,
+  );
+  /* AND THE FLOOR IS REACHABLE AT ALL. The assertion above compares the hit
+     against `minHitWidth`, so it agrees with itself for any value — setting the
+     floor back to the dead 18 it started as left it green. A floor at
+     `minBarWidth + 2 × hitPad` is what padding already gives, so it can never
+     raise anything; this is the one question that cannot be asked by measuring
+     an item, because no item can tell you about the rule it never met. */
+  check(
+    `the floor can bind at all (${GANTT.minHitWidth} > ${GANTT.minBarWidth} + 2 × ${GANTT.hitPad})`,
+    GANTT.minHitWidth > GANTT.minBarWidth + 2 * GANTT.hitPad,
+    `${GANTT.minHitWidth} is at or under what the padding alone gives — a dead line that reads as a guarantee`,
+  );
+  check(
+    `and every bundled bar clears the floor too (${narrowest.toFixed(1)} units)`,
+    narrowest >= GANTT.minHitWidth,
+    `${narrowest.toFixed(1)} — under the floor, so a short task has become unhittable`,
+  );
+  check(
+    "no name region runs off the canvas or into the plot",
+    offCanvas.length === 0 && merged.length === 0,
+    `${[...offCanvas, ...merged].slice(0, 3).join("; ")} — a target outside the viewBox cannot be clicked, and one reaching the bar has re-made the row`,
   );
 }
 
