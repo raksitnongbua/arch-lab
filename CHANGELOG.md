@@ -46,6 +46,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   there. Now it is the item's name and its bar. A one-day bar, which is six
   pixels wide, keeps a target you can actually hit.
 
+- **A lifecycle click has to land on the item, not near it.** The whole row was
+  clickable, so the empty space either side of the drawing selected a state. Now
+  it is the dot and its words, and each way out with its own text.
+- **Deselecting no longer stops the idle animation.** Clearing a selection
+  counted as the reader being busy, so every moving mark stopped for three
+  seconds — and selecting did the same. Nothing on these canvases is a sustained
+  act to stand aside for, so nothing stands aside any more.
+- **Focusing a gantt bar dimmed nothing.** The same defect the timeline and the
+  lifecycle had: the entrance animation held every row at full strength for the
+  life of the page, and an animation outranks the dimming underneath it.
+
 - **Scrolling no longer stops the idle animation.** Every wheel tick counted as
   the reader being busy, so the motion cut out for three seconds each time — on a
   gantt, a timeline and a lifecycle alike. Scrolling is how you look at more of a
@@ -98,8 +109,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   they broke the one continuous mark a reader follows, and they never moved
   anyway. The track now carries a single lit head running its length, the same
   gesture the timeline uses. A branch the subject does not come back from is
-  drawn broken and its dashes drift along it, so the two kinds of departure are
-  told apart at a glance rather than by tracing the route corner by corner. A
+  drawn broken and its dashes drift along it — a fifth slower than they were at
+  first — so the two kinds of departure are told apart at a glance rather than by tracing the route corner by corner. A
   branch that just stops stays solid; selecting one still makes its dashes run
   faster, which is how it says which way it goes. And a branch the
   subject does not come back from is now drawn broken rather than solid, so it
