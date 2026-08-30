@@ -1,9 +1,17 @@
 /**
  * How long the lit head of an ambient sweep is, given the line it travels.
  *
- * SHARED BY THE TIMELINE AND THE LIFECYCLE, which draw the same ambient down
- * their own spine and had the same defect in it. Both stylesheets held a flat
- * `--*-sweep-head: 90` and paired it with `calc(spine-len - 90)` as the gap.
+ * THE TIMELINE'S ALONE, and it lived in `src/lib` for exactly one commit. The
+ * lifecycle drew the same washing head down its own spine and had the same
+ * defect in it, so the fix was shared; then the lifecycle's ambient became
+ * marching dashes, whose pattern is two constants and needs no cap at all.
+ * `dry.md` is plain that code used inside one feature stays in that feature,
+ * and a shared module with one consumer is a claim about coupling that is no
+ * longer true. Should the timeline's wash ever become a march too, this file
+ * does not move back — it goes away.
+ *
+ * The stylesheet held a flat `--tl-sweep-head: 90` and paired it with
+ * `calc(spine-len - 90)` as the gap.
  *
  * ── THE DEFECT THAT BOUGHT THIS FILE ──────────────────────────────────────
  *
@@ -11,9 +19,9 @@
  * dasharray is not a partial failure — the declaration is dropped and the line
  * renders SOLID. So on any diagram whose spine was shorter than 90 units the
  * ambient stopped being a travelling head and became the entire line, fading
- * from nothing to full strength and back, for ever. A two-state lifecycle with
- * bare labels measures 49.9, which put `-40.1` in the gap: not an exotic
- * document, the smallest one the notation accepts.
+ * from nothing to full strength and back, for ever. The smallest timeline the grammar accepts
+ * measures 37.2 units, which put `-52.8` in the gap: not an exotic document,
+ * the smallest one the notation admits.
  *
  * And the hard failure had a soft one either side of it. At 99.8 units — three
  * bare states — the arithmetic was still legal and the head covered 90% of the
@@ -29,7 +37,7 @@
  *
  * `SWEEP_HEAD_SHARE` is 0.38 rather than a rounder third for a stated reason:
  * the cap then starts binding at 236.8 units, which is below every bundled
- * document and below both playground starters. Every diagram anyone has
+ * document and below the playground starter. Every diagram anyone has
  * actually looked at is pixel-identical to before, and only the short ones
  * that were broken move.
  *
@@ -39,8 +47,8 @@
  * solid line, and that is the exact failure being fixed here. The components
  * already stamp the spine's solved length; the head is arithmetic on the same
  * number. Both stylesheets keep the flat value as their declared default, and
- * `check:timeline-motion` / `check:lifecycle-motion` pin it to `SWEEP_HEAD_MAX`
- * and measure the result over every bundled document.
+ * `check:timeline-motion` pins it to `SWEEP_HEAD_MAX` and measures the result
+ * over every bundled document plus the grammar's minimum.
  */
 
 /** The head's length in user units on any spine long enough to carry it. */

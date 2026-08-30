@@ -118,48 +118,7 @@ const ROOT = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const load = registerTsResolution(ROOT);
 const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
 
-const { LIFECYCLE, layoutLifecycle } = await load(
-  "src/features/lifecycle/lib/layout.ts",
-);
-const { SWEEP_HEAD_MAX, SWEEP_HEAD_SHARE, sweepHead } = await load(
-  "src/lib/sweep-head.ts",
-);
-const { parseLifecycleText } = await load("src/features/archtext/index.ts");
-const { LIFECYCLE_EXAMPLE } = await load(
-  "src/features/lifecycle/input/example.ts",
-);
-const { listLifecycleExampleIds, loadLifecycleExample } = await load(
-  "src/features/lifecycle/service/example-service.ts",
-);
-const { VIEW_STARTER_TEXT } = await load(
-  "src/features/playground/input/parse.ts",
-);
-
-/* EVERY SPINE THIS REPO CAN PRODUCE A LENGTH FOR, plus the smallest document
-   the grammar accepts. The bundled ones are read from the REGISTRY so a third
-   example is covered the day it lands; the two-state document is written out
-   because no registry will ever hold the minimum on purpose, and the minimum
-   is where the defect lived. */
-const spineOf = (file) => {
-  const laid = layoutLifecycle(file);
-  return Math.max(1, laid.spineY1 - laid.spineY0);
-};
-const SPINES = [
-  ["seed", spineOf(parseLifecycleText(LIFECYCLE_EXAMPLE))],
-  ...listLifecycleExampleIds()
-    .map((id) => [id, loadLifecycleExample(id)])
-    .filter(([, example]) => example.status === "ok")
-    .map(([id, example]) => [id, spineOf(example.file)]),
-  ["starter", spineOf(parseLifecycleText(VIEW_STARTER_TEXT.lifecycle))],
-  [
-    "the smallest lifecycle there is",
-    spineOf(
-      parseLifecycleText(
-        `archlab 1.0 lifecycle\ntitle "T"\n\n@lifecycle\n  subject "S"\n  state a "A"\n  state b "B" ends\n`,
-      ),
-    ),
-  ],
-];
+const { LIFECYCLE } = await load("src/features/lifecycle/lib/layout.ts");
 const { IDLE_AFTER_MS, LIFECYCLE_SETTLE_MS } = await load(
   "src/features/lifecycle/lib/motion.ts",
 );
@@ -721,9 +680,9 @@ console.log("the connector motion says something (it is not decoration)");
     (match) => match[1],
   );
   check(
-    `the canvas declares exactly the six keyframes its four motions need (${keyframes.join(", ")})`,
-    keyframes.length === 6,
-    "entrance rise, draw (shared by the spine and the returns), the arrowhead's arrival, sweep, travel and focus breathe — a seventh needs an argument in the stylesheet header",
+    `the canvas declares exactly the five keyframes its four motions need (${keyframes.join(", ")})`,
+    keyframes.length === 5,
+    "entrance rise, draw (shared by the spine and the returns), the arrowhead's arrival, march (shared by the ambient drift and the focus dash) and focus breathe — a sixth needs an argument in the stylesheet header",
   );
 
   /* THE ARROWHEAD DOES NOT ARRIVE BEFORE ITS LINE. It shipped doing exactly
@@ -742,49 +701,74 @@ console.log("the connector motion says something (it is not decoration)");
 }
 
 /* ----------------------------------------------------------------------- */
-console.log("the sweep's head fits the spine it travels");
+console.log("the ambient drift cannot be sized wrong");
 
-/* THE DEFECT: both stylesheets held a flat head and paired it with
-   `calc(spine-len - head)` as the gap. On any spine shorter than the head that
-   gap is NEGATIVE, and a negative value does not clamp — it invalidates the
-   whole `stroke-dasharray`, which is then dropped, and the ambient paints the
-   line SOLID and pulses it on and off for ever. A lifecycle built from the
-   smallest document the notation accepts measures well under it.
+/* WHAT THE DEFECT WAS, AND WHY IT CANNOT BE WRITTEN HERE AGAIN. The ambient
+   used to be a single lit head washing down the spine, sized against the
+   spine: `head` and `calc(spine-len - head)`. On any diagram shorter than the
+   head that gap is NEGATIVE, and a negative value does not clamp — it
+   invalidates the whole `stroke-dasharray`, which is dropped, and the ambient
+   painted the line SOLID and pulsed it on and off for ever. The smallest
+   lifecycle the grammar accepts measures 49.9 units against a head of 90.
 
-   MEASURED OVER REAL LAYOUTS, not asserted about the constant. A rule that
-   only read `SWEEP_HEAD_MAX < something` would be a restatement; what has to
-   be true is that on EVERY document this repo ships, and on the smallest one
-   it accepts, the head is shorter than the line — and shorter by enough that
-   what travels still reads as a head rather than as the line itself. */
+   The march that replaced it repeats a pattern of TWO CONSTANTS, so it does
+   not know how long the line is and the arithmetic that produced the bug has
+   nowhere to live. That is a property worth pinning rather than trusting: a
+   later hand reaching for `--lc-spine-len` to make the dashes "fit" would be
+   walking straight back into it, so the assertion is that neither dash length
+   mentions the spine at all.
+
+   THE TIMELINE STILL WASHES, and `check:timeline-motion` still measures its
+   head against every document it ships. The two canvases move differently on
+   purpose; the checks say so rather than one silently covering both. */
 {
-  const cssHead = Number(rootProp("lc-sweep-head"));
+  /* FOUND IN `RULES`, NOT WITH `ruleBody`. That helper compares the selector
+     verbatim, and this one is long enough that the formatter wraps it across
+     two lines — so it would answer "" and every assertion under it would pass
+     on an empty string. `RULES` normalises the whitespace first. The first run
+     of this section did exactly that and reported "no rule at all". */
+  const drift =
+    RULES.find(
+      ([selector]) =>
+        selector.includes(".af-lc-sweep") && selector.includes("data-idle"),
+    )?.[1] ?? "";
   check(
-    `the stylesheet's declared head is SWEEP_HEAD_MAX (${SWEEP_HEAD_MAX})`,
-    cssHead === SWEEP_HEAD_MAX,
-    `${cssHead} in CSS, ${SWEEP_HEAD_MAX} in @/lib/sweep-head — CSS cannot import TypeScript, so the pair is pinned here`,
+    "the ambient marches a repeating pattern, not a head sized to the spine",
+    /stroke-dasharray:\s*var\(--lc-march-dash\)\s*var\(--lc-march-gap\)/.test(
+      drift,
+    ),
+    `${drift || "no rule at all"} — a one-dash pattern is a head, and a head has to be measured against the line`,
   );
   check(
-    "the component stamps the head, so the cap reaches the diagram at all",
-    /--lc-sweep-head/.test(diagram) && /sweepHead\(/.test(diagram),
-    "the stylesheet default would stand alone again, which is the flat number that shipped",
+    "and neither of its lengths is derived from the spine",
+    !/--lc-spine-len/.test(drift) &&
+      !/--lc-drift-dash:\s*[^;]*--lc-spine-len/.test(withoutComments) &&
+      !/--lc-drift-gap:\s*[^;]*--lc-spine-len/.test(withoutComments),
+    "sizing a repeating dash against the line reintroduces the negative gap that painted the ambient solid",
   );
 
-  const tooLong = [];
-  for (const [name, length] of SPINES) {
-    const head = sweepHead(length);
-    if (head >= length)
-      tooLong.push(
-        `${name}: head ${head.toFixed(1)} on a spine of ${length.toFixed(1)}`,
-      );
-    else if (head > length * SWEEP_HEAD_SHARE + 0.001)
-      tooLong.push(
-        `${name}: head ${head.toFixed(1)} is over ${SWEEP_HEAD_SHARE} of ${length.toFixed(1)}`,
-      );
-  }
+  /* THE AMBIENT STAYS THE QUIETER OF THE TWO MARCHES. They are one motion now,
+     which is what makes this worth asserting: the focus dash means "the
+     subject comes back HERE", and it can only mean that while the thing
+     running at rest is visibly sparser and slower. Read from the stylesheet's
+     own properties, so retuning either changes what this enforces. */
+  const driftDash = Number(rootProp("lc-drift-dash"));
+  const driftGap = Number(rootProp("lc-drift-gap"));
+  const travelDash = Number(rootProp("lc-travel-dash"));
+  const travelGap = Number(rootProp("lc-travel-gap"));
+  const driftDuty = driftDash / (driftDash + driftGap);
+  const travelDuty = travelDash / (travelDash + travelGap);
+  const driftSpeed = (driftDash + driftGap) / ms("lc-drift");
+  const travelSpeed = (travelDash + travelGap) / ms("lc-travel");
   check(
-    `every spine is longer than its own head (${SPINES.length} documents, shortest ${Math.min(...SPINES.map(([, l]) => l)).toFixed(1)})`,
-    tooLong.length === 0,
-    `${tooLong.join("; ")} — a gap of zero or less invalidates the dasharray and the ambient becomes a solid line`,
+    `the ambient is sparser than the focus dash (${(driftDuty * 100).toFixed(0)}% against ${(travelDuty * 100).toFixed(0)}%)`,
+    driftDuty < travelDuty,
+    "two marches at the same density are one mark, and lighting a branch then says nothing",
+  );
+  check(
+    `and slower (${driftSpeed.toFixed(3)} against ${travelSpeed.toFixed(3)} units/ms)`,
+    driftSpeed < travelSpeed,
+    "an ambient that keeps pace with the motion a reader asked for competes with it",
   );
 }
 

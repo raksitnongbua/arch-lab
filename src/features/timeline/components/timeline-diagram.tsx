@@ -49,7 +49,6 @@
 
 import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
 import { DiagramSurface } from "@/components/ui/diagram-surface";
-import { sweepHead } from "@/lib/sweep-head";
 import type { TimelineLabFile } from "@/types";
 
 import {
@@ -58,6 +57,7 @@ import {
   TIMELINE,
   layoutTimeline,
 } from "../lib/layout";
+import { sweepHead } from "../lib/sweep-head";
 import type { LaidTimelineEvent, TimelineLayout } from "../lib/layout";
 
 export interface TimelineDiagramProps {

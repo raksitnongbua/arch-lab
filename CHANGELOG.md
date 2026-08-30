@@ -27,6 +27,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **A lifecycle's idle animation is now dashes marching down the track**, in
+  place of a single lit wash travelling down it once per loop. The track itself
+  stays solid and still; the dashes drift over it, sparser and about half the
+  speed of the dash that runs on a branch you have selected, so the two never
+  read as the same mark. Nothing else about how the canvas moves changed — the
+  entrance and the focus motions are as they were. The timeline still washes.
+
 - **Timelines, gantt charts and lifecycles now draw on a panel instead of a
   hairline frame** — the same surface the data dictionary already gives its
   tables, in all nine themes. The diagram area is filled and edged in the pair

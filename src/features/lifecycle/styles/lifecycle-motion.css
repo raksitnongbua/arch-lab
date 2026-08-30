@@ -31,11 +31,23 @@
  *      hanging there, unattached, for the whole time the line took to reach
  *      it. That is six keyframes for four motions, not a fifth motion.
  *
- *   3. SPINE SWEEP — at rest, a wash travels down the spine and loops.
+ *   3. SPINE DRIFT — at rest, dashes march down the spine and loop, for ever.
  *      Answers "which way does time run", which a vertical line of identical
- *      dots genuinely cannot say standing still. The same argument the
- *      timeline's sweep makes, and it runs ALONG the spine and nowhere else
- *      for the same reason.
+ *      dots genuinely cannot say standing still. It runs ALONG the spine and
+ *      nowhere else.
+ *
+ *      IT WAS A SINGLE WASHING HEAD, and marching dashes replace it on a
+ *      request rather than on an argument — but the swap pays for itself
+ *      twice. The head had to be sized against the spine, which is what put a
+ *      negative number in the dash gap on short diagrams and painted the whole
+ *      line solid; a repeating pattern does not know how long the line is, so
+ *      that class of bug cannot be written here again. And it turned out to be
+ *      the same motion as the travelling dash on a lit return, which had been
+ *      written as a separate keyframe — they now share one.
+ *
+ *      THE TIMELINE'S SWEEP IS STILL A WASH and is deliberately left alone.
+ *      The two canvases no longer move alike, which is a real cost and is
+ *      accepted: this one was asked for by the person reading it.
  *
  *      WHAT IT IS NOT: a today marker or a playhead. arch-lab draws neither
  *      anywhere on purpose — a share link carries its document but not the
@@ -157,22 +169,26 @@
      nothing — see the rule under motion 2. */
   --lc-arrow-in: 300ms;
 
-  /* The sweep. Slow, because it is a wash over a line rather than a pulse
-     along a wire: a short head here reads as a dot lighting up, which on this
-     canvas is a state. */
-  --lc-sweep: 3.8s;
-  /* THE HEAD. THE DECLARED DEFAULT ONLY — the component overrides it per
-     diagram, capped to a share of the spine it travels, and `@/lib/sweep-head`
-     carries the argument. It stayed flat here for a while and paired with
-     `calc(spine-len - head)` as the gap, which went NEGATIVE on any spine
-     shorter than this: an invalid `stroke-dasharray` is dropped whole, so the
-     ambient painted a SOLID line pulsing on and off instead of a head
-     travelling down one. The check pins this number to `SWEEP_HEAD_MAX`. */
-  --lc-sweep-head: 90;
+  /* THE AMBIENT: dashes marching down the spine, for ever.
+     BOTH LENGTHS ARE CONSTANTS, and that is now a property rather than a
+     coincidence. The wash this replaced sized its lit head against the spine
+     and paired it with `calc(spine-len - head)` as the gap, which went
+     NEGATIVE on a short diagram — and a negative value invalidates the whole
+     `stroke-dasharray`, so the ambient painted a solid line pulsing on and off.
+     A repeating pattern cannot express that bug: it does not know how long the
+     line is, so every lifecycle from two states to twenty marches at the same
+     visual speed. `check:lifecycle-motion` asserts the two are constants.
 
-  /* The travelling dash on a lit return. Faster than the sweep: it is a
-     journey rather than a wash, and it only ever runs on one path at a
-     time. */
+     SPARSER AND SLOWER THAN THE FOCUS DASH BELOW — 33% duty against 42%, and
+     about half the speed. The two are the same motion, and the ambient has to
+     stay the quieter one or lighting a branch says nothing. */
+  --lc-drift: 2.8s;
+  --lc-drift-dash: 8;
+  --lc-drift-gap: 16;
+
+  /* The travelling dash on a lit return. Faster and denser than the ambient:
+     it is a journey rather than a drift, and it only ever runs on one path at
+     a time. */
   --lc-travel: 1.5s;
   --lc-travel-dash: 10;
   --lc-travel-gap: 14;
@@ -282,11 +298,26 @@
    canvas would be a permanent extra state at the top of the spine. */
 .af-lc-sweep {
   fill: none;
-  /* `--edge-drift` is this app's designated travelling-mark token, and it is
-     near-neutral in every theme — which is what a wash over a structural line
-     has to be. Nothing on this canvas carries meaning in a stroke colour, so
-     there is nothing for the sweep to be confused with and no new token is
-     owed. */
+  /* `--edge-drift` is this app's designated travelling-mark token. It differs
+     from `--edge` — which the spine under it now paints from — mostly in HUE:
+     measured across the nine themes it is 1.00–1.29:1 against the spine in
+     luminance but 0.06–0.12 in OKLab distance, where a just-noticeable
+     difference is 0.002. So the colour alone would carry this on a screen and
+     carry nothing in greyscale.
+
+     THE WIDTH IS THEREFORE LOAD-BEARING, not a taste. At 4 against the spine's
+     2 the marching dashes stand a unit proud on each side, which is a
+     GEOMETRIC difference and survives everything a hue does not — the same
+     argument this canvas makes for telling a terminal branch from a returning
+     one by shape.
+
+     ZERO-LENGTH DASH AT REST, never `opacity: 0`: every `opacity: 0` here is
+     reserved for the entrance and `check:lifecycle-motion` fails any other
+     rule outside the media query that hides something. The BUTT cap is what
+     stops that zero-length dash painting a dot — a round cap would leave a
+     permanent extra state at the top of the spine — and it is also what keeps
+     the marching dashes rectangular rather than rounding 2 units onto each
+     end of an 8-unit dash. */
   stroke: var(--edge-drift);
   stroke-width: 4;
   stroke-linecap: butt;
@@ -383,9 +414,11 @@
      lit. */
   .af-lc-canvas[data-af-idle="on"][data-idle="1"]:not(.af-lc-has-focus)
     .af-lc-sweep {
-    stroke-dasharray: var(--lc-sweep-head)
-      calc(var(--lc-spine-len) - var(--lc-sweep-head));
-    animation: af-lc-sweep var(--lc-sweep) linear infinite;
+    --lc-march-dash: var(--lc-drift-dash);
+    --lc-march-gap: var(--lc-drift-gap);
+    stroke-dasharray: var(--lc-march-dash) var(--lc-march-gap);
+    stroke-opacity: 0.55;
+    animation: af-lc-march var(--lc-drift) linear infinite;
   }
 
   /* 4a. Focus, the dot. Opacity only — no stroke, fill or radius moves, so
@@ -414,8 +447,10 @@
   .af-lc-canvas[data-af-idle="on"].af-lc-has-focus
     .af-lc-row[data-lit="1"]
     .af-lc-return {
-    stroke-dasharray: var(--lc-travel-dash) var(--lc-travel-gap);
-    animation: af-lc-travel var(--lc-travel) linear infinite;
+    --lc-march-dash: var(--lc-travel-dash);
+    --lc-march-gap: var(--lc-travel-gap);
+    stroke-dasharray: var(--lc-march-dash) var(--lc-march-gap);
+    animation: af-lc-march var(--lc-travel) linear infinite;
     animation-delay: calc(var(--lc-wave, 0) * var(--lc-breathe-step) * -1);
   }
 }
@@ -447,36 +482,31 @@
   }
 }
 
-/* The wash fades up off the top end and back down into the bottom one. A hard
-   cut at either end would read as an object arriving and leaving — a thing at
-   a moment — where a fade reads as the line itself catching light. Peak
-   opacity is deliberately modest: this is the only thing moving once the
-   canvas is at rest, so it must not become the loudest mark on the page. */
-@keyframes af-lc-sweep {
-  0% {
-    stroke-dashoffset: var(--lc-spine-len);
-    opacity: 0;
-  }
-  20%,
-  80% {
-    opacity: 0.55;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 0;
-  }
-}
+/* ONE KEYFRAME, TWO RIDERS — the ambient drift down the spine and the
+   travelling dash on a lit return. They were two, and the second was written
+   as a copy of the first with different numbers; they are the same motion, and
+   what differs between them is the pattern, the speed and what they run on.
+   Each rule sets `--lc-march-dash` and `--lc-march-gap` on its own element,
+   and custom properties in a keyframe resolve against the element the
+   animation runs on, so one declaration serves both without either knowing
+   about the other.
 
-/* One dash-and-gap of travel per cycle, so the marks appear to move
-   continuously rather than restarting. The offset counts DOWN, which on an
-   SVG path moves the dashes forward along the path's own direction — and the
-   component draws every return from its exit TO the spine, so forward is the
-   direction the subject goes. */
-@keyframes af-lc-travel {
+   ONE DASH-AND-GAP PER CYCLE, so the marks appear to move continuously rather
+   than restarting: after exactly one period the pattern is back where it
+   started and the loop is seamless. The offset counts DOWN, which moves the
+   dashes FORWARD along the line's own direction — the spine is drawn top to
+   bottom, so the drift runs the way time runs, and every return is drawn from
+   its exit TO the spine, so its dash runs the way the subject goes. A path
+   written backwards would animate the opposite claim.
+
+   NO FADE AT THE ENDS. The wash this replaced needed one, because it was a
+   single head arriving and leaving and a hard cut would have read as an object
+   appearing. A repeating pattern has no arrival to soften — it is already
+   everywhere on the line — so it carries a constant `stroke-opacity` instead
+   and the loop has no seam to hide. */
+@keyframes af-lc-march {
   to {
-    stroke-dashoffset: calc(
-      (var(--lc-travel-dash) + var(--lc-travel-gap)) * -1
-    );
+    stroke-dashoffset: calc((var(--lc-march-dash) + var(--lc-march-gap)) * -1);
   }
 }
 
