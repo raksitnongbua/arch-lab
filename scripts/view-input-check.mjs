@@ -1048,6 +1048,118 @@ console.log(
   );
 }
 
+console.log("\na click that selects is not eaten by the pane behind it");
+
+/* THE PAIR THAT HAS TO HOLD TOGETHER, and it shipped broken because each half
+   was checked alone. A viewer's pane is the backdrop that deselects on a click
+   to empty ground; every shape that SETS a selection sits inside that pane, so
+   the same click reaches both. Without `stopPropagation` on the shape, one
+   click selects and then immediately clears — the reader sees a flicker and
+   nothing stays lit.
+
+   THAT IS EXACTLY WHAT WENT OUT. `check:gantt-layout` gained "clicking the pane
+   clears the selection" and it was true; nothing asked whether the pane also
+   ate the click that had just set one, so the assertion passed over a canvas
+   where selecting had stopped working at all. The ER canvas has carried a
+   one-line note about this since it added its own backdrop.
+
+   SWEPT OVER EVERY CANVAS FROM THE FILESYSTEM, and stated as an implication
+   rather than as a rule about three names: a canvas with no backdrop needs no
+   stop, and a canvas that grows one tomorrow is covered the day it does. */
+{
+  const withBackdrop = readdirSync(path.join(ROOT, "src/features")).flatMap(
+    (feature) => {
+      const viewer = `src/features/${feature}/components/${feature}-viewer.tsx`;
+      const diagram = `src/features/${feature}/components/${feature}-diagram.tsx`;
+      if (
+        !existsSync(path.join(ROOT, viewer)) ||
+        !existsSync(path.join(ROOT, diagram))
+      ) {
+        return [];
+      }
+      const viewerCode = read(viewer);
+      /* A BACKDROP IS A PANE-LEVEL CLICK THAT CLEARS, however it is spelled —
+         asked of what the handler DOES rather than of what it is called. */
+      const clears =
+        /onClick=\{[\w.]*[Bb]ackdrop/.test(viewerCode) ||
+        /onClick=\{\(\) => on\w*Focus\w*\(null\)/.test(viewerCode);
+      return clears ? [[feature, diagram, read(diagram)]] : [];
+    },
+  );
+
+  /* EVERY CANVAS THAT CAN SELECT MUST BE ABLE TO DESELECT, which is the other
+     direction and the one a "does it have a backdrop" sweep cannot see: a set
+     derived from HAVING the thing can never report its absence. `components`
+     is the canvases whose shapes are buttons, so the two lists must match.
+
+     THE GANTT'S OWN CHECK HAD THIS AND ONLY THE GANTT DID, which is why the
+     timeline and the lifecycle shipped with no way out of a selection at all
+     once hover stopped clearing it. Deselecting is not a per-kind nicety. */
+  /* RE-DERIVED IN THIS BLOCK rather than reaching for the `components` list
+     above, which is scoped to its own. The first draft did reach for it, the
+     script threw `components is not defined`, and the break loop around it
+     printed nothing — an empty grep for a failure line reads exactly like a
+     pass. Same marker, same filesystem sweep. */
+  const selectable = readdirSync(path.join(ROOT, "src/features")).filter(
+    (feature) => {
+      const rel = `src/features/${feature}/components/${feature}-diagram.tsx`;
+      return (
+        existsSync(path.join(ROOT, rel)) &&
+        /role=\{[^}]*"button"|role="button"/.test(read(rel))
+      );
+    },
+  );
+  const noWayOut = selectable.filter(
+    (feature) => !withBackdrop.some(([f]) => f === feature),
+  );
+  check(
+    `every canvas that selects can also deselect (${withBackdrop.map(([f]) => f).join(", ")})`,
+    noWayOut.length === 0,
+    `${noWayOut.join(", ")} — the only ways out are re-clicking the row you already lost track of, and a key nobody presses`,
+  );
+
+  /* EACH HANDLER IS READ BY MATCHING ITS BRACES, never by a character window.
+     The first attempt bounded the body at 400 characters and ended it at the
+     first line holding only `}` — which is not how these are written (they end
+     `}}`), so the match ran on into the NEXT handler and reported the use-case
+     canvas, which stops propagation perfectly well. Every bounded window in
+     this session has eventually skipped or swallowed the thing it was aimed
+     at; brace matching has no window to be wrong about. */
+  const handlerBodies = (code) => {
+    const bodies = [];
+    let at = code.indexOf("onClick={");
+    while (at >= 0) {
+      let depth = 0;
+      let index = at + "onClick=".length;
+      for (; index < code.length; index += 1) {
+        if (code[index] === "{") depth += 1;
+        else if (code[index] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      bodies.push(code.slice(at, index + 1));
+      at = code.indexOf("onClick={", index + 1);
+    }
+    return bodies;
+  };
+
+  const eaten = withBackdrop.filter(([, , code]) => {
+    const selecting = handlerBodies(code).filter((body) =>
+      /on\w*Focus\w*\(/.test(body),
+    );
+    return (
+      selecting.length === 0 ||
+      selecting.some((body) => !/stopPropagation\(\)/.test(body))
+    );
+  });
+  check(
+    "every shape that selects stops the click before the pane sees it",
+    eaten.length === 0,
+    `${eaten.map(([f]) => f).join(", ")} — the same click sets the selection and then the backdrop clears it, which is a flicker and nothing staying lit`,
+  );
+}
+
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);
   process.exit(1);

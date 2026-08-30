@@ -354,7 +354,22 @@ function StateRow({
         tabIndex={onFocusState ? 0 : undefined}
         role={onFocusState ? "button" : undefined}
         aria-label={onFocusState ? describeState(state, exits) : undefined}
-        onClick={onFocusState ? () => onFocusState(key) : undefined}
+        /* STOPPED, OR THE PANE BEHIND IT CLEARS THE FOCUS THIS CLICK JUST
+           SET. The viewer's pane is the backdrop that deselects on a click to
+           empty ground, and it is an ANCESTOR of this rect — so without this
+           the same click both sets the selection and clears it, and what a
+           reader sees is a flicker and nothing staying lit. That shipped on the
+           gantt the moment its backdrop was added; the ER canvas has carried
+           the same one-line note since it added its own. `keyActivate` already
+           does this for the keyboard half. */
+        onClick={
+          onFocusState
+            ? (pointer) => {
+                pointer.stopPropagation();
+                onFocusState(key);
+              }
+            : undefined
+        }
         /* THE KEYBOARD HALF OF THE CLICK. `role="button"` promises a
            reader that Enter and Space do what a press does, and nothing in
            the platform honours that on an SVG shape. It mattered less while

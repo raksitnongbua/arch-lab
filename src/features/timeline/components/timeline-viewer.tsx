@@ -100,6 +100,38 @@ export function TimelineViewer({ file }: TimelineViewerProps) {
     [selected],
   );
 
+  /* CLICKING THE PANE CLEARS THE SELECTION. Every interactive shape inside the
+     SVG stops the event reaching here, so this only ever fires on empty
+     ground — and that stop is load-bearing rather than tidy: without it the
+     same click sets the selection and then clears it, which is a flicker and
+     nothing staying lit.
+
+     IT WAS MISSING ENTIRELY, and only became a problem when selecting stopped
+     happening on hover. A hover cleared itself the moment the pointer moved
+     away; a click PINS, so the only ways out were clicking the same row again —
+     which means finding it — or Escape, which nobody discovers. Reported as
+     being unable to deselect at all.
+
+     THE CLIENT-SIZE GUARD EXEMPTS THE SCROLLBAR GUTTERS, which are inside the
+     element's box but outside its content: a click on the scrollbar would
+     otherwise read as a click on empty ground and clear a selection the reader
+     was scrolling to look at. */
+  const handleBackdropClick = useCallback(
+    (pointer: React.MouseEvent<HTMLDivElement>) => {
+      const pane = pointer.currentTarget;
+      const rect = pane.getBoundingClientRect();
+      if (
+        pointer.clientX - rect.left > pane.clientWidth ||
+        pointer.clientY - rect.top > pane.clientHeight
+      ) {
+        return;
+      }
+      setPinned(null);
+      setKeyFocused(null);
+    },
+    [],
+  );
+
   const stir = useCallback(() => {
     setAtRest(false);
     if (idleTimer.current) clearTimeout(idleTimer.current);
@@ -165,6 +197,7 @@ export function TimelineViewer({ file }: TimelineViewerProps) {
         CANVAS_RULE_CLASS,
       )}
       style={groundFieldCss(groundScale)}
+      onClick={handleBackdropClick}
       onPointerMove={stir}
       onPointerDown={stir}
       onKeyDown={stir}

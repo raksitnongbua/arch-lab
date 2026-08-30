@@ -36,8 +36,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   its duration, state, float and what it waits for. The dates name the last day
   the work is done, not the day after. A plan with no `starts` line answers in
   day numbers rather than staying silent.
-- **Clicking empty space on a gantt clears the selection.** Previously the only
-  ways out were clicking the same bar again or pressing Escape.
+- **Clicking empty space clears the selection, on the gantt, the timeline and
+  the lifecycle.** Previously the only ways out were clicking the same row again
+  or pressing Escape — and on the timeline and lifecycle there was no way out at
+  all once selecting moved from hover to click.
+- **A click on a gantt bar no longer flickers and clears itself.** The click
+  reached the bar and then the pane behind it, so the same press both selected
+  and deselected. Nothing stayed lit.
 
 - **A selected row, event or bar now carries a ring, not just a dimmed
   background.** Choosing one used to work only by fading everything else, which
