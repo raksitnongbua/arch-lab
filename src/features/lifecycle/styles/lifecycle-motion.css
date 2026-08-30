@@ -111,8 +111,10 @@
  *     here (the focus breathe and the travelling dash) carry one.
  *   - FOCUS DIMS AND ANIMATES, IT DOES NOT REPAINT. No stroke, fill, width or
  *     radius changes in either direction — a focused dot that recolours is a
- *     new mark appearing where one already was. `:focus-visible` is the one
- *     exception, because a keyboard user has no hover to fall back on.
+ *     new mark appearing where one already was. THERE IS NO LONGER AN
+ *     EXCEPTION FOR `:focus-visible` EITHER: it drew a ring the width of the
+ *     canvas, and the lit row a keyboard reader already gets says where they
+ *     are far better. The rule on the hit target carries the argument.
  *   - THE SWEEP RIDES A SEPARATE LINE. Never a dasharray on the spine itself:
  *     the spine is the continuous mark a reader follows, and a travelling
  *     dash over it would break the line it is describing. The travelling dash
@@ -328,10 +330,30 @@
   fill: transparent;
   cursor: pointer;
 }
-/* The one place focus is allowed to paint: a keyboard user has no hover. */
+/* NO RING, AND NOTHING REPLACES IT. `outline` on this element drew a rounded
+   rectangle the WIDTH OF THE CANVAS, because the hit target is a full-width
+   band rather than the shape itself — so what a keyboard reader got was a
+   coloured bar across the diagram, and what everyone got was the loudest mark
+   on a canvas that sells presentation.
+
+   THE FOCUS STATE ITSELF IS THE INDICATOR, and it is a stronger one: tabbing
+   to a row lights it and drops every other row to 0.24, declared outside the
+   media query so it holds under reduced motion too. That is not a smaller
+   affordance than a 2px outline, it is a much larger one.
+
+   WHY THE RING WAS EVER NEEDED ARGUES AGAINST PUTTING IT BACK. The dimming did
+   not work: every entrance rule is `forwards` and kept matching for the life of
+   the page, so the animation origin held every row at full strength and the
+   focus declarations underneath it never applied to anything. The ring was the
+   only thing a keyboard reader could see, and it was covering for that bug
+   rather than answering a need. The bug is fixed; the cover is not owed.
+
+   FOUR OF THE SIX CANVASES THAT MAKE A SHAPE A BUTTON already suppressed this —
+   the flowchart and the use case in their components, ER and the sequence with
+   a stroke on the shape itself — and `check:view-input` asserts that every one
+   of them lights on `onFocus`, which is what makes suppressing it safe. */
 .af-lc-hit:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline: none;
 }
 
 /* ---------------------------------------------------------------------------

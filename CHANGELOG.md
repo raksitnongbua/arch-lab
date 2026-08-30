@@ -27,6 +27,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The focus ring is gone from the gantt, the timeline and the lifecycle.** On
+  those three the keyboard target is a band the full width of the drawing, so
+  the ring drew a coloured rectangle right across the diagram. Tabbing to a row
+  still lights it and fades everything else, which says where you are more
+  clearly than the ring did — and is what the other four canvases have always
+  relied on.
+
 - **Selecting a row on a gantt, a timeline or a lifecycle now takes a click.**
   Pointing at one used to select it, which meant crossing the diagram lit and
   cleared rows the reader never meant to touch. Tabbing to a row still lights

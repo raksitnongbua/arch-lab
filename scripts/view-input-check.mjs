@@ -846,6 +846,63 @@ console.log(
     );
   }
 
+  /* TABBING TO A SHAPE LIGHTS IT, and this is the assertion that lets the
+     canvases suppress the browser's focus ring at all.
+
+     Those rings were withdrawn because they were unusable to look at — the hit
+     target on three of these canvases is a band the full width of the drawing,
+     so `outline` drew a coloured rectangle across the whole diagram. But a
+     control that a keyboard reader can reach and cannot SEE is worse than an
+     ugly one, so the ring may only go where something else says "you are here".
+     On every one of these canvases that something is the focus state itself:
+     `onFocus` selects the shape, which lights it and drops everything else.
+
+     THE WIRING IS THE CLAIM, not the stylesheet. A dimming rule can exist and
+     still never fire — that is exactly what happened here, where a `forwards`
+     entrance held every row at full strength and the focus declarations under
+     it applied to nothing for the life of the page. So this asks the component
+     whether focus is CONNECTED, and `check:*-motion` asks separately whether
+     the entrance lets go so it can take effect. Neither question answers the
+     other. */
+  for (const [feature, rel, code] of components) {
+    check(
+      `${feature}: tabbing to a shape selects it, so focus is visible without a ring`,
+      /onFocus=/.test(code),
+      `${rel} makes a shape focusable but nothing happens when it is focused — with no outline either, a keyboard reader cannot see where they are`,
+    );
+  }
+
+  /* AND NO CANVAS DRAWS THE RING BACK. Written as the absence of the mechanism
+     for the same reason the hover rule below is: restoring a focus outline is
+     the obvious thing to do if someone reads the accessibility rule without
+     reading what replaced it, and in a diff it would look like a fix. */
+  const ringed = readdirSync(path.join(ROOT, "src/features")).flatMap(
+    (feature) => {
+      const rel = `src/features/${feature}/styles/${feature}-motion.css`;
+      if (!existsSync(path.join(ROOT, rel))) return [];
+      const css = read(rel).replace(/\/\*[\s\S]*?\*\//g, " ");
+      /* THE VALUE IS READ AND COMPARED, never matched with a negative
+         lookahead. The first draft asked for `outline:\s*(?!none)` and reported
+         EVERY canvas, the fixed ones included: `\s*` backtracks to empty, the
+         lookahead then sits on the space before "none" instead of on "none",
+         and it succeeds for any value at all. An assertion that cannot pass is
+         as useless as one that cannot fail, and it is louder about it. */
+      return [...css.matchAll(/:focus-visible[^{]*\{([^}]*)\}/g)].some(
+        (rule) => {
+          const value = /outline:\s*([^;]+)/.exec(rule[1]);
+          return value !== null && value[1].trim() !== "none";
+        },
+      )
+        ? [feature]
+        : [];
+    },
+  );
+  check(
+    "no canvas draws a focus outline on its hit target",
+    ringed.length === 0,
+    `${ringed.join(", ")} — the hit target is a full-width band, so an outline is a coloured bar across the drawing`,
+  );
+
   /* NO POINTER-HOVER SELECTION ANYWHERE IN THAT FAMILY. Asserted as the
      ABSENCE of the mechanism rather than as the presence of a click, because
      the defect being prevented is a re-addition: the obvious way to "make the
