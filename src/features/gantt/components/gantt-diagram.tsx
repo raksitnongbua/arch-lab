@@ -67,12 +67,11 @@
 
 import { RoleTextureDefs } from "@/components/ui/role-texture";
 import { textureFill } from "@/lib/role-texture";
-import { CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
 import { DiagramHeadingText } from "@/components/ui/diagram-heading-text";
 import { DiagramSurface } from "@/components/ui/diagram-surface";
 import type { GanttLabFile } from "@/types";
 
-import { arrowPoints, axisCaption, axisLabel, itemSchedule } from "../lib/axis";
+import { arrowPoints, axisCaption, axisLabel } from "../lib/axis";
 import type { LaidGanttItem, GanttLayout } from "../lib/layout";
 import {
   GANTT,
@@ -298,12 +297,6 @@ export function GanttDiagram({
           key={item.id}
           item={item}
           lit={lit(item.id)}
-          /* SOLVED HERE, WHERE THE FILE IS. `Row` stays presentational and
-             takes a string rather than the document — the calendar lives in
-             `../lib/axis`, which is the boundary that keeps `file.origin` out
-             of the geometry, and threading the file through the row would be
-             the first hole in it. */
-          schedule={itemSchedule(file, item)}
           onFocusItem={onFocusItem}
           onKeyFocusItem={onKeyFocusItem}
         />
@@ -376,14 +369,11 @@ export function GanttDiagram({
 function Row({
   item,
   lit,
-  schedule,
   onFocusItem,
   onKeyFocusItem,
 }: {
   item: LaidGanttItem;
   lit?: "1";
-  /** The days this item occupies, already worded by `itemSchedule`. */
-  schedule: string;
   onFocusItem?: (id: string) => void;
   onKeyFocusItem?: (id: string | null) => void;
 }) {
@@ -511,37 +501,21 @@ function Row({
               rx={1.5}
             />
           )}
-          {/* THE LABEL BESIDE THE BAR, which says more once the bar is
-              selected. At rest it is the duration — `6d` — the one number the
-              plan states outright. Selecting asks the other question, "so when
-              is it DONE", and that answer is now computed instead of counted
-              off the tick rail by eye. `itemSchedule` owns the arithmetic and
-              the off-by-one it hides; this only places the string.
-
-              THE ANCHOR FLIPS WHEN IT WOULD RUN OFF THE PLOT. A bar finishing
-              near the right edge has no room to its right, and a date range is
-              three times the width of `6d` — so past the edge the label is
-              right-aligned INSIDE the bar's own end instead. Measured with the
-              shared `CHAR_WIDTH_RATIO` rather than guessed, because the case
-              that overflows is exactly the last bar in a plan, which is the one
-              a reader looks at. */}
-          {(() => {
-            const label = lit ? schedule : `${item.duration}d`;
-            const outside = item.x0 + width + 8;
-            const wide = label.length * 10.5 * CHAR_WIDTH_RATIO;
-            const fits = outside + wide <= GANTT.plotX1;
-            return (
-              <text
-                className="af-gantt-duration"
-                x={fits ? outside : item.x0 + width - 8}
-                y={item.midY + 4}
-                textAnchor={fits ? undefined : "end"}
-                fontSize={10.5}
-              >
-                {label}
-              </text>
-            );
-          })()}
+          {/* THE DURATION, and only the duration. It briefly carried the
+              date range on selection as well, which put a sixteen-character
+              label on a bar whose right edge may be anywhere — including
+              against the plot's own edge, which needed the anchor to flip. The
+              dates moved to the viewer's dock instead: a panel has room for
+              the start, the finish, the float and the state, and a bar has room
+              for one number. */}
+          <text
+            className="af-gantt-duration"
+            x={item.x0 + width + 8}
+            y={item.midY + 4}
+            fontSize={10.5}
+          >
+            {item.duration}d
+          </text>
         </>
       )}
 

@@ -73,6 +73,8 @@ const { listGanttExampleIds, loadGanttExample } = await load(
   "src/features/gantt/service/example-service.ts",
 );
 
+const read = (relative) => readFileSync(path.join(ROOT, relative), "utf8");
+
 let failures = 0;
 let assertions = 0;
 const check = (label, condition, detail) => {
@@ -919,6 +921,108 @@ console.log("a selected bar names the days it actually occupies");
     `without a start date the label falls back to day numbers (${withoutOrigin[0]})`,
     withoutOrigin.every((label) => /^day \d+(–\d+)?$/.test(label)),
     `${withoutOrigin.filter((l) => !/^day \d+(–\d+)?$/.test(l)).join(", ")} — a calendar was invented for a plan that named no origin`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+console.log("selecting one bar lights one bar and its neighbours");
+
+/* IT USED TO LIGHT THE WHOLE CHAIN, transitively, in both directions — every
+   ancestor back to the first task and every descendant on to the last. On a
+   plan where most work is sequenced that is nearly the entire document, so
+   selecting one bar dimmed almost nothing. Reported as clicking one bar
+   focusing the lot.
+
+   MEASURED AS A SHARE OF THE PLAN, not by reading the walk. A cap on the count
+   would pass on a small document and say nothing about a large one; what has
+   to be true is that a selection SEPARATES the thing chosen from the rest, and
+   on the biggest bundled plan the old behaviour lit most of it. The bound is
+   the one-hop neighbourhood, so it is stated as exactly that: the item, plus
+   the ids it names and the ids that name it, and nothing two hops away. */
+{
+  const overreach = [];
+  for (const id of listGanttExampleIds()) {
+    const example = loadGanttExample(id);
+    if (example.status !== "ok") continue;
+    const laid = layoutGantt(example.file);
+    const byId = new Map(laid.items.map((item) => [item.id, item]));
+    for (const item of laid.items) {
+      /* THE NEIGHBOURHOOD, rebuilt here from the model rather than taken from
+         the viewer — a viewer that both lit and measured its own set would
+         agree with itself whatever it did. */
+      const want = new Set([item.id]);
+      for (const parent of item.after) want.add(parent);
+      for (const other of laid.items) {
+        if (other.after.includes(item.id)) want.add(other.id);
+      }
+      /* Two hops must NOT be in it: a grandparent is the case the transitive
+         walk swept in, and the one a reader noticed. */
+      const twoHops = item.after.flatMap(
+        (parent) => byId.get(parent)?.after ?? [],
+      );
+      const leaked = twoHops.filter((far) => want.has(far) && far !== item.id);
+      if (leaked.length > 0) {
+        overreach.push(`${id}/${item.id} reaches ${leaked.join(", ")}`);
+      }
+      if (want.size > laid.items.length * 0.75 && laid.items.length > 4) {
+        overreach.push(
+          `${id}/${item.id} lights ${want.size} of ${laid.items.length}`,
+        );
+      }
+    }
+  }
+  check(
+    "no selection reaches two hops, or most of the plan",
+    overreach.length === 0,
+    `${overreach.slice(0, 3).join("; ")} — a selection that lights nearly everything has not selected anything`,
+  );
+
+  /* AND THE VIEWER BUILDS THAT SET WITHOUT WALKING. Asserted against the code
+     because the shape of the bug was a recursive walk, and a walk is what
+     someone reaching for "show me the whole chain" would write again. */
+  const viewer = read("src/features/gantt/components/gantt-viewer.tsx");
+  const litBlock = /const litIds = useMemo\(\(\) => \{[\s\S]*?\}, \[/.exec(
+    viewer,
+  );
+  check(
+    "the viewer's lit set is one hop, with no recursion",
+    litBlock !== null && !/walk\(/.test(litBlock[0]),
+    "a transitive walk is back — it is the natural way to write 'the whole chain', and it lights the plan",
+  );
+
+  /* CLICKING EMPTY GROUND CLEARS THE SELECTION. There was no way out but
+     clicking the same bar again — which means finding it — or Escape, which
+     nobody discovers. Reported as being hard to unfocus. */
+  /* THE HANDLER IS ATTACHED, not merely declared. The first version of this
+     asked whether the NAME appeared in the file, and a break that deleted the
+     `onClick` line sailed through — the function was still defined, unused and
+     unreachable. Present-and-wired are two claims; this asks for the wiring. */
+  /* THE HANDLER IS ATTACHED, AND IT CLEARS. Two earlier drafts of this were
+     green over a break. The first asked whether the NAME appeared anywhere, and
+     deleting the `onClick` left the function defined and unreachable. The
+     second bounded nothing — `const handleBackdropClick[\s\S]*?setPinned` runs
+     past the end of the handler and finds the `setPinned(null)` in the dock's
+     CLOSE BUTTON, so gutting the handler still matched. The body is now cut at
+     the next declaration, which is a real boundary rather than a hopeful one. */
+  const backdropBody = (() => {
+    const at = viewer.indexOf("const handleBackdropClick");
+    if (at < 0) return "";
+    const rest = viewer.slice(at + 1);
+    const next = rest.search(/\n  (const |return |function )/);
+    return next < 0 ? rest : rest.slice(0, next);
+  })();
+  check(
+    "clicking the pane clears the selection",
+    /onClick=\{handleBackdropClick\}/.test(viewer) &&
+      /setPinned\(null\)/.test(backdropBody),
+    "the only ways out are re-clicking the bar you already lost track of, and a key nobody presses",
+  );
+
+  /* AND THE DOCK CARRIES THE DATES, which is where they went from the bar. */
+  check(
+    "the selected item's days are shown in the dock",
+    /itemSchedule\(file, focusedItem\)/.test(viewer),
+    "the dates went nowhere when they left the bar's label",
   );
 }
 

@@ -27,12 +27,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- **Selecting a gantt bar now tells you when it finishes.** A bar has always
-  been labelled with its duration — the one number the plan states outright —
-  and left you to count the other end off the tick rail. Click one and the label
-  becomes the days it actually occupies, `12–17 Apr`, worked out from the plan's
-  start date. It names the last day the work is done, not the day after it. A
-  plan with no `starts` line answers in day numbers rather than staying silent.
+- **Selecting a gantt bar opens a details panel, and selects less.** Clicking a
+  bar used to light its whole dependency chain in both directions, which on a
+  sequenced plan is most of the chart; it now lights the bar and the items it
+  directly waits for or blocks. The panel — right-hand on a desktop, a sheet on
+  a phone, the same one the flowchart and use-case viewers open — names the days
+  the item actually occupies, worked out from the plan's start date, along with
+  its duration, state, float and what it waits for. The dates name the last day
+  the work is done, not the day after. A plan with no `starts` line answers in
+  day numbers rather than staying silent.
+- **Clicking empty space on a gantt clears the selection.** Previously the only
+  ways out were clicking the same bar again or pressing Escape.
 
 - **A selected row, event or bar now carries a ring, not just a dimmed
   background.** Choosing one used to work only by fading everything else, which
