@@ -480,6 +480,39 @@ for (const [name, file] of REACT_FLOW_CANVASES) {
   );
 }
 
+/* SECTION 7 — THE WELL MUST NOT POSITION ITS HOST.
+   `.af-canvas-sheet` needs a containing block for its `::before`, and it takes
+   one with `position: relative`. Every custom class in `globals.css` is
+   UNLAYERED, and an unlayered declaration beats every layered one regardless of
+   specificity — so that `relative` beat Tailwind's `.fixed`, which lives in
+   `@layer utilities`. The playground's sequence/flowchart/use-case pane wears
+   both at once (`DIAGRAM_WELL_CLASSES` plus `fixed inset-0 z-50` in immersive),
+   and it silently stayed in the page flow: immersive mode rendered at pane size
+   with the site header above it, which everyone read as a z-index fight.
+   Naming the layer is the fix, and it is invisible — nothing about a rule that
+   simply says `position: relative` announces that it must lose. */
+const SHEET_CSS = read("src/app/globals.css").replace(/\/\*[\s\S]*?\*\//g, "");
+
+check(
+  "the well's position is layered, so a host's own position utility wins",
+  /@layer\s+components\s*\{\s*\.af-canvas-sheet\s*\{[^}]*\bposition:\s*relative\b/.test(
+    SHEET_CSS,
+  ),
+  "`.af-canvas-sheet` sets `position` outside `@layer components` — an " +
+    "unlayered rule outranks `@layer utilities`, so it overrides `fixed` on " +
+    "any host that wears the well and positions itself, and immersive mode " +
+    "stops covering the viewport",
+);
+
+check(
+  "the well's unlayered rule carries isolation and nothing that outranks a host",
+  !/(^|\n)\.af-canvas-sheet\s*\{[^}]*\bposition:/.test(SHEET_CSS),
+  "the layered and unlayered halves of `.af-canvas-sheet` have been merged " +
+    "back into one rule — `isolation` needs its unlayered weight (a host " +
+    "overriding it lets the `-1` material layer escape) and `position` must " +
+    "not have it; they are two rules for that reason",
+);
+
 if (failures > 0) {
   console.error(`\ncanvas-chrome-check: ${failures} problem(s).`);
   process.exit(1);

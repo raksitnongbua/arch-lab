@@ -9,6 +9,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Immersive mode did not cover the screen for a sequence, flowchart or use
+  case.** The diagram stayed at pane size with the site header above it, so
+  "fill the screen" filled nothing — the pane it shares with the diagram's new
+  ground could not position itself.
 - **A Gantt plan touched the edge of its own surface.** The section headings and
   the axis caption sit at the drawing's origin, and the plan's panel was drawn
   at exactly those bounds — so "SHAPE IT" ran into the border, on screen and in

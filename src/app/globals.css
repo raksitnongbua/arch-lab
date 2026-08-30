@@ -2964,8 +2964,39 @@
  * `--canvas` fill, below every child. `isolation` keeps the negative index from
  * escaping into the host's layout. */
 
+/* THE `position` IS IN `@layer components` SO A HOST'S OWN POSITION UTILITY CAN
+   BEAT IT, and that is a bug fix, not tidiness. Every custom class in this file
+   is UNLAYERED, and an unlayered declaration outranks every layered one no
+   matter how specific — cascade layers are decided before specificity. So this
+   rule beat Tailwind's `.fixed`, which lives in `@layer utilities`.
+
+   THE PANE THAT WEARS BOTH is the playground's sequence/flowchart/use-case
+   section (`view-playground.tsx`), which carries `DIAGRAM_WELL_CLASSES` and
+   adds `fixed inset-0 z-50` while immersive. `position` came back `relative`,
+   so immersive mode was never fixed at all: the pane stayed in the page flow at
+   its normal size with the site header sitting above it in the layout. That
+   reads as "the navbar shows THROUGH the overlay" and sends anyone debugging it
+   hunting for an ancestor stacking context that does not exist. `z-50` was
+   never the question — an unpositioned-by-intent element had no offsets to
+   honour.
+
+   Naming the layer, rather than `:where()`, is what actually fixes it: zero
+   specificity still wins from outside a layer. `components` is the Tailwind v4
+   layer directly below `utilities`, so a host that positions itself wins and
+   every host that does not still gets the containing block the `::before`
+   needs.
+
+   MERGING THIS BACK INTO ONE UNLAYERED RULE REGRESSES IMMERSIVE MODE. The two
+   declarations are split on purpose: `isolation` must keep its unlayered weight
+   — a host overriding it would let the `-1` layer escape, the bug the comment
+   above describes — while `position` must yield. */
+@layer components {
+  .af-canvas-sheet {
+    position: relative;
+  }
+}
+
 .af-canvas-sheet {
-  position: relative;
   isolation: isolate;
 }
 
