@@ -232,6 +232,44 @@ const MERMAID_IMPORT_CAVEATS: Partial<Record<ViewDocument["kind"], string>> = {
   timeline: MERMAID_TIMELINE_CAVEAT,
 };
 
+/**
+ * The kinds that can NEVER be written as Mermaid, and the sentence each one
+ * shows on the disabled half of the format toggle.
+ *
+ * A TABLE, FOR THE REASON THE CAVEAT TABLES ABOVE ARE TABLES. This began as a
+ * ternary — gantt's sentence, else the dictionary's — and it had already
+ * grown the same defect that comment records: `lifecycle` was added as a kind
+ * and nobody added it here, so its Mermaid button stayed ENABLED. Pressing it
+ * ran a conversion that returned the `.alab` text unchanged, the pane
+ * re-detected `.alab`, the radio snapped back, and the live region announced
+ * "Converted the pane to Mermaid." A dead control that claimed success, and
+ * lied to a screen reader while doing it. A missing key here now renders an
+ * enabled button that converts, which is wrong in the safe direction and is
+ * caught by `check:view-input`; a missing branch in a ternary was wrong in
+ * the silent one.
+ *
+ * KIND-LEVEL REFUSALS ONLY. Gantt is refused per DOCUMENT — the conversion
+ * runs both ways and only a plan with no `starts` line has nothing to anchor
+ * to — so it cannot live in a table keyed by kind and is resolved beside it.
+ *
+ * WHY LIFECYCLE IS HERE rather than converted. `stateDiagram-v2` is the
+ * nearest Mermaid notation and it is not the same claim: a state diagram
+ * draws every transition that COULD happen, where a lifecycle is one
+ * subject's actual ordered history. `flowchart` is closer still — a lifecycle
+ * is a flowchart subset by `types/lifecycle.ts`'s own admission — but the
+ * whole value of the subtraction is that the picture is GUARANTEED to read as
+ * elapsed time down one spine, and a flowchart carries no such guarantee. The
+ * import direction settles it regardless: a general flowchart has no main
+ * track, permits forward rejoins and branches off branches, so reading one
+ * back as a lifecycle means inventing a declaration order the author never
+ * wrote.
+ */
+const MERMAID_KIND_REFUSALS: Partial<Record<ViewDocument["kind"], string>> = {
+  dict: "Mermaid has no data-dictionary notation, so there is nothing to convert to",
+  lifecycle:
+    "Mermaid has no lifecycle notation — stateDiagram-v2 draws every transition that could happen, not one subject's actual ordered history",
+};
+
 /** The mirror of `MERMAID_IMPORT_CAVEATS`: what leaving for Mermaid drops. */
 const MERMAID_EXPORT_CAVEATS: Partial<Record<ViewDocument["kind"], string>> = {
   c4: MERMAID_C4_EXPORT_CAVEAT,
@@ -1414,12 +1452,19 @@ export function ViewPlayground({
                            allowed; selecting is not. (For a dictionary the
                            Mermaid side is never current, so this reads as the
                            flat refusal it always was.) */
+                        const refusal =
+                          MERMAID_KIND_REFUSALS[doc.kind] ??
+                          (doc.kind === "gantt" && doc.file.origin === undefined
+                            ? /* The emitter's own sentence, not a second
+                                 hand-written one: a reader who presses this
+                                 and a caller who catches the throw must be
+                                 told the same thing. */
+                              MERMAID_GANTT_ORIGIN_REFUSAL
+                            : undefined);
                         const unsupported =
                           format === "mermaid" &&
                           !current &&
-                          (doc.kind === "dict" ||
-                            (doc.kind === "gantt" &&
-                              doc.file.origin === undefined));
+                          refusal !== undefined;
                         return (
                           <button
                             key={format}
@@ -1431,13 +1476,7 @@ export function ViewPlayground({
                             onClick={() => convertPane(format)}
                             title={
                               unsupported
-                                ? doc.kind === "gantt"
-                                  ? /* The emitter's own sentence, not a second
-                                       hand-written one: a reader who presses
-                                       this and a caller who catches the throw
-                                       must be told the same thing. */
-                                    MERMAID_GANTT_ORIGIN_REFUSAL
-                                  : "Mermaid has no data-dictionary notation, so there is nothing to convert to"
+                                ? refusal
                                 : current
                                   ? `The pane is ${format === "alab" ? ".alab" : "Mermaid"}`
                                   : `Rewrite the pane as ${format === "alab" ? ".alab" : "Mermaid"}`

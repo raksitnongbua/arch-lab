@@ -52,6 +52,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **The playground offered to convert a lifecycle to Mermaid, and the button
+  did nothing.** Pressing it left the text unchanged and the toggle snapped
+  back, while screen readers were told the conversion had succeeded. Mermaid
+  has no lifecycle notation, so that half of the toggle is now disabled and
+  says why, as it already did for a data dictionary.
+
 - **Immersive mode did not cover the screen for a sequence, flowchart or use
   case.** The diagram stayed at pane size with the site header above it, so
   "fill the screen" filled nothing — the pane it shares with the diagram's new

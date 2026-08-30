@@ -589,6 +589,75 @@ for (const [label, text] of [
  * silently changing the document's kind under the toggle.
  */
 
+/**
+ * THE OTHER HALF OF THE TOGGLE: the kinds whose Mermaid side must be DISABLED.
+ *
+ * The section below proves the button works where it is offered. This one
+ * proves it is not offered where it cannot work, and it exists because that
+ * failed silently once. `lifecycle` was added as a kind and nobody added it to
+ * the toggle's refusal list, so its Mermaid radio stayed enabled: pressing it
+ * ran `convertedSourceText`, which returned the `.alab` text UNCHANGED, the
+ * pane re-detected `.alab`, the radio snapped back, and the live region
+ * announced "Converted the pane to Mermaid." Nothing threw. Nothing rendered
+ * wrong. A screen-reader user was simply told a lie.
+ *
+ * WHICH KINDS ARE INERT IS DERIVED, NEVER LISTED. A hand-written list here
+ * would have the same defect as the ternary this replaced — the tenth
+ * notation would be missing from it too. Instead every starter is actually
+ * converted and the ones that come back as `.alab` are the inert set, so a
+ * new kind joins it by behaving that way rather than by anyone remembering.
+ * Each one must then appear in `MERMAID_KIND_REFUSALS` in the pane component,
+ * which is what disables its button and gives it a sentence.
+ *
+ * TWO MECHANISMS COUNT AS REFUSING, and the assertion accepts either, because
+ * the first draft of it assumed only one and was wrong within the minute.
+ * `MERMAID_KIND_REFUSALS` refuses by KIND. Gantt is refused per DOCUMENT — the
+ * conversion runs both ways and only a plan with no `starts` line has nothing
+ * to anchor to — and the gantt STARTER happens to be exactly such a plan, so
+ * it lands in this set too and is caught by that branch instead. What matters
+ * is that the pane names the kind somewhere in the refusal it resolves, not
+ * which of the two shapes it used; pinning the shape would make this assertion
+ * a description of today's code rather than of the behaviour it guards.
+ */
+
+console.log("\na kind that cannot become Mermaid has its button disabled");
+
+const PANE_SOURCE = readFileSync(
+  path.join(ROOT, "src/features/playground/components/view-playground.tsx"),
+  "utf8",
+);
+const refusalTable = PANE_SOURCE.slice(
+  PANE_SOURCE.indexOf("const MERMAID_KIND_REFUSALS"),
+  PANE_SOURCE.indexOf("/** The mirror of `MERMAID_IMPORT_CAVEATS`"),
+);
+/* The per-document branch beside the table, so a kind refused that way counts
+   as refused. Sliced from the gate rather than searched for by name: this must
+   fail when the gate stops mentioning a kind, not when a comment does. */
+const refusalGate = PANE_SOURCE.slice(
+  PANE_SOURCE.indexOf("const refusal ="),
+  PANE_SOURCE.indexOf("const unsupported ="),
+);
+
+for (const [kind, text] of Object.entries(VIEW_STARTER_TEXT)) {
+  const parsed = parseViewSource(text);
+  if (parsed.status !== "ok") continue;
+  const converted = parseViewSource(
+    convertedSourceText(parsed.value, "mermaid"),
+  );
+  const inert =
+    converted.status === "ok" &&
+    converted.value.kind === kind &&
+    converted.value.format === "alab";
+  if (!inert) continue;
+  check(
+    `${kind}: asking for Mermaid returns .alab, so the pane must refuse that half of the toggle by name`,
+    new RegExp(`\\b${kind}\\b`).test(refusalTable + refusalGate),
+    `converting a ${kind} document to Mermaid is a no-op, but the pane has ` +
+      "no refusal sentence for it — the button is enabled, does nothing, and " +
+      'announces "Converted the pane to Mermaid." to a screen reader',
+  );
+}
+
 console.log("\nthe format toggle round-trips every kind");
 
 for (const kind of ["c4", "sequence", "flowchart", "usecase"]) {
