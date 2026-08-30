@@ -682,7 +682,18 @@ for (const theme of THEMES) {
    The three surface kinds emit `resolveExportGround`'s `defs`/`layers` pair
    full-bleed and directly; they used to reach it through a helper that split
    the ground around a frosted diagram surface, and that helper is gone with
-   the frost — `lib/diagram-surface.ts` records why. */
+   the frost — `lib/diagram-surface.ts` records why.
+
+   BOTH HALVES OF THE PAIR, and the reason is a hole this assertion actually
+   had. It used to ask a non-cloning exporter for `ground.defs` alone. Deleting
+   the `ground.layers(...)` push from an exporter therefore left it GREEN — and
+   that is the worst shape a ground defect can take, because `defs` only
+   DECLARES the patterns. A file with the declarations and no painted layer is
+   a valid SVG carrying a fully-specified ground it never draws: it opens to a
+   bare canvas and nothing anywhere reports it. `defs` without `layers` is the
+   silent half; requiring both is what makes the assertion mean what its name
+   has always claimed. All nine exporters already satisfy it, so this tightens
+   the guard without asking anyone to change a file. */
 const exporters = [];
 for (const kind of [...KINDS.filter((kind) => kind !== "c4"), "viewer"]) {
   const exporter = `src/features/${kind}/export/render-svg.ts`;
@@ -694,7 +705,8 @@ for (const kind of [...KINDS.filter((kind) => kind !== "c4"), "viewer"]) {
     `${kind}: its export carries the ground it was read on` +
       (clones ? " (clone path — it has to be put back)" : ""),
     /resolveExportGround\(\)/.test(code) &&
-      (clones ? /ground\.layers\(/.test(code) : /ground\.defs/.test(code)),
+      /ground\.layers\(/.test(code) &&
+      (clones || /ground\.defs/.test(code)),
     clones
       ? "this exporter copies what is on screen, and the screen's ground is on " +
           "the PANE — outside the clone. A file from this path silently loses " +
