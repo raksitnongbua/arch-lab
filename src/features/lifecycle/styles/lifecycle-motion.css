@@ -25,6 +25,12 @@
  *      are the same kind of thing. They are not — one is where the subject
  *      goes, the other is where it goes back to.
  *
+ *      A RETURN'S ARROWHEAD IS PART OF THIS MOTION AND NEEDS ITS OWN RULE.
+ *      It is filled, not stroked, so the dashoffset that draws the path leaves
+ *      it alone — it shipped appearing the instant its row faded in and then
+ *      hanging there, unattached, for the whole time the line took to reach
+ *      it. That is six keyframes for four motions, not a fifth motion.
+ *
  *   3. SPINE SWEEP — at rest, a wash travels down the spine and loops.
  *      Answers "which way does time run", which a vertical line of identical
  *      dots genuinely cannot say standing still. The same argument the
@@ -146,6 +152,10 @@
 
   --lc-spine-draw: 420ms;
   --lc-return-draw: 460ms;
+  /* The arrowhead's fade. Timed to FINISH with the return's draw rather than
+     to start there, so it lands with the line and costs the reveal budget
+     nothing — see the rule under motion 2. */
+  --lc-arrow-in: 300ms;
 
   /* The sweep. Slow, because it is a wash over a line rather than a pulse
      along a wire: a short head here reads as a dot lighting up, which on this
@@ -323,6 +333,26 @@
     animation-delay: var(--lc-spine-draw);
   }
 
+  /* AND ITS ARROWHEAD ARRIVES WITH IT. This is part of motion 2, not a fifth
+     motion — but it needs its own rule, because the arrowhead is a FILLED
+     triangle and the dashoffset that draws the path does not touch it. Without
+     this it sat at full strength on the spine from the moment its row faded in
+     and stayed there for the whole ~500ms the line spent travelling towards
+     it: a mark pointing into the track with nothing attached to it, which is
+     the one thing this canvas's single arrowhead must never look like.
+
+     THE DELAY IS THE DRAW MINUS THE FADE, so the arrowhead reaches full
+     strength exactly as the line reaches it and the reveal's worst case is
+     unchanged — `check:lifecycle-motion` computes that budget from these same
+     properties, so a longer fade would show up there rather than drift. */
+  .af-lc-canvas[data-reveal="1"] .af-lc-arrow {
+    opacity: 0;
+    animation: af-lc-arrive var(--lc-arrow-in) linear forwards;
+    animation-delay: calc(
+      var(--lc-spine-draw) + var(--lc-return-draw) - var(--lc-arrow-in)
+    );
+  }
+
   /* 3. The sweep. Gated on the app-wide toggle AND on at-rest, like every
      other ambient in this app: an ambient that never stops competes with the
      person reading and stops meaning anything, which is precisely how ER's
@@ -382,6 +412,16 @@
 @keyframes af-lc-draw {
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+/* The arrowhead catching up with the line it belongs to. Opacity only, and
+   deliberately NOT `af-lc-rise`: that keyframe slides its subject up 8 units,
+   which on an 8-unit triangle reads as a second object arriving from below
+   rather than as the end of a path being reached. */
+@keyframes af-lc-arrive {
+  to {
+    opacity: 1;
   }
 }
 

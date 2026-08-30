@@ -32,7 +32,10 @@
  *      BETWEEN two states rather than at one — which is both honest (the
  *      subject re-enters the track just before that state) and what makes
  *      "a branch never crosses a state it does not touch" a property of the
- *      geometry rather than a hope. `check:lifecycle-layout` measures it.
+ *      geometry rather than a hope. A rejoin to the FIRST state has no such
+ *      gap and lands on the spine's start instead; `routeRejoins` says why.
+ *      Wherever it lands, IT LANDS ON THE LINE — `check:lifecycle-layout`
+ *      measures that as well as the non-crossing.
  *
  * ── WHY VERTICAL ──────────────────────────────────────────────────────────
  *
@@ -638,12 +641,15 @@ export function layoutLifecycle(file: LifecycleLabFile): LifecycleLayout {
  *     dot would cross the exit's own label, which is right-aligned in the
  *     lane the branch has to travel through. So `departY` is placed in the
  *     gap under the exit's box, where the layout has already left air.
- *   - IT JOINS IN A GAP, NOT AT A DOT. `joinY` is inside the vertical space
- *     between the target state's box and whatever is above it, so the
- *     horizontal run into the spine passes through no state's box and no
- *     exit's — exits live inside their own state's box by construction. Two
- *     branches returning to one state are spread across that gap rather than
- *     drawn on top of each other.
+ *   - IT JOINS IN A GAP, NOT AT A DOT — everywhere the track has a gap.
+ *     `joinY` is inside the vertical space between the target state's box and
+ *     whatever is above it, so the horizontal run into the spine passes
+ *     through no state's box and no exit's — exits live inside their own
+ *     state's box by construction. Two branches returning to one state are
+ *     spread across that gap rather than drawn on top of each other.
+ *     THE FIRST STATE IS THE EXCEPTION AND HAS TO BE: the space above it is
+ *     under the subject, where there is no spine to meet. That join is
+ *     clamped down onto the spine's start, which is the target's own dot.
  *
  * A branch whose target is not in the document gets no path at all rather
  * than a route to nowhere: the parser refuses that document, but a hand-built
@@ -672,6 +678,11 @@ function routeRejoins(
   }
   const seen = new Map<string, number>();
 
+  /* WHERE THE TRACK ACTUALLY BEGINS. The spine is clipped to the state dots,
+     so there is no line at all above the first one — the space between the
+     subject and the first state is blank canvas, not track. */
+  const spineTop = states[0]?.dotY ?? 0;
+
   returning.forEach((exit, index) => {
     const targetId = exit.rejoins as string;
     const targetIndex = indexById.get(targetId) as number;
@@ -682,7 +693,24 @@ function routeRejoins(
     const share = perTarget.get(targetId) ?? 1;
     const ordinal = seen.get(targetId) ?? 0;
     seen.set(targetId, ordinal + 1);
-    const joinY = gapTop + ((gapBottom - gapTop) * (ordinal + 1)) / (share + 1);
+    /* CLAMPED ONTO THE SPINE, which only ever binds for a rejoin to the FIRST
+       state — and there it binds always, not in some awkward document. That
+       state has no predecessor, so the "gap above it" is the air under the
+       subject, which is above the top of the line: the arrowhead landed
+       roughly 23 units clear of the spine's start, pointing into blank canvas
+       with nothing to meet it. The starter document rejoins its first state,
+       so this was the first lifecycle most readers ever saw.
+       `check:lifecycle-layout` passed throughout, because it asked whether the
+       join was above the target's box and never whether it was ON the line —
+       it now asserts both. Clamping puts it on the spine's own start, which is
+       the truthful answer anyway: the subject re-enters the track exactly
+       where the track begins. Two branches returning to the first state land
+       together rather than spreading, and that is also the truth — they come
+       back to one place. */
+    const joinY = Math.max(
+      spineTop,
+      gapTop + ((gapBottom - gapTop) * (ordinal + 1)) / (share + 1),
+    );
 
     exit.rejoinPath = {
       channelX: lanes[index],
