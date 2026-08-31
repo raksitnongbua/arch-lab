@@ -31,8 +31,14 @@ import { isNormalizedTint } from "@/lib/tint";
 
 import { DEFAULT_TIMESTAMP } from "../defaults";
 import { META_KEYS, splitUnknowns } from "../schema";
-import { bangLine, isRecord, tagsLine, techBody } from "../serialize";
-import { BARE_ID_RE, valueToken } from "../text";
+import {
+  bangLine,
+  isFiniteNumber,
+  isRecord,
+  tagsLine,
+  techBody,
+} from "../serialize";
+import { BARE_ID_RE, numberToken, valueToken } from "../text";
 import { TINT_ATTRIBUTE } from "../sequence/keywords";
 import {
   FLOWCHART_ARROW,
@@ -171,7 +177,7 @@ export function serializeFlowchartText(file: FlowchartLabFile): string {
   const edges = file.edges;
   if (!Array.isArray(edges)) invalid("edges", edges);
   if (nodes.length > 0 && edges.length > 0) lines.push("");
-  for (const value of edges) emitEdge(lines, value);
+  for (const value of edges) emitEdge(lines, value, "  ");
 
   return `${lines.join("\n")}\n`;
 }
@@ -191,6 +197,78 @@ export function serializeFlowchartText(file: FlowchartLabFile): string {
  * a run is unrepresentable in this text, so it is refused here rather than
  * written as something the parser would read back differently.
  */
+/* -------------------------------------------------------------------------- */
+/* Canonical blocks, for the editable canvas                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ONE ELEMENT'S CANONICAL LINES, so a canvas gesture can splice them into the
+ * author's own text instead of re-emitting the file. The C4 grammar's
+ * `canonicalNodeBlock` and the sequence grammar's `canonicalParticipantBlock`
+ * are the same idea, and `line-patch.ts` holds the argument for why every
+ * gesture must go through one of them.
+ *
+ * A BLOCK, NOT A LINE, for both: a flowchart node's `desc` and either kind's
+ * `!` escapes are continuation lines an edit may add, replace or remove, so
+ * the unit has to be the element's whole block. Continuations inside the
+ * replaced block come back in canonical ORDER even where the author wrote them
+ * the other way round; every byte OUTSIDE it is untouched, which is the
+ * guarantee that matters.
+ */
+
+/**
+ * The canonical lines for one node — declaration plus its `desc` and `!`
+ * continuations — at `pad` indentation, or `null` when `nodeId` is not in
+ * `file`.
+ *
+ * `pad` IS THE CALLER'S, exactly as in the sequence grammar: a node inside a
+ * `group` sits at four spaces and one outside it at two, and this function
+ * cannot tell which from the model alone without re-deriving the group walk.
+ * The caller reads it off the leading whitespace of the block it is replacing,
+ * which is the only source that cannot be wrong about membership.
+ */
+export function canonicalFlowNodeBlock(
+  file: FlowchartLabFile,
+  nodeId: string,
+  pad: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const nodes = file.nodes;
+  if (!Array.isArray(nodes)) invalid("nodes", nodes);
+  const node = nodes.find(
+    (candidate) => isRecord(candidate) && candidate.id === nodeId,
+  );
+  if (node === undefined) return null;
+  const lines: string[] = [];
+  emitNode(lines, node, pad);
+  return lines;
+}
+
+/**
+ * The canonical lines for the edge at `index` in `file.edges`, or `null` when
+ * the index does not land on one.
+ *
+ * BY INDEX, not by a `from`/`to` pair, for the reason `FlowchartSpans` gives
+ * at length: a flowchart edge has no id, and two edges between the same pair
+ * of nodes are legal text — so a pair is not a key, and a lookup by one would
+ * patch whichever of the two it happened to find first.
+ */
+export function canonicalFlowEdgeBlock(
+  file: FlowchartLabFile,
+  index: number,
+  pad: string,
+): string[] | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const edges = file.edges;
+  if (!Array.isArray(edges)) invalid("edges", edges);
+  if (!Number.isInteger(index) || index < 0 || index >= edges.length) {
+    return null;
+  }
+  const lines: string[] = [];
+  emitEdge(lines, edges[index], pad);
+  return lines;
+}
+
 function emitNodes(
   lines: string[],
   nodes: unknown[],
@@ -307,6 +385,35 @@ function emitNode(lines: string[], value: unknown, pad: string): void {
   const tags = tagsLine(value.tags);
   if (tags !== undefined) line += ` ${tags}`;
   else if (value.tags !== undefined) fallback.push(["tags", value.tags]);
+
+  /* `(x,y)` LAST ON THE LINE, matching `FLOW_NODE_KEYS`. Written only when the
+     author pinned the node: an absent position is the normal case and means
+     "solve my place from the arrows", so emitting a derived coordinate here
+     would turn every unpinned node into a pinned one on the first save — the
+     round trip would still be byte-stable and the document would have silently
+     changed meaning. A malformed point falls back to the `!` escape rather
+     than being written as a position the parser would reject. */
+  const position = value.position;
+  if (position !== undefined) {
+    /* EXACTLY x AND y, and the key COUNT is the load-bearing half of this
+       test. Checking only that x and y are numbers passed a point carrying a
+       third key from a newer minor — `{"x":1,"y":2,"z":3}` — and wrote it back
+       as `(1,2)`, silently dropping the `z`. A `(x,y)` token cannot spell a
+       third coordinate, so a point that has one must ride the `!` escape
+       whole. (The C4 serializer splits the extras out as their own bang lines
+       instead; that needs a `POINT_KEYS` walk this grammar has no other use
+       for, and carrying the point intact loses nothing.) */
+    const spellable =
+      isRecord(position) &&
+      isFiniteNumber(position.x) &&
+      isFiniteNumber(position.y) &&
+      Object.keys(position).length === 2;
+    if (spellable) {
+      line += ` (${numberToken(position.x as number)},${numberToken(position.y as number)})`;
+    } else {
+      fallback.push(["position", position]);
+    }
+  }
   lines.push(line);
 
   const description = value.description;
@@ -328,7 +435,7 @@ function emitNode(lines: string[], value: unknown, pad: string): void {
 /* Edges                                                                      */
 /* -------------------------------------------------------------------------- */
 
-function emitEdge(lines: string[], value: unknown): void {
+function emitEdge(lines: string[], value: unknown, pad: string): void {
   if (!isRecord(value)) invalid("an edge", value);
   const from = value.from;
   const to = value.to;
@@ -336,16 +443,16 @@ function emitEdge(lines: string[], value: unknown): void {
   if (typeof to !== "string" || to === "") invalid("an edge target", to);
 
   const fallback: [string, unknown][] = [];
-  let line = `  ${flowIdToken(from)} ${FLOWCHART_ARROW} ${flowIdToken(to)}`;
+  let line = `${pad}${flowIdToken(from)} ${FLOWCHART_ARROW} ${flowIdToken(to)}`;
   const label = value.label;
   if (typeof label === "string") line += ` : ${JSON.stringify(label)}`;
   else if (label !== undefined) fallback.push(["label", label]);
   lines.push(line);
 
   for (const [key, raw] of fallback) {
-    lines.push(`    ${bangLine([key], null, raw)}`);
+    lines.push(`${pad}  ${bangLine([key], null, raw)}`);
   }
   for (const u of splitUnknowns(value, FLOW_EDGE_KEYS)) {
-    lines.push(`    ${bangLine([u.key], u.after, u.value)}`);
+    lines.push(`${pad}  ${bangLine([u.key], u.after, u.value)}`);
   }
 }

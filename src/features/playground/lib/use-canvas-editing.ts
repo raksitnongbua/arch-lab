@@ -25,6 +25,7 @@
 import { useCallback, useMemo, useRef } from "react";
 
 import type { SequenceEditHandlers } from "@/features/sequence";
+import type { FlowchartEditHandlers } from "@/features/flowchart";
 /* PAST THE BARREL, as `input/sequence-edit.ts` does and for the reason its
    comment gives: the refusals a reorder can hit are the sequence feature's own
    (a note in the way, a `box` boundary), and these handlers are the one surface
@@ -82,6 +83,19 @@ import {
   toggledAutonumberEdit,
   INSERTED_PARTICIPANT_NAME,
 } from "../input/sequence-edit";
+import {
+  connectedFlowEdgeEdit,
+  deletedFlowEdgeEdit,
+  flowConnectRefusal,
+  flowGroupRefusal,
+  groupedFlowNodesEdit,
+  insertedFlowStepEdit,
+  movedFlowNodeEdit,
+  revisedFlowEdgeEdit,
+  revisedFlowNodeEdit,
+  type FlowEdgeRevision,
+  type FlowNodeRevision,
+} from "../input/flowchart-edit";
 
 /**
  * How many canvas edits back the diagram-side undo reaches. Deep enough to
@@ -99,6 +113,8 @@ export interface CanvasEditingHost {
   canvasEditable: boolean;
   /** Whether sequence dock gestures are offered at all. */
   sequenceEditable: boolean;
+  /** Whether flowchart dock and connect gestures are offered at all. */
+  flowchartEditable: boolean;
   setText: (value: string) => void;
   /** Drops a queued keystroke that would otherwise land after the edit. */
   setPending: (pending: null) => void;
@@ -112,6 +128,7 @@ export function useCanvasEditing({
   text,
   canvasEditable,
   sequenceEditable,
+  flowchartEditable,
   setText,
   setPending,
   setAnnouncement,
@@ -120,6 +137,7 @@ export function useCanvasEditing({
 }: CanvasEditingHost): {
   canvasEdit: CanvasEditHandlers | undefined;
   sequenceEdit: SequenceEditHandlers | undefined;
+  flowchartEdit: FlowchartEditHandlers | undefined;
 } {
   /**
    * Previous source texts, newest last — the undo history for CANVAS edits.
@@ -821,6 +839,205 @@ export function useCanvasEditing({
     ],
   );
 
+  /* ---- flowchart ---------------------------------------------------------- */
+
+  const handleMoveFlowNode = useCallback(
+    (nodeId: string, position: { x: number; y: number }) => {
+      const next = movedFlowNodeEdit(doc, text, nodeId, position);
+      // null covers "landed where it started" as well as "cannot be edited",
+      // so a press that moves nothing costs no text change and no undo entry.
+      if (next === null) return;
+      /* THE ANNOUNCEMENT SAYS PINNED, not moved, and that word is the whole
+         point of it. A reader who drags a step has changed the document from
+         "solve this node's place from the arrows" to "put it here" — a
+         different kind of change from every other gesture on this canvas, and
+         the only one with no gesture to undo it (ADR 0002). */
+      applyCanvasEdit(
+        next,
+        `Pinned ${nodeId} at ${Math.round(position.x)}, ${Math.round(position.y)} — it no longer moves when the flow changes. The source text follows; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReviseFlowNode = useCallback(
+    (nodeId: string, revision: FlowNodeRevision) => {
+      const next = revisedFlowNodeEdit(doc, text, nodeId, revision);
+      // null covers "the form was submitted unchanged" as well as "cannot be
+      // edited", so a no-op press costs no text change and no undo entry.
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        `${nodeId} updated to “${revision.label}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleReviseFlowEdge = useCallback(
+    (index: number, revision: FlowEdgeRevision) => {
+      const next = revisedFlowEdgeEdit(doc, text, index, revision);
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        revision.label === undefined || revision.label === ""
+          ? "Arrow label cleared — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo."
+          : `Arrow labelled “${revision.label}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const handleConnectFlowNodes = useCallback(
+    (from: string, to: string) => {
+      const next = connectedFlowEdgeEdit(doc, text, from, to);
+      if (next === null) {
+        /* SAID, not swallowed. The viewer has already shown every refusal this
+           gesture states for itself, so reaching here means the pane and the
+           canvas disagree — a keystroke not yet parsed, or text that does not
+           parse at all — and a completed drag that silently does nothing reads
+           as a broken control rather than as a busy moment. */
+        setAnnouncement(
+          "The arrow was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `Connected ${from} to ${to} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
+  );
+
+  const handleDeleteFlowEdge = useCallback(
+    (index: number) => {
+      const edge = doc.kind === "flowchart" ? doc.file.edges[index] : undefined;
+      const next = deletedFlowEdgeEdit(doc, text, index);
+      if (next === null) {
+        setAnnouncement(
+          "The arrow was not removed — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      /* THE VERDICT IS ANNOUNCED, not just performed. A removal that can leave
+         a node unreachable has to say so at the moment it happens: the symbol
+         is still on the canvas, so a reader who does not hear it has no signal
+         that anything changed beyond one arrow. `deletedFlowEdgeEdit` states
+         the same rule in prose. */
+      const orphaned =
+        edge !== undefined &&
+        next.doc.kind === "flowchart" &&
+        !next.doc.file.edges.some((candidate) => candidate.to === edge.to);
+      applyCanvasEdit(
+        next,
+        edge === undefined
+          ? "Arrow removed — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo."
+          : `Arrow from ${edge.from} to ${edge.to} removed${orphaned ? `, leaving ${edge.to} with nothing pointing at it` : ""} — both steps are still declared and the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
+  );
+
+  /**
+   * Why a connect would be declined, for the viewer to show DURING the drag.
+   *
+   * Delegated to the gesture module's own function rather than restated here,
+   * because a second copy of the rules would be free to light a drop target
+   * the gesture then refuses — the drag would promise something the release
+   * takes away.
+   */
+  const handleInsertFlowStep = useCallback(
+    (edgeIndex: number) => {
+      const edge =
+        doc.kind === "flowchart" ? doc.file.edges[edgeIndex] : undefined;
+      const next = insertedFlowStepEdit(doc, text, edgeIndex);
+      if (next === null) {
+        setAnnouncement(
+          "The step was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        edge === undefined
+          ? "Step added — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo."
+          : `Step added between ${edge.from} and ${edge.to} — its wording is open for editing, and the arrow is now two. The source text follows; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
+  );
+
+  const handleGroupFlowNodes = useCallback(
+    (nodeIds: readonly string[], label: string) => {
+      const next = groupedFlowNodesEdit(doc, text, nodeIds, label);
+      if (next === null) {
+        /* The viewer greys the control and shows every refusal this gesture
+           states for itself, so reaching here is the pane-and-canvas
+           disagreement — see the connect handler's note. */
+        setAnnouncement(
+          "The group was not added — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `Grouped ${nodeIds.length} steps as “${label}” — nothing moved and no arrow changed; the frame is a bracket around steps already declared together. The source text follows; press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
+  );
+
+  /** Why a grouping would be declined, for the viewer to show BEFORE the press.
+   *  Delegated to the gesture module for the reason `flowchartConnectRefusal`
+   *  gives: a second copy of the rules could enable a control the gesture then
+   *  refuses. */
+  const flowchartGroupRefusal = useCallback(
+    (nodeIds: readonly string[]) =>
+      doc.kind === "flowchart" ? flowGroupRefusal(doc.file, nodeIds) : null,
+    [doc],
+  );
+
+  const flowchartConnectRefusal = useCallback(
+    (from: string, to: string) =>
+      doc.kind === "flowchart" ? flowConnectRefusal(doc.file, from, to) : null,
+    [doc],
+  );
+
+  /**
+   * The bundle the flowchart viewer takes — PRESENT only while editing is on.
+   * Presence is the signal, as on the sequence canvas: no bundle, no grip, no
+   * editable dock, no disabled controls.
+   */
+  const flowchartEdit = useMemo<FlowchartEditHandlers | undefined>(
+    () =>
+      flowchartEditable
+        ? {
+            onMoveNode: handleMoveFlowNode,
+            onReviseNode: handleReviseFlowNode,
+            onReviseEdge: handleReviseFlowEdge,
+            onConnectNodes: handleConnectFlowNodes,
+            onDeleteEdge: handleDeleteFlowEdge,
+            onInsertStep: handleInsertFlowStep,
+            onGroupNodes: handleGroupFlowNodes,
+            connectRefusal: flowchartConnectRefusal,
+            groupRefusal: flowchartGroupRefusal,
+          }
+        : undefined,
+    [
+      flowchartEditable,
+      handleMoveFlowNode,
+      handleReviseFlowNode,
+      handleReviseFlowEdge,
+      handleConnectFlowNodes,
+      handleDeleteFlowEdge,
+      handleInsertFlowStep,
+      handleGroupFlowNodes,
+      flowchartConnectRefusal,
+      flowchartGroupRefusal,
+    ],
+  );
+
   /** Put the previous source text back and parse it — see `canvasUndoRef`. */
   const handleCanvasUndo = useCallback(() => {
     const previous = canvasUndoRef.current.pop();
@@ -885,5 +1102,5 @@ export function useCanvasEditing({
     ],
   );
 
-  return { canvasEdit, sequenceEdit };
+  return { canvasEdit, sequenceEdit, flowchartEdit };
 }

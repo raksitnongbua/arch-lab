@@ -22,6 +22,7 @@
  */
 
 export { FlowchartViewer } from "./components/flowchart-viewer";
+export type { FlowchartEditHandlers } from "./components/flowchart-viewer";
 export { FlowchartShareButton } from "./share/share-button";
 export { FlowchartExportButton } from "./export/export-button";
 export {

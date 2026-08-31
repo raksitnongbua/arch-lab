@@ -56,7 +56,7 @@ import {
   readTechnology,
   segString,
 } from "../parse";
-import type { Loc, Pend } from "../parse";
+import type { LineSpan, Loc, Pend } from "../parse";
 import { META_KEYS } from "../schema";
 import { readTintAttribute } from "../sequence/parse";
 import { SEQUENCE_HEADER_WORD } from "../sequence/keywords";
@@ -90,7 +90,11 @@ interface PendNode extends Loc {
   label: string;
   technology?: string;
   tags?: string[];
+  position?: { x: number; y: number };
   description?: string;
+  /** The last line of this declaration's BLOCK — the declaration line itself
+   *  until a `desc` or `!` continuation extends it. See `FlowchartSpans`. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -101,6 +105,9 @@ interface PendEdge extends Loc {
   to: string;
   toLoc: Loc;
   label?: string;
+  /** As `PendNode.endLine`. An edge takes no `desc`, but it does take `!`
+   *  continuations, so the range is not always one line. */
+  endLine: number;
   raw: Map<string, Pend>;
   unknowns: Pend[];
 }
@@ -145,11 +152,55 @@ const EDGE_KEYS_SET: ReadonlySet<string> = new Set(FLOW_EDGE_KEYS);
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Where each node and edge of a parse sits in the source text.
+ *
+ * The flowchart counterpart of `ArchTextSpans` and `SequenceSpans`, and it
+ * exists for the same one reason: an edit to a flowchart on the canvas has to
+ * be a LINE PATCH. `serializeFlowchartText` writes canonical text, which has
+ * no `//` comments, no author blank lines, and no field the author spelled out
+ * that the canonical form omits at its default — so a re-emit is lossy in a
+ * way that passes every assertion, because canonical text re-emitted IS
+ * canonical text. Splicing by span keeps every byte the edit did not touch.
+ *
+ * NODES ARE KEYED BY ID, which the parser already proves unique per file.
+ *
+ * EDGES ARE AN INDEX-ALIGNED ARRAY, NOT A MAP, and that is the one place this
+ * shape departs from its two siblings. A flowchart edge has no id — the
+ * grammar gives it `from`, `to` and an optional `label`, and nothing else —
+ * and a pair of ids is not a key, because two edges between the same nodes are
+ * legal text (a retry and a fallback can both run `a -> b`). Keying by
+ * `"from->to"` would therefore silently collapse two rows into one and patch
+ * whichever the map happened to keep. The model's `edges` is an ordered array
+ * and this array is parallel to it, so a caller holding `file.edges[i]` reads
+ * `spans.edges[i]`.
+ *
+ * GROUPS CARRY NO SPAN. No gesture addresses one yet, and untested bookkeeping
+ * guarding nothing is what `SequenceSpans` declines to write for a fragment —
+ * add it with the first gesture that needs it.
+ */
+export interface FlowchartSpans {
+  nodes: ReadonlyMap<string, LineSpan>;
+  edges: readonly LineSpan[];
+}
+
+/**
  * Parses `.alab` flowchart source into a `FlowchartLabFile`. Pure and
  * deterministic. Throws `ArchTextParseError` (line + column) on any problem
  * — all-or-nothing.
  */
 export function parseFlowchartText(source: string): FlowchartLabFile {
+  return parseFlowchartTextWithSpans(source).file;
+}
+
+/**
+ * `parseFlowchartText`, plus where every node and edge came from — the SAME
+ * parse, so the spans cannot describe a different reading of the text than the
+ * model does. Callers that only want the model use `parseFlowchartText`.
+ */
+export function parseFlowchartTextWithSpans(source: string): {
+  file: FlowchartLabFile;
+  spans: FlowchartSpans;
+} {
   const header: Header = {
     metaRaw: new Map(),
     metaUnknowns: [],
@@ -349,7 +400,20 @@ export function parseFlowchartText(source: string): FlowchartLabFile {
     );
   }
 
-  return resolve(header, nodes, nodeById, groups, edges);
+  const file = resolve(header, nodes, nodeById, groups, edges);
+  /* Built from the SAME pending arrays `resolve` just read, after it has run —
+     so a document the parser rejects yields no spans at all rather than spans
+     describing a document that does not exist. `edges` is index-aligned with
+     `file.edges` because `resolve` maps that array in order. */
+  return {
+    file,
+    spans: {
+      nodes: new Map(
+        nodes.map((node) => [node.id, { start: node.line, end: node.endLine }]),
+      ),
+      edges: edges.map((edge) => ({ start: edge.line, end: edge.endLine })),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -657,6 +721,7 @@ function parseNodeLine(
     id,
     shape,
     label,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -681,6 +746,28 @@ function parseNodeLine(
     if (cursor.peek() === "#") {
       node.tags = node.tags ?? [];
       node.tags.push(readTag(cursor));
+      continue;
+    }
+    /* `(x,y)` — the author has PINNED this node. The same paren spelling a C4
+       node's geometry uses, minus the `w×h`: a flowchart node's size is
+       measured from its label and is not the author's to set, so there is
+       nothing for a size to mean here. Reusing the token rather than inventing
+       `at x,y` keeps one vocabulary across the kinds, as `[technology]` and
+       `#tag` on this very line already do. */
+    if (cursor.peek() === "(") {
+      if (node.position !== undefined) {
+        failAt(attrLoc.line, attrLoc.column, "duplicate (x,y) attribute");
+      }
+      cursor.pos += 1;
+      cursor.skipSpaces();
+      const x = cursor.readNumber("the x position");
+      cursor.skipSpaces();
+      cursor.expect(",", '"," between x and y');
+      cursor.skipSpaces();
+      const y = cursor.readNumber("the y position");
+      cursor.skipSpaces();
+      cursor.expect(")", '")" closing the position');
+      node.position = { x, y };
       continue;
     }
     break;
@@ -730,6 +817,7 @@ function parseEdgeLine(
     fromLoc: loc,
     to,
     toLoc,
+    endLine: loc.line,
     raw: new Map(),
     unknowns: [],
   };
@@ -862,6 +950,11 @@ function parseGroupBang(cursor: LineCursor, group: PendGroup): void {
 /* ----------------------------- continuations ------------------------------ */
 
 function parseContinuation(cursor: LineCursor, target: Continuable): void {
+  /* FIRST, before any refusal below can throw: this line belongs to the
+     target's block, so it extends the target's span. Written here rather than
+     at each of the two accepting paths, because a span that stopped short by
+     one line would make a patch overwrite an author's `!` escape. */
+  target.item.endLine = cursor.line;
   if (cursor.peek() !== "!") {
     /* `desc` — nodes only. An edge has no description field: the label is
        the whole annotation an arrow carries, and detail belongs on the node
@@ -981,6 +1074,8 @@ function resolve(
     add("label", node.label);
     add("technology", pick(node.technology, node.raw, "technology"));
     add("tags", pick(node.tags, node.raw, "tags"));
+    // Between tags and description, matching FLOW_NODE_KEYS and the line order.
+    add("position", pick(node.position, node.raw, "position"));
     add("description", pick(node.description, node.raw, "description"));
     return assemble(pairs, node.unknowns);
   });

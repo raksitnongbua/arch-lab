@@ -1071,14 +1071,16 @@ export function ViewPlayground({
     CANVAS_EDIT_ENABLED &&
     (editability.editable || wordingEditability.editable);
   /**
-   * The same offer for the sequence canvas, which renders in a DIFFERENT
-   * branch of this component — and that difference is why the lock was
-   * unreachable there. Gated on the wording ability alone: `showCanvasLock`
-   * is an or of both abilities because a C4 document in a Mermaid pane still
-   * wants the reason shown beside it, whereas this branch only ever holds a
-   * document whose one editable gesture is revision.
+   * The same offer for the canvases in the OTHER branch of this component —
+   * sequence and, since it grew a dock and a connect grip, flowchart. That
+   * branch being separate is why the lock was once unreachable there.
+   *
+   * Gated on the wording ability alone: `showCanvasLock` is an or of both
+   * abilities because a C4 document in a Mermaid pane still wants the reason
+   * shown beside it, whereas every document in this branch answers `revise`
+   * whenever it answers anything.
    */
-  const showSequenceCanvasLock =
+  const showSharedCanvasLock =
     CANVAS_EDIT_ENABLED && wordingEditability.editable;
 
   /**
@@ -1091,11 +1093,26 @@ export function ViewPlayground({
   const sequenceEditable =
     CANVAS_EDIT_ENABLED && wordingEditability.editable && !canvasLocked;
 
-  const { canvasEdit, sequenceEdit } = useCanvasEditing({
+  /**
+   * The same answer for the FLOWCHART canvas, which shares the branch above
+   * but not its gestures.
+   *
+   * A SEPARATE CONSTANT DESPITE THE IDENTICAL EXPRESSION, because the two are
+   * only equal by coincidence today: this canvas also offers `connect`, whose
+   * cell has no Mermaid exception where `revise`'s does, so the day a reader
+   * opens a flowchart in a Mermaid pane these two must differ. Naming them
+   * apart now means that divergence is a one-line change rather than an
+   * untangling — and every gesture still asks `canvasEditability` for itself.
+   */
+  const flowchartEditable =
+    CANVAS_EDIT_ENABLED && wordingEditability.editable && !canvasLocked;
+
+  const { canvasEdit, sequenceEdit, flowchartEdit } = useCanvasEditing({
     doc,
     text,
     canvasEditable,
     sequenceEditable,
+    flowchartEditable,
     setText,
     setPending,
     setAnnouncement,
@@ -1983,7 +2000,7 @@ export function ViewPlayground({
                         between a C4 document and a sequence one finds each in
                         one place. */}
                     <span className="ml-auto truncate text-xs text-muted-foreground">
-                      {showSequenceCanvasLock
+                      {showSharedCanvasLock
                         ? canvasStateLabel(canvasLocked)
                         : "Diagram"}
                     </span>
@@ -2011,7 +2028,7 @@ export function ViewPlayground({
                        control that cannot change anything is worse than its
                        absence. */
                     lockSlot={
-                      showSequenceCanvasLock ? (
+                      showSharedCanvasLock ? (
                         <CanvasLockButton
                           locked={canvasLocked}
                           onToggle={setCanvasLocked}
@@ -2025,6 +2042,25 @@ export function ViewPlayground({
                   <FlowchartViewer
                     file={doc.file}
                     onAnnounce={setAnnouncement}
+                    edit={flowchartEdit}
+                    /* THE SAME LOCK AGAIN, in the third branch that can now
+                       act on it. `67b35ae` is the bug this line exists to not
+                       repeat: a lock correct in `canvasEditability` and
+                       rendered in one branch only left a whole canvas
+                       silently uneditable with no control anywhere to unlock
+                       it. Gated on the same offer as the sequence canvas
+                       beside it — a control that cannot change anything is
+                       worse than its absence. */
+                    lockSlot={
+                      showSharedCanvasLock ? (
+                        <CanvasLockButton
+                          locked={canvasLocked}
+                          onToggle={setCanvasLocked}
+                          onAnnounce={setAnnouncement}
+                          copy={CANVAS_LOCK_COPY.flowchart}
+                        />
+                      ) : undefined
+                    }
                   />
                 ) : doc.kind === "usecase" ? (
                   <UseCaseViewer file={doc.file} onAnnounce={setAnnouncement} />

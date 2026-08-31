@@ -116,8 +116,40 @@ function clusterMount(source) {
   for (;;) {
     const at = source.indexOf("ZOOM_PILL_CLASSES", from);
     if (at === -1) break;
-    const window = source.slice(Math.max(0, at - 400), at + 40);
-    if (window.includes("className")) windows.push(window);
+    /* WALK BACK THROUGH `className`s UNTIL ONE STATES A HORIZONTAL POSITION,
+       and that one is the cluster's mount.
+       
+       A fixed 400-character window was tried and swept in whatever markup
+       happened to sit above the cluster: the flowchart canvas grew a Select/Pan
+       toggle mounted `left-3` immediately before its zoom pill, and this
+       reported the pill itself was on the left. Taking only the NEAREST
+       `className` was then too tight in the other direction — the ER and
+       dictionary canvases mount `<div className={ZOOM_PILL_CLASSES}>` inside a
+       positioned parent, so the nearest one states no position at all.
+       
+       Walking back until a position appears is what both shapes have in
+       common, and it stops before reaching a SIBLING's classes because a
+       sibling that is positioned is a different element in a different corner —
+       which is exactly what must not be mistaken for this one. Capped so a
+       cluster with no position anywhere still fails rather than walking to the
+       top of the file. */
+    let cn = at;
+    let mount = null;
+    for (let depth = 0; depth < 3; depth += 1) {
+      cn = source.lastIndexOf("className", cn - 1);
+      if (cn === -1) break;
+      const slice = source.slice(cn, at + 40);
+      mount ??= slice;
+      if (
+        /\b(?:right|left)-\d/.test(
+          source.slice(cn, source.indexOf("\n", cn) + 1),
+        )
+      ) {
+        mount = slice;
+        break;
+      }
+    }
+    if (mount !== null) windows.push(mount);
     from = at + 1;
   }
   return windows.length === 0 ? null : windows[windows.length - 1];
@@ -242,7 +274,7 @@ console.log("\nThe left corner holds the drag mode and nothing else");
 const viewer = read("src/features/viewer/components/viewer-canvas.tsx");
 check(
   "the drag-mode toggle stays bottom-left",
-  /<Panel position="bottom-left">[\s\S]{0,200}?<ViewerModeToggle/.test(viewer),
+  /<Panel position="bottom-left">[\s\S]{0,200}?<CanvasModeToggle/.test(viewer),
   "the mode toggle followed the camera controls into the shared cluster — it " +
     "governs what a PRESS does, exists on one of seven canvases, and folding " +
     "it in is how shared chrome starts differing per canvas",

@@ -2,9 +2,15 @@
 
 /**
  * The drag-mode toggle: what a bare drag on the canvas BACKGROUND does on an
- * EDITABLE C4 canvas — Select (drag draws the marquee) or Pan (drag moves the
+ * EDITABLE canvas — Select (drag draws the marquee) or Pan (drag moves the
  * camera). Select is the default: the toggle exists only where the canvas can
  * be edited, and a reader who unlocked it did so to edit.
+ *
+ * SHARED BY TWO CANVASES, which is why it sits in `components/ui` rather than
+ * inside the C4 feature it was written for. The flowchart canvas grew the same
+ * marquee-then-group gesture, and `dry.md` puts code two features use here —
+ * the move `DockRow` already made. A second copy would have been the third
+ * thing on this canvas to drift.
  *
  * AN EXPLICIT MODE, NOT A HELD KEY. This replaced hold-Space-to-pan, which was
  * reported broken three times and survived two attempted fixes, because a held
@@ -53,7 +59,7 @@ const MODE_NAME: Record<CanvasDragMode, string> = {
   pan: "Pan — drag moves the view",
 };
 
-export function ViewerModeToggle({
+export function CanvasModeToggle({
   mode,
   onModeChange,
 }: {

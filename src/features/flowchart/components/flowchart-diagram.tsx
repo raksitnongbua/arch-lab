@@ -138,7 +138,84 @@ export interface FlowchartDiagramProps {
   zoom: number | "fit";
   onFocusNode: (id: string) => void;
   onFocusEdge: (index: number) => void;
+  /**
+   * The element, so the host can turn client coordinates into user units with
+   * `getScreenCTM()`. Only the connect drag needs it, and only the host can
+   * own that drag: it spans the pane, the camera and the pointer capture,
+   * none of which this pure drawing knows about.
+   */
+  svgRef?: React.Ref<SVGSVGElement>;
+  /**
+   * Draw a connect GRIP on the focused node. Presence is the offer — the
+   * canvas renders no grip at all when editing is off, rather than a disabled
+   * one, matching how the whole edit surface here is presence-gated.
+   */
+  onConnectStart?: (id: string, event: React.PointerEvent) => void;
+  /**
+   * The in-flight connect, in user units: the dashed line from the grip to
+   * wherever the pointer is, plus the node it is currently over. Drawn here
+   * because it belongs in the same coordinate space as the chart; owned by the
+   * host because the pointer is.
+   */
+  connectDrag?: {
+    from: string;
+    x: number;
+    y: number;
+    over: string | null;
+  } | null;
+  /**
+   * Start pinning a step by dragging its body. Presence is the offer, like
+   * `onConnectStart`: a locked canvas passes nothing and the press falls
+   * through to the focus click it has always been.
+   */
+  onNodeDragStart?: (id: string, event: React.PointerEvent) => void;
+  /**
+   * The in-flight pin, in user units: where the dragged node's top-left corner
+   * would land.
+   *
+   * THE REAL SYMBOL MOVES, at reduced opacity. A dashed ghost outline was
+   * tried first — reasoning that the laid-out arrows cannot follow mid-drag, so
+   * moving the symbol would make the drawing say something false for the length
+   * of the gesture. The product owner asked for the symbol itself, and they are
+   * right about which cost is worse: a reader dragging a box wants to see the
+   * box, and an outline makes them translate between two shapes to judge where
+   * it lands.
+   *
+   * THE ARROWS ARE THE HONEST PART OF THE COMPROMISE. They still point at the
+   * solved position, so the ones touching the dragged step are DIMMED for the
+   * length of the drag — a stale arrow at full strength is the drawing
+   * asserting something untrue, and a faded one reads as "this will be
+   * redrawn". Everything re-solves once, on release.
+   */
+  nodeDrag?: { id: string; x: number; y: number } | null;
+  /**
+   * Add or remove a step from the GROUPING selection — a modifier-click,
+   * separate from focus.
+   *
+   * A SECOND SELECTION RATHER THAN A WIDER FOCUS, deliberately. Focus here
+   * means "show me this and dim the rest", and it drives the dock, the arrow
+   * keys and the dimming; widening it to a set would have meant answering what
+   * a five-node focus dims and what its dock shows, for one gesture that needs
+   * neither. This set only ever means "these are the steps I am about to
+   * group".
+   */
+  onToggleSelect?: (id: string) => void;
+  /** The grouping selection, drawn as a second ring. */
+  selected?: readonly string[];
+  /** The lasso in flight, in user units. Drawn here so it shares the chart's
+   *  coordinate space and needs no second conversion. */
+  marquee?: { x: number; y: number; width: number; height: number } | null;
 }
+
+/** The connect grip's RADIUS IN CSS PIXELS, counter-scaled below so it is the
+ *  same physical size at every zoom.
+ *
+ *  A grip sized in user units would be sub-pixel at 25% and a smear at 300% —
+ *  the camera here runs from 10% to 400%, so a control drawn in the drawing's
+ *  own units is unusable across most of that range. Screen-space is the same
+ *  choice every editor makes about handles, and the reason it has to be made
+ *  explicitly is that everything else in this file IS in user units. */
+const GRIP_RADIUS_PX = 5;
 
 /** The one dim rule: outside the focus set, recede on opacity only. */
 const DIMMABLE =
@@ -153,16 +230,46 @@ export function FlowchartDiagram({
   zoom,
   onFocusNode,
   onFocusEdge,
+  svgRef,
+  onConnectStart,
+  connectDrag = null,
+  onNodeDragStart,
+  nodeDrag = null,
+  onToggleSelect,
+  selected,
+  marquee = null,
 }: FlowchartDiagramProps): React.JSX.Element {
+  const selectedSet = new Set(selected ?? []);
   const focusSet = resolveFlowFocus(layout, focus);
+  /* The scale the chart is drawn at, so screen-space controls can divide it
+     out. In `"fit"` the number is not known here — the SVG is sized by the
+     pane — so the grip falls back to user units at 1:1, which is the scale
+     `"fit"` lands near for any chart that fills its pane. */
+  const gripRadius = typeof zoom === "number" ? GRIP_RADIUS_PX / zoom : 6;
   const nodeDimmed = (id: string): boolean =>
     focusSet !== null && !focusSet.nodes.has(id);
-  const edgeDimmed = (index: number): boolean =>
-    focusSet !== null && !focusSet.edges.has(index);
+  const edgeDimmed = (index: number): boolean => {
+    /* AN ARROW TOUCHING THE DRAGGED STEP IS STALE for the length of the drag:
+       the layout solved its geometry against the step's old place and cannot
+       re-solve mid-gesture. Dimming it is the honest reading — a stale arrow at
+       full strength is the drawing asserting something untrue, a faded one
+       reads as "this will be redrawn". */
+    if (nodeDrag !== null) {
+      const edge = layout.edges[index];
+      if (
+        edge !== undefined &&
+        (edge.from === nodeDrag.id || edge.to === nodeDrag.id)
+      ) {
+        return true;
+      }
+    }
+    return focusSet !== null && !focusSet.edges.has(index);
+  };
   const nodeById = new Map(layout.nodes.map((n) => [n.id, n]));
 
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       {...(zoom === "fit"
         ? { width: "100%", height: "100%" }
@@ -173,7 +280,12 @@ export function FlowchartDiagram({
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`Flowchart: ${title}. ${layout.nodes.length} nodes, ${layout.edges.length} arrows. Nodes and arrows are buttons — Tab reaches them.`}
-      className="af-flow-svg block"
+      /* `select-none` because this canvas is dragged. Without it a press that
+         starts on a node's label begins a TEXT selection, which on some
+         browsers swallows the click that follows — the same class of failure as
+         the pointer-capture bug, reached a different way. Nothing here is text
+         a reader selects; the source pane is. */
+      className="af-flow-svg block select-none"
     >
       {/* The role textures, defined once for every node on this canvas. Six
           shapes reference seven patterns, so a per-node copy would be pure DOM
@@ -234,14 +346,113 @@ export function FlowchartDiagram({
       {layout.nodes.map((node) => (
         <Node
           key={node.id}
-          node={node}
+          /* The dragged step is drawn at the pointer rather than at its solved
+             place. `shapeGeometry` and the label box are both derived from
+             `node`, so shifting the box here moves the whole symbol — outline,
+             texture, text and focus ring together. */
+          node={
+            nodeDrag?.id === node.id
+              ? {
+                  ...node,
+                  x: nodeDrag.x,
+                  y: nodeDrag.y,
+                  cx: nodeDrag.x + node.width / 2,
+                  cy: nodeDrag.y + node.height / 2,
+                  labelBox: {
+                    ...node.labelBox,
+                    x: nodeDrag.x + node.width / 2 - node.labelBox.width / 2,
+                    y: nodeDrag.y + node.height / 2 - node.labelBox.height / 2,
+                  },
+                }
+              : node
+          }
+          dragging={nodeDrag?.id === node.id}
           tagColors={tagColors}
           focused={focus?.kind === "node" && focus.id === node.id}
           dimmed={nodeDimmed(node.id)}
           onFocus={() => onFocusNode(node.id)}
           onKeyDown={keyActivate(() => onFocusNode(node.id))}
+          onDragStart={onNodeDragStart}
+          onToggleSelect={onToggleSelect}
+          selected={selectedSet.has(node.id)}
+          /* Lit while a connect drag is over it, so the reader can see WHICH
+             node the arrow would land on before letting go — a drop that
+             reveals its target only afterwards is a drop taken on faith. */
+          connectTarget={connectDrag?.over === node.id}
         />
       ))}
+
+      {/* ---- the connect affordances: the grip, and the line in flight ----
+            Both after the nodes so they draw on top, and both absent entirely
+            when `onConnectStart` is: a locked or read-only canvas renders no
+            grip rather than an inert one. */}
+      {onConnectStart !== undefined &&
+      focus?.kind === "node" &&
+      connectDrag === null
+        ? (() => {
+            const node = nodeById.get(focus.id);
+            if (node === undefined) return null;
+            /* ONE GRIP, at the bottom edge, because a flowchart reads
+               downward — that is the direction an arrow leaves a step in
+               nearly every chart, so the handle sits where the reader is
+               already looking. It is a start point, not a direction: the drag
+               can land anywhere, including back up into a loop. */
+            return (
+              <circle
+                className="af-flow-hit cursor-crosshair fill-[var(--primary)] focus-visible:outline-none"
+                cx={node.x + node.width / 2}
+                cy={node.y + node.height}
+                r={gripRadius}
+                role="button"
+                tabIndex={-1}
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  onConnectStart(focus.id, event);
+                }}
+              />
+            );
+          })()
+        : null}
+      {marquee !== null ? (
+        <rect
+          aria-hidden="true"
+          className="pointer-events-none"
+          x={marquee.x}
+          y={marquee.y}
+          width={marquee.width}
+          height={marquee.height}
+          fill="var(--primary)"
+          fillOpacity={0.08}
+          stroke="var(--primary)"
+          strokeWidth={gripRadius / 2}
+          strokeDasharray={`${gripRadius} ${gripRadius * 0.75}`}
+        />
+      ) : null}
+      {connectDrag !== null
+        ? (() => {
+            const node = nodeById.get(connectDrag.from);
+            if (node === undefined) return null;
+            return (
+              <g aria-hidden="true" className="pointer-events-none">
+                <path
+                  d={`M ${node.x + node.width / 2} ${node.y + node.height} L ${connectDrag.x} ${connectDrag.y}`}
+                  fill="none"
+                  stroke="var(--primary)"
+                  strokeWidth={gripRadius / 2}
+                  strokeDasharray={`${gripRadius} ${gripRadius * 0.75}`}
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx={connectDrag.x}
+                  cy={connectDrag.y}
+                  r={gripRadius * 0.8}
+                  fill="var(--primary)"
+                />
+              </g>
+            );
+          })()
+        : null}
 
       {/* ---- the heading: inside the drawing, so it travels with exports.
             aria-hidden — the <svg>'s aria-label already opens with it. ---- */}
@@ -302,6 +513,11 @@ function Node({
   dimmed,
   onFocus,
   onKeyDown,
+  connectTarget = false,
+  onDragStart,
+  onToggleSelect,
+  selected = false,
+  dragging = false,
 }: {
   node: LaidFlowNode;
   tagColors?: Readonly<Record<string, string>>;
@@ -309,6 +525,17 @@ function Node({
   dimmed: boolean;
   onFocus: () => void;
   onKeyDown: (event: React.KeyboardEvent<SVGElement>) => void;
+  /** A connect drag is currently over this node — see the call site. */
+  connectTarget?: boolean;
+  /** Absent on a read-only canvas; see `onNodeDragStart` on the diagram. */
+  onDragStart?: (id: string, event: React.PointerEvent) => void;
+  /** Absent on a read-only canvas; see `onToggleSelect` on the diagram. */
+  onToggleSelect?: (id: string) => void;
+  /** In the grouping selection. */
+  selected?: boolean;
+  /** Being dragged to a new pin right now — drawn at reduced opacity, because
+   *  the arrows around it still describe where it used to be. */
+  dragging?: boolean;
 }): React.JSX.Element {
   /* Colour: the author's tagColors entry wins (the same precedence
      `nodeColorStyle` gives C4 nodes — a residue default must never override
@@ -346,7 +573,17 @@ function Node({
 
   return (
     <g
-      className={cn(DIMMABLE, "af-flow-node", dimmed && DIM)}
+      className={cn(
+        DIMMABLE,
+        "af-flow-node",
+        dimmed && DIM,
+        /* THE DRAGGED SYMBOL IS TRANSLUCENT, and it beats `dimmed` because a
+           drag is the reader's own action: they must be able to see the box
+           they are placing even when the focus dim would have receded it. Not
+           `DIM` (25%) — that is "this is not what you are looking at", and
+           this is precisely what they are looking at. */
+        dragging && "opacity-60",
+      )}
       data-node-id={node.id}
       /* The trace's beat for this node — the layout's rank, never a render
          index (a barycentre re-order must not re-time the reveal). Inherited
@@ -471,6 +708,12 @@ function Node({
           target there is precision nobody asked for. */}
       <rect
         className="af-flow-hit cursor-pointer focus-visible:outline-none"
+        /* THE DROP TARGET'S NAME, read back off the DOM by the host's connect
+           drag through `elementFromPoint`. A data attribute rather than a
+           geometric hit test in the host, because this rect already IS the
+           node's hit area and re-deriving it there would be a second answer to
+           "what is under the pointer", free to disagree with the first. */
+        data-af-flow-node={node.id}
         x={node.x}
         y={node.y}
         width={node.width}
@@ -479,8 +722,30 @@ function Node({
         role="button"
         tabIndex={0}
         aria-label={ariaLabel}
+        /* The SAME rect is the focus target and the pin-drag handle. Not a
+           separate overlay: two stacked hit areas over one box is how a click
+           starts landing on whichever happens to be on top after the next
+           edit, and the host already distinguishes a click from a drag by
+           distance travelled. */
+        onPointerDown={
+          onDragStart === undefined
+            ? undefined
+            : (event) => onDragStart(node.id, event)
+        }
         onClick={(event) => {
           event.stopPropagation();
+          /* A MODIFIER-CLICK SELECTS FOR GROUPING instead of focusing, which is
+             the convention every canvas tool uses and the reason this is not a
+             second control: a reader building a selection is still clicking
+             steps, and a separate "add to selection" affordance on every node
+             would be five affordances per node for one gesture. */
+          if (
+            onToggleSelect !== undefined &&
+            (event.shiftKey || event.metaKey || event.ctrlKey)
+          ) {
+            onToggleSelect(node.id);
+            return;
+          }
           onFocus();
         }}
         onKeyDown={onKeyDown}
@@ -509,6 +774,61 @@ function Node({
           />
         );
       })()}
+      {/* THE DROP HIGHLIGHT, reusing the focus ring's own geometry so the two
+          cannot drift apart — a second outline function for the same shape is
+          exactly the duplication this file's ring comment argues against. It
+          is a separate ELEMENT rather than a modifier on the ring above
+          because a node can be a drop target while another node holds focus,
+          which is in fact the common case: you drag FROM the focused one. */}
+      {selected
+        ? (() => {
+            const ring = focusRingGeometry(node);
+            const shared = {
+              "aria-hidden": true as const,
+              className: "pointer-events-none",
+              fill: "none",
+              stroke: "var(--primary)",
+              strokeWidth: 2,
+              strokeDasharray: "5 3",
+            };
+            return ring.path !== undefined ? (
+              <path {...shared} d={ring.path} />
+            ) : (
+              <rect
+                {...shared}
+                x={ring.box.x}
+                y={ring.box.y}
+                width={ring.box.width}
+                height={ring.box.height}
+                rx={ring.rect?.rx ?? 0}
+              />
+            );
+          })()
+        : null}
+      {connectTarget
+        ? (() => {
+            const ring = focusRingGeometry(node);
+            const shared = {
+              "aria-hidden": true as const,
+              className: "pointer-events-none",
+              fill: "none",
+              stroke: "var(--primary)",
+              strokeWidth: 3,
+            };
+            return ring.path !== undefined ? (
+              <path {...shared} d={ring.path} />
+            ) : (
+              <rect
+                {...shared}
+                x={ring.box.x}
+                y={ring.box.y}
+                width={ring.box.width}
+                height={ring.box.height}
+                rx={ring.rect?.rx ?? 0}
+              />
+            );
+          })()
+        : null}
     </g>
   );
 }

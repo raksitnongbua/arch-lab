@@ -14,6 +14,10 @@
  *     naming convention (the sequence emitter's argument, unchanged).
  *   - A group's `tint`. A subgraph takes no colour without a `style` line,
  *     and emitting styling would contradict the import side dropping it.
+ *   - A node's PINNED `(x,y)`. Mermaid solves its own layout and has no
+ *     syntax for a coordinate at all, so a pinned node comes back solved —
+ *     which is why `CANVAS_EDIT_OFFERS.move.flowchart` refuses the drag
+ *     outright in a Mermaid pane rather than letting it round-trip away.
  *   - Everything the `.alab` HEADER carries beyond the title: description,
  *     owner, tags, timestamps, and any `!` forward-compatible field. The
  *     title itself rides YAML frontmatter, which Mermaid does render.
@@ -50,7 +54,8 @@ import type { MermaidFlowchartDirection } from "./flowchart-mapping";
  * `MERMAID_FLOWCHART_CAVEAT`, which describes the trip the other way. */
 export const MERMAID_FLOWCHART_EXPORT_CAVEAT =
   "Mermaid flowchart cannot hold everything a .alab flowchart can: a " +
-  "node's desc detail, [technology] and #tags, a group's tint, and every " +
+  "node's desc detail, [technology] and #tags, a node's pinned (x,y) " +
+  "position, a group's tint, and every " +
   "header field except the title (description, owner, tags, timestamps) " +
   "have no Mermaid equivalent and are left behind, start and end both draw " +
   "as Mermaid's one stadium terminator and are told apart on re-import by " +

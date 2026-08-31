@@ -939,10 +939,13 @@ console.log("\nno surface claims the canvas is C4-only");
 console.log("\nthe canvas-editing passage is reachable and quotable");
 
 {
-  const editable = Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
-    Object.values(cells).filter((offer) => offer.offers),
+  const editable = Object.entries(CANVAS_EDIT_OFFERS).flatMap(
+    ([ability, cells]) =>
+      Object.values(cells)
+        .filter((offer) => offer.offers)
+        .map((offer) => ({ ability, offer })),
   );
-  for (const offer of editable) {
+  for (const { ability, offer } of editable) {
     /* NAMED, not merely included. `CANVAS_EDITING_PASSAGE.includes(onCanvas)`
        was the first version of this and it was VACUOUS — the passage is built
        by joining those very clauses, so it passed for any clause at all,
@@ -951,13 +954,36 @@ console.log("\nthe canvas-editing passage is reachable and quotable");
        the notation's own name (the first word of the grid's mid-sentence
        `noun`, which is where the identity lives: "C4 diagrams", "sequence
        diagrams"). */
-    const named = offer.noun.split(" ")[0];
+    /* THE GRID NAMES THE IDENTITY WORD NOW, so this reads it rather than
+       guessing at it. "the first word of `noun`" was a heuristic that held
+       only while every noun was "<name> diagrams": the third editable canvas
+       is "flowcharts", whose first word is the PLURAL, and no clause about one
+       selected step can grammatically contain it. `shortNoun` is that name
+       without the head noun — added for `/live`'s character budget, and it is
+       the same fact this assertion wanted. */
+    const named = offer.shortNoun;
+    /* MEASURED ON THE CELL'S OWN CLAUSE, not on the assembled passage — and
+       that distinction is the second time this assertion has been vacuous.
+       Version one asked `CANVAS_EDITING_PASSAGE.includes(onCanvas)`, which
+       passed for any clause at all because the passage is built by joining
+       those very clauses. Version two asked whether the passage mentioned the
+       notation's name, which held only while each notation had ONE offering
+       cell: a flowchart now answers all four abilities, so a clause rewritten
+       to "you can move things around" still passed on the strength of its
+       three well-written siblings. Asking each clause about itself is the
+       version that cannot be satisfied by a neighbour. */
     check(
-      `the passage names ${named} as a notation you can edit on the canvas`,
-      CANVAS_EDITING_PASSAGE.includes(named),
-      `the ${offer.noun} clause is in the passage but does not say it is about ` +
-        `${named} — a capability an assistant cannot attribute is one it will ` +
-        "not quote",
+      `the ${named} clause for "${ability}" says which notation it is about`,
+      offer.onCanvas.includes(named),
+      `the clause is ${JSON.stringify(offer.onCanvas)} and never says ` +
+        `${named} — a capability an assistant cannot attribute is one it ` +
+        "will not quote",
+    );
+    check(
+      `and the ${named} clause for "${ability}" reaches the passage`,
+      CANVAS_EDITING_PASSAGE.includes(offer.onCanvas),
+      "the clause exists in the grid but the derived passage does not carry " +
+        "it, so the page and the capability model disagree",
     );
   }
   /* THE DISTINCTION IS THE POINT OF THE PASSAGE. A reader arriving from a

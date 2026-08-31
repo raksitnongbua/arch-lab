@@ -255,7 +255,10 @@ export function canvasStateLabel(locked: boolean) {
  * a control that silently borrows another notation's sentence — the failure
  * mode this whole module exists to prevent.
  */
-export const CANVAS_LOCK_COPY: Record<"c4" | "sequence", CanvasLockCopy> = {
+export const CANVAS_LOCK_COPY: Record<
+  "c4" | "sequence" | "flowchart",
+  CanvasLockCopy
+> = {
   c4: {
     unlockHint: "drag nodes to move them, or edit one's wording",
     unlockedAnnouncement:
@@ -269,5 +272,24 @@ export const CANVAS_LOCK_COPY: Record<"c4" | "sequence", CanvasLockCopy> = {
       "Canvas unlocked — click a message or a lifeline to edit it, drag either to reorder, and use the strip below to add one. Every change is written into the source text.",
     lockedAnnouncement:
       "Canvas locked — the diagram is read-only. Nothing on it can be edited or added.",
+  },
+  /* ITS OWN WORDING, not the sequence entry reused, even though this canvas
+     renders in the same branch and its gesture set is the closer of the two.
+     The sequence sentence names three things this canvas does not have — an
+     add control, a reorder drag, and a lifeline — and a control whose
+     accessible name describes another notation's gestures is the drift the
+     `Record` exists to make impossible.
+
+     IT NEVER SAYS "MOVE", and that is deliberate rather than incidental. A
+     flowchart node cannot be dragged to a position and never will be able to
+     (`CANVAS_EDIT_OFFERS.move.flowchart`, and ADR 0001), so a hint promising
+     it would send every reader who unlocked this canvas straight into the one
+     gesture it refuses. */
+  flowchart: {
+    unlockHint: "edit a step's wording, connect two steps, or remove an arrow",
+    unlockedAnnouncement:
+      "Canvas unlocked — click a step or an arrow to edit its wording, drag from one step to another to connect them, and remove an arrow you no longer want. Every change is written into the source text.",
+    lockedAnnouncement:
+      "Canvas locked — the diagram is read-only. Nothing on it can be edited, connected or removed.",
   },
 };

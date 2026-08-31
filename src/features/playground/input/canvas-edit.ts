@@ -230,6 +230,25 @@ type CanvasEditOffer =
        */
       noun: string;
       /**
+       * The same notation for the ONE BUDGETED surface — `/live`'s meta
+       * description, which has 160 characters for everything it says.
+       *
+       * A second name rather than a shortening of `noun`, because `noun` has a
+       * different job: it sits mid-sentence in another notation's refusal
+       * ("Only C4 diagrams can be dragged"), where dropping the head noun
+       * would leave "Only C4 can be dragged" — a claim about the notation
+       * rather than about its diagrams. Here the word "diagrams" is supplied
+       * once by the sentence instead of once per name, which is what buys the
+       * room.
+       *
+       * THE THIRD EDITABLE CANVAS IS WHY THIS FIELD EXISTS. Spelling the three
+       * out as `noun`s measured 166 against the 160 — `/live/page.tsx` had
+       * recorded six characters of headroom and named this as the line that
+       * would run out. `check:canvas-edit` now measures the description rather
+       * than trusting a comment about it.
+       */
+      shortNoun: string;
+      /**
        * What a gesture on this canvas WRITES, as a clause that can be dropped
        * into `CANVAS_EDITING_PASSAGE` below — the sentence the home page, both
        * `llms*.txt` documents and `/faq` all quote.
@@ -313,6 +332,7 @@ export const CANVAS_EDIT_OFFERS: Record<
     c4: {
       offers: true,
       noun: "C4 diagrams",
+      shortNoun: "C4",
       onCanvas: "a C4 node drags to a position the text records",
       unlessPane: {
         format: "mermaid",
@@ -333,10 +353,44 @@ export const CANVAS_EDIT_OFFERS: Record<
       because: NO_POSITION_IN_THE_TEXT,
       instead: "Click a message or a lifeline to edit its wording instead.",
     },
+    /* THIS CELL SAID `"grammar"` — REFUSED PERMANENTLY — AND THAT WAS TRUE
+       WHEN IT WAS WRITTEN. `FlowchartNode` carried no coordinate, so a drag
+       had nowhere in the text to land and the next parse re-derived the
+       node's place; the refusal was not a to-do, it was a fact about the
+       format.
+
+       THE FORMAT CHANGED. `FlowchartNode.position` is an optional `(x,y)`
+       now, `layout.ts` honours it, and the drag writes it — so the one thing
+       that could ever have moved a `"grammar"` refusal happened. ADR 0002
+       records the decision and supersedes ADR 0001, which recorded the
+       opposite one. THE TWO ADRs ARE BOTH KEPT ON PURPOSE: the argument for
+       refusing was sound, the costs it named are all still real (a pinned
+       node can overlap a solved one, and an arrow into it can run backwards),
+       and a reader who finds only the reversal would think nobody had weighed
+       them.
+
+       ABSENT IS STILL THE NORMAL CASE. A node with no `(x,y)` is solved from
+       the arrows exactly as before, which is why this was not a breaking
+       change and why an unpinned document lays out to the same pixel it
+       always did. */
     flowchart: {
-      offers: false,
-      ground: "grammar",
-      because: NO_POSITION_IN_THE_TEXT,
+      offers: true,
+      noun: "flowcharts",
+      shortNoun: "flowchart",
+      onCanvas:
+        "a flowchart step drags to a position the text pins it at, while every step left unpinned stays solved from the arrows",
+      unlessPane: {
+        format: "mermaid",
+        /* MEASURED, like every other cell's exception: `serializeMermaidFlowchart`
+           has no syntax for a coordinate at all — Mermaid solves its own
+           layout — so a pinned node comes back solved. The emitter's caveat
+           (`MERMAID_FLOWCHART_EXPORT_CAVEAT`) names the loss, which is the
+           evidence this sentence stands on. */
+        because:
+          "Mermaid solves its own layout and has no syntax for a position, " +
+          "so a dragged step would snap back. Switch the pane to .alab to " +
+          "edit on the canvas.",
+      },
     },
     usecase: {
       offers: false,
@@ -392,6 +446,7 @@ export const CANVAS_EDIT_OFFERS: Record<
     sequence: {
       offers: true,
       noun: "sequence diagrams",
+      shortNoun: "sequence",
       /* "into a new order", never "to a new position". This clause is the one
          the pages quote, and the whole reason the passage is derived from here
          is that a hand-written version of it said "drag" and left a reader
@@ -424,6 +479,7 @@ export const CANVAS_EDIT_OFFERS: Record<
     c4: {
       offers: true,
       noun: "C4 diagrams",
+      shortNoun: "C4",
       /* "in the details panel", not "in place": the fields are typed into the
          panel beside the node, never onto the node itself, and a clause
          promising in-place typing would send a reader double-clicking a box
@@ -487,10 +543,44 @@ export const CANVAS_EDIT_OFFERS: Record<
           "to .alab to edit on the canvas.",
       },
     },
+    /* THE `"surface"` REFUSAL THAT MOVED, which is what that ground is for.
+       Nothing about the grammar ever forbade retyping a step's label; the
+       canvas had no dock to type it into — and then it turned out it did. The
+       flowchart canvas already opened a details dock on selection to show a
+       node's `desc`, exactly as the C4 canvas already drew a details panel
+       when its own revise refusal moved. The dock GREW FIELDS rather than
+       gaining a neighbour, for the reason the C4 cell gave a release earlier:
+       a second, weaker editor beside an existing one is two authoring
+       surfaces for one model.
+
+       `shape` IS DELIBERATELY NOT IN THIS LIST. Turning a step into a decision
+       changes what its outgoing edges MEAN — they become guarded branches —
+       so it is a graph edit wearing a field edit's clothes, and it belongs
+       with `create` rather than here. */
     flowchart: {
-      offers: false,
-      ground: "surface",
-      because: NO_EDITOR_ON_THIS_CANVAS,
+      offers: true,
+      noun: "flowcharts",
+      shortNoun: "flowchart",
+      onCanvas:
+        "a selected flowchart step's wording, technology and tags are edited in the details dock, and a selected arrow's guard label with them — or the arrow removed",
+      unlessPane: {
+        format: "mermaid",
+        /* MEASURED against `serializeMermaidFlowchart`, not assumed — the
+           emitter's own caveat (`MERMAID_FLOWCHART_EXPORT_CAVEAT`) is the
+           evidence, and it names these three among what a Mermaid round trip
+           drops. Writing a `[technology]` edit back through a pane that
+           cannot spell it would show the change once and lose it on the next
+           parse, which is worse than refusing.
+
+           NOTE WHAT THIS CELL DOES *NOT* GATE: `connect` below stays open in
+           this pane, because the same measurement says every edge and its
+           label survive. Two abilities, one pane, different answers — because
+           the evidence differs, not because one of them was overlooked. */
+        because:
+          "Mermaid has no slot for a flowchart node's desc detail, " +
+          "[technology] or #tags, so those edits would be lost. Switch the " +
+          "pane to .alab to edit on the canvas.",
+      },
     },
     usecase: {
       offers: false,
@@ -553,6 +643,7 @@ export const CANVAS_EDIT_OFFERS: Record<
     c4: {
       offers: true,
       noun: "C4 diagrams",
+      shortNoun: "C4",
       /* "at a spot the text records" carries the ability's whole definition:
          creation here is a PLACEMENT, and the reader can drag the new node
          from that spot because the position is a field of the text — the
@@ -591,10 +682,43 @@ export const CANVAS_EDIT_OFFERS: Record<
       instead:
         "Use the Add controls under the canvas to add a message or a lifeline instead.",
     },
+    /* THE CELL THAT WAS ANSWERED WRONGLY BY INHERITANCE, which is the exact
+       failure the "no default cell" rule exists to prevent — and it still
+       happened, because a written-out cell can copy the wrong neighbour's
+       sentence just as easily as a default can supply it. This said
+       `NO_PLACE_IN_THE_TEXT`: "this notation works out its own layout, so
+       there is no position to place a new element at." True of the five
+       notations around it. Never true here.
+
+       A FLOWCHART STEP'S PLACE IS ITS ARROWS, not a coordinate — that is the
+       whole premise of the notation. So "between these two steps" is a place
+       the text can absolutely say, and `insertedFlowStepEdit` says it: the
+       reader points at an arrow, `a -> b` becomes `a -> new` and `new -> b`,
+       and the new step's position falls out of the flow. No coordinate is
+       needed and none is written; the created step is left unpinned.
+
+       (Positions exist now, and this cell does NOT depend on them. It would
+       have been just as correct before ADR 0002 — the refusal was wrong on
+       its own terms, and ADR 0001 said as much at the time.) */
     flowchart: {
-      offers: false,
-      ground: "grammar",
-      because: NO_PLACE_IN_THE_TEXT,
+      offers: true,
+      noun: "flowcharts",
+      shortNoun: "flowchart",
+      onCanvas:
+        "a flowchart step is added by splitting an arrow, which writes the step between the two it already joined",
+      unlessPane: {
+        format: "mermaid",
+        /* Measured: the emitter has no `desc` / `[technology]` / `#tag`, but
+           the created step carries none of those — what it cannot do is
+           SPLIT reliably, because Mermaid renames ids outside its safe
+           alphabet on the way back (`MERMAID_FLOWCHART_EXPORT_CAVEAT`), and a
+           minted `step7` that comes back renamed leaves the two new arrows
+           pointing at a step that is no longer called that. */
+        because:
+          "Mermaid renames ids outside its own alphabet, so a step added here " +
+          "could come back under a different name with its arrows pointing " +
+          "nowhere. Switch the pane to .alab to edit on the canvas.",
+      },
     },
     usecase: {
       offers: false,
@@ -651,6 +775,7 @@ export const CANVAS_EDIT_OFFERS: Record<
     c4: {
       offers: true,
       noun: "C4 diagrams",
+      shortNoun: "C4",
       /* "a relationship line" is the ability's whole definition said outward:
          what lands is a line naming a PAIR, never a coordinate — the claim
          that separates this row from `create`. "or onto a new element added
@@ -692,10 +817,28 @@ export const CANVAS_EDIT_OFFERS: Record<
       instead:
         "Use the Add controls under the canvas to insert a message between two lifelines instead.",
     },
+    /* THE OTHER `"surface"` REFUSAL THAT MOVED, and the easiest of the two to
+       argue: `a -> b` is a whole line of the grammar, already round-tripping,
+       and a drawn arrow lands in the text as itself. Only the handle was
+       missing.
+
+       THE DRAG COSTS NO NEW POINTER ARBITRATION, which is why this cell could
+       ship beside `revise` rather than after it. The canvas's drag-to-pan
+       already stands down for any press inside `.af-flow-hit`
+       (`flowchart-viewer.tsx`), so a grip carrying that class is a drag the
+       camera never sees. A gesture that both panned and drew was the failure
+       this reuse avoids.
+
+       NOT GATED ON THE MERMAID PANE, unlike `revise` directly above. Measured:
+       `serializeMermaidFlowchart` writes every edge with its label, so a drawn
+       arrow survives a round trip through that pane intact. Refusing here
+       would be a refusal with no evidence behind it. */
     flowchart: {
-      offers: false,
-      ground: "surface",
-      because: NO_EDITOR_ON_THIS_CANVAS,
+      offers: true,
+      noun: "flowcharts",
+      shortNoun: "flowchart",
+      onCanvas:
+        "a flowchart arrow is drawn by dragging from one step to another, writing the connection as a line of text",
     },
     usecase: {
       offers: false,
@@ -910,11 +1053,15 @@ export const CANVAS_EDITABLE_SUMMARY: string = (() => {
       Object.values(CANVAS_EDIT_OFFERS).flatMap((cells) =>
         Object.values(cells)
           .filter((offer) => offer.offers)
-          .map((offer) => offer.noun),
+          .map((offer) => offer.shortNoun),
       ),
     ),
   ];
-  return `Canvas editing for ${joinList(nouns)}.`;
+  /* "diagrams" ONCE, at the end, rather than inside each name — see
+     `shortNoun`. Three names spelled in full measured 166 against `/live`'s
+     160, and `check:canvas-edit` measures that description now rather than
+     leaving it to a comment to remember. */
+  return `Canvas editing for ${joinList(nouns)} diagrams.`;
 })();
 
 /* -------------------------------------------------------------------------- */

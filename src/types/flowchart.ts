@@ -63,9 +63,46 @@ export interface FlowchartNode {
   /** Same `#tag` vocabulary as a C4 node — a step and the container that runs
    * it are the same system drawn twice, so they share one tag namespace. */
   tags?: string[];
+  /**
+   * WHERE THIS NODE IS PINNED, when the author has pinned it — the one field
+   * in this model that overrides the layout rather than feeding it.
+   *
+   * OPTIONAL, AND THAT IS THE WHOLE DESIGN. Absent is the normal case and
+   * means "solve my place from the arrows", which is what every flowchart did
+   * before this field existed and what every flowchart on disk still says. A
+   * document with no pinned node lays out byte-identically to how it did
+   * before, which is why adding this was not a breaking change.
+   *
+   * WHAT IT OVERRIDES, PRECISELY: the drawn box's top-left corner. It does
+   * NOT override the node's RANK — rank is which arrows reach it, the arrows
+   * are unchanged, and the routing channels are still built from it. So a
+   * pinned node keeps its place in the flow's logic while sitting somewhere
+   * else on the page.
+   *
+   * THE COST IS REAL AND WAS ACCEPTED (ADR 0002, superseding ADR 0001, which
+   * refused this field): a pinned node can overlap a solved one, and an arrow
+   * into it can run backwards up the page. The engine has no opinion about
+   * either. `purpose.md` calls correct-and-ugly a bug here, so a pin is a
+   * tool for an author who wants a specific picture, not a default anybody
+   * falls into.
+   *
+   * Same `(x,y)` spelling as a C4 node's geometry, minus the size — a
+   * flowchart node's size is measured from its label and is not the author's
+   * to set. One vocabulary across the kinds, as `[technology]` and `#tag`
+   * already are.
+   */
+  position?: FlowchartPoint;
   /** <= 500 chars, same budget as `C4Node.description`: the detail behind the
    * label, revealed on focus, never drawn inside the symbol. */
   description?: string;
+}
+
+/** A pinned node's top-left corner, in the same user units the layout works
+ *  in. Its own interface rather than an inline shape so the parser, the
+ *  serializer and the canvas all name one thing. */
+export interface FlowchartPoint {
+  x: number;
+  y: number;
 }
 
 /* -------------------------------------------------------------------------- */
