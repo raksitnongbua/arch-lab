@@ -1464,6 +1464,24 @@ console.log("\nEvery notation that cannot carry geometry says so");
       );
       continue;
     }
+    if (kind === "flowchart") {
+      /* THE SECOND NOTATION THAT ANSWERS `move`, and the only cell in this
+         table whose `"grammar"` refusal has ever been reversed — the format
+         grew the coordinate it lacked (ADR 0002, superseding ADR 0001). It
+         still falls through to the `movedNodeEdit` guard below: offering the
+         ABILITY is not offering the C4 grammar's gesture. */
+      check(
+        "a flowchart document is draggable now that the grammar holds a position",
+        verdict.editable === true,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+      check(
+        "movedNodeEdit declines a flowchart document",
+        movedNodeEdit(parsed.value, "", "any", "any", { x: 1, y: 1 }) === null,
+        "expected null",
+      );
+      continue;
+    }
     check(
       `a ${kind} document is refused, with a reason a reader can act on`,
       verdict.editable === false &&
@@ -1505,6 +1523,22 @@ console.log("\nEvery notation that cannot carry geometry says so");
         "a C4 document can have a node's wording revised",
         verdict.editable === true,
         `verdict: ${JSON.stringify(verdict)}`,
+      );
+    } else if (kind === "flowchart") {
+      /* THE THIRD OFFERING NOTATION, and it sits here rather than in the
+         refusing `else` because its `"surface"` refusal moved: the details
+         dock the canvas already opened on selection grew fields. It still
+         falls through to the sequence-gesture loop below — offering the
+         ABILITY is not offering another grammar's gestures. */
+      check(
+        "a flowchart document can have a step's wording revised",
+        verdict.editable === true,
+        `verdict: ${JSON.stringify(verdict)}`,
+      );
+      check(
+        "revisedNodeEdit declines a flowchart document",
+        revisedNodeEdit(parsed.value, "", "any", "any", { name: "x" }) === null,
+        "expected null",
       );
     } else {
       check(
@@ -4819,11 +4853,44 @@ console.log("\nLocking never offers a link to somewhere you already are");
      against the lockable kinds rather than the literal 2, so a seventh
      notation cannot arrive without its word — and so the control's move
      could not silently take the word with it. */
-  const stateWords = playground.match(/canvasStateLabel\(/g) ?? [];
+  /* COUNTED AGAINST THE GATES, NOT AGAINST THE KINDS, and the difference is
+     what a third lockable notation taught. `lockable.length` worked while
+     kinds and strips were one-to-one; sequence and flowchart now render in the
+     SAME branch under the same strip, so a per-kind count started demanding a
+     third state word that would have had nowhere to go — and satisfying it
+     would have meant printing the state twice in one row.
+
+     What has to hold is not a number, it is that no lock is ever offered
+     without its state also being spelled: the padlock draws the state but
+     cannot say it. So every gate that decides whether a `CanvasLockButton`
+     renders must ALSO decide a `canvasStateLabel` call. That survives another
+     notation joining an existing strip (no new gate, no new word needed) and
+     still fails the case this section exists for — a canvas whose lock
+     appears under a gate no strip consults. */
+  const lockGates = [
+    ...playground.matchAll(/\{\s*(show[A-Za-z]*CanvasLock)\s*\?\s*\(?\s*</g),
+  ].map((match) => match[1]);
+  /* No `{` anchor on this one: the C4 strip's word is the tail of a NESTED
+     ternary (`!editable ? reason : showCanvasLock ? canvasStateLabel(…)`),
+     which is correct — a document that cannot be edited shows the reason
+     instead of a state — and an anchored pattern would only have matched the
+     branch that happens to sit at the top of its expression. */
+  const wordGates = [
+    ...playground.matchAll(
+      /(show[A-Za-z]*CanvasLock)\s*\r?\n?\s*\?\s*canvasStateLabel\(/g,
+    ),
+  ].map((match) => match[1]);
+  const uniqueLockGates = [...new Set(lockGates)];
   check(
     "every lockable canvas still names its state in words, in the strip",
-    stateWords.length === lockable.length,
-    `${stateWords.length} canvasStateLabel() uses for ${lockable.length} lockable kinds`,
+    uniqueLockGates.length > 0 &&
+      uniqueLockGates.every((gate) => wordGates.includes(gate)),
+    `locks render under [${uniqueLockGates.join(", ")}]; state words under [${[...new Set(wordGates)].join(", ")}]`,
+  );
+  check(
+    "every lockable kind reaches one of those gates",
+    lockable.length >= uniqueLockGates.length && lockable.length > 0,
+    `${lockable.length} lockable kinds, ${uniqueLockGates.length} lock gates`,
   );
 
   /* AND NOTHING ELSE ON THE PAGE CONTRADICTS IT. The claim above — that the
@@ -4916,6 +4983,36 @@ console.log("\nLocking never offers a link to somewhere you already are");
     `the intro clause is ${CANVAS_EDITABLE_SUMMARY.length} chars — it is ` +
       "growing back into the paragraph the gesture list was moved out of",
   );
+
+  /* AND IT STILL FITS THE ONE SURFACE THAT IS ACTUALLY BUDGETED. `/live`'s
+     meta description is the derived clause with a hand-written head in front of
+     it, and a meta description has 160 characters for everything it says.
+     Nothing measured the SUM before: the head's own comment recorded "154, six
+     characters of headroom" and named itself as the line that would run out —
+     and then the third editable canvas took it to 166, six over, with every
+     check green. A comment cannot notice that; this can.
+
+     THE HEAD IS READ OFF THE ROUTE rather than retyped here, because a copy
+     would measure a string this file invented instead of the one that ships. */
+  {
+    const liveRoute = read("src/app/live/page.tsx");
+    const headMatch =
+      /description:\s*`([^`$]*)\$\{CANVAS_EDITABLE_SUMMARY\}`/.exec(liveRoute);
+    check(
+      "the /live description still names its head and the derived tail",
+      headMatch !== null,
+      "the description stopped being head-plus-derived-clause, so the budget " +
+        "below is measuring nothing",
+    );
+    if (headMatch !== null) {
+      const full = headMatch[1] + CANVAS_EDITABLE_SUMMARY;
+      check(
+        "and the whole /live meta description stays inside 160 characters",
+        full.length <= 160,
+        `the description is ${full.length} chars: ${JSON.stringify(full)}`,
+      );
+    }
+  }
 
   /* DERIVED, NOT HAND-KEPT — the whole reason the list could move safely. The
      page maps the grid's own `onCanvas` cells and the sequence strip's own
@@ -6374,7 +6471,7 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
      render. */
   check(
     "the mode toggle renders only while the canvas is editable",
-    /\{editable \? \(\s*<ViewerModeToggle/.test(canvas),
+    /\{editable \? \(\s*<CanvasModeToggle/.test(canvas),
     "a mode control on a read-only canvas — it always pans, so the toggle " +
       "either lies (a Select option that does nothing) or ships disabled, " +
       "and this canvas ships neither",
@@ -6395,9 +6492,7 @@ console.log("\nGrouping several elements into a boundary is ONE edit");
      button. Checked on the group role plus aria-checked on the options,
      because the visual highlight is the one channel a screen reader cannot
      read. */
-  const modeToggle = code(
-    "src/features/viewer/components/viewer-mode-toggle.tsx",
-  );
+  const modeToggle = code("src/components/ui/canvas-mode-toggle.tsx");
   check(
     "the mode toggle is an honest radio group — role and checked state",
     /role="radiogroup"/.test(modeToggle) &&
@@ -7703,6 +7798,174 @@ console.log("\nRevising and deleting a relationship are line patches");
     "an immediate commit carries the rest of the form with it",
     (viewer.match(/revisionWith\(/g) ?? []).length >= 4,
     "a partial revision would drop label and detail typed but not applied",
+  );
+}
+
+/* THE SAME DERIVATION FOR THE FLOWCHART CANVAS, and it is owed for the same
+   reason the sequence one is: this canvas ships six gestures now, and the
+   expensive failure in this area is not a broken gesture but a correct one no
+   control invokes. Two of the six were added in a pass that also fixed a drag
+   bug, which is exactly the situation where a control gets forgotten.
+
+   DERIVED FROM `FlowchartEditHandlers`, never hand-listed — a list cannot
+   notice the gesture it has never heard of (`codebase.md`, habit 4). Adding a
+   handler to that interface adds two assertions here and they fail until
+   something calls it. */
+console.log("\nEvery flowchart gesture is reachable from the canvas it edits");
+{
+  const viewer = read("src/features/flowchart/components/flowchart-viewer.tsx");
+  const playground = read("src/features/playground/lib/use-canvas-editing.ts");
+
+  const contract =
+    /export interface FlowchartEditHandlers \{([\s\S]*?)\n\}/.exec(viewer);
+  check(
+    "the flowchart viewer declares a handler contract to derive from",
+    contract !== null,
+    "FlowchartEditHandlers not found — every assertion below would be vacuous",
+  );
+  const handlers = [
+    ...new Set(
+      [...(contract?.[1] ?? "").matchAll(/^\s{2}(on[A-Z]\w*)\s*[?:]/gm)].map(
+        (m) => m[1],
+      ),
+    ),
+  ];
+  check(
+    "the contract names at least the six gestures this canvas ships",
+    handlers.length >= 6,
+    `found ${handlers.length}: ${handlers.join(", ")}`,
+  );
+
+  for (const handler of handlers) {
+    check(
+      `the flowchart viewer reaches ${handler} from a control`,
+      new RegExp(`edit\\??\\.${handler}\\b`).test(viewer),
+      "the handler is declared but nothing in the viewer reaches it",
+    );
+    check(
+      `the playground wires ${handler} into the flowchart bundle`,
+      new RegExp(`${handler}:\\s*handle`).test(playground),
+      "the viewer would render a control the host never answers",
+    );
+  }
+
+  /* THE MULTI-SELECT GESTURE IS THE C4 CANVAS'S, NOT A SECOND INVENTION.
+     This canvas first shipped grouping as a shift-click, which is not how the
+     canvas next door works — so a reader who had learned one had not learned
+     the other, which is `codebase.md` habit 2 ("when adding the Nth of
+     something, open the (N-1)th and match it"). All four halves of the C4
+     contract are pinned, because any one of them going missing brings back a
+     canvas that only LOOKS like its neighbour. */
+  check(
+    "the flowchart canvas offers the same Select/Pan toggle as the C4 canvas",
+    /<CanvasModeToggle/.test(viewer),
+    "multi-select is reachable some other way than the neighbouring canvas's, " +
+      "so learning one canvas does not teach the other",
+  );
+  check(
+    "and both canvases take that toggle from one definition",
+    /@\/components\/ui\/canvas-mode-toggle/.test(viewer) &&
+      /@\/components\/ui\/canvas-mode-toggle/.test(
+        read("src/features/viewer/components/viewer-canvas.tsx"),
+      ),
+    "one of the two canvases has its own copy of the mode toggle, which is " +
+      "the drift `dry.md` moved this component to components/ui to prevent",
+  );
+  check(
+    "the lasso is offered only where it can do something",
+    /const marqueeMode =[\s\S]{0,40}?edit !== undefined/.test(viewer),
+    "a locked, read-only or Mermaid-pane canvas would lasso into a grouping " +
+      "gesture it cannot perform — a bare drag must still pan there",
+  );
+  check(
+    "the marquee selects on FULL containment, as the C4 marquee does",
+    /node\.x \+ node\.width <= box\.x \+ box\.width/.test(viewer),
+    "a box that merely clips a step would conscript it into the group, which " +
+      "is not what the neighbouring canvas's marquee does",
+  );
+
+  /* CHROME FLOATING OVER THE PANE OWNS ITS OWN PRESSES. The grouping card and
+     the padlock are CHILDREN of the pane that starts the lasso, so without a
+     guard a press on either began a marquee, took pointer capture, and
+     swallowed the click — reported as "cannot click Clear", and the padlock had
+     it too. Two assertions, because the guard and the markers can each go
+     missing on their own: a guard with nothing marked is inert, and a marker
+     with no guard is decoration. */
+  check(
+    "the lasso stands down for chrome floating over the pane",
+    /closest\?\.\("\[data-af-flow-chrome\]"\)/.test(viewer),
+    "a press on the grouping card or the padlock starts a marquee and the " +
+      "button never sees its click",
+  );
+  {
+    const overlays = (viewer.match(/className="absolute [^"]*z-2\d/g) ?? [])
+      .length;
+    /* THE ATTRIBUTE, NOT THE SELECTOR. A bare count also matched the guard's
+       own `"[data-af-flow-chrome]"`, which inflated the total by one and made
+       this assertion unfailable — removing a marker still cleared the
+       threshold. The negative lookahead drops the bracketed selector. */
+    const marked = (viewer.match(/data-af-flow-chrome(?!\])/g) ?? []).length;
+    check(
+      "and every overlay inside the pane is marked as chrome",
+      marked >= overlays && marked >= 2,
+      `${overlays} positioned overlays, ${marked} marked — an unmarked one is ` +
+        "a control whose clicks the lasso eats",
+    );
+  }
+
+  /* THE DRAG MOVES THE REAL SYMBOL, at reduced opacity. It first shipped as a
+     dashed ghost outline, on the reasoning that the laid-out arrows cannot
+     follow mid-drag; the product owner asked for the symbol itself, because a
+     reader dragging a box wants to see the box rather than translate between
+     two shapes. The arrows touching it are dimmed for the length of the drag,
+     which is the half of the compromise that keeps the drawing honest. */
+  check(
+    "a dragged step is drawn at the pointer, not as a separate outline",
+    /* THE `node` PROP ITSELF must be the thing overridden. Testing merely that
+       the comparison appears anywhere passed on the sibling `dragging=` prop,
+       so the outline could have come back with this still green. */
+    /node=\{\s*nodeDrag\?\.id === node\.id/.test(
+      read("src/features/flowchart/components/flowchart-diagram.tsx"),
+    ),
+    "the dragged symbol is back to a ghost outline beside the real one",
+  );
+  check(
+    "and the arrows that still describe its old place are dimmed",
+    /edge\.from === nodeDrag\.id \|\| edge\.to === nodeDrag\.id/.test(
+      read("src/features/flowchart/components/flowchart-diagram.tsx"),
+    ),
+    "a stale arrow is drawn at full strength while the step it points at has " +
+      "moved, which is the drawing asserting something untrue",
+  );
+
+  /* AND THE GROUPING GESTURE'S KEYBOARD PATH. Shift-click is the pointer
+     gesture; a keyboard has no shift-click, and without a control in the dock
+     the whole grouping feature was reachable by pointer only. Pinned as an
+     `aria-pressed` toggle rather than by its label, so rewording it is free. */
+  check(
+    "grouping has a keyboard path, not only a modifier-click",
+    /aria-pressed=\{inSelection\}/.test(viewer),
+    "the selection can only be built with a pointer, so a keyboard reader " +
+      "cannot reach the grouping gesture at all",
+  );
+  /* A MODIFIER-CLICK MUST NOT START A DRAG. This shipped: shift-clicking to
+     group started a pin drag, and any hand tremor past the threshold turned the
+     selection into a move — so building a selection was impossible in practice.
+     The guard is structural, in the drag's own entry point. */
+  check(
+    "a modifier-click is excluded from the pin drag",
+    /shiftKey \|\| event\.metaKey \|\| event\.ctrlKey\) return;/.test(viewer),
+    "a shift-click can still become a drag, which is the bug that made " +
+      "multi-select unusable",
+  );
+  /* AND THE DRAG THRESHOLD IS A PHYSICAL DISTANCE. In layout user units it
+     shrank with the zoom — at the default "fit" scale two pixels of jitter
+     cleared it — which is what made the above bug reachable on every click. */
+  check(
+    "the drag threshold is measured on client pixels, not user units",
+    /event\.clientX - nodeDrag\.from\.clientX/.test(viewer),
+    "the threshold is back in user units, so it is a hair-trigger whenever " +
+      "the chart is scaled below 1:1 — which is the default",
   );
 }
 

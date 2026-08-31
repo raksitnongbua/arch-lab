@@ -43,6 +43,12 @@ export const FLOW_NODE_KEYS = [
   "label",
   "technology",
   "tags",
+  /* `position` sits between `tags` and `description` for the reason the
+     comment above gives: the key order IS the line order. A pinned node reads
+     `step load "Load cart" [Go 1.22] #checkout (240,120)` — the `(x,y)` is the
+     last thing on the declaration line, and `description` is a continuation
+     line below it, so this is where it belongs in the walk. */
+  "position",
   "description",
 ] as const;
 
@@ -61,11 +67,16 @@ export const FLOW_GROUP_KEYS = ["label", "tint", "nodes"] as const;
  */
 export const FLOW_META_RAW: ReadonlySet<string> = SEQ_META_RAW;
 
-/** `id`, `shape` and `label` are required with dedicated syntax; these three
+/** `id`, `shape` and `label` are required with dedicated syntax; these four
  * are the optional fields a newer minor could carry with an odd shape. */
 export const FLOW_NODE_RAW: ReadonlySet<string> = new Set([
   "technology",
   "tags",
+  /* `position` rides the `!` escape like its neighbours, and it is the field
+     that most needs to: a newer minor could carry a point with a `z`, a unit
+     or a name on it, and a reader that dropped the whole node would lose the
+     author's flow rather than one coordinate. */
+  "position",
   "description",
 ]);
 

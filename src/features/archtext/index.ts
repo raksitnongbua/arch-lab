@@ -124,9 +124,22 @@ export {
   SEQUENCE_ARROW_TOKENS,
   sequenceArrowToken,
 } from "./lib/sequence/keywords";
-export { parseFlowchartText } from "./lib/flowchart/parse";
-export { serializeFlowchartText } from "./lib/flowchart/serialize";
-export { NODE_SHAPE_BY_KEYWORD } from "./lib/flowchart/keywords";
+export {
+  parseFlowchartText,
+  parseFlowchartTextWithSpans,
+  type FlowchartSpans,
+} from "./lib/flowchart/parse";
+export {
+  canonicalFlowEdgeBlock,
+  canonicalFlowNodeBlock,
+  serializeFlowchartText,
+} from "./lib/flowchart/serialize";
+export {
+  NODE_SHAPE_BY_KEYWORD,
+  // Re-exported under a qualified name: `GROUP_KEYWORD` is too generic for
+  // a barrel that carries four grammars.
+  GROUP_KEYWORD as FLOWCHART_GROUP_KEYWORD,
+} from "./lib/flowchart/keywords";
 export { parseUseCaseText } from "./lib/usecase/parse";
 export { serializeUseCaseText } from "./lib/usecase/serialize";
 export {

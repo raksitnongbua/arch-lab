@@ -9,6 +9,52 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A flowchart can now be edited on the canvas, not only in the text.** Click a
+  step and its label, technology, tags and details are editable in the dock the
+  canvas already opened; click an arrow and its guard label is too, with a
+  Remove button beside it. Dragging from the handle under a selected step onto
+  another step draws a new arrow. Every change is a patch to the lines it is
+  about, so comments, blank lines and your own spacing survive it. The padlock
+  at the canvas's top right locks and unlocks all of this, and — as everywhere
+  else — the canvas opens locked.
+- **A flowchart step can be dragged to a position and pinned there.** The
+  `.alab` flowchart grammar takes an optional `(x,y)` on a node line now, and
+  dragging a step writes it. A step with no `(x,y)` is still solved from the
+  arrows exactly as before, so **every flowchart already on disk or in a share
+  link lays out unchanged** — this is a minor addition, not a breaking one.
+  Pinning is deliberately not free of consequences: a pinned step can overlap a
+  solved one and an arrow into it can run backwards up the page, and the layout
+  has no opinion about either. There is no unpin gesture yet — delete the
+  `(x,y)` in the source pane. (Reverses a decision recorded in the previous
+  release; both ADRs are kept.)
+- **Clicking an arrow lets you insert a step into it.** `a -> b` becomes
+  `a -> new step -> b`, with the guard label staying on the first half, so a
+  decision's branch condition is not silently reworded. The new step arrives
+  unpinned, so the layout places it.
+- **Drag on empty canvas to lasso several steps and wrap them in a group** —
+  the same gesture the C4 canvas already had, including its Select/Pan toggle
+  beside the zoom pill, Select as the default once the canvas is unlocked, and
+  selection on full containment so a box that merely clips a step does not
+  conscript it. Shift-click extends a selection, and the dock's Add to
+  selection button makes the whole gesture reachable from the keyboard. Only
+  steps declared next to each other can be grouped — a flowchart group is the run of lines
+  nested inside it, so a group over scattered steps cannot be written down at
+  all. When the selection is not a run, the canvas says which steps are in the
+  way rather than greying the button. Nothing moves and no arrow changes: the
+  frame is a bracket around steps that were already neighbours.
+- **The connect drag declines three arrows rather than drawing something that
+  reads as broken:** a step pointing at itself, a duplicate of an arrow already
+  there, and one leaving an end terminator or arriving at a start. Each says
+  which. Hand-written `.alab` still accepts all three — only the gesture
+  declines to author them.
+- **In a Mermaid pane, only the gestures Mermaid can hold are offered.**
+  Editing a step's fields, dragging it to a position, and inserting a step are
+  all refused there — Mermaid has no slot for details, technology or tags, no
+  syntax for a coordinate, and it renames ids outside its own alphabet, so each
+  of those edits would be lost on the next parse. Drawing and removing arrows
+  still work, because those survive the round trip. Each refusal says which
+  fields switching the pane would buy you.
+
 - **The themes are now something the site actually says it has.** The home page
   has a short section naming all nine and what a theme reaches — node fills,
   connector ink, the canvas ground and the SVG or PNG you export — `/faq`

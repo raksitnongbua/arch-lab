@@ -67,6 +67,7 @@ import type {
   FlowchartLabFile,
   FlowchartNode,
   FlowchartNodeShape,
+  FlowchartPoint,
 } from "@/types";
 import {
   layoutDiagramHeading,
@@ -271,6 +272,21 @@ export interface FlowchartLayout {
   edges: LaidFlowEdge[];
   /** Frames behind the nodes — paint first. Empty when the file groups nothing. */
   groups: LaidFlowGroup[];
+  /**
+   * How far this layout SHIFTED its own solved coordinates to sit inside the
+   * margins — the difference between the space a pin is stored in and the space
+   * the canvas draws in.
+   *
+   * EXPOSED BECAUSE A DRAG HAS TO INVERT IT. The rows are built around axis 0,
+   * so the solved space is centred on zero and the drawn space is not; a
+   * gesture that reads a drop point off the canvas and writes it straight into
+   * `FlowchartNode.position` is writing a number from the wrong space. That
+   * shipped: a dragged step landed `offset.x` to the right of the cursor, and
+   * dragging it again added the offset a second time, so the step walked off
+   * the page. The viewer now writes `dropped − offset`, which round-trips
+   * exactly.
+   */
+  offset: { x: number; y: number };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -609,6 +625,53 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
     }
   });
 
+  /* ---- pins: an author's `(x,y)` replaces the solved place ----------------
+   * THE X HALF, applied here rather than inside the row loop above so the
+   * solved layout stays exactly what it was for every unpinned node — a
+   * document with no pins lays out byte-identically to how it did before this
+   * field existed, which is the property that made adding it safe.
+   *
+   * RANK IS NOT OVERRIDDEN, and that is the whole shape of the compromise.
+   * Rank is which arrows reach a node; the arrows have not changed, so the
+   * routing channels, lanes and back-edge flanks are all still built from the
+   * solved ranks. A pin moves the drawn BOX and nothing else. That is what
+   * keeps this a change to one pass instead of a second layout engine.
+   *
+   * The consequences were accepted rather than solved (ADR 0002): a pinned box
+   * can overlap a solved one, an arrow into it can run backwards up the page,
+   * and a hand-written coordinate outside the solved bounds is clipped (see
+   * `minY` below for why that last one cannot be fixed without breaking the
+   * drag). Nothing here tries to prevent any of them — a pin is a tool for an
+   * author who wants a specific picture. */
+  /* THE SOLVED CENTRES, captured BEFORE any pin is applied.
+   *
+   * ROUTING IS PLANNED FROM THESE, NEVER FROM THE PINNED BOXES, and that is
+   * what makes a drag land under the cursor. Everything downstream of here —
+   * which flank a loop takes, how many lanes a channel needs, therefore how
+   * tall each channel is, therefore the whole drawing's bounding box and the
+   * `offset` it is shifted by — would otherwise be a function of where a pin
+   * sits. The viewer inverts that offset to store a drop point, so an offset
+   * that moves WITH the pin makes the inversion wrong: measured at up to 280px
+   * off before this, worst when dragging left.
+   *
+   * A pin still moves the box and the edge endpoints attached to it. It no
+   * longer moves the channels, which is the same statement as "a pin moves the
+   * drawn box, never the rank" — the routing plan is part of what rank buys. */
+  const solvedCx = new Map<string, number>(
+    [...placed].map(([id, p]) => [id, p.cx]),
+  );
+  const pinned = new Map<string, FlowchartPoint>();
+  for (const node of file.nodes) {
+    const at = node.position;
+    if (at === undefined) continue;
+    if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) continue;
+    pinned.set(node.id, at);
+    const p = placed.get(node.id);
+    if (p === undefined) continue;
+    p.x = at.x;
+    p.cx = at.x + p.width / 2;
+  }
+
   /* ---- back edges: which flank they travel --------------------------------
    * A loop must read as a RETURNING ARROW, not a frame. The retired routing
    * sent every back edge out its source's BOTTOM, across to a corridor left
@@ -636,9 +699,14 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
   const flankFree = (id: string, side: -1 | 1): boolean => {
     const node = placed.get(id);
     if (node === undefined) return false;
-    for (const other of placed.values()) {
-      if (other === node || other.rank !== node.rank) continue;
-      if (side === -1 ? other.cx < node.cx : other.cx > node.cx) return false;
+    // Solved centres, not pinned ones — see `solvedCx`.
+    const mine = solvedCx.get(id);
+    if (mine === undefined) return false;
+    for (const [otherId, other] of placed) {
+      if (otherId === id || other.rank !== node.rank) continue;
+      const theirs = solvedCx.get(otherId);
+      if (theirs === undefined) continue;
+      if (side === -1 ? theirs < mine : theirs > mine) return false;
     }
     return true;
   };
@@ -684,7 +752,7 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
       )
       .sort(
         (a, b) =>
-          (placed.get(a.e.to)?.cx ?? 0) - (placed.get(b.e.to)?.cx ?? 0) ||
+          (solvedCx.get(a.e.to) ?? 0) - (solvedCx.get(b.e.to) ?? 0) ||
           a.i - b.i,
       );
     portOffsets(p, outgoing.length).forEach((dx, i) => {
@@ -700,7 +768,7 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
       )
       .sort(
         (a, b) =>
-          (placed.get(a.e.from)?.cx ?? 0) - (placed.get(b.e.from)?.cx ?? 0) ||
+          (solvedCx.get(a.e.from) ?? 0) - (solvedCx.get(b.e.from) ?? 0) ||
           a.i - b.i,
       );
     portOffsets(p, incoming.length).forEach((dx, i) => {
@@ -789,6 +857,16 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
       p.cy = p.y + p.height / 2;
     }
     cursor += rowHeight;
+  }
+  /* THE Y HALF OF A PIN, after the row walk rather than inside it — the row's
+     height is measured from every member including a pinned one, so a pin must
+     not change what the row reserves for its neighbours. Overriding inside the
+     loop would have let a pinned node drag its whole row's baseline with it. */
+  for (const [id, at] of pinned) {
+    const p = placed.get(id);
+    if (p === undefined) continue;
+    p.y = at.y;
+    p.cy = at.y + p.height / 2;
   }
   channelTop[rows.length] = cursor;
   cursor += channelHeight[rows.length];
@@ -1048,29 +1126,76 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
   /* ---- extents: shift everything so content starts at the margins ---------- */
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
+  /* `minY` exists only because a node can be PINNED. Without pins the topmost
+     thing on the canvas is always the first channel, which starts at
+     `marginTop + heading.height`, so there was nothing above the origin to
+     find and no reason to look. A pin takes any coordinate the author drops it
+     at, including a negative one — and a box drawn above y=0 is a box the
+     viewport clips, silently. */
+  let minY = Number.POSITIVE_INFINITY;
   let maxY = flowBottom;
   const stretch = (rect: FlowRect): void => {
     minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
     maxX = Math.max(maxX, rect.x + rect.width);
     maxY = Math.max(maxY, rect.y + rect.height);
   };
-  for (const p of placed.values()) {
-    stretch({ x: p.x, y: p.y, width: p.width, height: p.height });
+  /* A PINNED BOX IS EXCLUDED FROM THE MINIMUMS, so `offset` does not depend on
+     where a pin sits — which is what makes the drag's inversion exact rather
+     than approximate. If a pin could pull `minX` left, the shift would change
+     as a consequence of the drag, and the step would land somewhere other than
+     under the cursor. Pinned boxes still stretch the MAXIMUMS, so the canvas
+     grows to contain them. */
+  for (const [id, p] of placed) {
+    const box = { x: p.x, y: p.y, width: p.width, height: p.height };
+    if (pinned.has(id)) {
+      maxX = Math.max(maxX, box.x + box.width);
+      maxY = Math.max(maxY, box.y + box.height);
+    } else {
+      stretch(box);
+    }
   }
   for (const g of groups) stretch(g);
   for (const e of edges) {
+    /* AN EDGE TOUCHING A PIN IS EXCLUDED FROM THE MINIMUMS, for the same
+       reason its node is: this edge's endpoint follows the pinned box, so
+       letting it pull `minX` or `minY` would put the pin back into the shift
+       it must not influence. The last 20px of drag inaccuracy was exactly
+       this — a step dropped at the canvas top rendered 20px lower, because the
+       arrow reaching it dragged `minY` to zero and bought the whole drawing a
+       `marginTop` shift. Maxima still grow, so nothing falls off the canvas. */
+    const touchesPin = pinned.has(e.from) || pinned.has(e.to);
     for (const point of e.points) {
-      minX = Math.min(minX, point.x);
+      if (!touchesPin) {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+      }
       maxX = Math.max(maxX, point.x);
       maxY = Math.max(maxY, point.y);
     }
-    if (e.labelBox !== null) stretch(e.labelBox);
+    if (e.labelBox !== null) {
+      if (touchesPin) {
+        maxX = Math.max(maxX, e.labelBox.x + e.labelBox.width);
+        maxY = Math.max(maxY, e.labelBox.y + e.labelBox.height);
+      } else {
+        stretch(e.labelBox);
+      }
+    }
   }
   if (minX === Number.POSITIVE_INFINITY) {
     minX = 0;
     maxX = 0;
   }
   const dx = FLOW.marginX - minX;
+  /* CLAMPED AT ZERO, unlike `dx`, and the asymmetry is deliberate rather than
+     an oversight. `dx` re-centres every chart because the x pass builds rows
+     around axis 0, so a shift was always needed. On y, an unpinned chart
+     already starts exactly at `marginTop`, so an unclamped `dy` would compute
+     zero for it — but a chart whose heading is tall would shift by the
+     heading's height and every existing flowchart would move. Shifting ONLY
+     when something sits above the margin means an unpinned document is
+     laid out to the same pixel it was before pins existed. */
+  const dy = Math.max(0, FLOW.marginTop - minY);
 
   const nodes: LaidFlowNode[] = file.nodes.map((node) => {
     const p = placed.get(node.id);
@@ -1081,6 +1206,7 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
       throw new Error(`node "${node.id}" was never placed`);
     }
     const x = p.x + dx;
+    const y = p.y + dy;
     return {
       id: node.id,
       shape: node.shape,
@@ -1092,15 +1218,15 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
         ? { description: node.description }
         : {}),
       x,
-      y: p.y,
+      y,
       width: p.width,
       height: p.height,
       cx: p.cx + dx,
-      cy: p.cy,
+      cy: p.cy + dy,
       rank: p.rank,
       labelBox: {
         x: p.cx + dx - s.textWidth / 2,
-        y: p.cy - s.textHeight / 2,
+        y: p.cy + dy - s.textHeight / 2,
         width: s.textWidth,
         height: s.textHeight,
       },
@@ -1109,21 +1235,26 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
 
   const shiftedEdges: LaidFlowEdge[] = edges.map((edge) => ({
     ...edge,
-    points: edge.points.map((p) => ({ x: p.x + dx, y: p.y })),
+    points: edge.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
     labelBox:
       edge.labelBox === null
         ? null
-        : { ...edge.labelBox, x: edge.labelBox.x + dx },
+        : {
+            ...edge.labelBox,
+            x: edge.labelBox.x + dx,
+            y: edge.labelBox.y + dy,
+          },
   }));
   const shiftedGroups: LaidFlowGroup[] = groups.map((group) => ({
     ...group,
     x: group.x + dx,
+    y: group.y + dy,
   }));
 
   const width = Math.ceil(
     Math.max(maxX + dx, FLOW.marginX + heading.width) + FLOW.marginX,
   );
-  const height = Math.ceil(maxY + FLOW.marginBottom);
+  const height = Math.ceil(maxY + dy + FLOW.marginBottom);
   return {
     width,
     height,
@@ -1131,6 +1262,7 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
     nodes,
     edges: shiftedEdges,
     groups: shiftedGroups,
+    offset: { x: dx, y: dy },
   };
 }
 

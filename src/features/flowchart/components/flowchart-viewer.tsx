@@ -54,6 +54,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Scan, Waves, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import type { FlowchartLabFile } from "@/types";
+// Type-only, and a deep import for it: the playground's edit module is where
+// these two shapes are defined and enforced, and re-declaring them here would
+// be a second definition free to drift from the gestures that honour it.
+import type {
+  FlowEdgeRevision,
+  FlowNodeRevision,
+} from "@/features/playground/input/flowchart-edit";
+import { GROUPED_FLOW_LABEL } from "@/features/playground/input/flowchart-edit";
 import {
   idleMotionState,
   readIdleMotion,
@@ -72,6 +80,10 @@ import {
 import { useModKey } from "@/lib/mod-key";
 import { CANVAS_RULE_CLASS, groundFieldCss } from "@/lib/canvas-ground";
 import { useMeasuredScale } from "@/components/ui/use-measured-scale";
+import {
+  CanvasModeToggle,
+  type CanvasDragMode,
+} from "@/components/ui/canvas-mode-toggle";
 import { cn } from "@/lib/utils";
 
 import type { LaidFlowEdge } from "../lib/layout";
@@ -83,9 +95,86 @@ import { DockRow } from "@/components/ui/dock-row";
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 4;
 
+/**
+ * How far a press must travel before it stops being a click on a step and
+ * becomes a drag that pins it.
+ *
+ * IN CSS PIXELS, MEASURED ON CLIENT COORDINATES — not in the layout's user
+ * units, which is what this was and which had it exactly backwards. A
+ * threshold in user units is a threshold that shrinks with the zoom: at the
+ * default "fit" scale a chart wider than its pane draws at well under 1:1, so
+ * two pixels of hand jitter cleared three user units and a click became a
+ * drag. The bug that surfaced it was a shift-click for grouping turning into a
+ * pin. A pointer's tremor is a physical quantity, so its threshold has to be
+ * one too.
+ */
+const NODE_DRAG_THRESHOLD = 4;
+
+/** A marquee's two corners as a positive-extent rect, so a drag in any
+ *  direction describes the same box. */
+function marqueeBox(m: {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+}): { x: number; y: number; width: number; height: number } {
+  return {
+    x: Math.min(m.from.x, m.to.x),
+    y: Math.min(m.from.y, m.to.y),
+    width: Math.abs(m.to.x - m.from.x),
+    height: Math.abs(m.to.y - m.from.y),
+  };
+}
+
+/**
+ * The gestures this canvas can send back, when editing is on.
+ *
+ * PRESENCE IS THE OFFER, as on the sequence canvas: the whole bundle is
+ * `undefined` while the canvas is locked, read-only or in a Mermaid pane, and
+ * the viewer then renders no editing chrome at all rather than disabled
+ * controls. A control that cannot change anything is worse than its absence.
+ *
+ * AN EDGE IS ADDRESSED BY ITS INDEX in `file.edges`, which is also how the
+ * focus model already addresses one. A flowchart edge has no id, and a
+ * `from`/`to` pair is not a key — two arrows between the same nodes are legal
+ * text. `flowchart-edit.ts` argues it at length.
+ *
+ * `onMoveNode` PINS rather than moves, and the distinction is worth the word:
+ * a dragged step stops being solved from the arrows and stays where it was put
+ * (`FlowchartNode.position`). ADR 0002 records that decision and supersedes
+ * ADR 0001, which had refused it — read both before removing either.
+ */
+export interface FlowchartEditHandlers {
+  /** Pin `nodeId` at a position in USER UNITS — the space the layout works in,
+   *  which is what the host writes into the text unchanged. */
+  onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
+  onReviseNode: (nodeId: string, revision: FlowNodeRevision) => void;
+  onReviseEdge: (index: number, revision: FlowEdgeRevision) => void;
+  onConnectNodes: (from: string, to: string) => void;
+  onDeleteEdge: (index: number) => void;
+  /** Split the arrow at `index` — `a -> b` becomes `a -> new` and `new -> b`. */
+  onInsertStep: (index: number) => void;
+  /** Wrap a contiguous run of steps in a `group`. */
+  onGroupNodes: (nodeIds: readonly string[], label: string) => void;
+  /**
+   * Why a connect from `from` to `to` would be declined, or `null` when it
+   * would be accepted. Asked DURING the drag so the refusal can be shown at
+   * the grip rather than after the drop — a gesture that completes and
+   * silently changes nothing reads as a broken control.
+   */
+  connectRefusal: (from: string, to: string) => string | null;
+  /**
+   * Why grouping this selection would be declined, or `null`. Asked as the
+   * selection is BUILT so the reason sits beside the control the reader is
+   * about to press — a flowchart `group` can only wrap steps declared next to
+   * each other, and that is not guessable from the picture.
+   */
+  groupRefusal: (nodeIds: readonly string[]) => string | null;
+}
+
 export function FlowchartViewer({
   file,
   onAnnounce,
+  edit,
+  lockSlot,
 }: {
   file: FlowchartLabFile;
   /**
@@ -95,6 +184,18 @@ export function FlowchartViewer({
    * viewer documents the same contract).
    */
   onAnnounce: (message: string) => void;
+  /** Editing gestures, or absent — see `FlowchartEditHandlers`. */
+  edit?: FlowchartEditHandlers;
+  /**
+   * The canvas lock, mounted at the pane's top-right corner exactly as the C4
+   * and sequence canvases mount theirs.
+   *
+   * A SLOT RATHER THAN A FLAG, and it lives here rather than in the host's
+   * strip for the reason `canvas-lock-button.tsx` records: a lock that was
+   * correct in the model and rendered only in another branch left a whole
+   * canvas silently uneditable with no control anywhere to unlock it.
+   */
+  lockSlot?: React.ReactNode;
 }): React.JSX.Element {
   // ONE layout call per model — the single source of geometric truth.
   const layout = useMemo(() => layoutFlowchart(file), [file]);
@@ -431,10 +532,131 @@ export function FlowchartViewer({
   const panSuppressesClick = useRef(false);
   const [panning, setPanning] = useState(false);
 
+  /**
+   * The in-flight PIN drag: which node, and where its top-left corner would
+   * land. `grab` is the offset from that corner to the pointer, so the node
+   * does not jump to centre itself under the cursor on the first move.
+   *
+   * `moved` is what separates a click from a drag. The node's hit rect is both
+   * the focus target and the drag handle (see the diagram), so a press that
+   * travels less than the threshold stays a click and focuses the node, and
+   * one that travels further suppresses that click and pins instead.
+   */
+  const [nodeDrag, setNodeDrag] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    grab: { dx: number; dy: number };
+    /** Where the press started, in CLIENT pixels — see `NODE_DRAG_THRESHOLD`. */
+    from: { clientX: number; clientY: number };
+    moved: boolean;
+  } | null>(null);
+  /**
+   * WHAT A BARE DRAG ON THE BACKGROUND DOES — Select (draws the marquee) or Pan
+   * (moves the camera). The C4 canvas's contract verbatim, including Select as
+   * the default: the toggle only appears on an editable canvas, and a reader
+   * who unlocked it did so to edit.
+   *
+   * TAKEN FROM THE C4 CANVAS RATHER THAN INVENTED. This canvas first shipped
+   * multi-select as a shift-click, which is not how the neighbouring canvas
+   * works, so a reader who had learned one had not learned the other — the
+   * failure `codebase.md` habit 2 names ("when adding the Nth of something,
+   * open the (N-1)th and match it"). The held-key pan that toggle replaced was
+   * reported broken three times over there; do not reintroduce it here.
+   */
+  const [dragMode, setDragMode] = useState<CanvasDragMode>("select");
+  /* THE LASSO EXISTS ONLY WHERE IT CAN DO SOMETHING. On a locked, read-only or
+     Mermaid-pane canvas there is no `edit` bundle, so a bare drag still pans —
+     which is every shared link and every presentation, since the canvas locks
+     by default. */
+  const marqueeMode = edit !== undefined && dragMode === "select";
+  /** The marquee in flight, in USER UNITS — the space the containment test and
+   *  the drawn rect both work in, so neither converts. */
+  const [marquee, setMarquee] = useState<{
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+  } | null>(null);
+  /** The grouping selection — see `onToggleSelect` on the diagram for why it
+   *  is a second set rather than a wider focus. Cleared after a group lands. */
+  const [selection, setSelection] = useState<readonly string[]>([]);
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelection((current) =>
+      current.includes(id)
+        ? current.filter((candidate) => candidate !== id)
+        : [...current, id],
+    );
+  }, []);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  /** Client coordinates → user units, through the SVG's own matrix.
+   *
+   * `getScreenCTM` rather than arithmetic on the zoom and the scroll offsets:
+   * it already accounts for the camera, the `preserveAspectRatio` letterboxing
+   * that `"fit"` introduces, and any page transform above the pane — three
+   * things a hand-rolled conversion has to get right separately, and one of
+   * which changes with the pane's aspect ratio. */
+  const toUserUnits = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const svg = svgRef.current;
+      const matrix = svg?.getScreenCTM();
+      if (svg == null || matrix == null) return null;
+      const point = svg.createSVGPoint();
+      point.x = clientX;
+      point.y = clientY;
+      const local = point.matrixTransform(matrix.inverse());
+      return { x: local.x, y: local.y };
+    },
+    [],
+  );
+
+  /** The node under the pointer, read off the DOM rather than hit-tested
+   *  again here — see the `data-af-flow-node` comment in the diagram. */
+  const nodeUnderPointer = useCallback(
+    (clientX: number, clientY: number): string | null => {
+      const element = document.elementFromPoint(clientX, clientY);
+      const hit = element?.closest?.("[data-af-flow-node]");
+      return hit?.getAttribute("data-af-flow-node") ?? null;
+    },
+    [],
+  );
+  /**
+   * A bare drag on the background. ONE ENTRY POINT that chooses between the
+   * marquee and the pan, rather than two handlers racing for the same button.
+   *
+   * The C4 canvas achieves the same thing by DETACHING its marquee handlers in
+   * Pan mode, because there a third party (React Flow's own `panOnDrag`) owns
+   * the press it is standing down from. Here both gestures are this
+   * component's, so choosing at pointerdown is the same guarantee with one
+   * handler instead of two — and, as there, the pan owes nothing to keyboard
+   * or focus state.
+   */
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
       if ((event.target as Element).closest?.(".af-flow-hit") != null) return;
+      /* CHROME FLOATING OVER THE PANE OWNS ITS OWN PRESSES. The lasso and the
+         pan belong to the canvas GROUND, and every overlay inside this pane —
+         the grouping card, the padlock — is a child of it, so without this a
+         press on one started a marquee, captured the pointer, and swallowed
+         the click that never reached the button. Reported as "cannot click
+         Clear"; the padlock had it too.
+
+         MARKED, NOT LISTED: a new overlay carries the attribute and is covered,
+         where a list here would have to be remembered. `check:canvas-edit`
+         pins that every absolutely-positioned overlay in this pane has it. */
+      if (
+        (event.target as Element).closest?.("[data-af-flow-chrome]") != null
+      ) {
+        return;
+      }
+      if (marqueeMode) {
+        const at = toUserUnits(event.clientX, event.clientY);
+        if (at === null) return;
+        setMarquee({ from: at, to: at });
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+        return;
+      }
       const pane = event.currentTarget;
       const scrollable =
         pane.scrollWidth > pane.clientWidth ||
@@ -451,10 +673,123 @@ export function FlowchartViewer({
       pane.setPointerCapture(event.pointerId);
       event.preventDefault();
     },
-    [],
+    [marqueeMode, toUserUnits],
   );
+  /* ---- connect: drag from a grip to another node -------------------------- */
+
+  /**
+   * The in-flight connect, in USER UNITS — the same space the chart is drawn
+   * in, so the ghost line needs no second coordinate system.
+   *
+   * IT COSTS NO NEW POINTER ARBITRATION, which is the whole reason this could
+   * be added to a canvas that already drag-pans. `handlePointerDown` above
+   * already stands down for any press inside `.af-flow-hit`, and the grip
+   * carries that class — so the pan never sees the press that starts a
+   * connect, and a drag that both panned and drew is unreachable rather than
+   * merely unlikely.
+   */
+  const [connectDrag, setConnectDrag] = useState<{
+    from: string;
+    x: number;
+    y: number;
+    over: string | null;
+  } | null>(null);
+
+  const handleNodeDragStart = useCallback(
+    (id: string, event: React.PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      /* A MODIFIER-CLICK IS A SELECTION AND MUST NOT BECOME A DRAG. Without
+         this, shift-clicking a step to group it started a pin drag, and any
+         hand jitter past the threshold turned the selection into a move — so
+         building a multi-step selection was, in practice, impossible. The
+         modifier is checked in exactly one other place (the node's own
+         `onClick`); these two are the whole of the gesture's split and they
+         must agree, which is why both read the same three keys. */
+      if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+      const at = toUserUnits(event.clientX, event.clientY);
+      const node = nodeById.get(id);
+      if (at === null || node === undefined) return;
+      setNodeDrag({
+        id,
+        x: node.x,
+        y: node.y,
+        grab: { dx: at.x - node.x, dy: at.y - node.y },
+        from: { clientX: event.clientX, clientY: event.clientY },
+        moved: false,
+      });
+      /* NO POINTER CAPTURE HERE, and that omission is the whole fix for a bug
+         this shipped with: capturing on pointerdown retargets the following
+         `click` to the pane, so the node's own `onClick` never ran and
+         clicking a step stopped focusing it entirely. Capture is taken
+         LAZILY instead, on the first move that crosses the drag threshold —
+         by which point there is a real drag to keep hold of and no click to
+         protect. */
+    },
+    [nodeById, toUserUnits],
+  );
+
+  const handleConnectStart = useCallback(
+    (id: string, event: React.PointerEvent) => {
+      const at = toUserUnits(event.clientX, event.clientY);
+      if (at === null) return;
+      setConnectDrag({ from: id, x: at.x, y: at.y, over: null });
+      paneRef.current?.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    },
+    [toUserUnits],
+  );
+
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (nodeDrag !== null) {
+        const at = toUserUnits(event.clientX, event.clientY);
+        if (at === null) return;
+        const x = at.x - nodeDrag.grab.dx;
+        const y = at.y - nodeDrag.grab.dy;
+        const crossed =
+          nodeDrag.moved ||
+          Math.abs(event.clientX - nodeDrag.from.clientX) +
+            Math.abs(event.clientY - nodeDrag.from.clientY) >
+            NODE_DRAG_THRESHOLD;
+        // See `handleNodeDragStart`: capture only once this is really a drag,
+        // so a click keeps its own target.
+        if (crossed && !nodeDrag.moved) {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        setNodeDrag({
+          ...nodeDrag,
+          x,
+          y,
+          moved: crossed,
+        });
+        return;
+      }
+      if (connectDrag !== null) {
+        const at = toUserUnits(event.clientX, event.clientY);
+        if (at === null) return;
+        const over = nodeUnderPointer(event.clientX, event.clientY);
+        setConnectDrag({
+          from: connectDrag.from,
+          x: at.x,
+          y: at.y,
+          /* Only a node the gesture would ACCEPT lights up. Highlighting one
+             it is about to refuse would promise a drop that cannot happen —
+             the refusal is the same one `flowConnectRefusal` will give, asked
+             here so it is visible before the reader commits. */
+          over:
+            over !== null &&
+            over !== connectDrag.from &&
+            edit?.connectRefusal(connectDrag.from, over) == null
+              ? over
+              : null,
+        });
+        return;
+      }
+      if (marquee !== null) {
+        const at = toUserUnits(event.clientX, event.clientY);
+        if (at !== null) setMarquee({ from: marquee.from, to: at });
+        return;
+      }
       const state = panState.current;
       if (state === null) return;
       const dx = event.clientX - state.x;
@@ -464,10 +799,80 @@ export function FlowchartViewer({
       pane.scrollLeft = state.left - dx;
       pane.scrollTop = state.top - dy;
     },
-    [],
+    [connectDrag, edit, marquee, nodeDrag, nodeUnderPointer, toUserUnits],
   );
+
   const handlePointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (nodeDrag !== null) {
+        setNodeDrag(null);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        // Under the threshold: this was a click. Let it focus the node, which
+        // is what the rect's own onClick does after this handler returns.
+        if (!nodeDrag.moved) return;
+        // Over it: suppress the trailing click so the drag does not also
+        // change the selection out from under the reader.
+        panSuppressesClick.current = true;
+        /* MINUS THE LAYOUT'S OWN SHIFT. `nodeDrag` is in the space the canvas
+           DRAWS in; `FlowchartNode.position` is in the space the layout SOLVES
+           in, and the two differ by `layout.offset` because the rows are built
+           around axis 0. Writing the drawn coordinate straight through put the
+           step `offset.x` to the right of the cursor and did it again on every
+           subsequent drag, so the step walked off the page. */
+        edit?.onMoveNode(nodeDrag.id, {
+          x: nodeDrag.x - layout.offset.x,
+          y: nodeDrag.y - layout.offset.y,
+        });
+        return;
+      }
+      if (connectDrag !== null) {
+        const target = nodeUnderPointer(event.clientX, event.clientY);
+        setConnectDrag(null);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        // Dropped on empty canvas: the reader changed their mind. Silent, the
+        // way abandoning any drag is.
+        if (target === null || edit === undefined) return;
+        const refusal = edit.connectRefusal(connectDrag.from, target);
+        if (refusal !== null) {
+          // SAID, not swallowed: the reader aimed at something and let go, so
+          // "nothing happened" needs a reason attached to it.
+          onAnnounce(refusal);
+          return;
+        }
+        edit.onConnectNodes(connectDrag.from, target);
+        return;
+      }
+      if (marquee !== null) {
+        const box = marqueeBox(marquee);
+        setMarquee(null);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        /* FULL CONTAINMENT, matching the C4 marquee and React Flow's own
+           default: a box that merely clips a neighbour does not conscript it
+           into a group. A drag too small to be a lasso (a click on empty
+           canvas) selects nothing and falls through to the backdrop click,
+           which clears focus as it always did. */
+        if (box.width < 4 && box.height < 4) return;
+        const covered = layout.nodes
+          .filter(
+            (node) =>
+              node.x >= box.x &&
+              node.y >= box.y &&
+              node.x + node.width <= box.x + box.width &&
+              node.y + node.height <= box.y + box.height,
+          )
+          .map((node) => node.id);
+        // REPLACES rather than adds: a fresh lasso is a fresh selection, and
+        // shift-click is the way to extend one.
+        setSelection(covered);
+        panSuppressesClick.current = true;
+        return;
+      }
       const state = panState.current;
       if (state === null) return;
       panState.current = null;
@@ -477,7 +882,15 @@ export function FlowchartViewer({
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
     },
-    [],
+    [
+      connectDrag,
+      edit,
+      layout,
+      marquee,
+      nodeDrag,
+      nodeUnderPointer,
+      onAnnounce,
+    ],
   );
 
   /* The pane is the backdrop — clicking empty canvas clears focus (every
@@ -546,6 +959,10 @@ export function FlowchartViewer({
     focusedNode === null || focusSet === null
       ? []
       : layout.edges.filter((e) => focusSet.edges.has(e.index));
+  /* VALIDATED AT READ TIME, the discipline this viewer's header sets out: a
+     re-parse can remove a selected step, and a stale id would make the group
+     control offer one that is no longer there. */
+  const liveSelection = selection.filter((id) => nodeById.has(id));
   const dockOpen = focusedNode !== null || focusedEdge !== null;
 
   return (
@@ -578,8 +995,13 @@ export function FlowchartViewer({
                reason `local` attachment is the whole panning mechanism. */
             CANVAS_RULE_CLASS,
             zoom !== "fit" && "flex",
-            zoom !== "fit" && "cursor-grab",
-            panning && "cursor-grabbing",
+            /* THE CURSOR REPEATS THE MODE, as it does on the C4 canvas: the
+               crosshair says a drag will lasso, the grab hand says it will
+               pan. A mode with no cursor to match it is a mode the reader has
+               to remember. */
+            marqueeMode && "cursor-crosshair",
+            !marqueeMode && zoom !== "fit" && "cursor-grab",
+            !marqueeMode && panning && "cursor-grabbing",
           )}
           style={groundFieldCss(groundScale)}
           onClick={handleBackdropClick}
@@ -607,10 +1029,99 @@ export function FlowchartViewer({
               zoom={zoom}
               onFocusNode={handleFocusNode}
               onFocusEdge={handleFocusEdge}
+              svgRef={svgRef}
+              onConnectStart={
+                edit === undefined ? undefined : handleConnectStart
+              }
+              connectDrag={connectDrag}
+              onNodeDragStart={
+                edit === undefined ? undefined : handleNodeDragStart
+              }
+              nodeDrag={nodeDrag?.moved === true ? nodeDrag : null}
+              onToggleSelect={
+                edit === undefined ? undefined : handleToggleSelect
+              }
+              selected={liveSelection}
+              marquee={marquee === null ? null : marqueeBox(marquee)}
             />
           </div>
+          {/* THE GROUPING BAR, present only while a selection exists — the
+              gesture's one control, and the only place its refusal is shown.
+              Bottom-left so it clears the lock at the top right and the dock
+              down the right-hand side. */}
+          {edit !== undefined && liveSelection.length > 0 ? (
+            /* ABOVE the mode toggle, which owns the bottom-left corner now.
+               Two overlays in one corner is how a control ends up unreachable
+               on a short pane. */
+            <div
+              data-af-flow-chrome
+              className="absolute bottom-16 left-3 z-20 flex max-w-[min(24rem,calc(100%-1.5rem))] flex-col gap-2 rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-sm"
+            >
+              <p className="text-xs font-medium text-foreground">
+                {liveSelection.length === 1
+                  ? "1 step selected"
+                  : `${liveSelection.length} steps selected`}
+              </p>
+              {(() => {
+                const refusal = edit.groupRefusal(liveSelection);
+                return refusal === null ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        edit.onGroupNodes(liveSelection, GROUPED_FLOW_LABEL);
+                        setSelection([]);
+                      }}
+                      className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      Group these steps
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelection([])}
+                      className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                ) : (
+                  /* THE SENTENCE, NOT A DISABLED BUTTON WITH A TOOLTIP. The
+                     reason names the steps in the way, which is exactly what
+                     the reader needs in order to fix the selection — a greyed
+                     control would hide it. */
+                  <>
+                    <p className="text-xs text-muted-foreground">{refusal}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSelection([])}
+                      className="self-start rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      Clear
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
+          {/* The lock, at the pane's top-right — the same corner the C4 and
+              sequence canvases put theirs, so a reader moving between the
+              three notations finds it in one place. */}
+          {lockSlot !== undefined ? (
+            <div data-af-flow-chrome className="absolute top-2 right-2 z-20">
+              {lockSlot}
+            </div>
+          ) : null}
         </div>
 
+        {/* ---- the drag mode, beside the zoom pill: the C4 canvas's own
+              placement, so a reader moving between the two canvases finds it
+              in one place. Only where it can do something — see
+              `marqueeMode`. ---- */}
+        {edit !== undefined ? (
+          <div className="absolute bottom-3 left-3 z-10">
+            <CanvasModeToggle mode={dragMode} onModeChange={setDragMode} />
+          </div>
+        ) : null}
         {/* ---- zoom pill (bottom-right, the house pattern) ---- */}
         <div
           className={cn("absolute right-3 bottom-3 z-10", ZOOM_PILL_CLASSES)}
@@ -711,7 +1222,43 @@ export function FlowchartViewer({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-              {focusedNode !== null ? (
+              {focusedNode !== null && edit !== undefined ? (
+                /* KEYED BY THE NODE, so moving focus to another symbol
+                   remounts the form with that symbol's values. A shared
+                   instance would keep the fields the reader had half-typed and
+                   submit them against a different node — the C4 edge form
+                   carries the same key for the same reason. */
+                <NodeEditForm
+                  key={focusedNode.id}
+                  inSelection={liveSelection.includes(focusedNode.id)}
+                  onToggleSelect={handleToggleSelect}
+                  node={{
+                    id: focusedNode.id,
+                    shape: focusedNode.shape,
+                    label: focusedNode.label,
+                    technology: focusedNode.technology,
+                    tags: focusedNode.tags,
+                    description: focusedNode.description,
+                  }}
+                  edges={focusedNodeEdges.map((e) => ({
+                    index: e.index,
+                    label: describeEdge(e),
+                  }))}
+                  onFocusEdge={handleFocusEdge}
+                  onRevise={edit.onReviseNode}
+                />
+              ) : focusedEdge !== null && edit !== undefined ? (
+                <EdgeEditForm
+                  key={focusedEdge.index}
+                  index={focusedEdge.index}
+                  from={nodeById.get(focusedEdge.from)?.label ?? ""}
+                  to={nodeById.get(focusedEdge.to)?.label ?? ""}
+                  label={focusedEdge.label}
+                  onRevise={edit.onReviseEdge}
+                  onDelete={edit.onDeleteEdge}
+                  onInsert={edit.onInsertStep}
+                />
+              ) : focusedNode !== null ? (
                 <dl className="flex flex-col gap-2.5">
                   <DockRow term="Label" value={focusedNode.label} />
                   <DockRow term="Shape" value={focusedNode.shape} mono />
@@ -781,5 +1328,274 @@ export function FlowchartViewer({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The editable dock                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The dock's field styling, in one place. Three inputs and a textarea share it,
+ * and a fourth copy is how one of them ends up a pixel out from the others.
+ *
+ * `bg-canvas/60` IS THE SHARED ANSWER, not a colour picked here: it is the fill
+ * the C4 details panel's `FIELD_CLASSES` uses for the same job — a control
+ * floating over a diagram — and `check:canvas-chrome` fails a viewer that
+ * reaches for a full-strength `bg-background` or `bg-canvas`, because a
+ * notation grounding itself is how the ground behind a diagram came to change
+ * shade when the reader changed notation.
+ *
+ * NOT EXTRACTED INTO ONE CONSTANT WITH THAT PANEL, deliberately: its fields are
+ * `text-xs` with a top margin because its labels WRAP their control, and these
+ * are `text-sm` in a gap-spaced column. Unifying would change how that panel
+ * looks to save a line. The token is the part that has to agree, and it does.
+ */
+const FIELD_CLASS =
+  "w-full rounded-md border border-border bg-canvas/60 px-2 py-1 text-sm text-foreground " +
+  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+const LABEL_CLASS = "text-xs font-medium text-muted-foreground";
+
+/**
+ * A selected step's own fields, editable in place.
+ *
+ * SUBMIT, NOT KEYSTROKE. Every gesture on this canvas is a source-text patch
+ * and each one lands in the undo ring, so committing per character would fill
+ * that ring with a letter apiece and rewrite the pane under a reader who is
+ * still mid-word. The C4 details panel makes the same call.
+ *
+ * `shape` IS NOT A FIELD HERE, and its absence is deliberate rather than an
+ * omission — changing a step to a decision changes what its outgoing edges
+ * MEAN. It is shown, read-only, so the dock still says what the symbol is.
+ */
+function NodeEditForm({
+  node,
+  edges,
+  onFocusEdge,
+  onRevise,
+  inSelection,
+  onToggleSelect,
+}: {
+  node: {
+    id: string;
+    shape: string;
+    label: string;
+    technology?: string;
+    tags?: readonly string[];
+    description?: string;
+  };
+  edges: readonly { index: number; label: string }[];
+  onFocusEdge: (index: number) => void;
+  onRevise: (nodeId: string, revision: FlowNodeRevision) => void;
+  /** This step is in the grouping selection. */
+  inSelection: boolean;
+  /** Add or remove it — the KEYBOARD path to the grouping gesture. */
+  onToggleSelect: (id: string) => void;
+}): React.JSX.Element {
+  const [label, setLabel] = useState(node.label);
+  const [technology, setTechnology] = useState(node.technology ?? "");
+  /* Tags round-trip through ONE space-separated string rather than a chip
+     editor: the grammar writes them as `#a #b` on the node's own line, and a
+     text field is the shape that matches what the author would have typed. The
+     leading `#` is decoration here — accepted if typed, never required. */
+  const [tags, setTags] = useState((node.tags ?? []).join(" "));
+  const [description, setDescription] = useState(node.description ?? "");
+
+  const submit = (event: React.FormEvent): void => {
+    event.preventDefault();
+    const parsedTags = tags
+      .split(/[\s,]+/)
+      .map((tag) => tag.replace(/^#/, ""))
+      .filter((tag) => tag !== "");
+    onRevise(node.id, {
+      label: label.trim(),
+      // An emptied box REMOVES the field — `undefined` is what the gesture
+      // reads as "drop it", and a blank string would write `[]` or `""`.
+      technology: technology.trim() === "" ? undefined : technology.trim(),
+      tags: parsedTags.length === 0 ? undefined : parsedTags,
+      description: description.trim() === "" ? undefined : description.trim(),
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-flow-label">
+          Label
+        </label>
+        <input
+          id="af-flow-label"
+          className={FIELD_CLASS}
+          value={label}
+          required
+          onChange={(event) => setLabel(event.target.value)}
+        />
+      </div>
+      <DockRow term="Shape" value={node.shape} mono />
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-flow-tech">
+          Technology
+        </label>
+        <input
+          id="af-flow-tech"
+          className={FIELD_CLASS}
+          value={technology}
+          placeholder="Go 1.22"
+          onChange={(event) => setTechnology(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-flow-tags">
+          Tags
+        </label>
+        <input
+          id="af-flow-tags"
+          className={FIELD_CLASS}
+          value={tags}
+          placeholder="checkout retry"
+          onChange={(event) => setTags(event.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-flow-desc">
+          Details
+        </label>
+        <textarea
+          id="af-flow-desc"
+          className={FIELD_CLASS}
+          rows={3}
+          value={description}
+          placeholder="What this step is short for"
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </div>
+      <button
+        type="submit"
+        className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Apply
+      </button>
+      {edges.length > 0 ? (
+        <div>
+          <p className={LABEL_CLASS}>Arrows</p>
+          <div className="mt-1 flex flex-col gap-1">
+            {edges.map((edge) => (
+              <button
+                key={edge.index}
+                type="button"
+                onClick={() => onFocusEdge(edge.index)}
+                className="rounded-md border border-border bg-card px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {edge.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {/* THE KEYBOARD PATH TO GROUPING. Shift-click is the pointer gesture and
+          a keyboard has no shift-click, so without this control the whole
+          grouping feature was reachable by pointer only — the dock is where a
+          keyboard reader already is, having tabbed to this step. */}
+      <button
+        type="button"
+        onClick={() => onToggleSelect(node.id)}
+        aria-pressed={inSelection}
+        className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        {inSelection ? "Remove from selection" : "Add to selection"}
+      </button>
+      {/* The two gestures a pointer has that a keyboard does not, named where a
+          reader will find them rather than left to be discovered. */}
+      <p className="text-xs text-muted-foreground">
+        Drag this step to pin it where you drop it, or drag the handle under it
+        onto another step to connect them. Shift-click also adds a step to the
+        selection.
+      </p>
+    </form>
+  );
+}
+
+/**
+ * A selected arrow's guard label — and its removal.
+ *
+ * BY INDEX, which is also how the focus model addresses an arrow: this grammar
+ * gives an edge no id, and two arrows between the same pair of steps are legal
+ * text, so a `from`/`to` pair would not identify one.
+ */
+function EdgeEditForm({
+  index,
+  from,
+  to,
+  label,
+  onRevise,
+  onDelete,
+  onInsert,
+}: {
+  index: number;
+  from: string;
+  to: string;
+  label?: string;
+  onRevise: (index: number, revision: FlowEdgeRevision) => void;
+  onDelete: (index: number) => void;
+  onInsert: (index: number) => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(label ?? "");
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onRevise(index, {
+          label: draft.trim() === "" ? undefined : draft.trim(),
+        });
+      }}
+      className="flex flex-col gap-3"
+    >
+      <DockRow term="From" value={from} />
+      <DockRow term="To" value={to} />
+      <div className="flex flex-col gap-1">
+        <label className={LABEL_CLASS} htmlFor="af-flow-edge-label">
+          Label
+        </label>
+        <input
+          id="af-flow-edge-label"
+          className={FIELD_CLASS}
+          value={draft}
+          placeholder="yes"
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        {/* The one thing a reader cannot see from the diagram: on an arrow
+            leaving a decision this field IS the branch condition. */}
+        <p className="text-xs text-muted-foreground">
+          On an arrow out of a decision, this is the branch&rsquo;s condition.
+        </p>
+      </div>
+      <button
+        type="submit"
+        className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Apply
+      </button>
+      {/* REMOVAL IS THE ARROW'S, NOT THE STEP'S. Both steps stay declared, and
+          the announcement says so — including when the removal leaves one with
+          nothing pointing at it. Node removal is a separate change; its verdict
+          has three questions this one does not (`deletedFlowEdgeEdit`). */}
+      {/* SPLITTING THE ARROW is `create` on this notation — the new step's
+          place is "between these two", which is what two edges spell, so no
+          coordinate is needed and none is written. */}
+      <button
+        type="button"
+        onClick={() => onInsert(index)}
+        className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Insert a step into this arrow
+      </button>
+      <button
+        type="button"
+        onClick={() => onDelete(index)}
+        className="rounded-md border border-destructive px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        Remove this arrow
+      </button>
+    </form>
   );
 }

@@ -129,7 +129,10 @@ import {
   type ViewerFlowNode,
   type ViewerNodeActions,
 } from "./viewer-node";
-import { ViewerModeToggle, type CanvasDragMode } from "./viewer-mode-toggle";
+import {
+  CanvasModeToggle,
+  type CanvasDragMode,
+} from "@/components/ui/canvas-mode-toggle";
 import { ViewerNodePalette } from "./viewer-node-palette";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
@@ -2719,7 +2722,7 @@ function ViewerCanvasInner({
               there. */}
           <Panel position="bottom-left">
             {editable ? (
-              <ViewerModeToggle
+              <CanvasModeToggle
                 mode={dragMode}
                 onModeChange={handleDragModeChange}
               />
