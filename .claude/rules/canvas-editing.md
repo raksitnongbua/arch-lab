@@ -3,14 +3,15 @@ paths:
   - "src/features/playground/**"
   - "src/features/sequence/**"
   - "src/features/viewer/**"
+  - "src/features/flowchart/**"
   - "scripts/canvas-edit-check.mjs"
   - "scripts/sequence-check.mjs"
 ---
 
 # Editing a Diagram on the Canvas
 
-Two of the six notations can be edited by pointing at the picture rather than at
-the text. This file is how a seventh answers the same question, and it exists
+Three of the nine notations can be edited by pointing at the picture rather than
+at the text. This file is how a tenth answers the same question, and it exists
 because that question has been answered wrongly four times on one branch — each
 time in a way that typechecked, passed every check, and was visible to the first
 person who opened the page.
@@ -26,17 +27,45 @@ derives new text, re-parses it, and hands both back through the path a keystroke
 already takes. Which gestures a document may receive is one table —
 `CANVAS_EDIT_OFFERS` in `src/features/playground/input/canvas-edit.ts` — keyed by
 notation and by **ability**, and `canvasEditability(doc, ability)` is its only
-reader. There are two abilities:
+reader. There are four abilities:
 
-| Ability    | What it writes                        | Needs                                             | Offered by |
-| ---------- | ------------------------------------- | ------------------------------------------------- | ---------- |
-| `"move"`   | geometry — a coordinate               | a per-element position **in the grammar**         | C4         |
-| `"revise"` | one element's own fields, in place    | a knowable line range per element **and** a place on the canvas to type into | sequence, C4 |
+| Ability     | What it writes | Needs | Offered by |
+| ----------- | -------------- | ----- | ---------- |
+| `"move"`    | geometry — a coordinate | a per-element position **in the grammar** | C4, flowchart |
+| `"revise"`  | one element's own fields, in place — including removing it | a knowable line range per element **and** a place on the canvas to type into | C4, sequence, flowchart |
+| `"create"`  | a new element, at a place the text records | somewhere in the text to write the placement | C4, flowchart |
+| `"connect"` | a line between two existing elements | a bare relationship line **in the grammar** | C4, flowchart |
 
-A sequence document refuses `move` and offers `revise`; C4 answers both. That
-is not an accident of what got built first — it is what the grammars can hold
-plus which canvases grew a surface to type into, which is why the answers are
-a grid and not a flag.
+A sequence document refuses `move` and offers `revise`; C4 and the flowchart
+answer all four. That is not an accident of what got built first — it is what
+the grammars can hold plus which canvases grew a surface to act on, which is why
+the answers are a grid and not a flag.
+
+**Two of the flowchart's four cells were `"grammar"` refusals that moved, and
+they moved for opposite reasons — read both before writing one of your own:**
+
+- `move` moved because **the format changed.** `FlowchartNode` grew an optional
+  `(x,y)` and `layout.ts` honours it (ADR 0002, superseding ADR 0001). This is
+  the only legitimate way a `"grammar"` refusal ever moves, and it costs a
+  format decision with a changelog entry and an ADR — not a code change.
+- `create` moved because **the refusal was simply wrong.** Its cell had copied
+  `NO_PLACE_IN_THE_TEXT` from the notations that solve their own layout: "there
+  is no position to place a new element at." But a flowchart step's place *is*
+  its arrows, so "between these two steps" was always writable — splitting
+  `a -> b` into `a -> new` and `new -> b` needed no new grammar and would have
+  worked a release earlier. **A written-out cell can copy the wrong
+  neighbour's sentence just as easily as a default can supply one**, which is
+  the failure mode the "no default cell" rule does *not* protect against. When
+  you write a refusal, check it against your own notation rather than against
+  the cell above it.
+
+**Removal rides under `revise`**, not under an ability of its own — C4's
+`deletedEdgeEdit` and the flowchart's `deletedFlowEdgeEdit` both gate on it. So
+offering `revise` does not settle whether a notation may delete anything. That
+is a separate decision, argued in each notation's own gesture module: the
+flowchart removes an arrow and refuses to remove a node, because a node
+removal's verdict has to answer for an emptied group, a one-branch decision and
+a split graph.
 
 ## Does my notation have anything to edit on a canvas?
 
@@ -63,13 +92,22 @@ parse — because every edit is a line patch (see below). Without spans there is
 
 **3. Is there somewhere on the canvas to make the edit?** A grammar that could
 hold the edit and a canvas with no dock, inspector or handle to make it with is a
-legitimate refusal too, with `ground: "surface"`. The four text-laid-out
-notations refuse `revise` on exactly these grounds. The C4 canvas refused it
-this way for a release — "it already has move and delete, and a second, weaker
+legitimate refusal too, with `ground: "surface"`. The text-laid-out notations
+that have grown no dock refuse `revise` on exactly these grounds. The C4 canvas
+refused it this way for a release — "it already has move and delete, and a second, weaker
 field editor would be two authoring surfaces for one model" — and that refusal
 then moved the way a `"surface"` refusal is supposed to: the details panel the
 canvas already rendered for a selected element became the surface
 (`revisedNodeEdit`), not a new inspector beside one.
+
+**The flowchart canvas then did the same thing twice**, which is what makes this
+a pattern rather than one lucky reuse. Its `revise` refusal moved into the
+details dock the canvas already opened to show a node's `desc`
+(`revisedFlowNodeEdit`), and its `connect` refusal moved onto a grip drawn on
+the node that already had focus (`connectedFlowEdgeEdit`) — costing no new
+pointer arbitration, because the canvas's drag-to-pan already stands down for
+any press inside `.af-flow-hit`. **Look for the surface the canvas already has
+before building one.**
 
 **The two grounds are both shipped answers.** `"surface"` is not a to-do marker.
 The distinction is there so the next reader knows whether the refusal is theirs
@@ -105,18 +143,26 @@ just tried something, so:
 
 **A pane-language exception where one applies.** A cell that offers an ability
 can still refuse it in one pane language, via `unlessPane`: Mermaid C4 carries no
-geometry and gives `technology` no slot on person/system elements, and Mermaid
-`sequenceDiagram` holds neither `desc` nor `[technology]`.
+geometry and gives `technology` no slot on person/system elements, Mermaid
+`sequenceDiagram` holds neither `desc` nor `[technology]`, and Mermaid
+`flowchart` drops a node's `desc`, `[technology]` and `#tag`s.
 All are **measured against the emitter**, not assumed —
-`MERMAID_SEQUENCE_EXPORT_CAVEAT` and `MERMAID_C4_EXPORT_CAVEAT` are the
-evidence, and a check asserts each caveat
-still says what the refusal claims it says. If you add such an exception, name
-the fields that would be lost; "the format is not supported" tells the reader
+`MERMAID_SEQUENCE_EXPORT_CAVEAT`, `MERMAID_C4_EXPORT_CAVEAT` and
+`MERMAID_FLOWCHART_EXPORT_CAVEAT` are the evidence, and a check asserts each
+caveat still says what the refusal claims it says.
+
+**An exception is per (notation, ability), and one pane may answer them
+differently.** The flowchart cells are the worked example: `revise` is refused
+in a Mermaid pane because those three fields provably do not survive it, and
+`connect` is not, because the same emitter provably writes every edge with its
+label. Gating both for tidiness would have been a refusal with no evidence
+behind it. If you add such an exception, name the
+fields that would be lost; "the format is not supported" tells the reader
 nothing about what switching the pane would buy them.
 
-**Every gesture asks before it acts.** Each entry point in
-`sequence-edit.ts` / `canvas-edit.ts` calls `canvasEditability` itself. A gesture
-that trusts its caller is unguarded the day somebody points it at another
+**Every gesture asks before it acts.** Each entry point in `canvas-edit.ts` /
+`sequence-edit.ts` / `flowchart-edit.ts` calls `canvasEditability` itself. A
+gesture that trusts its caller is unguarded the day somebody points it at another
 notation, and the check derives the gesture list from the viewer's own handler
 interface so a new one is covered automatically.
 
@@ -125,6 +171,15 @@ a full re-serialize deleted every `//` comment in the author's file on the first
 drag, and it passed every assertion for a release, because a re-emit of canonical
 text *is* canonical text. Patch only the lines the gesture is about, and prove it
 from deliberately non-canonical text.
+
+**And a gesture the neighbouring canvas already has must work the same way.**
+The flowchart canvas shipped multi-select as a shift-click while the C4 canvas
+next door had a Select/Pan toggle and a marquee — so a reader who had learned
+one had not learned the other, which is `codebase.md` habit 2 exactly ("when
+adding the Nth of something, open the (N-1)th and match it"). Read the other
+canvas's implementation before designing an interaction, not after a user
+reports it. Where the two share a control, it belongs in `components/ui` rather
+than in one feature (`CanvasModeToggle` moved there for this).
 
 **And the control that gates it must render in the branch your notation takes.**
 `67b35ae` is the most expensive bug in this area: the canvas lock was correct in
@@ -139,13 +194,25 @@ renders `CanvasLockButton` and it gets its own wording in `CANVAS_LOCK_COPY`.
 mentions is a feature nobody finds. The playground heading names every verb the
 canvas offers, and the check fails until a new one is named there.
 
+**Mind the one budgeted surface while you do.** The outward-facing sentences are
+derived from the grid, so they update themselves — `/live`'s meta description
+among them, and a meta description has 160 characters for everything it says.
+The third editable canvas pushed it to 166 with every check green, because a
+comment recording "six characters of headroom" is not a measurement.
+`CANVAS_EDITABLE_SUMMARY` spells notations with `shortNoun` now, and
+`check:canvas-edit` measures the assembled description. If a fourth canvas
+overflows it again, the answer is written in `src/app/live/page.tsx`: drop the
+notation list and name the count.
+
 ## Which checks fail until you have done it
 
 | Check                | Fails on                                                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `check:canvas-edit`  | a notation with no cell for an ability, or a cell for a notation that no longer exists; a refusal that reads as unfinished, is a dead end, or has no `ground`; the function disagreeing with the table; refusal prose that stopped being derived; a lockable canvas with no lock rendered or no wording; a gesture no control invokes; a stale claim about what the canvas can do |
 | `check:sequence`     | a sequence gesture that re-emits instead of patching, or that leaves a document the parser refuses                          |
-| `check:view-input`   | an impure import in `input/parse.ts`; `check:canvas-edit` and `check:sequence` do the same for their two edit modules. All three load the real code through Node's type stripping, which cannot read `.tsx` at all, so an import reaching a feature barrel that exports a component removes the module from its only harness |
+| `check:flowchart`    | a flowchart grammar or serializer change the edit path needed that broke a round trip; the spans and the model disagreeing about how many edges a document has |
+| `check:view-input`   | an impure import in `input/parse.ts`; `check:canvas-edit` and `check:sequence` do the same for the three edit modules
+(`canvas-edit.ts`, `sequence-edit.ts` and `flowchart-edit.ts`). All three load the real code through Node's type stripping, which cannot read `.tsx` at all, so an import reaching a feature barrel that exports a component removes the module from its only harness |
 | `check:archtext` / `check:roundtrip` | a grammar or serializer change your edit path needed that broke open-change-nothing-save                        |
 
 **Write the assertion, then break the code and watch it fail.** This has gone
