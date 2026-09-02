@@ -88,7 +88,7 @@ import {
   CanvasLockButton,
   canvasStateLabel,
 } from "./canvas-lock-button";
-import { LayoutDirectionToggle } from "./layout-direction-toggle";
+import { LayoutDirectionMenu } from "./layout-direction-menu";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
@@ -1138,14 +1138,7 @@ export function ViewPlayground({
      re-render when the reader drills into another one. Both are written here,
      in one place, so they cannot disagree. */
   const [activeDiagramId, setActiveDiagramId] = useState<string | null>(null);
-  /* Which line the direction buttons write. Component state, not persisted:
-     it is a reading of the control, not a property of the document, and a
-     scope remembered across documents would have the next file's first press
-     land somewhere the reader did not choose. Defaults to the diagram, which
-     is the narrower of the two. */
-  const [directionScope, setDirectionScope] = useState<"layer" | "file">(
-    "layer",
-  );
+
   const handleDiagramChange = useCallback((diagramId: string) => {
     currentDiagramRef.current = diagramId;
     setActiveDiagramId(diagramId);
@@ -1943,9 +1936,7 @@ export function ViewPlayground({
                         editability.editable &&
                         doc.kind === "c4" &&
                         activeDiagramId !== null ? (
-                          <LayoutDirectionToggle
-                            scope={directionScope}
-                            onScopeChange={setDirectionScope}
+                          <LayoutDirectionMenu
                             layerDirection={
                               doc.synced.file.diagrams.find(
                                 (candidate) => candidate.id === activeDiagramId,

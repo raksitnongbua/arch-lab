@@ -10,16 +10,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - **The layout direction can be set from the canvas, not only in the text.**
-  With the padlock open, two controls sit beside it: **where** the direction
-  applies — `This layer` or `Whole file` — and **which way** — `Top-down` or
-  `Left-right`. `This layer` writes `direction=` onto that diagram's own line;
-  `Whole file` writes the file's `direction` header line. Whichever is in force
-  at the scope you have chosen reads as pressed, and a `Follow file` / `Clear`
-  button appears **only when there is something to clear**, so no button on
-  this control is ever one whose press does nothing. Each press changes **one
-  line** of your document and leaves your comments, blank lines and spacing
-  exactly as they were; setting the file's direction never rewrites a diagram
-  that has its own.
+  With the padlock open, a small `Top-down` / `Left-right` button beside it
+  shows how the diagram on screen is laid out and opens a menu of outcomes:
+  top-down or left-right, for **this layer** or for the **whole file**, each
+  row naming the line it writes. The row already in force is ticked rather than
+  pressable, and a row for removing a setting appears only when there is one to
+  remove — so no row in the menu is ever one whose press does nothing. Each
+  choice changes **one line** of your document and leaves your comments, blank
+  lines and spacing exactly as they were; setting the file's direction never
+  rewrites a diagram that has its own.
 - **A diagram can be laid out left-to-right, and it will tell you when it
   should be.** `direction lr` as a header line sets it for the whole file;
   `direction=lr` on a `@context`/`@container`/`@component` line sets it for one
