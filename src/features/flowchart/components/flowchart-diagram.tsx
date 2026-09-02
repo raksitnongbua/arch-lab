@@ -11,8 +11,12 @@
  *
  * PAINT ORDER (SVG has no z-index; document order is stacking order):
  * group frames first (they are context, everything sits ON them), then
- * edges, then edge labels (over the lines they annotate), then nodes (a box
- * must cover any lane that passes behind its row), then the heading.
+ * edges, then nodes (a box must cover any lane that passes behind its row),
+ * then edge LABELS, then the heading. Labels last is deliberate and moved
+ * there after a bug: nested inside their edge they sat under every node, so a
+ * guard the layout could not place clear of a box vanished rather than merely
+ * crowding one. Being on top of a node is a worse-looking guard; being under
+ * one is no guard at all.
  *
  * FOCUS: clicking a node emphasises it and keeps its incident edges and
  * their far endpoints lit; clicking an edge keeps its two endpoints lit;
@@ -270,12 +274,19 @@ export function FlowchartDiagram({
   return (
     <svg
       ref={svgRef}
-      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      /* THE LAYOUT'S OWN FRAME, which is `0 0 width height` for every chart
+         with no pinned node and wider than it whenever a pin sits outside the
+         solved bounds. Reading `0 0` here cropped exactly that case — a
+         dragged step drawn 64% off the left of the picture — and the export
+         inherited the crop. `toUserUnits` is `getScreenCTM()`-based, so it
+         follows a moved origin on its own, and `layout.offset` is untouched:
+         the drag still inverts exactly. */
+      viewBox={`${layout.bounds.x} ${layout.bounds.y} ${layout.bounds.width} ${layout.bounds.height}`}
       {...(zoom === "fit"
         ? { width: "100%", height: "100%" }
         : {
-            width: Math.round(layout.width * zoom),
-            height: Math.round(layout.height * zoom),
+            width: Math.round(layout.bounds.width * zoom),
+            height: Math.round(layout.bounds.height * zoom),
           })}
       preserveAspectRatio="xMidYMid meet"
       role="img"
@@ -379,6 +390,25 @@ export function FlowchartDiagram({
              node the arrow would land on before letting go — a drop that
              reveals its target only afterwards is a drop taken on faith. */
           connectTarget={connectDrag?.over === node.id}
+        />
+      ))}
+
+      {/* ---- edge labels, AFTER the nodes ----
+            Paint order is the safety net under the layout's collision walk.
+            They used to live inside their own edge's group, i.e. under every
+            node — so a guard the layout could not place clear of a box did not
+            merely read badly, it disappeared, leaving the tail of the word
+            poking past the node's edge (reported as a label reading "d"). The
+            layout still tries to keep them off the boxes; this is what happens
+            when it cannot. Each one re-wears `af-flow-edge` and its source's
+            `--flow-rank` because it left the group that carried them, and the
+            stylesheet's `.af-flow-edge .af-flow-elabel` window is unchanged. */}
+      {layout.edges.map((edge) => (
+        <EdgeLabel
+          key={`elabel-${edge.index}`}
+          edge={edge}
+          sourceRank={nodeById.get(edge.from)?.rank ?? 0}
+          dimmed={edgeDimmed(edge.index)}
         />
       ))}
 
@@ -946,46 +976,6 @@ function Edge({
           />
         </g>
       ) : null}
-      {edge.labelBox !== null ? (
-        <g className="af-flow-elabel pointer-events-none">
-          {/* A canvas-coloured backing plate, from the SAME box the layout
-              cleared of collisions — the halo is what keeps a guard legible
-              when a group wash sits behind it. */}
-          <rect
-            x={edge.labelBox.x}
-            y={edge.labelBox.y}
-            width={edge.labelBox.width}
-            height={edge.labelBox.height}
-            rx={4}
-            fill="var(--canvas)"
-            fillOpacity={0.88}
-          />
-          <text
-            x={edge.labelBox.x + FLOW.labelPadX}
-            fontSize={FLOW.labelFontSize}
-            fontStyle="italic"
-            fill="var(--muted-foreground)"
-          >
-            {edge.labelLines.map((line, index) => (
-              <tspan
-                key={index}
-                x={
-                  edge.labelBox === null ? 0 : edge.labelBox.x + FLOW.labelPadX
-                }
-                y={
-                  (edge.labelBox === null ? 0 : edge.labelBox.y) +
-                  FLOW.labelPadY +
-                  index * FLOW.labelLineHeight +
-                  FLOW.labelFontSize -
-                  2
-                }
-              >
-                {line}
-              </tspan>
-            ))}
-          </text>
-        </g>
-      ) : null}
       {/* The hit target: the same polyline, invisibly wide. `stroke` hit
           testing only — a filled hit path over an open polyline would claim
           the whole area the line encloses. */}
@@ -1005,6 +995,73 @@ function Edge({
         }}
         onKeyDown={onKeyDown}
       />
+    </g>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* One edge's label                                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A guard, drawn as its own top-level layer rather than as a child of its
+ * edge — see the paint-order note at the call site. Carries the edge's
+ * dimmable group and `--flow-rank` itself so the focus dim and the trace's
+ * head window behave exactly as they did when it was nested.
+ */
+function EdgeLabel({
+  edge,
+  sourceRank,
+  dimmed,
+}: {
+  edge: LaidFlowEdge;
+  sourceRank: number;
+  dimmed: boolean;
+}): React.JSX.Element | null {
+  const box = edge.labelBox;
+  if (box === null || edge.points.length < 2) return null;
+  return (
+    <g
+      aria-hidden="true"
+      className={cn(DIMMABLE, "af-flow-edge", dimmed && DIM)}
+      style={{ "--flow-rank": sourceRank } as React.CSSProperties}
+    >
+      <g className="af-flow-elabel pointer-events-none">
+        {/* A canvas-coloured backing plate, from the SAME box the layout
+            cleared of collisions — the halo is what keeps a guard legible
+            when a group wash or a passing line sits behind it. */}
+        <rect
+          x={box.x}
+          y={box.y}
+          width={box.width}
+          height={box.height}
+          rx={4}
+          fill="var(--canvas)"
+          fillOpacity={0.88}
+        />
+        <text
+          x={box.x + FLOW.labelPadX}
+          fontSize={FLOW.labelFontSize}
+          fontStyle="italic"
+          fill="var(--muted-foreground)"
+        >
+          {edge.labelLines.map((line, index) => (
+            <tspan
+              key={index}
+              x={box.x + FLOW.labelPadX}
+              y={
+                box.y +
+                FLOW.labelPadY +
+                index * FLOW.labelLineHeight +
+                FLOW.labelFontSize -
+                2
+              }
+            >
+              {line}
+            </tspan>
+          ))}
+        </text>
+      </g>
     </g>
   );
 }

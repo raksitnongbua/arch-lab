@@ -82,6 +82,14 @@ const { layoutFlowchart, FLOW } = await import(
 const { ARROW_LENGTH } = await import(
   pathToFileURL(path.join(ROOT, "src/features/flowchart/lib/shapes.ts")).href
 );
+/* The SVG exporter, loaded for real rather than read as source: it is the
+   other consumer of the geometry below, and the frame it writes is the half
+   of the pin crop that no assertion covered. `resolveExportGround()` returns
+   an empty ground outside a browser, so this is Node-safe. */
+const { renderFlowchartSvg } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/flowchart/export/render-svg.ts"))
+    .href
+);
 
 /* ----------------------------------------------------------------------- */
 /* Harness                                                                  */
@@ -184,7 +192,22 @@ const pointToEdge = (p, edge) =>
  * ship — run against EVERY fixture, because the routing regression this
  * suite exists for showed up on the user's chart, not on the one someone
  * was editing. */
-function assertBackEdgesReadAsArrows(label, layout) {
+function assertBackEdgesReadAsArrows(
+  label,
+  layout,
+  /* THE ONE OPT-OUT, and it is a geometric impossibility rather than a
+   * to-do. The label clause below asks each guard to be strictly closer to
+   * its own line than to any other. Two loops between the SAME pair of nodes
+   * leave one flank 16px apart — that is `laneGap`, clamped into 55% of a
+   * 37px-tall step — so no 115px-wide guard can be nearer to one of them than
+   * to the other, at any placement. Fixture 5 is that chart, and it opts out
+   * with the substitute assertion written beside its call: the two guards do
+   * not overlap and they appear in the SAME vertical order as the lines they
+   * name, which is how a reader pairs them off instead. Every other fixture
+   * takes the clause; do not reach for this flag to quiet a chart whose
+   * guards merely landed badly. */
+  { attributableLabels = true } = {},
+) {
   const nodeById = new Map(layout.nodes.map((n) => [n.id, n]));
   const backs = layout.edges.filter((e) => e.back && !e.self);
 
@@ -263,17 +286,19 @@ function assertBackEdgesReadAsArrows(label, layout) {
   /* THE BRANCH LABELS — the user's "yes"/"no" pair flanked one overlap point
    * below the diamond, so neither guard was attributable to its line. */
   const labelled = layout.edges.filter((e) => e.labelBox !== null);
-  check(
-    `${label}: every edge label sits strictly closer to ITS OWN line than to any other labelled line — equidistant guards are swappable guards, exactly the yes/no ambiguity that was reported`,
-    labelled.every((e) => {
-      const centre = {
-        x: e.labelBox.x + e.labelBox.width / 2,
-        y: e.labelBox.y + e.labelBox.height / 2,
-      };
-      const own = pointToEdge(centre, e);
-      return labelled.every((o) => o === e || own < pointToEdge(centre, o));
-    }),
-  );
+  if (attributableLabels) {
+    check(
+      `${label}: every edge label sits strictly closer to ITS OWN line than to any other labelled line — equidistant guards are swappable guards, exactly the yes/no ambiguity that was reported`,
+      labelled.every((e) => {
+        const centre = {
+          x: e.labelBox.x + e.labelBox.width / 2,
+          y: e.labelBox.y + e.labelBox.height / 2,
+        };
+        const own = pointToEdge(centre, e);
+        return labelled.every((o) => o === e || own < pointToEdge(centre, o));
+      }),
+    );
+  }
   check(
     `${label}: edges leaving one node depart through distinct points (>= 8px apart) — branches that share a departure point cannot be told apart at the vertex they leave`,
     layout.nodes.every((n) => {
@@ -882,6 +907,510 @@ check(
   JSON.stringify(layoutFlowchart(parseFlowchartText(THAI))) ===
     JSON.stringify(thai),
 );
+
+/* ----------------------------------------------------------------------- */
+/* Fixture 5 — the reported PINNED chart, verbatim: two of four nodes carry  */
+/* an author's `(x,y)`, and everything the pin feature had not been made to  */
+/* meet came out at once. Measured on the shipped code before the fix:       */
+/* the canvas was 411x436 with a `0 0 411 436` viewBox while the `locked`    */
+/* step spanned x=-62..34, so 64% of it was outside the frame on screen and  */
+/* in every PNG; the three return corridors sat at x=-94/-110/-126, all      */
+/* outside it too; the two `locked -> available` loops were one polyline     */
+/* drawn twice; and the "penalty removed" guard was placed at (-54, 325.5),  */
+/* inside the `locked` box, where the node painted over it and left the last */
+/* glyph or two showing — reported as a label reading "d".                   */
+/* ----------------------------------------------------------------------- */
+
+console.log("the reported pinned chart (regression, user report verbatim)");
+
+const PINNED = `archlab 1.0 flowchart
+title "Crypto withdrawal standing"
+description "Three states, three events. The point total decides where a penalty lands."
+
+@flowchart
+  step available "Available"
+    desc "crypto_suspended = false. Withdrawals allowed.\\nNOT a clean slate — the point total carries over."
+  decision total "Failed time?"
+    desc "Points accumulate across penalties and are never reset by an expiry or a removal."
+  step locked "Locked" (-193,307)
+    desc "crypto_suspended = true.\\n3 points = 1h, 6 points = 24h."
+  step suspended "Suspended" (76,336)
+    desc "crypto_suspended = true. No timer."
+
+  available -> total : "penalty applied"
+
+  total -> locked : "3 or 6"
+  total -> suspended : "9"
+  locked -> available : "penalty expired"
+  locked -> available : "penalty removed"
+  suspended -> available : "penalty removed"
+`;
+
+const pinnedLayout = layoutFlowchart(parseFlowchartText(PINNED));
+
+/* ---- the fixture must actually exercise the defect ----
+ * An assertion that everything sits inside `bounds` proves nothing on a
+ * chart whose bounds are the plain canvas. This is the clause that keeps
+ * fixture 5 about pins: if a future ordering change happened to bring every
+ * pinned box back inside `0..width`, the containment assertions below would
+ * pass vacuously and this one fails to say so. */
+check(
+  "the pins really do draw outside the origin-measured canvas — otherwise the containment clauses below prove nothing about pins",
+  pinnedLayout.bounds.x < 0 &&
+    pinnedLayout.nodes.some((n) => n.x < 0) &&
+    pinnedLayout.edges.some((e) => e.points.some((p) => p.x < 0)),
+  `bounds ${box(pinnedLayout.bounds)}, leftmost node x ${Math.min(...pinnedLayout.nodes.map((n) => n.x))}`,
+);
+
+/* ---- everything the reader must see is inside the declared frame ----
+ * `bounds` is what all three renderers set their viewBox to, so anything
+ * outside it is invisible on screen AND cropped out of every export. This is
+ * the assertion the shipped bug fails: `locked` at x=-62..34 against a frame
+ * that started at 0. */
+{
+  const frame = pinnedLayout.bounds;
+  const insideFrame = (rect) => rectInside(rect, frame);
+  check(
+    "every node box lies inside the layout's declared bounds — a pinned box outside the frame is a step the reader cannot see and the PNG does not contain",
+    pinnedLayout.nodes.every((n) =>
+      insideFrame({ x: n.x, y: n.y, width: n.width, height: n.height }),
+    ),
+    pinnedLayout.nodes
+      .filter(
+        (n) =>
+          !insideFrame({ x: n.x, y: n.y, width: n.width, height: n.height }),
+      )
+      .map((n) => `${n.id} ${box(n)}`)
+      .join(" "),
+  );
+  check(
+    "every edge point lies inside the bounds — the three return corridors of this chart all sat outside the old frame, drawn and then cropped",
+    pinnedLayout.edges.every((e) =>
+      e.points.every((p) =>
+        insideFrame({ x: p.x, y: p.y, width: 0, height: 0 }),
+      ),
+    ),
+    pinnedLayout.edges
+      .filter((e) =>
+        e.points.some(
+          (p) => !insideFrame({ x: p.x, y: p.y, width: 0, height: 0 }),
+        ),
+      )
+      .map((e) => `${e.from}->${e.to}`)
+      .join(" "),
+  );
+  check(
+    "every edge label lies inside the bounds",
+    pinnedLayout.edges.every(
+      (e) => e.labelBox === null || insideFrame(e.labelBox),
+    ),
+    pinnedLayout.edges
+      .filter((e) => e.labelBox !== null && !insideFrame(e.labelBox))
+      .map((e) => `${e.from}->${e.to} ${box(e.labelBox)}`)
+      .join(" "),
+  );
+  check(
+    "the bounds GROW around the drawing rather than shifting it — they contain the origin-measured canvas, so no existing chart's frame can shrink",
+    frame.x <= 0 &&
+      frame.y <= 0 &&
+      frame.x + frame.width >= pinnedLayout.width &&
+      frame.y + frame.height >= pinnedLayout.height,
+    `${box(frame)} vs canvas ${pinnedLayout.width}x${pinnedLayout.height}`,
+  );
+}
+
+/* ---- THE DRAG GUARANTEE, as an assertion instead of a comment ----
+ * `offset` is the number the viewer subtracts from a drop point to store it
+ * (`movedFlowNodeEdit`), so if MOVING a pin moves the offset, the next drag
+ * lands somewhere other than under the cursor — measured at up to 280px
+ * before the minima were made pin-free. Every pass that reads geometry has
+ * to preserve this, and until now nothing proved it: the corridor claim read
+ * pinned boxes for a release with every check green. */
+{
+  const moved = layoutFlowchart(
+    parseFlowchartText(
+      PINNED.replace("(-193,307)", "(-640,412)").replace(
+        "(76,336)",
+        "(910,120)",
+      ),
+    ),
+  );
+  check(
+    "moving both pins a long way changes NO part of `offset` — the shift a drag inverts must not be a function of where the pins sit, or dragging a step walks it off the page",
+    moved.offset.x === pinnedLayout.offset.x &&
+      moved.offset.y === pinnedLayout.offset.y,
+    `${JSON.stringify(pinnedLayout.offset)} vs ${JSON.stringify(moved.offset)}`,
+  );
+  check(
+    "and the far-flung pins are still inside the bounds of THAT layout — the frame follows the pin even when the shift does not",
+    moved.nodes.every((n) =>
+      rectInside(
+        { x: n.x, y: n.y, width: n.width, height: n.height },
+        moved.bounds,
+      ),
+    ),
+    box(moved.bounds),
+  );
+}
+
+/* ---- the drag guarantee's OTHER half: a pin a loop merely SPANS ----
+ * The case above moves the pins the loops are attached to, and those loops
+ * are excluded from the shift's minima because they touch a pin. The case
+ * that was actually broken is this one: `locked -> available` runs from rank 2
+ * to rank 0 and therefore SPANS rank 1, so a pin on rank 1 moved the corridor
+ * that loop climbs — and nothing about that loop touches a pin, so it went
+ * on pulling `minX`. Measured on the shipped code: dragging the decision from
+ * x=-103 to x=-503 moved `offset.x` from 269 to 563, i.e. the shift moved
+ * 294px because of a drag three rows away, and the NEXT drag would land that
+ * far from the cursor. The pins here are on the spanned row precisely to
+ * catch that, and the same document is laid out at three pin positions
+ * because one position proves nothing about invariance. */
+{
+  const spannedPin = (at) => `archlab 1.0 flowchart
+title "Spanned pin"
+
+@flowchart
+  step available "Available"
+  decision total "Failed time?" ${at}
+  step locked "Locked"
+  step suspended "Suspended"
+
+  available -> total : "penalty applied"
+  total -> locked : "3 or 6"
+  total -> suspended : "9"
+  locked -> available : "penalty expired"
+  suspended -> available : "penalty removed"
+`;
+  const offsets = ["(-103,191)", "(-503,191)", "(297,191)"].map((at) =>
+    layoutFlowchart(parseFlowchartText(spannedPin(at))),
+  );
+  check(
+    "a pin on a row a loop only PASSES leaves `offset` alone at every position — the corridor that loop climbs may follow the pinned box, but the shift a drag inverts may not",
+    offsets.every(
+      (l) =>
+        l.offset.x === offsets[0].offset.x &&
+        l.offset.y === offsets[0].offset.y,
+    ),
+    offsets.map((l) => JSON.stringify(l.offset)).join(" vs "),
+  );
+  check(
+    "and the loop is still drawn inside that layout's bounds — excluding it from the shift must not exclude it from the frame",
+    offsets.every((l) =>
+      l.edges.every((e) =>
+        e.points.every((pt) =>
+          rectInside({ x: pt.x, y: pt.y, width: 0, height: 0 }, l.bounds),
+        ),
+      ),
+    ),
+    offsets.map((l) => box(l.bounds)).join(" "),
+  );
+}
+
+/* ---- guards stay visible ----
+ * Nodes paint over edge labels on both canvases, so a guard under a box is
+ * not a crowded guard, it is a missing one. The layout's own walk is the
+ * first line of defence and this is what proves it held. */
+check(
+  "no edge label overlaps any node box — the reported symptom was a guard placed inside the `locked` step, which the node then painted over",
+  pinnedLayout.edges.every(
+    (e) =>
+      e.labelBox === null ||
+      pinnedLayout.nodes.every((n) => !rectsOverlap(e.labelBox, n, 1)),
+  ),
+  pinnedLayout.edges
+    .filter(
+      (e) =>
+        e.labelBox !== null &&
+        pinnedLayout.nodes.some((n) => rectsOverlap(e.labelBox, n, 1)),
+    )
+    .map((e) => `${e.from}->${e.to} ${box(e.labelBox)}`)
+    .join(" "),
+);
+check(
+  "no two edge labels overlap on the pinned chart either",
+  (() => {
+    const boxes = pinnedLayout.edges
+      .filter((e) => e.labelBox !== null)
+      .map((e) => e.labelBox);
+    return boxes.every((a, i) =>
+      boxes.every((b, j) => i >= j || !rectsOverlap(a, b, 1)),
+    );
+  })(),
+);
+
+/* ---- two loops between the same pair are two loops ----
+ * `locked -> available` twice: both got the same plan, both left at exactly
+ * the source's `cy` and both landed at exactly the target's `cy`, so one
+ * polyline was drawn on top of the other with two arrowheads on one pixel.
+ * Nothing about pins was needed to reproduce it — it ships in v1.x. */
+{
+  const parallel = pinnedLayout.edges.filter(
+    (e) => e.from === "locked" && e.to === "available",
+  );
+  check(
+    "the document's two `locked -> available` loops are both laid out",
+    parallel.length === 2,
+  );
+  const [first, second] = parallel;
+  check(
+    "the two parallel loops LEAVE at different points — a shared departure is one arrow the reader cannot count twice",
+    first.points[0].y !== second.points[0].y,
+    `${JSON.stringify(first?.points[0])} vs ${JSON.stringify(second?.points[0])}`,
+  );
+  check(
+    "and LAND at different points, so there are two arrowheads to see rather than two drawn on one",
+    (() => {
+      const a = first.points[first.points.length - 1];
+      const b = second.points[second.points.length - 1];
+      return a.x !== b.x || a.y !== b.y;
+    })(),
+    `${JSON.stringify(first?.points.at(-1))} vs ${JSON.stringify(second?.points.at(-1))}`,
+  );
+  check(
+    "and share no horizontal run's y — two runs on one y are one line, however many edges claim it",
+    (() => {
+      const ys = (e) =>
+        segments(e)
+          .filter(([a, b]) => a.y === b.y && a.x !== b.x)
+          .map(([a]) => a.y);
+      const mine = ys(first);
+      return ys(second).every((y) => !mine.includes(y));
+    })(),
+  );
+  check(
+    "each of the two loops still leaves and lands within its own node's height — a spread wide enough to slide off the box would trade one defect for another",
+    parallel.every((e) => {
+      const from = pinnedLayout.nodes.find((n) => n.id === e.from);
+      const to = pinnedLayout.nodes.find((n) => n.id === e.to);
+      const exit = e.points[0];
+      const land = e.points[e.points.length - 1];
+      return (
+        exit.y > from.y &&
+        exit.y < from.y + from.height &&
+        land.y > to.y &&
+        land.y < to.y + to.height
+      );
+    }),
+  );
+}
+
+assertBackEdgesReadAsArrows("pinned chart", pinnedLayout, {
+  attributableLabels: false,
+});
+
+/* ---- the substitute for the clause fixture 5 cannot satisfy ----
+ * Two loops off one flank sit 16px apart, so no guard wide enough to hold
+ * "penalty removed" can be nearer to one line than to the other (the flag's
+ * comment carries the arithmetic). What a reader CAN use is the ordering:
+ * the upper line's guard is the upper guard. That is the property this pins,
+ * and it fails the moment the placement walk stops respecting the exit
+ * spread — which is exactly the state the chart shipped in, with both guards
+ * on one y because both lines were on one y. */
+{
+  const [upper, lower] = pinnedLayout.edges
+    .filter((e) => e.from === "locked" && e.to === "available")
+    .sort((a, b) => a.points[0].y - b.points[0].y);
+  check(
+    "of the two parallel loops, the one that leaves HIGHER carries the higher guard — with neither guard nearest its own line, matching order is what lets a reader pair each name to its arrow",
+    upper.points[0].y < lower.points[0].y &&
+      upper.labelBox.y < lower.labelBox.y &&
+      !rectsOverlap(upper.labelBox, lower.labelBox, 1),
+    `lines at y ${upper.points[0].y}/${lower.points[0].y}, guards at y ${upper.labelBox.y}/${lower.labelBox.y}`,
+  );
+}
+
+check(
+  "fixture 5 is deterministic too — a pin must not make the layout order-dependent",
+  JSON.stringify(layoutFlowchart(parseFlowchartText(PINNED))) ===
+    JSON.stringify(pinnedLayout),
+);
+
+/* ---- the exporter frames the same rectangle -----------------------------
+ * `render-svg.ts` is the other reader of this layout, and it was the half
+ * that shipped the crop: it wrote `viewBox="0 0 width height"`, which is the
+ * bounds only when nothing is pinned. Rendered here with a stand-in palette
+ * — the assertion is about the frame, and a Proxy answering every colour
+ * lookup cannot go stale when the theme grows a token. */
+{
+  const swatch = "#808080";
+  const pairs = new Proxy(
+    {},
+    { get: () => ({ fill: swatch, border: swatch }) },
+  );
+  const theme = new Proxy(
+    {},
+    {
+      get: (_, key) => {
+        if (key === "flowShapes" || key === "nodeRoles") return pairs;
+        if (key === "roleTexture") return { ink: swatch, opacity: 0 };
+        return swatch;
+      },
+    },
+  );
+  const rendered = renderFlowchartSvg(parseFlowchartText(PINNED), theme);
+  const frame = pinnedLayout.bounds;
+  check(
+    "the exported SVG's viewBox IS the layout's bounds — the exporter and the screen must frame one rectangle, or the file is not the picture the reader approved",
+    rendered.svg.includes(
+      `viewBox="${frame.x} ${frame.y} ${frame.width} ${frame.height}"`,
+    ),
+    /viewBox="[^"]*"/.exec(rendered.svg)?.[0] ?? "no viewBox",
+  );
+  check(
+    "and the size it reports — the one the PNG rasterises at — is that rectangle's, not the origin-measured canvas's",
+    rendered.width === frame.width && rendered.height === frame.height,
+    `${rendered.width}x${rendered.height} vs ${frame.width}x${frame.height}`,
+  );
+  check(
+    "every edge label is emitted AFTER the last node group, because a node paints over a label and a hidden guard is worse than a crowded one",
+    rendered.svg.lastIndexOf('class="af-export-flow-node"') <
+      rendered.svg.indexOf('class="af-export-flow-elabel"'),
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Fixture 6 — a chart crowded enough to EXHAUST the label walk.            */
+/* Narrow on purpose: it exists to prove the second placement pass, not to  */
+/* re-prove routing, so it asserts only what the retreat is for.            */
+/*                                                                          */
+/* When no spot is clear of every line, node and label, the walk used to    */
+/* keep its FIRST candidate silently — and a back edge's first candidate is */
+/* inside its own source's box, where the node paints over it. That is the  */
+/* guard a user saw as a single letter. The retreat drops the LINE clearance */
+/* and keeps the box clearances, because a guard crossing an arrow is still */
+/* readable and a guard under a step is not.                                */
+/* ----------------------------------------------------------------------- */
+
+console.log("the crowded case (the label walk's retreat)");
+
+const CROWDED = `archlab 1.0 flowchart
+title "Crowded"
+
+@flowchart
+  start s "Start"
+  step a "Alpha"
+  step b "Beta"
+  step c "Gamma"
+  step d "Delta"
+  decision q "Retry?"
+  end z "Done"
+
+  s -> a
+  a -> b
+  b -> c
+  c -> d
+  d -> q
+  q -> z : "no"
+  q -> a : "retry the whole pipeline from alpha again"
+  q -> b : "retry from beta because gamma was fine"
+  q -> c : "retry from gamma only, a narrower replay"
+  q -> d : "retry from delta, the last hop before the check"
+  d -> a : "roll all the way back to alpha for a reprice"
+  c -> a : "roll back to alpha from gamma as well"
+`;
+
+{
+  const crowded = layoutFlowchart(parseFlowchartText(CROWDED));
+  const guards = crowded.edges.filter((e) => e.labelBox !== null);
+  const clearOfNodes = guards.filter((e) =>
+    crowded.nodes.every((n) => !rectsOverlap(e.labelBox, n, 1)),
+  );
+  check(
+    "this chart really does exhaust the clear-spot walk — some guard has to fall through to the retreat, or this fixture proves nothing about it",
+    clearOfNodes.length < guards.length,
+    `${clearOfNodes.length} of ${guards.length} guards are clear of every node`,
+  );
+  check(
+    "and MOST guards still land clear of every node box anyway — measured at 5 of 7 with the retreat and 2 of 7 without it, i.e. five guards a node would have painted over",
+    clearOfNodes.length * 2 > guards.length,
+    `${clearOfNodes.length} of ${guards.length}`,
+  );
+  /* NOT "no two guards overlap" — this chart is deliberately past the point
+     where any placement can give seven guards their own ground, and asserting
+     otherwise would only be asserting that the fixture is not crowded. What
+     must still hold is that no name is ENTIRELY behind another: partial
+     crowding is a chart to simplify, a fully covered guard is a name the
+     document contains and the drawing does not. */
+  check(
+    "no guard is completely swallowed by another — the clearances give way against lines first, then nodes, and last of all against other guards, because a name with no visible area is a name the reader never learns exists",
+    guards.every((a) =>
+      guards.every((b) => a === b || !rectInside(a.labelBox, b.labelBox)),
+    ),
+    guards
+      .filter((a) =>
+        guards.some((b) => a !== b && rectInside(a.labelBox, b.labelBox)),
+      )
+      .map((e) => `${e.label} ${box(e.labelBox)}`)
+      .join(" | "),
+  );
+  check(
+    "every guard is inside the bounds, so the ones that had to compromise are at least on the canvas",
+    guards.every((e) => rectInside(e.labelBox, crowded.bounds)),
+  );
+  check(
+    "fixture 6 is deterministic too",
+    JSON.stringify(layoutFlowchart(parseFlowchartText(CROWDED))) ===
+      JSON.stringify(crowded),
+  );
+}
+
+/* ---- the other two readers of the frame ---------------------------------
+ * `bounds` is only worth computing if every surface takes its frame from it.
+ * The exporter is proven by rendering, above; the screen renderer and the
+ * viewer's fit-to-view cannot be — one is `.tsx`, which Node's type stripping
+ * will not read, and the other measures a live pane. So both are pinned from
+ * source, which is habit 4 of `codebase.md`: two halves of one thing, each
+ * self-consistent, that disagree. The pin crop WAS that — the layout knew the
+ * drawing ran past the origin and three renderers each framed it from zero. */
+{
+  const diagramSrc = readFileSync(
+    path.join(ROOT, "src/features/flowchart/components/flowchart-diagram.tsx"),
+    "utf8",
+  );
+  const viewerSrc = readFileSync(
+    path.join(ROOT, "src/features/flowchart/components/flowchart-viewer.tsx"),
+    "utf8",
+  );
+  check(
+    "the screen renderer's viewBox is the layout's bounds, and no literal `0 0` frame survives — that literal is what cropped a pinned step out of the picture",
+    /viewBox=\{`\$\{layout\.bounds\.x\} \$\{layout\.bounds\.y\} \$\{layout\.bounds\.width\} \$\{layout\.bounds\.height\}`\}/.test(
+      diagramSrc,
+    ) && !/viewBox=\{`0 0 /.test(diagramSrc),
+  );
+  check(
+    "and its zoomed pixel size comes off the bounds too, so a zoomed canvas is the same rectangle as a fitted one",
+    /layout\.bounds\.width \* zoom/.test(diagramSrc) &&
+      /layout\.bounds\.height \* zoom/.test(diagramSrc),
+  );
+  check(
+    "fit-to-view divides by the BOUNDS, not the origin-measured canvas — fitting to the smaller rectangle scales the picture as if the overhang were not there and then lets the viewBox crop it",
+    /width \/ layout\.bounds\.width/.test(viewerSrc) &&
+      /height \/ layout\.bounds\.height/.test(viewerSrc),
+  );
+  check(
+    "the screen renderer paints edge labels AFTER the nodes — the same safety net the exported SVG carries, because both canvases have a node paint over a label",
+    (() => {
+      const nodesAt = diagramSrc.indexOf("layout.nodes.map((node) => (");
+      const labelsAt = diagramSrc.indexOf("<EdgeLabel");
+      const headingAt = diagramSrc.indexOf("---- the heading");
+      return (
+        nodesAt > 0 &&
+        labelsAt > nodesAt &&
+        headingAt > labelsAt &&
+        !/edge\.labelBox !== null \? \(/.test(diagramSrc)
+      );
+    })(),
+  );
+  check(
+    "neither component reads `layout.width` or `layout.height` any more — one frame, one source, or the two disagree the way they already did once",
+    !/layout\.(width|height)\b/.test(
+      diagramSrc.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ""),
+    ) &&
+      !/layout\.(width|height)\b/.test(
+        viewerSrc.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ""),
+      ),
+  );
+}
 
 /* ----------------------------------------------------------------------- */
 

@@ -124,7 +124,10 @@ export const FLOW = {
   columnGap: 44,
   /** Minimum vertical band between two rows (grows per routing lane). */
   rankGap: 56,
-  /** One routing lane's height inside a channel. */
+  /** One routing lane's height inside a channel — and the cap on the vertical
+   * spread between two side-connected loops sharing one flank, which is the
+   * same quantity read the other way round: the smallest gap at which two
+   * parallel runs still read as two. */
   laneGap: 16,
   /** Gap from the widest row to the first vertical corridor. */
   corridorGap: 32,
@@ -287,6 +290,25 @@ export interface FlowchartLayout {
    * exactly.
    */
   offset: { x: number; y: number };
+  /**
+   * THE RECTANGLE EVERY DRAWN THING ACTUALLY OCCUPIES, in drawn coordinates —
+   * what a viewBox must be, as opposed to `width`/`height`, which describe the
+   * canvas measured from the origin.
+   *
+   * The two are the same rectangle for every document without pins, and that
+   * is why this field did not exist until pins did. `offset` is computed with
+   * pinned boxes deliberately left out of the minima (see the extents pass) so
+   * that a drag inverts exactly; the price is that a pin at a negative
+   * coordinate legitimately draws to the LEFT of x=0. Rendering
+   * `viewBox="0 0 width height"` then cut it off — a pinned step 64% outside
+   * the frame on screen, and the same crop baked into every PNG and GIF.
+   *
+   * So the bounds GROW rather than shift: `x`/`y` are at most 0 and reach
+   * further out when something does, `offset` is untouched, and the drag
+   * inversion keeps working because it never reads this. Every renderer takes
+   * its viewBox, its backdrop and its fit-to-view from here.
+   */
+  bounds: FlowRect;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -638,12 +660,14 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
    * keeps this a change to one pass instead of a second layout engine.
    *
    * The consequences were accepted rather than solved (ADR 0002): a pinned box
-   * can overlap a solved one, an arrow into it can run backwards up the page,
-   * and a hand-written coordinate outside the solved bounds is clipped (see
-   * `minY` below for why that last one cannot be fixed without breaking the
-   * drag). Nothing here tries to prevent any of them — a pin is a tool for an
-   * author who wants a specific picture. */
-  /* THE SOLVED CENTRES, captured BEFORE any pin is applied.
+   * can overlap a solved one, and an arrow into it can run backwards up the
+   * page. Nothing here tries to prevent either — a pin is a tool for an author
+   * who wants a specific picture. The third accepted cost, that a coordinate
+   * outside the solved bounds was CLIPPED, is no longer one: `bounds` reports
+   * the rectangle the drawing really occupies, so the canvas grows around a
+   * far-flung pin instead of cropping it, and `offset` — the half the drag
+   * inverts — still ignores pins entirely. */
+  /* THE SOLVED GEOMETRY, captured BEFORE any pin is applied.
    *
    * ROUTING IS PLANNED FROM THESE, NEVER FROM THE PINNED BOXES, and that is
    * what makes a drag land under the cursor. Everything downstream of here —
@@ -659,6 +683,15 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
    * drawn box, never the rank" — the routing plan is part of what rank buys. */
   const solvedCx = new Map<string, number>(
     [...placed].map(([id, p]) => [id, p.cx]),
+  );
+  /* The SOLVED RIGHT FLANK, which is where every long forward edge's bypass
+     corridor is measured from. Reading the pinned box instead would let one
+     step dragged far right fling every bypass in the chart out with it — a pin
+     moving arrows it has nothing to do with. The back-edge hug is the one
+     corridor that deliberately reads the DRAWN boxes; the comment on that
+     claim says why, and what protects the shift there. */
+  const solvedRight = new Map<string, number>(
+    [...placed].map(([id, p]) => [id, p.x + p.width]),
   );
   const pinned = new Map<string, FlowchartPoint>();
   for (const node of file.nodes) {
@@ -715,9 +748,18 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
     if (!cls.back[index] || cls.self[index]) return;
     if (!placed.has(edge.from) || !placed.has(edge.to)) return;
     const sides: (-1 | 1)[] = [-1, 1];
-    // The ENTRY side decides (the arrowhead is the loop's landing); the exit
-    // follows it so one loop never wraps both flanks.
+    /* A FLANK THAT SERVES BOTH ENDS BEATS ONE THAT SERVES THE ENTRY, and
+       preferring the entry alone was measured shipping the very frame this
+       routing exists to abolish: a loop out of the rightmost step of its row
+       found its target's LEFT flank free, took the left, could not use its own
+       blocked left flank, and fell back to bottom-port-and-channel — down,
+       right across the whole chart, up the far corridor and in. Its bounding
+       box then enclosed two nodes it does not connect, which is a dashed
+       rectangle around strangers, which is a group frame. Both ends free on
+       the right was available the whole time. The entry still decides when no
+       flank serves both, because the arrowhead is the loop's landing. */
     const side =
+      sides.find((s) => flankFree(edge.to, s) && flankFree(edge.from, s)) ??
       sides.find((s) => flankFree(edge.to, s)) ??
       sides.find((s) => flankFree(edge.from, s)) ??
       -1;
@@ -886,14 +928,17 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
    * corridor offsets from the outermost node among ONLY the rows the loop
    * spans, so a loop stays a short hook beside the column it returns along
    * instead of a rectangle around everything (the frame-lookalike defect the
-   * back-edge banner above records). `claim` dedupes every corridor against
-   * every other, pushing outward by one step, so two corridors — hugging or
-   * not, either side — can never share an x and overdraw. */
-  const rowsRight = Math.max(
-    0,
-    ...[...placed.values()].map((p) => p.x + p.width),
-  );
+   * back-edge banner above records). The bypass is measured from the SOLVED
+   * flanks and the hug from the DRAWN ones — the two are the same until
+   * something is pinned, and the reason they then part company is argued at
+   * the hug itself. `claim` dedupes every corridor against every other,
+   * pushing outward by one step, so two corridors — hugging or not, either
+   * side — can never share an x and overdraw. */
+  const rowsRight = Math.max(0, ...[...solvedRight.values()]);
+  /** Back edges whose corridor followed a PINNED box — see the hug comment. */
+  const pinShapedCorridor = new Set<number>();
   {
+    let corridorTainted = false;
     const used: number[] = [];
     const claim = (x: number, step: number): number => {
       let out = x;
@@ -916,24 +961,118 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
         if (from === undefined || to === undefined) return;
         const lo = Math.min(from.rank, to.rank);
         const hi = Math.max(from.rank, to.rank);
-        const spanned = [...placed.values()].filter(
-          (p) => p.rank >= lo && p.rank <= hi,
+        const spanned = [...placed].filter(
+          ([, p]) => p.rank >= lo && p.rank <= hi,
         );
+        /* THE HUG IS MEASURED FROM THE DRAWN BOXES, and this is the one place
+           that deliberately departs from "route from the solved geometry".
+           Taking it from the solved flanks instead was tried and measured on the
+           three-loop chart of fixture 5: a corridor planned behind a step
+           dragged 130px to the right ran straight down through that step's
+           body, and — because the corridor then sat under the node the loops
+           leave from — took away the only spot two of the three guards had.
+           A corridor has to clear the boxes it actually passes, and after a
+           pin those are the drawn ones.
+           THE SHIFT IS PROTECTED SEPARATELY: a loop that SPANS a pinned row
+           joins `pinShapedCorridor` and is then excluded from the minima,
+           exactly as an edge touching a pin is. Tested on the span rather than
+           on whether the pin actually moved the corridor, because the cheap
+           test is the safe one — a loop between two UNPINNED nodes that merely
+           passes a pinned row is not otherwise excluded, so without this
+           `offset` becomes a function of that pin and the drag's inversion
+           drifts. Measured at 294px on a four-node chart: dragging the
+           decision from x=-103 to x=-503 moved `offset.x` from 269 to 563.
+           Same defect `solvedCx` exists to prevent, one pass further on. */
+        if (spanned.some(([id]) => pinned.has(id))) corridorTainted = true;
+        /* Once one corridor has moved, `claim`'s dedupe can push every later
+           one, so the taint latches rather than being tested per edge. */
+        if (corridorTainted) pinShapedCorridor.add(index);
         corridorOf.set(
           index,
           side === -1
             ? claim(
-                Math.min(...spanned.map((p) => p.x)) - FLOW.corridorGap,
+                Math.min(...spanned.map(([, p]) => p.x)) - FLOW.corridorGap,
                 -FLOW.corridorStep,
               )
             : claim(
-                Math.max(...spanned.map((p) => p.x + p.width)) +
+                Math.max(...spanned.map(([, p]) => p.x + p.width)) +
                   FLOW.corridorGap,
                 FLOW.corridorStep,
               ),
         );
       }
     });
+  }
+
+  /* ---- side-connected loops: one y each, never a shared one ---------------
+   * Two loops between the SAME pair of nodes both left their source's flank
+   * at exactly `cy` and both landed at exactly the target's `cy`: one
+   * polyline drawn twice, two arrowheads stacked on one pixel, and — because
+   * a back edge's label anchors at its exit point — two guards fighting over
+   * one spot. A user with two ways out of one state ("penalty expired" and
+   * "penalty removed") saw one arrow and one readable guard. This ships on
+   * main; pins only made it easy to see.
+   *
+   * So a flank's side EXITS, and separately its side ENTRIES, are spread
+   * vertically exactly the way `portOffsets` spreads a bottom port
+   * horizontally: declaration order, symmetric about `cy`, stepped by at most
+   * `laneGap` and clamped into the middle 55% of the node's height so a run
+   * cannot slide off a stadium's cap or past a diamond's vertex. A flank with
+   * ONE edge on it is left at `cy`, so every chart that had no parallel loop
+   * lays out to the pixel it did before. */
+  const sideExitY = new Map<number, number>();
+  const sideEntryY = new Map<number, number>();
+  {
+    const flanks = (
+      keyOf: (index: number, plan: BackPlan) => string | null,
+    ): Map<string, number[]> => {
+      const out = new Map<string, number[]>();
+      file.edges.forEach((_, index) => {
+        const bp = backPlans.get(index);
+        if (bp === undefined) return;
+        const key = keyOf(index, bp);
+        if (key === null) return;
+        const members = out.get(key);
+        if (members === undefined) out.set(key, [index]);
+        else members.push(index);
+      });
+      return out;
+    };
+    const spread = (
+      groups: Map<string, number[]>,
+      nodeOf: (index: number) => Placed | undefined,
+      into: Map<number, number>,
+    ): void => {
+      for (const members of groups.values()) {
+        members.forEach((index, slot) => {
+          const node = nodeOf(index);
+          if (node === undefined) return;
+          if (members.length === 1) {
+            into.set(index, node.cy);
+            return;
+          }
+          const step = Math.min(
+            FLOW.laneGap,
+            (node.height * 0.55) / (members.length - 1),
+          );
+          into.set(index, node.cy + (slot - (members.length - 1) / 2) * step);
+        });
+      }
+    };
+    spread(
+      flanks((index, bp) =>
+        bp.exitSide ? `${file.edges[index].from}:${bp.side}` : null,
+      ),
+      (index) => placed.get(file.edges[index].from),
+      sideExitY,
+    );
+    spread(
+      flanks((index, bp) =>
+        bp.entrySide ? `${file.edges[index].to}:${bp.side}` : null,
+      ),
+      (index) => placed.get(file.edges[index].to),
+      sideEntryY,
+    );
   }
 
   /* ---- edge polylines ----------------------------------------------------- */
@@ -995,7 +1134,7 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
         const bp = backPlans.get(index);
         const points: FlowPoint[] = [];
         if (bp?.exitSide === true) {
-          const exitY = from.cy;
+          const exitY = sideExitY.get(index) ?? from.cy;
           points.push(
             { x: sideBoundaryX(from, bp.side), y: exitY },
             { x: corridor, y: exitY },
@@ -1005,7 +1144,7 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
           points.push(start, { x: sx, y: y1 }, { x: corridor, y: y1 });
         }
         if (bp?.entrySide === true) {
-          const entryY = to.cy;
+          const entryY = sideEntryY.get(index) ?? to.cy;
           points.push(
             { x: corridor, y: entryY },
             { x: sideBoundaryX(to, bp.side), y: entryY },
@@ -1096,28 +1235,47 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
     const height = lines.length * FLOW.labelLineHeight + FLOW.labelPadY * 2;
 
     const anchor = labelAnchor(edge);
+    const candidate = (side: 1 | -1, dy: number, extra: number): FlowPoint => ({
+      x:
+        side === 1
+          ? anchor.x + FLOW.labelGap + extra
+          : anchor.x - FLOW.labelGap - extra - width,
+      y: anchor.y + dy,
+    });
     const candidates: FlowPoint[] = [];
     for (const dy of [0, 12, 24, 36]) {
-      candidates.push({ x: anchor.x + FLOW.labelGap, y: anchor.y + dy });
-      candidates.push({
-        x: anchor.x - FLOW.labelGap - width,
-        y: anchor.y + dy,
-      });
-      candidates.push({ x: anchor.x + FLOW.labelGap + 14, y: anchor.y + dy });
+      candidates.push(candidate(1, dy, 0));
+      candidates.push(candidate(-1, dy, 0));
+      candidates.push(candidate(1, dy, 14));
     }
-    let box: FlowRect = {
-      x: candidates[0].x,
-      y: candidates[0].y,
-      width,
-      height,
-    };
-    for (const candidate of candidates) {
-      const trial = { x: candidate.x, y: candidate.y, width, height };
-      if (labelClear(trial, edges, nodeBoxes, placedLabels)) {
-        box = trial;
-        break;
+    const firstFit = (fits: (trial: FlowRect) => boolean): FlowRect | null => {
+      for (const spot of candidates) {
+        const trial = { x: spot.x, y: spot.y, width, height };
+        if (fits(trial)) return trial;
       }
-    }
+      return null;
+    };
+    let box = firstFit((trial) =>
+      labelClear(trial, edges, nodeBoxes, placedLabels),
+    );
+    /* NO SPOT WAS CLEAR OF EVERYTHING — and what happened next used to be
+       silent: the walk kept its FIRST candidate, which for a loop leaving a
+       flank is a box inside the source's own body, and a node paints over an
+       edge label, so the guard vanished but for the last glyph or two poking
+       past the node's edge. A user reported that as a label reading "d".
+       THE TWO FAILURES ARE NOT EQUAL. A guard crossing a LINE is still
+       readable on its backing plate; a guard under a NODE is not there at
+       all. So the retreat drops only the line clearance and keeps both box
+       clearances. Measured on a chart crowded enough to need it: five of
+       seven guards were under a box before, two after. */
+    box ??= firstFit((trial) =>
+      labelClearOfBoxes(trial, [...nodeBoxes, ...placedLabels]),
+    );
+    /* Not one of the twelve spots is clear even of the boxes. Keep the first,
+       so the pass stays total and every label exists — a chart this dense is
+       one to simplify, and what stops the guard disappearing outright is the
+       renderers painting labels after the nodes. */
+    box ??= { x: candidates[0].x, y: candidates[0].y, width, height };
     placedLabels.push(box);
     edge.labelBox = box;
     edge.labelLines = lines;
@@ -1130,15 +1288,29 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
      thing on the canvas is always the first channel, which starts at
      `marginTop + heading.height`, so there was nothing above the origin to
      find and no reason to look. A pin takes any coordinate the author drops it
-     at, including a negative one — and a box drawn above y=0 is a box the
-     viewport clips, silently. */
+     at, including a negative one. */
   let minY = Number.POSITIVE_INFINITY;
   let maxY = flowBottom;
-  const stretch = (rect: FlowRect): void => {
-    minX = Math.min(minX, rect.x);
-    minY = Math.min(minY, rect.y);
+  /* TWO SETS OF MINIMA, and the whole pin compromise lives in the difference.
+     `minX`/`minY` feed the SHIFT and must not see a pin (the drag inverts that
+     shift). `fullMinX`/`fullMinY` see everything, and feed `bounds` — the
+     rectangle the drawing really occupies, which every renderer's viewBox is
+     taken from. Reporting only the shift's minima is what cropped a pinned
+     step out of the frame on screen and out of every PNG and GIF. */
+  let fullMinX = Number.POSITIVE_INFINITY;
+  let fullMinY = Number.POSITIVE_INFINITY;
+  /** Grows the maxima and the true minima — everything, pin or not. */
+  const reach = (rect: FlowRect): void => {
+    fullMinX = Math.min(fullMinX, rect.x);
+    fullMinY = Math.min(fullMinY, rect.y);
     maxX = Math.max(maxX, rect.x + rect.width);
     maxY = Math.max(maxY, rect.y + rect.height);
+  };
+  /** `reach`, plus the shift's own pin-free minima. */
+  const stretch = (rect: FlowRect): void => {
+    reach(rect);
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
   };
   /* A PINNED BOX IS EXCLUDED FROM THE MINIMUMS, so `offset` does not depend on
      where a pin sits — which is what makes the drag's inversion exact rather
@@ -1148,12 +1320,8 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
      grows to contain them. */
   for (const [id, p] of placed) {
     const box = { x: p.x, y: p.y, width: p.width, height: p.height };
-    if (pinned.has(id)) {
-      maxX = Math.max(maxX, box.x + box.width);
-      maxY = Math.max(maxY, box.y + box.height);
-    } else {
-      stretch(box);
-    }
+    if (pinned.has(id)) reach(box);
+    else stretch(box);
   }
   for (const g of groups) stretch(g);
   for (const e of edges) {
@@ -1164,27 +1332,21 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
        this — a step dropped at the canvas top rendered 20px lower, because the
        arrow reaching it dragged `minY` to zero and bought the whole drawing a
        `marginTop` shift. Maxima still grow, so nothing falls off the canvas. */
-    const touchesPin = pinned.has(e.from) || pinned.has(e.to);
+    const touchesPin =
+      pinned.has(e.from) || pinned.has(e.to) || pinShapedCorridor.has(e.index);
+    const grow = touchesPin ? reach : stretch;
     for (const point of e.points) {
-      if (!touchesPin) {
-        minX = Math.min(minX, point.x);
-        minY = Math.min(minY, point.y);
-      }
-      maxX = Math.max(maxX, point.x);
-      maxY = Math.max(maxY, point.y);
+      grow({ x: point.x, y: point.y, width: 0, height: 0 });
     }
-    if (e.labelBox !== null) {
-      if (touchesPin) {
-        maxX = Math.max(maxX, e.labelBox.x + e.labelBox.width);
-        maxY = Math.max(maxY, e.labelBox.y + e.labelBox.height);
-      } else {
-        stretch(e.labelBox);
-      }
-    }
+    if (e.labelBox !== null) grow(e.labelBox);
   }
   if (minX === Number.POSITIVE_INFINITY) {
     minX = 0;
     maxX = 0;
+  }
+  if (fullMinX === Number.POSITIVE_INFINITY) {
+    fullMinX = 0;
+    fullMinY = 0;
   }
   const dx = FLOW.marginX - minX;
   /* CLAMPED AT ZERO, unlike `dx`, and the asymmetry is deliberate rather than
@@ -1255,6 +1417,17 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
     Math.max(maxX + dx, FLOW.marginX + heading.width) + FLOW.marginX,
   );
   const height = Math.ceil(maxY + dy + FLOW.marginBottom);
+  /* THE FRAME GROWS, IT NEVER SHIFTS. Origin at 0 unless something genuinely
+     reaches past it, and then out by the same margin the rest of the drawing
+     gets — a corridor sitting exactly on the viewBox edge loses half its
+     stroke width to the crop, which is the same defect in miniature.
+     Floored/ceiled to whole units so the frame can never end a fraction short
+     of the ink. `width`/`height` are measured from 0, so the far edges are
+     already inside them and the span is simply the origin subtracted. */
+  const overflowX = Math.floor(fullMinX + dx);
+  const overflowY = Math.floor(fullMinY + dy);
+  const boundsX = overflowX < 0 ? overflowX - FLOW.marginX : 0;
+  const boundsY = overflowY < 0 ? overflowY - FLOW.marginTop : 0;
   return {
     width,
     height,
@@ -1263,6 +1436,12 @@ export function layoutFlowchart(file: FlowchartLabFile): FlowchartLayout {
     edges: shiftedEdges,
     groups: shiftedGroups,
     offset: { x: dx, y: dy },
+    bounds: {
+      x: boundsX,
+      y: boundsY,
+      width: width - boundsX,
+      height: height - boundsY,
+    },
   };
 }
 
@@ -1287,12 +1466,10 @@ function labelAnchor(edge: LaidFlowEdge): FlowPoint {
   return { x: p0.x, y: p0.y + 4 };
 }
 
-/** True when `box` (inflated by the clearance) touches no line, node or label. */
-function labelClear(
+/** True when `box` (inflated by the clearance) covers none of `others`. */
+function labelClearOfBoxes(
   box: FlowRect,
-  edges: readonly LaidFlowEdge[],
-  nodeBoxes: readonly FlowRect[],
-  labels: readonly FlowRect[],
+  others: readonly FlowRect[],
 ): boolean {
   const c = FLOW.labelClearance;
   const inflated = {
@@ -1301,9 +1478,24 @@ function labelClear(
     width: box.width + c * 2,
     height: box.height + c * 2,
   };
-  for (const other of [...nodeBoxes, ...labels]) {
-    if (rectsOverlap(inflated, other)) return false;
-  }
+  return !others.some((other) => rectsOverlap(inflated, other));
+}
+
+/** True when `box` (inflated by the clearance) touches no line, node or label. */
+function labelClear(
+  box: FlowRect,
+  edges: readonly LaidFlowEdge[],
+  nodeBoxes: readonly FlowRect[],
+  labels: readonly FlowRect[],
+): boolean {
+  if (!labelClearOfBoxes(box, [...nodeBoxes, ...labels])) return false;
+  const c = FLOW.labelClearance;
+  const inflated = {
+    x: box.x - c,
+    y: box.y - c,
+    width: box.width + c * 2,
+    height: box.height + c * 2,
+  };
   for (const edge of edges) {
     for (let i = 0; i + 1 < edge.points.length; i += 1) {
       if (segmentHitsRect(edge.points[i], edge.points[i + 1], inflated)) {
