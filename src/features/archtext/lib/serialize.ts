@@ -629,6 +629,68 @@ export function canonicalDiagramBlock(
 /* Diagram / node / edge emitters                                             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The one `@level id …` line a diagram's block opens with.
+ *
+ * Extracted so a canvas gesture can replace exactly that line and nothing
+ * else. `canonicalDiagramBlock` emits the whole block — every node, edge and
+ * frame — and a gesture built on it would be a re-emit, which is the thing
+ * `canvas-editing.md` forbids by name: the first drag of the release that did
+ * that deleted every `//` comment in the author's file. One line in, one line
+ * out.
+ */
+function diagramHeadLine(
+  diagram: Record<string, unknown>,
+  nodeHome: ReadonlyMap<string, { diagramId: string; name: string }>,
+): string {
+  const id = diagram.id as string;
+  const level = diagram.level;
+  const title = diagram.title;
+  const owner = diagram.ownerNodeId;
+  const parent = diagram.parentDiagramId;
+  const ownerHome = typeof owner === "string" ? nodeHome.get(owner) : undefined;
+  let head = `@${level as string} ${idToken(id)}`;
+  if (!(ownerHome !== undefined && ownerHome.name === title)) {
+    head += ` ${JSON.stringify(title)}`;
+  }
+  if (typeof owner === "string") head += ` owner=${idToken(owner)}`;
+  const ownDirection = diagram.direction;
+  if (ownDirection === "tb" || ownDirection === "lr") {
+    head += ` direction=${ownDirection}`;
+  } else if (ownDirection !== undefined) {
+    invalid(`diagram "${id}".direction`, ownDirection);
+  }
+  if (typeof parent === "string") {
+    if (ownerHome === undefined || ownerHome.diagramId !== parent) {
+      head += ` in=${idToken(parent)}`;
+    }
+  } else if (ownerHome !== undefined) {
+    /* Parent is null but inference from owner= would produce one. */
+    head += ` in=null`;
+  }
+  return head;
+}
+
+/**
+ * That line for one diagram of `file`, or null when there is no such diagram.
+ * The canvas's layout-direction gesture writes this and only this.
+ */
+export function canonicalDiagramHead(
+  file: ArchLabFile,
+  diagramId: string,
+): string | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const diagramsValue = file.diagrams;
+  if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
+  const diagrams = diagramsValue.map((diagram, i) => {
+    if (!isRecord(diagram)) invalid(`diagrams[${i}]`, diagram);
+    return diagram;
+  });
+  const diagram = diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  return diagramHeadLine(diagram, buildNodeHome(diagrams));
+}
+
 function emitDiagram(
   lines: string[],
   diagram: Record<string, unknown>,
@@ -658,27 +720,7 @@ function emitDiagram(
     invalid(`diagram "${id}".parentDiagramId`, parent);
   }
 
-  const ownerHome = typeof owner === "string" ? nodeHome.get(owner) : undefined;
-  let head = `@${level} ${idToken(id)}`;
-  if (!(ownerHome !== undefined && ownerHome.name === title)) {
-    head += ` ${JSON.stringify(title)}`;
-  }
-  if (typeof owner === "string") head += ` owner=${idToken(owner)}`;
-  const ownDirection = diagram.direction;
-  if (ownDirection === "tb" || ownDirection === "lr") {
-    head += ` direction=${ownDirection}`;
-  } else if (ownDirection !== undefined) {
-    invalid(`diagram "${diagram.id as string}".direction`, ownDirection);
-  }
-  if (typeof parent === "string") {
-    if (ownerHome === undefined || ownerHome.diagramId !== parent) {
-      head += ` in=${idToken(parent)}`;
-    }
-  } else if (ownerHome !== undefined) {
-    /* Parent is null but inference from owner= would produce one. */
-    head += ` in=null`;
-  }
-  lines.push(head);
+  lines.push(diagramHeadLine(diagram, nodeHome));
 
   const fallback: [string, unknown][] = [];
   const description = diagram.description;

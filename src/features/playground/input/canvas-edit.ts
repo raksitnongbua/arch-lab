@@ -80,6 +80,7 @@ import {
   canonicalEdgeBlock,
   canonicalFrameDeclaration,
   canonicalFrameLine,
+  canonicalDiagramHead,
   canonicalNodeBlock,
   canonicalNodeLine,
   canonicalTagColorLine,
@@ -1361,6 +1362,75 @@ function frameMintPatch(
  * The `id` is deliberately not editable here; `C4NodeRevision` carries the
  * argument.
  */
+/**
+ * Set (or clear) one diagram's layout direction from the canvas.
+ *
+ * RIDES UNDER `revise`, like removal does, and for the same reason
+ * `canvas-editing.md` gives: it writes one element's own field in place. The
+ * element here is the DIAGRAM rather than a node, which is the only thing new
+ * about it — it is not a `move` (no coordinate is written), not a `create`, and
+ * not a `connect`, so a fifth ability would buy nothing but a fifth column in
+ * a table that is already total.
+ *
+ * PER-DIAGRAM ONLY, never the file's `direction` header line. The canvas shows
+ * one diagram at a time, and a control that silently relaid out three diagrams
+ * a reader cannot see would be the worst kind of surprise — the file-wide
+ * default stays something you write in the text, where you can see its scope.
+ *
+ * ONE LINE IN, ONE LINE OUT. It replaces the `@level id …` head line with the
+ * bytes the serializer would have written for it and touches nothing else, so
+ * a diagram's `desc`, its comments and its blank lines all survive. Building
+ * this on `canonicalDiagramBlock` would have re-emitted every node, edge and
+ * frame under it — the re-emit that ate an author's comments once already.
+ *
+ * `null` for a no-op: asking for the direction a diagram already has costs no
+ * text change, no undo entry and no re-render. `"inherit"` clears the
+ * attribute, handing the diagram back to the file's default.
+ */
+export function revisedDirectionEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  direction: "tb" | "lr" | "inherit",
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const current = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (current === undefined) return null;
+
+  const next = direction === "inherit" ? undefined : direction;
+  if ((current.direction ?? undefined) === next) return null;
+
+  /* Named rather than spread, the same "whole value" contract every other
+     revision here follows: `{ ...current, direction: next }` with `next`
+     undefined leaves the key PRESENT and undefined, which is what the
+     serializer must see to write nothing — and what a spread of an omitted
+     optional could not have produced. */
+  const revised: C4Diagram = { ...current, direction: next };
+  const edited: ArchLabFile = {
+    ...file,
+    diagrams: file.diagrams.map((candidate) =>
+      candidate.id === diagramId ? revised : candidate,
+    ),
+  };
+
+  const patchable = patchablePane(doc, sourceText);
+  const headLine = patchable?.spans.diagramHeads.get(diagramId);
+  const line = canonicalDiagramHead(edited, diagramId);
+  if (headLine !== undefined && line !== null) {
+    return adopt(
+      doc,
+      edited,
+      applyPatches(sourceText, [
+        { span: { start: headLine, end: headLine }, lines: [line] },
+      ]),
+    );
+  }
+  return adopt(doc, edited, null);
+}
+
 export function revisedNodeEdit(
   doc: ViewDocument,
   sourceText: string,

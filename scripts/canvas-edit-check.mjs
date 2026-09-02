@@ -292,6 +292,7 @@ const {
   nestedNodeEdit,
   ownsChildDiagram,
   revisedEdgeEdit,
+  revisedDirectionEdit,
   revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
 const { connectTargets, creatableNodeTypes } = await load(
@@ -365,6 +366,149 @@ function c4Document(text) {
     );
   }
   return parsed.value;
+}
+
+/* ----------------------------------------------------------------------- */
+/* The layout-direction gesture                                             */
+/*                                                                          */
+/* It rides under `revise` — it writes one element's own field in place, the */
+/* element being the DIAGRAM — and the rule that matters most for it is the  */
+/* one 0a9cbf1 bought: EVERY GESTURE IS A LINE PATCH, NEVER A RE-EMIT. A    */
+/* re-emit of a diagram block would rewrite every node, edge and frame under */
+/* it and delete the author's comments, which is what a full re-serialize    */
+/* did on the first drag of the release that shipped it. So the assertions   */
+/* below are about the TEXT, not the model: how many lines moved, and what   */
+/* survived. Proven from deliberately non-canonical source, comments and all.*/
+/* ----------------------------------------------------------------------- */
+
+console.log("\nThe layout-direction gesture");
+
+{
+  /* Loaded here rather than reusing the one further down: that binding is
+     declared inside a later block, and a check that depends on the order of
+     unrelated blocks breaks the next time somebody moves one. */
+  const { convertedSourceText } = await load(
+    "src/features/playground/input/parse.ts",
+  );
+  const SEED = `archlab 1.0
+title "Direction"
+
+// a comment the author wrote and must keep
+@context ctx-root "Direction"
+  a:system "A" >cnt
+  b:external "B"
+
+  a -> b : "Calls the other one"
+
+@container cnt "C" owner=a
+  desc "A description that must survive the gesture."
+
+  // another comment, mid-block
+  x:container "X" [Go 1.22]
+  y:container "Y" [Go 1.22]
+
+  x -> y : "Hands the batch on"
+`;
+  const doc = c4Document(SEED);
+  const linesOf = (text) => text.split("\n");
+  const changedLines = (before, after) => {
+    const a = linesOf(before);
+    const b = linesOf(after);
+    const out = [];
+    for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+      if (a[i] !== b[i]) out.push(b[i] ?? "(removed)");
+    }
+    return out;
+  };
+
+  const toLr = revisedDirectionEdit(doc, SEED, "cnt", "lr");
+  check(
+    "setting a direction takes the PATCH path, not the re-emit path",
+    toLr !== null && toLr.path === "patch",
+    `path: ${toLr === null ? "null" : toLr.path}`,
+  );
+  const moved = toLr === null ? [] : changedLines(SEED, toLr.text);
+  check(
+    "it rewrites exactly ONE line — the diagram's head",
+    moved.length === 1 &&
+      moved[0] === '@container cnt "C" owner=a direction=lr',
+    `changed: ${JSON.stringify(moved)}`,
+  );
+  check(
+    "the author's comments and the diagram's desc survive",
+    toLr !== null &&
+      toLr.text.includes("// a comment the author wrote") &&
+      toLr.text.includes("// another comment, mid-block") &&
+      toLr.text.includes("A description that must survive the gesture."),
+    "a re-emit would have taken all three",
+  );
+
+  /* Clearing is not the same edit as setting, and an insert is not the
+     inverse of a removal (`canvas-editing.md`): the attribute has to LEAVE the
+     line, not be written as some empty form of itself. */
+  const WITH_LR = SEED.replace(
+    '@container cnt "C" owner=a',
+    '@container cnt "C" owner=a direction=lr',
+  );
+  const withLr = c4Document(WITH_LR);
+  const cleared = revisedDirectionEdit(withLr, WITH_LR, "cnt", "inherit");
+  check(
+    "choosing File removes the attribute rather than writing an empty one",
+    cleared !== null &&
+      !/direction=/.test(cleared.text) &&
+      changedLines(WITH_LR, cleared.text).length === 1,
+    cleared === null
+      ? "returned null — there was an attribute to clear"
+      : `changed: ${JSON.stringify(changedLines(WITH_LR, cleared.text))}`,
+  );
+  check(
+    "clearing keeps the comments too",
+    cleared !== null && cleared.text.includes("// another comment, mid-block"),
+  );
+
+  check(
+    "asking for the direction a diagram already has costs nothing",
+    revisedDirectionEdit(withLr, WITH_LR, "cnt", "lr") === null,
+    "a no-op must not produce a text change or an undo entry",
+  );
+  check(
+    "an unknown diagram id is refused",
+    revisedDirectionEdit(doc, SEED, "no-such-diagram", "lr") === null,
+  );
+  check(
+    "it asks canvasEditability itself rather than trusting its caller",
+    (() => {
+      /* A C4 DOCUMENT IN A MERMAID PANE, not a document of another notation.
+         The first version of this looped over the other notations and passed
+         with the editability guard DELETED, because the `doc.kind !== "c4"`
+         half of the same condition caught them — "passed because a second
+         guard caught the break", which `canvas-editing.md` lists as one of the
+         five ways this has already gone wrong here. Mermaid C4 carries no
+         geometry and refuses `revise`, so this is the one input where only the
+         editability call can decline. */
+      const converted = parseViewSource(
+        convertedSourceText(c4Document(SEED), "mermaid"),
+      );
+      if (converted.status !== "ok" || converted.value.kind !== "c4") {
+        return "the Mermaid conversion of the fixture did not parse as C4";
+      }
+      if (canvasEditability(converted.value, "revise").editable) {
+        return "Mermaid C4 now offers revise — this assertion needs a different input";
+      }
+      /* The converted document's OWN diagram id, and a direction it does not
+         already have. Hardcoding "cnt" let the unknown-diagram guard decline
+         it instead — a THIRD guard catching the break, after the second one
+         already did. An assertion about one guard has to reach that guard. */
+      const target = converted.value.synced.file.diagrams.find(
+        (candidate) => candidate.direction !== "lr",
+      );
+      if (target === undefined) return "no diagram to aim at";
+      return revisedDirectionEdit(converted.value, "", target.id, "lr") === null
+        ? true
+        : "accepted an edit a Mermaid-pane C4 document cannot take";
+    })() === true,
+    "an unguarded gesture is unguarded the day somebody points it at a pane that cannot hold the edit",
+  );
 }
 
 /* ----------------------------------------------------------------------- */

@@ -63,6 +63,7 @@ import {
   ownsChildDiagram,
   renamedFrameEdit,
   revisedEdgeEdit,
+  revisedDirectionEdit,
   revisedNodeEdit,
   unnestedNodeEdit,
   type CanvasEdit,
@@ -138,6 +139,15 @@ export function useCanvasEditing({
   canvasEdit: CanvasEditHandlers | undefined;
   sequenceEdit: SequenceEditHandlers | undefined;
   flowchartEdit: FlowchartEditHandlers | undefined;
+  /**
+   * Set or clear one C4 diagram's layout direction. Beside the handler sets
+   * rather than inside `canvasEdit`, because the control that invokes it is
+   * rendered by the playground in the canvas's lock slot — not by the canvas.
+   */
+  changeDirection: (
+    diagramId: string,
+    direction: "tb" | "lr" | "inherit",
+  ) => void;
 } {
   /**
    * Previous source texts, newest last — the undo history for CANVAS edits.
@@ -264,6 +274,37 @@ export function useCanvasEditing({
       applyCanvasEdit(
         next,
         `${nodeId} updated to “${revision.name}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  /**
+   * Set or clear one diagram's layout direction, from the toggle beside the
+   * canvas lock.
+   *
+   * The announcement names the SHAPE rather than the keyword, because "lr" is
+   * the text you write and "runs left to right" is what just happened to the
+   * picture — a reader who reached for this control did so because the
+   * diagram was the wrong shape, not because they wanted a particular word in
+   * their file.
+   */
+  const handleDirectionChange = useCallback(
+    (diagramId: string, direction: "tb" | "lr" | "inherit") => {
+      const next = revisedDirectionEdit(doc, text, diagramId, direction);
+      // null covers "nothing changed" as well as every refusal, so choosing
+      // the direction a diagram already has costs no text change and no undo
+      // entry — the node revise's own contract.
+      if (next === null) return;
+      const said =
+        direction === "lr"
+          ? "runs left to right, folding a long flow into bands"
+          : direction === "tb"
+            ? "runs top to bottom"
+            : "follows the file's own direction again";
+      applyCanvasEdit(
+        next,
+        `Layout ${said} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
       );
     },
     [doc, text, applyCanvasEdit],
@@ -1102,5 +1143,16 @@ export function useCanvasEditing({
     ],
   );
 
-  return { canvasEdit, sequenceEdit, flowchartEdit };
+  /* `changeDirection` is returned BESIDE `canvasEdit` rather than inside it.
+     `CanvasEditHandlers` is the set of gestures the CANVAS invokes — a drag, a
+     click on a node, a grip — and this one is invoked by a control the
+     playground renders in the lock slot, at the canvas's top right. Putting it
+     in that interface would say the canvas calls it, and nothing in the canvas
+     does. */
+  return {
+    canvasEdit,
+    sequenceEdit,
+    flowchartEdit,
+    changeDirection: handleDirectionChange,
+  };
 }
