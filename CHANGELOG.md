@@ -24,9 +24,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   link lays out unchanged** — this is a minor addition, not a breaking one.
   Pinning is deliberately not free of consequences: a pinned step can overlap a
   solved one and an arrow into it can run backwards up the page, and the layout
-  has no opinion about either. There is no unpin gesture yet — delete the
-  `(x,y)` in the source pane. (Reverses a decision recorded in the previous
-  release; both ADRs are kept.)
+  has no opinion about either. What it does have an opinion about is the frame:
+  a step pinned outside the space the arrows would have given it makes the
+  canvas **wider**, rather than being cropped at the edge — on screen, in
+  fit-to-view, and in the SVG, PNG and GIF you export, which all frame the same
+  rectangle. There is no unpin gesture yet — delete the `(x,y)` in the source
+  pane. (Reverses a decision recorded in the previous release; both ADRs are
+  kept.)
 - **Clicking an arrow lets you insert a step into it.** `a -> b` becomes
   `a -> new step -> b`, with the guard label staying on the first half, so a
   decision's branch condition is not silently reworded. The new step arrives
@@ -654,6 +658,30 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   state is spelled out.
 
 ### Fixed
+
+- **Two arrows returning from the same step to the same step are two arrows
+  again.** A flowchart with, say, both "penalty expired" and "penalty removed"
+  going back from one state drew them at identical heights: one line on top of
+  another, both arrowheads on one pixel, and only one of the two guard labels
+  readable — so a chart that named two ways back showed one. Each returning
+  arrow now leaves and lands at its own height on the step's side, and the
+  guard names stack in the same order as the lines they belong to.
+
+- **A loop that reads as a frame takes the other side instead.** A returning
+  arrow leaving the rightmost step of its row used to aim for its target's left
+  side, find its own left side blocked by a neighbour, and fall back to going
+  down, all the way across the chart, up the far edge and in — a dashed
+  rectangle enclosing steps it has nothing to do with, which is what a group
+  frame looks like. When one side is clear at _both_ ends, it now takes that
+  side and stays a short hook.
+
+- **A guard label under a step is a guard label nobody can read.** When the
+  layout could find no clear spot for an arrow's label it silently kept its
+  first guess, which for a returning arrow is inside the step it leaves — and a
+  step is painted over its labels, so the name vanished apart from the last
+  letter or two poking past the box. Labels now retreat to a spot clear of the
+  boxes even if it crosses a line, and on both the canvas and every export they
+  are painted last, so a crowded guard is crowded rather than absent.
 
 - A Gantt chart has air around it again. The section headings, the axis caption
   and the section rules all start at the very edge of the drawing, and since the

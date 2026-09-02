@@ -95,17 +95,25 @@ export function renderFlowchartSvg(
      it is under everything; full-bleed, including any export padding, because
      a sheet does not stop where the drawing stops. */
   const ground = resolveExportGround();
+  /* THE FRAME IS THE LAYOUT'S `bounds`, NOT `0 0 width height`. They are the
+     same rectangle for every document without pinned nodes, which is why this
+     read `0 0` for two releases; a pin at a negative coordinate legitimately
+     draws to the left of the origin, and the old frame cut it off — a step 64%
+     outside the picture, baked into the PNG and every GIF frame at exactly the
+     crop the screen showed. The sheet and the backdrop follow it, because a
+     sheet does not stop where the drawing stops. */
+  const frame = layout.bounds;
   push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" ` +
-      `viewBox="0 0 ${layout.width} ${layout.height}" font-family="${FONT_SANS}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.width}" height="${frame.height}" ` +
+      `viewBox="${fmt(frame.x)} ${fmt(frame.y)} ${fmt(frame.width)} ${fmt(frame.height)}" font-family="${FONT_SANS}">`,
   );
   // Explicit backdrop: without one the file composites over whatever the
   // viewer paints behind it — black in most image viewers.
   push(
-    `<rect x="0" y="0" width="${layout.width}" height="${layout.height}" fill="${theme.canvas}"/>`,
+    `<rect x="${fmt(frame.x)}" y="${fmt(frame.y)}" width="${fmt(frame.width)}" height="${fmt(frame.height)}" fill="${theme.canvas}"/>`,
   );
   push(`<defs>${ground.defs}</defs>`);
-  push(ground.layers(0, 0, layout.width, layout.height));
+  push(ground.layers(frame.x, frame.y, frame.width, frame.height));
 
   /* ---- groups (context first — the paint order the screen uses) ---------- */
   for (const group of layout.groups) {
@@ -123,6 +131,15 @@ export function renderFlowchartSvg(
 
   /* ---- edges -------------------------------------------------------------- */
   const rankOf = new Map(layout.nodes.map((node) => [node.id, node.rank]));
+  /* EDGE LABELS ARE BUFFERED AND EMITTED AFTER THE NODES. They used to sit
+     inside their edge's own group, which put them under every node — and a
+     guard the layout could not place clear of a box then vanished completely
+     rather than merely reading badly. Painting them last is the safety net for
+     that: the layout still tries to keep them off the boxes, and when it
+     cannot the text is at least visible. They keep their own `data-flow-rank`
+     because they left the edge group that carried it, and `frames.ts` selects
+     them at the top level for the same reason. */
+  const labelParts: string[] = [];
   for (const edge of layout.edges) {
     if (edge.points.length < 2) continue;
     push(
@@ -135,14 +152,17 @@ export function renderFlowchartSvg(
     push(
       `<path class="af-export-flow-head" d="${arrowHeadPath(edge.points)}" fill="${theme.edge}" stroke="none"/>`,
     );
+    push(`</g>`);
     const box = edge.labelBox;
     if (box !== null) {
-      push(`<g class="af-export-flow-elabel">`);
-      push(
+      labelParts.push(
+        `<g class="af-export-flow-elabel" data-flow-rank="${rankOf.get(edge.from) ?? 0}">`,
+      );
+      labelParts.push(
         `<rect x="${fmt(box.x)}" y="${fmt(box.y)}" width="${fmt(box.width)}" height="${fmt(box.height)}" rx="4" fill="${theme.canvas}" fill-opacity="0.88"/>`,
       );
       edge.labelLines.forEach((line, index) => {
-        push(
+        labelParts.push(
           `<text x="${fmt(box.x + FLOW.labelPadX)}" y="${fmt(
             box.y +
               FLOW.labelPadY +
@@ -152,9 +172,8 @@ export function renderFlowchartSvg(
           )}" font-size="${FLOW.labelFontSize}" font-style="italic" fill="${theme.mutedForeground}">${escapeXml(line)}</text>`,
         );
       });
-      push(`</g>`);
+      labelParts.push(`</g>`);
     }
-    push(`</g>`);
   }
 
   /* ---- nodes -------------------------------------------------------------- */
@@ -228,6 +247,7 @@ export function renderFlowchartSvg(
   }
   push(`<defs>${wash.markup()}${textures.markup()}</defs>`);
   for (const part of nodeParts) push(part);
+  for (const part of labelParts) push(part);
 
   /* ---- heading ------------------------------------------------------------ */
   layout.heading.titleLines.forEach((line, index) => {
@@ -248,7 +268,7 @@ export function renderFlowchartSvg(
   });
 
   push("</svg>");
-  return { svg: parts.join(""), width: layout.width, height: layout.height };
+  return { svg: parts.join(""), width: frame.width, height: frame.height };
 }
 
 /**
