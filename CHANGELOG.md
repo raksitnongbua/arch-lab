@@ -9,6 +9,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A boundary no longer draws one huge rectangle around half the diagram.** A
+  boundary's box came from the bounding box of everything in it, which is right
+  only while its members sit together — so a boundary holding an inbound
+  gateway near the top of a flow and a webhook gateway near the bottom spanned
+  the whole diagram and swallowed two other boundaries and four elements that
+  were not its members. A boundary whose members are scattered now draws **one
+  rectangle per cluster**, each captioned, and no rectangle ever encloses an
+  element that is not its member. A boundary whose members sit together is a
+  single rectangle exactly as before.
+- **An element no longer shows half a sentence.** The description was drawn on
+  the element clamped to one line, which for anything worth writing meant a
+  sentence cut mid-word — "Validates the request and…". It cost the height of a
+  line and delivered nothing; the full text is in the detail panel and on hover.
 - **A connector no longer disappears behind an element it does not connect.**
   A relationship whose line grazed an unrelated box vanished behind it and
   reappeared past it, which on a busy diagram is how a reader joins up the

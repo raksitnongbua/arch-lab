@@ -86,6 +86,9 @@ const { useEditorStore } = await import(
 const { serializeModel } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/serialize.ts")).href
 );
+const { placeFrames } = await import(
+  pathToFileURL(path.join(ROOT, "src/features/editor/lib/frame-layout.ts")).href
+);
 const { validateArchLabFile } = await import(
   pathToFileURL(path.join(ROOT, "src/features/editor/io/validate.ts")).href
 );
@@ -406,6 +409,137 @@ const innerId = store().createFrame({
 }
 
 /* ----------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------- */
+/* Boundary RECTANGLES — one per cluster, never enclosing a stranger         */
+/*                                                                          */
+/* A frame's rectangle was the bounding box of everything in it, which is    */
+/* correct only while its members sit together. The reported diagram had an  */
+/* "Edge and ingress" boundary holding the inbound gateway near the top of   */
+/* the flow and the webhook gateway near the bottom: 360x1466, enclosing     */
+/* four elements that were not its members, with two other frames inside it. */
+/* Three nested dashed rectangles, none of them meaning what it looked like. */
+/*                                                                          */
+/* The layout is what scatters them and cannot be changed without moving     */
+/* coordinates people have on disk, so the invariant asserted here is the    */
+/* one that was actually broken.                                            */
+/* ----------------------------------------------------------------------- */
+
+{
+  const encloses = (rect, node) => {
+    const cx = node.position.x + node.size.width / 2;
+    const cy = node.position.y + node.size.height / 2;
+    return (
+      cx > rect.x &&
+      cx < rect.x + rect.width &&
+      cy > rect.y &&
+      cy < rect.y + rect.height
+    );
+  };
+  const node = (id, x, y) => ({
+    id,
+    name: id,
+    type: "container",
+    position: { x, y },
+    size: { width: 176, height: 88 },
+  });
+
+  /* Two members at opposite ends of a column with strangers between them —
+   * the shape of the report. */
+  const scattered = {
+    id: "d",
+    level: "container",
+    nodes: [
+      { ...node("kong-in", 40, 40), frameId: "edge" },
+      node("email-svc", 40, 256),
+      node("mongodb", 40, 472),
+      { ...node("kong-wh", 40, 688), frameId: "edge" },
+    ],
+    edges: [],
+    frames: [{ id: "edge", label: "Edge and ingress" }],
+  };
+  const rects = placeFrames(scattered);
+
+  if (rects.length === 2) {
+    ok(
+      "a boundary whose members are scattered draws one rectangle per cluster",
+    );
+  } else {
+    fail(
+      "a boundary whose members are scattered draws one rectangle per cluster",
+      `got ${rects.length} rectangle(s): ${rects
+        .map((r) => `${Math.round(r.width)}x${Math.round(r.height)}`)
+        .join(", ")}`,
+    );
+  }
+
+  const strangers = scattered.nodes.filter((n) => n.frameId === undefined);
+  const trespass = rects.flatMap((rect) =>
+    strangers
+      .filter((n) => encloses(rect, n))
+      .map((n) => `${rect.key}:${n.id}`),
+  );
+  if (trespass.length === 0) {
+    ok("no boundary rectangle encloses an element that is not its member");
+  } else {
+    fail(
+      "no boundary rectangle encloses an element that is not its member",
+      `enclosed strangers: ${trespass.join(", ")}`,
+    );
+  }
+
+  const keys = new Set(rects.map((r) => r.key));
+  if (keys.size === rects.length && rects.every((r) => r.id === "edge")) {
+    ok("every rectangle carries the frame's id and its own unique key");
+  } else {
+    fail(
+      "every rectangle carries the frame's id and its own unique key",
+      `ids ${rects.map((r) => r.id).join(",")} keys ${[...keys].join(",")}`,
+    );
+  }
+
+  if (rects.every((r) => r.label === "Edge and ingress")) {
+    ok("both rectangles are captioned — an uncaptioned box is scenery");
+  } else {
+    fail(
+      "both rectangles are captioned — an uncaptioned box is scenery",
+      rects.map((r) => JSON.stringify(r.label)).join(" "),
+    );
+  }
+
+  /* THE OTHER HALF: a boundary whose members sit together must still be ONE
+   * rectangle, or every diagram that already looked right now looks split. */
+  const together = {
+    id: "d",
+    level: "container",
+    nodes: [
+      { ...node("a", 40, 40), frameId: "state" },
+      { ...node("b", 304, 40), frameId: "state" },
+      { ...node("c", 568, 40), frameId: "state" },
+    ],
+    edges: [],
+    frames: [{ id: "state", label: "State" }],
+  };
+  const whole = placeFrames(together);
+  if (whole.length === 1) {
+    ok("a boundary whose members sit together is still a single rectangle");
+  } else {
+    fail(
+      "a boundary whose members sit together is still a single rectangle",
+      `split into ${whole.length}`,
+    );
+  }
+
+  const twice = placeFrames(scattered);
+  if (
+    JSON.stringify(twice.map((r) => [r.key, r.x, r.y, r.width, r.height])) ===
+    JSON.stringify(rects.map((r) => [r.key, r.x, r.y, r.width, r.height]))
+  ) {
+    ok("placement is deterministic — the exporter's bytes stay stable");
+  } else {
+    fail("placement is deterministic — the exporter's bytes stay stable", "");
+  }
+}
 
 if (failures > 0) {
   console.error(`\n${failures} of ${checks} frame check(s) FAILED`);

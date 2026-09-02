@@ -168,7 +168,7 @@ export function FrameLayer({
         >
           {frames.map((frame) => (
             <div
-              key={frame.id}
+              key={frame.key}
               className="absolute"
               style={{
                 transform: `translate(${frame.x}px, ${frame.y}px)`,
@@ -270,7 +270,7 @@ export function FrameLayer({
         >
           {frames.map((frame) => (
             <button
-              key={frame.id}
+              key={frame.key}
               type="button"
               onClick={() => {
                 focusFrame(frame);

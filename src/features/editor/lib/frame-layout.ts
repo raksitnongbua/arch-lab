@@ -42,6 +42,14 @@ export interface FrameRect {
 
 export interface PlacedFrame extends FrameRect {
   id: string;
+  /**
+   * Unique per RECTANGLE, where `id` is unique per frame. A frame whose
+   * members sit in separated clusters draws one rectangle each (see
+   * `placeFrames`), so `id` is no longer a usable React key or SVG id —
+   * this is. Renderers key on this; selection and the detail panel still
+   * use `id`, because both clusters are the same boundary.
+   */
+  key: string;
   label: string;
   /**
    * 0 for a top-level frame, +1 per enclosing frame. Renderers use it to sit
@@ -108,34 +116,114 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
     else bucket.push(node);
   }
 
-  const boxes = new Map<string, Box>();
+  /** Every node that belongs to `id`, directly or through a descendant. */
+  const membersOf = (id: string): Set<string> => {
+    const out = new Set<string>();
+    const walk = (frameId: string, seen: Set<string>): void => {
+      if (seen.has(frameId)) return;
+      seen.add(frameId);
+      for (const node of directNodes.get(frameId) ?? []) out.add(node.id);
+      for (const child of childIds.get(frameId) ?? []) walk(child, seen);
+    };
+    walk(id, new Set());
+    return out;
+  };
+
+  const encloses = (box: Box, node: C4Node): boolean => {
+    const centreX = node.position.x + node.size.width / 2;
+    const centreY = node.position.y + node.size.height / 2;
+    return (
+      centreX > box.minX &&
+      centreX < box.maxX &&
+      centreY > box.minY &&
+      centreY < box.maxY
+    );
+  };
+
+  const pad = (box: Box): Box => ({
+    minX: box.minX - PAD,
+    minY: box.minY - PAD - LABEL_BAND,
+    maxX: box.maxX + PAD,
+    maxY: box.maxY + PAD,
+  });
+
+  const boxes = new Map<string, Box[]>();
   const visiting = new Set<string>();
 
-  const boxOf = (id: string): Box | null => {
+  /**
+   * A frame's rectangles — usually one, but ONE PER CLUSTER when its members
+   * are scattered.
+   *
+   * WHY IT IS NOT ALWAYS ONE BOX. A frame's rectangle was the bounding box of
+   * everything in it, which is correct only while its members sit together. On
+   * the reported diagram they did not: an "Edge and ingress" boundary held the
+   * inbound gateway near the top of the flow and the webhook gateway near the
+   * bottom, so its box spanned the whole diagram and ENCLOSED the two frames
+   * and eight elements between them — three nested dashed rectangles, none of
+   * which meant what it looked like. The layout is what scatters them, and the
+   * layout cannot be changed without moving coordinates people have on disk.
+   *
+   * So the invariant is the one that was actually broken: A FRAME'S RECTANGLE
+   * MUST NOT ENCLOSE A NODE THAT IS NOT ITS MEMBER. Clusters start as one box
+   * per member and merge only while the merged rectangle stays legal by that
+   * rule, nearest pair first. A frame whose members sit together merges all
+   * the way back to one box, so every diagram that looked right still does.
+   *
+   * Two rectangles for one boundary is a real convention — the diagram the
+   * report came from draws its own namespace twice, for the same reason — and
+   * both carry the label, because a rectangle with no caption is scenery.
+   */
+  const boxesOf = (id: string): Box[] => {
     const cached = boxes.get(id);
     if (cached !== undefined) return cached;
     // A cycle should be impossible — the parser and validate.ts both refuse
     // one — but this runs per render, so bail rather than recurse forever.
-    if (visiting.has(id)) return null;
+    if (visiting.has(id)) return [];
     visiting.add(id);
 
-    let box: Box | null = null;
+    let parts: Box[] = [];
     for (const node of directNodes.get(id) ?? []) {
-      box = union(box, boxOfNode(node));
+      parts.push(boxOfNode(node));
     }
     for (const child of childIds.get(id) ?? []) {
-      const childBox = boxOf(child);
-      if (childBox !== null) box = union(box, childBox);
+      parts.push(...boxesOf(child).map((box) => box));
     }
     visiting.delete(id);
 
-    if (box === null) return null;
-    const padded: Box = {
-      minX: box.minX - PAD,
-      minY: box.minY - PAD - LABEL_BAND,
-      maxX: box.maxX + PAD,
-      maxY: box.maxY + PAD,
-    };
+    if (parts.length === 0) {
+      boxes.set(id, []);
+      return [];
+    }
+
+    const mine = membersOf(id);
+    const foreign = diagram.nodes.filter((node) => !mine.has(node.id));
+    const legal = (box: Box): boolean =>
+      !foreign.some((node) => encloses(pad(box), node));
+
+    /* Merge the nearest legal pair until none is left. Nearest first so the
+     * clusters that form are the ones a reader would group by eye, and the
+     * legality test is applied to the MERGED box, which is what makes the
+     * invariant hold by construction rather than by inspection afterwards. */
+    for (;;) {
+      let best: { i: number; j: number; cost: number } | null = null;
+      for (let i = 0; i < parts.length; i += 1) {
+        for (let j = i + 1; j < parts.length; j += 1) {
+          const merged = union(parts[i], parts[j]);
+          if (!legal(merged)) continue;
+          const cost =
+            (merged.maxX - merged.minX) * (merged.maxY - merged.minY);
+          if (best === null || cost < best.cost) best = { i, j, cost };
+        }
+      }
+      if (best === null) break;
+      const merged = union(parts[best.i], parts[best.j]);
+      parts = parts.filter((_, index) => index !== best.i && index !== best.j);
+      parts.push(merged);
+    }
+
+    // Deterministic order: top-left first, so ids and paint order are stable.
+    parts.sort((a, b) => a.minY - b.minY || a.minX - b.minX);
+    const padded = parts.map(pad);
     boxes.set(id, padded);
     return padded;
   };
@@ -154,21 +242,22 @@ export function placeFrames(diagram: C4Diagram): PlacedFrame[] {
 
   const placed: PlacedFrame[] = [];
   for (const frame of frames) {
-    const box = boxOf(frame.id);
-    if (box === null) continue;
-    placed.push({
-      id: frame.id,
-      label: frame.label,
-      depth: depthOf(frame.id),
-      x: box.minX,
-      y: box.minY,
-      width: box.maxX - box.minX,
-      height: box.maxY - box.minY,
+    boxesOf(frame.id).forEach((box, part) => {
+      placed.push({
+        id: frame.id,
+        key: `${frame.id}#${part}`,
+        label: frame.label,
+        depth: depthOf(frame.id),
+        x: box.minX,
+        y: box.minY,
+        width: box.maxX - box.minX,
+        height: box.maxY - box.minY,
+      });
     });
   }
-  // Outermost first. Ties broken by id so the order is deterministic, which
-  // keeps the SVG exporter's output byte-stable between runs.
-  placed.sort((a, b) => a.depth - b.depth || (a.id < b.id ? -1 : 1));
+  // Outermost first. Ties broken by the per-rectangle key so the order is
+  // deterministic, which keeps the SVG exporter's output byte-stable.
+  placed.sort((a, b) => a.depth - b.depth || (a.key < b.key ? -1 : 1));
   return placed;
 }
 
