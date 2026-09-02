@@ -293,6 +293,7 @@ const {
   ownsChildDiagram,
   revisedEdgeEdit,
   revisedDirectionEdit,
+  revisedFileDirectionEdit,
   revisedNodeEdit,
 } = await load("src/features/playground/input/canvas-edit.ts");
 const { connectTargets, creatableNodeTypes } = await load(
@@ -475,6 +476,109 @@ title "Direction"
     "an unknown diagram id is refused",
     revisedDirectionEdit(doc, SEED, "no-such-diagram", "lr") === null,
   );
+  /* ---- The FILE's direction line, which is a different line -------------- */
+
+  /* The control that reads "Whole file" writes here. It exists because the
+     first version of this control offered `File` as a third DIRECTION meaning
+     "inherit", which for a diagram carrying no attribute was the state already
+     in force — so pressing it did nothing, and there was no way to set the
+     file's direction at all. Reported as "pressed it, nothing happened". Scope
+     is its own choice now, and these are the assertions for the other half. */
+  const countOf = (text, re) =>
+    text.split("\n").filter((line) => re.test(line)).length;
+
+  const inserted = revisedFileDirectionEdit(doc, SEED, "lr");
+  check(
+    "setting the file's direction inserts ONE header line, on the patch path",
+    inserted !== null &&
+      inserted.path === "patch" &&
+      countOf(inserted.text, /^direction lr$/) === 1 &&
+      inserted.text.split("\n").length === SEED.split("\n").length + 1,
+    inserted === null
+      ? "returned null"
+      : `path=${inserted.path} lines ${SEED.split("\n").length} -> ${inserted.text.split("\n").length}`,
+  );
+  check(
+    "the inserted line leaves a document that parses, with the file's direction set",
+    (() => {
+      if (inserted === null) return false;
+      const reparsed = parseViewSource(inserted.text);
+      return (
+        reparsed.status === "ok" &&
+        reparsed.value.kind === "c4" &&
+        reparsed.value.synced.file.direction === "lr"
+      );
+    })(),
+    "the gesture wrote a header the parser does not accept",
+  );
+  check(
+    "inserting keeps the author's comments",
+    inserted !== null &&
+      inserted.text.includes("// a comment the author wrote"),
+  );
+
+  const FILE_TB = SEED.replace(
+    'title "Direction"',
+    'title "Direction"\ndirection tb',
+  );
+  const withFile = c4Document(FILE_TB);
+  const swapped = revisedFileDirectionEdit(withFile, FILE_TB, "lr");
+  check(
+    "changing the file's direction replaces that one line and adds none",
+    swapped !== null &&
+      countOf(swapped.text, /^direction /) === 1 &&
+      swapped.text.split("\n").length === FILE_TB.split("\n").length,
+    swapped === null
+      ? "returned null"
+      : `${countOf(swapped.text, /^direction /)} direction line(s), ${swapped.text.split("\n").length} lines`,
+  );
+  const removed = revisedFileDirectionEdit(withFile, FILE_TB, "none");
+  check(
+    "clearing removes the line rather than blanking it",
+    removed !== null &&
+      countOf(removed.text, /^direction/) === 0 &&
+      removed.text.split("\n").length === FILE_TB.split("\n").length - 1 &&
+      removed.text.includes("// another comment, mid-block"),
+    removed === null
+      ? "returned null"
+      : `${countOf(removed.text, /^direction/)} line(s) left, ${removed.text.split("\n").length} lines`,
+  );
+  check(
+    "the file gesture is a no-op for what is already in force",
+    revisedFileDirectionEdit(withFile, FILE_TB, "tb") === null &&
+      revisedFileDirectionEdit(doc, SEED, "none") === null,
+    "a press that changes nothing must not cost a text change or an undo entry",
+  );
+  check(
+    "setting the file's direction does NOT touch a diagram's own attribute",
+    (() => {
+      /* Asserted on the RE-EMIT path, deliberately. `adopt` re-parses the
+         patched text, so on the patch path the model this gesture builds is
+         discarded and a wrong one is unobservable — a break there proves
+         nothing, which is what a first version of this assertion found out.
+         The fallback path is the one that serializes the model, and an empty
+         `sourceText` is what reaches it: it cannot match `aftText`, so
+         `patchablePane` declines and `adopt` writes the model instead.
+         Stripping a diagram's own `direction=` to make the file's setting
+         "take" would then rewrite a line the reader never pointed at. */
+      const both = SEED.replace(
+        '@container cnt "C" owner=a',
+        '@container cnt "C" owner=a direction=tb',
+      );
+      const edit = revisedFileDirectionEdit(c4Document(both), "", "lr");
+      if (edit === null) return "returned null";
+      if (edit.path !== "reemit")
+        return `expected the re-emit path, got ${edit.path}`;
+      const kept = edit.doc.synced.file.diagrams.find(
+        (candidate) => candidate.id === "cnt",
+      );
+      return kept?.direction === "tb"
+        ? true
+        : `the diagram's own direction became ${JSON.stringify(kept?.direction)}`;
+    })() === true,
+    "the file gesture rewrote a diagram's own setting",
+  );
+
   check(
     "it asks canvasEditability itself rather than trusting its caller",
     (() => {

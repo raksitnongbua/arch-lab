@@ -162,6 +162,8 @@ interface Header {
   schema?: string;
   /** File-wide default layout direction; a diagram may override it. */
   direction?: "tb" | "lr";
+  /** Source line of the `direction` line, for `ArchTextSpans.header`. */
+  directionLine?: number;
   title?: string;
   description?: string;
   owner?: string;
@@ -362,6 +364,13 @@ export interface HeaderSpans {
   end: number;
   /** 1-based line of each `tagcolor` line, keyed by tag. */
   tagColors: ReadonlyMap<string, number>;
+  /**
+   * 1-based line of the `direction` line, when the file has one. Recorded for
+   * the same reason `tagColors` is: the canvas's direction control replaces
+   * that one line, and a gesture that had to FIND it would be re-implementing
+   * the header parse in a module that already has the parse's answer.
+   */
+  direction?: number;
 }
 
 export interface ArchTextSpans {
@@ -575,7 +584,11 @@ export function parseArchTextWithSpans(source: string): {
     edges: new Map(),
     frames: new Map(),
     diagramHeads: new Map(),
-    header: { end: headerEnd, tagColors: header.tagColorLines ?? new Map() },
+    header: {
+      end: headerEnd,
+      tagColors: header.tagColorLines ?? new Map(),
+      direction: header.directionLine,
+    },
   };
   const file = resolve(header, diagrams, diagramById, nodeHome, spans);
   return { file, spans };
@@ -637,6 +650,7 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
         );
       }
       header.direction = value;
+      header.directionLine = loc.line;
       break;
     }
     case "tags": {

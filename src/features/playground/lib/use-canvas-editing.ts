@@ -64,6 +64,7 @@ import {
   renamedFrameEdit,
   revisedEdgeEdit,
   revisedDirectionEdit,
+  revisedFileDirectionEdit,
   revisedNodeEdit,
   unnestedNodeEdit,
   type CanvasEdit,
@@ -140,14 +141,17 @@ export function useCanvasEditing({
   sequenceEdit: SequenceEditHandlers | undefined;
   flowchartEdit: FlowchartEditHandlers | undefined;
   /**
-   * Set or clear one C4 diagram's layout direction. Beside the handler sets
-   * rather than inside `canvasEdit`, because the control that invokes it is
-   * rendered by the playground in the canvas's lock slot — not by the canvas.
+   * Apply or clear a layout direction, at the diagram's scope or the file's.
+   * Beside the handler sets rather than inside `canvasEdit`, because the
+   * control that invokes them is rendered by the playground in the canvas's
+   * lock slot — not by the canvas.
    */
-  changeDirection: (
+  applyDirection: (
     diagramId: string,
-    direction: "tb" | "lr" | "inherit",
+    scope: "layer" | "file",
+    direction: "tb" | "lr",
   ) => void;
+  clearDirection: (diagramId: string, scope: "layer" | "file") => void;
 } {
   /**
    * Previous source texts, newest last — the undo history for CANVAS edits.
@@ -280,31 +284,53 @@ export function useCanvasEditing({
   );
 
   /**
-   * Set or clear one diagram's layout direction, from the toggle beside the
-   * canvas lock.
+   * Apply a direction at one scope, or clear it there.
    *
-   * The announcement names the SHAPE rather than the keyword, because "lr" is
-   * the text you write and "runs left to right" is what just happened to the
-   * picture — a reader who reached for this control did so because the
-   * diagram was the wrong shape, not because they wanted a particular word in
-   * their file.
+   * TWO GESTURES BEHIND ONE PAIR OF CALLBACKS, because the two scopes write
+   * different lines: the diagram's own head line, or the file's `direction`
+   * header line. The control chooses the scope; this only routes.
+   *
+   * The announcement names the SHAPE and the SCOPE rather than the keyword,
+   * because "lr" is the text that gets written and "this layer now runs left
+   * to right" is what happened to the picture — a reader reached for this
+   * because the diagram was the wrong shape, not because they wanted a
+   * particular word in their file.
    */
-  const handleDirectionChange = useCallback(
-    (diagramId: string, direction: "tb" | "lr" | "inherit") => {
-      const next = revisedDirectionEdit(doc, text, diagramId, direction);
+  const applyDirection = useCallback(
+    (diagramId: string, scope: "layer" | "file", direction: "tb" | "lr") => {
+      const next =
+        scope === "layer"
+          ? revisedDirectionEdit(doc, text, diagramId, direction)
+          : revisedFileDirectionEdit(doc, text, direction);
       // null covers "nothing changed" as well as every refusal, so choosing
-      // the direction a diagram already has costs no text change and no undo
-      // entry — the node revise's own contract.
+      // what is already in force costs no text change and no undo entry.
       if (next === null) return;
-      const said =
+      const shape =
         direction === "lr"
           ? "runs left to right, folding a long flow into bands"
-          : direction === "tb"
-            ? "runs top to bottom"
-            : "follows the file's own direction again";
+          : "runs top to bottom";
+      const where =
+        scope === "layer" ? "This layer" : "Every diagram in the file";
       applyCanvasEdit(
         next,
-        `Layout ${said} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+        `${where} ${shape} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const clearDirection = useCallback(
+    (diagramId: string, scope: "layer" | "file") => {
+      const next =
+        scope === "layer"
+          ? revisedDirectionEdit(doc, text, diagramId, "inherit")
+          : revisedFileDirectionEdit(doc, text, "none");
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        scope === "layer"
+          ? "This layer follows the file's direction again — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo."
+          : "The file no longer sets a direction — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.",
       );
     },
     [doc, text, applyCanvasEdit],
@@ -1153,6 +1179,7 @@ export function useCanvasEditing({
     canvasEdit,
     sequenceEdit,
     flowchartEdit,
-    changeDirection: handleDirectionChange,
+    applyDirection,
+    clearDirection,
   };
 }
