@@ -28,12 +28,22 @@
  * `menu-item.ts` had already written the rule that kills it: "a menu should
  * say what you GET, not make you assemble it."
  *
- * So: one row per outcome. Four rows, each naming both the shape and the
- * scope, plus a clearing row that appears only when there is something to
- * clear. Resting chrome is one button wide, the anatomy is `zoom-menu.tsx`'s
- * (readout-as-button, shared dismissal hook, real `<button>` rows), and no row
- * can be one whose press does nothing — the row currently in force is checked
- * rather than pressable-and-inert.
+ * So: one row per outcome, and the anatomy is `zoom-menu.tsx`'s — trigger,
+ * shared dismissal hook, real `<button>` rows. No row can be one whose press
+ * does nothing: the row in force is CHECKED rather than pressable-and-inert,
+ * and a clearing row exists only where there is a line to remove.
+ *
+ * THE THIRD PASS WAS ABOUT LENGTH, and it is why scope is a heading. The rows
+ * read "Top-down, this layer" / "Left-right, whole file" with the `.alab` line
+ * each would write spelled underneath in mono — four rows of that is a
+ * paragraph in the corner of a canvas, and it said the scope four times to
+ * mean two things. A heading says it once and leaves each row a shape and two
+ * words; the line it writes moved into the row's `title`, where it is there
+ * for the reader who wants it and out of the way of the one who just wants
+ * the picture turned. The trigger lost its label for the same reason and one
+ * more: the padlock it shares a slot with has always been its glyph alone, and
+ * a labelled neighbour reads as a different KIND of control rather than a
+ * second one of the same kind.
  *
  * The glyphs are the shapes, not letters: a column of bars for top-down, a row
  * of them for left-to-right. A reader reaches for this because the picture is
@@ -41,8 +51,9 @@
  */
 
 import { useCallback, useId, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, RotateCcw } from "lucide-react";
 
+import { buttonClasses } from "@/components/ui/button";
 import { useMenuDismissal } from "@/components/ui/menu-dismissal";
 import { cn } from "@/lib/utils";
 import type { C4LayoutDirection } from "@/types";
@@ -82,37 +93,58 @@ function DirectionGlyph({
   );
 }
 
-const OUTCOMES: readonly {
+/**
+ * The menu's two sections. Scope is a HEADING, not part of every row's label.
+ *
+ * It was in the labels first — "Top-down, this layer", "Left-right, whole
+ * file" — with the line each would write spelled underneath in mono. Four rows
+ * of that is a paragraph in a corner of a canvas, and it repeated the scope
+ * four times to say two things. A heading says it once, which leaves the row
+ * itself two words and a shape.
+ *
+ * The `.alab` line each choice writes is still there, in the row's `title`:
+ * useful to the reader who wants to know what lands in their file, and not in
+ * the way of the one who just wants the picture turned.
+ */
+const SECTIONS: readonly {
   scope: DirectionScope;
-  direction: C4LayoutDirection;
-  label: string;
-  hint: string;
+  heading: string;
+  /** What removing this scope's setting is called, in the reader's terms. */
+  clearLabel: string;
+  clearTitle: string;
 }[] = [
   {
     scope: "layer",
-    direction: "tb",
-    label: "Top-down, this layer",
-    hint: "direction=tb on this diagram",
-  },
-  {
-    scope: "layer",
-    direction: "lr",
-    label: "Left-right, this layer",
-    hint: "direction=lr on this diagram",
+    heading: "This layer",
+    clearLabel: "Follow file",
+    clearTitle: "Remove this diagram's direction= so it follows the file again",
   },
   {
     scope: "file",
-    direction: "tb",
-    label: "Top-down, whole file",
-    hint: "direction tb in the header",
-  },
-  {
-    scope: "file",
-    direction: "lr",
-    label: "Left-right, whole file",
-    hint: "direction lr in the header",
+    heading: "Whole file",
+    clearLabel: "Clear",
+    clearTitle: "Remove the file's direction line",
   },
 ];
+
+const DIRECTIONS: readonly {
+  value: C4LayoutDirection;
+  label: string;
+}[] = [
+  { value: "tb", label: "Top-down" },
+  { value: "lr", label: "Left-right" },
+];
+
+const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
+  layer: {
+    tb: "Writes direction=tb on this diagram's line",
+    lr: "Writes direction=lr on this diagram's line — folds a long flow into bands",
+  },
+  file: {
+    tb: "Writes direction tb in the file header",
+    lr: "Writes direction lr in the file header — folds a long flow into bands",
+  },
+};
 
 export function LayoutDirectionMenu({
   layerDirection,
@@ -161,11 +193,22 @@ export function LayoutDirectionMenu({
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
         aria-label={`Layout runs ${effective === "lr" ? "left to right" : "top to bottom"} — choose a layout direction`}
-        title="Layout direction"
-        className="flex items-center gap-1.5 rounded-lg border border-border bg-card/90 px-2 py-1.5 text-[11px] font-medium whitespace-nowrap text-foreground shadow-sm backdrop-blur transition-colors hover:bg-secondary"
+        title={`Layout direction — ${effective === "lr" ? "left to right" : "top to bottom"}`}
+        /* ONE GLYPH, NO LABEL, squared like the padlock beside it. The two
+           controls share a slot, and the padlock has always been its icon
+           alone — a labelled neighbour reads as a different KIND of control
+           rather than a second one of the same kind. The state is in the
+           glyph (bars stacked or bars in a row, which is the shape the
+           diagram takes) and in the tooltip and accessible name; the words
+           live in the menu, where there is room for them. */
+        className={buttonClasses({
+          variant: "outline",
+          size: "sm",
+          className:
+            "w-8 border-border bg-card/90 px-0 text-foreground shadow-sm backdrop-blur",
+        })}
       >
-        <DirectionGlyph value={effective} className="size-3 shrink-0" />
-        {effective === "lr" ? "Left-right" : "Top-down"}
+        <DirectionGlyph value={effective} className="size-3.5 shrink-0" />
       </button>
 
       {open ? (
@@ -176,76 +219,69 @@ export function LayoutDirectionMenu({
           /* Opens DOWNWARD and to the right edge: this button sits at the
              canvas's top right beside the padlock, so there is room below it
              and none above. */
-          className="af-glass absolute top-full right-0 z-20 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
+          className="af-glass absolute top-full right-0 z-20 mt-1.5 min-w-44 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
         >
-          {OUTCOMES.map((row) => {
-            const inForce =
-              (row.scope === "layer" ? layerDirection : fileDirection) ===
-              row.direction;
+          {SECTIONS.map((section, index) => {
+            const set =
+              section.scope === "layer" ? layerDirection : fileDirection;
             return (
-              <button
-                key={`${row.scope}-${row.direction}`}
-                type="button"
-                role="menuitemradio"
-                aria-checked={inForce}
-                onClick={() => choose(row.scope, row.direction)}
-                className={cn(
-                  "flex w-full items-start gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
-                  inForce ? "text-foreground" : "text-muted-foreground",
-                )}
+              <div
+                key={section.scope}
+                className={cn(index > 0 && "mt-1 border-t border-border pt-1")}
               >
-                <Check
-                  aria-hidden="true"
-                  className={cn(
-                    "mt-0.5 size-3 shrink-0",
-                    !inForce && "invisible",
-                  )}
-                />
-                <span className="min-w-0">
-                  <span
-                    className={cn(
-                      "block text-xs whitespace-nowrap",
-                      inForce && "font-medium",
-                    )}
+                <p className="px-2.5 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                  {section.heading}
+                </p>
+                {DIRECTIONS.map((direction) => {
+                  const inForce = set === direction.value;
+                  return (
+                    <button
+                      key={direction.value}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={inForce}
+                      title={WRITES[section.scope][direction.value]}
+                      onClick={() => choose(section.scope, direction.value)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs whitespace-nowrap transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none",
+                        inForce
+                          ? "font-medium text-foreground"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      <Check
+                        aria-hidden="true"
+                        className={cn(
+                          "size-3 shrink-0",
+                          !inForce && "invisible",
+                        )}
+                      />
+                      <DirectionGlyph
+                        value={direction.value}
+                        className="size-3 shrink-0"
+                      />
+                      {direction.label}
+                    </button>
+                  );
+                })}
+                {/* Only when this scope HAS a line to remove, which is what
+                    keeps every row in this menu one that does something. */}
+                {set !== null ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    title={section.clearTitle}
+                    onClick={() => clear(section.scope)}
+                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
                   >
-                    {row.label}
-                  </span>
-                  <span className="block font-mono text-[10px] text-muted-foreground">
-                    {row.hint}
-                  </span>
-                </span>
-              </button>
+                    <span className="size-3 shrink-0" />
+                    <RotateCcw aria-hidden="true" className="size-3 shrink-0" />
+                    {section.clearLabel}
+                  </button>
+                ) : null}
+              </div>
             );
           })}
-
-          {/* Clearing rows exist only when there is a line to remove, which is
-              what keeps every row in this menu one that does something. */}
-          {layerDirection !== null || fileDirection !== null ? (
-            <div className="mt-1 border-t border-border pt-1">
-              {layerDirection !== null ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => clear("layer")}
-                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
-                >
-                  <span className="size-3 shrink-0" />
-                  Follow the file instead
-                </button>
-              ) : null}
-              {fileDirection !== null ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => clear("file")}
-                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
-                >
-                  <span className="size-3 shrink-0" />
-                  Remove the file&rsquo;s direction
-                </button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>
