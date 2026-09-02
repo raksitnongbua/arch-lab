@@ -35,6 +35,23 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   says so plainly when a diagram's coordinates are hand-placed and a direction
   would not move them. It never edits your document.
 
+### Changed
+
+- **The C4 diagram opens as the diagram.** The strip of hint text that sat
+  permanently across the bottom of the canvas — click for details, double-click
+  to zoom, Esc steps back, drag to pan — is gone. Every clause it carried is
+  now a step in the feature tour behind the **?** button under the diagram,
+  including the two it was the only home for: modifier-and-scroll zooming, and
+  what a plain drag does (it pans a read-only canvas and draws a selection box
+  on an unlocked one, and the step names the **Select / Pan** toggle either
+  way).
+- **The tour waits to be asked.** It no longer opens itself on a first visit,
+  on either the C4 or the sequence viewer — press **?** when you want it. With
+  nothing appearing uninvited there is nothing to silence, so the tour's
+  "Don't show again" control and the per-browser flag behind it are gone; a
+  browser that had dismissed the old tour is not treated differently from one
+  that never saw it.
+
 ### Fixed
 
 - **A boundary no longer draws one huge rectangle around half the diagram.** A

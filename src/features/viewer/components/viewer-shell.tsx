@@ -45,6 +45,7 @@ import {
   Map as MapIcon,
   Maximize2,
   Minimize2,
+  Move,
   MousePointerClick,
   Shrink,
   Waves,
@@ -58,6 +59,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
 import { Tour, useTour, type TourStep } from "@/components/ui/tour";
 import { CANVAS_EDIT_ENABLED } from "@/lib/constants";
+import { useModKey } from "@/lib/mod-key";
 import { cn } from "@/lib/utils";
 
 import {
@@ -105,12 +107,6 @@ const readFalse = (): boolean => false;
 
 /* ---- the tour --------------------------------------------------------------- */
 
-/**
- * Versioned so a rewritten tour can re-show itself: bump `v1` and every
- * browser that dismissed the old one sees the new one once.
- */
-const C4_TOUR_KEY = "arch-lab:tour:c4:v1";
-
 /*
  * The canvas's controls that its chrome does not explain, one step each.
  * These strings are user-facing contracts: each names a control by what is
@@ -118,46 +114,76 @@ const C4_TOUR_KEY = "arch-lab:tour:c4:v1";
  * this shell's strip), so a change to a control means rewording its step.
  * The zoom presets stop at 200% because this canvas clamps at 250%
  * (`lib/canvas-constants.ts`) and the menu drops what it cannot honour.
+ *
+ * THIS IS NOW THE ONLY PLACE THE GESTURES ARE TAUGHT. The canvas used to
+ * carry a permanent hint strip along its bottom edge saying the same things
+ * in one long line — a band of prose pinned over the drawing on every visit,
+ * on the page whose whole argument is that the diagram is worth presenting.
+ * It was deleted, so every clause it held has to survive here or it is gone
+ * from the product: the modifier-scroll zoom, what Escape steps back from,
+ * and — the one a reader is most likely to be wrong about — what a plain
+ * drag does. `check:viewer-motion` reads these steps for that last pair.
+ *
+ * BUILT PER READER, not a module constant, for two reasons the strip also
+ * had: the modifier is named for the reader's platform (`⌘` on a Mac, where
+ * "Ctrl + scroll" names the gesture that zooms the OS instead), and the drag
+ * gesture SPLITS on whether the canvas is editable — a bare drag pans a
+ * read-only canvas and lassos an editable one, so one sentence cannot teach
+ * both without promising a pan that delivers a marquee.
  */
-const C4_TOUR_STEPS: readonly TourStep[] = [
-  {
-    title: "Select for details",
-    body:
-      "Click any element or connector to open its detail panel — the rest " +
-      "of the diagram dims around it. Escape deselects.",
-    icon: MousePointerClick,
-  },
-  {
-    title: "Drill into a level",
-    body:
-      "Double-click an element — or press its zoom chip — to open the view " +
-      "inside it. Escape, or the breadcrumb top-left, climbs back out.",
-    icon: Layers,
-  },
-  {
-    title: "Zoom the canvas",
-    body:
-      "In the bottom-right pill, − and + step the zoom and the readout opens " +
-      "presets (Fit, 50–200%). Pinch, or hold ⌘/Ctrl and scroll, zooms at " +
-      "the pointer; dragging empty canvas pans.",
-    icon: ZoomIn,
-  },
-  {
-    title: "The minimap",
-    body:
-      "Off by default, so the diagram opens clean. The map button in the " +
-      "bottom-right pill — or M — shows the whole diagram in thumbnail " +
-      "with your viewport marked. Drag it to pan; scroll it to zoom.",
-    icon: MapIcon,
-  },
-  {
-    title: "Take it with you",
-    body:
-      "Export, in the strip under the diagram, saves this view — or every " +
-      "view at once — as SVG, PNG, or an animated GIF.",
-    icon: Download,
-  },
-];
+function useC4TourSteps(mod: string, editable: boolean): readonly TourStep[] {
+  return useMemo(
+    () => [
+      {
+        title: "Select for details",
+        body:
+          "Click any element or connector to open its detail panel — the rest " +
+          "of the diagram dims around it. Escape deselects.",
+        icon: MousePointerClick,
+      },
+      {
+        title: "Drill into a level",
+        body:
+          "Double-click an element — or press its zoom chip — to open the view " +
+          "inside it. Escape, or the breadcrumb top-left, climbs back out.",
+        icon: Layers,
+      },
+      {
+        title: "Zoom the canvas",
+        body:
+          "In the bottom-right pill, − and + step the zoom and the readout opens " +
+          `presets (Fit, 50–200%). Pinch, or hold ${mod} and scroll, zooms at ` +
+          "the pointer — a plain scroll pans instead.",
+        icon: ZoomIn,
+      },
+      {
+        title: editable ? "Drag to select, or to pan" : "Drag to pan",
+        body: editable
+          ? "Dragging empty canvas draws a selection box — release to group " +
+            "what it caught. The Select / Pan toggle, bottom-left, makes a " +
+            "drag pan the canvas instead."
+          : "Drag anywhere on empty canvas to move the diagram under you.",
+        icon: Move,
+      },
+      {
+        title: "The minimap",
+        body:
+          "Off by default, so the diagram opens clean. The map button in the " +
+          "bottom-right pill — or M — shows the whole diagram in thumbnail " +
+          "with your viewport marked. Drag it to pan; scroll it to zoom.",
+        icon: MapIcon,
+      },
+      {
+        title: "Take it with you",
+        body:
+          "Export, in the strip under the diagram, saves this view — or every " +
+          "view at once — as SVG, PNG, or an animated GIF.",
+        icon: Download,
+      },
+    ],
+    [mod, editable],
+  );
+}
 
 export function ViewerShell({
   model,
@@ -222,9 +248,10 @@ export function ViewerShell({
    * exists to show a model wants it.
    *
    * `false` is for a host that embeds the shell as EVIDENCE rather than as
-   * the destination — a preview beside something else. A card opening itself
-   * over a preview teaches the wrong page's controls, and spends the reader's
-   * one first visit somewhere it does not apply.
+   * the destination — a preview beside something else. The tour teaches THIS
+   * view's controls, so on a page where the view is the exhibit and not the
+   * thing being driven, both the button and the card it opens are answering
+   * a question nobody standing there is asking.
    */
   tour?: boolean;
   /**
@@ -362,7 +389,9 @@ export function ViewerShell({
   // The tour card only mounts once opened, so its Escape listener always
   // registers AFTER this shell's rung-4 listener above — making "close the
   // tour" the ladder's last rung, per the design in components/ui/tour.tsx.
-  const tour = useTour(C4_TOUR_KEY);
+  const tour = useTour();
+  const mod = useModKey();
+  const tourSteps = useC4TourSteps(mod, edit !== undefined);
 
   return (
     <div
@@ -409,18 +438,18 @@ export function ViewerShell({
           onDiagramChange={handleDiagramChange}
           edit={edit}
           lockSlot={lockSlot}
-          immersive={isImmersive}
         />
-        {/* First visit it opens itself (remembered per browser — see
-            components/ui/tour.tsx for the persistence verdicts); the strip's
-            Tour button replays it. Bottom-left, which is now the QUIET
+        {/* NOTHING OPENS THIS BUT THE STRIP'S TOUR BUTTON — it never shows
+            itself on a first visit (see components/ui/tour.tsx), so a diagram
+            put on a screen in front of an audience opens as the drawing and
+            nothing else. Bottom-left, which is now the QUIET
             corner: the camera controls and the map moved to the right to sit
             together, so this clears the whole navigation column as well as the
             top-right detail panel, and only ever shares its corner with the
             drag-mode toggle an editable canvas shows. */}
         {tourEnabled ? (
           <Tour
-            steps={C4_TOUR_STEPS}
+            steps={tourSteps}
             handle={tour}
             label="C4 viewer tour"
             className="absolute bottom-14 left-3 z-20"

@@ -3,17 +3,26 @@
 /**
  * The feature TOUR: a compact, dismissible card that walks through the
  * controls a view's chrome does not explain by itself — one step per control,
- * Back/Next/Done, a step counter, and a way to never see it again.
+ * Back/Next/Done, a step counter, and a close button.
+ *
+ * ASKED FOR, NEVER OFFERED. The card only ever opens because a reader pressed
+ * the view's Tour button; it does not auto-show on a first visit and it
+ * remembers nothing between them. A diagram is something people OPEN TO READ,
+ * often in front of an audience, and a card that lands over the drawing
+ * uninvited is chrome on the one surface this project sells clean. The
+ * question the tour answers — "what can I do here?" — is asked at a moment
+ * only the reader knows, and the ⓘ/? button is on screen the whole time to
+ * take it. That also removes the reason the tour used to persist a verdict:
+ * with nothing auto-showing, there is nothing to suppress, so there is no
+ * storage key, no "Don't show again", and nothing that can go stale in a
+ * browser that has been here before.
  *
  * NOT A MODAL, deliberately. The card teaches controls that live on the
  * canvas underneath it, and a dialog (focus trap, backdrop, inert page) would
  * forbid trying each one while reading about it — the same argument the
  * sequence viewer's details dock records against becoming a <dialog>. Do not
- * "fix" this into one. It never steals DOM focus on open either: the card
- * auto-opens on a first visit, and yanking focus off whatever the reader was
- * doing would make the introduction the interruption. Its buttons are real
- * <button>s in the tab order, so the keyboard reaches everything without a
- * trap.
+ * "fix" this into one. Its buttons are real <button>s in the tab order, so
+ * the keyboard reaches everything without a trap.
  *
  * ESCAPE — the LAST rung of whichever ladder the hosting page runs (the
  * sequence playground and the viewer shell each document theirs). That falls
@@ -28,33 +37,12 @@
  * sequence viewer exempts them: Escape inside the source textarea belongs to
  * its Tab-escape-hatch.
  *
- * PERSISTENCE, one versioned localStorage key per view (bump the version to
- * re-show a rewritten tour). The key stores a VERDICT, so the three ways out
- * write differently:
- *   - Done (walking off the last step) and "Don't show again" both persist —
- *     finishing is seeing it, and suppressing is asking for exactly this;
- *   - the close button and Escape close for the SESSION only. Abandoning a
- *     tour mid-read is not a verdict on it, and the reader who never wants it
- *     back has the explicit control for that.
- * SSR-safe the way lib/idle-motion.ts is: a `useSyncExternalStore` whose
- * server snapshot claims the tour was seen, so server markup never contains
- * the card and the client corrects after hydration. localStorage failures
- * (private mode, quota) degrade to "seen" — never auto-nagging on every load
- * beats never remembering a dismissal, and the replay button still works.
- *
  * REDUCED MOTION: the entrance animation is skipped in JS (`useReducedMotion`
  * — the card mounts from client state, never on first paint, so the JS read
  * is always available) and the card simply appears.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X, type LucideIcon } from "lucide-react";
 
 import { buttonClasses } from "@/components/ui/button";
@@ -69,102 +57,24 @@ export interface TourStep {
 }
 
 /* -------------------------------------------------------------------------- */
-/* The seen flag                                                               */
-/* -------------------------------------------------------------------------- */
-
-/* Same store shape as lib/idle-motion.ts: the `storage` event only fires in
- * OTHER tabs, so local writes notify a listener set, and both paths funnel
- * through the one subscribe. */
-const listeners = new Set<() => void>();
-
-function readSeen(storageKey: string): boolean {
-  try {
-    return window.localStorage.getItem(storageKey) !== null;
-  } catch {
-    // Unreadable storage cannot remember a dismissal, and auto-showing a
-    // card nobody can silence is worse than not auto-showing it. The replay
-    // button keeps the tour reachable.
-    return true;
-  }
-}
-
-function writeSeen(storageKey: string): void {
-  try {
-    window.localStorage.setItem(storageKey, "seen");
-  } catch {
-    /* Session-only degradation — the session flags below still close it. */
-  }
-  for (const listener of listeners) listener();
-}
-
-function subscribe(onChange: () => void): () => void {
-  listeners.add(onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    listeners.delete(onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-/* -------------------------------------------------------------------------- */
 /* The hook                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** What a view needs to host a tour: whether the card shows, and the four
- * ways its state changes. `start` is for the persistent replay button. */
+/** What a view needs to host a tour: whether the card shows, and the two ways
+ * that changes. `start` is the view's Tour button — the ONLY way in. */
 export interface TourHandle {
   open: boolean;
   /** Open (or re-open) the tour at its first step. */
   start: () => void;
-  /** Close for this session only — the tour may auto-show again next visit. */
+  /** Close it. Nothing is remembered; the button reopens it. */
   close: () => void;
-  /** Done: the tour was walked through; persist and close. */
-  finish: () => void;
-  /** "Don't show again": persist without finishing, and close. */
-  suppress: () => void;
 }
 
-export function useTour(storageKey: string): TourHandle {
-  const seen = useSyncSeen(storageKey);
-  // Closing without persisting still has to close: `seen` alone cannot say
-  // "dismissed just now", and `manuallyOpen` alone cannot say "auto-show is
-  // over". Both are plain event-handler writes — no effects involved.
-  const [sessionClosed, setSessionClosed] = useState(false);
-  const [manuallyOpen, setManuallyOpen] = useState(false);
-
-  const start = useCallback(() => setManuallyOpen(true), []);
-  const close = useCallback(() => {
-    setManuallyOpen(false);
-    setSessionClosed(true);
-  }, []);
-  const finish = useCallback(() => {
-    writeSeen(storageKey);
-    setManuallyOpen(false);
-    setSessionClosed(true);
-  }, [storageKey]);
-
-  return useMemo(
-    () => ({
-      open: manuallyOpen || (!seen && !sessionClosed),
-      start,
-      close,
-      finish,
-      // Same write as finishing — the key records "do not auto-show", not
-      // how the reader arrived at that.
-      suppress: finish,
-    }),
-    [manuallyOpen, seen, sessionClosed, start, close, finish],
-  );
-}
-
-function useSyncSeen(storageKey: string): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => readSeen(storageKey),
-    // Server snapshot: seen. The card must never be in server markup — its
-    // truth lives in localStorage, which only the client can read.
-    () => true,
-  );
+export function useTour(): TourHandle {
+  const [open, setOpen] = useState(false);
+  const start = useCallback(() => setOpen(true), []);
+  const close = useCallback(() => setOpen(false), []);
+  return useMemo(() => ({ open, start, close }), [open, start, close]);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -299,43 +209,32 @@ function TourCard({
         {step.body}
       </p>
 
-      <div className="mt-2.5 flex items-center gap-1.5">
-        {/* Suppression is a quiet text control, not a peer of Next: it is the
-            escape hatch for the reader the auto-show annoyed, and giving it
-            button chrome would make "never help me" the visual equal of
-            "keep going". */}
+      {/* No suppression control: nothing auto-shows, so there is nothing to
+          suppress — see the header. The row is Back/Next alone, right-aligned. */}
+      <div className="mt-2.5 flex items-center justify-end gap-1.5">
         <button
           type="button"
-          onClick={handle.suppress}
-          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          onClick={() => setIndex(Math.max(0, safeIndex - 1))}
+          disabled={safeIndex === 0}
+          className={buttonClasses({
+            variant: "ghost",
+            size: "sm",
+            className: "h-7 px-2 text-xs",
+          })}
         >
-          Don&apos;t show again
+          Back
         </button>
-        <div className="ml-auto flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setIndex(Math.max(0, safeIndex - 1))}
-            disabled={safeIndex === 0}
-            className={buttonClasses({
-              variant: "ghost",
-              size: "sm",
-              className: "h-7 px-2 text-xs",
-            })}
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={() => (isLast ? handle.finish() : setIndex(safeIndex + 1))}
-            className={buttonClasses({
-              variant: "secondary",
-              size: "sm",
-              className: "h-7 px-2.5 text-xs",
-            })}
-          >
-            {isLast ? "Done" : "Next"}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => (isLast ? handle.close() : setIndex(safeIndex + 1))}
+          className={buttonClasses({
+            variant: "secondary",
+            size: "sm",
+            className: "h-7 px-2.5 text-xs",
+          })}
+        >
+          {isLast ? "Done" : "Next"}
+        </button>
       </div>
     </div>
   );

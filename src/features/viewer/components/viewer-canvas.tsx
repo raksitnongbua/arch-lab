@@ -146,7 +146,6 @@ import { ViewerNodePalette } from "./viewer-node-palette";
 import { ViewerToolbar } from "./viewer-toolbar";
 import { CanvasMinimap } from "@/components/ui/canvas-minimap";
 import { useMinimap } from "@/components/ui/use-minimap";
-import { useModKey } from "@/lib/mod-key";
 
 import { ViewerZoomControls } from "./viewer-zoom-controls";
 
@@ -903,18 +902,13 @@ function ViewerCanvasInner({
   onDiagramChange,
   edit,
   lockSlot,
-  immersive = false,
 }: {
   model: ViewerModel;
-  immersive?: boolean;
   initialDiagramId?: string;
   onDiagramChange?: (diagramId: string) => void;
   edit?: CanvasEditHandlers;
   lockSlot?: React.ReactNode;
 }): React.JSX.Element {
-  /* The modifier's name for THIS reader's platform — "Ctrl + scroll" on a Mac
-     names the gesture that zooms the operating system, not the canvas. */
-  const mod = useModKey();
   const { getViewport, setViewport } = useReactFlow<
     ViewerFlowNode,
     ViewerFlowEdge
@@ -3006,53 +3000,6 @@ function ViewerCanvasInner({
               />
             </div>
           </Panel>
-          {/* The gesture clause is here as well as in the zoom pill's menu, and
-              the repetition is the point: a plain wheel PANS this canvas, so a
-              reader who tries it concludes the wheel does not zoom and never
-              reaches for the modifier. The failure looks like an answer, which
-              is the one case worth saying twice. */}
-          <Panel
-            position="bottom-center"
-            /* A plain ternary, not `cn(… && "!hidden")`: the base class is
-               already `hidden` at small widths, so the immersive branch is the
-               SAME class with the `sm:` escape removed — expressing that as an
-               override would need `!important` to beat a variant that is only
-               conditionally there. */
-            className={immersive ? "hidden" : "hidden sm:block"}
-          >
-            <p className="rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
-              Click an <span className="font-medium text-primary">element</span>{" "}
-              or <span className="font-medium text-primary">connector</span> for
-              details ·{" "}
-              <span className="font-medium text-primary">double-click</span> or
-              the <span className="font-medium text-primary">zoom chip</span> to
-              zoom in ·{" "}
-              <span className="font-medium text-primary">{mod} + scroll</span>{" "}
-              zooms · <kbd className="font-mono text-[10px]">Esc</kbd> steps
-              back ·{" "}
-              {/* THE PAN CLAUSE SPLITS ON `editable`, because the gesture
-                  does: a bare drag pans only the read-only canvas, and a hint
-                  teaching it on an editable one would promise a pan and
-                  deliver a lasso. The editable branch names the Select/Pan
-                  toggle — the pan a reader who knew drag-to-pan must now be
-                  told where to find, or they conclude panning broke. The
-                  marquee half exists only there too: advertising a lasso on a
-                  read-only canvas would teach a gesture that does nothing.
-                  `check:viewer-motion` reads both sentences. */}
-              {editable ? (
-                <>
-                  <span className="font-medium text-primary">drag</span> to
-                  select or group elements · the{" "}
-                  <span className="font-medium text-primary">Select / Pan</span>{" "}
-                  toggle makes a drag pan instead
-                </>
-              ) : (
-                <>
-                  <span className="font-medium text-primary">drag</span> to pan
-                </>
-              )}
-            </p>
-          </Panel>
         </ReactFlow>
       </ViewerNodeActionsProvider>
     </div>
@@ -3066,7 +3013,6 @@ export function ViewerCanvas({
   onDiagramChange,
   edit,
   lockSlot,
-  immersive,
 }: {
   model: ViewerModel;
   /** Open on this diagram (share deep links); unknown ids fall back to root. */
@@ -3087,20 +3033,6 @@ export function ViewerCanvas({
    * handlers, so a lock gated on them could never be pressed to undo itself.
    */
   lockSlot?: React.ReactNode;
-  /**
-   * True while the host has the view fixed over the whole viewport.
-   *
-   * The canvas uses it for ONE thing: the gesture sentence at the bottom
-   * centre stops rendering. That sentence exists because a plain wheel pans
-   * this canvas, so a reader who tries it concludes the wheel does not zoom —
-   * a silent failure worth saying twice. Immersive is the case where the
-   * second telling stops being worth it: the view has been fixed over the
-   * screen to be PRESENTED, the people looking at it are usually not the
-   * person driving, and the zoom pill's own menu still carries the clause for
-   * whoever is. `check:viewer-motion` reads both sentences out of this file,
-   * so hiding one here cannot quietly delete it.
-   */
-  immersive?: boolean;
 }): React.JSX.Element {
   return (
     <ReactFlowProvider>
@@ -3110,7 +3042,6 @@ export function ViewerCanvas({
         onDiagramChange={onDiagramChange}
         edit={edit}
         lockSlot={lockSlot}
-        immersive={immersive}
       />
     </ReactFlowProvider>
   );

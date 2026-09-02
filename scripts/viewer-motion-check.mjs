@@ -390,30 +390,43 @@ check(
       /^\s*selectionOnDrag$/m,
       "selectionOnDrag would claim left-drag on the pane and remove the pan gesture",
     );
-    /* And the pill has to SAY so, in BOTH branches. The gesture existing while
-     nothing announces it is how the wheel-zoom confusion this same file
-     documents happened — a reader tries drag, sees a lasso, and concludes
-     the canvas cannot pan. The editable branch must name the toggle (the pan
-     a reader who knew drag-to-pan has to be told where to find); the
-     read-only branch must still teach plain drag-to-pan.
+    /* And SOMETHING has to SAY so, in both branches. The gesture existing
+     while nothing announces it is how the wheel-zoom confusion this same file
+     documents happened — a reader tries drag, sees a lasso, and concludes the
+     canvas cannot pan. That sentence used to live in a hint strip pinned
+     along the bottom of the canvas; the strip is gone (a permanent band of
+     prose over the drawing, on the page that sells the drawing), and the tour
+     step is now its ONLY home. So the assertion moved with it rather than
+     being deleted: the editable branch must name the toggle (the pan a reader
+     who knew drag-to-pan has to be told where to find), the read-only branch
+     must still teach plain drag-to-pan.
 
-     Matched against the SENTENCE, with the JSX space expressions and line
-     breaks collapsed away first. Prettier owns where that paragraph wraps —
-     wrapping the flow in one more provider was enough to move the break and
-     fail this assertion while every word a reader sees stayed put. An
+     Matched against the SENTENCE, with line breaks and string concatenation
+     collapsed away first. Prettier owns where that prose wraps, and an
      assertion about copy must not be an assertion about indentation. */
-    const hintProse = canvas.replace(/\{" "\}/g, " ").replace(/\s+/g, " ");
+    const shell = read("src/features/viewer/components/viewer-shell.tsx");
+    const tourProse = shell.replace(/"\s*\+\s*"/g, "").replace(/\s+/g, " ");
     assert.match(
-      hintProse,
-      /Select \/ Pan<\/span> toggle makes a drag pan/,
-      "the editable hint no longer says where the pan went — a reader who knew " +
-        "drag-to-pan concludes panning broke",
+      tourProse,
+      /Select \/ Pan toggle, bottom-left, makes a drag pan/,
+      "the editable tour step no longer says where the pan went — a reader " +
+        "who knew drag-to-pan concludes panning broke",
     );
     assert.match(
-      hintProse,
-      /drag<\/span> to pan/,
-      "the read-only hint must still teach drag-to-pan — it is the gesture " +
-        "every shared link opens with",
+      tourProse,
+      /Drag anywhere on empty canvas to move the diagram/,
+      "the read-only tour step must still teach drag-to-pan — it is the " +
+        "gesture every shared link opens with",
+    );
+    /* The strip is gone and must STAY gone: it is the one piece of chrome
+     that was on screen unasked, and "put the hint back" is the obvious wrong
+     fix the next time someone reports not knowing a gesture. The answer is a
+     tour step. */
+    assert.doesNotMatch(
+      canvas,
+      /position="bottom-center"/,
+      "the permanent hint strip is back on the canvas — the gestures belong " +
+        "in the tour, which opens only when asked",
     );
   },
 );

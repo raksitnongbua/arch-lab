@@ -312,10 +312,10 @@ export function SequenceViewer({
    * that exists to SHOW a flow wants it.
    *
    * `false` is for a host that embeds the viewer as EVIDENCE rather than as
-   * the destination — a preview beside something else. A card that opened
-   * itself over a preview would teach the wrong page's controls, and would
-   * count as the reader's one first visit, spending the auto-show somewhere
-   * it does not apply.
+   * the destination — a preview beside something else. The tour teaches THIS
+   * viewer's controls, so on a page where the flow is the exhibit and not the
+   * thing being driven, both the button and the card it opens are answering
+   * a question nobody standing there is asking.
    */
   tour?: boolean;
   /**
@@ -510,7 +510,7 @@ export function SequenceViewer({
 
   /* ---- the tour ------------------------------------------------------------ */
 
-  const tour = useTour(SEQUENCE_TOUR_KEY);
+  const tour = useTour();
   // The fold step rides the same condition as the hint bar's fold clause: the
   // `−` glyph only exists on cards with private dependencies, and a tour step
   // naming a control that is not on screen sends the reader hunting.
@@ -2049,9 +2049,9 @@ export function SequenceViewer({
           ) : null}
         </div>
 
-        {/* First visit it opens itself (remembered per browser — see
-            components/ui/tour.tsx for the persistence verdicts); the pill
-            button replays it. Anchored above the pill, z-20 so it clears the
+        {/* Opened ONLY by the pill's ? button — the tour never shows itself
+            on a first visit (see components/ui/tour.tsx). Anchored above the
+            pill, z-20 so it clears the
             pill and the dock (both z-10); the dock sits on the RIGHT edge, so
             the two never cover each other. */}
         {tourEnabled ? (
@@ -2467,11 +2467,12 @@ export function SequenceViewer({
                     text nobody re-reads, and it was the thing left to minimise
                     once the editing legend moved in here.
 
-                    NOT DELETED, though every clause is also in a tour step. The
-                    tour opens itself once per browser and is then behind a
-                    button; this panel is the surface a reader opens WHEN they
-                    are stuck, which is a different moment. What the move buys
-                    is that neither costs anything until asked for.
+                    NOT DELETED, though every clause is also in a tour step.
+                    Both are now asked for rather than offered, and they answer
+                    different asks: the tour walks the controls one at a time
+                    for a reader learning the view, this panel is the whole list
+                    at once for a reader who is stuck mid-task. Neither costs
+                    anything until pressed.
 
                     THE FOLD CLAUSE STAYS CONDITIONAL, and that is the point:
                     the `−` glyph only exists on cards with private dependencies
@@ -2619,10 +2620,6 @@ const ZOOM_MAX = 4;
 /* -------------------------------------------------------------------------- */
 
 /**
- * Versioned so a rewritten tour can re-show itself: bump `v1` and every
- * browser that dismissed the old one sees the new one once.
- */
-/**
  * The guide's icon names, resolved to the glyphs the real controls carry.
  *
  * A TOTAL `Record<SequenceGuideIcon, LucideIcon>`, which is the load-bearing
@@ -2668,8 +2665,6 @@ const GUIDE_GLYPH: Record<SequenceGuideIcon, LucideIcon> = {
  */
 const FOLDED_REORDER_REFUSAL =
   "Nothing can be reordered while lifelines are folded — the rows and columns on screen are renumbered over what is visible, so a move would land somewhere else in the file. Press “Show all”, then try again.";
-
-const SEQUENCE_TOUR_KEY = "arch-lab:tour:sequence:v1";
 
 /*
  * The controls readers were not finding, one step each. These strings are
