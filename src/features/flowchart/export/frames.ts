@@ -237,10 +237,17 @@ export async function buildFlowchartFrames(
         group
           .querySelector(".af-export-flow-head")
           ?.setAttribute("opacity", String(headP));
-        group
-          .querySelector(".af-export-flow-elabel")
-          ?.setAttribute("opacity", String(headP));
       }
+    }
+
+    /* EDGE LABELS ARE A TOP-LEVEL LAYER, not children of their edge's group —
+       render-svg.ts paints them after the nodes so a guard can never end up
+       under a box. They carry their edge's own `data-flow-rank`, so the head's
+       window still governs them: a guard belongs to the finished arrow. */
+    for (const label of root.querySelectorAll(".af-export-flow-elabel")) {
+      const headP =
+        spec.head[Number(label.getAttribute("data-flow-rank"))] ?? 1;
+      if (headP < 1) label.setAttribute("opacity", String(headP));
     }
 
     frames.push({

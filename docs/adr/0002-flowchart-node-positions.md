@@ -48,6 +48,25 @@ them:
   above can produce it. A pin is therefore a tool for an author who wants a
   specific picture, not a default anyone falls into.
 
+### Amended: a coordinate outside the solved bounds is no longer clipped
+
+A fourth cost was accepted here and in `layout.ts`'s pin banner, and it should
+not have been: a hand-written or dragged coordinate outside the solved bounds
+was **cropped out of the picture**. The reasoning was that the fix required
+moving `offset`, and `offset` is what a drag inverts — so the crop looked like
+the price of the drag landing under the cursor.
+
+It was not. The shift and the frame are two different numbers. `offset` still
+ignores pins entirely, and `FlowchartLayout.bounds` reports the rectangle the
+drawing actually occupies; the frame **grows** around a far-flung pin instead
+of shifting the drawing to reach it, and every surface — the canvas, the SVG
+export, the PNG, the GIF, fit-to-view — takes its viewBox from `bounds`. The
+drag guarantee is untouched and is now an assertion rather than a comment
+(`check:flowchart-layout`, fixture 5).
+
+Reported as a pinned step drawn 64% outside the frame on screen and cropped
+identically in the PNG. The other three costs above stand.
+
 ## What was NOT given up
 
 - **Absent is still the normal case.** A node with no `(x,y)` is solved from

@@ -380,7 +380,11 @@ export function FlowchartViewer({
     const width = pane.clientWidth - 24;
     const height = pane.clientHeight - 24;
     if (width <= 0 || height <= 0) return 1;
-    return Math.min(width / layout.width, height / layout.height);
+    /* Fitted against the DRAWN frame, not the canvas measured from the
+       origin: a pin outside the solved bounds widens the former and not the
+       latter, so fitting to `layout.width` scaled the picture as if the
+       overhang were not there and then let the viewBox crop it. */
+    return Math.min(width / layout.bounds.width, height / layout.bounds.height);
   }, [layout]);
 
   /* THE GROUND'S CAMERA. `zoom` is a MODE as often as it is a number, and the

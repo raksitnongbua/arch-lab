@@ -210,7 +210,11 @@ function renderSummary(file: FlowchartLabFile, audit: FlowchartAudit): string {
     );
   }
   lines.push(
-    `Size: ${Math.round(layout.width)} x ${Math.round(layout.height)} px.`,
+    /* The DRAWN frame, which is what the exporter writes and what the reader
+       sees. It is `width x height` for every chart without pinned nodes, and
+       larger when a pin sits outside the solved bounds — reporting the
+       origin-measured canvas there would tell an agent a size no file has. */
+    `Size: ${Math.round(layout.bounds.width)} x ${Math.round(layout.bounds.height)} px.`,
   );
   return lines.join("\n");
 }
