@@ -386,6 +386,16 @@ export interface C4Frame {
   parentFrameId?: string | null;
 }
 
+/**
+ * Which way an automatic layout runs.
+ *
+ * `tb` — layers stack downwards, the original and the default. `lr` — layers
+ * advance along the long axis and a long flow FOLDS into bands, so a deep
+ * chain lands near the shape of a screen instead of a column three viewports
+ * tall.
+ */
+export type C4LayoutDirection = "tb" | "lr";
+
 export interface C4Diagram {
   /** Slug, unique in file. Convention `d-<level>-<owner-slug>`. */
   id: string;
@@ -397,6 +407,18 @@ export interface C4Diagram {
   /** `null` only for the root Context diagram. */
   parentDiagramId: string | null;
   viewport?: Viewport;
+  /**
+   * Which way the automatic layout runs for THIS diagram, overriding the
+   * file's `direction`. Absent means "whatever the file says", and a file that
+   * says nothing lays out top-down — so a document that mentions direction
+   * nowhere is laid out exactly as every document was before the field
+   * existed. That is the whole compatibility story: it is an authored opt-in,
+   * not a version-gated change of default.
+   *
+   * Only affects nodes whose position the text OMITS. A hand-written `(x,y)`
+   * is honoured whichever way the layout runs.
+   */
+  direction?: C4LayoutDirection;
   /** Grouping frames drawn behind the nodes. Sorted by `id` on write. */
   frames?: C4Frame[];
   /** Sorted by `id` on write. */
@@ -449,6 +471,12 @@ export interface ArchLabFile {
   metadata: ArchLabMetadata;
   /** The Context-level diagram; the entry point. */
   rootDiagramId: string;
+  /**
+   * The default layout direction for every diagram that does not name its own.
+   * Absent means `tb`, which is what every document written before this field
+   * existed gets — see `C4Diagram.direction`.
+   */
+  direction?: C4LayoutDirection;
   /** Every diagram at every level, flat, sorted by `id`. */
   diagrams: C4Diagram[];
   /** Forward tolerance: unknown fields from newer minor versions. */

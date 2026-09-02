@@ -7,6 +7,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **A diagram can be laid out left-to-right, and it will tell you when it
+  should be.** `direction lr` as a header line sets it for the whole file;
+  `direction=lr` on a `@context`/`@container`/`@component` line sets it for one
+  diagram and overrides the file. Under `lr` the layers run along the long axis
+  and **a long flow folds into bands**, so a ten-step chain lands near the
+  shape of a screen (about 1136&times;640) instead of a column three viewports
+  tall (176&times;2040) — and a diagram already wider than it is deep is left
+  top-down, because turning that sideways would just make a column of it the
+  other way. Only nodes whose position the text omits are affected; a
+  hand-written `(x,y)` is honoured whichever way the layout runs. **A document
+  that mentions direction nowhere lays out exactly as it always has** — this is
+  an authored opt-in, not a change of default. `validate_model` raises a review
+  note naming the diagrams that would benefit, with both measured shapes, and
+  says so plainly when a diagram's coordinates are hand-placed and a direction
+  would not move them. It never edits your document.
+
 ### Fixed
 
 - **A boundary no longer draws one huge rectangle around half the diagram.** A

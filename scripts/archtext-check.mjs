@@ -927,6 +927,234 @@ expectParseError(
 }
 
 /* ----------------------------------------------------------------------- */
+/* Layout direction — an authored opt-in, not a change of default           */
+/*                                                                          */
+/* The whole compatibility argument for this field is that a document which */
+/* never mentions it is laid out exactly as it was before the field existed, */
+/* and that both halves of the format resolve it the same way. The parser    */
+/* fills omitted geometry from `defaultPositions`; the serializer OMITS      */
+/* geometry that matches it. Resolve differently on the two sides and the    */
+/* first save of a document that INHERITS its direction stamps an explicit   */
+/* (x,y) onto every node — no error, an unrecognisable diff.                 */
+/*                                                                          */
+/* Forgetting `direction` in DIAGRAM_KEYS did exactly that in a milder form: */
+/* the serializer wrote the head attribute AND a `!` unknown line, and the   */
+/* next parse refused the file it had just written. The round trip caught it.*/
+/* ----------------------------------------------------------------------- */
+
+console.log("\nLayout direction");
+
+{
+  const COORD = /\(-?\d+,\s*-?\d+/;
+  const shapeOf = (file, id) => {
+    const diagram = file.diagrams.find((d) => d.id === id);
+    const xs = diagram.nodes.map((n) => n.position.x);
+    const ys = diagram.nodes.map((n) => n.position.y);
+    const right = Math.max(
+      ...diagram.nodes.map((n) => n.position.x + n.size.width),
+    );
+    const bottom = Math.max(
+      ...diagram.nodes.map((n) => n.position.y + n.size.height),
+    );
+    return {
+      width: right - Math.min(...xs),
+      height: bottom - Math.min(...ys),
+    };
+  };
+  const ratio = (file, id) => {
+    const { width, height } = shapeOf(file, id);
+    return width / height;
+  };
+
+  const CHAIN = (extra, attr) => `archlab 1.0
+title "Chain"${extra}
+
+@context ctx-root "Chain"${attr}
+  a:system "A"
+  b:system "B"
+  c:system "C"
+  d:system "D"
+  e:system "E"
+  f:system "F"
+
+  a -> b : "Hands on"
+  b -> c : "Hands on"
+  c -> d : "Hands on"
+  d -> e : "Hands on"
+  e -> f : "Hands on"
+`;
+
+  const plain = parseArchText(CHAIN("", ""));
+  const headerLr = parseArchText(CHAIN("\ndirection lr", ""));
+  const diagramLr = parseArchText(CHAIN("", " direction=lr"));
+  const override = parseArchText(CHAIN("\ndirection lr", " direction=tb"));
+
+  check(
+    "a document that never mentions direction is laid out top-down",
+    ratio(plain, "ctx-root") < 0.5,
+    `ratio ${ratio(plain, "ctx-root").toFixed(2)} — a six-deep chain should be a column`,
+  );
+  check(
+    "the header line turns the same document landscape",
+    ratio(headerLr, "ctx-root") > 1,
+    `ratio ${ratio(headerLr, "ctx-root").toFixed(2)}`,
+  );
+  check(
+    "a diagram attribute does it on its own, with no header line",
+    JSON.stringify(shapeOf(diagramLr, "ctx-root")) ===
+      JSON.stringify(shapeOf(headerLr, "ctx-root")),
+    `${JSON.stringify(shapeOf(diagramLr, "ctx-root"))} vs ${JSON.stringify(shapeOf(headerLr, "ctx-root"))}`,
+  );
+  check(
+    "a diagram attribute OVERRIDES the header, not the other way round",
+    JSON.stringify(shapeOf(override, "ctx-root")) ===
+      JSON.stringify(shapeOf(plain, "ctx-root")),
+    `override ${JSON.stringify(shapeOf(override, "ctx-root"))} vs plain ${JSON.stringify(shapeOf(plain, "ctx-root"))}`,
+  );
+
+  for (const [label, file, source] of [
+    ["no direction", plain, CHAIN("", "")],
+    ["header", headerLr, CHAIN("\ndirection lr", "")],
+    ["attribute", diagramLr, CHAIN("", " direction=lr")],
+    ["override", override, CHAIN("\ndirection lr", " direction=tb")],
+  ]) {
+    const written = serializeArchText(file);
+    check(
+      `${label}: the serializer still omits the geometry it filled in`,
+      !COORD.test(written),
+      `first offending line: ${written
+        .split("\n")
+        .find((l) => COORD.test(l))
+        ?.trim()}`,
+    );
+    check(
+      `${label}: round-trips byte-identically`,
+      written === source,
+      `re-serialized:\n${written}`,
+    );
+    check(
+      `${label}: the re-serialized text parses`,
+      (() => {
+        try {
+          parseArchText(written);
+          return true;
+        } catch (error) {
+          return `threw: ${error.message}`;
+        }
+      })() === true,
+      "the serializer wrote a document its own parser refuses",
+    );
+  }
+
+  check(
+    "a long flow FOLDS into bands rather than becoming a ribbon",
+    (() => {
+      /* Turning the column on its side is not enough on its own: ten layers
+       * laid along X is 3200 wide and 152 tall, which a landscape frame
+       * shrinks by as much as the column did. A ribbon is a column. Asserted
+       * as a bound on the shape, because "> 1" passes for a ribbon too —
+       * which is how deleting the fold first went unnoticed here. */
+      const ids = "abcdefghij".split("");
+      const body = ids
+        .map((id) => `  ${id}:system "${id.toUpperCase()}"`)
+        .join("\n");
+      const edges = ids
+        .slice(0, -1)
+        .map((id, i) => `  ${id} -> ${ids[i + 1]} : "Hands on"`)
+        .join("\n");
+      const file = parseArchText(
+        `archlab 1.0\ntitle "Ribbon"\ndirection lr\n\n@context ctx-root "Ribbon"\n${body}\n\n${edges}\n`,
+      );
+      const { width, height } = shapeOf(file, "ctx-root");
+      const r = width / height;
+      // 16:9 is 1.78; a ribbon would be about 21.
+      return r > 1 && r < 4
+        ? true
+        : `ten layers came out ${Math.round(width)}x${Math.round(height)} (ratio ${r.toFixed(2)})`;
+    })() === true,
+    "a ten-layer flow was stretched into a strip instead of folded",
+  );
+  check(
+    "a diagram already wider than deep is left top-down even under lr",
+    (() => {
+      /* The other half of the axis choice. Turning a hub with five dependents
+       * sideways would recreate the column the other way round. */
+      const fan = `archlab 1.0
+title "Fan"
+direction lr
+
+@context ctx-root "Fan"
+  hub:system "Hub"
+  one:external "One"
+  two:external "Two"
+  three:external "Three"
+  four:external "Four"
+  five:external "Five"
+
+  hub -> one : "Calls"
+  hub -> two : "Calls"
+  hub -> three : "Calls"
+  hub -> four : "Calls"
+  hub -> five : "Calls"
+`;
+      const lr = shapeOf(parseArchText(fan), "ctx-root");
+      const tb = shapeOf(
+        parseArchText(fan.replace("\ndirection lr", "")),
+        "ctx-root",
+      );
+      return JSON.stringify(lr) === JSON.stringify(tb);
+    })(),
+    "lr turned an already-landscape diagram sideways, making a column of it",
+  );
+  check(
+    "a direction that is neither tb nor lr is refused BY NAME",
+    (() => {
+      try {
+        parseArchText(CHAIN("\ndirection sideways", ""));
+        return false;
+      } catch (error) {
+        return /sideways/.test(error.message) && /tb|lr/.test(error.message);
+      }
+    })(),
+    "a silently ignored layout hint is a diagram laid out the way nobody asked",
+  );
+  check(
+    "a bad direction on a DIAGRAM is refused by name too",
+    (() => {
+      try {
+        parseArchText(CHAIN("", " direction=sideways"));
+        return false;
+      } catch (error) {
+        return /sideways/.test(error.message);
+      }
+    })(),
+  );
+  check(
+    "a hand-written coordinate is honoured whichever way the layout runs",
+    (() => {
+      const pinned = `archlab 1.0
+title "Pinned"
+direction lr
+
+@context ctx-root "Pinned"
+  a:system "A" (776,344 176x88)
+  b:external "B"
+
+  a -> b : "Calls"
+`;
+      const file = parseArchText(pinned);
+      const a = file.diagrams[0].nodes.find((n) => n.id === "a");
+      return (
+        a.position.x === 776 &&
+        a.position.y === 344 &&
+        serializeArchText(file) === pinned
+      );
+    })(),
+    "lr moved a pinned node, or the pin stopped round-tripping",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
 
 if (failures > 0) {
   console.error(`\n${failures} of ${assertions} assertion(s) FAILED`);

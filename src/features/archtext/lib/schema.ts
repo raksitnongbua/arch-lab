@@ -20,6 +20,12 @@ export const FILE_KEYS = [
   "$schema",
   "version",
   "metadata",
+  /* The file-wide layout default. A known key, so the serializer writes it as
+   * the `direction` header line rather than falling through to a `!` unknown
+   * line — which the next parse would then see BESIDE the header line and
+   * refuse as already set. That is exactly what happened when this was
+   * forgotten on the diagram list, and the round trip is what caught it. */
+  "direction",
   "rootDiagramId",
   "diagrams",
 ] as const;
@@ -45,6 +51,7 @@ export const DIAGRAM_KEYS = [
   "ownerNodeId",
   "parentDiagramId",
   "viewport",
+  "direction",
   "frames",
   "nodes",
   "edges",

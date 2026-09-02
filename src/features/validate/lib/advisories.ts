@@ -34,6 +34,7 @@
  * Pure and synchronous, like `check.ts` — no DOM, no I/O.
  */
 
+import { defaultPositions } from "@/features/archtext";
 import { MAX_TITLE_LENGTH, titleLengthOverCap } from "@/lib/constants";
 import type { ArchLabFile, C4Diagram, C4Level, SequenceLabFile } from "@/types";
 import { C4_ABSTRACTION, isBoundaryPlaceholder } from "@/types";
@@ -50,13 +51,24 @@ export type AdvisoryRule =
   | "bidirectional-relationship"
   | "missing-protocol"
   | "missing-diagram-title"
-  | "long-title";
+  | "long-title"
+  | "column-layout";
 
 /** Why each rule exists, in C4's own terms. Rendered as the group heading. */
 export const ADVISORY_RULES: Record<
   AdvisoryRule,
   { title: string; because: string }
 > = {
+  "column-layout": {
+    title: "Layout will read as a column",
+    because:
+      "A diagram far deeper than it is wide is shrunk to fit a landscape " +
+      "frame — every screen a diagram is presented on is landscape — and its " +
+      "labels shrink with it. Not a C4 rule: this one is about how an `.alab` " +
+      "document will be DRAWN rather than what it says, and it is advice " +
+      "rather than a fix because the layout direction is the author's line to " +
+      "write and nothing may write it for them.",
+  },
   "missing-technology": {
     title: "Technology not stated",
     because:
@@ -183,7 +195,106 @@ function adviseTitleLength(
   });
 }
 
+/**
+ * A diagram far deeper than it is wide, and what to do about it.
+ *
+ * MEASURED FROM THE MODEL'S OWN COORDINATES, not from a re-derived layout, so
+ * it tells the truth about a diagram whose positions were hand-written or
+ * dragged — those are what will be drawn, whatever the layout would have said.
+ *
+ * The projected size is only offered when the document OMITS its geometry,
+ * which is testable: the positions match what the top-down layout produces.
+ * For a hand-placed diagram `direction=lr` would move nothing, and promising
+ * a new shape there would be advice that does not work.
+ */
+const COLUMN_RATIO = 0.6;
+/** Below this many elements a tall diagram is just a small diagram. */
+const COLUMN_MIN_NODES = 6;
+
+function extentOf(
+  diagram: C4Diagram,
+): { width: number; height: number } | null {
+  if (diagram.nodes.length === 0) return null;
+  const xs = diagram.nodes.map((node) => node.position.x);
+  const ys = diagram.nodes.map((node) => node.position.y);
+  const rights = diagram.nodes.map((node) => node.position.x + node.size.width);
+  const bottoms = diagram.nodes.map(
+    (node) => node.position.y + node.size.height,
+  );
+  return {
+    width: Math.max(...rights) - Math.min(...xs),
+    height: Math.max(...bottoms) - Math.min(...ys),
+  };
+}
+
+function laidOutBy(
+  diagram: C4Diagram,
+  direction: "tb" | "lr",
+): Map<string, { x: number; y: number }> {
+  return defaultPositions(
+    diagram.nodes.map((node) => node.id).sort(),
+    diagram.edges.map((edge) => ({ source: edge.source, target: edge.target })),
+    direction,
+  );
+}
+
+function adviseColumnLayout(diagram: C4Diagram, out: Advisory[]): void {
+  /* No "already asked for lr" guard: it would be dead code. Under `lr` a
+   * deep flow is folded toward 16:9 and a diagram wider than it is deep is
+   * left top-down, so neither outcome is tall enough to reach the test below.
+   * Proven by dropping the guard and finding no fixture that changed. */
+  if (diagram.nodes.length < COLUMN_MIN_NODES) return;
+  const extent = extentOf(diagram);
+  if (extent === null || extent.height === 0) return;
+  const ratio = extent.width / extent.height;
+  if (ratio >= COLUMN_RATIO) return;
+
+  const shape = `${Math.round(extent.width)}x${Math.round(extent.height)} (ratio ${ratio.toFixed(2)})`;
+
+  const derived = laidOutBy(diagram, "tb");
+  const omitsGeometry = diagram.nodes.every((node) => {
+    const at = derived.get(node.id);
+    return (
+      at !== undefined && at.x === node.position.x && at.y === node.position.y
+    );
+  });
+
+  if (!omitsGeometry) {
+    out.push({
+      rule: "column-layout",
+      where: diagram.id,
+      message:
+        `"${diagram.title}" is ${shape} — far deeper than it is wide, so a ` +
+        "landscape frame will shrink it and its labels. Its coordinates are " +
+        "written into the document, so a layout direction would not move " +
+        "them: the shape is only changed by moving them.",
+    });
+    return;
+  }
+
+  const folded = laidOutBy(diagram, "lr");
+  const sizes = diagram.nodes.map((node) => node.size);
+  const fx = [...folded.values()].map((at) => at.x);
+  const fy = [...folded.values()].map((at) => at.y);
+  const fw =
+    Math.max(...fx.map((x, i) => x + (sizes[i]?.width ?? 0))) - Math.min(...fx);
+  const fh =
+    Math.max(...fy.map((y, i) => y + (sizes[i]?.height ?? 0))) -
+    Math.min(...fy);
+
+  out.push({
+    rule: "column-layout",
+    where: diagram.id,
+    message:
+      `"${diagram.title}" is ${shape} — far deeper than it is wide, so a ` +
+      `landscape frame will shrink it and its labels. \`direction=lr\` on ` +
+      `this diagram lays it out at about ${Math.round(fw)}x${Math.round(fh)} ` +
+      `(ratio ${(fw / fh).toFixed(2)}) instead.`,
+  });
+}
+
 function adviseDiagram(diagram: C4Diagram, out: Advisory[]): void {
+  adviseColumnLayout(diagram, out);
   if (isBlank(diagram.title)) {
     out.push({
       rule: "missing-diagram-title",

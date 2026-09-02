@@ -32,6 +32,40 @@ const COLUMN_STEP = 264;
  */
 const ROW_STEP = 216;
 
+/**
+ * Horizontal pitch when layers advance along X (`direction=lr`). Wider than
+ * `COLUMN_STEP` on purpose: flowing left-to-right puts every edge label chip
+ * in a HORIZONTAL gap, where a two-line chip needs the room the vertical
+ * gutter used to give it. 176-px node plus a 144-px gutter.
+ */
+const LAYER_STEP_X = 320;
+/**
+ * Vertical pitch between members of one layer under `direction=lr`. Tallest
+ * default node (96) plus a 56-px gutter — tighter than `ROW_STEP` because
+ * nothing has to fit between these two boxes: an edge from this layer leaves
+ * sideways, so the gap carries no label.
+ */
+const MEMBER_STEP_Y = 152;
+/**
+ * Gap between two bands of a folded flow. Wider than the gutter inside a band
+ * because the arrow that crosses it is the one that doubles back — the reader
+ * needs to see that the flow continues rather than that two boxes are related.
+ */
+const BAND_GAP_Y = 120;
+/**
+ * The shape a folded flow aims at. Every screen a diagram is presented on is
+ * landscape — a laptop, a projector, a slide — so this is 16:9 rather than
+ * anything derived from the model. A target, never a constraint: the fold
+ * picks the band count closest to it and takes whatever ratio that gives.
+ */
+const TARGET_RATIO = 16 / 9;
+/**
+ * The shortest band a fold may produce. A flow with fewer layers than this
+ * stays on one line whatever its ratio: the strip already fits any frame at
+ * full size, and a two-box band reads worse than the straight run it replaced.
+ */
+const MIN_LAYERS_PER_BAND = 4;
+
 /** An edge as the layout sees it — endpoints only. */
 export interface DefaultLayoutEdge {
   source: string;
@@ -120,8 +154,9 @@ function layerOf(
 }
 
 /**
- * Default geometry when the text omits it: a layered top-down layout derived
- * from the diagram's own relationships — sources on top, each target at least
+ * Default geometry when the text omits it: a layered layout derived from the
+ * diagram's own relationships, running top-down by default and left-to-right
+ * (folding a long flow into bands) when the document asks for it — sources on top, each target at least
  * one row below, rows ordered to keep edges short and centred under their
  * parents. Replaces the old fixed 4-column grid, which ignored edges entirely
  * and so turned any real flow into a tangle of long crossing lines.
@@ -134,6 +169,7 @@ function layerOf(
 export function defaultPositions(
   nodeIds: readonly string[],
   edges: readonly DefaultLayoutEdge[],
+  direction: "tb" | "lr" = "tb",
 ): Map<string, Point> {
   const ids = [...nodeIds].sort(compareStrings);
   const idSet = new Set(ids);
@@ -192,6 +228,69 @@ export function defaultPositions(
   }
 
   const positions = new Map<string, Point>();
+
+  /* `lr`: layers advance along X, and a long flow FOLDS.
+   *
+   * Turning the column on its side is not enough on its own. Nineteen
+   * relationships over ten layers went from 704x2040 (ratio 0.35) to 3056x400
+   * (7.64), which fits a landscape viewport exactly as badly — the drawing is
+   * wider than the frame instead of taller, and fit-to-view shrinks it by the
+   * same amount for the same reason. A ribbon is a column.
+   *
+   * So bands read the way text does, left to right and then down, and the
+   * count is whichever lands closest to the shape of a screen. On that
+   * document: one band 7.64, two 1.55, three 0.80 — two wins, and the diagram
+   * becomes 1456x904.
+   *
+   * The `>= widest` test is what stops this being the same bug rotated: a
+   * diagram whose widest layer outnumbers its layers is ALREADY landscape — a
+   * hub with six dependents — and turning that sideways would recreate the
+   * column in the other direction. The tie goes to the flow, because a graph
+   * as wide as it is deep reads better with its arrows running the way people
+   * scan. */
+  if (direction === "lr" && lastRow + 1 >= widest) {
+    const layers = lastRow + 1;
+    const tallest = widest;
+    const bandPitch = tallest * MEMBER_STEP_Y + BAND_GAP_Y;
+
+    let bands = 1;
+    let closest = Number.POSITIVE_INFINITY;
+    for (let candidate = 1; candidate <= layers; candidate += 1) {
+      const perBand = Math.ceil(layers / candidate);
+      /* A fold has to buy more than a ratio. Three boxes laid a-b / c read
+       * worse than a-b-c however close to 16:9 the second shape scores, and
+       * the strip was never the problem — it fits any frame at full size. So
+       * only a band with real length in it counts as an option, and one band
+       * is always an option. */
+      if (candidate > 1 && perBand < MIN_LAYERS_PER_BAND) continue;
+      const width = perBand * LAYER_STEP_X;
+      const height = candidate * bandPitch - BAND_GAP_Y;
+      const distance = Math.abs(width / height - TARGET_RATIO);
+      // Strictly closer, so a tie keeps the FEWER bands: an unfolded flow is
+      // easier to follow, and only shape justifies the fold.
+      if (distance < closest) {
+        closest = distance;
+        bands = candidate;
+      }
+    }
+    const perBand = Math.ceil(layers / bands);
+
+    for (let layer = 0; layer < layers; layer += 1) {
+      const members = rows.get(layer) ?? [];
+      const band = Math.floor(layer / perBand);
+      // Centre short layers within their band, back on the 8-px grid.
+      const inset =
+        Math.round(((tallest - members.length) * MEMBER_STEP_Y) / 2 / 8) * 8;
+      members.forEach((id, member) => {
+        positions.set(id, {
+          x: ORIGIN + (layer % perBand) * LAYER_STEP_X,
+          y: ORIGIN + band * bandPitch + inset + member * MEMBER_STEP_Y,
+        });
+      });
+    }
+    return positions;
+  }
+
   for (let row = 0; row <= lastRow; row += 1) {
     const members = rows.get(row) ?? [];
     // Centre narrow rows under the widest one, snapped back to the 8-px grid.
