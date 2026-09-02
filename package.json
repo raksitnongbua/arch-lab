@@ -86,6 +86,7 @@
     "gen:share-keys": "node scripts/gen-share-keys.mjs",
     "check:vscode-grammar": "node scripts/vscode-grammar-check.mjs",
     "check:viewer-motion": "node scripts/viewer-motion-check.mjs",
+    "check:viewer-labels": "node scripts/viewer-label-check.mjs",
     "check:mcp-motion": "node scripts/mcp-motion-check.mjs",
     "check:icon-embed": "node scripts/icon-embed-check.mjs",
     "check:icon-contrast": "node scripts/icon-contrast-check.mjs",

@@ -68,6 +68,15 @@ export interface ViewerEdgeData extends Record<string, unknown> {
   parallelCount: number;
   /** Slides the label off a shared endpoint (`labelBiasByEdgeId`). */
   labelBias: LabelBias;
+  /**
+   * Where the chip actually sits, from the canvas's whole-diagram placement
+   * pass (`lib/edge-label-placement`). Null when this relationship has nothing
+   * to say and so draws no chip — never a signal to fall back silently: the
+   * anchor is only used if a placement is genuinely absent, which for a
+   * labelled edge would mean the pass and this component disagree about which
+   * edges have labels.
+   */
+  labelPlacement: { x: number; y: number; crowded: boolean } | null;
   /** Endpoint node names, for honest accessible labelling. */
   sourceName: string;
   targetName: string;
@@ -151,6 +160,8 @@ function ViewerEdgeInner({
   const gradientId = `viewer-flow-grad-${flowKey}`;
   const arrowId = `viewer-flow-arrow-${flowKey}`;
 
+  const chipX = data?.labelPlacement?.x ?? labelX;
+  const chipY = data?.labelPlacement?.y ?? labelY;
   const label = data?.edge.label;
   const technology = data?.edge.technology;
   const emphasis = data?.emphasis ?? "idle";
@@ -318,7 +329,10 @@ function ViewerEdgeInner({
       <EdgeLabelRenderer>
         <div
           style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            /* The placement pass's answer, which has cleared the node boxes
+             * and the other chips. `labelX`/`labelY` — the raw curve midpoint
+             * — is the fallback for an edge the pass never saw. */
+            transform: `translate(-50%, -50%) translate(${chipX}px, ${chipY}px)`,
           }}
           className="pointer-events-none absolute z-[1]"
         >
