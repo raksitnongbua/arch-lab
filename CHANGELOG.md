@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A connector no longer disappears behind an element it does not connect.**
+  A relationship whose line grazed an unrelated box vanished behind it and
+  reappeared past it, which on a busy diagram is how a reader joins up the
+  wrong two ends. Those connectors now bow around the obstruction — the same
+  curve the second relationship between one pair has always used, so no new
+  visual language — and a connector with nothing in its way is drawn exactly as
+  before. A connector aimed straight through the _middle_ of an element is left
+  alone deliberately: clearing that needs a bow so wide it reads as a third
+  element's border, and the fix for it is a `via` waypoint or a different
+  layout.
+- **A relationship's label now fades with its own connector.** Selecting one
+  relationship dimmed every other line and left the words naming them at full
+  strength on top, because a label is drawn in a separate layer from the
+  connector it belongs to and nothing had ever joined the two.
 - **A relationship's label no longer lands on top of an unrelated element.**
   The chip used to sit wherever the connector's midpoint fell, so on a diagram
   with a long relationship passing near a third element the sentence naming

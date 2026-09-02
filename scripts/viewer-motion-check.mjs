@@ -799,6 +799,38 @@ check("hover and selection agree on what a neighbourhood is", () => {
   );
 });
 
+check("a label recedes with the connector it names", () => {
+  /* A chip is NOT inside its edge's <g>: React Flow portals every label into
+   * one sibling `.react-flow__edgelabel-renderer` div. So the edge selector
+   * cannot reach it, and without a selector of its own the words naming a
+   * receded connector stayed at full strength above it — which reads as the
+   * labels being what is in focus. Selection had the same hole, since
+   * `emphasis` only ever reached the path. */
+  const reveal = memoBody(canvas, "hoverFocusCss");
+  assert.match(
+    reveal,
+    /viewer-edge-chip/,
+    "the hover reveal dims connectors but not the labels on them",
+  );
+  assert.match(
+    reveal,
+    /data-edge-id=/,
+    "the chip rule stopped being addressed per edge, so it dims every label " +
+      "including the hovered element's own",
+  );
+  assert.match(
+    edge,
+    /data-edge-id=\{id\}/,
+    "the chip carries no edge id, so nothing outside can address it",
+  );
+  assert.match(
+    edge,
+    /opacity: isDimmed \? EDGE_CHIP_DIM_OPACITY/,
+    "a chip no longer dims when its own relationship is deselected in favour " +
+      "of another",
+  );
+});
+
 check("the keyboard gets the same reveal, not a weaker one", () => {
   assert.match(
     canvas,

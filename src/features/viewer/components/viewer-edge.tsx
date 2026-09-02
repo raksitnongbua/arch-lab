@@ -60,6 +60,14 @@ import {
  */
 export type EdgeEmphasis = "idle" | "selected" | "dimmed";
 
+/**
+ * How far a chip recedes while another relationship is selected. Matches the
+ * connector dim in `viewer-canvas.tsx`'s `EDGE_INTERACTION_CSS` — the line and
+ * the words naming it have to fade together, or the reader is left with a
+ * floating sentence over an empty canvas.
+ */
+const EDGE_CHIP_DIM_OPACITY = 0.2;
+
 export interface ViewerEdgeData extends Record<string, unknown> {
   edge: C4Edge;
   /** 0-based position within the set of edges sharing this endpoint pair. */
@@ -77,6 +85,13 @@ export interface ViewerEdgeData extends Record<string, unknown> {
    * edges have labels.
    */
   labelPlacement: { x: number; y: number; crowded: boolean } | null;
+  /**
+   * Boxes this connector must not cross — every element except its own two.
+   * Handed down rather than read from React Flow's store here: an edge would
+   * have to subscribe to every node's measured rect to work it out, which is
+   * one subscription per edge for a list that only changes with the model.
+   */
+  obstacles: readonly { x: number; y: number; width: number; height: number }[];
   /** Endpoint node names, for honest accessible labelling. */
   sourceName: string;
   targetName: string;
@@ -151,6 +166,7 @@ function ViewerEdgeInner({
     parallelIndex: data?.parallelIndex ?? 0,
     parallelCount: data?.parallelCount ?? 1,
     labelBias: data?.labelBias ?? 0,
+    obstacles: data?.obstacles,
   });
 
   // Stable per-instance SVG ids (sanitised: useId's delimiters are not safe
@@ -328,13 +344,27 @@ function ViewerEdgeInner({
       ) : null}
       <EdgeLabelRenderer>
         <div
+          /* ADDRESSABLE FROM OUTSIDE, because a chip does not live in its own
+           * edge's <g>: React Flow portals every label into one sibling
+           * `.react-flow__edgelabel-renderer` div. So neither focus effect
+           * could ever reach a chip through the edge it belongs to — dimming
+           * `.react-flow__edge` left every label at full strength above the
+           * lines that had just receded, which reads as the labels being the
+           * thing in focus. The id is what lets the canvas's reveal dim them
+           * with their own connectors. */
+          data-edge-id={id}
           style={{
+            /* Selection's own dim, which had the same hole: `emphasis` only
+             * ever reached the path. Kept here rather than in the canvas's
+             * stylesheet because this component already knows its emphasis,
+             * and one dim per surface is one too few, not one too many. */
+            opacity: isDimmed ? EDGE_CHIP_DIM_OPACITY : undefined,
             /* The placement pass's answer, which has cleared the node boxes
              * and the other chips. `labelX`/`labelY` — the raw curve midpoint
              * — is the fallback for an edge the pass never saw. */
             transform: `translate(-50%, -50%) translate(${chipX}px, ${chipY}px)`,
           }}
-          className="pointer-events-none absolute z-[1]"
+          className="viewer-edge-chip pointer-events-none absolute z-[1]"
         >
           <button
             type="button"

@@ -402,7 +402,8 @@ function neighbourhoodOf(
  */
 const HOVER_REVEAL_CSS = `
 @media (prefers-reduced-motion: no-preference) {
-  .viewer-canvas .react-flow__node {
+  .viewer-canvas .react-flow__node,
+  .viewer-canvas .viewer-edge-chip {
     transition: opacity ${VIEWER_DURATIONS.edgeFocus}ms ease;
   }
 }
@@ -2290,6 +2291,15 @@ function ViewerCanvasInner({
           parallelCount: group.count,
           labelBias: labelBias.get(edge.id) ?? 0,
           labelPlacement: labelPlacements.get(edge.id) ?? null,
+          /* Every element except this connector's own two, so the curve can
+           * bow around what it does not connect. From the model's rects, like
+           * the label placement above and for the same reason: it is what lets
+           * the exporter reach the same path from the same helper. */
+          obstacles: modelRects.filter(
+            (_rect, index) =>
+              diagram.nodes[index].id !== edge.source &&
+              diagram.nodes[index].id !== edge.target,
+          ),
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,
@@ -2606,9 +2616,23 @@ function ViewerCanvasInner({
       .map((edge) => `:not([data-id="${edge.id}"])`)
       .join("");
 
+    /* Chips get their own selector because they are not inside their edge's
+     * <g> — React Flow portals every label into one sibling div, so the edge
+     * rule above cannot reach them. Left out, the words naming the receded
+     * connectors stayed at full strength above them, which reads as the labels
+     * being what is in focus. */
+    const chipExclude = diagram.edges
+      .filter(
+        (edge) =>
+          edge.source === hoveredNodeId || edge.target === hoveredNodeId,
+      )
+      .map((edge) => `:not([data-edge-id="${edge.id}"])`)
+      .join("");
+
     return (
       `.viewer-canvas .react-flow__node${nodeExclude} { opacity: ${HOVER_DIM_NODE_OPACITY}; }\n` +
-      `.viewer-canvas .react-flow__edge${edgeExclude} .viewer-edge-base { opacity: ${HOVER_DIM_EDGE_OPACITY}; }`
+      `.viewer-canvas .react-flow__edge${edgeExclude} .viewer-edge-base { opacity: ${HOVER_DIM_EDGE_OPACITY}; }\n` +
+      `.viewer-canvas .viewer-edge-chip${chipExclude} { opacity: ${HOVER_DIM_EDGE_OPACITY}; }`
     );
   }, [
     activeMultiIds,
