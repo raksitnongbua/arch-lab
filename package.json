@@ -40,6 +40,7 @@
     "check:mermaid": "node scripts/mermaid-check.mjs",
     "check:archtext": "node scripts/archtext-check.mjs",
     "check:canvas-edit": "node scripts/canvas-edit-check.mjs",
+    "check:c4-layout-guard": "node scripts/c4-layout-guard-check.mjs",
     "check:sequence": "node scripts/sequence-check.mjs",
     "check:flowchart": "node scripts/flowchart-check.mjs",
     "check:flowchart-layout": "node scripts/flowchart-layout-check.mjs",
