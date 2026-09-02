@@ -34,6 +34,7 @@
  */
 
 import {
+  type FocusEvent as ReactFocusEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -328,6 +329,76 @@ export interface CanvasEditHandlers {
 
 /** How far non-participants recede while a relationship is selected. */
 const DIM_NODE_OPACITY = 0.3;
+
+/**
+ * How far the rest of the diagram recedes while an element is merely HOVERED
+ * or keyboard-focused, rather than selected.
+ *
+ * Deliberately SHALLOWER than `DIM_NODE_OPACITY`. Reading a diagram used to
+ * cost a click: hover lifted the box two pixels and lit a ring around it, and
+ * the thing a reader actually wants — which connectors are these, and what is
+ * on the other end — only arrived on selection, which is modal and has to be
+ * dismissed. So the reveal moved to hover, and the two states have to stay
+ * distinguishable: hover is a preview you get for free by moving the mouse,
+ * selection is the commitment that opens the detail panel. A preview that dims
+ * as hard as the commitment makes the click feel like it did nothing.
+ *
+ * Hover ANIMATES NOTHING. The rule that the only moving light is the selection
+ * itself is what keeps a twenty-edge diagram from becoming noise, and a reveal
+ * that follows the cursor is the last place to break it — so this changes
+ * opacity and nothing else: no stroke, no width, no colour, no arrowhead.
+ */
+const HOVER_DIM_NODE_OPACITY = 0.55;
+/**
+ * The same for connectors. A shade deeper than the nodes because a line is
+ * thin: at the nodes' value a dimmed connector still reads as present, and the
+ * point of the reveal is that the hovered element's own connectors are the
+ * only ones a reader has to follow.
+ */
+const HOVER_DIM_EDGE_OPACITY = 0.35;
+
+/**
+ * An element and everything one relationship away from it — the set both the
+ * selection focus and the hover reveal keep at full strength.
+ *
+ * One function rather than the same four-line walk in two memos: the two
+ * effects differ in how far the rest recedes and in what animates, never in
+ * what counts as the neighbourhood, and the day they disagree about that the
+ * diagram would light differently depending on whether you had clicked.
+ */
+function neighbourhoodOf(
+  diagram: { edges: readonly { source: string; target: string }[] },
+  nodeId: string,
+): Set<string> {
+  const keep = new Set<string>([nodeId]);
+  for (const edge of diagram.edges) {
+    if (edge.source === nodeId) keep.add(edge.target);
+    if (edge.target === nodeId) keep.add(edge.source);
+  }
+  return keep;
+}
+
+/**
+ * The dim is a cross-fade, not a cut.
+ *
+ * Connectors already cross-faded theirs (`.viewer-edge-base`'s `opacity`
+ * transition, `edgeFocus`); nodes snapped. That asymmetry was invisible while
+ * the only thing that dimmed the canvas was a click — one deliberate act, one
+ * hard change of state — and becomes obvious the moment the cursor can do it:
+ * a snap that tracks mouse movement reads as flicker. Both halves now use the
+ * same clock, so element and relationship focus keep reading as one system.
+ *
+ * `opacity` only, so nothing here can move a box or restyle the notation, and
+ * `prefers-reduced-motion` takes the cut instead — a reader who has asked for
+ * no motion still gets the whole reveal, just without the fade.
+ */
+const HOVER_REVEAL_CSS = `
+@media (prefers-reduced-motion: no-preference) {
+  .viewer-canvas .react-flow__node {
+    transition: opacity ${VIEWER_DURATIONS.edgeFocus}ms ease;
+  }
+}
+`;
 
 /**
  * How far a press may travel and still count as a CLICK rather than a lasso.
@@ -900,6 +971,14 @@ function ViewerCanvasInner({
    * read-only canvas can never enter this state.
    */
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+
+  /**
+   * The element under the cursor, or under the keyboard focus ring. Drives
+   * `hoverFocusCss` and nothing else — it never reaches a node or edge object,
+   * so a mouse move across the canvas costs one stylesheet swap rather than a
+   * React Flow re-adopt of every element (`lib/project-nodes.ts`).
+   */
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const diagramIdRef = useRef(diagramId);
@@ -2388,11 +2467,7 @@ function ViewerCanvasInner({
   // see the remount note above the `nodes` memo.
   const nodeFocusCss = useMemo<string | null>(() => {
     if (selectedNodeId === null) return null;
-    const keep = new Set<string>([selectedNodeId]);
-    for (const edge of diagram.edges) {
-      if (edge.source === selectedNodeId) keep.add(edge.target);
-      if (edge.target === selectedNodeId) keep.add(edge.source);
-    }
+    const keep = neighbourhoodOf(diagram, selectedNodeId);
     const excludeKeptSelector = [...keep]
       .map((id) => `:not([data-id="${id}"])`)
       .join("");
@@ -2433,6 +2508,62 @@ function ViewerCanvasInner({
   // memo). Ids that stop existing mid-selection (a pane edit deleting a
   // member) select nothing and dim as part of "everything else" — harmless,
   // and the grouping itself refuses the stale id with an announcement.
+  /**
+   * The hover reveal: the element under the cursor (or under the keyboard
+   * focus ring) and its neighbourhood hold full strength while everything else
+   * recedes.
+   *
+   * SELECTION WINS, and that is the whole interaction rule. A reader who has
+   * clicked has said which element they care about; letting the cursor keep
+   * re-aiming the dim on the way to the detail panel would take that back, and
+   * two dims fighting over the same opacity is how you get a diagram that
+   * flickers while someone reads a description. So this returns null whenever
+   * ANY selection is live — relationship, element, multi or frame — and the
+   * cursor goes back to being free the moment Escape clears it.
+   */
+  const hoverFocusCss = useMemo<string | null>(() => {
+    if (hoveredNodeId === null) return null;
+    if (
+      detail !== null ||
+      selectedNodeId !== null ||
+      activeMultiIds !== null ||
+      selectedFrameId !== null
+    ) {
+      return null;
+    }
+    if (!diagram.nodes.some((node) => node.id === hoveredNodeId)) return null;
+
+    const keep = neighbourhoodOf(diagram, hoveredNodeId);
+    const nodeExclude = [...keep]
+      .map((id) => `:not([data-id="${id}"])`)
+      .join("");
+    /* Connectors are addressed the same way as nodes — by `data-id`, in a
+     * stylesheet — rather than through the `emphasis` prop the selection uses.
+     * Emphasis is a prop on the edge object, and a new edge object per cursor
+     * move is exactly the re-adopt the projection cache exists to prevent
+     * (`lib/project-nodes.ts`): React Flow would rebuild every edge's handle
+     * bounds on every mouse move. A stylesheet touches no object at all. */
+    const edgeExclude = diagram.edges
+      .filter(
+        (edge) =>
+          edge.source === hoveredNodeId || edge.target === hoveredNodeId,
+      )
+      .map((edge) => `:not([data-id="${edge.id}"])`)
+      .join("");
+
+    return (
+      `.viewer-canvas .react-flow__node${nodeExclude} { opacity: ${HOVER_DIM_NODE_OPACITY}; }\n` +
+      `.viewer-canvas .react-flow__edge${edgeExclude} .viewer-edge-base { opacity: ${HOVER_DIM_EDGE_OPACITY}; }`
+    );
+  }, [
+    activeMultiIds,
+    detail,
+    diagram,
+    hoveredNodeId,
+    selectedFrameId,
+    selectedNodeId,
+  ]);
+
   const multiFocusCss = useMemo<string | null>(() => {
     if (activeMultiIds === null) return null;
     const excludeSelector = activeMultiIds
@@ -2449,6 +2580,50 @@ function ViewerCanvasInner({
       rings
     );
   }, [activeMultiIds]);
+
+  /* ---- hover reveal -------------------------------------------------------- */
+
+  const handleNodeMouseEnter = useCallback<NodeMouseHandler<ViewerFlowNode>>(
+    (_event, node) => setHoveredNodeId(node.id),
+    [],
+  );
+  const handleNodeMouseLeave = useCallback(() => setHoveredNodeId(null), []);
+
+  /**
+   * The keyboard's half of the same reveal, and the reason it is a capturing
+   * listener on the wrapper rather than a prop: React Flow surfaces
+   * `onNodeMouseEnter` but no `onNodeFocus`, and reaching focus any other way
+   * means putting a handler on the node objects — the per-element churn this
+   * whole approach avoids. `focusin`/`focusout` bubble, so one pair of
+   * listeners on the pane sees every element, and the id comes off the same
+   * `data-id` the stylesheets are written against.
+   *
+   * Without this, tabbing through a diagram gave a focus ring and no reveal,
+   * so the one reader who cannot hover was the one reader who still had to
+   * click for everything.
+   */
+  const handleFocusIn = useCallback((event: ReactFocusEvent) => {
+    const host = (event.target as HTMLElement | null)?.closest?.(
+      ".react-flow__node",
+    );
+    const id = host?.getAttribute("data-id");
+    setHoveredNodeId(id ?? null);
+  }, []);
+  /**
+   * Clears the reveal only when focus actually LEAVES the elements. Tabbing
+   * from one node to the next fires focusout before focusin, so clearing
+   * unconditionally would blank the reveal for a frame between every pair —
+   * a flicker down the whole tab order. `relatedTarget` is where focus is
+   * going, so a hop between two nodes is left for the incoming focusin to
+   * re-aim.
+   */
+  const handleFocusOut = useCallback((event: ReactFocusEvent) => {
+    const next = (event.relatedTarget as HTMLElement | null)?.closest?.(
+      ".react-flow__node",
+    );
+    if (next != null) return;
+    setHoveredNodeId(null);
+  }, []);
 
   /* ---- camera persistence --------------------------------------------------- */
 
@@ -2484,12 +2659,18 @@ function ViewerCanvasInner({
          through React Flow instead. Down is CAPTURE phase to claim the press
          before React Flow's pane sees it; the other three receive the
          captured pointer, so they are ordinary props. */
+      /* React's onFocus/onBlur are delegated focusin/focusout, so they bubble
+         from whichever element inside a node took the ring — which is what
+         lets one pair of handlers here serve every element. */
+      onFocus={handleFocusIn}
+      onBlur={handleFocusOut}
       onPointerDownCapture={marqueeMode ? handleMarqueeStart : undefined}
       onPointerMove={marqueeMode ? handleMarqueeMove : undefined}
       onPointerUp={marqueeMode ? handleMarqueeEnd : undefined}
       onPointerCancel={marqueeMode ? handleMarqueeCancel : undefined}
     >
       <style>{EDGE_INTERACTION_CSS}</style>
+      <style>{HOVER_REVEAL_CSS}</style>
       {detail !== null ? (
         // Focus effect while a relationship is selected: every node except
         // the two endpoints recedes. Stylesheet-driven (node ids are model
@@ -2497,6 +2678,7 @@ function ViewerCanvasInner({
         // remount note above the `nodes` memo.
         <style>{`.viewer-canvas .react-flow__node:not([data-id="${detail.edge.source}"]):not([data-id="${detail.edge.target}"]) { opacity: ${DIM_NODE_OPACITY}; }`}</style>
       ) : null}
+      {hoverFocusCss !== null ? <style>{hoverFocusCss}</style> : null}
       {nodeFocusCss !== null ? <style>{nodeFocusCss}</style> : null}
       {multiFocusCss !== null ? <style>{multiFocusCss}</style> : null}
       {marquee !== null ? (
@@ -2529,6 +2711,8 @@ function ViewerCanvasInner({
           fitViewOptions={{ padding: FIT_PADDING }}
           onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
+          onNodeMouseEnter={handleNodeMouseEnter}
+          onNodeMouseLeave={handleNodeMouseLeave}
           onEdgeClick={handleEdgeClick}
           onPaneClick={handlePaneClick}
           onMoveEnd={handleMoveEnd}

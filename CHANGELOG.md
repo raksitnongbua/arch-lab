@@ -9,6 +9,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Hovering an element on a C4 diagram now shows you what it connects to,
+  without clicking.** The element under the cursor and everything one
+  relationship away from it hold full strength while the rest of the diagram
+  recedes — so following a path is a matter of moving the mouse, where it used
+  to mean clicking each element in turn and pressing Escape to get back. Hover
+  recedes the diagram less far than selecting does, so a preview still reads as
+  weaker than the commitment that opens the details panel, and **a selection
+  wins**: once you have clicked, the cursor stops re-aiming the focus. Tabbing
+  gets exactly the same reveal as hovering, rather than a focus ring and
+  nothing. It animates nothing at all — the only moving light on the canvas is
+  still the selection itself — and a reader who has asked for reduced motion
+  gets the reveal without the cross-fade.
 - **A flowchart can now be edited on the canvas, not only in the text.** Click a
   step and its label, technology, tags and details are editable in the dock the
   canvas already opened; click an arrow and its guard label is too, with a
