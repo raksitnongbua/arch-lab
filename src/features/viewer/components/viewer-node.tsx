@@ -288,11 +288,14 @@ function ViewerNodeInner({
         <span className="w-full truncate text-[10px] leading-tight text-node-meta">
           [{meta}]
         </span>
-        {node.description !== undefined && node.description !== "" ? (
-          <span className="line-clamp-1 w-full text-[10px] leading-tight break-words text-node-meta">
-            {node.description}
-          </span>
-        ) : null}
+        {/* THE DESCRIPTION IS NOT DRAWN HERE. It used to be, clamped to one
+            line, which for every description worth writing meant a sentence
+            cut mid-word: "Validates the request and…", "Collections:
+            templates,…". A clipped sentence is worse than no sentence — it
+            costs the same height and delivers nothing a reader can use — and
+            it competed with the two lines that CAN be read whole. The full
+            text is one click away in the detail panel, and already in this
+            element's `title` for a hover. */}
       </div>
       {/* Hover outline — always mounted, opacity-only transition. */}
       <span

@@ -11,6 +11,8 @@
 
 import { getBezierPath, Position } from "@xyflow/react";
 
+import { clearingOffset } from "@/lib/curve-clearance";
+
 /** Control-point spacing between adjacent parallel edges, in flow units. */
 export const PARALLEL_EDGE_SPACING = 48;
 
@@ -166,6 +168,13 @@ export interface ParallelEdgePathInput {
   parallelCount: number;
   /** From `labelBiasByEdgeId`. Omitted ⇒ 0 ⇒ label at the midpoint. */
   labelBias?: LabelBias;
+  /**
+   * Boxes the curve must not pass through — every node on the diagram EXCEPT
+   * this edge's own two endpoints. Omitted, the curve is drawn exactly as it
+   * always was, which is what keeps the editor canvas and every existing
+   * fixture unchanged until a caller opts in.
+   */
+  obstacles?: readonly NodeRect[];
 }
 
 export interface EdgePathGeometry {
@@ -217,19 +226,7 @@ function slideAlongLine(
 export function getParallelEdgePath(
   input: ParallelEdgePathInput,
 ): EdgePathGeometry {
-  const offset = parallelOffset(input.parallelIndex, input.parallelCount);
-
-  if (offset === 0) {
-    const [path, midX, midY] = getBezierPath({
-      sourceX: input.sourceX,
-      sourceY: input.sourceY,
-      sourcePosition: input.sourcePosition,
-      targetX: input.targetX,
-      targetY: input.targetY,
-      targetPosition: input.targetPosition,
-    });
-    return { path, ...slideAlongLine(input, midX, midY) };
-  }
+  const base = parallelOffset(input.parallelIndex, input.parallelCount);
 
   const dx = input.targetX - input.sourceX;
   const dy = input.targetY - input.sourceY;
@@ -242,6 +239,35 @@ export function getParallelEdgePath(
   if (dx < 0 || (dx === 0 && dy < 0)) {
     nx = -nx;
     ny = -ny;
+  }
+
+  const offset = clearingOffset({
+    sourceX: input.sourceX,
+    sourceY: input.sourceY,
+    targetX: input.targetX,
+    targetY: input.targetY,
+    base,
+    normalX: nx,
+    normalY: ny,
+    obstacles: input.obstacles,
+  });
+
+  /* React Flow's own bezier ONLY while the edge is genuinely straight — a lone
+   * connector with nothing in its way. The moment an offset is wanted, for a
+   * parallel group or to get past a box, the curve becomes the quadratic below,
+   * whose control point is the thing being moved. Keeping the default bezier
+   * for the unobstructed case is what leaves every existing diagram drawing
+   * exactly as it did. */
+  if (offset === 0) {
+    const [path, midX, midY] = getBezierPath({
+      sourceX: input.sourceX,
+      sourceY: input.sourceY,
+      sourcePosition: input.sourcePosition,
+      targetX: input.targetX,
+      targetY: input.targetY,
+      targetPosition: input.targetPosition,
+    });
+    return { path, ...slideAlongLine(input, midX, midY) };
   }
 
   const controlX = (input.sourceX + input.targetX) / 2 + nx * offset;

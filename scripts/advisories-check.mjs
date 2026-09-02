@@ -121,6 +121,46 @@ const CLEAN = PREFIX + CLEAN_BODY;
  */
 const CASES = [
   {
+    rule: "column-layout",
+    why: "a six-deep chain, which the top-down layout draws as a column",
+    expect: 1,
+    /* Its own PREFIX: the shared one has two containers side by side, which is
+     * landscape and so cannot trip this. Every element carries technology and
+     * a description, and every relationship a real label, so the only note
+     * this can raise is the one it is named for. */
+    source: `archlab 1.0
+title "T"
+
+@context ctx-root "T"
+  a:person "Analyst"
+    desc "Starts the run."
+  s:system "Pipeline"
+    desc "Does the work."
+
+  a -> s : "Starts a run" [HTTPS]
+
+@container cnt-root "T — Containers" owner=s
+  c1:container "Ingest" [Go 1.22]
+    desc "Takes the batch in."
+  c2:container "Validate" [Go 1.22]
+    desc "Checks the batch."
+  c3:container "Enrich" [Go 1.22]
+    desc "Adds the reference data."
+  c4:container "Score" [Go 1.22]
+    desc "Scores each row."
+  c5:container "Publish" [Go 1.22]
+    desc "Writes the result out."
+  c6:container "Notify" [Go 1.22]
+    desc "Tells the caller."
+
+  c1 -> c2 : "Hands the batch on" [gRPC]
+  c2 -> c3 : "Hands the batch on" [gRPC]
+  c3 -> c4 : "Hands the batch on" [gRPC]
+  c4 -> c5 : "Hands the batch on" [gRPC]
+  c5 -> c6 : "Hands the batch on" [gRPC]
+`,
+  },
+  {
     rule: "missing-technology",
     why: "a container with no technology",
     expect: 1,
@@ -457,7 +497,9 @@ for (const name of ["shopflow", "order-shop"]) {
      listed EXPLICITLY rather than inferred, so a new rule cannot slip past this
      check simply by not containing the word "C4": it either states a C4 reason
      or it is declared here as a format rule and states the limit it enforces. */
-  const FORMAT_RULES = new Set(["long-title"]);
+  /* Rules that are arch-lab's own rather than C4's, and so cite the format
+   * instead of the spec. `column-layout` is about how a document is DRAWN. */
+  const FORMAT_RULES = new Set(["long-title", "column-layout"]);
 
   const uncited = declared.filter((rule) => {
     const because = ADVISORY_RULES[rule].because;

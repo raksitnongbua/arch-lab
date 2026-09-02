@@ -141,6 +141,7 @@ interface PendingDiagram extends Loc {
   level: C4Level;
   title?: string;
   ownerAttr?: string;
+  directionAttr?: "tb" | "lr";
   /** Meaningful only when `hasIn` is true; `null` = explicit `in=null`. */
   inAttr?: string | null;
   hasIn: boolean;
@@ -159,6 +160,10 @@ interface Header {
   version?: string;
   versionLoc?: Loc;
   schema?: string;
+  /** File-wide default layout direction; a diagram may override it. */
+  direction?: "tb" | "lr";
+  /** Source line of the `direction` line, for `ArchTextSpans.header`. */
+  directionLine?: number;
   title?: string;
   description?: string;
   owner?: string;
@@ -359,6 +364,13 @@ export interface HeaderSpans {
   end: number;
   /** 1-based line of each `tagcolor` line, keyed by tag. */
   tagColors: ReadonlyMap<string, number>;
+  /**
+   * 1-based line of the `direction` line, when the file has one. Recorded for
+   * the same reason `tagColors` is: the canvas's direction control replaces
+   * that one line, and a gesture that had to FIND it would be re-implementing
+   * the header parse in a module that already has the parse's answer.
+   */
+  direction?: number;
 }
 
 export interface ArchTextSpans {
@@ -572,7 +584,11 @@ export function parseArchTextWithSpans(source: string): {
     edges: new Map(),
     frames: new Map(),
     diagramHeads: new Map(),
-    header: { end: headerEnd, tagColors: header.tagColorLines ?? new Map() },
+    header: {
+      end: headerEnd,
+      tagColors: header.tagColorLines ?? new Map(),
+      direction: header.directionLine,
+    },
   };
   const file = resolve(header, diagrams, diagramById, nodeHome, spans);
   return { file, spans };
@@ -618,6 +634,25 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       onceString(cursor, header.owner, keyword);
       header.owner = cursor.readQuoted("the owner");
       break;
+    case "direction": {
+      if (header.direction !== undefined) {
+        cursor.fail('duplicate "direction" line — it may appear only once');
+      }
+      /* Bare, not quoted: it is one of two fixed words, like a node type,
+       * rather than free text like a title. Refused BY NAME when it is
+       * neither, because a silently ignored layout hint is a diagram that
+       * lays out the way the author did not ask for with nothing to explain
+       * why. */
+      const value = cursor.readBare(/^[a-z]+/, '"tb" or "lr"');
+      if (value !== "tb" && value !== "lr") {
+        cursor.fail(
+          `"${value}" is not a layout direction — expected "tb" (top-down, the default) or "lr" (left-to-right, folding a long flow into bands)`,
+        );
+      }
+      header.direction = value;
+      header.directionLine = loc.line;
+      break;
+    }
     case "tags": {
       if (header.tags !== undefined) {
         cursor.fail('duplicate "tags" line — it may appear only once');
@@ -694,7 +729,7 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
         loc.line,
         loc.column,
         `"${keyword}" is not a recognised header keyword — expected archlab, schema, title, ` +
-          "description, owner, tags, created, updated, reviewed, tagcolor, customicon, generator or root",
+          "description, owner, direction, tags, created, updated, reviewed, tagcolor, customicon, generator or root",
         keyword,
       );
   }
@@ -901,7 +936,7 @@ function parseDiagramHeader(
     const attrLoc = { line: cursor.line, column: cursor.column };
     const word = cursor.readBare(
       /^[a-z]+/,
-      'a diagram attribute ("owner=" or "in=")',
+      'a diagram attribute ("owner=", "in=" or "direction=")',
     );
     cursor.expect("=", `"=" after "${word}"`);
     if (word === "owner") {
@@ -909,6 +944,24 @@ function parseDiagramHeader(
         failAt(attrLoc.line, attrLoc.column, 'duplicate "owner=" attribute');
       }
       diagram.ownerAttr = cursor.readIdToken("the owner node id");
+    } else if (word === "direction") {
+      if (diagram.directionAttr !== undefined) {
+        failAt(
+          attrLoc.line,
+          attrLoc.column,
+          'duplicate "direction=" attribute',
+        );
+      }
+      const value = cursor.readBare(/^[a-z]+/, '"tb" or "lr"');
+      if (value !== "tb" && value !== "lr") {
+        failAt(
+          attrLoc.line,
+          attrLoc.column,
+          `"${value}" is not a layout direction — expected "tb" (top-down, the default) or "lr" (left-to-right, folding a long flow into bands)`,
+          value,
+        );
+      }
+      diagram.directionAttr = value;
     } else if (word === "in") {
       if (diagram.hasIn) {
         failAt(attrLoc.line, attrLoc.column, 'duplicate "in=" attribute');
@@ -1066,6 +1119,7 @@ const DIAGRAM_KEYS_SET: ReadonlySet<string> = new Set([
   "ownerNodeId",
   "parentDiagramId",
   "viewport",
+  "direction",
   "frames",
   "nodes",
   "edges",
@@ -1887,7 +1941,13 @@ function resolve(
     /* nodes */
     const sortedIds = diagram.nodes.map((n) => n.id).sort(compareStrings);
     const nodeIdSet = new Set(sortedIds);
-    const layout = defaultPositions(sortedIds, diagram.edges);
+    /* The effective direction: the diagram's own, else the file's, else the
+     * original top-down. Resolved HERE rather than stored resolved, so a
+     * diagram that inherits keeps inheriting when the file's line changes —
+     * and so the serializer, which resolves the same way, omits exactly what
+     * the author left out. */
+    const layoutDirection = diagram.directionAttr ?? header.direction ?? "tb";
+    const layout = defaultPositions(sortedIds, diagram.edges, layoutDirection);
     const finalNodes: Record<string, unknown>[] = [];
     for (const node of diagram.nodes) {
       // Fill in a derived name before assembly, so the JSON model always
@@ -2195,6 +2255,9 @@ function resolve(
     pairs.push(["ownerNodeId", owner]);
     pairs.push(["parentDiagramId", parent]);
     if (viewport !== undefined) pairs.push(["viewport", viewport]);
+    if (diagram.directionAttr !== undefined) {
+      pairs.push(["direction", diagram.directionAttr]);
+    }
     if (finalFrames.length > 0) pairs.push(["frames", finalFrames]);
     pairs.push(["nodes", finalNodes]);
     pairs.push(["edges", finalEdges]);
@@ -2261,6 +2324,7 @@ function resolve(
       : header.schema;
   if (schemaValue !== undefined) file.$schema = schemaValue;
   file.version = header.version;
+  if (header.direction !== undefined) file.direction = header.direction;
   file.metadata = metadata;
   file.rootDiagramId = root;
   file.diagrams = finalDiagrams;

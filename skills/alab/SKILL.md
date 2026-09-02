@@ -121,6 +121,7 @@ Header lines sit at indent 0 before the first diagram. `archlab
 | `title "<text>"` | `metadata.title` | Required — a file without a title is refused. Keep it to 120 characters: longer still parses, but the checkers raise a review note, since the title becomes the export filename too. |
 | `description "<text>"` | `metadata.description` | Optional. |
 | `owner "<text>"` | `metadata.owner` | Optional. |
+| `direction tb\|lr` | `direction` | Optional; the default layout direction for every diagram that does not set its own. Omitted means `tb` — top-down, as every document laid out before this line existed. `lr` runs layers along the long axis and folds a long flow into bands, so a deep chain lands near the shape of a screen instead of a column. Only affects nodes whose position the text omits. |
 | `tags #a #b` | `metadata.tags` | At least one tag; quote odd names: #"needs review". |
 | `created <timestamp>` | `metadata.createdAt` | Defaults to the fixed sentinel 1970-01-01T00:00:00Z when omitted. |
 | `updated <timestamp>` | `metadata.updatedAt` | Same default sentinel as created. |
@@ -154,10 +155,21 @@ root ctx-root
 ## Diagrams
 
 `@context | @container | @component | @code <id> ["Title"]
-[owner=<node>] [in=<diagram>]`.
+[owner=<node>] [in=<diagram>] [direction=tb|lr]`.
 
 - The title may be omitted when it equals the owner node's name.
 - `owner=<node>` is `ownerNodeId`; `in=<diagram>` is `parentDiagramId`.
+- `direction=tb|lr` sets THIS diagram's layout direction, overriding the
+  file's `direction` header line. Absent means the file's; a file that
+  says nothing lays out `tb`, exactly as every document did before the
+  field existed. It only moves nodes whose position the text OMITS — a
+  hand-written `(x,y)` is honoured whichever way the layout runs.
+  `lr` runs the layers along the long axis and FOLDS a long flow into
+  bands, which is what keeps a deep chain from being drawn as a column
+  three screens tall; a diagram already wider than it is deep is left
+  top-down even under `lr`, because turning that sideways would make a
+  column of it the other way. `validate_model` raises a review note
+  naming the diagrams this would help, with both measured shapes.
 - `in=` may be omitted when it equals the diagram containing the owner
   node; `in=null` forces a parentless diagram that still has an owner.
 - Body lines at indent 2: `desc "…"` and `view <zoom> <x> <y>`.

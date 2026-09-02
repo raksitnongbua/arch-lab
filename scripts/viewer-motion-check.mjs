@@ -620,6 +620,284 @@ check("the folded face keeps its label at every width it appears at", () => {
   );
 });
 
+/**
+ * A slice of source with its comments removed.
+ *
+ * Written after two of the assertions below failed on their own prose: one
+ * matched the word "emphasis" inside the comment explaining why the reveal
+ * does NOT use emphasis. A check that reads a file as text has to read the
+ * code, or it grades the documentation.
+ */
+function codeOf(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
+/** The body of a named `useMemo`, comments stripped. */
+function memoBody(source, name) {
+  const raw = source.match(
+    new RegExp(`const ${name} = useMemo[\\s\\S]*?\\n  \\}, \\[`),
+  )?.[0];
+  return raw === undefined ? undefined : codeOf(raw);
+}
+
+/* ----------------------------------------------------------------------- */
+/* The hover reveal                                                         */
+/*                                                                          */
+/* Reading a diagram used to cost a click: hover lifted the box and lit a    */
+/* ring, and the thing a reader wants — which connectors are these, what is  */
+/* on the other end — only arrived on selection, which is modal. The reveal  */
+/* now happens on hover. That puts a state change on the cursor's path, so   */
+/* the rules that keep this canvas quiet are exactly the ones it could       */
+/* break, and each is asserted as a relation rather than as a number.        */
+/* ----------------------------------------------------------------------- */
+
+check("hover recedes the diagram LESS than selection does", () => {
+  const hoverNode = Number(
+    canvas.match(/const HOVER_DIM_NODE_OPACITY = ([\d.]+);/)?.[1],
+  );
+  const selectionNode = Number(
+    canvas.match(/const DIM_NODE_OPACITY = ([\d.]+);/)?.[1],
+  );
+  assert.ok(
+    Number.isFinite(hoverNode) && Number.isFinite(selectionNode),
+    "one of the two dim constants is no longer a literal this can read",
+  );
+  assert.ok(
+    hoverNode > selectionNode,
+    `hover dims to ${hoverNode} and selection to ${selectionNode} — a preview ` +
+      "that recedes as hard as the commitment makes the click feel inert",
+  );
+});
+
+check(
+  "a hovered connector stays stronger than a hovered node's strangers",
+  () => {
+    const edgeDim = Number(
+      canvas.match(/const HOVER_DIM_EDGE_OPACITY = ([\d.]+);/)?.[1],
+    );
+    const selectionEdgeDim = Number(
+      canvas.match(/viewer-edge-base-dimmed \{ opacity: ([\d.]+); \}/)?.[1],
+    );
+    assert.ok(
+      Number.isFinite(edgeDim) && Number.isFinite(selectionEdgeDim),
+      "the connector dim values are no longer literals this can read",
+    );
+    assert.ok(
+      edgeDim > selectionEdgeDim,
+      `hover dims connectors to ${edgeDim}, selection to ${selectionEdgeDim} — ` +
+        "same reason as the nodes",
+    );
+  },
+);
+
+check("the hover reveal changes OPACITY and nothing else", () => {
+  const block = memoBody(canvas, "hoverFocusCss");
+  assert.ok(block, "hoverFocusCss is no longer a memo this can find");
+  /* Scan the CSS the memo RETURNS — every backtick segment — and require every
+   * property in it to be `opacity`.
+   *
+   * The first version of this matched whole rules with `{ prop: value; }`,
+   * which a rule carrying TWO declarations does not match at all: adding a
+   * `stroke:` made that rule invisible to the assertion instead of failing it,
+   * and the check passed with the break in the file. It only surfaced because
+   * the break was confirmed present before the green was believed. Counting
+   * properties cannot fail that way — a declaration the scan cannot classify
+   * is a declaration it reports. */
+  const css = [...block.matchAll(/`([^`]*)`/g)].map((m) => m[1]).join("\n");
+  assert.ok(css.length > 0, "the memo returns no CSS this can read");
+  const properties = [...css.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
+  assert.ok(properties.length > 0, "the memo emits no declarations at all");
+  for (const property of properties) {
+    assert.equal(
+      property,
+      "opacity",
+      `the reveal writes \`${property}\` — dim what is unrelated, but change ` +
+        "no stroke, fill, width or arrowhead in either direction",
+    );
+  }
+});
+
+check("the hover reveal animates nothing", () => {
+  const block = memoBody(canvas, "hoverFocusCss");
+  assert.ok(block, "hoverFocusCss is no longer a memo this can find");
+  assert.doesNotMatch(
+    block,
+    /animation|@keyframes|dashoffset/,
+    "the only moving light is the selection itself — a reveal that follows " +
+      "the cursor is the last place to break that",
+  );
+});
+
+check("no filter reaches a connector through the reveal", () => {
+  // A percentage filter region is objectBoundingBox units, and a flat path has
+  // a zero-extent box in one axis: the region collapses and the paint lands
+  // somewhere else. This is the ER banding bug, and it cost three commits.
+  const block = canvas.match(/const HOVER_REVEAL_CSS = `[\s\S]*?`;/)?.[0];
+  assert.ok(block, "HOVER_REVEAL_CSS is no longer a template this can find");
+  assert.doesNotMatch(
+    block + canvas.match(/const hoverFocusCss[\s\S]*?\n  \}, \[/)?.[0],
+    /filter:/,
+    "never apply an SVG filter to a connector",
+  );
+});
+
+check("reduced motion loses the fade, never the reveal", () => {
+  const block = canvas.match(/const HOVER_REVEAL_CSS = `[\s\S]*?`;/)?.[0];
+  assert.match(
+    block,
+    /prefers-reduced-motion: no-preference/,
+    "the transition is not guarded by a motion query, so a reader who asked " +
+      "for no motion gets the cross-fade anyway",
+  );
+  assert.match(
+    block,
+    /transition: opacity/,
+    "the guarded rule stopped being the transition",
+  );
+  // The reveal itself must NOT be inside the query: the information is not
+  // decoration, and a reader who opted out of motion still needs it.
+  const reveal = canvas.match(/const hoverFocusCss[\s\S]*?\n  \}, \[/)?.[0];
+  assert.doesNotMatch(
+    reveal,
+    /prefers-reduced-motion/,
+    "the reveal is gated on a motion preference — the dim carries which " +
+      "connectors are which, so opting out of motion must not opt out of it",
+  );
+});
+
+check("selection wins: the cursor cannot re-aim a committed focus", () => {
+  const reveal = memoBody(canvas, "hoverFocusCss");
+  for (const state of [
+    "detail !== null",
+    "selectedNodeId !== null",
+    "activeMultiIds !== null",
+    "selectedFrameId !== null",
+  ]) {
+    assert.ok(
+      reveal.includes(state),
+      `the reveal does not stand down for \`${state}\` — two dims fighting ` +
+        "over one opacity is a diagram that flickers while somebody reads it",
+    );
+  }
+});
+
+check("hover and selection agree on what a neighbourhood is", () => {
+  // They differ in how far the rest recedes and in what animates, never in
+  // which elements count as near. One function, two callers.
+  const uses = [...canvas.matchAll(/neighbourhoodOf\(/g)].length;
+  assert.ok(
+    uses >= 3,
+    `neighbourhoodOf appears ${uses} time(s) — expected its definition plus ` +
+      "both the hover and the selection memo",
+  );
+  assert.doesNotMatch(
+    canvas.match(/const hoverFocusCss[\s\S]*?\n  \}, \[/)?.[0],
+    /edge\.source === hoveredNodeId \) keep\.add/,
+    "the hover memo walks the edges itself instead of asking — the day the " +
+      "two walks disagree, the diagram lights differently depending on " +
+      "whether you clicked",
+  );
+});
+
+check("a label recedes with the connector it names", () => {
+  /* A chip is NOT inside its edge's <g>: React Flow portals every label into
+   * one sibling `.react-flow__edgelabel-renderer` div. So the edge selector
+   * cannot reach it, and without a selector of its own the words naming a
+   * receded connector stayed at full strength above it — which reads as the
+   * labels being what is in focus. Selection had the same hole, since
+   * `emphasis` only ever reached the path. */
+  const reveal = memoBody(canvas, "hoverFocusCss");
+  assert.match(
+    reveal,
+    /viewer-edge-chip/,
+    "the hover reveal dims connectors but not the labels on them",
+  );
+  assert.match(
+    reveal,
+    /data-edge-id=/,
+    "the chip rule stopped being addressed per edge, so it dims every label " +
+      "including the hovered element's own",
+  );
+  assert.match(
+    edge,
+    /data-edge-id=\{id\}/,
+    "the chip carries no edge id, so nothing outside can address it",
+  );
+  assert.match(
+    edge,
+    /opacity: isDimmed \? EDGE_CHIP_DIM_OPACITY/,
+    "a chip no longer dims when its own relationship is deselected in favour " +
+      "of another",
+  );
+});
+
+check("the keyboard gets the same reveal, not a weaker one", () => {
+  assert.match(
+    canvas,
+    /onFocus=\{handleFocusIn\}/,
+    "nothing wires focus to the reveal, so tabbing gives a ring and no reveal",
+  );
+  assert.match(
+    canvas,
+    /onBlur=\{handleFocusOut\}/,
+    "focus is never released, so the reveal sticks after focus leaves",
+  );
+  assert.match(
+    canvas.match(
+      /const handleFocusOut = useCallback[\s\S]*?\n  \}, \[\]\);/,
+    )?.[0] ?? "",
+    /relatedTarget/,
+    "focusout clears unconditionally, so tabbing between two elements blanks " +
+      "the reveal for a frame between every pair",
+  );
+});
+
+check("the reveal never touches a node or edge OBJECT", () => {
+  // Emphasis is a prop on the edge object, and a new object per cursor move is
+  // the re-adopt the projection cache exists to prevent: React Flow rebuilds
+  // handle bounds, and getEdgePosition returns null until the next
+  // measurement — error 008, and a visible blink of the connector layer.
+  const reveal = memoBody(canvas, "hoverFocusCss");
+  assert.match(
+    reveal,
+    /data-id=/,
+    "the reveal stopped being stylesheet-driven",
+  );
+  assert.doesNotMatch(
+    reveal,
+    /emphasis|setNodes|setEdges/,
+    "the reveal reaches for the element objects — one cursor move would " +
+      "re-adopt every element on the canvas",
+  );
+  assert.match(
+    canvas,
+    /const \[hoveredNodeId, setHoveredNodeId\] = useState/,
+    "the hovered id is no longer local state this can find",
+  );
+});
+
+check("every class the reveal targets is a class the canvas emits", () => {
+  // A class list is an array joined with a space, never concatenated: a lost
+  // leading space merges two classes into one nonsense class, every rule
+  // targeting it silently stops applying, and CSS that matches nothing is not
+  // an error. This shipped once already.
+  const reveal =
+    (canvas.match(/const hoverFocusCss[\s\S]*?\n  \}, \[/)?.[0] ?? "") +
+    (canvas.match(/const HOVER_REVEAL_CSS = `[\s\S]*?`;/)?.[0] ?? "");
+  const targeted = [
+    ...reveal.matchAll(/\.(viewer-[a-z-]+|react-flow__[a-z]+)/g),
+  ].map((m) => m[1]);
+  assert.ok(targeted.length > 0, "the reveal targets no class at all");
+  for (const cls of new Set(targeted)) {
+    if (cls.startsWith("react-flow__")) continue; // React Flow's own, asserted above by data-id
+    assert.ok(
+      canvas.includes(cls) || edge.includes(cls),
+      `the reveal styles \`.${cls}\`, which neither the canvas nor the edge ` +
+        "component ever emits — the rule matches nothing and nothing reports it",
+    );
+  }
+});
+
 /* ----------------------------------------------------------------------- */
 
 if (failures > 0) {

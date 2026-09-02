@@ -191,6 +191,15 @@ export function serializeArchText(file: ArchLabFile): string {
   };
   stringLine("description", "description");
   stringLine("owner", "owner");
+  /* Bare, not quoted — one of two fixed words, exactly as the parser reads it.
+   * Omitted when absent, which is what keeps a document that never mentions
+   * direction byte-identical through a round trip. */
+  const fileDirection = (file as Record<string, unknown>).direction;
+  if (fileDirection === "tb" || fileDirection === "lr") {
+    lines.push(`direction ${fileDirection}`);
+  } else if (fileDirection !== undefined) {
+    invalid("direction", fileDirection);
+  }
 
   const metaTags = tagsLine(metadata.tags);
   if (metaTags !== undefined) lines.push(`tags ${metaTags}`);
@@ -317,7 +326,7 @@ export function serializeArchText(file: ArchLabFile): string {
 
   for (const diagram of diagrams) {
     lines.push("");
-    emitDiagram(lines, diagram, nodeHome);
+    emitDiagram(lines, diagram, nodeHome, resolveDirection(file, diagram));
   }
 
   return `${lines.join("\n")}\n`;
@@ -417,7 +426,7 @@ export function canonicalNodeBlock(
   emitNode(
     lines,
     node,
-    defaultLayoutFor(nodes, edges),
+    defaultLayoutFor(nodes, edges, resolveDirection(file, diagram)),
     buildNodeHome(diagrams),
   );
   return lines;
@@ -607,7 +616,12 @@ export function canonicalDiagramBlock(
   const diagram = diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
   const lines: string[] = [];
-  emitDiagram(lines, diagram, buildNodeHome(diagrams));
+  emitDiagram(
+    lines,
+    diagram,
+    buildNodeHome(diagrams),
+    resolveDirection(file, diagram),
+  );
   return lines;
 }
 
@@ -615,10 +629,73 @@ export function canonicalDiagramBlock(
 /* Diagram / node / edge emitters                                             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The one `@level id …` line a diagram's block opens with.
+ *
+ * Extracted so a canvas gesture can replace exactly that line and nothing
+ * else. `canonicalDiagramBlock` emits the whole block — every node, edge and
+ * frame — and a gesture built on it would be a re-emit, which is the thing
+ * `canvas-editing.md` forbids by name: the first drag of the release that did
+ * that deleted every `//` comment in the author's file. One line in, one line
+ * out.
+ */
+function diagramHeadLine(
+  diagram: Record<string, unknown>,
+  nodeHome: ReadonlyMap<string, { diagramId: string; name: string }>,
+): string {
+  const id = diagram.id as string;
+  const level = diagram.level;
+  const title = diagram.title;
+  const owner = diagram.ownerNodeId;
+  const parent = diagram.parentDiagramId;
+  const ownerHome = typeof owner === "string" ? nodeHome.get(owner) : undefined;
+  let head = `@${level as string} ${idToken(id)}`;
+  if (!(ownerHome !== undefined && ownerHome.name === title)) {
+    head += ` ${JSON.stringify(title)}`;
+  }
+  if (typeof owner === "string") head += ` owner=${idToken(owner)}`;
+  const ownDirection = diagram.direction;
+  if (ownDirection === "tb" || ownDirection === "lr") {
+    head += ` direction=${ownDirection}`;
+  } else if (ownDirection !== undefined) {
+    invalid(`diagram "${id}".direction`, ownDirection);
+  }
+  if (typeof parent === "string") {
+    if (ownerHome === undefined || ownerHome.diagramId !== parent) {
+      head += ` in=${idToken(parent)}`;
+    }
+  } else if (ownerHome !== undefined) {
+    /* Parent is null but inference from owner= would produce one. */
+    head += ` in=null`;
+  }
+  return head;
+}
+
+/**
+ * That line for one diagram of `file`, or null when there is no such diagram.
+ * The canvas's layout-direction gesture writes this and only this.
+ */
+export function canonicalDiagramHead(
+  file: ArchLabFile,
+  diagramId: string,
+): string | null {
+  if (!isRecord(file)) invalid("the file", file);
+  const diagramsValue = file.diagrams;
+  if (!Array.isArray(diagramsValue)) invalid("diagrams", diagramsValue);
+  const diagrams = diagramsValue.map((diagram, i) => {
+    if (!isRecord(diagram)) invalid(`diagrams[${i}]`, diagram);
+    return diagram;
+  });
+  const diagram = diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  return diagramHeadLine(diagram, buildNodeHome(diagrams));
+}
+
 function emitDiagram(
   lines: string[],
   diagram: Record<string, unknown>,
   nodeHome: ReadonlyMap<string, { diagramId: string; name: string }>,
+  direction: "tb" | "lr",
 ): void {
   const id = diagram.id as string;
   const level = diagram.level;
@@ -643,21 +720,7 @@ function emitDiagram(
     invalid(`diagram "${id}".parentDiagramId`, parent);
   }
 
-  const ownerHome = typeof owner === "string" ? nodeHome.get(owner) : undefined;
-  let head = `@${level} ${idToken(id)}`;
-  if (!(ownerHome !== undefined && ownerHome.name === title)) {
-    head += ` ${JSON.stringify(title)}`;
-  }
-  if (typeof owner === "string") head += ` owner=${idToken(owner)}`;
-  if (typeof parent === "string") {
-    if (ownerHome === undefined || ownerHome.diagramId !== parent) {
-      head += ` in=${idToken(parent)}`;
-    }
-  } else if (ownerHome !== undefined) {
-    /* Parent is null but inference from owner= would produce one. */
-    head += ` in=null`;
-  }
-  lines.push(head);
+  lines.push(diagramHeadLine(diagram, nodeHome));
 
   const fallback: [string, unknown][] = [];
   const description = diagram.description;
@@ -716,7 +779,7 @@ function emitDiagram(
     return edge;
   });
 
-  const layout = defaultLayoutFor(nodes, edges);
+  const layout = defaultLayoutFor(nodes, edges, direction);
   for (const node of nodes) {
     emitNode(lines, node, layout, nodeHome);
   }
@@ -737,9 +800,31 @@ function emitDiagram(
  * failure: a patched line whose geometry token was decided against a different
  * layout is text the next parse reads as a different diagram.
  */
+/**
+ * The direction a diagram lays out in — the same resolution the parser does.
+ *
+ * IT HAS TO BE THE SAME FUNCTION OF THE SAME TWO FIELDS. The parser fills
+ * geometry in from `defaultPositions`; this module OMITS geometry that matches
+ * what `defaultPositions` returns. Resolve differently on the two sides and
+ * the omission rule stops holding: the first save of a document that inherits
+ * its direction from the file would stamp an explicit `(x,y)` onto every node,
+ * because the positions no longer match the default this side computed.
+ */
+export function resolveDirection(
+  file: Record<string, unknown> | ArchLabFile,
+  diagram: Record<string, unknown>,
+): "tb" | "lr" {
+  const own = diagram.direction;
+  if (own === "tb" || own === "lr") return own;
+  const fileWide = (file as Record<string, unknown>).direction;
+  if (fileWide === "tb" || fileWide === "lr") return fileWide;
+  return "tb";
+}
+
 function defaultLayoutFor(
   nodes: readonly Record<string, unknown>[],
   edges: readonly Record<string, unknown>[],
+  direction: "tb" | "lr",
 ): ReadonlyMap<string, Point> {
   const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
   return defaultPositions(
@@ -749,6 +834,7 @@ function defaultLayoutFor(
         ? [{ source: edge.source, target: edge.target }]
         : [],
     ),
+    direction,
   );
 }
 

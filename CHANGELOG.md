@@ -9,6 +9,86 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The layout direction can be set from the canvas, not only in the text.**
+  With the padlock open, a small button beside it carries the shape the diagram
+  is laid out in — bars stacked for top-down, bars in a row for left-right —
+  and opens a short menu: `Top-down` or `Left-right`, under a heading for
+  **This layer** or the **Whole file**. The choice in force is ticked rather
+  than pressable, and a `Follow file` / `Clear` row appears only where there is
+  a setting to remove, so no row in the menu is ever one whose press does
+  nothing. Each choice changes **one line** of your document and leaves your
+  comments, blank lines and spacing exactly as they were; setting the file's
+  direction never rewrites a diagram that has its own.
+- **A diagram can be laid out left-to-right, and it will tell you when it
+  should be.** `direction lr` as a header line sets it for the whole file;
+  `direction=lr` on a `@context`/`@container`/`@component` line sets it for one
+  diagram and overrides the file. Under `lr` the layers run along the long axis
+  and **a long flow folds into bands**, so a ten-step chain lands near the
+  shape of a screen (about 1136&times;640) instead of a column three viewports
+  tall (176&times;2040) — and a diagram already wider than it is deep is left
+  top-down, because turning that sideways would just make a column of it the
+  other way. Only nodes whose position the text omits are affected; a
+  hand-written `(x,y)` is honoured whichever way the layout runs. **A document
+  that mentions direction nowhere lays out exactly as it always has** — this is
+  an authored opt-in, not a change of default. `validate_model` raises a review
+  note naming the diagrams that would benefit, with both measured shapes, and
+  says so plainly when a diagram's coordinates are hand-placed and a direction
+  would not move them. It never edits your document.
+
+### Fixed
+
+- **A boundary no longer draws one huge rectangle around half the diagram.** A
+  boundary's box came from the bounding box of everything in it, which is right
+  only while its members sit together — so a boundary holding an inbound
+  gateway near the top of a flow and a webhook gateway near the bottom spanned
+  the whole diagram and swallowed two other boundaries and four elements that
+  were not its members. A boundary whose members are scattered now draws **one
+  rectangle per cluster**, each captioned, and no rectangle ever encloses an
+  element that is not its member. A boundary whose members sit together is a
+  single rectangle exactly as before.
+- **An element no longer shows half a sentence.** The description was drawn on
+  the element clamped to one line, which for anything worth writing meant a
+  sentence cut mid-word — "Validates the request and…". It cost the height of a
+  line and delivered nothing; the full text is in the detail panel and on hover.
+- **A connector no longer disappears behind an element it does not connect.**
+  A relationship whose line grazed an unrelated box vanished behind it and
+  reappeared past it, which on a busy diagram is how a reader joins up the
+  wrong two ends. Those connectors now bow around the obstruction — the same
+  curve the second relationship between one pair has always used, so no new
+  visual language — and a connector with nothing in its way is drawn exactly as
+  before. A connector aimed straight through the _middle_ of an element is left
+  alone deliberately: clearing that needs a bow so wide it reads as a third
+  element's border, and the fix for it is a `via` waypoint or a different
+  layout.
+- **A relationship's label now fades with its own connector.** Selecting one
+  relationship dimmed every other line and left the words naming them at full
+  strength on top, because a label is drawn in a separate layer from the
+  connector it belongs to and nothing had ever joined the two.
+- **A relationship's label no longer lands on top of an unrelated element.**
+  The chip used to sit wherever the connector's midpoint fell, so on a diagram
+  with a long relationship passing near a third element the sentence naming
+  that relationship was drawn over a box — you could see there was a label and
+  not what it said. Chips now step off the anchor until they clear both the
+  elements and each other, preferring to sit beside their own line rather than
+  slide along it, and preferring to overlap another label rather than an
+  element, because a label crossing a label is legible and a label under a box
+  is not there at all. **The exported SVG and PNG place every chip exactly
+  where the canvas does** — the two used to size and position it separately.
+
+### Added
+
+- **Hovering an element on a C4 diagram now shows you what it connects to,
+  without clicking.** The element under the cursor and everything one
+  relationship away from it hold full strength while the rest of the diagram
+  recedes — so following a path is a matter of moving the mouse, where it used
+  to mean clicking each element in turn and pressing Escape to get back. Hover
+  recedes the diagram less far than selecting does, so a preview still reads as
+  weaker than the commitment that opens the details panel, and **a selection
+  wins**: once you have clicked, the cursor stops re-aiming the focus. Tabbing
+  gets exactly the same reveal as hovering, rather than a focus ring and
+  nothing. It animates nothing at all — the only moving light on the canvas is
+  still the selection itself — and a reader who has asked for reduced motion
+  gets the reveal without the cross-fade.
 - **A flowchart can now be edited on the canvas, not only in the text.** Click a
   step and its label, technology, tags and details are editable in the dock the
   canvas already opened; click an arrow and its guard label is too, with a

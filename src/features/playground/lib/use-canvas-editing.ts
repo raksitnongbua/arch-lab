@@ -63,6 +63,8 @@ import {
   ownsChildDiagram,
   renamedFrameEdit,
   revisedEdgeEdit,
+  revisedDirectionEdit,
+  revisedFileDirectionEdit,
   revisedNodeEdit,
   unnestedNodeEdit,
   type CanvasEdit,
@@ -138,6 +140,18 @@ export function useCanvasEditing({
   canvasEdit: CanvasEditHandlers | undefined;
   sequenceEdit: SequenceEditHandlers | undefined;
   flowchartEdit: FlowchartEditHandlers | undefined;
+  /**
+   * Apply or clear a layout direction, at the diagram's scope or the file's.
+   * Beside the handler sets rather than inside `canvasEdit`, because the
+   * control that invokes them is rendered by the playground in the canvas's
+   * lock slot — not by the canvas.
+   */
+  applyDirection: (
+    diagramId: string,
+    scope: "layer" | "file",
+    direction: "tb" | "lr",
+  ) => void;
+  clearDirection: (diagramId: string, scope: "layer" | "file") => void;
 } {
   /**
    * Previous source texts, newest last — the undo history for CANVAS edits.
@@ -264,6 +278,59 @@ export function useCanvasEditing({
       applyCanvasEdit(
         next,
         `${nodeId} updated to “${revision.name}” — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  /**
+   * Apply a direction at one scope, or clear it there.
+   *
+   * TWO GESTURES BEHIND ONE PAIR OF CALLBACKS, because the two scopes write
+   * different lines: the diagram's own head line, or the file's `direction`
+   * header line. The control chooses the scope; this only routes.
+   *
+   * The announcement names the SHAPE and the SCOPE rather than the keyword,
+   * because "lr" is the text that gets written and "this layer now runs left
+   * to right" is what happened to the picture — a reader reached for this
+   * because the diagram was the wrong shape, not because they wanted a
+   * particular word in their file.
+   */
+  const applyDirection = useCallback(
+    (diagramId: string, scope: "layer" | "file", direction: "tb" | "lr") => {
+      const next =
+        scope === "layer"
+          ? revisedDirectionEdit(doc, text, diagramId, direction)
+          : revisedFileDirectionEdit(doc, text, direction);
+      // null covers "nothing changed" as well as every refusal, so choosing
+      // what is already in force costs no text change and no undo entry.
+      if (next === null) return;
+      const shape =
+        direction === "lr"
+          ? "runs left to right, folding a long flow into bands"
+          : "runs top to bottom";
+      const where =
+        scope === "layer" ? "This layer" : "Every diagram in the file";
+      applyCanvasEdit(
+        next,
+        `${where} ${shape} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  const clearDirection = useCallback(
+    (diagramId: string, scope: "layer" | "file") => {
+      const next =
+        scope === "layer"
+          ? revisedDirectionEdit(doc, text, diagramId, "inherit")
+          : revisedFileDirectionEdit(doc, text, "none");
+      if (next === null) return;
+      applyCanvasEdit(
+        next,
+        scope === "layer"
+          ? "This layer follows the file's direction again — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo."
+          : "The file no longer sets a direction — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.",
       );
     },
     [doc, text, applyCanvasEdit],
@@ -1102,5 +1169,17 @@ export function useCanvasEditing({
     ],
   );
 
-  return { canvasEdit, sequenceEdit, flowchartEdit };
+  /* `changeDirection` is returned BESIDE `canvasEdit` rather than inside it.
+     `CanvasEditHandlers` is the set of gestures the CANVAS invokes — a drag, a
+     click on a node, a grip — and this one is invoked by a control the
+     playground renders in the lock slot, at the canvas's top right. Putting it
+     in that interface would say the canvas calls it, and nothing in the canvas
+     does. */
+  return {
+    canvasEdit,
+    sequenceEdit,
+    flowchartEdit,
+    applyDirection,
+    clearDirection,
+  };
 }

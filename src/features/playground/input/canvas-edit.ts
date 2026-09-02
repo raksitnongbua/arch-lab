@@ -80,6 +80,7 @@ import {
   canonicalEdgeBlock,
   canonicalFrameDeclaration,
   canonicalFrameLine,
+  canonicalDiagramHead,
   canonicalNodeBlock,
   canonicalNodeLine,
   canonicalTagColorLine,
@@ -1361,6 +1362,158 @@ function frameMintPatch(
  * The `id` is deliberately not editable here; `C4NodeRevision` carries the
  * argument.
  */
+/**
+ * Set (or clear) one diagram's layout direction from the canvas.
+ *
+ * RIDES UNDER `revise`, like removal does, and for the same reason
+ * `canvas-editing.md` gives: it writes one element's own field in place. The
+ * element here is the DIAGRAM rather than a node, which is the only thing new
+ * about it — it is not a `move` (no coordinate is written), not a `create`, and
+ * not a `connect`, so a fifth ability would buy nothing but a fifth column in
+ * a table that is already total.
+ *
+ * PER-DIAGRAM ONLY, never the file's `direction` header line. The canvas shows
+ * one diagram at a time, and a control that silently relaid out three diagrams
+ * a reader cannot see would be the worst kind of surprise — the file-wide
+ * default stays something you write in the text, where you can see its scope.
+ *
+ * ONE LINE IN, ONE LINE OUT. It replaces the `@level id …` head line with the
+ * bytes the serializer would have written for it and touches nothing else, so
+ * a diagram's `desc`, its comments and its blank lines all survive. Building
+ * this on `canonicalDiagramBlock` would have re-emitted every node, edge and
+ * frame under it — the re-emit that ate an author's comments once already.
+ *
+ * `null` for a no-op: asking for the direction a diagram already has costs no
+ * text change, no undo entry and no re-render. `"inherit"` clears the
+ * attribute, handing the diagram back to the file's default.
+ */
+/**
+ * Set or clear the FILE's default layout direction — the `direction` header
+ * line — from the canvas.
+ *
+ * WHY THIS EXISTS SEPARATELY, and it is a correction. The first version of the
+ * canvas control offered `File · Top-down · Left-right` as three directions,
+ * where `File` meant "inherit". That conflated two different questions — which
+ * way, and how widely — and it showed: for the common case, a diagram with no
+ * attribute of its own, `File` was the state already in force, so pressing it
+ * did nothing. Worse, the control had no way to set the file's direction at
+ * all, which is the one thing a reader pressing a button labelled "File" would
+ * expect. Scope is its own choice now, and it needs its own gesture, because
+ * the two write different lines of the document.
+ *
+ * ONE LINE, like every gesture here. An existing `direction` line is replaced;
+ * a new one is inserted after the last header line; `"none"` removes it. What
+ * this deliberately does NOT do is touch the diagrams: a diagram carrying its
+ * own `direction=` still overrides the file, and silently stripping those to
+ * make the file's setting "take" would be one gesture editing lines the reader
+ * never pointed at.
+ */
+export function revisedFileDirectionEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  direction: "tb" | "lr" | "none",
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const next = direction === "none" ? undefined : direction;
+  const currentDirection =
+    file.direction === "tb" || file.direction === "lr"
+      ? file.direction
+      : undefined;
+  if (currentDirection === next) return null;
+
+  /* Named rather than spread, for the reason every revision here states: a
+     spread cannot REMOVE a key, and the serializer writes the line only for a
+     string, so the key has to be present and undefined. */
+  const edited: ArchLabFile = { ...file, direction: next };
+
+  const patchable = patchablePane(doc, sourceText);
+  const existing = patchable?.spans.header.direction;
+  const headerEnd = patchable?.spans.header.end;
+
+  if (patchable !== null && patchable !== undefined) {
+    if (existing !== undefined) {
+      return adopt(
+        doc,
+        edited,
+        applyPatches(sourceText, [
+          {
+            span: { start: existing, end: existing },
+            // Removal is an empty replacement — the line leaves, rather than
+            // being written as some blank form of itself.
+            lines: next === undefined ? [] : [`direction ${next}`],
+          },
+        ]),
+      );
+    }
+    if (next !== undefined && headerEnd !== undefined) {
+      /* INSERTED AFTER THE LAST HEADER LINE rather than at the serializer's
+         canonical position (which is after `owner`). The two differ only in
+         where the line sits among lines nothing reads in order, and inserting
+         at the end of the header is the patch that cannot land inside
+         something else — a `customicon` line's SVG, say. The next full
+         serialize moves it; nothing depends on that happening first. */
+      return adopt(
+        doc,
+        edited,
+        applyPatches(sourceText, [
+          {
+            span: { start: headerEnd + 1, end: headerEnd },
+            lines: [`direction ${next}`],
+          },
+        ]),
+      );
+    }
+  }
+  return adopt(doc, edited, null);
+}
+
+export function revisedDirectionEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  direction: "tb" | "lr" | "inherit",
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "revise").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const current = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (current === undefined) return null;
+
+  const next = direction === "inherit" ? undefined : direction;
+  if ((current.direction ?? undefined) === next) return null;
+
+  /* Named rather than spread, the same "whole value" contract every other
+     revision here follows: `{ ...current, direction: next }` with `next`
+     undefined leaves the key PRESENT and undefined, which is what the
+     serializer must see to write nothing — and what a spread of an omitted
+     optional could not have produced. */
+  const revised: C4Diagram = { ...current, direction: next };
+  const edited: ArchLabFile = {
+    ...file,
+    diagrams: file.diagrams.map((candidate) =>
+      candidate.id === diagramId ? revised : candidate,
+    ),
+  };
+
+  const patchable = patchablePane(doc, sourceText);
+  const headLine = patchable?.spans.diagramHeads.get(diagramId);
+  const line = canonicalDiagramHead(edited, diagramId);
+  if (headLine !== undefined && line !== null) {
+    return adopt(
+      doc,
+      edited,
+      applyPatches(sourceText, [
+        { span: { start: headLine, end: headLine }, lines: [line] },
+      ]),
+    );
+  }
+  return adopt(doc, edited, null);
+}
+
 export function revisedNodeEdit(
   doc: ViewDocument,
   sourceText: string,

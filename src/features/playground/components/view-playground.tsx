@@ -88,6 +88,7 @@ import {
   CanvasLockButton,
   canvasStateLabel,
 } from "./canvas-lock-button";
+import { LayoutDirectionMenu } from "./layout-direction-menu";
 import { SvgExportButton } from "@/components/ui/svg-export-button";
 import { CaretQuote } from "@/components/ui/caret-quote";
 import { DIAGRAM_WELL_CLASSES } from "@/components/ui/diagram-well";
@@ -1107,7 +1108,13 @@ export function ViewPlayground({
   const flowchartEditable =
     CANVAS_EDIT_ENABLED && wordingEditability.editable && !canvasLocked;
 
-  const { canvasEdit, sequenceEdit, flowchartEdit } = useCanvasEditing({
+  const {
+    canvasEdit,
+    sequenceEdit,
+    flowchartEdit,
+    applyDirection,
+    clearDirection,
+  } = useCanvasEditing({
     doc,
     text,
     canvasEditable,
@@ -1124,8 +1131,17 @@ export function ViewPlayground({
   // Also retires the share link's one-shot starting diagram: once the shell
   // is up, later remounts (edits that delete the current diagram) go back to
   // the model root, not to a stale deep link.
+  /* STATE BESIDE THE REF, not instead of it. The ref is what the edit
+     callbacks read — they run outside render and must not see a stale id —
+     and the state is what the direction toggle RENDERS from, because a
+     control showing which direction the current diagram is in has to
+     re-render when the reader drills into another one. Both are written here,
+     in one place, so they cannot disagree. */
+  const [activeDiagramId, setActiveDiagramId] = useState<string | null>(null);
+
   const handleDiagramChange = useCallback((diagramId: string) => {
     currentDiagramRef.current = diagramId;
+    setActiveDiagramId(diagramId);
     setSharedInitialDiagram((current) => (current === null ? current : null));
   }, []);
 
@@ -1910,12 +1926,38 @@ export function ViewPlayground({
                      covered. */
                   lockSlot={
                     showCanvasLock ? (
-                      <CanvasLockButton
-                        locked={canvasLocked}
-                        onToggle={setCanvasLocked}
-                        onAnnounce={setAnnouncement}
-                        copy={CANVAS_LOCK_COPY.c4}
-                      />
+                      <div className="flex items-center gap-2">
+                        {/* Only while the padlock is OPEN and the document can
+                            actually take the edit. A direction control on a
+                            shared link would be a button that writes to a file
+                            the reader does not have, and one on a locked canvas
+                            would contradict the padlock beside it. */}
+                        {!canvasLocked &&
+                        editability.editable &&
+                        doc.kind === "c4" &&
+                        activeDiagramId !== null ? (
+                          <LayoutDirectionMenu
+                            layerDirection={
+                              doc.synced.file.diagrams.find(
+                                (candidate) => candidate.id === activeDiagramId,
+                              )?.direction ?? null
+                            }
+                            fileDirection={doc.synced.file.direction ?? null}
+                            onApply={(scope, direction) =>
+                              applyDirection(activeDiagramId, scope, direction)
+                            }
+                            onClear={(scope) =>
+                              clearDirection(activeDiagramId, scope)
+                            }
+                          />
+                        ) : null}
+                        <CanvasLockButton
+                          locked={canvasLocked}
+                          onToggle={setCanvasLocked}
+                          onAnnounce={setAnnouncement}
+                          copy={CANVAS_LOCK_COPY.c4}
+                        />
+                      </div>
                     ) : undefined
                   }
                   /* Passing these is what makes the canvas editable — see
