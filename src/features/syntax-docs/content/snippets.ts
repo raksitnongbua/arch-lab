@@ -1011,7 +1011,7 @@ export const NODE_ATTR_ROWS: readonly NodeAttrRow[] = [
     mapsTo: "position + size",
     example: 'api:container "API" (656,616 176x88)',
     notes:
-      "Omit it and the node gets a deterministic grid position and per-type default size.",
+      "Omit it and the node gets a deterministic position derived from the relationships (top-down under `archlab 1.0`; along the long axis, folded into bands, from `1.1`) and a per-type default size.",
   },
   {
     attr: 'desc "…" (indent 4)',

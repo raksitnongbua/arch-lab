@@ -1965,9 +1965,22 @@ const CREATED_NODE_GAP = 80;
  * `defaults.ts` defines it — and the serializer then omits the geometry token
  * entirely, because the position IS the default.
  */
-function vacantPosition(diagram: C4Diagram, nodeId: string): Point {
+function vacantPosition(
+  diagram: C4Diagram,
+  nodeId: string,
+  version: string,
+): Point {
   if (diagram.nodes.length === 0) {
-    return defaultPositions([nodeId], []).get(nodeId) ?? { x: 0, y: 0 };
+    /* The version is threaded even though a lone node in an empty diagram
+     * lands on (40, 40) under every layout `defaults.ts` has ever had. That
+     * agreement is an accident of the algorithm, not a promise: the moment it
+     * stops holding, an unversioned call here would put the node somewhere the
+     * serializer does not recognise as the default and stamp a coordinate onto
+     * a brand-new node. `check:c4-layout-guard` covers the identity; this
+     * covers the day it changes. */
+    return (
+      defaultPositions([nodeId], [], version).get(nodeId) ?? { x: 0, y: 0 }
+    );
   }
   const onGrid = (value: number): number =>
     Math.round(value / EDIT_GRID) * EDIT_GRID;
@@ -2032,7 +2045,7 @@ export function createdNodeEdit(
     id,
     type,
     name: createdNodeName(type),
-    position: vacantPosition(diagram, id),
+    position: vacantPosition(diagram, id, doc.synced.file.version),
     size: defaultSizeFor(type),
   };
   const edited = mapDiagram(doc.synced.file, diagramId, (current) => ({
@@ -2125,7 +2138,7 @@ export function createdRefEdit(
     id,
     type: origin.type,
     name: origin.name,
-    position: vacantPosition(diagram, id),
+    position: vacantPosition(diagram, id, doc.synced.file.version),
     size: defaultSizeFor(origin.type),
     externalRef: { diagramId: source.diagramId, nodeId: source.nodeId },
   };
@@ -2355,7 +2368,7 @@ export function connectedNewNodeEdit(
     id,
     type,
     name: createdNodeName(type),
-    position: vacantPosition(diagram, id),
+    position: vacantPosition(diagram, id, doc.synced.file.version),
     size: defaultSizeFor(type),
   };
   const edge: C4Edge = {

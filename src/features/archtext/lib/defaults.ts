@@ -32,6 +32,72 @@ const COLUMN_STEP = 264;
  */
 const ROW_STEP = 216;
 
+/**
+ * Horizontal pitch when layers advance along X (see `LAYOUT_VERSION`). Wider
+ * than `COLUMN_STEP` on purpose: flowing left-to-right puts every edge label
+ * chip in a HORIZONTAL gap, where a two-line chip needs the room the vertical
+ * gutter used to give it. 176-px node plus a 144-px gutter.
+ */
+const LAYER_STEP_X = 320;
+/**
+ * Vertical pitch between members of one layer when layers advance along X.
+ * Tallest default node (96) plus a 56-px gutter — tighter than `ROW_STEP`
+ * because nothing has to fit between these two boxes: an edge from this layer
+ * leaves sideways, so the gap carries no label.
+ */
+const MEMBER_STEP_Y = 152;
+/**
+ * Gap between two bands of a folded flow. Wider than the gutter inside a band
+ * because the arrow that crosses it is the one that doubles back — the reader
+ * needs to see that the flow continues rather than that two boxes are related.
+ */
+const BAND_GAP_Y = 120;
+/**
+ * The shape a folded flow aims at. Every screen a diagram is presented on is
+ * landscape — a laptop, a projector, a slide — so this is 16:9 rather than
+ * anything derived from the model. It is a target, never a constraint: the fold
+ * picks the band count closest to it and takes whatever ratio that gives.
+ */
+const TARGET_RATIO = 16 / 9;
+/**
+ * The shortest band a fold may produce. A flow with fewer layers than this
+ * stays on one line whatever its ratio: the strip already fits any frame at
+ * full size, and a two-box band reads worse than the straight run it replaced.
+ */
+const MIN_LAYERS_PER_BAND = 4;
+
+/**
+ * The document version at which the layout may choose its long axis.
+ *
+ * WHY A VERSION AND NOT A FLAG. The coordinates this module returns are a
+ * published interface, and not because anyone published them: the parser fills
+ * geometry in from here, the serializer OMITS geometry that matches what it
+ * returns, and the canvas editor's text patcher agrees with both. Change the
+ * answer for an existing document and nothing errors — the file parses, the
+ * share link opens — but the first time its owner nudges anything and saves,
+ * every node comes back stamped with an explicit `(x,y)`, because the position
+ * no longer matches the default the serializer would have dropped. There is no
+ * message for that, and the diff is unrecognisable.
+ *
+ * So a document written against `1.0` keeps `1.0`'s geometry for as long as it
+ * says `1.0`. Adopting the new layout is one edit to the header, made by the
+ * person who owns the file, who sees the picture change in the same second.
+ * `scripts/c4-layout-guard-check.mjs` holds both halves: the `1.0` fixtures
+ * must not move, and the `1.1` ones must.
+ */
+const LAYOUT_VERSION = { major: 1, minor: 1 } as const;
+
+/** True when `version` is at or past the layout change. Unparsable → oldest. */
+function choosesLongAxis(version: string | undefined): boolean {
+  if (typeof version !== "string") return false;
+  const match = /^(\d+)\.(\d+)$/.exec(version);
+  if (match === null) return false;
+  const major = Number.parseInt(match[1], 10);
+  const minor = Number.parseInt(match[2], 10);
+  if (major !== LAYOUT_VERSION.major) return major > LAYOUT_VERSION.major;
+  return minor >= LAYOUT_VERSION.minor;
+}
+
 /** An edge as the layout sees it — endpoints only. */
 export interface DefaultLayoutEdge {
   source: string;
@@ -134,6 +200,7 @@ function layerOf(
 export function defaultPositions(
   nodeIds: readonly string[],
   edges: readonly DefaultLayoutEdge[],
+  version?: string,
 ): Map<string, Point> {
   const ids = [...nodeIds].sort(compareStrings);
   const idSet = new Set(ids);
@@ -192,6 +259,76 @@ export function defaultPositions(
   }
 
   const positions = new Map<string, Point>();
+
+  /* From 1.1, layers advance along whichever axis the graph needs LESS of.
+   *
+   * The layering above is the same either way — this only decides which way to
+   * pour it out. A diagram whose layers outnumber its widest layer is a flow,
+   * and pouring a flow downwards is what turned a seven-element send path into
+   * a column three screens tall and one node wide: the viewport is landscape,
+   * so fit-to-view answered a 1:3 drawing by shrinking it to 47%, and every
+   * label in it became unreadable for a reason that had nothing to do with the
+   * labels. Laid along X the same graph is landscape and reads at full size.
+   *
+   * A diagram whose widest layer outnumbers its layers is already landscape —
+   * a hub with six dependents — and turning THAT sideways would recreate the
+   * column in the other direction. Hence `>=` rather than an unconditional
+   * flip: the tie goes to the flow, because a two-layer graph as wide as it is
+   * deep reads better with its arrows running the way people scan. */
+  if (choosesLongAxis(version) && lastRow + 1 >= widest) {
+    const layers = lastRow + 1;
+    const tallest = widest;
+
+    /* Turning the column on its side is not enough on its own, and the
+     * document that prompted this proves it: nineteen relationships over ten
+     * layers went from 704x2040 (0.35) to 3056x400 (7.64), which fits a
+     * landscape viewport exactly as badly — the drawing is now wider than the
+     * frame instead of taller, and fit-to-view shrinks it by the same amount
+     * for the same reason. A ribbon is a column.
+     *
+     * So a long flow FOLDS. Bands read the way text does, left to right and
+     * then down, and the number of them is whichever count lands closest to
+     * the shape of a screen. On that document: one band 7.64, two bands 1.55,
+     * three bands 0.80 — two wins, and the diagram becomes 1600x1032. */
+    const bandPitch = tallest * MEMBER_STEP_Y + BAND_GAP_Y;
+    let bands = 1;
+    let closest = Number.POSITIVE_INFINITY;
+    for (let candidate = 1; candidate <= layers; candidate += 1) {
+      const perBand = Math.ceil(layers / candidate);
+      /* A fold has to buy more than a ratio. Three boxes laid a-b / c read
+       * worse than a-b-c however close to 16:9 the second shape scores, and
+       * the strip was never the problem — it fits any frame at full size. So
+       * only a band with real length in it counts as an option, and one band
+       * is always an option. */
+      if (candidate > 1 && perBand < MIN_LAYERS_PER_BAND) continue;
+      const width = perBand * LAYER_STEP_X;
+      const height = candidate * bandPitch - BAND_GAP_Y;
+      const distance = Math.abs(width / height - TARGET_RATIO);
+      // Strictly closer, so a tie keeps the FEWER bands: an unfolded flow is
+      // easier to follow than a folded one, and only shape justifies the fold.
+      if (distance < closest) {
+        closest = distance;
+        bands = candidate;
+      }
+    }
+    const perBand = Math.ceil(layers / bands);
+
+    for (let layer = 0; layer < layers; layer += 1) {
+      const members = rows.get(layer) ?? [];
+      const band = Math.floor(layer / perBand);
+      // Centre short layers within their band, back on the 8-px grid.
+      const inset =
+        Math.round(((tallest - members.length) * MEMBER_STEP_Y) / 2 / 8) * 8;
+      members.forEach((id, member) => {
+        positions.set(id, {
+          x: ORIGIN + (layer % perBand) * LAYER_STEP_X,
+          y: ORIGIN + band * bandPitch + inset + member * MEMBER_STEP_Y,
+        });
+      });
+    }
+    return positions;
+  }
+
   for (let row = 0; row <= lastRow; row += 1) {
     const members = rows.get(row) ?? [];
     // Centre narrow rows under the widest one, snapped back to the 8-px grid.

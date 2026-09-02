@@ -25,6 +25,12 @@ export interface LayoutEdge {
   target: string;
 }
 
+/**
+ * The `.alab` schema version the Mermaid importers stamp on the models they
+ * build. Kept beside the layout call that has to agree with it.
+ */
+const MERMAID_MODEL_VERSION = "1.0";
+
 /** The `.alab` default size for a node of this type. */
 export function sizeForNodeType(type: C4NodeType): Size {
   return defaultSizeFor(type);
@@ -39,5 +45,13 @@ export function layoutNodes(
   nodeIds: readonly string[],
   edges: readonly LayoutEdge[],
 ): Map<string, Point> {
-  return defaultPositions(nodeIds, edges);
+  /* Pinned to the version the Mermaid importers stamp on the model they build
+   * (`version: "1.0"`, in every `toModel`), NOT left to the default. An import
+   * writes a whole document: if the geometry here came from a later layout than
+   * the header it writes, the file would be born disagreeing with itself, and
+   * the first save would stamp a coordinate onto every node. Whether a Mermaid
+   * import should ADOPT a later layout is a product decision about what new
+   * documents get — make it by changing both together, here and in the
+   * importers, not by dropping this argument. */
+  return defaultPositions(nodeIds, edges, MERMAID_MODEL_VERSION);
 }

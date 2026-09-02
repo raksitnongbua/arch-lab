@@ -67,8 +67,13 @@ tools (`validate_sequence`, `format_sequence`). See the sequence section.
 ## A complete example
 
 A whole small model, so the shape is clear before the details.
-Geometry is omitted throughout — omitted positions are laid out
-top-down from the relationships, so this file is still lossless.
+Geometry is omitted throughout — omitted positions are derived from the
+relationships, so this file is still lossless. WHICH layout derives them
+depends on the version in the header: `1.0` lays every diagram out
+top-down, and from `1.1` a flow runs along the long axis and folds into
+bands so it fits a landscape frame. A `1.0` document keeps `1.0`
+geometry for as long as it says `1.0`; adopting the newer layout is one
+edit to that line.
 
 ```
 archlab 1.0
@@ -255,7 +260,7 @@ Attributes (canonical order shown):
 | `^diagram/node` | `externalRef` | Boundary placeholder for a node that lives in another diagram. The name is omitted here because it is derived from the referenced node; give one ("Shop (boundary)") only to override it locally. |
 | `in=<frame>` | `frameId` | Puts the node inside a frame declared on the same diagram. Name the INNERMOST frame; nesting is recorded on the frame itself. |
 | `pin / pin=false` | `pinned` | Bare pin means pinned: true. |
-| `(x,y wxh)` | `position + size` | Omit it and the node gets a deterministic grid position and per-type default size. |
+| `(x,y wxh)` | `position + size` | Omit it and the node gets a deterministic position derived from the relationships (top-down under `archlab 1.0`; along the long axis, folded into bands, from `1.1`) and a per-type default size. |
 | `desc "…" (indent 4)` | `description` | A continuation line under the node, indented four spaces. |
 
 A node line carrying everything:

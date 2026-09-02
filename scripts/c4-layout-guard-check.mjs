@@ -17,18 +17,24 @@
  * longer match the ones the serializer would have omitted. Nothing logs. The
  * file still parses. The diff is unrecognisable.
  *
- * So this check is deliberately a SNAPSHOT, which no other check here is. The
- * usual rule — assert relationally, never restate the implementation — is
- * about assertions that should survive a refactor. This one asserts the
- * opposite thing on purpose: these coordinates are a published interface, and
- * the check's whole job is to fail when they move. When a layout change is
- * genuinely wanted, it does not edit these numbers: it gates the new layout on
- * the document's own `archlab <version>` header, leaves `1.0` documents on the
- * old solver, and adds fixtures for the new version beside these.
+ * So the golden tables here are deliberately SNAPSHOTS, which no other check
+ * in this repo keeps. The usual rule — assert relationally, never restate the
+ * implementation — is about assertions that should survive a refactor. These
+ * assert the opposite thing on purpose: the coordinates are a published
+ * interface, and their job is to fail when one moves. A layout change does not
+ * edit them; it gates itself on the document's own `archlab <version>` header
+ * and brings its own table.
+ *
+ * There are now TWO such tables, and both are load-bearing. `1.0` keeps the
+ * top-down layered layout it has always had. From `1.1` the same layering
+ * chooses its long axis and folds a long flow into bands — re-recording one
+ * table without the other has changed a published answer for whichever set was
+ * left behind.
  *
  * What it proves, clause by clause:
- *   1. GOLDEN GEOMETRY. Four shapes — a chain, a fan-out, a cycle, and a real
- *      two-level document — land on exactly the coordinates recorded here.
+ *   1. GOLDEN GEOMETRY at 1.0. Five shapes — a chain, a fan-out, a cycle, a
+ *      real two-level document and a ten-layer ribbon — land on exactly the
+ *      coordinates recorded here.
  *   2. SYMMETRY. A document that omits geometry survives parse → serialize
  *      with its geometry still omitted. This is the assertion that goes red
  *      when a layout change touches the parser without the serializer.
@@ -36,12 +42,20 @@
  *      byte-identically, so the guard cannot be satisfied by freezing
  *      everything.
  *   4. NOTHING BUT THE MODEL REACHES THE LAYOUT. Declaration order in the
- *      text does not move a single node, so the parser and the serializer
- *      cannot disagree because one of them walked an array the other sorted.
+ *      text does not move a single node, AND the layout sorts its own ids, so
+ *      the three callers cannot disagree because one walked an array another
+ *      sorted.
  *   5. THE 8-PX GRID. Every default coordinate is a multiple of 8.
- *   6. THE VERSION GATE IS AVAILABLE. The header already carries a version
- *      through the parse, so the gate that protects clause 1 needs no grammar
- *      change to adopt.
+ *   6. THE GATE IS WIRED. A `1.0` document and a `1.1` document of the same
+ *      text get DIFFERENT geometry, and the version survives serialization so
+ *      the gate cannot be lost on save.
+ *   7. WHAT 1.1 IS FOR, measured rather than asserted about the algorithm. A
+ *      short flow runs along X unfolded; a fan-out — already wider than it is
+ *      deep — is left byte-identical to 1.0; and a ten-layer flow that was a
+ *      0.09-ratio column lands within a third of 16:9 by folding, not by
+ *      stretching into an equally unusable ribbon. Clause 2's symmetry and
+ *      clause 5's grid are re-proved for 1.1, because a gate that moved the
+ *      silent-stamping bug to the documents that opted in would be no gate.
  *
  * Runs the REAL parser and serializer through Node's type stripping and the
  * `@/*` resolve hook (`scripts/lib/resolve-ts.mjs`).
@@ -96,7 +110,10 @@ const geometryOf = (file) =>
 
 const flat = (file) =>
   geometryOf(file)
-    .map(({ id, at }) => `${id}:${at.map((n) => `${n.id}=${n.x},${n.y}`).join(" ")}`)
+    .map(
+      ({ id, at }) =>
+        `${id}:${at.map((n) => `${n.id}=${n.x},${n.y}`).join(" ")}`,
+    )
     .join(" | ");
 
 /** A coordinate pair anywhere in `.alab` text — `(40,256)` or `(40,256 176x88)`. */
@@ -189,6 +206,38 @@ title "Notification Email Platform"
   email-webhook -> email-svc : "Updates activities" [HTTP]
 `;
 
+/**
+ * Ten layers, one node each — the shape that motivated the fold, and the one
+ * that shows why turning the column sideways is not on its own a fix: laid
+ * along X it is 3200 px wide and 152 tall, which a landscape frame shrinks by
+ * as much as the column did.
+ */
+const RIBBON = `archlab 1.0
+title "Ribbon"
+
+@context ctx-root "Ribbon"
+  a:system "A"
+  b:system "B"
+  c:system "C"
+  d:system "D"
+  e:system "E"
+  f:system "F"
+  g:system "G"
+  h:system "H"
+  i:system "I"
+  j:system "J"
+
+  a -> b : "Step 1"
+  b -> c : "Step 2"
+  c -> d : "Step 3"
+  d -> e : "Step 4"
+  e -> f : "Step 5"
+  f -> g : "Step 6"
+  g -> h : "Step 7"
+  h -> i : "Step 8"
+  i -> j : "Step 9"
+`;
+
 /** The same three nodes as CHAIN, declared in reverse. Clause 4. */
 const CHAIN_REVERSED = `archlab 1.0
 title "Chain"
@@ -227,6 +276,29 @@ const GOLDEN = {
     "sendgrid=176,472 slack=440,472 customer=304,688 | " +
     "cnt-notify:kong-in=304,40 email-svc=40,256 template-svc=304,256 " +
     "email-consumer=176,688 email-webhook=40,40 mongodb=304,472 rabbitmq=40,472",
+  ribbon:
+    "ctx-root:a=40,40 b=40,256 c=40,472 d=40,688 e=40,904 f=40,1120 " +
+    "g=40,1336 h=40,1552 i=40,1768 j=40,1984",
+};
+
+/**
+ * The SAME fixtures with `archlab 1.1`. Two halves of one interface: the table
+ * above must not move, and this one must not move either — a layout tune that
+ * only re-records one of them has changed a published answer for whichever set
+ * it left behind.
+ */
+const GOLDEN_11 = {
+  chain: "ctx-root:a=40,40 b=360,40 c=680,40",
+  fan: "ctx-root:hub=304,40 one=40,256 two=568,256 three=304,256",
+  cycle: "ctx-root:a=40,40 b=360,40 c=680,40",
+  notify:
+    "ctx-root:admin=40,40 bitkub1=40,192 other-svc=40,344 notify=360,192 " +
+    "sendgrid=680,120 slack=680,272 customer=1000,192 | " +
+    "cnt-notify:kong-in=40,192 email-svc=360,40 template-svc=360,192 " +
+    "email-consumer=1000,120 email-webhook=40,40 mongodb=680,192 rabbitmq=680,40",
+  ribbon:
+    "ctx-root:a=40,40 b=360,40 c=680,40 d=1000,40 e=40,312 f=360,312 " +
+    "g=680,312 h=1000,312 i=40,584 j=360,584",
 };
 
 /* ----------------------------------------------------------------------- */
@@ -240,6 +312,7 @@ const parsed = {
   fan: parseArchText(FAN),
   cycle: parseArchText(CYCLE),
   notify: parseArchText(NOTIFY),
+  ribbon: parseArchText(RIBBON),
 };
 
 for (const [name, file] of Object.entries(parsed)) {
@@ -302,7 +375,13 @@ console.log(
 );
 
 for (const [name, file] of Object.entries(parsed)) {
-  const source = { chain: CHAIN, fan: FAN, cycle: CYCLE, notify: NOTIFY }[name];
+  const source = {
+    chain: CHAIN,
+    fan: FAN,
+    cycle: CYCLE,
+    notify: NOTIFY,
+    ribbon: RIBBON,
+  }[name];
   const written = serializeArchText(file);
   check(
     `${name}: re-serialized text carries NO coordinate the author never wrote`,
@@ -330,7 +409,9 @@ for (const [name, file] of Object.entries(parsed)) {
 /* 3. Pins survive                                                          */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nHand-written coordinates — the guard freezes defaults, not pins");
+console.log(
+  "\nHand-written coordinates — the guard freezes defaults, not pins",
+);
 
 {
   const file = parseArchText(PINNED);
@@ -482,9 +563,158 @@ console.log("\nVersion gate — the header can carry the decision already");
     serializeArchText(next).split("\n")[0],
   );
   check(
-    "a 1.1 document still lays out on the 1.0 geometry TODAY (no gate yet)",
-    flat(next) === GOLDEN.chain,
-    `${flat(next)} — if this fails, a gate has landed and this fixture needs updating alongside it`,
+    "a 1.1 document does NOT get 1.0 geometry — the gate is live",
+    flat(next) !== GOLDEN.chain,
+    `1.1 laid out identically to 1.0 (${flat(next)}) — the gate is not wired`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 7. The other half of the gate: what 1.1 is FOR                           */
+/* ----------------------------------------------------------------------- */
+
+console.log("\n1.1 — layers choose the long axis, and a long flow folds");
+
+const at11 = (source) =>
+  parseArchText(source.replace("archlab 1.0", "archlab 1.1"));
+
+const parsed11 = {
+  chain: at11(CHAIN),
+  fan: at11(FAN),
+  cycle: at11(CYCLE),
+  notify: at11(NOTIFY),
+  ribbon: at11(RIBBON),
+};
+
+for (const [name, file] of Object.entries(parsed11)) {
+  const actual = flat(file);
+  check(
+    `1.1 ${name}: every node sits on its recorded coordinate`,
+    actual === GOLDEN_11[name],
+    actual === GOLDEN_11[name]
+      ? undefined
+      : `recorded ${GOLDEN_11[name]}\n    got      ${actual}`,
+  );
+}
+
+/** Bounding box of one diagram, in the units the viewer frames. */
+function extent(diagram) {
+  const xs = diagram.nodes.map((n) => n.position.x);
+  const ys = diagram.nodes.map((n) => n.position.y);
+  return {
+    width: Math.max(...xs) - Math.min(...xs) + 176,
+    height: Math.max(...ys) - Math.min(...ys) + 96,
+  };
+}
+const ratio = (diagram) => {
+  const { width, height } = extent(diagram);
+  return width / height;
+};
+const TARGET = 16 / 9;
+
+{
+  /* A flow runs along X, unfolded while it is short. */
+  const chain = parsed11.chain.diagrams[0].nodes;
+  check(
+    "1.1: a three-layer flow runs along X on one row",
+    new Set(chain.map((n) => n.position.y)).size === 1 &&
+      chain[0].position.x < chain[1].position.x &&
+      chain[1].position.x < chain[2].position.x,
+    chain.map((n) => `${n.id}=${n.position.x},${n.position.y}`).join(" "),
+  );
+  check(
+    "1.1: a short flow is NOT folded — a two-box band reads worse than the run",
+    new Set(chain.map((n) => n.position.y)).size === 1,
+    "the fold floor let a three-layer flow wrap",
+  );
+
+  /* An already-landscape diagram is left exactly alone. This is the assertion
+   * that stops the fix from becoming the same bug rotated: a hub with more
+   * dependents than layers must not be turned on its side. */
+  check(
+    "1.1: a fan-out — wider than it is deep — is byte-identical to 1.0",
+    flat(parsed11.fan) === GOLDEN.fan,
+    `1.1 ${flat(parsed11.fan)}\n    1.0 ${GOLDEN.fan}`,
+  );
+
+  /* The shape claim, measured rather than asserted about the algorithm. */
+  const before = parsed.ribbon.diagrams[0];
+  const after = parsed11.ribbon.diagrams[0];
+  check(
+    "1.1: a ten-layer flow was a column no frame could hold at full size",
+    ratio(before) < 0.2,
+    `1.0 ratio ${ratio(before).toFixed(2)} (${extent(before).width}x${extent(before).height})`,
+  );
+  check(
+    "1.1: the same flow lands within a third of a 16:9 frame",
+    Math.abs(ratio(after) - TARGET) < TARGET / 3,
+    `1.1 ratio ${ratio(after).toFixed(2)} (${extent(after).width}x${extent(after).height}), target ${TARGET.toFixed(2)}`,
+  );
+  check(
+    "1.1: it got there by FOLDING, not by stretching into a ribbon",
+    new Set(after.nodes.map((n) => n.position.y)).size > 1 &&
+      extent(after).width < extent(before).height,
+    `bands=${new Set(after.nodes.map((n) => n.position.y)).size} width=${extent(after).width} vs 1.0 height=${extent(before).height}`,
+  );
+  check(
+    "1.1: folding is strictly closer to the frame than not folding",
+    Math.abs(ratio(after) - TARGET) < Math.abs(ratio(before) - TARGET),
+    `1.1 ${ratio(after).toFixed(2)} vs 1.0 ${ratio(before).toFixed(2)}`,
+  );
+
+  /* Every band is full before the next one starts, or the fold has produced a
+   * ragged shape that reads as two diagrams rather than one folded flow. */
+  const byBand = new Map();
+  for (const node of after.nodes) {
+    const band = byBand.get(node.position.y) ?? [];
+    band.push(node);
+    byBand.set(node.position.y, band);
+  }
+  const sizes = [...byBand.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, band]) => band.length);
+  check(
+    "1.1: no band is fuller than the one before it",
+    sizes.every((size, i) => i === 0 || size <= sizes[i - 1]),
+    `band sizes ${sizes.join(", ")}`,
+  );
+}
+
+/* Everything clause 2 proves for 1.0 has to hold for 1.1, or the version gate
+ * has simply moved the silent-stamping bug to the documents that opted in. */
+for (const [name, file] of Object.entries(parsed11)) {
+  const written = serializeArchText(file);
+  check(
+    `1.1 ${name}: re-serialized text carries NO coordinate the author never wrote`,
+    !COORD.test(written),
+    COORD.test(written)
+      ? `first offending line: ${written
+          .split("\n")
+          .find((line) => COORD.test(line))
+          ?.trim()}`
+      : undefined,
+  );
+  check(
+    `1.1 ${name}: parse → serialize → parse lands on the same geometry`,
+    flat(parseArchText(written)) === flat(file),
+  );
+}
+
+{
+  const offenders = [];
+  for (const file of Object.values(parsed11)) {
+    for (const diagram of file.diagrams) {
+      for (const node of diagram.nodes) {
+        if (node.position.x % 8 !== 0 || node.position.y % 8 !== 0) {
+          offenders.push(`${node.id}=${node.position.x},${node.position.y}`);
+        }
+      }
+    }
+  }
+  check(
+    "1.1: no coordinate falls off the 8-px grid",
+    offenders.length === 0,
+    offenders.join(" "),
   );
 }
 

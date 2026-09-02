@@ -9,6 +9,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A C4 diagram can now be laid out for the screen it is shown on, by writing
+  `archlab 1.1` in the header.** Under `1.0` a diagram with no hand-placed
+  positions is stacked top-down, which turns any real flow into a column: a
+  ten-step path came out 176&nbsp;px wide and 2040 tall, so fit-to-view shrank it
+  to a fraction of full size and nothing in it was readable. From `1.1` the same
+  layering runs along the long axis and **folds into bands** when the flow is
+  long, landing close to the shape of a screen — that ten-step path becomes
+  1136&times;640. A diagram that is already wider than it is deep, like one
+  service with six dependents, is left exactly as it was. **Every existing file
+  keeps its current geometry to the pixel**: the layout is chosen by the version
+  in your header and nothing else, so a `1.0` document lays out identically
+  forever and adopting the new one is a single edit you make when you want to
+  see it. Nothing about the grammar changed, and `1.0` remains the version the
+  tools write.
 - **A flowchart can now be edited on the canvas, not only in the text.** Click a
   step and its label, technology, tags and details are editable in the dock the
   canvas already opened; click an arrow and its guard label is too, with a

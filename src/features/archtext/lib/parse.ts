@@ -1887,7 +1887,7 @@ function resolve(
     /* nodes */
     const sortedIds = diagram.nodes.map((n) => n.id).sort(compareStrings);
     const nodeIdSet = new Set(sortedIds);
-    const layout = defaultPositions(sortedIds, diagram.edges);
+    const layout = defaultPositions(sortedIds, diagram.edges, header.version);
     const finalNodes: Record<string, unknown>[] = [];
     for (const node of diagram.nodes) {
       // Fill in a derived name before assembly, so the JSON model always

@@ -317,7 +317,7 @@ export function serializeArchText(file: ArchLabFile): string {
 
   for (const diagram of diagrams) {
     lines.push("");
-    emitDiagram(lines, diagram, nodeHome);
+    emitDiagram(lines, diagram, nodeHome, version);
   }
 
   return `${lines.join("\n")}\n`;
@@ -417,7 +417,7 @@ export function canonicalNodeBlock(
   emitNode(
     lines,
     node,
-    defaultLayoutFor(nodes, edges),
+    defaultLayoutFor(nodes, edges, file.version),
     buildNodeHome(diagrams),
   );
   return lines;
@@ -607,7 +607,7 @@ export function canonicalDiagramBlock(
   const diagram = diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
   const lines: string[] = [];
-  emitDiagram(lines, diagram, buildNodeHome(diagrams));
+  emitDiagram(lines, diagram, buildNodeHome(diagrams), file.version);
   return lines;
 }
 
@@ -619,6 +619,7 @@ function emitDiagram(
   lines: string[],
   diagram: Record<string, unknown>,
   nodeHome: ReadonlyMap<string, { diagramId: string; name: string }>,
+  version: unknown,
 ): void {
   const id = diagram.id as string;
   const level = diagram.level;
@@ -716,7 +717,7 @@ function emitDiagram(
     return edge;
   });
 
-  const layout = defaultLayoutFor(nodes, edges);
+  const layout = defaultLayoutFor(nodes, edges, version);
   for (const node of nodes) {
     emitNode(lines, node, layout, nodeHome);
   }
@@ -740,6 +741,7 @@ function emitDiagram(
 function defaultLayoutFor(
   nodes: readonly Record<string, unknown>[],
   edges: readonly Record<string, unknown>[],
+  version: unknown,
 ): ReadonlyMap<string, Point> {
   const sortedIds = nodes.map((node) => node.id as string).sort(compareStrings);
   return defaultPositions(
@@ -749,6 +751,7 @@ function defaultLayoutFor(
         ? [{ source: edge.source, target: edge.target }]
         : [],
     ),
+    typeof version === "string" ? version : undefined,
   );
 }
 
