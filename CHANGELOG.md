@@ -7,6 +7,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **A relationship's label no longer lands on top of an unrelated element.**
+  The chip used to sit wherever the connector's midpoint fell, so on a diagram
+  with a long relationship passing near a third element the sentence naming
+  that relationship was drawn over a box — you could see there was a label and
+  not what it said. Chips now step off the anchor until they clear both the
+  elements and each other, preferring to sit beside their own line rather than
+  slide along it, and preferring to overlap another label rather than an
+  element, because a label crossing a label is legible and a label under a box
+  is not there at all. **The exported SVG and PNG place every chip exactly
+  where the canvas does** — the two used to size and position it separately.
+
 ### Added
 
 - **Hovering an element on a C4 diagram now shows you what it connects to,

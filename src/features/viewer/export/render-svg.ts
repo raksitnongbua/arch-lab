@@ -31,6 +31,12 @@ import { escapeXml, fmt } from "@/lib/svg-markup";
 // exporters bake into their files.
 import { WashRegistry, washTopColor } from "@/lib/wash";
 import { CHAR_WIDTH_RATIO, MONO_CHAR_WIDTH_RATIO } from "@/lib/text-metrics";
+import {
+  CHIP_LABEL_MAX_WIDTH,
+  CHIP_TECH_MAX_WIDTH,
+  edgeChipSize,
+  placeEdgeLabels,
+} from "@/features/viewer/lib/edge-label-placement";
 import type { C4Diagram, C4Edge, C4Node, C4NodeType } from "@/types";
 import { isBoundaryPlaceholder } from "@/types";
 
@@ -513,6 +519,43 @@ function edgeMarkup(
   );
   const parts: string[] = [];
 
+  /* Where every chip goes, decided before any of them is painted.
+   *
+   * It has to be a pass over the whole diagram rather than a decision per
+   * edge: a chip's own clearance depends on the chips already placed, and an
+   * edge cannot know that while the loop below is still running. Same input
+   * and same module as the canvas, so a label sits in the same place in the
+   * PNG as it does on screen. */
+  const labelPlacements = placeEdgeLabels(
+    diagram.edges.flatMap((edge) => {
+      const source = rectById.get(edge.source);
+      const target = rectById.get(edge.target);
+      if (source === undefined || target === undefined) return [];
+      const size = edgeChipSize(edge.label, edge.technology);
+      if (size === null) return [];
+      const anchors = getFloatingAnchors(source, target);
+      const group = groups.get(edge.id) ?? { index: 0, count: 1 };
+      const { labelX, labelY } = getParallelEdgePath({
+        ...anchors,
+        parallelIndex: group.index,
+        parallelCount: group.count,
+        labelBias: labelBias.get(edge.id) ?? 0,
+      });
+      return [
+        {
+          id: edge.id,
+          anchorX: labelX,
+          anchorY: labelY,
+          dirX: anchors.targetX - anchors.sourceX,
+          dirY: anchors.targetY - anchors.sourceY,
+          width: size.width,
+          height: size.height,
+        },
+      ];
+    }),
+    [...rectById.values()],
+  );
+
   for (const edge of diagram.edges) {
     const source = rectById.get(edge.source);
     const target = rectById.get(edge.target);
@@ -561,7 +604,7 @@ function edgeMarkup(
     }> = [];
     if (label !== "") {
       lines.push({
-        text: ellipsize(label, labelSize, 176),
+        text: ellipsize(label, labelSize, CHIP_LABEL_MAX_WIDTH),
         size: labelSize,
         mono: false,
         color: theme.foreground,
@@ -569,24 +612,31 @@ function edgeMarkup(
     }
     if (technology !== "") {
       lines.push({
-        text: `[${ellipsize(technology, techSize, 168)}]`,
+        text: `[${ellipsize(technology, techSize, CHIP_TECH_MAX_WIDTH)}]`,
         size: techSize,
         mono: true,
         color: theme.mutedForeground,
       });
     }
-    const chipWidth =
-      Math.max(...lines.map((l) => estimateWidth(l.text, l.size, l.mono))) + 14;
-    const chipHeight = lines.length * 13 + 8;
-    const chipX = labelX - chipWidth / 2;
-    const chipY = labelY - chipHeight / 2;
+    /* The size the placement pass avoided, not a second formula for the same
+     * rectangle — a chip drawn wider than the box anything dodged is a chip
+     * that overlaps what the pass promised it would clear. */
+    const chipSize = edgeChipSize(edge.label, edge.technology);
+    if (chipSize === null) continue;
+    const chipWidth = chipSize.width;
+    const chipHeight = chipSize.height;
+    const placement = labelPlacements.get(edge.id);
+    const chipCentreX = placement?.x ?? labelX;
+    const chipCentreY = placement?.y ?? labelY;
+    const chipX = chipCentreX - chipWidth / 2;
+    const chipY = chipCentreY - chipHeight / 2;
     parts.push(
       `<rect x="${fmt(chipX)}" y="${fmt(chipY)}" width="${fmt(chipWidth)}" height="${fmt(chipHeight)}" rx="5" fill="${theme.canvas}" fill-opacity="0.92" stroke="${theme.nodeBorder}" stroke-opacity="0.6"/>`,
     );
     let lineY = chipY + 4;
     for (const line of lines) {
       parts.push(
-        `<text x="${fmt(labelX)}" y="${fmt(lineY + 13 * 0.72)}" text-anchor="middle" font-family="${line.mono ? FONT_MONO : FONT_SANS}" font-size="${line.size}" fill="${line.color}">${escapeXml(line.text)}</text>`,
+        `<text x="${fmt(chipCentreX)}" y="${fmt(lineY + 13 * 0.72)}" text-anchor="middle" font-family="${line.mono ? FONT_MONO : FONT_SANS}" font-size="${line.size}" fill="${line.color}">${escapeXml(line.text)}</text>`,
       );
       lineY += 13;
     }

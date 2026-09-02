@@ -61,6 +61,10 @@ import {
 } from "@xyflow/react";
 
 import { CanvasGroundLayers } from "@/components/ui/canvas-ground-layers";
+import {
+  edgeChipSize,
+  placeEdgeLabels,
+} from "@/features/viewer/lib/edge-label-placement";
 
 import "@xyflow/react/dist/style.css";
 
@@ -75,7 +79,11 @@ import type {
 } from "@/types";
 import { childLevelOf, hasChildDiagram } from "@/types";
 
-import { labelBiasByEdgeId } from "@/features/editor/lib/edge-geometry";
+import {
+  getFloatingAnchors,
+  getParallelEdgePath,
+  labelBiasByEdgeId,
+} from "@/features/editor/lib/edge-geometry";
 import { DURATIONS, duration } from "@/features/editor/lib/motion";
 
 import {
@@ -2187,6 +2195,52 @@ function ViewerCanvasInner({
   const edges = useMemo(() => {
     const groups = parallelGroups(diagram.edges);
     const labelBias = labelBiasByEdgeId(diagram.edges);
+    /* Where every chip goes, decided once for the whole diagram.
+     *
+     * A pass, not a per-edge decision: a chip's clearance depends on the chips
+     * already placed, which no single edge can know. Computed from the MODEL's
+     * rects rather than React Flow's measured ones, which is what lets the
+     * exporter reach the same answer from the same module — the two differ only
+     * while a node is mid-drag, and a chip settling a few pixels late during a
+     * drag is not the failure this fixes. */
+    const modelRects = diagram.nodes.map((node) => ({
+      x: node.position.x,
+      y: node.position.y,
+      width: node.size.width,
+      height: node.size.height,
+    }));
+    const rectById = new Map(
+      diagram.nodes.map((node, index) => [node.id, modelRects[index]] as const),
+    );
+    const labelPlacements = placeEdgeLabels(
+      diagram.edges.flatMap((edge) => {
+        const source = rectById.get(edge.source);
+        const target = rectById.get(edge.target);
+        if (source === undefined || target === undefined) return [];
+        const size = edgeChipSize(edge.label, edge.technology);
+        if (size === null) return [];
+        const anchors = getFloatingAnchors(source, target);
+        const group = groups.get(edge.id) ?? { index: 0, count: 1 };
+        const anchor = getParallelEdgePath({
+          ...anchors,
+          parallelIndex: group.index,
+          parallelCount: group.count,
+          labelBias: labelBias.get(edge.id) ?? 0,
+        });
+        return [
+          {
+            id: edge.id,
+            anchorX: anchor.labelX,
+            anchorY: anchor.labelY,
+            dirX: anchors.targetX - anchors.sourceX,
+            dirY: anchors.targetY - anchors.sourceY,
+            width: size.width,
+            height: size.height,
+          },
+        ];
+      }),
+      modelRects,
+    );
     const selectedEdge =
       selectedEdgeId !== null ? findEdge(diagram, selectedEdgeId) : null;
     const nameById = new Map(diagram.nodes.map((n) => [n.id, n.name]));
@@ -2235,6 +2289,7 @@ function ViewerCanvasInner({
           parallelIndex: group.index,
           parallelCount: group.count,
           labelBias: labelBias.get(edge.id) ?? 0,
+          labelPlacement: labelPlacements.get(edge.id) ?? null,
           sourceName: nameById.get(edge.source) ?? edge.source,
           targetName: nameById.get(edge.target) ?? edge.target,
           emphasis,
