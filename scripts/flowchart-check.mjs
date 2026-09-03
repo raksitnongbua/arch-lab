@@ -466,6 +466,21 @@ flowError(
   'archlab 2.0 flowchart\ntitle "T"\n\n@flowchart\n',
   "newer arch-lab",
 );
+/* THE WHOLE SENTENCE, not a fragment — see the twin in `sequence-check.mjs`.
+   This set is `FLOWCHART_HEADER_KEYWORDS`, its own array rather than the
+   sequence one, because the two are only coincidentally equal today. */
+flowError(
+  "an unknown header keyword is refused, naming the whole closed set",
+  'archlab 1.0 flowchart\ntitle "T"\ndescriptoin "d"\n\n@flowchart\n  step a "A"\n',
+  '"descriptoin" is not a flowchart header keyword — expected archlab, schema, ' +
+    "title, description, owner, tags, created, updated or reviewed " +
+    '(other metadata rides "! meta.<key> : <json>")',
+);
+flowError(
+  "a header line indented before the block is refused",
+  'archlab 1.0 flowchart\ntitle "T"\n  owner "O"\n\n@flowchart\n  step a "A"\n',
+  'this line is indented, but no "@flowchart" block is open above it',
+);
 flowError(
   "tab indentation is refused",
   `${FLOW_HEAD}\ta -> b\n`,

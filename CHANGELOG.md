@@ -32,6 +32,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   and Cmd-Z puts it back. `Alt+Enter` takes the single safe fix without
   leaving the keyboard. Working on all three surfaces that report a parse
   error: the playground's source pane, the editor's text pane and `/validate`.
+  A misspelled header keyword is offered the keyword it was nearly — write
+  `tagcodlor` and the panel offers `tagcolor`, from that document type's own
+  closed list rather than a merged one. A header line that arrived with a
+  stray indent, which used to read as "indented like a diagram body, but no
+  `@` diagram is open above it", offers to put it back at column 1 — and only
+  when removing the indent is proved to make the whole document parse. And
+  text left over after a complete statement — the `s` on the end of
+  `tagcolor write-side "#e0524d"s` — now offers to delete exactly that, named
+  in the button so you can see what would go. Deleting your own text is never
+  a one-click fix and never swept up by anything: it is always shown and
+  always waits for you.
 - **A paste that came in with the wrong indentation can be fixed in one
   click.** `.alab` indentation is significant, so text copied out of somewhere
   that had its own — a chat window, a nested code block, a docs page — arrives

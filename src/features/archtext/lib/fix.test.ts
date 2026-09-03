@@ -12,12 +12,14 @@ import {
   applyTextEdit,
   closestMatches,
   commentStart,
+  dedentProof,
   deleteLine,
   insertLineBefore,
   offsetOf,
   quoteTail,
   reindentLine,
   replaceOnLine,
+  retypeChoices,
 } from "./fix";
 import { sourceLines } from "@/lib/source-text";
 
@@ -158,6 +160,78 @@ describe("quoteTail", () => {
 
   it("drops trailing spaces that would otherwise land inside the string", () => {
     expect(quoteTail("Pays   ")).toBe('"Pays"');
+  });
+});
+
+describe("retypeChoices", () => {
+  const HEADER = ["title", "description", "owner", "tagcolor"];
+
+  /* The report this exists for: one transposed letter against a closed set
+     the refusal already prints, and the reader was offered nothing. */
+  it("offers the intended header keyword for the reported typo", () => {
+    const [first] = retypeChoices({ line: 9, column: 1 }, "tagcodlor", HEADER);
+    expect(first.title).toBe('Change "tagcodlor" to "tagcolor"');
+    expect(applyTextEdit('tagcodlor regional "#8b5cf6"', first.edits)).toBe(
+      'tagcolor regional "#8b5cf6"',
+    );
+  });
+
+  /* The edit replaces the WORD and stops. Reaching to end of line would take
+     the tag and the colour with it — the silent deformation the mutation
+     corpus in `check:quickfix` exists to refuse. */
+  it("replaces only the keyword, wherever on the line it sits", () => {
+    const [first] = retypeChoices({ line: 1, column: 3 }, "titel", HEADER);
+    expect(applyTextEdit('  titel "T"', first.edits)).toBe('  title "T"');
+  });
+
+  /* Fixability is declared in `ISSUE_CODES`, so a kind that depended on how
+     many candidates came back would not be a contract a check can hold. */
+  it("is a choice even when exactly one candidate is near", () => {
+    const near = retypeChoices({ line: 1, column: 1 }, "ownre", HEADER);
+    expect(near).toHaveLength(1);
+    expect(near[0].kind).toBe("choice");
+  });
+
+  it("offers nothing for a word no keyword is near", () => {
+    expect(retypeChoices({ line: 1, column: 1 }, "aardvark", HEADER)).toEqual(
+      [],
+    );
+  });
+});
+
+describe("dedentProof", () => {
+  const ORPHAN = 'archlab 1.0\n  title "T"\n';
+
+  it("offers the dedent when the reparse accepts it", () => {
+    const accepts = (text: string) => {
+      if (/^ /m.test(text)) throw new Error("still indented");
+    };
+    const [fix] = dedentProof(ORPHAN, 2, '  title "T"', accepts);
+    expect(fix.kind).toBe("safe");
+    expect(applyTextEdit(ORPHAN, fix.edits)).toBe('archlab 1.0\ntitle "T"\n');
+  });
+
+  /* THE POINT OF THE MODULE: an offer is a proof. A parser that still refuses
+     the dedented document leaves the reader the plain error rather than a
+     button that does not help. */
+  it("offers nothing when the reparse still refuses", () => {
+    const refuses = () => {
+      throw new Error("no");
+    };
+    expect(dedentProof(ORPHAN, 2, '  title "T"', refuses)).toEqual([]);
+  });
+
+  /* The proof re-enters the parser it was called from, so the nested parse
+     must not start a proof of its own — and the flag must be cleared however
+     the reparse ended, or the first refusal would silence every later offer. */
+  it("declines to prove from inside a proof, and recovers afterwards", () => {
+    let inner: unknown;
+    const nests = () => {
+      inner = dedentProof(ORPHAN, 2, '  title "T"', () => {});
+    };
+    expect(dedentProof(ORPHAN, 2, '  title "T"', nests)).toHaveLength(1);
+    expect(inner).toEqual([]);
+    expect(dedentProof(ORPHAN, 2, '  title "T"', () => {})).toHaveLength(1);
   });
 });
 

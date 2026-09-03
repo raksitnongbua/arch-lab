@@ -24,6 +24,14 @@ import type { FixCandidate } from "./fix";
 import { NUMBER_RE } from "./text";
 import { describeError } from "@/lib/errors";
 
+/**
+ * The longest run of unexpected text the delete offer quotes in its own
+ * label, in characters. Sized so `Delete "…"` stays inside the 40-character
+ * budget a `FixCandidate` title has, with room to spare — a label at the
+ * limit is a button nobody can read.
+ */
+const QUOTED_TRAILING_TEXT_LIMIT = 16;
+
 export class LineCursor {
   readonly text: string;
   readonly line: number;
@@ -317,17 +325,46 @@ export class LineCursor {
   /**
    * Fails if anything but whitespace remains on the line.
    *
-   * NO FIX, and this one is a refusal rather than an absence: the only rewrite
-   * that makes this line parse DELETES text the author typed. A quick fix that
-   * throws away input is not a quick fix, it is a data-loss button one click
-   * from a caret quote, so the reader is told where the statement ended and
-   * left to decide.
+   * ONE CANDIDATE, AND IT DELETES — which is the whole reason this is a
+   * `choice` and may never be promoted. The blanket rule this used to state
+   * ("a fix that throws away input is a data-loss button") is right about a
+   * one-click fix and wrong about an offered one: `choice` means the rewrite
+   * is shown with its own text in the label and waits for an explicit Apply,
+   * and it is never eligible for a fix-all. Withholding it bought the reader
+   * nothing — they were told where the statement ended and left to delete the
+   * stray `s` by hand.
+   *
+   * The span is exact rather than guessed, which is what makes the offer
+   * honest at all: `expectEnd` is standing on the first character past a
+   * complete statement, so the range is that character to end of line. The
+   * separator in front of it goes too, so `archlab 1.0 wobble` repairs to
+   * `archlab 1.0` and not to a line with a trailing space on it.
    */
   expectEnd(context: string): void {
     this.skipSpaces();
     if (!this.atEnd()) {
+      const junk = this.text.slice(this.pos).trimEnd();
+      let from = this.pos;
+      while (from > 0 && this.text.charAt(from - 1) === " ") from -= 1;
       this.fail(`unexpected text after ${context}`, this.foundHere(), {
         code: "cursor.trailing-text",
+        fixes: [
+          {
+            /* Quoted while it is short, because "Delete "s"" says what the
+               button does and "Remove the unexpected text" only says that it
+               does something. Past the limit the quote stops helping and
+               starts filling the label with the author's own prose — the
+               trailing `//` comment this refuses is exactly that case. */
+            title:
+              junk.length <= QUOTED_TRAILING_TEXT_LIMIT
+                ? `Delete "${junk}"`
+                : "Remove the unexpected text",
+            edits: [
+              replaceOnLine(this.line, from + 1, this.text.length + 1, ""),
+            ],
+            kind: "choice",
+          },
+        ],
       });
     }
   }

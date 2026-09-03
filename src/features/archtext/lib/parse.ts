@@ -26,6 +26,7 @@ import type {
 } from "@/types";
 
 import { newerVersionMessage, SUPPORTED_MAJOR_VERSION } from "@/lib/constants";
+import { joinList } from "@/lib/prose";
 
 import { LineCursor } from "./cursor";
 import { compareStrings, defaultEdgeId, DEFAULT_TIMESTAMP } from "./defaults";
@@ -36,14 +37,16 @@ import {
   arrowShapeAt,
   bareTail,
   closestMatches,
+  dedentProof,
   expandedIndent,
   indentChoices,
   insertLineBefore,
   replaceOnLine,
+  retypeChoices,
   setIndent,
 } from "./fix";
 import type { FixCandidate } from "./fix";
-import { ARROWS, NODE_TYPE_BY_KEYWORD } from "./keywords";
+import { ARROWS, C4_HEADER_KEYWORDS, NODE_TYPE_BY_KEYWORD } from "./keywords";
 import {
   DIAGRAM_KEYS,
   DIAGRAM_RAW,
@@ -623,6 +626,10 @@ export function parseArchTextWithSpans(source: string): {
           3,
           'this line is indented like a diagram body, but no "@" diagram is open above it',
           text.trim().slice(0, 40),
+          {
+            code: "alab.body-indent-orphan",
+            fixes: dedentProof(source, lineNo, text, parseArchTextWithSpans),
+          },
         );
       }
       const line = parseBodyLine(cursor, current, nodeHome);
@@ -824,9 +831,12 @@ function parseHeaderLine(cursor: LineCursor, header: Header): void {
       failAt(
         loc.line,
         loc.column,
-        `"${keyword}" is not a recognised header keyword — expected archlab, schema, title, ` +
-          "description, owner, direction, tags, created, updated, reviewed, tagcolor, customicon, generator or root",
+        `"${keyword}" is not a recognised header keyword — expected ${joinList(C4_HEADER_KEYWORDS, "or")}`,
         keyword,
+        {
+          code: "alab.header-keyword-unknown",
+          fixes: retypeChoices(loc, keyword, C4_HEADER_KEYWORDS),
+        },
       );
   }
   cursor.expectEnd(`the "${keyword}" line`);

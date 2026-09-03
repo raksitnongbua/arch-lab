@@ -85,17 +85,42 @@ export const ISSUE_CODES = {
       "An indent that is not a rung of the ladder, reached before the parser knows which block the line belongs to. Candidates are the nearest rung below and the nearest above.",
   },
   /*
-   * THE HEADER LINE AND THE `!` ESCAPE ARE UNCODED, and the ratchet is where
-   * they live rather than here. Both are raised from three places each (one
-   * per main grammar) with prose that differs per grammar, so coding them is
-   * a sweep of its own — and a header-kind mismatch is `none` anyway: the fix
-   * is to route the text to the other parser, which is a decision for the
-   * pane and not a rewrite of the line. Registering keys no parser raises
-   * would fail `check:quickfix`, which closes the registry both ways, so they
-   * are counted as uncoded sites in the baseline instead. Same for the
-   * sequence grammar's fragment-branch, note-arity and empty-block refusals,
-   * which are all `none` and therefore buy the reader nothing on this pass.
+   * WAS "THE HEADER LINE IS UNCODED", and that decision is reversed here
+   * rather than left standing beside the code that contradicts it. What the
+   * earlier note got right is that the header refusal is raised from three
+   * grammars with prose that differs per grammar, so coding it is a sweep of
+   * its own; what it got wrong is treating the sweep as the reason to skip
+   * it. Three sites are three sites, the code is not the message, and the
+   * failure is a one-character typo against a CLOSED SET THE SENTENCE ALREADY
+   * PRINTS IN FULL — the cheapest near-match ranking in the format, and a
+   * real report from a reader who typed `tagcodlor` and got nothing.
+   *
+   * What did NOT change: a header-KIND mismatch ("this is a sequence header,
+   * a flowchart document must read …") stays uncoded and would be `none`
+   * anyway, because the fix is to route the text to the other parser — a
+   * decision for the pane, not a rewrite of the line. The `!` escape stays
+   * uncoded too, on the original reasoning. And the six smaller grammars have
+   * the same header site with the same closed-set shape; they carry no codes
+   * of their own yet and are outside the ratchet's four files, so they earn
+   * this code on the pass that reaches them.
    */
+  "alab.header-keyword-unknown": {
+    fixability: "choice",
+    summary:
+      "A header line opening with a word outside its grammar's closed set. Ranked by `closestMatches` against THAT grammar's own keyword array — the C4 header takes fourteen words, the sequence and flowchart headers nine, and a candidate from the wrong set would fail again on the same line. The array is also what joins the sentence, so the list the message prints and the list the fix ranks against cannot come apart.",
+  },
+  /*
+   * The sequence grammar's fragment-branch, note-arity and empty-block
+   * refusals stay uncoded: all three are `none`, so a code buys the reader
+   * nothing on this pass. Registering keys no parser raises would fail
+   * `check:quickfix`, which closes the registry both ways, so they are
+   * counted as uncoded sites in the baseline instead.
+   */
+  "alab.body-indent-orphan": {
+    fixability: "safe",
+    summary:
+      "A line indented like a diagram body with no block open above it. SAFE ON A PROOF, not on a guess: `dedentProof` moves the line to column 1, reparses the whole document, and builds the candidate only if the real parser then accepts it — so a stray indent on a header line is one click and a line the author meant to put inside a diagram they never opened is offered nothing at all. Raised by all three main grammars; the C4 message names the `@` diagram and the other two name their single block.",
+  },
 
   /* ---------------------------------------------------------------------- */
   /* LineCursor — raised on behalf of all nine grammars                     */
@@ -138,9 +163,9 @@ export const ISSUE_CODES = {
     summary: "A malformed JSON value.",
   },
   "cursor.trailing-text": {
-    fixability: "none",
+    fixability: "choice",
     summary:
-      "Text after a complete statement. The only rewrite deletes what the author wrote.",
+      "Text after a complete statement. The only rewrite deletes what the author wrote, which was read as the reason for `none` and is really the reason for `choice`: the blanket rule is right about a ONE-CLICK fix and wrong about an OFFERED one. `expectEnd` is standing on the first character past a complete statement, so the span is exact rather than guessed, and being a choice means the deletion is shown with its own text in the label, applied only on an explicit Apply, and never swept up by a fix-all.",
   },
 
   /* ---------------------------------------------------------------------- */
