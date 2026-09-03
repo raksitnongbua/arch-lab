@@ -98,7 +98,9 @@
  *      coincidental ones, and that the direction then applies. It also pins
  *      the emitter's numeric test on its own terms — a full serialize still
  *      omits a default-valued token, which is a decision about canonical
- *      bytes and the one place the two questions answer differently.
+ *      bytes and the one place the two questions answer differently — and
+ *      that the menu's note is reachable under BOTH scopes, which it was not:
+ *      `Whole file` warned only afterwards, from the toast.
  *
  * Exits non-zero on any failure. Run with: pnpm check:layout-reset
  */
@@ -953,7 +955,7 @@ console.log("\nThe menu offers the release, and the announcement is honest");
     "the note would be counting something of its own",
   );
   check(
-    "the note renders above the direction rows of the layer section",
+    "the note renders above the direction rows, at both scopes",
     menu.indexOf("{note}") !== -1 &&
       menu.indexOf("{note}") < menu.indexOf("DIRECTIONS.map"),
     "a caveat read after the press is a caveat that arrived too late",
@@ -1457,6 +1459,35 @@ console.log("\nA coordinate that equals the default is still a coordinate");
     [...nodes.values()].every((node) => placedByHand(node)) &&
       canonical !== DEFAULTS_AS_TOKENS,
     "if these agreed, this whole section would be measuring nothing",
+  );
+
+  /* THE NOTE IS REACHABLE UNDER BOTH SCOPES. It was rendered inside the layer
+     section, so `Whole file` — the same press, the same evidence, the same
+     diagram sitting still — warned only afterwards, from the toast, while
+     `This layer` warned twice. Source-scanned, in the manner of section 10:
+     the note has to be OUTSIDE the section loop for both headings to get it. */
+  const menu = code(
+    "src/features/playground/components/layout-direction-menu.tsx",
+  );
+  check(
+    "the note is rendered once, outside the per-section loop",
+    (menu.match(/\{note\}/g) ?? []).length === 1 &&
+      menu.indexOf("{note}") < menu.indexOf("SECTIONS.map"),
+    "a note inside a section is a note one scope's rows never carry",
+  );
+  check(
+    "and nothing gates it on the layer scope any more",
+    !/scope === "layer" && note/.test(menu),
+    "the file section's rows would write a line with no warning read first",
+  );
+  /* THE RELEASE ROW IS THE OPPOSITE DECISION, and it is deliberate: it
+     releases ONE layer, so it stays under that heading rather than appearing
+     twice under one label with two different reaches. */
+  check(
+    "the release row stays gated on the layer scope, alone",
+    (menu.match(/scope === "layer" &&\s*\n?\s*placement !== null/g) ?? [])
+      .length === 1,
+    "a file-wide release row, or none at all",
   );
 }
 
