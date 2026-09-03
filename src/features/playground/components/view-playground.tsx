@@ -207,6 +207,7 @@ import {
   CANVAS_EDITABLE_SUMMARY,
   CANVAS_GESTURE_CLAUSES,
   canvasEditability,
+  layerPlacement,
 } from "../input/canvas-edit";
 
 /**
@@ -1132,6 +1133,7 @@ export function ViewPlayground({
     flowchartEdit,
     applyDirection,
     clearDirection,
+    resetLayerPositions,
   } = useCanvasEditing({
     doc,
     text,
@@ -1967,11 +1969,15 @@ export function ViewPlayground({
                               )?.direction ?? null
                             }
                             fileDirection={doc.synced.file.direction ?? null}
+                            placement={layerPlacement(doc, activeDiagramId)}
                             onApply={(scope, direction) =>
                               applyDirection(activeDiagramId, scope, direction)
                             }
                             onClear={(scope) =>
                               clearDirection(activeDiagramId, scope)
+                            }
+                            onRelease={() =>
+                              resetLayerPositions(activeDiagramId)
                             }
                           />
                         ) : null}

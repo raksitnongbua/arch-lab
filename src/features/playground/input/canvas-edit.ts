@@ -85,8 +85,10 @@ import {
   canonicalNodeLine,
   canonicalTagColorLine,
   defaultEdgeId,
+  defaultNodeLayout,
   defaultPositions,
   defaultSizeFor,
+  hasAuthoredGeometry,
   KEYWORD_BY_NODE_TYPE,
   parseArchTextWithSpans,
   serializeArchText,
@@ -1154,6 +1156,228 @@ export function movedNodeEdit(
         { span: { start: span.start, end: span.start }, lines: [line] },
       ]),
     );
+  }
+  return adopt(doc, edited, null);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Handing coordinates back to the layout                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How much of one layer the layout is not allowed to place.
+ *
+ * WHY A COUNT AND NOT A BOOLEAN. Geometry wins PER NODE — the parser resolves
+ * `node.geometry ?? layout.get(id)` one node at a time — so a direction can
+ * be wholly inert, partly applied, or free to move everything, and those are
+ * three different sentences to say to a reader who just pressed it. The
+ * controls read this rather than counting `(` in the text, so what the menu
+ * claims and what a reset would actually rewrite cannot drift apart.
+ */
+export interface LayerPlacement {
+  /** Elements in the layer. */
+  total: number;
+  /** Elements a reset would hand back to the layout. */
+  placed: number;
+  /**
+   * Elements carrying the author's coordinates AND marked `pin` — placed, and
+   * deliberately left alone by the sweep. Counted apart from `placed` because
+   * the menu owes the reader both numbers: what the direction cannot move,
+   * and what pressing the row would actually change.
+   */
+  pinned: number;
+}
+
+/**
+ * The elements of `diagram` a reset would rewrite: those carrying coordinates
+ * the author wrote, minus the ones marked `pin`.
+ *
+ * `hasAuthoredGeometry` IS THE TEST, borrowed from the serializer rather than
+ * spelled again here, because the serializer is what decides whether a
+ * geometry token appears on the line at all. A second opinion would offer to
+ * release nodes whose lines carry nothing (an edit that changes no bytes) or
+ * quietly skip ones that do.
+ *
+ * THE `pin` EXEMPTION IS WHAT THE WORD MEANS — see `C4Node.pinned`. It gives
+ * an author a way to keep one element while releasing the rest, which is the
+ * only reading under which the attribute does anything at all.
+ */
+function releasableNodes(file: ArchLabFile, diagram: C4Diagram): C4Node[] {
+  return diagram.nodes.filter(
+    (node) => node.pinned !== true && hasAuthoredGeometry(file, diagram, node),
+  );
+}
+
+/** `node` sitting in its default slot at its type's default size — the one
+ *  geometry the serializer omits, so the patched line carries no token. */
+function releasedNode(
+  node: C4Node,
+  layout: ReadonlyMap<string, Point>,
+): C4Node | null {
+  const at = layout.get(node.id);
+  if (at === undefined) return null;
+  return {
+    ...node,
+    position: { x: at.x, y: at.y },
+    size: defaultSizeFor(node.type),
+  };
+}
+
+/**
+ * What the direction control and the details panel need to know about one
+ * layer before they say anything: how many of its elements a direction cannot
+ * move, and how many of those a reset would release.
+ *
+ * `null` for a document that is not a C4 file, or a diagram it does not hold.
+ */
+export function layerPlacement(
+  doc: ViewDocument,
+  diagramId: string,
+): LayerPlacement | null {
+  if (doc.kind !== "c4") return null;
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  const authored = diagram.nodes.filter((node) =>
+    hasAuthoredGeometry(file, diagram, node),
+  );
+  const pinned = authored.filter((node) => node.pinned === true).length;
+  return {
+    total: diagram.nodes.length,
+    placed: authored.length - pinned,
+    pinned,
+  };
+}
+
+/**
+ * `doc` with ONE element's hand-written coordinates removed, handing it back
+ * to the layout — or `null` when there is nothing to remove.
+ *
+ * A RESET IS A MOVE TO THE DEFAULT SLOT, and that is not a shortcut: the
+ * serializer omits geometry that equals `defaultNodeLayout` at the type's
+ * default size, so writing that geometry onto the node and asking
+ * `canonicalNodeLine` for the line yields a line with no `(x,y wxh)` token on
+ * it. There is no separate token-stripping path to keep in step with the
+ * omission rule, which is what `check:canvas-edit`'s "returning to the
+ * default removes the token" already proves for a drag.
+ *
+ * ONE LINE PATCHED, `movedNodeEdit`'s rule and for its reason: geometry can
+ * only appear on the declaration line, so the element's `desc` and `!`
+ * continuations are left exactly as the author has them.
+ *
+ * `null` FOR A NODE THE TEXT DOES NOT PLACE keeps the no-undo-for-nothing
+ * contract every gesture here states — and it covers a `pin`ned element
+ * asked for by name, which this DOES release: the exemption in
+ * `releasableNodes` is from the layer sweep, not from a reader pointing at
+ * one element and asking for it.
+ */
+export function resetNodePositionEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+  nodeId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "move").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  const current = diagram.nodes.find((candidate) => candidate.id === nodeId);
+  if (current === undefined) return null;
+  if (!hasAuthoredGeometry(file, diagram, current)) return null;
+
+  const released = releasedNode(current, defaultNodeLayout(file, diagram));
+  if (released === null) return null;
+
+  const edited = mapDiagram(file, diagramId, (target) => ({
+    ...target,
+    nodes: target.nodes.map((node) => (node.id === nodeId ? released : node)),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  const span = patchable?.spans.nodes.get(spanKey(diagramId, nodeId));
+  const line = canonicalNodeLine(edited, diagramId, nodeId);
+  if (span !== undefined && line !== null) {
+    return adopt(
+      doc,
+      edited,
+      applyPatches(sourceText, [
+        { span: { start: span.start, end: span.start }, lines: [line] },
+      ]),
+    );
+  }
+  return adopt(doc, edited, null);
+}
+
+/**
+ * `doc` with every releasable element of ONE layer handed back to the layout —
+ * the gesture that makes the direction control able to do anything on a
+ * diagram somebody has arranged by hand.
+ *
+ * N PATCHES, ONE `applyPatches`, ONE `CanvasEdit`, therefore ONE Cmd+Z. This
+ * is the whole reason it is a gesture of its own rather than a loop over
+ * `resetNodePositionEdit` in the host: seven elements released one call at a
+ * time would be seven undo entries, and a reader who pressed one row would
+ * have to press undo seven times to get their arrangement back. The frame
+ * grouping (`groupedNodesEdit`) resolves a multi-element intent into one edit
+ * for the same reason.
+ *
+ * THE LAYER ONLY, never the file. The reason is `revisedDirectionEdit`'s: a
+ * control that silently relaid out diagrams the reader cannot see is the worst
+ * kind of surprise, and a reset is strictly worse than a direction change
+ * there because it also DELETES the coordinates it moves off. So there is no
+ * file-wide row, and adding one is not a small extension of this.
+ *
+ * `null` when the layer has nothing placed, so the row that invokes it can be
+ * absent rather than inert.
+ */
+export function resetLayerPositionsEdit(
+  doc: ViewDocument,
+  sourceText: string,
+  diagramId: string,
+): CanvasEdit | null {
+  if (!canvasEditability(doc, "move").editable || doc.kind !== "c4") {
+    return null;
+  }
+  const file = doc.synced.file;
+  const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
+  if (diagram === undefined) return null;
+  const releasable = releasableNodes(file, diagram);
+  if (releasable.length === 0) return null;
+
+  const layout = defaultNodeLayout(file, diagram);
+  const released = new Map<string, C4Node>();
+  for (const node of releasable) {
+    const next = releasedNode(node, layout);
+    if (next !== null) released.set(node.id, next);
+  }
+  if (released.size === 0) return null;
+
+  const edited = mapDiagram(file, diagramId, (target) => ({
+    ...target,
+    nodes: target.nodes.map((node) => released.get(node.id) ?? node),
+  }));
+
+  const patchable = patchablePane(doc, sourceText);
+  if (patchable !== null && patchable !== undefined) {
+    const patches: LinePatch[] = [];
+    for (const id of released.keys()) {
+      const span = patchable.spans.nodes.get(spanKey(diagramId, id));
+      const line = canonicalNodeLine(edited, diagramId, id);
+      if (span === undefined || line === null) break;
+      patches.push({
+        span: { start: span.start, end: span.start },
+        lines: [line],
+      });
+    }
+    /* ALL OR NOTHING. A partial patch would leave the pane holding a document
+       that disagrees with the model this returns — half the layer released in
+       the text, all of it released on the canvas. The re-emit fallback below
+       is the same one every gesture here falls back to for the JSON pane. */
+    if (patches.length === released.size) {
+      return adopt(doc, edited, applyPatches(sourceText, patches));
+    }
   }
   return adopt(doc, edited, null);
 }
