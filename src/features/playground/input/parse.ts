@@ -498,6 +498,70 @@ export function parseViewSource(text: string): ViewParseResult {
  * keeps the format toggle honest: syncing must never silently flip the
  * language the user chose to look at.
  */
+/* -------------------------------------------------------------------------- */
+/* Repairs — the one failure the reader can fix for you                       */
+/* -------------------------------------------------------------------------- */
+
+/** A rewrite the pane can offer for text that does not parse. */
+export interface SourceRepair {
+  /** Leading spaces removed from every line. */
+  spaces: number;
+  /** The rewritten text. PROVED to parse before it is offered. */
+  text: string;
+}
+
+/** Every line dedented by `spaces`, keeping lines that have fewer at 0. */
+function dedent(text: string, spaces: number): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      let n = 0;
+      while (n < spaces && line.charAt(n) === " ") n += 1;
+      return line.slice(n);
+    })
+    .join("\n");
+}
+
+/**
+ * The deepest indent the grammar has a production for. A shift bigger than
+ * this would put a legal line past every rung of the ladder, so there is
+ * nothing beyond it worth trying.
+ */
+const MAX_INDENT_SHIFT = 8;
+
+/**
+ * A uniform indent shift that would make `text` parse, or null.
+ *
+ * THE ONE FAILURE WORTH REPAIRING, and it is not a typo. `.alab` indentation
+ * is significant, so text copied out of a place that had its own indentation —
+ * a chat window, a nested code block, a documentation page — arrives with two
+ * or four spaces on every line and refuses at the first line where the shift
+ * becomes illegal. That error is accurate and completely unhelpful: it names
+ * one line when EVERY line moved, and a reader who fixes the line it names
+ * gets the same error on the next one.
+ *
+ * The answer is a proof, not a heuristic: dedent, re-read, and offer the
+ * result only if the real reader accepts it. So this can never suggest a
+ * rewrite that produces a different failure, and it stays honest for grammars
+ * whose indentation means something else — a shift that does not fix the
+ * document is simply not offered.
+ *
+ * Costs one parse per candidate and runs only after a parse has already
+ * failed, which is a keystroke the reader is not waiting on.
+ */
+export function indentRepairFor(text: string): SourceRepair | null {
+  for (let spaces = 1; spaces <= MAX_INDENT_SHIFT; spaces += 1) {
+    const candidate = dedent(text, spaces);
+    // No line had that much indentation left to give — every deeper shift
+    // would produce the same text, so there is nothing further to try.
+    if (candidate === text) return null;
+    if (parseViewSource(candidate).status === "ok") {
+      return { spaces, text: candidate };
+    }
+  }
+  return null;
+}
+
 export function sourceTextFor(doc: ViewDocument): string {
   if (doc.kind === "sequence") {
     return doc.format === "mermaid"

@@ -9,6 +9,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **A paste that came in with the wrong indentation can be fixed in one
+  click.** `.alab` indentation is significant, so text copied out of somewhere
+  that had its own — a chat window, a nested code block, a docs page — arrives
+  with two or four spaces on every line and refuses to parse. The error named
+  one line when every line had moved, and fixing that line just produced the
+  same error on the next one. The pane now offers **Remove 2 spaces from every
+  line** beside the error, and only when removing them is proved to make the
+  document parse — so the button never leaves you with a second failure.
 - **A C4 diagram can carry an authored walk through itself.** Write
   `path send "Send email path"` at the end of a diagram, with
   `beat "One sentence"` lines under it and the chain of elements each beat is
