@@ -124,12 +124,23 @@ export function ViewerPathPlayer({
     <div
       role="group"
       aria-label={`Path: ${title}`}
-      className="flex w-fit max-w-[min(36rem,calc(100vw-2rem))] flex-col gap-1 rounded-lg border border-border/70 bg-card/80 px-3 py-2 shadow-sm backdrop-blur"
+      /* FIXED WIDTH, and a caption box that always reserves two lines.
+       *
+       * This was `w-fit` with a clamped caption, which made the player's shape
+       * a function of the sentence in it: a shorter beat narrowed the card,
+       * bottom-centre re-centred it, and the Next button slid out from under
+       * the cursor between every step. A stepper whose step button moves when
+       * you press it is the one thing it must not do. So the card is the same
+       * size on every beat and only the words inside it change. */
+      className="flex w-[min(36rem,calc(100vw-2rem))] flex-col gap-1 rounded-lg border border-border/70 bg-card/80 px-3 py-2 shadow-sm backdrop-blur"
     >
       {/* The caption announces itself, position first, because a listener who
           cannot see the dim needs to know where in the walk they are before
           they hear what it says. */}
-      <p aria-live="polite" className="line-clamp-2 text-sm font-medium">
+      <p
+        aria-live="polite"
+        className="line-clamp-2 min-h-[2.5rem] text-sm leading-5 font-medium"
+      >
         <span className="sr-only">
           {`Beat ${(beat + 1).toString()} of ${beatCount.toString()}: `}
         </span>

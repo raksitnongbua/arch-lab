@@ -169,6 +169,11 @@ export function FrameLayer({
           {frames.map((frame) => (
             <div
               key={frame.key}
+              /* Addressable from a stylesheet, the way nodes and edges are.
+                 The viewer's path overlay recedes a boundary along with the
+                 elements inside it: a frame left at full strength while its
+                 members dim reads as the boundary being what is in focus. */
+              data-frame-id={frame.id}
               className="absolute"
               style={{
                 transform: `translate(${frame.x}px, ${frame.y}px)`,
@@ -285,6 +290,7 @@ export function FrameLayer({
               // select, not zoom: the zoom is the camera helping, the
               // selection is what the reader pressed for.
               data-frame-hit=""
+              data-frame-id={frame.id}
               aria-pressed={focusedId === frame.id}
               aria-label={
                 controlled

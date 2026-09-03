@@ -36,7 +36,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   changes, and an older arch-lab refuses a `path` line with a parse error
   rather than misreading it. `validate_model` flags a beat that doubles back
   and a walk that jumps with nothing joining it, as review notes rather than
-  errors.
+  errors. Boundaries recede along with the elements inside them, the current
+  beat's elements wear a ring so the walk reads as a set being shown rather
+  than a diagram slightly faded, and the player is the same size on every beat
+  so the Next button never moves out from under the cursor.
 - **The layout direction can be set from the canvas, not only in the text.**
   With the padlock open, a small button beside it carries the shape the diagram
   is laid out in — bars stacked for top-down, bars in a row for left-right —

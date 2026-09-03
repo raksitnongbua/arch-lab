@@ -330,13 +330,43 @@ check("the path outranks hover: the reveal stands down under a walk", () => {
   );
 });
 
-check("the current beat's nodes get no ring and no marching outline", () => {
+check("the beat's nodes are marked, and the mark does not move", () => {
   const body = memoBody(canvas, "pathFocusCss");
+  /* The ring is allowed and required: un-dimming alone reads as a difference
+     in weight rather than a mark, and a reader scanning for "which ones am I
+     being shown" had to compare instead of look. It is the multi-select's own
+     static affordance, reused. */
+  assert.match(
+    body,
+    /viewer-node-selected-ring/,
+    "the beat's elements wear no mark — at a glance the walk then reads as " +
+      "the diagram being slightly faded rather than as a set being shown",
+  );
+  /* What must never come back is MOTION. A beat's moving light is its
+     connectors; N marching outlines would be N moving lights. */
   assert.doesNotMatch(
     body,
-    /viewer-node-selected-ring|viewer-node-flow-|animation:/,
-    "the path overlay animates or rings a node — the beat's moving light is " +
-      "its connectors, and N marching outlines is N moving lights",
+    /viewer-node-flow-|animation:/,
+    "the path overlay animates a node — the beat's moving light is its " +
+      "connectors, and N marching outlines is N moving lights",
+  );
+});
+
+check("a boundary recedes with the elements inside it", () => {
+  const body = memoBody(canvas, "pathFocusCss");
+  assert.match(
+    body,
+    /data-frame-id=/,
+    "the overlay no longer dims frames — a boundary left bright while its " +
+      "members dim reads as the boundary being what is in focus, and on a " +
+      "diagram with three namespaces it is most of the ink on screen",
+  );
+  const layer = read("src/features/editor/components/frame-layer.tsx");
+  assert.ok(
+    (layer.match(/data-frame-id=\{frame\.id\}/g) ?? []).length >= 2,
+    "the frame layer stopped labelling both its box and its caption — the " +
+      "overlay addresses frames by id, and a caption left behind stays lit " +
+      "over a dimmed boundary",
   );
 });
 
@@ -393,6 +423,24 @@ check("the player's height stays inside the camera's bottom inset", () => {
     /line-clamp-2/,
     "the caption is no longer clamped, so the player has no bounded height " +
       `to fit inside the ${inset.toString()}px the camera reserves`,
+  );
+  /* The card's SHAPE must not depend on the sentence in it. It was `w-fit`
+     with a clamped caption, so a shorter beat narrowed the card, bottom-centre
+     re-centred it, and the Next button slid out from under the cursor between
+     every step — a stepper whose step button moves when you press it. Both
+     halves are pinned: a fixed width, and a caption box that reserves its
+     second line whether or not the sentence needs it. */
+  assert.match(
+    player,
+    /className="flex w-\[min\(/,
+    "the player sized itself to its content again — the controls then move " +
+      "between beats and Next walks away from the cursor",
+  );
+  assert.match(
+    player,
+    /min-h-\[[\d.]+rem\]/,
+    "the caption no longer reserves both its lines, so a one-line beat " +
+      "shortens the card and the control row jumps vertically",
   );
   assert.ok(
     inset >= 80,

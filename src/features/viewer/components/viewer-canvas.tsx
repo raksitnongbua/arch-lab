@@ -2731,11 +2731,39 @@ function ViewerCanvasInner({
       .map((id) => `:not([data-edge-id="${id}"])`)
       .join("");
 
+    /* Boundaries recede with what is inside them. A frame left bright while
+     * its members dim reads as the boundary being what is in focus, which is
+     * the opposite of what a walk is saying — and in a diagram with three
+     * namespaces it is most of the ink on screen. Depth is the SHALLOWEST its
+     * members reach, so a frame holding one lit element stays whole rather
+     * than half-dimming around it. */
+    const frameDepth = new Map<string, number>();
+    for (const node of diagram.nodes) {
+      if (node.frameId === undefined) continue;
+      const depth = current.nodeIds.has(node.id)
+        ? 1
+        : resolved.nodeIds.has(node.id)
+          ? 2
+          : 3;
+      frameDepth.set(
+        node.frameId,
+        Math.min(frameDepth.get(node.frameId) ?? 3, depth),
+      );
+    }
+
     /* The middle tier is written id by id rather than as one exclusion
      * selector: "on the path but not in this beat" is a set difference, and
      * `:not()` chains cannot express one without repeating both sets. Paths
      * are short, so this is a handful of rules. */
     const rest: string[] = [];
+    for (const frame of diagram.frames ?? []) {
+      const depth = frameDepth.get(frame.id) ?? 3;
+      if (depth === 1) continue;
+      const opacity = depth === 2 ? HOVER_DIM_NODE_OPACITY : DIM_NODE_OPACITY;
+      rest.push(
+        `.viewer-canvas [data-frame-id="${frame.id}"] { opacity: ${opacity}; }`,
+      );
+    }
     for (const id of resolved.nodeIds) {
       if (current.nodeIds.has(id)) continue;
       rest.push(
@@ -2752,13 +2780,35 @@ function ViewerCanvasInner({
       );
     }
 
+    /* The beat's own elements wear the STATIC selection ring — the multi
+     * select's affordance, and for its reason. Un-dimming alone was not
+     * enough: on a dark ground a node at full strength beside one at 0.3 is a
+     * difference in weight, not a mark, and a reader scanning for "which ones
+     * am I being shown" had to compare rather than look. A ring is a mark.
+     *
+     * STATIC, never marching. N moving outlines would be N moving lights, and
+     * the rule that a beat's moving light is its connectors is what keeps this
+     * from becoming the noise the selection focus is careful to avoid. */
+    for (const id of current.nodeIds) {
+      rest.push(
+        `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }`,
+      );
+    }
+
     return (
       `.viewer-canvas .react-flow__node${offPathNodes} { opacity: ${DIM_NODE_OPACITY}; }\n` +
       `.viewer-canvas .react-flow__edge${offPathEdges} .viewer-edge-base { opacity: ${DIM_EDGE_OPACITY}; }\n` +
       `.viewer-canvas .viewer-edge-chip${offPathChips} { opacity: ${DIM_EDGE_OPACITY}; }` +
       (rest.length > 0 ? `\n${rest.join("\n")}` : "")
     );
-  }, [activeMultiIds, detail, selectedFrameId, selectedNodeId, walk]);
+  }, [
+    activeMultiIds,
+    detail,
+    diagram,
+    selectedFrameId,
+    selectedNodeId,
+    walk,
+  ]);
 
   // Focus effect while an element is selected: the element and its direct
   // neighbours stay at full strength (the touching edges stay "idle" in the
