@@ -93,8 +93,14 @@ const TONE_CLASSES = {
 } as const;
 
 /**
- * Toast stack. Mounted exactly once, by `editor-shell.tsx`. Frozen after
- * Batch 1.
+ * Toast stack. Mounted exactly once, by the root layout — it lived in
+ * `editor-shell.tsx`, which made `toast()` a silent no-op on every route but
+ * /editor; the argument is at the mount site. Frozen after Batch 1.
+ *
+ * A LIVE REGION, and callers have to know: the container is `aria-live` and
+ * each entry is a `role="status"`, so a toast raised beside a page's own
+ * `sr-only` announcement of the same fact says it twice. `applyDirection` in
+ * the playground is where that was decided and why.
  */
 export function Toaster(): React.JSX.Element {
   const current = useSyncExternalStore(

@@ -15,7 +15,11 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
-import { C4_LEVELS, VALID_NODE_TYPES_BY_LEVEL } from "@/types";
+import {
+  C4_LEVELS,
+  markPlacedByHand,
+  VALID_NODE_TYPES_BY_LEVEL,
+} from "@/types";
 import type {
   ArchLabFile,
   C4Level,
@@ -2562,7 +2566,15 @@ function resolve(
       add("externalRef", externalRef);
       add("frameId", node.frameId);
       add("pinned", pick(node.pinned, node.raw, "pinned"));
-      finalNodes.push(assemble(pairs, node.unknowns));
+      const assembled = assemble(pairs, node.unknowns);
+      /* THE ONE PLACE THE TOKEN'S PRESENCE IS RECORDED. `position` above is
+         filled from `layout` when the text omits it, so after this line
+         nothing can tell the two apart by looking — and a token whose numbers
+         equal the default slot looks exactly like an omitted one. Everything
+         that offers to release a coordinate reads this; see
+         `AUTHORED_GEOMETRY`. */
+      if (node.geometry !== undefined) markPlacedByHand(assembled);
+      finalNodes.push(assembled);
       spans.nodes.set(spanKey(diagram.id, node.id), {
         start: node.line,
         end: node.endLine,

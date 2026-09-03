@@ -141,11 +141,12 @@ export interface NodeDetail {
    */
   tagColors?: Readonly<Record<string, string>>;
   /**
-   * The element's own `(x,y)`, when the text carries one — `null` when the
+   * The element's own `(x,y)`, when the source states one — `null` when the
    * layout placed it and there is nothing to release. Decided by the canvas
-   * through `hasAuthoredGeometry`, the serializer's own test, rather than by
+   * through `placedByHand`, the fact the parser recorded, rather than by
    * comparing coordinates here: two opinions about "is this placed by hand"
-   * is how a panel comes to offer a release that writes no bytes.
+   * is how a panel comes to offer a release that writes no bytes — or to
+   * withhold one from an element whose line does carry a coordinate.
    */
   placedAt: { x: number; y: number } | null;
 }

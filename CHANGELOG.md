@@ -16,7 +16,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   moved nothing. The direction menu now says so before you press it ("3 of 7
   elements are placed by hand and won't move"), and carries a row —
   **Let the layout place them** — that takes those coordinates off every
-  element in the layer in one undoable change. The element panel offers the
+  element in the layer in one undoable change. Press a direction anyway and
+  the menu stays open, its note switching from a caveat to what just happened
+  — "Nothing in this layer moved" or "3 of 7 elements … stayed where they
+  were" — with that release row still one line below the row you pressed, and
+  the same sentence read out to a screen reader. The element panel offers the
   same for one element beside the coordinates it is sitting at, and `pin` on
   an element line now means what it always looked like it meant: kept when the
   rest of the layer is released. The whole-file section is deliberately
@@ -159,6 +163,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A layer whose coordinates happen to match the layout is no longer counted
+  as unplaced.** An element line carrying `(40,40 176x88)` beats the layout
+  whether or not those numbers are the ones the layout would have chosen — so a
+  diagram written out with its own default coordinates refused every direction
+  while the menu counted nothing placed, said nothing before the press and
+  raised no warning after it, and **Let the layout place them** left exactly
+  those coordinates in the file. Placement is now read from what the document
+  states rather than from comparing numbers: the count is right, the warning
+  appears, and the release takes every coordinate off the layer.
+- **A whole-file direction now warns before the press, not only after it.** The
+  note saying how much of the diagram a direction cannot move sat above the
+  layer rows only, so pressing `Whole file` wrote a line, moved nothing and
+  said nothing at all. One note, above every row in the menu.
 - **A parse error no longer says where twice.** Every `validate_<kind>` and
   `format_<kind>` tool over MCP, and every error example in the syntax
   reference and the bundled `alab` skill, opened with

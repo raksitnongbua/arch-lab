@@ -103,7 +103,7 @@ export const APP_DESCRIPTION =
 /* -------------------------------------------------------------------------- */
 
 /**
- * Every theme the app knows about. Adding one takes four edits, and
+ * Every theme the app knows about. Adding one takes five edits, and
  * `pnpm check:themes` fails on each of them being forgotten:
  *
  *   1. this list;
@@ -129,6 +129,11 @@ export const APP_DESCRIPTION =
  *      their colour cannot be shown. `check:canvas-edit` sweeps the whole output
  *      space and is what catches it; the fix is to pick a pin an existing theme
  *      already holds rather than a new one.
+ *
+ *   5. an entry in `CANVAS_GROUND_METAPHOR` below — which of the two things a
+ *      diagram well can BE this palette means it to be. It is a declaration and
+ *      not a measurement on purpose: see that constant's own note for the
+ *      assertion that went stale by inferring it from the numbers instead.
  *
  * AND ONE THING THAT IS NOT AN EDIT BUT DECIDES WHETHER THE THEME MAY SHIP AT
  * ALL, for a LOW-CHROMA theme: the ΔE floors in `check:themes`,
@@ -165,6 +170,51 @@ export const THEMES = [
 ] as const;
 
 export type Theme = (typeof THEMES)[number];
+
+/**
+ * What a diagram well IS, in the palette that draws it. Two answers, and
+ * `--canvas` carries a different meaning under each.
+ *
+ * `"recessed"` — the well is a hollow cut into the page: `--canvas` sits at or
+ * below `--background`, and a node printed on it is a raised panel found by its
+ * own lighter surface.
+ *
+ * `"sheet"` — the well IS the material, the sheet the drawing is made on, so it
+ * sits ABOVE the chrome that frames it. A theme choosing this owes the premise
+ * that goes with it: `--canvas` at or above `--node`, so nothing drawn on the
+ * well reads as a raised panel and the marks have to be found by their line
+ * work instead. `paper` is the one theme that takes it (#104).
+ */
+export type CanvasGroundMetaphor = "recessed" | "sheet";
+
+/**
+ * Which of the two `CanvasGroundMetaphor` readings each theme commits to.
+ *
+ * DECLARED, NEVER INFERRED, and that is the whole point of this table existing
+ * rather than a branch inside the check that measures it. `check:canvas-grid`
+ * held one rule — `--canvas` at or below `--background` — as if every palette
+ * owed a recess, and it went stale the moment a theme committed to the other
+ * metaphor: #104 lifted `paper`'s well above its chrome deliberately, argued it
+ * in the block comment beside the token, and left the assertion red. A check
+ * that read the metaphor off the numbers would instead have gone GREEN on that
+ * day and on every later drift, because it would agree with whatever the
+ * palette happened to say. So the palette states its intent here and the check
+ * holds it to the obligation that intent carries.
+ *
+ * An exemption was the other option and was rejected: a theme skipping the rule
+ * owes nothing and can then be wrong in a direction nobody is measuring.
+ */
+export const CANVAS_GROUND_METAPHOR: Record<Theme, CanvasGroundMetaphor> = {
+  light: "recessed",
+  paper: "sheet",
+  pastel: "recessed",
+  glass: "recessed",
+  dark: "recessed",
+  midnight: "recessed",
+  contrast: "recessed",
+  blueprint: "recessed",
+  eink: "recessed",
+};
 
 /**
  * The theme a first-time visitor gets WHEN THEIR SYSTEM PREFERS DARK, and the

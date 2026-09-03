@@ -53,11 +53,59 @@
  * direction per element, so on a diagram somebody has arranged by hand this
  * menu's rows write a line and move nothing — which read as a broken control
  * for as long as the only place that fact was written down was `/validate`, a
- * page nobody visits with a diagram in front of them. So the layer's section
- * carries a one-line note when elements are placed, and a row that releases
- * them. The counts come from `layerPlacement`, which asks the SERIALIZER
- * whether a line carries geometry; counting `(` here would be a second
- * opinion about the thing the note is asserting.
+ * page nobody visits with a diagram in front of them. So the menu carries a
+ * one-line note when elements are placed, and a row that releases them. The
+ * counts come from `layerPlacement`, which reads the fact the PARSER recorded
+ * about the source; counting `(` here would be a second opinion about the
+ * thing the note is asserting.
+ *
+ * THE NOTE IS ABOVE EVERY ROW IT QUALIFIES, which is why it is not inside a
+ * section. It sat in the layer section for a release, so a reader pressing
+ * `Whole file` — the same press, the same evidence, the same diagram sitting
+ * still — was told nothing, while the reader pressing `This layer` was told.
+ * One note at the top says it once and says it before all four rows;
+ * repeating it under each heading would say the same sentence twice in a menu
+ * two sentences tall.
+ *
+ * THE RELEASE ROW STAYS UNDER `This layer`, alone, because it releases exactly
+ * one layer — `resetLayerPositionsEdit` argues why there is no file-wide one.
+ * A second copy under `Whole file` would be one act offered twice under one
+ * label, leaving the reader to guess which of the two reached further. It sits
+ * in the first section, so it is already on screen when the note is read.
+ *
+ * AND WHEN THE PRESS CHANGED NOTHING, THIS MENU STAYS OPEN. A toast was built
+ * for that moment first and rejected: it appeared in a screen corner, a whole
+ * canvas away from the row that had just been pressed, so it read as a
+ * notification about the app rather than as the answer to the press — and it
+ * offered as its action a remedy this menu already holds one line further
+ * down. Staying open costs no component at all. The note changes tense, from
+ * a caveat about what a direction will not move to a report of what just did
+ * not move, and the release row is already under the reader's pointer.
+ *
+ * A PRESS THAT DID RE-LAY THE DIAGRAM STILL CLOSES IT. A menu that never
+ * closes is a worse control than the toast was: the reader's evidence for "it
+ * worked" is seeing the picture, and this menu sits over a corner of it.
+ * `directionInertWarning` decides which of the two happened — the same
+ * function that words the report — so the menu cannot stay open on a press it
+ * would then describe as having moved things.
+ *
+ * WHICH IS WHY THE DIRECTION ROWS ARE `menuitemradio` AND THE OTHER ROWS ARE
+ * NOT. Activating a `menuitem` conventionally dismisses its menu; a radio in a
+ * menu conventionally does not, because the reader may be weighing options.
+ * The direction rows were already radios — they carry `aria-checked` and the
+ * one in force is checked rather than pressable-and-inert — so a menu that
+ * survives one of those presses is what the role already promised, not a
+ * surprise bolted onto it. The clearing and release rows stay `menuitem` and
+ * stay closing: each takes a line out of the document, and there is nothing
+ * left to weigh afterwards.
+ *
+ * FOCUS IS LEFT WHERE THE PRESS PUT IT — on the row that was pressed, which a
+ * native `<button>` click already focuses. There is no roving `tabindex` and
+ * no focus trap in this menu (or in `zoom-menu.tsx`, whose anatomy it shares),
+ * so the release row is one or two Tab stops below the pressed row and needs
+ * no reopening, and Escape still closes through `useMenuDismissal`. Moving
+ * focus programmatically onto the release row was rejected: it would put the
+ * reader's caret on a destructive row they had not chosen.
  */
 
 import { useCallback, useId, useRef, useState } from "react";
@@ -71,7 +119,13 @@ import type { C4LayoutDirection } from "@/types";
 /* One spelling of the row's label, shared with the announcement that points a
    reader at it and with the validator's advice — see `resetLayerLabel`. */
 import { resetLayerLabel } from "@/lib/prose";
-import type { LayerPlacement } from "../input/canvas-edit";
+/* The past-tense half of the note, and the test for whether the press moved
+   anything — both from the gesture module, so the sentence this menu shows and
+   the sentence the live region announces cannot be worded apart. */
+import {
+  directionInertWarning,
+  type LayerPlacement,
+} from "../input/canvas-edit";
 
 /** Which document line a press writes. */
 export type DirectionScope = "layer" | "file";
@@ -162,7 +216,16 @@ const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
 };
 
 /**
- * The note above the layer's direction rows: what a direction will not move.
+ * The note above every direction row BEFORE anything is pressed: what a
+ * direction will not move.
+ *
+ * THE FUTURE-TENSE HALF. After a press that moved nothing the same slot shows
+ * `directionInertWarning`'s sentence instead — "Nothing in this layer moved …"
+ * rather than "… won't move". Two tenses for one fact, because a caveat read
+ * after the act is not a caveat, and a report worded as a warning leaves the
+ * reader unsure whether the press landed. They are deliberately different
+ * strings, not one string with a verb swapped: the sentence a reader is
+ * looking at is how they know which of the two moments they are in.
  *
  * WORDED FROM THE COUNTS rather than chosen from three fixed strings, because
  * the mixed case is the one that has to be exact. "3 of 7 elements are placed
@@ -170,8 +233,14 @@ const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
  * told only that "some elements are placed" has learned nothing they can act
  * on, and a reader told nothing concludes the control is broken.
  *
+ * WORDED FOR THE LAYER ON SCREEN AT BOTH SCOPES, and deliberately so. There is
+ * no file-wide release, so a sentence promising anything about the diagrams
+ * nobody is looking at would promise more than any row here delivers. "These
+ * elements are placed by hand" is true of the diagram in front of the reader
+ * whichever scope they press, and the remedy offered releases exactly that.
+ *
  * `null` when the layout places everything — then there is nothing to warn
- * about and the section is the two rows it always was.
+ * about and the menu is the four rows it always was.
  */
 function placementNote(placement: LayerPlacement): string | null {
   const held = placement.placed + placement.pinned;
@@ -216,12 +285,24 @@ export function LayoutDirectionMenu({
   onRelease: () => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  /**
+   * Whether a direction row has been pressed in this opening and moved
+   * nothing — which is the only reason this menu is still on screen.
+   *
+   * It switches the note's tense and nothing else. Cleared with every
+   * open and every close, so reopening the menu shows the caveat again rather
+   * than a report of a press the reader has since scrolled past.
+   */
+  const [reported, setReported] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 
   // The dismissal contract lives in the shared hook — see `menu-dismissal.ts`
   // for the Escape-consumption and pointerdown arguments it carries.
-  const closeMenu = useCallback(() => setOpen(false), []);
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setReported(false);
+  }, []);
   useMenuDismissal(open, closeMenu, wrapperRef);
 
   /* What the diagram is ACTUALLY laid out by, which is what the button shows:
@@ -231,20 +312,43 @@ export function LayoutDirectionMenu({
      a tick on the FILE row, because that is where the line lives. */
   const effective: C4LayoutDirection = layerDirection ?? fileDirection ?? "tb";
 
+  /* WHETHER THIS PRESS CAN CHANGE THE PICTURE AT ALL, asked of the gesture
+     module rather than answered here. `placement` is already the parser's
+     count; re-deriving the verdict from it in a component would be a second
+     opinion about the thing the note is asserting. */
+  const inert = placement === null ? null : directionInertWarning(placement);
+
   const choose = (scope: DirectionScope, direction: C4LayoutDirection) => {
-    setOpen(false);
     onApply(scope, direction);
+    /* THE MENU SURVIVES A PRESS THAT MOVED NOTHING, and only that one. The
+       reader who needs telling is standing at the row they just pressed with
+       the release row one line below it; closing over an unchanged diagram is
+       what read as a broken control. Everything else closes, because the
+       proof it worked is the picture this menu is covering. */
+    if (inert === null) {
+      closeMenu();
+      return;
+    }
+    setReported(true);
   };
   const clear = (scope: DirectionScope) => {
-    setOpen(false);
+    closeMenu();
     onClear(scope);
   };
   const release = () => {
-    setOpen(false);
+    closeMenu();
     onRelease();
   };
 
-  const note = placement === null ? null : placementNote(placement);
+  /* ONE SLOT, TWO TENSES — see `placementNote`. The report is
+     `directionInertWarning`'s own sentence, which is what keeps the note the
+     reader sees and the announcement a screen reader hears from drifting. */
+  const note =
+    reported && inert !== null
+      ? inert.message
+      : placement === null
+        ? null
+        : placementNote(placement);
   /* THE TRIGGER CARRIES IT TOO, because the menu's note is only read by
      somebody who has already opened the menu — and the reader most likely to
      be confused is the one who pressed a direction, saw nothing move, and is
@@ -259,7 +363,12 @@ export function LayoutDirectionMenu({
     <div ref={wrapperRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          // Every opening starts on the caveat, never on a report of the
+          // press before it.
+          setReported(false);
+          setOpen((value) => !value);
+        }}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
@@ -292,6 +401,29 @@ export function LayoutDirectionMenu({
              and none above. */
           className="af-glass absolute top-full right-0 z-20 mt-1.5 min-w-44 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg"
         >
+          {/* ABOVE EVERY ROW, AT BOTH SCOPES: it is the reason any of them may
+              do nothing, and a caveat read after the press arrived too late.
+              Outside the sections, because gating it on the layer section left
+              the reader who pressed "Whole file" with no note at all.
+
+              NOT A LIVE REGION, deliberately — `applyDirection` announces the
+              same fact into the one the page already owns, and the same
+              sentence in two live regions is one a screen-reader user hears
+              twice. This is the sighted reader's channel; that is theirs.
+
+              The report is weighted and the caveat is not: fine print is the
+              right register for something that has not happened yet, and the
+              wrong one for the answer to a press. */}
+          {note !== null ? (
+            <p
+              className={cn(
+                "mb-1 max-w-56 border-b border-border px-2.5 pt-0.5 pb-1.5 text-[11px] leading-snug",
+                reported ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {note}
+            </p>
+          ) : null}
           {SECTIONS.map((section, index) => {
             const set =
               section.scope === "layer" ? layerDirection : fileDirection;
@@ -303,16 +435,6 @@ export function LayoutDirectionMenu({
                 <p className="px-2.5 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
                   {section.heading}
                 </p>
-                {/* ABOVE the rows, not below them: it is the reason the rows
-                    may do nothing, and a caveat read after the press is a
-                    caveat that arrived too late. Layer scope only — the file
-                    section writes a default this menu cannot count the
-                    consequences of across diagrams nobody is looking at. */}
-                {section.scope === "layer" && note !== null ? (
-                  <p className="max-w-56 px-2.5 pt-0.5 pb-1.5 text-[11px] leading-snug text-muted-foreground">
-                    {note}
-                  </p>
-                ) : null}
                 {DIRECTIONS.map((direction) => {
                   const inForce = set === direction.value;
                   return (
@@ -363,7 +485,10 @@ export function LayoutDirectionMenu({
                 {/* ABSENT, not disabled, when nothing is placed — this menu's
                     founding rule: no row whose press does nothing. Same
                     anatomy as the clearing row above it, because it is the
-                    same kind of act: taking a line out of the document. */}
+                    same kind of act: taking a line out of the document. Under
+                    "This layer" only: it releases one layer, and a second copy
+                    under the file heading would be one act offered twice under
+                    one label. */}
                 {section.scope === "layer" &&
                 placement !== null &&
                 placement.placed > 0 ? (

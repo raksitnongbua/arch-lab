@@ -25,6 +25,15 @@
  * while this was written: the luminance formula wants LINEAR sRGB, and
  * gamma-decoding it a second time reported 1.45:1 where the file says 3.61:1.
  *
+ * AND THEN WHAT THE WELL IS, which is a declaration rather than a colour and so
+ * cannot be caught by any sweep over tokens. A theme's diagram well is either a
+ * recess cut into the page or the sheet the drawing is made on, and
+ * `check:canvas-grid` holds `--canvas` to a different rule under each. It used
+ * to hold only the recess rule, universally, and was red for the whole life of
+ * #104 because `paper` had deliberately become a sheet. One section below
+ * asserts that `CANVAS_GROUND_METAPHOR` covers `THEMES` exactly, so a palette
+ * cannot arrive with its well measured against the wrong metaphor or none.
+ *
  * AND THEN REACHABILITY, which is a third way a theme fails invisibly: a
  * complete, legible palette nobody can select is not offered. The picker lives
  * in the site header, and immersive mode covers the site header with a fixed
@@ -152,6 +161,53 @@ for (const theme of declared) {
     `${theme}: redefines every token the baseline declares (${tokens.size})`,
     missing.length === 0,
     `missing: ${missing.join(", ")} — these would fall back to the light value`,
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* Every declared theme says what its diagram well IS                       */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nevery theme in THEMES declares a canvas ground metaphor");
+
+/* THE FIFTH OF THE FIVE EDITS the `THEMES` note promises this script fails on.
+   The other four are caught by a compiler that wants a total `Record` or by a
+   token sweep; this one is a `Record<Theme, …>` too, so `pnpm typecheck` does
+   ask for it — but the reason it is ALSO asserted here is that this list is the
+   thing a theme author reads, and an edit the list claims is checked had better
+   be checked by the script the list names.
+
+   WHAT IT BUYS is not completeness for its own sake. `check:canvas-grid` holds
+   `--canvas` to a different rule under each metaphor — at or below `--background`
+   for a recess, at or above `--node` for a sheet — and a theme with no
+   declaration is a well neither rule reaches. That check held ONE rule, as if
+   every palette owed a recess, and stayed red for the whole life of #104
+   because `paper` had deliberately become a sheet. The declaration is what
+   stops the next such palette from being measured against the wrong metaphor,
+   or against none. */
+{
+  /* The real declaration, through Node's type stripping, rather than a regex
+     walking a `Record` literal — `codebase.md`: never a second implementation
+     of what `src/` already states. */
+  const { CANVAS_GROUND_METAPHOR } = await import("../src/lib/constants.ts");
+  const undeclared = declared.filter(
+    (theme) => CANVAS_GROUND_METAPHOR[theme] === undefined,
+  );
+  const stray = Object.keys(CANVAS_GROUND_METAPHOR).filter(
+    (theme) => !declared.includes(theme),
+  );
+  check(
+    `all ${declared.length} carry an entry in CANVAS_GROUND_METAPHOR`,
+    undeclared.length === 0,
+    `missing: ${undeclared.join(", ")} — check:canvas-grid measures the well ` +
+      "against the metaphor the theme declares, so an undeclared theme's " +
+      "--canvas is held to no rule at all",
+  );
+  check(
+    "and nothing is declared that is not in THEMES",
+    stray.length === 0,
+    `not in THEMES: ${stray.join(", ")} — a metaphor for a palette that does ` +
+      "not exist is a rule nothing ever runs, and reads as coverage",
   );
 }
 

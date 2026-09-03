@@ -24,10 +24,6 @@
 
 import { useCallback, useMemo, useRef } from "react";
 
-/* The release row's own label, so the announcement that sends a reader to it
-   cannot name a row that has been reworded — see `resetLayerLabel`. */
-import { resetLayerLabel } from "@/lib/prose";
-
 import type { SequenceEditHandlers } from "@/features/sequence";
 import type { FlowchartEditHandlers } from "@/features/flowchart";
 /* PAST THE BARREL, as `input/sequence-edit.ts` does and for the reason its
@@ -61,6 +57,7 @@ import {
   deletedEdgeEdit,
   deletedFrameEdit,
   deletedNodeEdit,
+  directionInertWarning,
   groupedNodesEdit,
   layerPlacement,
   movedNodeEdit,
@@ -297,82 +294,6 @@ export function useCanvasEditing({
   );
 
   /**
-   * Apply a direction at one scope, or clear it there.
-   *
-   * TWO GESTURES BEHIND ONE PAIR OF CALLBACKS, because the two scopes write
-   * different lines: the diagram's own head line, or the file's `direction`
-   * header line. The control chooses the scope; this only routes.
-   *
-   * The announcement names the SHAPE and the SCOPE rather than the keyword,
-   * because "lr" is the text that gets written and "this layer now runs left
-   * to right" is what happened to the picture — a reader reached for this
-   * because the diagram was the wrong shape, not because they wanted a
-   * particular word in their file.
-   *
-   * AND IT SAYS WHEN THE PICTURE DID NOT CHANGE. Geometry beats the direction
-   * per element, so on a diagram somebody has arranged by hand this gesture
-   * writes a line and moves nothing — announcing "this layer runs left to
-   * right" there is the announcement telling the reader the opposite of what
-   * they can see. Counted BEFORE the edit, from the document being edited,
-   * the way the boundary removal counts its members: afterwards the released
-   * elements are indistinguishable from ones that were never placed.
-   *
-   * Counted for the ACTIVE LAYER in both scopes, and worded as such. A
-   * file-wide press changes what every diagram inherits, but this hook can
-   * only honestly report the one on screen — claiming a total across
-   * diagrams the reader cannot see is the surprise `revisedFileDirectionEdit`
-   * refuses to cause in the first place.
-   */
-  const applyDirection = useCallback(
-    (diagramId: string, scope: "layer" | "file", direction: "tb" | "lr") => {
-      const placement = layerPlacement(doc, diagramId);
-      const held = placement === null ? 0 : placement.placed + placement.pinned;
-      const next =
-        scope === "layer"
-          ? revisedDirectionEdit(doc, text, diagramId, direction)
-          : revisedFileDirectionEdit(doc, text, direction);
-      // null covers "nothing changed" as well as every refusal, so choosing
-      // what is already in force costs no text change and no undo entry.
-      if (next === null) return;
-      const shape =
-        direction === "lr"
-          ? "runs left to right, folding a long flow into bands"
-          : "runs top to bottom";
-      const words = direction === "lr" ? "left to right" : "top to bottom";
-      const where =
-        scope === "layer" ? "This layer" : "Every diagram in the file";
-      const undo = "Press Cmd or Ctrl + Z with the diagram focused to undo.";
-      if (placement !== null && held > 0 && held === placement.total) {
-        /* Pointing at the row only while there IS one: a layer whose every
-           element is `pin`ned offers nothing to release, and naming a row
-           that is absent sends the reader looking for a control that is not
-           there — the whole failure this announcement exists to stop. */
-        const remedy =
-          placement.placed > 0
-            ? `, so nothing moved — choose “${resetLayerLabel(placement.placed)}” in the direction menu`
-            : " and pinned, so nothing moved";
-        applyCanvasEdit(
-          next,
-          `${where} now says ${words}, but ${held === 1 ? "the only element in this layer is" : `all ${held} elements in this layer are`} placed by hand${remedy}. The source text follows; ${undo}`,
-        );
-        return;
-      }
-      if (held > 0) {
-        applyCanvasEdit(
-          next,
-          `${where} ${shape} — ${held} ${held === 1 ? "element" : "elements"} placed by hand stayed where ${held === 1 ? "it was" : "they were"}. The source text follows; ${undo}`,
-        );
-        return;
-      }
-      applyCanvasEdit(
-        next,
-        `${where} ${shape} — the source text follows. ${undo}`,
-      );
-    },
-    [doc, text, applyCanvasEdit],
-  );
-
-  /**
    * Hand one element's hand-written coordinates back to the layout, from the
    * details panel.
    *
@@ -428,6 +349,113 @@ export function useCanvasEditing({
     [doc, text, applyCanvasEdit, setAnnouncement],
   );
 
+  /**
+   * Apply a direction at one scope, or clear it there.
+   *
+   * TWO GESTURES BEHIND ONE PAIR OF CALLBACKS, because the two scopes write
+   * different lines: the diagram's own head line, or the file's `direction`
+   * header line. The control chooses the scope; this only routes.
+   *
+   * The announcement names the SHAPE and the SCOPE rather than the keyword,
+   * because "lr" is the text that gets written and "this layer now runs left
+   * to right" is what happened to the picture — a reader reached for this
+   * because the diagram was the wrong shape, not because they wanted a
+   * particular word in their file.
+   *
+   * AND IT SAYS WHEN THE PICTURE DID NOT CHANGE, IN THIS ANNOUNCEMENT.
+   * Geometry beats the direction per element, so on a diagram somebody has
+   * arranged by hand this gesture writes a line and moves nothing — and a
+   * control that does nothing and says nothing is the whole bug this feature
+   * exists to end.
+   *
+   * A TOAST HELD THAT SENTENCE FOR ONE ROUND AND WAS REJECTED. It rendered in
+   * a screen corner, a whole canvas away from the row that had just been
+   * pressed, so it read as a notification about the app rather than as the
+   * answer to the press. The menu now stays open instead and says it in its
+   * own note, one line above the release row — see
+   * `layout-direction-menu.tsx`, which owns that decision and the roles that
+   * make it idiomatic.
+   *
+   * WHICH IS WHY THE PLACEMENT PROSE IS BACK IN THIS ANNOUNCEMENT. While the
+   * toast held the fact, this sentence deliberately did NOT carry it:
+   * `<Toaster />` is itself a polite live region with a `role="status"` per
+   * entry, so saying it here as well would have told a screen-reader user the
+   * same thing twice. The menu's note is a plain `<p>` and announces nothing,
+   * so with the toast gone this live region is the ONLY channel a screen
+   * reader has — and leaving the prose out would have left exactly those
+   * readers told nothing about a press that did nothing, which is the original
+   * defect aimed at the people who had it first. It carries the release row's
+   * LABEL too, so the remedy is named rather than left to be found.
+   *
+   * The announcement still switches from "runs left to right" to "now says
+   * left to right" when the shape did not follow: a live region claiming the
+   * layer turned, followed by a sentence saying nothing moved, is worse than
+   * either half alone.
+   *
+   * Counted BEFORE the edit, from the document being edited, the way the
+   * boundary removal counts its members: afterwards the released elements are
+   * indistinguishable from ones that were never placed.
+   *
+   * Counted for the ACTIVE LAYER in both scopes, and `directionInertWarning`
+   * is worded as such — so the file-wide press, which does change what every
+   * other diagram inherits, warns about the one diagram on screen and offers a
+   * release that touches exactly that. There is deliberately no file-wide
+   * release to offer: relaying out diagrams the reader cannot see is the
+   * surprise `revisedFileDirectionEdit` refuses to cause.
+   */
+  const applyDirection = useCallback(
+    (diagramId: string, scope: "layer" | "file", direction: "tb" | "lr") => {
+      const placement = layerPlacement(doc, diagramId);
+      const next =
+        scope === "layer"
+          ? revisedDirectionEdit(doc, text, diagramId, direction)
+          : revisedFileDirectionEdit(doc, text, direction);
+      // null covers "nothing changed" as well as every refusal, so choosing
+      // what is already in force costs no text change and no undo entry — and
+      // says nothing, which is what keeps a repeated press from repeating the
+      // sentence below.
+      if (next === null) return;
+      const where =
+        scope === "layer" ? "This layer" : "Every diagram in the file";
+      const inert = directionInertWarning(placement);
+      if (inert === null) {
+        applyCanvasEdit(
+          next,
+          `${where} ${direction === "lr" ? "runs left to right, folding a long flow into bands" : "runs top to bottom"} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+        );
+        return;
+      }
+      /* The release is NAMED, not merely implied — the menu is still open with
+         that row in it, and a reader who cannot see it needs the label to know
+         what to look for. Silent when every placed element is pinned, because
+         then there is no row: `directionInertWarning` returns `null` there
+         rather than let anything point at a control that is not rendered. */
+      const remedy =
+        inert.releaseLabel === null
+          ? ""
+          : ` The direction menu is still open, with “${inert.releaseLabel}” in it.`;
+      applyCanvasEdit(
+        next,
+        `${where} now says ${direction === "lr" ? "left to right" : "top to bottom"}. ${inert.message}${remedy} The source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit],
+  );
+
+  /**
+   * Clear the direction at one scope.
+   *
+   * NO PLACEMENT WARNING HERE, and that is a decision rather than an
+   * omission. The one beside `applyDirection` exists because a reader asked
+   * for a SHAPE and the picture refused it — there is an expectation to
+   * falsify. Clearing asks for no shape: it takes a line out of the document,
+   * which is exactly what happens, and what the diagram falls back to is the
+   * file's default the reader has no picture of in advance. So this closes the
+   * menu like any other row, and the menu's own state answers it — the tick
+   * moves and the clearing row leaves. Warning here as well would put the
+   * sentence on a press that did what it said, and a warning that appears on
+   * every direction press is one nobody reads on the press that matters.
+   */
   const clearDirection = useCallback(
     (diagramId: string, scope: "layer" | "file") => {
       const next =

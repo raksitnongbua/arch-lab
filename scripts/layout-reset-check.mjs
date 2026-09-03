@@ -28,14 +28,17 @@
  *      slot. This is the rule the whole feature's copy rests on — "3 of 7
  *      elements are placed by hand" is only true if precedence is per node —
  *      so it is pinned here rather than left implicit in the parser.
- *   3. `hasAuthoredGeometry` AGREES WITH THE SERIALIZER, for every node of
- *      every bundled example and every fixture: true exactly when a full
- *      serialize writes a `(` on that node's line. The menu's counts, the
- *      panel's row and the gesture's filter all read that one function, so
- *      the failure this forbids is the "two halves of one thing" one — a menu
- *      offering to release a node whose line carries nothing, or silent about
- *      one that does. Read from the FILESYSTEM rather than a hand-listed set
- *      of example names, so an example added tomorrow is covered.
+ *   3. `placedByHand` IS WHAT THE SOURCE SAID, in both languages: for every
+ *      `.alab` fixture, true exactly when the element's own declaration line
+ *      carries a token, read off the spans rather than off a re-serialize;
+ *      for every bundled `.archlab.json`, true for every element, because
+ *      `position` is required there and no JSON document can leave one to the
+ *      layout. Measured against the SOURCE deliberately — this section used
+ *      to measure the predicate against the serializer, and both sides shared
+ *      one wrong idea (see 12). It also pins that the mark reaches neither
+ *      output, which is why it is a symbol rather than a field. Read from the
+ *      FILESYSTEM rather than a hand-listed set of example names, so an
+ *      example added tomorrow is covered.
  *   4. RESETTING ONE ELEMENT IS A ONE-LINE PATCH. `path === "patch"`, exactly
  *      one line changes, that line is byte-identical to what a full serialize
  *      would write for the node, it carries no geometry token, and the
@@ -66,11 +69,41 @@
  *      Asked for BY NAME it still releases — the exemption is from the sweep,
  *      not from the author.
  *  10. THE CONTROL IS REACHABLE AND HONEST. The note and the row exist in the
- *      menu that gates them, the "nothing moved" branch exists in the
- *      announcement, and the reset announcement names the undo key. A past
- *      release shipped a correct module behind a control nobody could reach
- *      (`67b35ae`) with every assertion green, because they all asked whether
- *      the MODULE agreed and none asked whether the CONTROL did.
+ *      menu that gates them, and the reset announcement names the undo key. A
+ *      past release shipped a correct module behind a control nobody could
+ *      reach (`67b35ae`) with every assertion green, because they all asked
+ *      whether the MODULE agreed and none asked whether the CONTROL did.
+ *  11. THE PRESS ITSELF TELLS BOTH READERS. The menu's note is a caveat read
+ *      BEFORE the press, so this section proves the REPORT that replaces it
+ *      afterwards, for all four shapes a layer can be in (nothing placed —
+ *      silent; some placed; all placed; all pinned). A toast carried that
+ *      report for one round and was rejected — a screen corner, a whole
+ *      canvas from the row that was pressed — so what is pinned now is that
+ *      the MENU STAYS OPEN on a press that moved nothing and closes on one
+ *      that did not, that the remedy it names is `resetLayerLabel`'s so it
+ *      cannot drift from the row it points at, and that the `sr-only`
+ *      ANNOUNCEMENT carries the placement sentence again: with no toast, that
+ *      live region is the only channel a screen reader has, and the note is a
+ *      plain `<p>`. It also pins the four judgements the wording rests on: the
+ *      file-scope press warns with a layer-scoped sentence, `clearDirection`
+ *      does not warn, the fact still lives in ONE channel per reader (the note
+ *      announces nothing), and a repeated press says nothing a second time
+ *      because the edit refuses first. And it scans the playground for a
+ *      returning `toast()`, so the rejected surface cannot creep back.
+ *  12. A TOKEN WHOSE NUMBERS EQUAL THE DEFAULT SLOT still beats the direction
+ *      — the shape the other eleven assertions could not see. The fixture is
+ *      built by COMPUTATION (parse the token-free layer, write its own
+ *      coordinates back onto its lines), because a hand-typed `(40,40 …)`
+ *      stops being the default the day the layout changes. It proves the
+ *      premise (the direction moves nothing, and had somewhere to move it
+ *      to), then that the layer counts every element placed, that the press
+ *      is not silent, that the sweep removes every token including the
+ *      coincidental ones, and that the direction then applies. It also pins
+ *      the emitter's numeric test on its own terms — a full serialize still
+ *      omits a default-valued token, which is a decision about canonical
+ *      bytes and the one place the two questions answer differently — and
+ *      that the menu's note is reachable under BOTH scopes, which it was not:
+ *      `Whole file` wrote a line with nothing read first.
  *
  * Exits non-zero on any failure. Run with: pnpm check:layout-reset
  */
@@ -135,12 +168,14 @@ const {
   canonicalNodeLine,
   defaultPositions,
   defaultSizeFor,
-  hasAuthoredGeometry,
   parseArchText,
+  parseArchTextWithSpans,
   serializeArchText,
+  spanKey,
 } = await load("src/features/archtext/index.ts");
 const {
   canvasEditability,
+  directionInertWarning,
   layerPlacement,
   movedNodeEdit,
   resetLayerPositionsEdit,
@@ -151,6 +186,13 @@ const { parseViewSource } = await load(
   "src/features/playground/input/parse.ts",
 );
 const { resetLayerLabel } = await load("src/lib/prose.ts");
+const { placedByHand } = await load("src/types/c4.ts");
+const { deserializeModel } = await load(
+  "src/features/editor/io/deserialize.ts",
+);
+const { fileFromEditorModel } = await load(
+  "src/features/viewer/input/parse-input.ts",
+);
 
 /* ----------------------------------------------------------------------- */
 /* Harness — same shape as the sibling check scripts                        */
@@ -279,6 +321,43 @@ function everyElementDragged(text) {
   return { doc, text: current };
 }
 
+/**
+ * The same layer with every element's DEFAULT coordinates written back onto
+ * its line as an explicit token — the document the whole feature was blind to.
+ *
+ * BUILT BY COMPUTATION, never by hand. The coordinates come from parsing the
+ * token-free fixture and reading what the layout chose, so the fixture cannot
+ * encode a stale idea of where `tb` puts anything: hand-typing `(40,40 176x88)`
+ * would stop being the default the day `defaultPositions` changes, and this
+ * fixture would then be testing an ordinary dragged document.
+ *
+ * WHY IT MATTERS. Every one of these tokens beats the layout — the parser
+ * resolves `node.geometry ?? layout.get(id)` and the token is present — so the
+ * direction moves nothing. But the numbers are exactly what the layout would
+ * have chosen, so a comparison against the default layout answers "nothing is
+ * placed here", which is how a diagram that refuses every direction came to be
+ * described by a menu with no note and a press that reported nothing.
+ */
+function defaultsWrittenBack(text) {
+  const doc = c4Document(text);
+  const nodes = nodesById(doc, DIAGRAM_ID);
+  return text
+    .split("\n")
+    .map((line) => {
+      const declared = /^ {2}([\w-]+):\w+ /.exec(line);
+      const node = declared === null ? undefined : nodes.get(declared[1]);
+      if (node === undefined) return line;
+      return `${line} (${node.position.x},${node.position.y} ${node.size.width}x${node.size.height})`;
+    })
+    .join("\n");
+}
+
+/** The `tb` defaults written back, under a file header that asks for `lr`. */
+const DEFAULTS_AS_TOKENS = defaultsWrittenBack(FREE_TB).replace(
+  'title "Reset"',
+  'title "Reset"\ndirection lr',
+);
+
 /* ----------------------------------------------------------------------- */
 /* 1. A direction moves a token-free document                               */
 /* ----------------------------------------------------------------------- */
@@ -380,65 +459,88 @@ console.log("\nA hand-written coordinate wins for its own element only");
 }
 
 /* ----------------------------------------------------------------------- */
-/* 3. `hasAuthoredGeometry` agrees with the serializer, everywhere           */
+/* 3. `placedByHand` is what the SOURCE said, in both languages             */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nhasAuthoredGeometry says exactly what the serializer writes");
+console.log("\nplacedByHand says exactly what the source stated");
 
 {
-  /** True ⇔ a full serialize writes a geometry token on this node's line. */
-  const tokenedIds = (file) => {
-    const out = new Set();
-    for (const line of serializeArchText(file).split("\n")) {
-      const match = /^ {2}([\w-]+):\w+ .*\((-?[\d.]+),/.exec(line);
-      if (match !== null) out.add(match[1]);
-    }
-    return out;
-  };
-
-  const cases = [];
-  /* FROM THE FILESYSTEM, never a hand-listed set of names: a hardcoded list
-     cannot notice the example it has never heard of, which is how three
-     checks in this repo passed while the feature under them was broken. */
-  const dataDir = "src/features/viewer/service/data";
-  for (const name of readdirSync(path.join(ROOT, dataDir)).sort()) {
-    if (!name.endsWith(".archlab.json")) continue;
-    /* The committed `.archlab.json` IS an `ArchLabFile` — the same four
-       top-level keys the app's own reader knows — so it goes to the
-       serializer unconverted rather than through a round of model shapes
-       that could normalise away the very geometry this measures. */
-    cases.push({ label: name, file: JSON.parse(read(`${dataDir}/${name}`)) });
-  }
-  check(
-    "there are bundled examples to measure against",
-    cases.length > 0,
-    `no .archlab.json under ${dataDir} — this section would be vacuous`,
-  );
+  /* THE `.alab` SIDE, MEASURED AGAINST THE AUTHOR'S OWN LINES rather than
+     against a re-serialize. The predicate used to be measured against the
+     serializer's output, and both sides shared one wrong idea — a token whose
+     numbers equal the default slot is omitted on the way out, so the pair
+     agreed on "not placed" for an element the text plainly places. The source
+     text cannot agree with that mistake: the spans say which line each element
+     is declared on, and either the token is on it or it is not. */
+  const tokenOnLine = /\((-?[\d.]+),(-?[\d.]+) (-?[\d.]+)x(-?[\d.]+)\)/;
   for (const [label, text] of [
     ["fixture: token-free tb", FREE_TB],
     ["fixture: token-free lr", FREE_LR],
     ["fixture: every element dragged", everyElementDragged(FREE_LR).text],
+    ["fixture: the defaults written back as tokens", DEFAULTS_AS_TOKENS],
   ]) {
-    cases.push({ label, file: c4Document(text).synced.file });
-  }
-
-  for (const { label, file } of cases) {
-    const written = tokenedIds(file);
+    const { file, spans } = parseArchTextWithSpans(text);
+    const lines = text.split("\n");
     const disagreed = [];
     for (const diagram of file.diagrams) {
       for (const node of diagram.nodes) {
-        const predicted = hasAuthoredGeometry(file, diagram, node);
-        if (predicted !== written.has(node.id)) {
+        const span = spans.nodes.get(spanKey(diagram.id, node.id));
+        const declared = lines[span.start - 1];
+        const inText = tokenOnLine.test(declared);
+        if (placedByHand(node) !== inText) {
           disagreed.push(
-            `${diagram.id}/${node.id}: predicate ${predicted}, text ${written.has(node.id)}`,
+            `${diagram.id}/${node.id}: predicate ${placedByHand(node)}, line "${declared.trim()}"`,
           );
         }
       }
     }
     check(
-      `${label}: the predicate and the emitted line agree on every element`,
+      `${label}: the predicate matches the declaration line, every element`,
       disagreed.length === 0,
       disagreed.join("; "),
+    );
+  }
+
+  /* THE JSON SIDE. `position` is required of every element there — there is no
+     way for a `.archlab.json` document to leave one to the layout — so every
+     element read through the app's own reader is placed, and the direction
+     control on that pane has to say so. Read through `deserializeModel`, not
+     `JSON.parse`: the mark is put on by the reader, and a section that parsed
+     the bytes itself would be measuring a model the app never builds.
+
+     FROM THE FILESYSTEM, never a hand-listed set of names: a hardcoded list
+     cannot notice the example it has never heard of, which is how three checks
+     in this repo passed while the feature under them was broken. */
+  const dataDir = "src/features/viewer/service/data";
+  const names = readdirSync(path.join(ROOT, dataDir))
+    .filter((name) => name.endsWith(".archlab.json"))
+    .sort();
+  check(
+    "there are bundled JSON examples to measure against",
+    names.length > 0,
+    `no .archlab.json under ${dataDir} — this section would be vacuous`,
+  );
+  for (const name of names) {
+    const text = read(`${dataDir}/${name}`);
+    const file = fileFromEditorModel(deserializeModel(text));
+    const nodes = file.diagrams.flatMap((diagram) => diagram.nodes);
+    check(
+      `${name}: every element states its own position, so every one is placed`,
+      nodes.length > 0 &&
+        nodes.every((node) => placedByHand(node)) &&
+        /"position"/.test(text),
+      `${nodes.filter((node) => !placedByHand(node)).length} of ${nodes.length} unmarked`,
+    );
+    /* THE MARK IS INVISIBLE TO BOTH WRITERS, which is the whole reason it is a
+       symbol: a string field would be document content, would collide with an
+       author's own `! authoredGeometry` line, and would have to be stripped in
+       two serializers. `check:roundtrip` proves the JSON bytes; this proves
+       the name reaches neither output. */
+    check(
+      `${name}: the mark reaches neither the JSON nor the .alab text`,
+      !JSON.stringify(file).includes("authoredGeometry") &&
+        !serializeArchText(file).includes("authoredGeometry"),
+      "a read-time annotation leaked into the document",
     );
   }
 }
@@ -512,13 +614,7 @@ console.log("\nResetting one element patches one line and nothing else");
     "every OTHER element keeps the coordinates it was dragged to",
     layerOf(edit.doc, DIAGRAM_ID)
       .nodes.filter((node) => node.id !== "api")
-      .every((node) =>
-        hasAuthoredGeometry(
-          edit.doc.synced.file,
-          layerOf(edit.doc, DIAGRAM_ID),
-          node,
-        ),
-      ),
+      .every((node) => placedByHand(node)),
     "releasing one element released others",
   );
 }
@@ -862,7 +958,7 @@ console.log("\nThe menu offers the release, and the announcement is honest");
     "the note would be counting something of its own",
   );
   check(
-    "the note renders above the direction rows of the layer section",
+    "the note renders above the direction rows, at both scopes",
     menu.indexOf("{note}") !== -1 &&
       menu.indexOf("{note}") < menu.indexOf("DIRECTIONS.map"),
     "a caveat read after the press is a caveat that arrived too late",
@@ -918,21 +1014,6 @@ console.log("\nThe menu offers the release, and the announcement is honest");
 
   const hook = read("src/features/playground/lib/use-canvas-editing.ts");
   check(
-    "the direction announcement has a branch for a layer that cannot move",
-    /so nothing moved/.test(hook) && /placed by hand/.test(hook),
-    "the announcement would claim the layer turned when it did not",
-  );
-  check(
-    "and it points at the row by its shared label rather than a typed copy",
-    /resetLayerLabel\(/.test(hook),
-    "prose naming a control that can be reworded out from under it",
-  );
-  check(
-    "the mixed case is said too, not folded into the inert one",
-    /stayed where/.test(hook),
-    "a half-applied direction would be announced as a whole one",
-  );
-  check(
     "both reset announcements name the undo key",
     (
       hook.match(
@@ -978,14 +1059,565 @@ console.log("\nThe menu offers the release, and the announcement is honest");
     "a release button on a read-only canvas, or on an element nothing placed",
   );
   check(
-    "the canvas decides that from hasAuthoredGeometry, not its own comparison",
-    /hasAuthoredGeometry\(archLabFileFrom\(model\), diagram, node\)/.test(
-      canvas,
-    ) &&
+    "the canvas decides that from placedByHand, not its own comparison",
+    /placedAt: placedByHand\(node\)/.test(canvas) &&
       /canRelease = edit !== undefined && nodeDetail\?\.placedAt != null/.test(
         canvas,
       ),
     "a second opinion about what counts as placed by hand",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 11. The press says what did not move, in the menu and to a screen reader  */
+/*                                                                          */
+/* The menu's note is a caveat read BEFORE the press. The reader who needs   */
+/* the fact is the one who has already pressed, watched the diagram sit      */
+/* still and is deciding whether the control is broken.                      */
+/* `directionInertWarning` is that sentence, and it now has two callers:     */
+/* the menu shows it in place of the caveat and STAYS OPEN so the release    */
+/* row is still on screen, and `applyDirection` announces it into the live   */
+/* region. A toast held it for one round and was rejected — a corner of the  */
+/* screen, a whole canvas from the row that was pressed — so the assertions  */
+/* below pin the menu and the announcement where they used to pin the toast, */
+/* including the source scan that keeps the rejected surface from creeping   */
+/* back. The message is CALLED rather than regex-matched, because a message  */
+/* nothing ever evaluates is a message whose shape nothing proved.           */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nThe press says what did not move, in the menu and out loud");
+
+{
+  /** The layer with `ids` dragged and the rest left to the layout. */
+  function dragged(text, ids) {
+    let doc = c4Document(text);
+    let current = text;
+    for (const id of ids) {
+      const node = nodesById(doc, DIAGRAM_ID).get(id);
+      const next = movedNodeEdit(doc, current, DIAGRAM_ID, id, {
+        x: node.position.x + 80,
+        y: node.position.y + 160,
+      });
+      if (next === null) throw new Error(`the drag of ${id} was refused`);
+      doc = next.doc;
+      current = next.text;
+    }
+    return doc;
+  }
+
+  /* THE SILENT HAPPY PATH FIRST. Everything below is a warning, and a warning
+     that also fires on the working case is noise — which is the state that
+     trains a reader to ignore the press that mattered. */
+  const free = layerPlacement(c4Document(FREE_TB), DIAGRAM_ID);
+  check(
+    "a layer the layout places freely raises nothing at all",
+    free.placed === 0 &&
+      free.pinned === 0 &&
+      directionInertWarning(free) === null,
+    JSON.stringify(free),
+  );
+  check(
+    "and a document this cannot be asked about raises nothing either",
+    directionInertWarning(null) === null,
+    "a null placement would have to be read as 'everything is placed'",
+  );
+
+  /* SOME PLACED. The count is the whole content of this sentence: a reader
+     told only that "some elements are placed" has learned nothing they can
+     act on, and a half-turned diagram is the case that needs explaining. */
+  const partly = layerPlacement(
+    dragged(FREE_TB, ["web", "api", "db"]),
+    DIAGRAM_ID,
+  );
+  const partlyWarning = directionInertWarning(partly);
+  check(
+    "the fixture really is partly placed, or the sentence below is the wrong one",
+    partly.placed === 3 && partly.total > 3 && partly.pinned === 0,
+    JSON.stringify(partly),
+  );
+  check(
+    "a partly placed layer is warned about, and the message names the count",
+    partlyWarning !== null &&
+      partlyWarning.message.includes(`3 of ${partly.total} elements`),
+    partlyWarning?.message,
+  );
+  check(
+    "it says the rest DID move, so it is not read as the inert case",
+    partlyWarning !== null &&
+      /the rest took the new direction/.test(partlyWarning.message) &&
+      !partlyWarning.message.includes("Nothing"),
+    partlyWarning?.message,
+  );
+
+  /* ALL PLACED — the press did nothing visible at all, which is a different
+     fact and gets a different sentence. */
+  const all = layerPlacement(everyElementDragged(FREE_TB).doc, DIAGRAM_ID);
+  const allWarning = directionInertWarning(all);
+  check(
+    "an entirely placed layer is told plainly that nothing moved",
+    allWarning !== null &&
+      allWarning.message.startsWith("Nothing in this layer moved") &&
+      allWarning.message.includes(`all ${all.total} of its elements`),
+    allWarning?.message,
+  );
+  check(
+    "and the two cases are not the same sentence with a number swapped",
+    allWarning.message !== partlyWarning.message &&
+      !/\d+ of \d+ elements/.test(allWarning.message) &&
+      !partlyWarning.message.startsWith("Nothing"),
+    "blurring 'nothing moved' into 'some moved' is the wording this forbids",
+  );
+
+  /* THE REMEDY IS NAMED AS THE MENU'S ROW, under the menu's own label. Two
+     spellings of one control is the drift `resetLayerLabel` exists to prevent
+     — a reader who is told to look for "Release positions" and finds a row
+     called "Let the layout place them" has been sent to the wrong place. */
+  check(
+    "the release is offered under the shared row label, not a second spelling",
+    allWarning.releaseLabel === resetLayerLabel(all.placed) &&
+      partlyWarning.releaseLabel === resetLayerLabel(partly.placed),
+    `${allWarning.releaseLabel} / ${partlyWarning.releaseLabel}`,
+  );
+
+  /* ALL PINNED. There is no release row on a layer whose every placed element
+     is `pin`ned, so there must be no button either — naming a remedy that is
+     not there is the failure this whole feature exists to stop. */
+  const pinnedOnly = directionInertWarning({ total: 2, placed: 0, pinned: 2 });
+  check(
+    "an all-pinned layer is warned about with no action to press",
+    pinnedOnly !== null &&
+      pinnedOnly.releaseLabel === null &&
+      pinnedOnly.message.includes("pinned"),
+    JSON.stringify(pinnedOnly),
+  );
+  /* AND WHAT THE ACTION WILL LEAVE. The release skips pins, so a message
+     counting four while the button frees two would promise more than it does. */
+  const mixed = directionInertWarning({ total: 4, placed: 2, pinned: 2 });
+  check(
+    "a mix says what stays behind, so the action cannot over-promise",
+    mixed.message.includes("The 2 pinned ones stay in place either way") &&
+      mixed.releaseLabel === resetLayerLabel(2),
+    mixed.message,
+  );
+
+  /* JUDGEMENT 1 — THE FILE-SCOPE PRESS. It warns, because the reader's
+     evidence is identical: they pressed, and the diagram in front of them did
+     not move. What keeps that honest with no file-wide release to offer is
+     that the SENTENCE is layer-scoped — it never claims anything about the
+     diagrams nobody is looking at, so the layer-only action does exactly what
+     the message implies. */
+  check(
+    "the warning never talks about the file, so it is honest at both scopes",
+    [allWarning, partlyWarning, mixed, pinnedOnly].every(
+      (warning) =>
+        warning.message.includes("this layer") &&
+        !/\bfile\b|\bdiagrams\b/.test(warning.message),
+    ),
+    "a file-scope sentence whose remedy can only release one layer",
+  );
+
+  /* JUDGEMENT 4 — A REPEATED PRESS. No dedupe is needed because the EDIT
+     refuses first: choosing the direction already in force returns null, and
+     the handler returns before it says anything. Pinned here rather than
+     reasoned about, because "it cannot happen" is what a repeating bug looks
+     like from the inside. */
+  const placedDoc = everyElementDragged(FREE_TB).doc;
+  const turned = revisedDirectionEdit(
+    placedDoc,
+    serializeArchText(placedDoc.synced.file),
+    DIAGRAM_ID,
+    "lr",
+  );
+  check(
+    "pressing the direction already in force is refused, so nothing repeats",
+    turned !== null &&
+      revisedDirectionEdit(turned.doc, turned.text, DIAGRAM_ID, "lr") === null,
+    "a repeated press would announce a second time for an edit that did nothing",
+  );
+
+  /* REACHABILITY. `67b35ae` again, and the branch has already spent two rounds
+     on it: a correct module behind a control nothing invokes is the same bug
+     as no module at all. Read from the source with comments stripped — the
+     prose above these handlers quotes the fragments, and a regex counting the
+     comment would report success for exactly the state this forbids. */
+  const hookCode = code("src/features/playground/lib/use-canvas-editing.ts");
+  const menuCode = code(
+    "src/features/playground/components/layout-direction-menu.tsx",
+  );
+  const applyBody =
+    /const applyDirection = useCallback\(([\s\S]*?)\n {4}\[/.exec(hookCode);
+  check(
+    "the direction handler exists in the hook this reads",
+    applyBody !== null,
+    "applyDirection not found — the assertions below would be vacuous",
+  );
+  check(
+    "the direction press is what asks whether anything moved",
+    applyBody !== null &&
+      /directionInertWarning\(placement\)/.test(applyBody[1]),
+    "a warning nobody can trigger is a warning that does not exist",
+  );
+
+  /* THE `sr-only` ANNOUNCEMENT CARRIES THE PLACEMENT PROSE. Pinned first and
+     hardest, because it is the failure this whole change was most likely to
+     introduce. While a toast held the fact, this sentence deliberately did NOT
+     — `<Toaster />` is itself a live region, so saying it in both would have
+     said it twice. With the toast gone the live region is the ONLY channel a
+     screen reader has (the menu's note is a plain `<p>`), so dropping the
+     prose here leaves exactly those readers told nothing about a press that
+     did nothing: the original defect, aimed at the people who had it first. */
+  check(
+    "the announcement carries the placement sentence itself, not a paraphrase",
+    applyBody !== null &&
+      /inert\.message/.test(applyBody[1]) &&
+      !/placed by hand|Nothing in this layer/.test(applyBody[1]),
+    "a screen-reader user told nothing at all about a press that did nothing",
+  );
+  check(
+    "and it names the release row, so the remedy can be looked for",
+    applyBody !== null &&
+      /inert\.releaseLabel/.test(applyBody[1]) &&
+      !/Let the layout place/.test(applyBody[1]),
+    "the announcement and the menu row could be reworded apart",
+  );
+  check(
+    "and it says what the FILE says, not what the shape did, when inert",
+    applyBody !== null && /now says \$\{/.test(applyBody[1]),
+    "a live region claiming the layer turned beside a sentence saying it did not",
+  );
+  /* ONE CHANNEL PER FACT, STILL — the note must not become a second live
+     region now that the announcement carries the sentence, or the two say the
+     same thing to the same listener. */
+  check(
+    "the menu's note announces nothing of its own",
+    !/aria-live|role="status"|role="alert"/.test(menuCode),
+    "the same sentence in two live regions — said twice to anyone listening",
+  );
+
+  /* THE REJECTED SURFACE, KEPT OUT. A toast in a screen corner read as a
+     notification about the app rather than as the answer to the press, and it
+     duplicated a remedy the menu already holds one line below the row. It is
+     the obvious thing to reach for again, so the whole feature is scanned
+     rather than just the one handler — and `toast.tsx` keeps its ~20 other
+     callers, so this is a claim about the playground, not about the app. */
+  for (const file of [
+    "src/features/playground/lib/use-canvas-editing.ts",
+    "src/features/playground/components/layout-direction-menu.tsx",
+    "src/features/playground/components/view-playground.tsx",
+  ]) {
+    check(
+      `${path.basename(file)} raises no toast for the direction`,
+      !/\btoast\s*\(/.test(code(file)) &&
+        !/from "@\/components\/ui\/toast"/.test(code(file)),
+      "the surface the reader rejected, back in the corner of the screen",
+    );
+  }
+
+  /* THE MENU STAYS OPEN ON AN INERT PRESS, AND ONLY THEN. Both halves matter:
+     a menu that never closes hides the picture that is the reader's only proof
+     the press worked, and a menu that always closes is the state that read as
+     a broken control. The verdict comes from `directionInertWarning`, so the
+     menu cannot stay open on a press it would then describe as having moved
+     things. */
+  const chooseBody = /const choose = \(([\s\S]*?)\n {2}\};/.exec(menuCode);
+  check(
+    "the menu has a direction handler this section can read",
+    chooseBody !== null,
+    "choose not found — the assertions below would be vacuous",
+  );
+  check(
+    "the menu asks the gesture module whether the press can move anything",
+    /const inert =[\s\S]{0,80}directionInertWarning\(placement\)/.test(
+      menuCode,
+    ) && !/placedByHand|\.placed \+ placement\.pinned > 0/.test(chooseBody[1]),
+    "a component with a second opinion about what the note is asserting",
+  );
+  check(
+    "a press that re-laid the diagram closes the menu",
+    chooseBody !== null &&
+      /if \(inert === null\) \{\s*closeMenu\(\);\s*return;\s*\}/.test(
+        chooseBody[1],
+      ),
+    "a menu that never closes, over the corner of the picture it just turned",
+  );
+  /* MEASURED WITH THE GUARDED BRANCH CUT OUT, not by counting `closeMenu()`
+     in the whole handler. A count of one passes on a handler that closes
+     unconditionally, which is exactly the state this assertion is for. */
+  const inertPath =
+    chooseBody === null
+      ? ""
+      : chooseBody[1].replace(/if \(inert === null\) \{[\s\S]*?\n {4}\}/, "");
+  check(
+    "and a press that moved nothing leaves it open, with the note in it",
+    chooseBody !== null &&
+      /setReported\(true\)/.test(inertPath) &&
+      !/closeMenu\(\)|setOpen\(false\)/.test(inertPath),
+    "the caveat read before the press was the only telling the reader got",
+  );
+  /* AND THE OTHER TWO ROWS STILL CLOSE. Each takes a line out of the document
+     and leaves nothing to weigh, so `menuitem` is the honest role and
+     dismissal is what that role promises. */
+  check(
+    "clearing and releasing still close the menu",
+    /const clear = \(scope: DirectionScope\) => \{\s*closeMenu\(\);/.test(
+      menuCode,
+    ) && /const release = \(\) => \{\s*closeMenu\(\);/.test(menuCode),
+    "a menu left open by a row whose role promises to dismiss it",
+  );
+  /* THE ROLES. A `menuitem` conventionally dismisses its menu and a radio in a
+     menu conventionally does not — so the rows that survive a press have to be
+     the radios, or the new behaviour is a surprise rather than the role's own
+     promise. */
+  check(
+    "the direction rows are radios and the acting rows are menuitems",
+    (menuCode.match(/role="menuitemradio"/g) ?? []).length === 1 &&
+      /aria-checked=\{inForce\}/.test(menuCode) &&
+      (menuCode.match(/role="menuitem"/g) ?? []).length === 2,
+    "a menuitem that does not dismiss, which is the one thing its role promises",
+  );
+  /* AND NOTHING TRAPS FOCUS. The reader is left on the row they pressed and
+     Tabs down to the release row; a roving tabindex or an autofocus would
+     either strand them or put their caret on a destructive row they did not
+     choose. */
+  check(
+    "the menu neither traps focus nor moves it onto the release row",
+    !/tabIndex|autoFocus|\.focus\(\)/.test(menuCode),
+    "a menu that stays open around focus the reader cannot get out of",
+  );
+
+  /* THE TWO TENSES ARE TWO SENTENCES. Same slot, and that is the point: the
+     sentence in front of the reader is how they know whether they are being
+     warned about a press or told the outcome of one. Written once each — the
+     report is `directionInertWarning`'s own string, never re-typed here. */
+  check(
+    "the note switches to the module's own sentence after an inert press",
+    /reported && inert !== null\s*\?\s*inert\.message/.test(menuCode) &&
+      /placementNote\(placement\)/.test(menuCode),
+    "one tense for both moments, or a second hand-typed copy of the report",
+  );
+  check(
+    "the report is not a hand-typed second copy of it",
+    !menuCode.includes("Nothing in this layer moved"),
+    "two spellings of one sentence, one of which will be reworded alone",
+  );
+  check(
+    "and the caveat and the report cannot collapse into one string",
+    /won't move/.test(
+      read("src/features/playground/components/layout-direction-menu.tsx"),
+    ) &&
+      [allWarning, partlyWarning, mixed, pinnedOnly].every(
+        (warning) =>
+          !/won't|will not/.test(warning.message) &&
+          /moved|stayed/.test(warning.message),
+      ),
+    "a caveat read after the act, or a report worded as a warning",
+  );
+  /* AND THE REPORT IS CLEARED. A menu reopened later must show the caveat, not
+     a report of a press the reader has since scrolled past. */
+  check(
+    "reopening the menu starts on the caveat again",
+    (menuCode.match(/setReported\(false\)/g) ?? []).length === 2,
+    "a stale 'nothing moved' above rows that have not been pressed",
+  );
+
+  /* JUDGEMENT 2 — CLEARING DOES NOT WARN. It asks for no shape, so there is
+     no expectation to falsify: the line leaves the document, which is exactly
+     what the reader asked for, and the menu's own tick answers it. */
+  const clearBody =
+    /const clearDirection = useCallback\(([\s\S]*?)\n {4}\[/.exec(hookCode);
+  check(
+    "the clearing handler exists in the hook this reads",
+    clearBody !== null,
+    "clearDirection not found — the assertion below would be vacuous",
+  );
+  check(
+    "clearing raises no placement warning, so the fact stays about a refused shape",
+    clearBody !== null &&
+      !/directionInertWarning|inert/.test(clearBody[1]) &&
+      !/placed by hand/.test(clearBody[1]),
+    "a warning on every direction press is one nobody reads on the press that matters",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 12. A TOKEN THAT EQUALS THE DEFAULT still beats the direction            */
+/*                                                                          */
+/* The section the other eleven could not have caught, and the reason this  */
+/* one is written from the SOURCE rather than from the serializer. Section  */
+/* 3 used to measure the predicate against a full serialize and both sides  */
+/* held the same wrong idea: the writer omits a token whose numbers equal   */
+/* the default slot, so a document that writes its defaults out was read as */
+/* placing nothing. Every assertion was green while three of three elements */
+/* refused the direction, the menu carried no note and the press reported   */
+/* nothing — the exact bug this feature exists to end, in its quietest form.*/
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA coordinate that equals the default is still a coordinate");
+
+{
+  const doc = c4Document(DEFAULTS_AS_TOKENS);
+  const nodes = nodesById(doc, DIAGRAM_ID);
+  const lrLayout = layoutAt(doc, DIAGRAM_ID, "lr");
+
+  /* THE PREMISE FIRST, so the assertions below document the bug rather than
+     just the fix. Two halves: changing the direction moves NOTHING (every
+     element keeps its token's coordinates), and the direction would otherwise
+     have had somewhere to move it to — an element whose `tb` slot happens to
+     be its `lr` slot proves nothing either way, so the second half is "at
+     least one" rather than "all". */
+  const underTb = nodesById(
+    c4Document(DEFAULTS_AS_TOKENS.replace("\ndirection lr", "")),
+    DIAGRAM_ID,
+  );
+  const budged = [...nodes.keys()].filter(
+    (id) =>
+      underTb.get(id).position.x !== nodes.get(id).position.x ||
+      underTb.get(id).position.y !== nodes.get(id).position.y,
+  );
+  check(
+    "the direction genuinely does not apply — lr moves not one element",
+    budged.length === 0 && nodes.size > 1,
+    `${budged.length} of ${nodes.size} elements moved: ${budged.join(", ")}`,
+  );
+  const offLrSlot = [...nodes.keys()].filter(
+    (id) =>
+      at(lrLayout, id).x !== nodes.get(id).position.x ||
+      at(lrLayout, id).y !== nodes.get(id).position.y,
+  );
+  check(
+    "and lr had somewhere to put them, so the refusal is what stopped it",
+    offLrSlot.length > 0,
+    "every tb slot is also an lr slot — this fixture would prove nothing",
+  );
+  check(
+    "and the tokens really are the default coordinates, not a drag",
+    nodesById(c4Document(FREE_TB), DIAGRAM_ID).size === nodes.size &&
+      [...nodes.keys()].every((id) => {
+        const free = nodesById(c4Document(FREE_TB), DIAGRAM_ID).get(id);
+        return (
+          free.position.x === nodes.get(id).position.x &&
+          free.position.y === nodes.get(id).position.y
+        );
+      }),
+    "the fixture drifted from the tb layout it was built from",
+  );
+
+  /* THE COUNT. `placed: 0` here was the whole defect: a layer that refuses
+     every direction, reported as free to move. */
+  const placement = layerPlacement(doc, DIAGRAM_ID);
+  check(
+    "every element is counted as placed, not one of them written off",
+    placement.total === nodes.size &&
+      placement.placed === nodes.size &&
+      placement.pinned === 0,
+    JSON.stringify(placement),
+  );
+
+  /* AND THE READER IS TOLD. Silence was the second half of the defect: no
+     note before the press because nothing was counted, and no report after
+     it for the same reason. */
+  const warning = directionInertWarning(placement);
+  check(
+    "the press is not silent, and the sentence is the inert one",
+    warning !== null &&
+      warning.message.startsWith("Nothing in this layer moved") &&
+      warning.message.includes(`all ${nodes.size} of its elements`) &&
+      warning.releaseLabel === resetLayerLabel(nodes.size),
+    JSON.stringify(warning),
+  );
+
+  /* THE SWEEP TAKES ALL OF THEM. Under the comparison this replaced, the
+     coincidental tokens were skipped — so the reader pressed a row that
+     promised the layer back and the tokens defeating the direction stayed in
+     the file. Counted by TOKEN, not by line, because a skipped element leaves
+     a line the patch never touched. */
+  const edit = resetLayerPositionsEdit(doc, DEFAULTS_AS_TOKENS, DIAGRAM_ID);
+  check(
+    "the sweep applies as a patch",
+    edit !== null && edit.path === "patch",
+    `path: ${edit === null ? "refused" : edit.path}`,
+  );
+  const leftover = edit.text
+    .split("\n")
+    .filter((line) => /^ {2}[\w-]+:\w+ .*\(-?[\d.]+,/.test(line));
+  check(
+    "not one token survives it, including the coincidental ones",
+    leftover.length === 0,
+    leftover.join(" | "),
+  );
+
+  /* AND THE DIRECTION FINALLY APPLIES, measured on the reparsed text: the
+     point of the whole gesture is the picture, not the bytes. */
+  const after = nodesById(c4Document(edit.text), DIAGRAM_ID);
+  const off = [...after.keys()].filter(
+    (id) =>
+      after.get(id).position.x !== at(lrLayout, id).x ||
+      after.get(id).position.y !== at(lrLayout, id).y,
+  );
+  check(
+    "after the sweep every element sits where lr puts it",
+    off.length === 0 && after.size === nodes.size,
+    off.join(", "),
+  );
+  check(
+    "and the layer now reports nothing placed",
+    layerPlacement(c4Document(edit.text), DIAGRAM_ID).placed === 0,
+    JSON.stringify(layerPlacement(c4Document(edit.text), DIAGRAM_ID)),
+  );
+
+  /* THE WRITER'S OWN TEST, ON ITS OWN TERMS. `emitNode` still omits a token
+     whose numbers equal the default slot, and that is a DECISION rather than
+     an oversight: `serializeArchText` is documented as a pure function of the
+     model, and the mark is a read-time annotation that no share link, JSON
+     round trip or `structuredClone` carries — so honouring it in the emitter
+     would make canonical bytes depend on which reader happened to load the
+     document. The consequence is pinned here rather than discovered: this is
+     the one place where the two questions give different answers, and the
+     release still removes the token from the SOURCE because it patches lines
+     (above) rather than re-emitting the file. */
+  const canonical = serializeArchText(doc.synced.file);
+  const stillTokened = canonical
+    .split("\n")
+    .filter((line) => /^ {2}[\w-]+:\w+ .*\(-?[\d.]+,/.test(line));
+  check(
+    "a full serialize omits the tokens the emitter's numeric test calls default",
+    stillTokened.length < nodes.size,
+    `${stillTokened.length} of ${nodes.size} lines kept a token`,
+  );
+  check(
+    "so the two questions provably differ here, and only the source's wins",
+    [...nodes.values()].every((node) => placedByHand(node)) &&
+      canonical !== DEFAULTS_AS_TOKENS,
+    "if these agreed, this whole section would be measuring nothing",
+  );
+
+  /* THE NOTE IS REACHABLE UNDER BOTH SCOPES. It was rendered inside the layer
+     section, so `Whole file` — the same press, the same evidence, the same
+     diagram sitting still — was warned not at all, while `This layer` was.
+     Source-scanned, in the manner of section 10:
+     the note has to be OUTSIDE the section loop for both headings to get it. */
+  const menu = code(
+    "src/features/playground/components/layout-direction-menu.tsx",
+  );
+  check(
+    "the note is rendered once, outside the per-section loop",
+    (menu.match(/\{note\}/g) ?? []).length === 1 &&
+      menu.indexOf("{note}") < menu.indexOf("SECTIONS.map"),
+    "a note inside a section is a note one scope's rows never carry",
+  );
+  check(
+    "and nothing gates it on the layer scope any more",
+    !/scope === "layer" && note/.test(menu),
+    "the file section's rows would write a line with no warning read first",
+  );
+  /* THE RELEASE ROW IS THE OPPOSITE DECISION, and it is deliberate: it
+     releases ONE layer, so it stays under that heading rather than appearing
+     twice under one label with two different reaches. */
+  check(
+    "the release row stays gated on the layer scope, alone",
+    (menu.match(/scope === "layer" &&\s*\n?\s*placement !== null/g) ?? [])
+      .length === 1,
+    "a file-wide release row, or none at all",
   );
 }
 

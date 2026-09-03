@@ -17,6 +17,7 @@
  * keep the syntax erasable and type-only imports as `import type`.
  */
 
+import { markPlacedByHand } from "@/types";
 import type { C4Diagram } from "@/types";
 import { describeError } from "@/lib/errors";
 import type { EditorModel } from "../state";
@@ -50,6 +51,14 @@ export function deserializeModel(text: string): EditorModel {
 
   const diagrams: Record<string, C4Diagram> = {};
   for (const diagram of file.diagrams) {
+    /* EVERY JSON ELEMENT IS PLACED BY HAND, because `position` is required
+       here (`validate.ts` refuses a node without one) — there is no way for a
+       `.archlab.json` document to leave an element to the layout the way an
+       `.alab` line does by omitting its token. So a layout direction cannot
+       move anything in this pane until the coordinates are released, and the
+       control has to say so. Marked with a symbol, which `serializeModel`
+       cannot see: the round trip above stays byte-identical. */
+    for (const node of diagram.nodes) markPlacedByHand(node);
     diagrams[diagram.id] = diagram;
   }
 

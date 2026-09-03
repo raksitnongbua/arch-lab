@@ -73,7 +73,7 @@ import type {
   ExternalRef,
   Point,
 } from "@/types";
-import { childLevelOf } from "@/types";
+import { AUTHORED_GEOMETRY, childLevelOf, placedByHand } from "@/types";
 
 import {
   canonicalDiagramBlock,
@@ -88,7 +88,6 @@ import {
   defaultNodeLayout,
   defaultPositions,
   defaultSizeFor,
-  hasAuthoredGeometry,
   KEYWORD_BY_NODE_TYPE,
   parseArchTextWithSpans,
   serializeArchText,
@@ -112,7 +111,7 @@ import {
   referenceableNodes,
 } from "@/features/viewer/lib/node-palette";
 import { APP_NAME } from "@/lib/constants";
-import { inWords, joinList } from "@/lib/prose";
+import { inWords, joinList, resetLayerLabel } from "@/lib/prose";
 import { slugify } from "@/lib/slug";
 
 import { applyPatches, type CanvasEdit, type LinePatch } from "./line-patch";
@@ -1171,8 +1170,14 @@ export function movedNodeEdit(
  * `node.geometry ?? layout.get(id)` one node at a time — so a direction can
  * be wholly inert, partly applied, or free to move everything, and those are
  * three different sentences to say to a reader who just pressed it. The
- * controls read this rather than counting `(` in the text, so what the menu
+ * controls read this rather than each deciding for itself, so what the menu
  * claims and what a reset would actually rewrite cannot drift apart.
+ *
+ * COUNTED FROM `placedByHand`, the source's own answer. Counted from a
+ * comparison against the default layout instead, it reported a hand-placed
+ * layer as free to move — every element tokened at its default slot, nothing
+ * counted, no note before the press, no report after it, and a direction
+ * that turned nothing.
  */
 export interface LayerPlacement {
   /** Elements in the layer. */
@@ -1180,7 +1185,7 @@ export interface LayerPlacement {
   /** Elements a reset would hand back to the layout. */
   placed: number;
   /**
-   * Elements carrying the author's coordinates AND marked `pin` — placed, and
+   * Elements whose coordinates the source states AND marked `pin` — placed, and
    * deliberately left alone by the sweep. Counted apart from `placed` because
    * the menu owes the reader both numbers: what the direction cannot move,
    * and what pressing the row would actually change.
@@ -1189,22 +1194,23 @@ export interface LayerPlacement {
 }
 
 /**
- * The elements of `diagram` a reset would rewrite: those carrying coordinates
- * the author wrote, minus the ones marked `pin`.
+ * The elements of `diagram` a reset would rewrite: those whose coordinates the
+ * SOURCE states, minus the ones marked `pin`.
  *
- * `hasAuthoredGeometry` IS THE TEST, borrowed from the serializer rather than
- * spelled again here, because the serializer is what decides whether a
- * geometry token appears on the line at all. A second opinion would offer to
- * release nodes whose lines carry nothing (an edit that changes no bytes) or
- * quietly skip ones that do.
+ * `placedByHand` IS THE TEST — token presence, not a comparison against the
+ * default layout. The comparison was the test for one release and it skipped
+ * exactly the elements this gesture exists for: a token whose numbers equal
+ * the default slot reads as "already released", so the sweep left it in the
+ * file and went on defeating the direction after the reader pressed the button
+ * that promised to release it.
  *
  * THE `pin` EXEMPTION IS WHAT THE WORD MEANS — see `C4Node.pinned`. It gives
  * an author a way to keep one element while releasing the rest, which is the
  * only reading under which the attribute does anything at all.
  */
-function releasableNodes(file: ArchLabFile, diagram: C4Diagram): C4Node[] {
+function releasableNodes(diagram: C4Diagram): C4Node[] {
   return diagram.nodes.filter(
-    (node) => node.pinned !== true && hasAuthoredGeometry(file, diagram, node),
+    (node) => node.pinned !== true && placedByHand(node),
   );
 }
 
@@ -1216,11 +1222,18 @@ function releasedNode(
 ): C4Node | null {
   const at = layout.get(node.id);
   if (at === undefined) return null;
-  return {
+  const next: C4Node = {
     ...node,
     position: { x: at.x, y: at.y },
     size: defaultSizeFor(node.type),
   };
+  /* A SPREAD COPIES THE MARK, and this element no longer carries the source's
+     own coordinates — the line about to be written for it has no token. The
+     text is re-parsed before it reaches the reader (`adopt`), so nothing
+     downstream depends on this; leaving it set would still be a model that
+     says the opposite of the bytes it produced. */
+  delete next[AUTHORED_GEOMETRY];
+  return next;
 }
 
 /**
@@ -1238,14 +1251,88 @@ export function layerPlacement(
   const file = doc.synced.file;
   const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
-  const authored = diagram.nodes.filter((node) =>
-    hasAuthoredGeometry(file, diagram, node),
-  );
+  const authored = diagram.nodes.filter((node) => placedByHand(node));
   const pinned = authored.filter((node) => node.pinned === true).length;
   return {
     total: diagram.nodes.length,
     placed: authored.length - pinned,
     pinned,
+  };
+}
+
+/**
+ * What to tell a reader who has just pressed a direction on a layer the
+ * layout is not allowed to place — or `null` when it was free to place
+ * everything, which is the working case and says nothing.
+ *
+ * WHY THIS EXISTS AT ALL, given the menu already carries a note. The note's
+ * own sentence is a caveat about what a direction WILL NOT move, read before
+ * the press. This is the report of what just did not move, and the reader who
+ * needs it is the one who has already pressed, watched the diagram sit still,
+ * and is deciding whether the control is broken. Two moments, two tenses, and
+ * a caveat re-read after the act does not answer the act.
+ *
+ * IT IS ALSO THE TEST, not only the wording. `null` here means the press could
+ * move something, which is what the menu reads to decide whether to close on
+ * it: a press that re-laid the diagram closes the menu, a press that changed
+ * nothing leaves it open with this sentence in it. Deciding that in the
+ * component would let the menu stay open on a press it then described as
+ * having moved things.
+ *
+ * HERE RATHER THAN IN THE HOOK THAT RAISES IT, for `layerPlacement`'s reason:
+ * the counts and the sentence made from them belong to one module, so the
+ * menu's note, the release row's label and this cannot come to three
+ * different conclusions about the same layer. It also puts the wording where
+ * `check:layout-reset` can CALL it — the hook is a React module the check can
+ * only read as text, and a message only ever regex-matched is a message
+ * nothing has proved the shape of.
+ *
+ * TWO CASES, KEPT APART. "Nothing moved" and "some of it moved" are different
+ * facts, and blurring them into "some elements are placed" leaves a reader
+ * with nothing to act on — which is the state that read as a broken control
+ * in the first place. The partly-applied sentence names the count, because
+ * that is the only thing that explains a diagram which half-turned.
+ *
+ * IT MAKES NO CLAIM ABOUT THE FILE. Worded for the layer on screen at both
+ * scopes, so a file-wide press — which does change what other diagrams
+ * inherit — is reported honestly by a sentence that only ever talks about the
+ * one diagram the reader can see, and whose remedy releases exactly that.
+ */
+export interface DirectionInertWarning {
+  message: string;
+  /**
+   * Label for the release that would let the direction take effect, or `null`
+   * when there is nothing to release — a layer whose every placed element is
+   * `pin`ned offers no row, and naming one sends the reader looking for a
+   * control that is not there.
+   */
+  releaseLabel: string | null;
+}
+
+export function directionInertWarning(
+  placement: LayerPlacement | null,
+): DirectionInertWarning | null {
+  if (placement === null) return null;
+  const held = placement.placed + placement.pinned;
+  if (held === 0) return null;
+
+  /* The pinned count is said whenever a release is on offer, never folded
+     into the total: those are the elements the release will LEAVE, so a
+     reader who presses it and finds a box unmoved was told beforehand. */
+  const pinnedClause =
+    placement.pinned === 0 || placement.placed === 0
+      ? ""
+      : ` The ${placement.pinned} pinned ${placement.pinned === 1 ? "one" : "ones"} stay in place either way.`;
+
+  const message =
+    held === placement.total
+      ? `Nothing in this layer moved — ${held === 1 ? "its only element is" : `all ${held} of its elements are`} placed by hand${placement.placed === 0 ? " and pinned" : ""}.${pinnedClause}`
+      : `${held} of ${placement.total} elements in this layer are placed by hand and stayed where they were — the rest took the new direction.${pinnedClause}`;
+
+  return {
+    message,
+    releaseLabel:
+      placement.placed === 0 ? null : resetLayerLabel(placement.placed),
   };
 }
 
@@ -1285,7 +1372,7 @@ export function resetNodePositionEdit(
   if (diagram === undefined) return null;
   const current = diagram.nodes.find((candidate) => candidate.id === nodeId);
   if (current === undefined) return null;
-  if (!hasAuthoredGeometry(file, diagram, current)) return null;
+  if (!placedByHand(current)) return null;
 
   const released = releasedNode(current, defaultNodeLayout(file, diagram));
   if (released === null) return null;
@@ -1343,7 +1430,7 @@ export function resetLayerPositionsEdit(
   const file = doc.synced.file;
   const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
-  const releasable = releasableNodes(file, diagram);
+  const releasable = releasableNodes(diagram);
   if (releasable.length === 0) return null;
 
   const layout = defaultNodeLayout(file, diagram);
