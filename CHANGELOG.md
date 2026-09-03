@@ -9,6 +9,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **The layout direction says what it cannot move, and offers to release it.**
+  Dragging an element writes its coordinates into the document, and those
+  coordinates beat the layout for that element alone — so on a diagram you had
+  arranged by hand, `Top-down` and `Left-right` wrote a line to your file and
+  moved nothing. The direction menu now says so before you press it ("3 of 7
+  elements are placed by hand and won't move"), and carries a row —
+  **Let the layout place them** — that takes those coordinates off every
+  element in the layer in one undoable change. The element panel offers the
+  same for one element beside the coordinates it is sitting at, and `pin` on
+  an element line now means what it always looked like it meant: kept when the
+  rest of the layer is released. The whole-file section is deliberately
+  unchanged; nothing relays out diagrams you cannot see.
 - **A paste that came in with the wrong indentation can be fixed in one
   click.** `.alab` indentation is significant, so text copied out of somewhere
   that had its own — a chat window, a nested code block, a docs page — arrives

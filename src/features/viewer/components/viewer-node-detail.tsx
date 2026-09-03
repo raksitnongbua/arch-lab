@@ -28,6 +28,14 @@
  * than imported because the layering runs editor → viewer → sequence — this
  * feature cannot import the sequence viewer's.
  *
+ * IT ALSO SAYS WHERE THE ELEMENT IS, and that is not decoration. A drag
+ * writes coordinates into the document and those coordinates beat the layout
+ * for this element alone, so a reader who has dragged something has no other
+ * way to learn why the direction control then does nothing to it. The row
+ * shows the coordinates and offers to hand them back — `detail.placedAt`
+ * decides whether it appears, from the serializer's own test rather than a
+ * comparison made here.
+ *
  * Announcements come from the host's existing aria-live region, not from
  * this component (same contract as the relationship card): the playground
  * says what the applied edit did.
@@ -42,6 +50,7 @@ import {
   MoveLeft,
   MoveRight,
   Pencil,
+  RotateCcw,
   Trash2,
   X,
   ZoomIn,
@@ -131,6 +140,14 @@ export interface NodeDetail {
    * states arrives the same way.
    */
   tagColors?: Readonly<Record<string, string>>;
+  /**
+   * The element's own `(x,y)`, when the text carries one — `null` when the
+   * layout placed it and there is nothing to release. Decided by the canvas
+   * through `hasAuthoredGeometry`, the serializer's own test, rather than by
+   * comparing coordinates here: two opinions about "is this placed by hand"
+   * is how a panel comes to offer a release that writes no bytes.
+   */
+  placedAt: { x: number; y: number } | null;
 }
 
 /** Directional glyph for a connection row, seen from the selected element. */
@@ -786,6 +803,7 @@ export function ViewerNodeDetail({
   onRevise,
   onNest,
   onUnnest,
+  onReleasePosition,
 }: {
   detail: NodeDetail;
   onDismiss: () => void;
@@ -809,6 +827,13 @@ export function ViewerNodeDetail({
    * nobody filled. Present only beside a child the canvas can see is empty.
    */
   onUnnest?: () => void;
+  /**
+   * Take the element's hand-written coordinates off its line and let the
+   * layout place it again. Present only beside an element the canvas can see
+   * is placed (`detail.placedAt`), on an editable canvas — the per-element
+   * presence rule `onNest` follows.
+   */
+  onReleasePosition?: () => void;
 }): React.JSX.Element {
   const { node } = detail;
 
@@ -887,6 +912,30 @@ export function ViewerNodeDetail({
               one patch. A child diagram is a whole block elsewhere in the
               file — an action, not a field, and putting it behind Apply would
               let Cancel imply it could be taken back after the block existed. */}
+          {/* WHERE THE COORDINATES ARE SAID OUT LOUD. A reader who has dragged
+              this element has no other way to learn that the drag wrote a
+              number into their file — and therefore no way to connect it to
+              the layout direction quietly doing nothing. Outside the form for
+              the reason nesting is: releasing a position rewrites the line at
+              once, and putting it behind Apply would let Cancel imply it
+              could be taken back after the coordinates were gone. */}
+          {detail.placedAt !== null && onReleasePosition !== undefined ? (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2">
+              <p className="text-[11px] text-muted-foreground">
+                Placed at {Math.round(detail.placedAt.x)},{" "}
+                {Math.round(detail.placedAt.y)}
+              </p>
+              <button
+                type="button"
+                onClick={onReleasePosition}
+                title="Removes the (x,y) written on this element's line so the layout direction can move it"
+                className={buttonClasses({ variant: "outline", size: "sm" })}
+              >
+                <RotateCcw aria-hidden="true" className="size-3.5" />
+                Let the layout place it
+              </button>
+            </div>
+          ) : null}
           {onNest !== undefined || onUnnest !== undefined ? (
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
               {onNest !== undefined ? (

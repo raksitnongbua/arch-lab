@@ -48,6 +48,16 @@
  * The glyphs are the shapes, not letters: a column of bars for top-down, a row
  * of them for left-to-right. A reader reaches for this because the picture is
  * the wrong shape, so the control shows shapes.
+ *
+ * AND IT SAYS WHAT IT CANNOT DO, AT THE MOMENT OF PRESSING. Geometry beats the
+ * direction per element, so on a diagram somebody has arranged by hand this
+ * menu's rows write a line and move nothing — which read as a broken control
+ * for as long as the only place that fact was written down was `/validate`, a
+ * page nobody visits with a diagram in front of them. So the layer's section
+ * carries a one-line note when elements are placed, and a row that releases
+ * them. The counts come from `layerPlacement`, which asks the SERIALIZER
+ * whether a line carries geometry; counting `(` here would be a second
+ * opinion about the thing the note is asserting.
  */
 
 import { useCallback, useId, useRef, useState } from "react";
@@ -57,6 +67,11 @@ import { buttonClasses } from "@/components/ui/button";
 import { useMenuDismissal } from "@/components/ui/menu-dismissal";
 import { cn } from "@/lib/utils";
 import type { C4LayoutDirection } from "@/types";
+
+/* One spelling of the row's label, shared with the announcement that points a
+   reader at it and with the validator's advice — see `resetLayerLabel`. */
+import { resetLayerLabel } from "@/lib/prose";
+import type { LayerPlacement } from "../input/canvas-edit";
 
 /** Which document line a press writes. */
 export type DirectionScope = "layer" | "file";
@@ -146,18 +161,59 @@ const WRITES: Record<DirectionScope, Record<C4LayoutDirection, string>> = {
   },
 };
 
+/**
+ * The note above the layer's direction rows: what a direction will not move.
+ *
+ * WORDED FROM THE COUNTS rather than chosen from three fixed strings, because
+ * the mixed case is the one that has to be exact. "3 of 7 elements are placed
+ * by hand" is the sentence that explains a diagram which half-moved; a reader
+ * told only that "some elements are placed" has learned nothing they can act
+ * on, and a reader told nothing concludes the control is broken.
+ *
+ * `null` when the layout places everything — then there is nothing to warn
+ * about and the section is the two rows it always was.
+ */
+function placementNote(placement: LayerPlacement): string | null {
+  const held = placement.placed + placement.pinned;
+  if (held === 0) return null;
+  /* The pinned count is said SEPARATELY, never folded into the total: those
+     are the elements the release row will leave behind, so a reader who
+     presses it and finds one box unmoved was told why beforehand. */
+  const pinnedTail =
+    placement.pinned === 0
+      ? ""
+      : ` ${placement.pinned} ${placement.pinned === 1 ? "is pinned and keeps its place" : "are pinned and keep their places"}.`;
+  if (held === placement.total) {
+    return held === 1
+      ? `The only element is placed by hand — a direction won't move it.${pinnedTail}`
+      : `All ${held} elements are placed by hand — a direction won't move them.${pinnedTail}`;
+  }
+  return `${held} of ${placement.total} elements are placed by hand and won't move.${pinnedTail}`;
+}
+
 export function LayoutDirectionMenu({
   layerDirection,
   fileDirection,
+  placement,
   onApply,
   onClear,
+  onRelease,
 }: {
   /** This diagram's own attribute, or null when it carries none. */
   layerDirection: C4LayoutDirection | null;
   /** The file's header line, or null when it has none. */
   fileDirection: C4LayoutDirection | null;
+  /**
+   * How much of the layer on screen is placed by hand — what decides the
+   * note, the release row and the trigger's own tooltip. `null` for a
+   * document this cannot be asked about, which renders the menu exactly as it
+   * was before any of it existed.
+   */
+  placement: LayerPlacement | null;
   onApply: (scope: DirectionScope, direction: C4LayoutDirection) => void;
   onClear: (scope: DirectionScope) => void;
+  /** Hand this layer's hand-written coordinates back to the layout. */
+  onRelease: () => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -183,6 +239,21 @@ export function LayoutDirectionMenu({
     setOpen(false);
     onClear(scope);
   };
+  const release = () => {
+    setOpen(false);
+    onRelease();
+  };
+
+  const note = placement === null ? null : placementNote(placement);
+  /* THE TRIGGER CARRIES IT TOO, because the menu's note is only read by
+     somebody who has already opened the menu — and the reader most likely to
+     be confused is the one who pressed a direction, saw nothing move, and is
+     hovering the button wondering whether it did anything. */
+  const held = placement === null ? 0 : placement.placed + placement.pinned;
+  const heldSuffix =
+    held === 0
+      ? ""
+      : ` — ${held} ${held === 1 ? "element" : "elements"} placed by hand`;
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -192,8 +263,8 @@ export function LayoutDirectionMenu({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
-        aria-label={`Layout runs ${effective === "lr" ? "left to right" : "top to bottom"} — choose a layout direction`}
-        title={`Layout direction — ${effective === "lr" ? "left to right" : "top to bottom"}`}
+        aria-label={`Layout runs ${effective === "lr" ? "left to right" : "top to bottom"} — choose a layout direction${heldSuffix}`}
+        title={`Layout direction — ${effective === "lr" ? "left to right" : "top to bottom"}${heldSuffix}`}
         /* ONE GLYPH, NO LABEL, squared like the padlock beside it. The two
            controls share a slot, and the padlock has always been its icon
            alone — a labelled neighbour reads as a different KIND of control
@@ -232,6 +303,16 @@ export function LayoutDirectionMenu({
                 <p className="px-2.5 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
                   {section.heading}
                 </p>
+                {/* ABOVE the rows, not below them: it is the reason the rows
+                    may do nothing, and a caveat read after the press is a
+                    caveat that arrived too late. Layer scope only — the file
+                    section writes a default this menu cannot count the
+                    consequences of across diagrams nobody is looking at. */}
+                {section.scope === "layer" && note !== null ? (
+                  <p className="max-w-56 px-2.5 pt-0.5 pb-1.5 text-[11px] leading-snug text-muted-foreground">
+                    {note}
+                  </p>
+                ) : null}
                 {DIRECTIONS.map((direction) => {
                   const inForce = set === direction.value;
                   return (
@@ -277,6 +358,25 @@ export function LayoutDirectionMenu({
                     <span className="size-3 shrink-0" />
                     <RotateCcw aria-hidden="true" className="size-3 shrink-0" />
                     {section.clearLabel}
+                  </button>
+                ) : null}
+                {/* ABSENT, not disabled, when nothing is placed — this menu's
+                    founding rule: no row whose press does nothing. Same
+                    anatomy as the clearing row above it, because it is the
+                    same kind of act: taking a line out of the document. */}
+                {section.scope === "layer" &&
+                placement !== null &&
+                placement.placed > 0 ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    title={`Removes the (x,y) written on ${placement.placed} element ${placement.placed === 1 ? "line" : "lines"} in this layer. One undo.`}
+                    onClick={release}
+                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
+                  >
+                    <span className="size-3 shrink-0" />
+                    <RotateCcw aria-hidden="true" className="size-3 shrink-0" />
+                    {resetLayerLabel(placement.placed)}
                   </button>
                 ) : null}
               </div>

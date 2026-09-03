@@ -24,6 +24,10 @@
 
 import { useCallback, useMemo, useRef } from "react";
 
+/* The release row's own label, so the announcement that sends a reader to it
+   cannot name a row that has been reworded — see `resetLayerLabel`. */
+import { resetLayerLabel } from "@/lib/prose";
+
 import type { SequenceEditHandlers } from "@/features/sequence";
 import type { FlowchartEditHandlers } from "@/features/flowchart";
 /* PAST THE BARREL, as `input/sequence-edit.ts` does and for the reason its
@@ -58,10 +62,13 @@ import {
   deletedFrameEdit,
   deletedNodeEdit,
   groupedNodesEdit,
+  layerPlacement,
   movedNodeEdit,
   nestedNodeEdit,
   ownsChildDiagram,
   renamedFrameEdit,
+  resetLayerPositionsEdit,
+  resetNodePositionEdit,
   revisedEdgeEdit,
   revisedDirectionEdit,
   revisedFileDirectionEdit,
@@ -152,6 +159,12 @@ export function useCanvasEditing({
     direction: "tb" | "lr",
   ) => void;
   clearDirection: (diagramId: string, scope: "layer" | "file") => void;
+  /**
+   * Hand one layer's hand-written coordinates back to the layout. Beside the
+   * handler sets for `applyDirection`'s reason — it is pressed in the same
+   * menu, which the playground renders in the lock slot.
+   */
+  resetLayerPositions: (diagramId: string) => void;
 } {
   /**
    * Previous source texts, newest last — the undo history for CANVAS edits.
@@ -295,9 +308,25 @@ export function useCanvasEditing({
    * to right" is what happened to the picture — a reader reached for this
    * because the diagram was the wrong shape, not because they wanted a
    * particular word in their file.
+   *
+   * AND IT SAYS WHEN THE PICTURE DID NOT CHANGE. Geometry beats the direction
+   * per element, so on a diagram somebody has arranged by hand this gesture
+   * writes a line and moves nothing — announcing "this layer runs left to
+   * right" there is the announcement telling the reader the opposite of what
+   * they can see. Counted BEFORE the edit, from the document being edited,
+   * the way the boundary removal counts its members: afterwards the released
+   * elements are indistinguishable from ones that were never placed.
+   *
+   * Counted for the ACTIVE LAYER in both scopes, and worded as such. A
+   * file-wide press changes what every diagram inherits, but this hook can
+   * only honestly report the one on screen — claiming a total across
+   * diagrams the reader cannot see is the surprise `revisedFileDirectionEdit`
+   * refuses to cause in the first place.
    */
   const applyDirection = useCallback(
     (diagramId: string, scope: "layer" | "file", direction: "tb" | "lr") => {
+      const placement = layerPlacement(doc, diagramId);
+      const held = placement === null ? 0 : placement.placed + placement.pinned;
       const next =
         scope === "layer"
           ? revisedDirectionEdit(doc, text, diagramId, direction)
@@ -309,14 +338,94 @@ export function useCanvasEditing({
         direction === "lr"
           ? "runs left to right, folding a long flow into bands"
           : "runs top to bottom";
+      const words = direction === "lr" ? "left to right" : "top to bottom";
       const where =
         scope === "layer" ? "This layer" : "Every diagram in the file";
+      const undo = "Press Cmd or Ctrl + Z with the diagram focused to undo.";
+      if (placement !== null && held > 0 && held === placement.total) {
+        /* Pointing at the row only while there IS one: a layer whose every
+           element is `pin`ned offers nothing to release, and naming a row
+           that is absent sends the reader looking for a control that is not
+           there — the whole failure this announcement exists to stop. */
+        const remedy =
+          placement.placed > 0
+            ? `, so nothing moved — choose “${resetLayerLabel(placement.placed)}” in the direction menu`
+            : " and pinned, so nothing moved";
+        applyCanvasEdit(
+          next,
+          `${where} now says ${words}, but ${held === 1 ? "the only element in this layer is" : `all ${held} elements in this layer are`} placed by hand${remedy}. The source text follows; ${undo}`,
+        );
+        return;
+      }
+      if (held > 0) {
+        applyCanvasEdit(
+          next,
+          `${where} ${shape} — ${held} ${held === 1 ? "element" : "elements"} placed by hand stayed where ${held === 1 ? "it was" : "they were"}. The source text follows; ${undo}`,
+        );
+        return;
+      }
       applyCanvasEdit(
         next,
-        `${where} ${shape} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+        `${where} ${shape} — the source text follows. ${undo}`,
       );
     },
     [doc, text, applyCanvasEdit],
+  );
+
+  /**
+   * Hand one element's hand-written coordinates back to the layout, from the
+   * details panel.
+   *
+   * SAID, not swallowed, on a refusal — the Add strip's rule: the panel only
+   * renders the button beside an element whose line carries coordinates, so
+   * the one refusal a reader can cause is the pane lagging the canvas.
+   */
+  const handleNodeResetPosition = useCallback(
+    (diagramId: string, nodeId: string) => {
+      const next = resetNodePositionEdit(doc, text, diagramId, nodeId);
+      if (next === null) {
+        setAnnouncement(
+          "The element was not released — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      applyCanvasEdit(
+        next,
+        `${nodeId} handed back to the layout — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
+  );
+
+  /**
+   * Hand a whole layer's hand-written coordinates back to the layout, from the
+   * direction menu's own row.
+   *
+   * The announcement NAMES THE UNDO KEY for the node delete's reason: this is
+   * the edit with nothing left on screen to put back by hand — coordinates
+   * that took a reader a dozen drags to arrange leave the file in one press,
+   * and dragging them back is not an option they have. It is also the one
+   * announcement that has to say the count, because the row's whole promise is
+   * that the direction control will work afterwards.
+   */
+  const resetLayerPositions = useCallback(
+    (diagramId: string) => {
+      const placement = layerPlacement(doc, diagramId);
+      const next = resetLayerPositionsEdit(doc, text, diagramId);
+      if (next === null) {
+        setAnnouncement(
+          "Nothing was released — the source pane and the diagram do not match yet. Wait for the text to parse, then try again.",
+        );
+        return;
+      }
+      const released = placement?.placed ?? 0;
+      const kept = placement?.pinned ?? 0;
+      applyCanvasEdit(
+        next,
+        `${released} ${released === 1 ? "element" : "elements"} handed back to the layout${kept > 0 ? `, and ${kept} pinned ${kept === 1 ? "element kept its" : "elements kept their"} place` : ""} — the source text follows. Press Cmd or Ctrl + Z with the diagram focused to undo.`,
+      );
+    },
+    [doc, text, applyCanvasEdit, setAnnouncement],
   );
 
   const clearDirection = useCallback(
@@ -1133,6 +1242,7 @@ export function useCanvasEditing({
       canvasEditable
         ? {
             onNodeMove: handleNodeMove,
+            onNodeResetPosition: handleNodeResetPosition,
             onNodeRevise: handleNodeRevise,
             onNodeDelete: handleNodeDelete,
             onNodeCreate: handleNodeCreate,
@@ -1152,6 +1262,7 @@ export function useCanvasEditing({
     [
       canvasEditable,
       handleNodeMove,
+      handleNodeResetPosition,
       handleNodeRevise,
       handleNodeDelete,
       handleNodeCreate,
@@ -1174,12 +1285,19 @@ export function useCanvasEditing({
      click on a node, a grip — and this one is invoked by a control the
      playground renders in the lock slot, at the canvas's top right. Putting it
      in that interface would say the canvas calls it, and nothing in the canvas
-     does. */
+     does.
+
+     `resetLayerPositions` rides beside it for exactly that reason and no
+     other: it is pressed in the same menu. Its per-element twin
+     (`handleNodeResetPosition`) IS in the bundle, because the details panel
+     the canvas owns is what offers it — the same split the revise gesture
+     already has. */
   return {
     canvasEdit,
     sequenceEdit,
     flowchartEdit,
     applyDirection,
     clearDirection,
+    resetLayerPositions,
   };
 }

@@ -41,6 +41,7 @@
     "check:archtext": "node scripts/archtext-check.mjs",
     "check:paths": "node scripts/paths-check.mjs",
     "check:canvas-edit": "node scripts/canvas-edit-check.mjs",
+    "check:layout-reset": "node scripts/layout-reset-check.mjs",
     "check:sequence": "node scripts/sequence-check.mjs",
     "check:flowchart": "node scripts/flowchart-check.mjs",
     "check:flowchart-layout": "node scripts/flowchart-layout-check.mjs",

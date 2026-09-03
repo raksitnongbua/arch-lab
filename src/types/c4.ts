@@ -171,7 +171,25 @@ export interface C4Node {
    * the two disagree, and every consumer that needs the chain can walk it.
    */
   frameId?: string;
-  /** Excluded from Tidy layout. */
+  /**
+   * KEEP THIS ELEMENT'S COORDINATES when the layer is handed back to the
+   * layout. `resetLayerPositionsEdit` strips the `(x,y wxh)` token from every
+   * element it can and skips this one, so an author who has placed one thing
+   * deliberately — a legend, an element that must sit beside a boundary —
+   * can release the rest without losing it.
+   *
+   * It is not a layout input: nothing consults it while positions are being
+   * solved, because a tokened element is never solved in the first place
+   * (`defaultPositions` is asked only for the elements whose text omits
+   * geometry). The doc comment here said "excluded from Tidy layout" for two
+   * releases, naming a feature that has never existed in this repo, and no
+   * consumer read the field at all — a reset that respected nothing would
+   * have been the third release of the same lie.
+   *
+   * A per-element reset still honours a direct request: pointing at THIS
+   * element and pressing "Let the layout place it" releases it. The exemption
+   * is from the sweep, not from the author.
+   */
   pinned?: boolean;
 }
 

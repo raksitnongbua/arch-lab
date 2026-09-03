@@ -89,6 +89,8 @@ export {
   canonicalNodeBlock,
   canonicalNodeLine,
   canonicalTagColorLine,
+  defaultNodeLayout,
+  hasAuthoredGeometry,
   serializeArchText,
 } from "./lib/serialize";
 export { ArchTextParseError } from "./lib/errors";
