@@ -400,8 +400,8 @@ check("the player exists only while a walk is on", () => {
 check(
   "the beat's elements are lit from behind, without repainting them",
   () => {
-    const aura = canvas.match(/const BEAT_AURA =([\s\S]*?);\n/)?.[1] ?? "";
-    assert.ok(aura !== "", "BEAT_AURA is no longer a constant this can read");
+    const aura = canvas.match(/const LIT_AURA =([\s\S]*?);\n/)?.[1] ?? "";
+    assert.ok(aura !== "", "LIT_AURA is no longer a constant this can read");
     assert.match(
       aura,
       /var\(--primary\)/,
@@ -433,7 +433,7 @@ check(
     );
     const body = memoBody(canvas, "pathFocusCss");
     assert.ok(
-      body.includes("${BEAT_AURA}"),
+      body.includes("litNodeCss("),
       "the beat's elements are no longer lit from behind — dimming alone tells " +
         "a reader which elements are NOT being shown, and never makes the ones " +
         "that are reach forward",
@@ -456,6 +456,46 @@ check(
     );
   },
 );
+
+/**
+ * The aura arrived for a path, and would have been a fourth visual language if
+ * it had stayed there. "This is the element I am showing you" is a claim
+ * selection and multi-select already make, so all three light one thing.
+ */
+check("every state that marks an element lights the same aura", () => {
+  assert.equal(
+    (canvas.match(/const LIT_AURA =/g) ?? []).length,
+    1,
+    "the aura has more than one definition — two spellings of one light is " +
+      "how the canvas ends up with a fourth visual language for an idea it " +
+      "already had",
+  );
+  for (const memo of ["nodeFocusCss", "multiFocusCss", "pathFocusCss"]) {
+    assert.ok(
+      memoBody(canvas, memo).includes("litNodeCss("),
+      `${memo} no longer lights the shared aura — a reader who focuses an ` +
+        "element one way would get a different state from focusing it another",
+    );
+  }
+  /* The single selection's aura sits OUTSIDE its motion split: a reader with
+     motion off must not get a quieter selection than one with it on. */
+  const selection = memoBody(canvas, "nodeFocusCss");
+  const litAt = selection.indexOf("litNodeCss(");
+  const splitAt = selection.indexOf("prefers-reduced-motion");
+  assert.ok(
+    litAt !== -1 && splitAt !== -1 && litAt < splitAt,
+    "the selection's aura moved inside its motion split — one of the two " +
+      "readers then gets a dimmer selection than the other for no reason " +
+      "either of them chose",
+  );
+  /* Hover stays out of it, and has its own rule saying why. */
+  assert.ok(
+    !memoBody(canvas, "hoverFocusCss").includes("litNodeCss("),
+    "hover lights the aura — a preview you get for free by moving the mouse " +
+      "changes opacity and nothing else, or the canvas lights up under a " +
+      "wandering cursor",
+  );
+});
 
 check("the walk's control and the walk itself share one place", () => {
   const panel = canvas.match(

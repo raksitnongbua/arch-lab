@@ -17,6 +17,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   same error on the next one. The pane now offers **Remove 2 spaces from every
   line** beside the error, and only when removing them is proved to make the
   document parse — so the button never leaves you with a second failure.
+- **A focused element is lit from behind, however you focused it.** Selecting
+  an element, grouping several, and stepping through a path's beats all light
+  the same soft halo in the theme's own accent — so "this is the one I am
+  showing you" looks the same whichever way you said it. The mark at the edge
+  still differs (a selection marches, a group and a beat wear the ring), and
+  hover deliberately stays a preview that changes nothing but opacity.
 - **A C4 diagram can carry an authored walk through itself.** Write
   `path send "Send email path"` at the end of a diagram, with
   `beat "One sentence"` lines under it and the chain of elements each beat is
@@ -37,8 +43,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   rather than misreading it. `validate_model` flags a beat that doubles back
   and a walk that jumps with nothing joining it, as review notes rather than
   errors. Boundaries recede along with the elements inside them, the current
-  beat's elements are lit from behind so the walk reads as a set standing out
-  of the drawing rather than a drawing behind a veil, and the player is the
+  beat's elements are lit from behind (the same light selection uses) so the
+  walk reads as a set standing out of the drawing, and the player is the
   same size on every beat so the Next button never moves out from under the
   cursor. The control that offers the walks sits where the player will, at the
   bottom of the canvas — one place for the whole feature, and out of the

@@ -297,6 +297,26 @@ function ViewerNodeInner({
             text is one click away in the detail panel, and already in this
             element's `title` for a hover. */}
       </div>
+      {/*
+       * The lit aura — light BEHIND the card, so an element that is the one
+       * being shown reaches forward out of a dimmed diagram.
+       *
+       * Its own always-mounted span rather than a shadow bolted onto one of
+       * the marks below, because the mark differs by state and the light must
+       * not: a selected element wears a marching outline, a multi-selected or
+       * beat element wears the static ring, and all three are the same claim
+       * — "this is the one" — so all three light this. Hanging the glow off
+       * whichever edge happened to be showing is how a feature ends up with a
+       * fourth visual language for an idea the canvas already had.
+       *
+       * Behind the card (`z-0`) and inset outwards, so only the halo escapes
+       * past the card's own background. The shadow itself lives in the
+       * canvas's stylesheet — one definition, three consumers.
+       */}
+      <span
+        aria-hidden="true"
+        className="viewer-node-aura pointer-events-none absolute -inset-1 z-0 rounded-[inherit] opacity-0 transition-opacity duration-150"
+      />
       {/* Hover outline — always mounted, opacity-only transition. */}
       <span
         aria-hidden="true"

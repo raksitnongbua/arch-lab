@@ -388,30 +388,44 @@ const HOVER_DIM_EDGE_OPACITY = 0.35;
 const DIM_EDGE_OPACITY = 0.2;
 
 /**
- * The light behind an element the current beat is about.
+ * The light behind an element that is THE ONE BEING SHOWN — whichever
+ * behaviour is showing it.
  *
- * Dimming alone told a reader which elements were NOT being shown; it did not
- * make the ones that were reach forward. This does — a soft primary halo on
- * the ring the beat already lights, so the walk reads as a set standing out of
- * the drawing rather than as the drawing behind a veil.
+ * ONE STATE, NOT ONE PER FEATURE. It arrived for a path's current beat, where
+ * dimming alone told a reader which elements were not being shown and never
+ * made the ones that were reach forward. But "this is the element I am
+ * showing you" is a claim selection and multi-select already make, and giving
+ * the newest of the three its own glow would have left the canvas with a
+ * fourth visual language for an idea it already had. So every state that
+ * marks an element lights this, and the mark each one draws — a marching
+ * outline for a selection, the static ring for a multi-select or a beat —
+ * stays its own.
+ *
+ * Hover is deliberately NOT one of them. It has its own softer ring and its
+ * own rule: a preview you get for free by moving the mouse changes opacity
+ * and nothing else, or the canvas lights up under a wandering cursor.
  *
  * TWO SHADOWS, not one. A single blur reads as a smudge at the edge; a tight
  * bright bloom over a wide faint one reads as light, which is the whole point
- * — the element is lit, not outlined. There is deliberately no hard ring in
- * here: the span this hangs on already draws one, and a third edge inside the
- * node's own border made a lit element look re-bordered rather than lit.
+ * — the element is lit, not outlined. No hard ring in here either: the marks
+ * draw their own, and a third edge inside the node's own border made a lit
+ * element look re-bordered rather than lit.
  *
- * A `box-shadow` on the ring's own span, which already carries the node's
- * rounding. Not an SVG `filter`, which this codebase forbids near the canvas
- * after a percentage filter region on a flat path painted bands across a whole
+ * Not an SVG `filter`, which this codebase forbids near the canvas after a
+ * percentage filter region on a flat path painted bands across a whole
  * diagram — and not a change of the node's stroke, fill or width, which the
  * focus rules forbid outright: focus dims and lights, it does not repaint the
  * notation. Colour is `--primary` mixed with transparency, so every theme
  * carries its own halo and no tenth palette is introduced.
  */
-const BEAT_AURA =
+const LIT_AURA =
   "0 0 14px 2px color-mix(in oklch, var(--primary) 55%, transparent), " +
   "0 0 40px 12px color-mix(in oklch, var(--primary) 24%, transparent)";
+
+/** Lights the aura on one node — the single spelling all three states use. */
+function litNodeCss(id: string): string {
+  return `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-aura { opacity: 1; }`;
+}
 
 /**
  * An element and everything one relationship away from it — the set both the
@@ -671,6 +685,7 @@ const EDGE_INTERACTION_CSS = `
  * until the selection stylesheet lights ONE node's overlay and attaches the
  * animations — unselected nodes carry zero running animations.
  */
+.viewer-canvas .viewer-node-aura { box-shadow: ${LIT_AURA}; }
 .viewer-canvas .viewer-node-outline {
   opacity: 0;
   visibility: hidden;
@@ -2817,7 +2832,8 @@ function ViewerCanvasInner({
      * from becoming the noise the selection focus is careful to avoid. */
     for (const id of current.nodeIds) {
       rest.push(
-        `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; box-shadow: ${BEAT_AURA}; }`,
+        `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }`,
+        litNodeCss(id),
       );
     }
 
@@ -2852,10 +2868,17 @@ function ViewerCanvasInner({
     // still at full strength. Reduced motion: nothing marches anywhere — the
     // classic static ring lights instead, exactly as before this animation
     // existed.
+    //
+    // THE AURA IS OUTSIDE THAT SPLIT, and deliberately: the light saying "this
+    // is the one" is the same claim whichever mark draws the edge, and a
+    // reader who has motion off should not get a quieter selection than one
+    // who has it on. It is also what a path's beat and a multi-select light,
+    // so all three read as one state rather than three.
     const flowAnimation = (name: string): string =>
       `animation: ${name} ${VIEWER_DURATIONS.edgeFlow}ms linear infinite;`;
     return (
       `.viewer-canvas .react-flow__node${excludeKeptSelector} { opacity: ${DIM_NODE_OPACITY}; }\n` +
+      `${litNodeCss(selectedNodeId)}\n` +
       `@media (prefers-reduced-motion: no-preference) {\n` +
       `  ${selected} .viewer-node-outline { opacity: 1; visibility: visible; transition-delay: 0s; }\n` +
       `  ${selected} .viewer-node-flow-glow { ${flowAnimation("viewer-edge-flow-glow")} }\n` +
@@ -2963,7 +2986,7 @@ function ViewerCanvasInner({
     const rings = activeMultiIds
       .map(
         (id) =>
-          `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }`,
+          `.viewer-canvas .react-flow__node[data-id="${id}"] .viewer-node-selected-ring { opacity: 1; }\n${litNodeCss(id)}`,
       )
       .join("\n");
     return (
