@@ -376,6 +376,44 @@
           "technology": "HTTP/JSON",
           "direction": "forward"
         }
+      ],
+      "paths": [
+        {
+          "id": "checkout",
+          "title": "Placing an order",
+          "beats": [
+            {
+              "caption": "A shopper checks out in the storefront.",
+              "chains": [
+                {
+                  "nodes": ["ext-customer", "storefront"]
+                }
+              ]
+            },
+            {
+              "caption": "The storefront submits the order to the service.",
+              "chains": [
+                {
+                  "nodes": ["storefront", "order-service"]
+                }
+              ]
+            },
+            {
+              "caption": "Which authorises the payment, stores the order, and confirms it by email.",
+              "chains": [
+                {
+                  "nodes": ["order-service", "ext-payment"]
+                },
+                {
+                  "nodes": ["order-service", "order-db"]
+                },
+                {
+                  "nodes": ["order-service", "ext-email"]
+                }
+              ]
+            }
+          ]
+        }
       ]
     },
     {
