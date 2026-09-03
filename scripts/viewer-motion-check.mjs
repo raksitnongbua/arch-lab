@@ -421,13 +421,32 @@ check(
     /* The strip is gone and must STAY gone: it is the one piece of chrome
      that was on screen unasked, and "put the hint back" is the obvious wrong
      fix the next time someone reports not knowing a gesture. The answer is a
-     tour step. */
-    assert.doesNotMatch(
-      canvas,
-      /position="bottom-center"/,
-      "the permanent hint strip is back on the canvas — the gestures belong " +
-        "in the tour, which opens only when asked",
-    );
+     tour step.
+
+     What was pinned was the CORNER, as a proxy for the strip. That stopped
+     being the right rule when the path player arrived: it is bottom-centre
+     too, and it is the opposite of the strip — on screen only while somebody
+     is walking a path, gone the moment they leave. So the rule now says what
+     it always meant: nothing may sit at the bottom of the canvas
+     unconditionally. A bottom-centre panel has to be gated on state.
+
+     `strip` is the panel's own body — from its `position="bottom-center"` to
+     the closing `</Panel>` — so the gate has to be inside that panel, not
+     somewhere else on the canvas that happens to have a ternary in it. */
+    const bottomPanels = [
+      ...canvas.matchAll(
+        /<Panel[^>]*position="bottom-center"[\s\S]*?<\/Panel>/g,
+      ),
+    ];
+    for (const [strip] of bottomPanels) {
+      assert.match(
+        strip,
+        /!== null \?|\? \(/,
+        "a bottom-centre panel renders unconditionally — that is the shape of " +
+          "the deleted hint strip: prose pinned over the drawing whether or " +
+          "not anyone asked for it",
+      );
+    }
   },
 );
 
@@ -688,12 +707,22 @@ check(
     const edgeDim = Number(
       canvas.match(/const HOVER_DIM_EDGE_OPACITY = ([\d.]+);/)?.[1],
     );
+    /* Read the NAMED constant, not the rule: `viewer-edge-base-dimmed` now
+       interpolates it, because the path overlay dims connectors by id and
+       needed the same number. Following the name is also the stronger check —
+       it fails if the constant is renamed away rather than passing on a stale
+       literal left behind in the stylesheet. */
     const selectionEdgeDim = Number(
-      canvas.match(/viewer-edge-base-dimmed \{ opacity: ([\d.]+); \}/)?.[1],
+      canvas.match(/const DIM_EDGE_OPACITY = ([\d.]+);/)?.[1],
     );
     assert.ok(
       Number.isFinite(edgeDim) && Number.isFinite(selectionEdgeDim),
-      "the connector dim values are no longer literals this can read",
+      "the connector dim constants are no longer named as this expects",
+    );
+    assert.match(
+      canvas,
+      /viewer-edge-base-dimmed \{ opacity: \$\{DIM_EDGE_OPACITY\}; \}/,
+      "the selection dim rule no longer uses the constant it is compared against",
     );
     assert.ok(
       edgeDim > selectionEdgeDim,

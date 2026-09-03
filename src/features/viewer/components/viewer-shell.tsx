@@ -20,8 +20,12 @@
  *      never does two things;
  *   2. an element or relationship is selected (never both — they are
  *      mutually exclusive) → deselect it (canvas);
- *   3. below Context → climb one C4 level (canvas);
- *   4. at the root with nothing selected and immersive mode on → leave
+ *   3. a path is being walked → leave the path (canvas). Below the
+ *      selection and above the climb: most local first, so a presenter backs
+ *      out one layer at a time and is never dumped out of a diagram or out of
+ *      fullscreen in the middle of a story;
+ *   4. below Context → climb one C4 level (canvas);
+ *   5. at the root with nothing selected and immersive mode on → leave
  *      immersive mode (here — the canvas leaves the event unconsumed, and
  *      this parent's listener registers after the child's, so it runs last).
  *

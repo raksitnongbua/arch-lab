@@ -34,19 +34,29 @@ export const EDIT_GRID = 8;
  * Fit-to-view padding around the diagram bounds.
  *
  * Per-side rather than one fraction, because the canvas is not empty at its
- * edges: the breadcrumb and level chips float over the top-left, and the zoom
- * control and hint pill over the bottom. A symmetric fraction centred the
- * diagram in the *whole* rect, so on a short canvas — a phone, or a small
- * embedded frame — the top row of nodes ended up underneath the breadcrumb.
- * The top and bottom insets are the height of that chrome plus a margin, in
- * px, so they reserve the same real space at every canvas size; the sides stay
- * proportional, which is what keeps a wide diagram from touching the frame.
+ * edges: chrome floats over the top-left and over the bottom. A symmetric
+ * fraction centred the diagram in the *whole* rect, so on a short canvas — a
+ * phone, or a small embedded frame — the top row of nodes ended up underneath
+ * the breadcrumb. The top and bottom insets are the height of that chrome plus
+ * a margin, in px, so they reserve the same real space at every canvas size;
+ * the sides stay proportional, which is what keeps a wide diagram from
+ * touching the frame.
  */
 export const FIT_PADDING = {
-  /** Breadcrumb + level chips (top-left). */
+  /**
+   * The top-left stack: the breadcrumb card, and whatever stacks under it —
+   * the node palette while the canvas is unlocked, the Paths pill on a diagram
+   * that has paths. Deliberately unchanged as that stack grew: raising it
+   * would re-frame every diagram in the product, including the ones with none
+   * of that chrome on them.
+   */
   top: "72px",
-  /** Zoom control (bottom-right) and the hint pill, which wraps to two lines
-   *  on a narrow canvas — hence a little more than the top. */
+  /**
+   * The bottom band: the zoom control at the right, and the path player when a
+   * walk is being read, which is centred and taller. The player's own maximum
+   * height is kept inside this inset — `check:paths` pins the relationship, so
+   * a taller player fails rather than quietly covering the last row of nodes.
+   */
   bottom: "80px",
   x: "7%",
 } as const;
