@@ -31,7 +31,6 @@
 import type {
   ArchLabFile,
   C4Diagram,
-  C4Node,
   C4NodeType,
   EdgeDirection,
   Point,
@@ -927,8 +926,9 @@ function defaultLayoutFor(
  *
  * EXPORTED FOR THE RESET GESTURE, which needs the coordinates themselves
  * rather than a verdict about them: handing a node back to the layout means
- * writing this map's entry onto it, after which `hasAuthoredGeometry` is
- * false and the emitted line carries no token. Computing it a second time in
+ * writing this map's entry onto it, after which `geometryIsDefault` holds and
+ * the emitted line carries no token — which is why a release needs no
+ * token-stripping path of its own. Computing it a second time in
  * the playground would be the "two halves of one thing" failure this file
  * already guards against for `resolveDirection` — a reset aimed at a slot the
  * serializer does not agree is the default writes a token back on the way out.
@@ -953,11 +953,15 @@ export function defaultNodeLayout(
  * there — the test that decides whether a declaration line carries a geometry
  * token at all.
  *
- * ONE DEFINITION, TWO READERS, which is the whole reason it is a function:
- * `emitNode` omits the token when this is true, and `hasAuthoredGeometry`
- * inverts it for the controls that offer to release a node. A second copy of
- * the comparison would let the direction menu offer to release a node the
- * serializer considers already released, or say nothing about one it does not.
+ * ONE READER ONLY, AND THAT IS THE POINT. "Equals the default" is exactly the
+ * condition under which the writer may omit the token, and it is exactly the
+ * WRONG test for anything asking whether an element is placed by hand: an
+ * author who writes the default coordinates out has still placed the element,
+ * and the layout direction still cannot move it. The controls that warn and
+ * the gestures that release ask `placedByHand` instead, which is the source's
+ * own answer rather than this arithmetic. Inverting this for them shipped a
+ * diagram that refused every direction while the menu counted nothing placed
+ * and said nothing at all; do not lend it out again.
  */
 function geometryIsDefault(
   defaultPosition: Point | undefined,
@@ -971,31 +975,6 @@ function geometryIsDefault(
     Object.is(position.y, defaultPosition.y) &&
     Object.is(size.width, defaultSize.width) &&
     Object.is(size.height, defaultSize.height)
-  );
-}
-
-/**
- * Whether the coordinates on `node` are the AUTHOR'S — a `(x,y wxh)` token
- * this module will write out — rather than the slot the default layout put it
- * in, which it omits.
- *
- * TRUE MEANS A LAYOUT DIRECTION CANNOT MOVE THIS NODE. The parser resolves
- * `node.geometry ?? layout.get(node.id)` per node, so a tokened node keeps
- * its coordinates whichever way the diagram runs — and a diagram whose every
- * node carries one makes the direction control completely inert. The controls
- * that say so, and the gesture that undoes it, all ask this function rather
- * than looking for a `(` in the text or comparing coordinates themselves.
- */
-export function hasAuthoredGeometry(
-  file: ArchLabFile,
-  diagram: C4Diagram,
-  node: C4Node,
-): boolean {
-  return !geometryIsDefault(
-    defaultNodeLayout(file, diagram).get(node.id),
-    defaultSizeFor(node.type),
-    node.position,
-    node.size,
   );
 }
 

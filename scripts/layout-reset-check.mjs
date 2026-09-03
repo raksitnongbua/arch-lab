@@ -28,14 +28,17 @@
  *      slot. This is the rule the whole feature's copy rests on — "3 of 7
  *      elements are placed by hand" is only true if precedence is per node —
  *      so it is pinned here rather than left implicit in the parser.
- *   3. `hasAuthoredGeometry` AGREES WITH THE SERIALIZER, for every node of
- *      every bundled example and every fixture: true exactly when a full
- *      serialize writes a `(` on that node's line. The menu's counts, the
- *      panel's row and the gesture's filter all read that one function, so
- *      the failure this forbids is the "two halves of one thing" one — a menu
- *      offering to release a node whose line carries nothing, or silent about
- *      one that does. Read from the FILESYSTEM rather than a hand-listed set
- *      of example names, so an example added tomorrow is covered.
+ *   3. `placedByHand` IS WHAT THE SOURCE SAID, in both languages: for every
+ *      `.alab` fixture, true exactly when the element's own declaration line
+ *      carries a token, read off the spans rather than off a re-serialize;
+ *      for every bundled `.archlab.json`, true for every element, because
+ *      `position` is required there and no JSON document can leave one to the
+ *      layout. Measured against the SOURCE deliberately — this section used
+ *      to measure the predicate against the serializer, and both sides shared
+ *      one wrong idea (see 12). It also pins that the mark reaches neither
+ *      output, which is why it is a symbol rather than a field. Read from the
+ *      FILESYSTEM rather than a hand-listed set of example names, so an
+ *      example added tomorrow is covered.
  *   4. RESETTING ONE ELEMENT IS A ONE-LINE PATCH. `path === "patch"`, exactly
  *      one line changes, that line is byte-identical to what a full serialize
  *      would write for the node, it carries no geometry token, and the
@@ -84,6 +87,18 @@
  *      live region, so leaving it in the announcement too would say it twice),
  *      and a repeated press raises no second toast because the edit refuses
  *      first.
+ *  12. A TOKEN WHOSE NUMBERS EQUAL THE DEFAULT SLOT still beats the direction
+ *      — the shape the other eleven assertions could not see. The fixture is
+ *      built by COMPUTATION (parse the token-free layer, write its own
+ *      coordinates back onto its lines), because a hand-typed `(40,40 …)`
+ *      stops being the default the day the layout changes. It proves the
+ *      premise (the direction moves nothing, and had somewhere to move it
+ *      to), then that the layer counts every element placed, that the press
+ *      is not silent, that the sweep removes every token including the
+ *      coincidental ones, and that the direction then applies. It also pins
+ *      the emitter's numeric test on its own terms — a full serialize still
+ *      omits a default-valued token, which is a decision about canonical
+ *      bytes and the one place the two questions answer differently.
  *
  * Exits non-zero on any failure. Run with: pnpm check:layout-reset
  */
@@ -148,9 +163,10 @@ const {
   canonicalNodeLine,
   defaultPositions,
   defaultSizeFor,
-  hasAuthoredGeometry,
   parseArchText,
+  parseArchTextWithSpans,
   serializeArchText,
+  spanKey,
 } = await load("src/features/archtext/index.ts");
 const {
   canvasEditability,
@@ -165,6 +181,13 @@ const { parseViewSource } = await load(
   "src/features/playground/input/parse.ts",
 );
 const { resetLayerLabel } = await load("src/lib/prose.ts");
+const { placedByHand } = await load("src/types/c4.ts");
+const { deserializeModel } = await load(
+  "src/features/editor/io/deserialize.ts",
+);
+const { fileFromEditorModel } = await load(
+  "src/features/viewer/input/parse-input.ts",
+);
 
 /* ----------------------------------------------------------------------- */
 /* Harness — same shape as the sibling check scripts                        */
@@ -293,6 +316,43 @@ function everyElementDragged(text) {
   return { doc, text: current };
 }
 
+/**
+ * The same layer with every element's DEFAULT coordinates written back onto
+ * its line as an explicit token — the document the whole feature was blind to.
+ *
+ * BUILT BY COMPUTATION, never by hand. The coordinates come from parsing the
+ * token-free fixture and reading what the layout chose, so the fixture cannot
+ * encode a stale idea of where `tb` puts anything: hand-typing `(40,40 176x88)`
+ * would stop being the default the day `defaultPositions` changes, and this
+ * fixture would then be testing an ordinary dragged document.
+ *
+ * WHY IT MATTERS. Every one of these tokens beats the layout — the parser
+ * resolves `node.geometry ?? layout.get(id)` and the token is present — so the
+ * direction moves nothing. But the numbers are exactly what the layout would
+ * have chosen, so a comparison against the default layout answers "nothing is
+ * placed here", which is how a diagram that refuses every direction came to be
+ * described by a menu with no note and a press with no toast.
+ */
+function defaultsWrittenBack(text) {
+  const doc = c4Document(text);
+  const nodes = nodesById(doc, DIAGRAM_ID);
+  return text
+    .split("\n")
+    .map((line) => {
+      const declared = /^ {2}([\w-]+):\w+ /.exec(line);
+      const node = declared === null ? undefined : nodes.get(declared[1]);
+      if (node === undefined) return line;
+      return `${line} (${node.position.x},${node.position.y} ${node.size.width}x${node.size.height})`;
+    })
+    .join("\n");
+}
+
+/** The `tb` defaults written back, under a file header that asks for `lr`. */
+const DEFAULTS_AS_TOKENS = defaultsWrittenBack(FREE_TB).replace(
+  'title "Reset"',
+  'title "Reset"\ndirection lr',
+);
+
 /* ----------------------------------------------------------------------- */
 /* 1. A direction moves a token-free document                               */
 /* ----------------------------------------------------------------------- */
@@ -394,65 +454,88 @@ console.log("\nA hand-written coordinate wins for its own element only");
 }
 
 /* ----------------------------------------------------------------------- */
-/* 3. `hasAuthoredGeometry` agrees with the serializer, everywhere           */
+/* 3. `placedByHand` is what the SOURCE said, in both languages             */
 /* ----------------------------------------------------------------------- */
 
-console.log("\nhasAuthoredGeometry says exactly what the serializer writes");
+console.log("\nplacedByHand says exactly what the source stated");
 
 {
-  /** True ⇔ a full serialize writes a geometry token on this node's line. */
-  const tokenedIds = (file) => {
-    const out = new Set();
-    for (const line of serializeArchText(file).split("\n")) {
-      const match = /^ {2}([\w-]+):\w+ .*\((-?[\d.]+),/.exec(line);
-      if (match !== null) out.add(match[1]);
-    }
-    return out;
-  };
-
-  const cases = [];
-  /* FROM THE FILESYSTEM, never a hand-listed set of names: a hardcoded list
-     cannot notice the example it has never heard of, which is how three
-     checks in this repo passed while the feature under them was broken. */
-  const dataDir = "src/features/viewer/service/data";
-  for (const name of readdirSync(path.join(ROOT, dataDir)).sort()) {
-    if (!name.endsWith(".archlab.json")) continue;
-    /* The committed `.archlab.json` IS an `ArchLabFile` — the same four
-       top-level keys the app's own reader knows — so it goes to the
-       serializer unconverted rather than through a round of model shapes
-       that could normalise away the very geometry this measures. */
-    cases.push({ label: name, file: JSON.parse(read(`${dataDir}/${name}`)) });
-  }
-  check(
-    "there are bundled examples to measure against",
-    cases.length > 0,
-    `no .archlab.json under ${dataDir} — this section would be vacuous`,
-  );
+  /* THE `.alab` SIDE, MEASURED AGAINST THE AUTHOR'S OWN LINES rather than
+     against a re-serialize. The predicate used to be measured against the
+     serializer's output, and both sides shared one wrong idea — a token whose
+     numbers equal the default slot is omitted on the way out, so the pair
+     agreed on "not placed" for an element the text plainly places. The source
+     text cannot agree with that mistake: the spans say which line each element
+     is declared on, and either the token is on it or it is not. */
+  const tokenOnLine = /\((-?[\d.]+),(-?[\d.]+) (-?[\d.]+)x(-?[\d.]+)\)/;
   for (const [label, text] of [
     ["fixture: token-free tb", FREE_TB],
     ["fixture: token-free lr", FREE_LR],
     ["fixture: every element dragged", everyElementDragged(FREE_LR).text],
+    ["fixture: the defaults written back as tokens", DEFAULTS_AS_TOKENS],
   ]) {
-    cases.push({ label, file: c4Document(text).synced.file });
-  }
-
-  for (const { label, file } of cases) {
-    const written = tokenedIds(file);
+    const { file, spans } = parseArchTextWithSpans(text);
+    const lines = text.split("\n");
     const disagreed = [];
     for (const diagram of file.diagrams) {
       for (const node of diagram.nodes) {
-        const predicted = hasAuthoredGeometry(file, diagram, node);
-        if (predicted !== written.has(node.id)) {
+        const span = spans.nodes.get(spanKey(diagram.id, node.id));
+        const declared = lines[span.start - 1];
+        const inText = tokenOnLine.test(declared);
+        if (placedByHand(node) !== inText) {
           disagreed.push(
-            `${diagram.id}/${node.id}: predicate ${predicted}, text ${written.has(node.id)}`,
+            `${diagram.id}/${node.id}: predicate ${placedByHand(node)}, line "${declared.trim()}"`,
           );
         }
       }
     }
     check(
-      `${label}: the predicate and the emitted line agree on every element`,
+      `${label}: the predicate matches the declaration line, every element`,
       disagreed.length === 0,
       disagreed.join("; "),
+    );
+  }
+
+  /* THE JSON SIDE. `position` is required of every element there — there is no
+     way for a `.archlab.json` document to leave one to the layout — so every
+     element read through the app's own reader is placed, and the direction
+     control on that pane has to say so. Read through `deserializeModel`, not
+     `JSON.parse`: the mark is put on by the reader, and a section that parsed
+     the bytes itself would be measuring a model the app never builds.
+
+     FROM THE FILESYSTEM, never a hand-listed set of names: a hardcoded list
+     cannot notice the example it has never heard of, which is how three checks
+     in this repo passed while the feature under them was broken. */
+  const dataDir = "src/features/viewer/service/data";
+  const names = readdirSync(path.join(ROOT, dataDir))
+    .filter((name) => name.endsWith(".archlab.json"))
+    .sort();
+  check(
+    "there are bundled JSON examples to measure against",
+    names.length > 0,
+    `no .archlab.json under ${dataDir} — this section would be vacuous`,
+  );
+  for (const name of names) {
+    const text = read(`${dataDir}/${name}`);
+    const file = fileFromEditorModel(deserializeModel(text));
+    const nodes = file.diagrams.flatMap((diagram) => diagram.nodes);
+    check(
+      `${name}: every element states its own position, so every one is placed`,
+      nodes.length > 0 &&
+        nodes.every((node) => placedByHand(node)) &&
+        /"position"/.test(text),
+      `${nodes.filter((node) => !placedByHand(node)).length} of ${nodes.length} unmarked`,
+    );
+    /* THE MARK IS INVISIBLE TO BOTH WRITERS, which is the whole reason it is a
+       symbol: a string field would be document content, would collide with an
+       author's own `! authoredGeometry` line, and would have to be stripped in
+       two serializers. `check:roundtrip` proves the JSON bytes; this proves
+       the name reaches neither output. */
+    check(
+      `${name}: the mark reaches neither the JSON nor the .alab text`,
+      !JSON.stringify(file).includes("authoredGeometry") &&
+        !serializeArchText(file).includes("authoredGeometry"),
+      "a read-time annotation leaked into the document",
     );
   }
 }
@@ -526,13 +609,7 @@ console.log("\nResetting one element patches one line and nothing else");
     "every OTHER element keeps the coordinates it was dragged to",
     layerOf(edit.doc, DIAGRAM_ID)
       .nodes.filter((node) => node.id !== "api")
-      .every((node) =>
-        hasAuthoredGeometry(
-          edit.doc.synced.file,
-          layerOf(edit.doc, DIAGRAM_ID),
-          node,
-        ),
-      ),
+      .every((node) => placedByHand(node)),
     "releasing one element released others",
   );
 }
@@ -977,10 +1054,8 @@ console.log("\nThe menu offers the release, and the announcement is honest");
     "a release button on a read-only canvas, or on an element nothing placed",
   );
   check(
-    "the canvas decides that from hasAuthoredGeometry, not its own comparison",
-    /hasAuthoredGeometry\(archLabFileFrom\(model\), diagram, node\)/.test(
-      canvas,
-    ) &&
+    "the canvas decides that from placedByHand, not its own comparison",
+    /placedAt: placedByHand\(node\)/.test(canvas) &&
       /canRelease = edit !== undefined && nodeDetail\?\.placedAt != null/.test(
         canvas,
       ),
@@ -1229,6 +1304,159 @@ console.log("\nThe press says what did not move, to the reader who can see");
     "clearing raises no toast, so the warning stays about a refused shape",
     clearBody !== null && !/toast\(/.test(clearBody[1]),
     "a toast on every direction press is one nobody reads on the press that matters",
+  );
+}
+
+/* ----------------------------------------------------------------------- */
+/* 12. A TOKEN THAT EQUALS THE DEFAULT still beats the direction            */
+/*                                                                          */
+/* The section the other eleven could not have caught, and the reason this  */
+/* one is written from the SOURCE rather than from the serializer. Section  */
+/* 3 used to measure the predicate against a full serialize and both sides  */
+/* held the same wrong idea: the writer omits a token whose numbers equal   */
+/* the default slot, so a document that writes its defaults out was read as */
+/* placing nothing. Every assertion was green while three of three elements */
+/* refused the direction, the menu carried no note and the press raised no  */
+/* toast — the exact bug this feature exists to end, in its quietest shape. */
+/* ----------------------------------------------------------------------- */
+
+console.log("\nA coordinate that equals the default is still a coordinate");
+
+{
+  const doc = c4Document(DEFAULTS_AS_TOKENS);
+  const nodes = nodesById(doc, DIAGRAM_ID);
+  const lrLayout = layoutAt(doc, DIAGRAM_ID, "lr");
+
+  /* THE PREMISE FIRST, so the assertions below document the bug rather than
+     just the fix. Two halves: changing the direction moves NOTHING (every
+     element keeps its token's coordinates), and the direction would otherwise
+     have had somewhere to move it to — an element whose `tb` slot happens to
+     be its `lr` slot proves nothing either way, so the second half is "at
+     least one" rather than "all". */
+  const underTb = nodesById(
+    c4Document(DEFAULTS_AS_TOKENS.replace("\ndirection lr", "")),
+    DIAGRAM_ID,
+  );
+  const budged = [...nodes.keys()].filter(
+    (id) =>
+      underTb.get(id).position.x !== nodes.get(id).position.x ||
+      underTb.get(id).position.y !== nodes.get(id).position.y,
+  );
+  check(
+    "the direction genuinely does not apply — lr moves not one element",
+    budged.length === 0 && nodes.size > 1,
+    `${budged.length} of ${nodes.size} elements moved: ${budged.join(", ")}`,
+  );
+  const offLrSlot = [...nodes.keys()].filter(
+    (id) =>
+      at(lrLayout, id).x !== nodes.get(id).position.x ||
+      at(lrLayout, id).y !== nodes.get(id).position.y,
+  );
+  check(
+    "and lr had somewhere to put them, so the refusal is what stopped it",
+    offLrSlot.length > 0,
+    "every tb slot is also an lr slot — this fixture would prove nothing",
+  );
+  check(
+    "and the tokens really are the default coordinates, not a drag",
+    nodesById(c4Document(FREE_TB), DIAGRAM_ID).size === nodes.size &&
+      [...nodes.keys()].every((id) => {
+        const free = nodesById(c4Document(FREE_TB), DIAGRAM_ID).get(id);
+        return (
+          free.position.x === nodes.get(id).position.x &&
+          free.position.y === nodes.get(id).position.y
+        );
+      }),
+    "the fixture drifted from the tb layout it was built from",
+  );
+
+  /* THE COUNT. `placed: 0` here was the whole defect: a layer that refuses
+     every direction, reported as free to move. */
+  const placement = layerPlacement(doc, DIAGRAM_ID);
+  check(
+    "every element is counted as placed, not one of them written off",
+    placement.total === nodes.size &&
+      placement.placed === nodes.size &&
+      placement.pinned === 0,
+    JSON.stringify(placement),
+  );
+
+  /* AND THE READER IS TOLD. Silence was the second half of the defect: no
+     note before the press because nothing was counted, and no toast after it
+     for the same reason. */
+  const warning = directionInertWarning(placement);
+  check(
+    "the press is not silent, and the sentence is the inert one",
+    warning !== null &&
+      warning.message.startsWith("Nothing in this layer moved") &&
+      warning.message.includes(`all ${nodes.size} of its elements`) &&
+      warning.releaseLabel === resetLayerLabel(nodes.size),
+    JSON.stringify(warning),
+  );
+
+  /* THE SWEEP TAKES ALL OF THEM. Under the comparison this replaced, the
+     coincidental tokens were skipped — so the reader pressed a row that
+     promised the layer back and the tokens defeating the direction stayed in
+     the file. Counted by TOKEN, not by line, because a skipped element leaves
+     a line the patch never touched. */
+  const edit = resetLayerPositionsEdit(doc, DEFAULTS_AS_TOKENS, DIAGRAM_ID);
+  check(
+    "the sweep applies as a patch",
+    edit !== null && edit.path === "patch",
+    `path: ${edit === null ? "refused" : edit.path}`,
+  );
+  const leftover = edit.text
+    .split("\n")
+    .filter((line) => /^ {2}[\w-]+:\w+ .*\(-?[\d.]+,/.test(line));
+  check(
+    "not one token survives it, including the coincidental ones",
+    leftover.length === 0,
+    leftover.join(" | "),
+  );
+
+  /* AND THE DIRECTION FINALLY APPLIES, measured on the reparsed text: the
+     point of the whole gesture is the picture, not the bytes. */
+  const after = nodesById(c4Document(edit.text), DIAGRAM_ID);
+  const off = [...after.keys()].filter(
+    (id) =>
+      after.get(id).position.x !== at(lrLayout, id).x ||
+      after.get(id).position.y !== at(lrLayout, id).y,
+  );
+  check(
+    "after the sweep every element sits where lr puts it",
+    off.length === 0 && after.size === nodes.size,
+    off.join(", "),
+  );
+  check(
+    "and the layer now reports nothing placed",
+    layerPlacement(c4Document(edit.text), DIAGRAM_ID).placed === 0,
+    JSON.stringify(layerPlacement(c4Document(edit.text), DIAGRAM_ID)),
+  );
+
+  /* THE WRITER'S OWN TEST, ON ITS OWN TERMS. `emitNode` still omits a token
+     whose numbers equal the default slot, and that is a DECISION rather than
+     an oversight: `serializeArchText` is documented as a pure function of the
+     model, and the mark is a read-time annotation that no share link, JSON
+     round trip or `structuredClone` carries — so honouring it in the emitter
+     would make canonical bytes depend on which reader happened to load the
+     document. The consequence is pinned here rather than discovered: this is
+     the one place where the two questions give different answers, and the
+     release still removes the token from the SOURCE because it patches lines
+     (above) rather than re-emitting the file. */
+  const canonical = serializeArchText(doc.synced.file);
+  const stillTokened = canonical
+    .split("\n")
+    .filter((line) => /^ {2}[\w-]+:\w+ .*\(-?[\d.]+,/.test(line));
+  check(
+    "a full serialize omits the tokens the emitter's numeric test calls default",
+    stillTokened.length < nodes.size,
+    `${stillTokened.length} of ${nodes.size} lines kept a token`,
+  );
+  check(
+    "so the two questions provably differ here, and only the source's wins",
+    [...nodes.values()].every((node) => placedByHand(node)) &&
+      canonical !== DEFAULTS_AS_TOKENS,
+    "if these agreed, this whole section would be measuring nothing",
   );
 }
 

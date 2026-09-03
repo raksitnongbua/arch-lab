@@ -73,7 +73,7 @@ import type {
   ExternalRef,
   Point,
 } from "@/types";
-import { childLevelOf } from "@/types";
+import { AUTHORED_GEOMETRY, childLevelOf, placedByHand } from "@/types";
 
 import {
   canonicalDiagramBlock,
@@ -88,7 +88,6 @@ import {
   defaultNodeLayout,
   defaultPositions,
   defaultSizeFor,
-  hasAuthoredGeometry,
   KEYWORD_BY_NODE_TYPE,
   parseArchTextWithSpans,
   serializeArchText,
@@ -1171,8 +1170,13 @@ export function movedNodeEdit(
  * `node.geometry ?? layout.get(id)` one node at a time — so a direction can
  * be wholly inert, partly applied, or free to move everything, and those are
  * three different sentences to say to a reader who just pressed it. The
- * controls read this rather than counting `(` in the text, so what the menu
+ * controls read this rather than each deciding for itself, so what the menu
  * claims and what a reset would actually rewrite cannot drift apart.
+ *
+ * COUNTED FROM `placedByHand`, the source's own answer. Counted from a
+ * comparison against the default layout instead, it reported a hand-placed
+ * layer as free to move — every element tokened at its default slot, nothing
+ * counted, no note, no toast, and a direction that turned nothing.
  */
 export interface LayerPlacement {
   /** Elements in the layer. */
@@ -1180,7 +1184,7 @@ export interface LayerPlacement {
   /** Elements a reset would hand back to the layout. */
   placed: number;
   /**
-   * Elements carrying the author's coordinates AND marked `pin` — placed, and
+   * Elements whose coordinates the source states AND marked `pin` — placed, and
    * deliberately left alone by the sweep. Counted apart from `placed` because
    * the menu owes the reader both numbers: what the direction cannot move,
    * and what pressing the row would actually change.
@@ -1189,22 +1193,23 @@ export interface LayerPlacement {
 }
 
 /**
- * The elements of `diagram` a reset would rewrite: those carrying coordinates
- * the author wrote, minus the ones marked `pin`.
+ * The elements of `diagram` a reset would rewrite: those whose coordinates the
+ * SOURCE states, minus the ones marked `pin`.
  *
- * `hasAuthoredGeometry` IS THE TEST, borrowed from the serializer rather than
- * spelled again here, because the serializer is what decides whether a
- * geometry token appears on the line at all. A second opinion would offer to
- * release nodes whose lines carry nothing (an edit that changes no bytes) or
- * quietly skip ones that do.
+ * `placedByHand` IS THE TEST — token presence, not a comparison against the
+ * default layout. The comparison was the test for one release and it skipped
+ * exactly the elements this gesture exists for: a token whose numbers equal
+ * the default slot reads as "already released", so the sweep left it in the
+ * file and went on defeating the direction after the reader pressed the button
+ * that promised to release it.
  *
  * THE `pin` EXEMPTION IS WHAT THE WORD MEANS — see `C4Node.pinned`. It gives
  * an author a way to keep one element while releasing the rest, which is the
  * only reading under which the attribute does anything at all.
  */
-function releasableNodes(file: ArchLabFile, diagram: C4Diagram): C4Node[] {
+function releasableNodes(diagram: C4Diagram): C4Node[] {
   return diagram.nodes.filter(
-    (node) => node.pinned !== true && hasAuthoredGeometry(file, diagram, node),
+    (node) => node.pinned !== true && placedByHand(node),
   );
 }
 
@@ -1216,11 +1221,18 @@ function releasedNode(
 ): C4Node | null {
   const at = layout.get(node.id);
   if (at === undefined) return null;
-  return {
+  const next: C4Node = {
     ...node,
     position: { x: at.x, y: at.y },
     size: defaultSizeFor(node.type),
   };
+  /* A SPREAD COPIES THE MARK, and this element no longer carries the source's
+     own coordinates — the line about to be written for it has no token. The
+     text is re-parsed before it reaches the reader (`adopt`), so nothing
+     downstream depends on this; leaving it set would still be a model that
+     says the opposite of the bytes it produced. */
+  delete next[AUTHORED_GEOMETRY];
+  return next;
 }
 
 /**
@@ -1238,9 +1250,7 @@ export function layerPlacement(
   const file = doc.synced.file;
   const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
-  const authored = diagram.nodes.filter((node) =>
-    hasAuthoredGeometry(file, diagram, node),
-  );
+  const authored = diagram.nodes.filter((node) => placedByHand(node));
   const pinned = authored.filter((node) => node.pinned === true).length;
   return {
     total: diagram.nodes.length,
@@ -1355,7 +1365,7 @@ export function resetNodePositionEdit(
   if (diagram === undefined) return null;
   const current = diagram.nodes.find((candidate) => candidate.id === nodeId);
   if (current === undefined) return null;
-  if (!hasAuthoredGeometry(file, diagram, current)) return null;
+  if (!placedByHand(current)) return null;
 
   const released = releasedNode(current, defaultNodeLayout(file, diagram));
   if (released === null) return null;
@@ -1413,7 +1423,7 @@ export function resetLayerPositionsEdit(
   const file = doc.synced.file;
   const diagram = file.diagrams.find((candidate) => candidate.id === diagramId);
   if (diagram === undefined) return null;
-  const releasable = releasableNodes(file, diagram);
+  const releasable = releasableNodes(diagram);
   if (releasable.length === 0) return null;
 
   const layout = defaultNodeLayout(file, diagram);

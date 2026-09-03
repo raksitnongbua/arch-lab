@@ -115,6 +115,41 @@ export interface Size {
   height: number;
 }
 
+/**
+ * Set on an element whose SOURCE stated its coordinates — a `(x,y wxh)` token
+ * in `.alab`, or the `position` every `.archlab.json` node is required to
+ * carry. Read through `placedByHand`, never directly.
+ *
+ * WHY THE FACT HAS TO BE CARRIED AT ALL. `position` and `size` are always
+ * present on a resolved element: the `.alab` parser fills them from the
+ * default layout when the text omits the token. So the model alone cannot say
+ * whether a coordinate is the author's or the layout's — and comparing it
+ * against the default layout cannot either, because a token whose numbers
+ * happen to EQUAL the default is indistinguishable from an omitted one. That
+ * was a shipped bug: a diagram whose every element carried a token equal to
+ * its default slot refused every layout direction while the control counted
+ * nothing placed and said nothing at all.
+ *
+ * WHY A SYMBOL AND NOT A FIELD. A string key would be document content: the
+ * `.alab` `! <key> : <json>` escape and the JSON writer's unknown-field
+ * tolerance both carry any key an author writes, so a plain `authoredGeometry`
+ * would collide with a file that already has one (`assemble` refuses a `!`
+ * line naming a field the element already sets — a document that parses today
+ * would stop parsing), and both writers would have to learn to strip it.
+ * A symbol key is invisible to `Object.keys`, to `JSON.stringify` and to every
+ * `!` escape, so neither serializer changed and no byte on disk moved.
+ * `check:layout-reset` pins that invisibility.
+ *
+ * DERIVED AT READ TIME, NEVER WRITTEN. Both readers set it (`parseArchText`
+ * from the token, `deserializeModel` from the required `position`), and its
+ * text form is the token itself — so a canvas edit does not maintain it: every
+ * gesture re-parses the text it produced (`adopt`), which re-derives this from
+ * what the bytes now say.
+ */
+export const AUTHORED_GEOMETRY: unique symbol = Symbol(
+  "archlab.authoredGeometry",
+);
+
 /** Last saved camera for a diagram, restored on open. */
 export interface Viewport extends Point {
   zoom: number;
@@ -191,6 +226,12 @@ export interface C4Node {
    * is from the sweep, not from the author.
    */
   pinned?: boolean;
+  /**
+   * Whether the source stated these coordinates itself — see
+   * `AUTHORED_GEOMETRY` for why it is a symbol and who sets it. Ask
+   * `placedByHand(node)` rather than reading it.
+   */
+  [AUTHORED_GEOMETRY]?: true;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -579,4 +620,35 @@ export function isBoundaryPlaceholder(node: C4Node): boolean {
 /** A node with no child diagram is a leaf and offers "Drill into" instead. */
 export function hasChildDiagram(node: C4Node): boolean {
   return typeof node.childDiagramId === "string" && node.childDiagramId !== "";
+}
+
+/**
+ * Whether the source placed this element rather than the layout — and
+ * therefore whether A LAYOUT DIRECTION CANNOT MOVE IT. The parser resolves
+ * `node.geometry ?? layout.get(id)` per element, so a stated coordinate wins
+ * one element at a time and a diagram whose every element states one makes the
+ * direction control completely inert.
+ *
+ * THIS IS TOKEN PRESENCE, NOT A COMPARISON. The controls that warn, the row
+ * that releases and the sweep that rewrites all ask this, because all three
+ * are asking "is there a coordinate in the text to remove?". The serializer's
+ * question — "do these numbers equal the default, so the token may be omitted?"
+ * — is a DIFFERENT question with a different answer, and answering the first
+ * with the second is what left a hand-placed diagram silently unmovable.
+ */
+export function placedByHand(node: C4Node): boolean {
+  return node[AUTHORED_GEOMETRY] === true;
+}
+
+/**
+ * `node` marked as carrying the source's own coordinates, for the two readers
+ * that know — the `.alab` parser (a `(x,y wxh)` token) and the JSON
+ * deserializer (`position` is required there, so every element states one).
+ *
+ * Mutates and returns, because both callers are assembling a fresh element and
+ * a spread would copy the property they are trying to add.
+ */
+export function markPlacedByHand<T extends object>(node: T): T {
+  (node as Record<symbol, unknown>)[AUTHORED_GEOMETRY] = true;
+  return node;
 }

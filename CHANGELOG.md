@@ -163,6 +163,15 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **A layer whose coordinates happen to match the layout is no longer counted
+  as unplaced.** An element line carrying `(40,40 176x88)` beats the layout
+  whether or not those numbers are the ones the layout would have chosen — so a
+  diagram written out with its own default coordinates refused every direction
+  while the menu counted nothing placed, said nothing before the press and
+  raised no warning after it, and **Let the layout place them** left exactly
+  those coordinates in the file. Placement is now read from what the document
+  states rather than from comparing numbers: the count is right, the warning
+  appears, and the release takes every coordinate off the layer.
 - **A parse error no longer says where twice.** Every `validate_<kind>` and
   `format_<kind>` tool over MCP, and every error example in the syntax
   reference and the bundled `alab` skill, opened with
